@@ -5,7 +5,7 @@ import django_glue
 setup(
     name="django-glue",
     version=django_glue.__version__,
-    description="Industrial strength glue for Django Backends and Frontends!",
+    description="Industrial Strength Glue for Django Backends and Frontends!",
     long_description=open("README.md").read(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -25,7 +25,7 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    keywords=["glue", "django", "backend", "frontend", "javascript"],
+    keywords=["glue", "django", "backend", "frontend", "javascript", "active server pages"],
     author="Nathan Johnson & Wesley Howery",
     author_email="info@stratusadv.com",
     url="https://github.com/stratusadv/django-glue",
