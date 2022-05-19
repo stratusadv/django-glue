@@ -21,4 +21,4 @@ jobs:
           python-version: '3.x'
 
       - name: Testing
-        run: python -m unittest django-glue/tests/test_core.py
+        run: python -m unittest tests/test_core.py

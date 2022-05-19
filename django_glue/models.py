@@ -33,19 +33,14 @@ class Joint(models.Model):
 
 class FieldJoint(Joint):
     field_name = models.CharField(max_length=64, editable=False)
-    field_properties = models.CharField(max_length=64, editable=False)
 
     def __str__(self):
-        return f'{self.content_object} {self.field} {self.method}'
+        return f'{self.content_object} {self.field_name} {self.method}'
 
 
-class ModelJoint(Joint):
-
-    def __str__(self):
-        return f'{self.content_object} {self.method}'
-
-
-class QuerySetJoint(Joint):
+class ModelObjectJoint(Joint):
 
     def __str__(self):
         return f'{self.content_object} {self.method}'
+
+
