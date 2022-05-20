@@ -40,6 +40,7 @@ DATABASES = {
 MIDDLEWARE_CLASSES = (
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'django_glue.middleware.GlueMiddleware'
 )
 
 ROOT_URLCONF = 'tests.urls'
@@ -62,6 +63,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django_glue.context_processors.glue',
             ],
             'debug': TEMPLATE_DEBUG,
         },

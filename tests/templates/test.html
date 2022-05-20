@@ -1,1 +1,60 @@
-<h1>Hello From Django Glue Test</h1>
+{% extends 'base.html' %}
+
+{% django_glue %}
+
+{% block base_content %}
+    <div class="row">
+        <div class="col-12 mb-3 h3 text-center">
+            Django Glue Test Page
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-4">
+            <div class="card bg-100">
+                <div class="card-header h4 text-center">
+                    Test Form
+                </div>
+
+                <div class="card-body">
+                    <label for="char">Char</label>
+                    <input class="form-control" id="char" name="char" value=""/>
+
+                    <label for="text">Text</label>
+                    <textarea class="form-control" id="text" name="text"></textarea>
+
+                    <label for="integer">Integer</label>
+                    <input class="form-control" id="integer" name="integer" value=""/>
+
+                    <label for="decimal">Decimal</label>
+                    <input class="form-control" id="decimal" name="decimal" value=""/>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4">
+            <div class="card">
+                <div class="card-header h4 text-center">
+                    Context Data
+                </div>
+
+                <div class="card-body">
+                    joint_list<br/>
+                    {{ joint_list }}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4">
+            <div class="card">
+                <div class="card-header h4 text-center">
+                    Javascript Output
+                </div>
+
+                <div id="javascript-output" class="card-body">
+                    Nothing to See Yet!!!
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
