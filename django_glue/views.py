@@ -1,2 +1,2 @@
-def joint_handler_view(request):
+def glue_handler_view(request):
     pass

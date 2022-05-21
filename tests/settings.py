@@ -1,4 +1,10 @@
 import os
+import logging
+
+logging.basicConfig(
+    format='[%(asctime)-15s] Django Glue: "%(message)s"',
+    datefmt='%d/%b/%Y %H:%M:%S'
+)
 
 DEBUG = True
 
@@ -6,7 +12,7 @@ ALLOWED_HOSTS = ['127.0.0.1']
 
 WSGI_APPLICATION = 'tests.wsgi.application'
 
-BASE_DIR = os.path.dirname(__file__)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 INSTALLED_APPS = [
     'django.contrib.auth',
@@ -46,16 +52,15 @@ MIDDLEWARE_CLASSES = (
 ROOT_URLCONF = 'tests.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
-SITE_ROOT = os.path.dirname(os.path.abspath(__file__))
-USE_TZ = True
 
-TEMPLATE_DEBUG = True
-TEMPLATE_DIRS = (os.path.join(BASE_DIR, 'templates'),)
+USE_TZ = True
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': TEMPLATE_DIRS,
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates'),
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -65,7 +70,13 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django_glue.context_processors.glue',
             ],
-            'debug': TEMPLATE_DEBUG,
+            'builtins': [
+            ],
+            'debug': DEBUG,
         },
     },
 ]
+
+STATIC_URL = 'static/'
+
+DJANGO_GLUE_URL = 'django_glue/'

@@ -1,0 +1,17 @@
+<script type="application/javascript">
+    const javascript_output = document.getElementById('javascript-output')
+    let glue = JSON.parse('{{ glue_json_string|safe }}')
+    let proxy_glue = JSON.parse('{{ glue_json_string|safe }}')
+
+    let glue_change_interval = setInterval(function () {
+        if(JSON.stringify(glue) !== JSON.stringify(proxy_glue)){
+            alert('Different')
+            proxy_glue = JSON.parse(JSON.stringify(glue));
+            javascript_output.innerText = JSON.stringify(glue)
+        }
+    }, 2000);
+
+    console.log(glue)
+
+    javascript_output.innerText = JSON.stringify(glue)
+</script>

@@ -5,5 +5,5 @@ from django_glue import views
 app_name = 'django_glue'
 
 urlpatterns = [
-    path("", views.joint_handler_view, name="joint_handler"),
+    path("", views.glue_handler_view, name="glue_handler"),
 ]

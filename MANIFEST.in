@@ -3,4 +3,6 @@ include LICENSE.md
 include CHANGELOG.md
 include CONTRIBUTORS.md
 exclude *.db
-recursive-exclude tests .github
+recursive-include django_glue/template *
+recursive-exclude tests
+recursive-exclude .github
