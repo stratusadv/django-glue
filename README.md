@@ -1,7 +1,5 @@
 # django-glue
 
-___
-
 We built Django Glue to help solve the problem of fluid interactions between the front and back ends of a Django application.
 
 A single function call in a view allows you to interact with a model object or specific field in both the context data and javascript throught a context json object. 
@@ -9,14 +7,10 @@ This handles construction of the data the connection between all sides along wit
 
 ## Requirements
 
----
-
 - Django 3.2+ or 4.0+
 - Python 3.8+
 
 ## Installation
-
----
 
 Start by install django-glue using pip.
 
@@ -71,7 +65,17 @@ After all the migrations are successfully complete you are ready to go.
 
 ## Getting Started
 
-___
+Inside of the view you would like to have access to glue objects simply include and call the glue method.
+
+```python
+from django_glue.utils import add_glue
+
+# Simply call this function to allow access to this object.
+add_glue(model_object=test_model, method='write')
+
+# Including the field will restrict access to only that field name.
+add_glue(model_object=test_model, method='write', field_name='text')
+```
 
 Example View 
 
@@ -152,13 +156,9 @@ Updating the Javascript JSON Object will automatically update the model in the D
 
 ## Roadmap
 
----
-
 - [ ] Prototype (2022-07-31)
 
 ## Authors
-
----
 
 - Nathan Johnson
 - Wesley Howery
