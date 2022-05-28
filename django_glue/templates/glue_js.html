@@ -1,10 +1,28 @@
 <script type="application/javascript">
+
+    function post_ajax(url, data) {
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+    }
+
     const javascript_output = document.getElementById('javascript-output')
     let glue = JSON.parse('{{ glue_json_string|safe }}')
     let proxy_glue = JSON.parse('{{ glue_json_string|safe }}')
 
     let glue_change_interval = setInterval(function () {
-        if(JSON.stringify(glue) !== JSON.stringify(proxy_glue)){
+        if (JSON.stringify(glue) !== JSON.stringify(proxy_glue)) {
             alert('Different')
             proxy_glue = JSON.parse(JSON.stringify(glue));
             javascript_output.innerText = JSON.stringify(glue)
