@@ -18,10 +18,10 @@
 
                 <div class="card-body">
                     <label for="char">Char</label>
-                    <input class="form-control" id="char" name="char" value=""/>
+                    <input class="form-control" {% glue_connect 'objects.test_model.char' %}/>
 
                     <label for="text">Text</label>
-                    <textarea class="form-control" id="text" name="text"></textarea>
+                    <textarea class="form-control" {% glue_connect 'fields.test_model.text' %}></textarea>
 
                     <label for="integer">Integer</label>
                     <input class="form-control" id="integer" name="integer" value=""/>
