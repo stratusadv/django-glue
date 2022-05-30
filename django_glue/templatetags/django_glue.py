@@ -15,8 +15,8 @@ def glue_js(context):
 
 
 @register.simple_tag(takes_context=True, name='glue_connect')
-def glue_connect(context, target):
-    target_key_list = target.split('.')
+def glue_connect(context, target_string):
+    target_key_list = target_string.split('.')
     glue_key = ''
     if len(target_key_list) == 3:
 
