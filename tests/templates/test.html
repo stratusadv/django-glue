@@ -18,16 +18,16 @@
 
                 <div class="card-body">
                     <label for="char">Char</label>
-                    <input class="form-control" {% glue_connect 'objects.test_model.char' %}/>
+                    <input class="form-control" {% glue_connect 'objects.test_model.char' %} />
 
                     <label for="text">Text</label>
                     <textarea class="form-control" {% glue_connect 'fields.test_model.text' %}></textarea>
 
                     <label for="integer">Integer</label>
-                    <input class="form-control" id="integer" name="integer" value=""/>
+                    <input class="form-control" id="integer" name="integer" value="" {% glue_connect 'objects.test_model.integer' %} />
 
                     <label for="decimal">Decimal</label>
-                    <input class="form-control" id="decimal" name="decimal" value=""/>
+                    <input class="form-control" id="decimal" name="decimal" value="" {% glue_connect 'objects.test_model.decimal' %} />
                 </div>
             </div>
         </div>
@@ -47,10 +47,10 @@
         <div class="col-4">
             <div class="card">
                 <div class="card-header h4 text-center">
-                    Javascript Output
+                    Javascript Data
                 </div>
 
-                <div id="javascript-output" class="card-body">
+                <div id="javascript-data" class="card-body">
                     Nothing to See Yet!!!
                 </div>
             </div>

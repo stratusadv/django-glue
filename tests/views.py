@@ -16,6 +16,7 @@ class TestView(TemplateView):
         TestModel.objects.all().delete()
         FieldGlue.objects.all().delete()
         ObjectGlue.objects.all().delete()
+
         logging.warning('Purged database of testing objects.')
 
         test_model = TestModel.objects.create(
@@ -24,6 +25,9 @@ class TestView(TemplateView):
             integer=789456123,
             decimal=258.369,
         )
+
+        # test_model = TestModel.objects.all().latest('id')
+
         logging.warning(f'Added TestModel object.')
 
         add_glue(test_model, 'write', 'text')

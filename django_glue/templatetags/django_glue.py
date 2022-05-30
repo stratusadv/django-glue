@@ -17,15 +17,20 @@ def glue_js(context):
 @register.simple_tag(takes_context=True, name='glue_connect')
 def glue_connect(context, target):
     target_key_list = target.split('.')
-    value = ''
+    glue_key = ''
     if len(target_key_list) == 3:
-        if target_key_list[0] in context['glue']:
-            if target_key_list[1] in context['glue'][target_key_list[0]]:
-                if target_key_list[0] == 'fields':
-                    if target_key_list[2] in context['glue'][target_key_list[0]][target_key_list[1]]:
-                        value = context['glue'][target_key_list[0]][target_key_list[1]][target_key_list[2]]
-                elif target_key_list[0] == 'objects':
-                    value = context['glue'][target_key_list[0]][target_key_list[1]]['data'].__dict__[target_key_list[2]]
-        return mark_safe(f'id="{target_key_list[2]}" name="{target_key_list[2]}"')
+
+        glue_type = target_key_list[0]
+        glue_object = target_key_list[1]
+        glue_field = target_key_list[2]
+
+        if glue_type in context['glue']:
+            if glue_object in context['glue'][glue_type]:
+                if glue_type == 'fields':
+                    if glue_field in context['glue'][glue_type][glue_object]:
+                        glue_key = context['glue'][glue_type][glue_object]['django_glue_key']
+                elif glue_type == 'objects':
+                    glue_key = context['glue'][glue_type][glue_object]['django_glue_key']
+        return mark_safe(f'glue-connect glue-key="{ glue_key }" glue-type="{ glue_type }" glue-object="{ glue_object }" glue-field="{ glue_field }"')
     else:
         return mark_safe(f'')
