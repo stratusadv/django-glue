@@ -24,10 +24,12 @@
                     <textarea class="form-control" {% glue_connect 'fields.test_model.text' %}></textarea>
 
                     <label for="integer">Integer</label>
-                    <input class="form-control" id="integer" name="integer" value="" {% glue_connect 'objects.test_model.integer' %} />
+                    <input class="form-control" id="integer" name="integer"
+                           value="" {% glue_connect 'objects.test_model.integer' %} />
 
                     <label for="decimal">Decimal</label>
-                    <input class="form-control" id="decimal" name="decimal" value="" {% glue_connect 'objects.test_model.decimal' %} />
+                    <input class="form-control" id="decimal" name="decimal"
+                           value="" {% glue_connect 'objects.test_model.decimal' %} />
                 </div>
             </div>
         </div>
@@ -52,6 +54,22 @@
 
                 <div id="javascript-data" class="card-body">
                     Nothing to See Yet!!!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-2">
+        <div class="col-4">
+            <div class="card">
+                <div class="card-header h4 text-center">
+                    Session Data
+                </div>
+
+                <div class="card-body">
+                    {% for key, value in request.session.key_dict.super_secret_key.items %}
+                        <span>{{ key }}: {{ value }}</span><br/>
+                    {% endfor %}
                 </div>
             </div>
         </div>

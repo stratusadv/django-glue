@@ -36,4 +36,19 @@ class TestView(TemplateView):
         add_glue(test_model, 'write')
         logging.warning('Added model object glue for TestModel Object in write mode')
 
+        if 'test_key' not in self.request.session:
+            self.request.session['test_key'] = '12345'
+
+        self.request.session['key_dict'] = {
+            'super_secret_key': {
+                'model': 'test_model',
+                'pk': 8,
+                'method': 'write',
+                'type': 'field',
+                'field': 'text',
+            }
+        }
+
+        logging.warning(f'Session key: {self.request.session["test_key"]}')
+
         return context_data
