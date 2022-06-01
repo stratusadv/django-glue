@@ -36,19 +36,19 @@ class TestView(TemplateView):
         add_glue(test_model, 'write')
         logging.warning('Added model object glue for TestModel Object in write mode')
 
-        if 'test_key' not in self.request.session:
-            self.request.session['test_key'] = '12345'
+        from django.contrib.contenttypes.models import ContentType
+        content_type = ContentType.objects.get_for_model(test_model)
 
         self.request.session['key_dict'] = {
             'super_secret_key': {
                 'model': 'test_model',
-                'pk': 8,
                 'method': 'write',
                 'type': 'field',
                 'field': 'text',
+                'content_app_label': content_type.app_label,
+                'content_model': content_type.model,
+                'object_id': test_model.pk,
             }
         }
-
-        logging.warning(f'Session key: {self.request.session["test_key"]}')
 
         return context_data
