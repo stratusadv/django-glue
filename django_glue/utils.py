@@ -1,42 +1,41 @@
 import logging
+from uuid import uuid4
 
-from django_glue import models
+from django.contrib.contenttypes.models import ContentType
 
 
-def add_or_update_glue(model_object, method, field_name=None, **kwargs):
-    arguments = {
-        'content_object': model_object,
-        'method': method,
+def add_object_glue(request, model_object, method, field_name=None, **kwargs):
+    if 'django_glue' not in request.session:
+        request.session['django_glue'] = dict()
+
+    rs = request.session['django_glue']
+
+    content_type = ContentType.objects.get_for_model(model_object)
+
+    key = uuid4()
+
+    rs[key] = {
+        'model': 'test_model',
+        'content_app_label': content_type.app_label,
+        'content_model': content_type.model,
+        'object_id': model_object.pk,
     }
 
     if type(field_name) is str:
-        field_glue = models.FieldGlue(
-            **arguments,
-            field_name=field_name
-        )
-
-        field_glue.save()
+        rs[key]['field_name'] = field_name
 
     elif field_name is None:
-        object_glue = models.ObjectGlue(
-            **arguments,
-        )
-
-        object_glue.save()
+        pass
 
     else:
         raise TypeError('field argument must be a str object')
-
-
-def add_glue(model_object, method, field_name=None, **kwargs):
-    add_or_update_glue(model_object, method, field_name)
 
 
 def camel_to_snake(string):
     return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
 
 
-def generate_glue_dict():
+def generate_glue_dict(request):
     glue_dict = {
         'fields': dict(),
         'objects': dict(),
