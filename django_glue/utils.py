@@ -29,16 +29,15 @@ def add_model_object_glue(request, unique_name, model_object, method, fields=Non
     }
 
     model = type(model_object)
-    print(model)
     if type(fields) is str:
         rs[unique_name]['fields'] = generate_field_dict(model._meta.get_field(fields), model_object)
 
     elif fields is None:
-        fields = dict()
-        print(model._meta.fields)
+        fields_dict = dict()
         for field in model._meta.fields:
-            fields[field.name] = generate_field_dict(field, model_object)
+            fields_dict[field.name] = generate_field_dict(field, model_object)
 
+        rs[unique_name]['fields'] = fields_dict
     else:
         raise TypeError('field argument must be a str object')
 
