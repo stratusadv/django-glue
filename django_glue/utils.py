@@ -11,17 +11,16 @@ GLUE_METHOD_CHOICES = (
 )
 
 
-def add_model_object_glue(request, model_object, method, field_name=None, **kwargs):
-    if 'django_glue' not in request.session:
-        request.session['django_glue'] = dict()
+def add_model_object_glue(request, unique_name, model_object, method, fields=None, **kwargs):
+    if 'glue' not in request.session:
+        request.session['glue'] = dict()
 
-    rs = request.session['django_glue']
+    rs = request.session['glue']
 
     content_type = ContentType.objects.get_for_model(model_object)
 
-    key = str(uuid4())
-
-    rs[key] = {
+    # Todo: Write check to ensure unique name does not exist in session data
+    rs[unique_name] = {
         'method': method,
         'model': 'test_model',
         'content_app_label': content_type.app_label,
@@ -29,18 +28,38 @@ def add_model_object_glue(request, model_object, method, field_name=None, **kwar
         'object_id': model_object.pk,
     }
 
-    if type(field_name) is str:
-        rs[key]['field_name'] = field_name
+    model = type(model_object)
+    print(model)
+    if type(fields) is str:
+        rs[unique_name]['fields'] = generate_field_dict(model._meta.get_field(fields), model_object)
 
-    elif field_name is None:
-        pass
+    elif fields is None:
+        fields = dict()
+        print(model._meta.fields)
+        for field in model._meta.fields:
+            fields[field.name] = generate_field_dict(field, model_object)
 
     else:
         raise TypeError('field argument must be a str object')
 
 
 def clean_glue_session(request):
-    request.session['django_glue'] = dict()
+    request.session['glue'] = dict()
+
+
+def generate_field_dict(model_field, model_object):
+    if hasattr(model_field, 'get_internal_type'):
+        field_type = model_field.get_internal_type()
+
+        field_dict = {
+            'type': field_type,
+            'value': getattr(model_object, model_field.name)
+        }
+        return field_dict
+
+
+def get_fields_from_model(model):
+    return [field for field in model._meta.fields]
 
 
 # def camel_to_snake(string):
@@ -76,31 +95,31 @@ def clean_glue_session(request):
 #     return glue_dict
 #
 #
-# def convert_glue_dict_to_json(glue_dict):
-#     import json
-#
-#     glue_json = {
-#         'fields': glue_dict['fields'],
-#         'objects': dict(),
-#     }
-#
-#     exclude_field_type_list = ['AutoField', 'ManyToManyField']
-#
-#     for key, val in glue_dict['objects'].items():
-#         glue_json['objects'][key] = {
-#             'django_glue_key': val['django_glue_key']
-#         }
-#
-#         for field in val['data']._meta.get_fields():
-#             if hasattr(field, 'get_internal_type'):
-#                 field_type = field.get_internal_type()
-#                 if field_type not in exclude_field_type_list:
-#                     if field_type == 'DecimalField':
-#                         field_value = float(val['data'].__dict__[field.name])
-#                     else:
-#                         field_value = val['data'].__dict__[field.name]
-#
-#                     glue_json['objects'][key][field.name] = field_value
-#                     # logging.warning(field.get_internal_type())
-#
-#     return json.dumps(glue_json)
+def convert_glue_dict_to_json(glue_dict):
+    import json
+
+    glue_json = {
+        'fields': glue_dict['fields'],
+        'objects': dict(),
+    }
+
+    exclude_field_type_list = ['AutoField', 'ManyToManyField']
+
+    for key, val in glue_dict['objects'].items():
+        glue_json['objects'][key] = {
+            'django_glue_key': val['django_glue_key']
+        }
+
+        for field in val['data']._meta.get_fields():
+            if hasattr(field, 'get_internal_type'):
+                field_type = field.get_internal_type()
+                if field_type not in exclude_field_type_list:
+                    if field_type == 'DecimalField':
+                        field_value = float(val['data'].__dict__[field.name])
+                    else:
+                        field_value = val['data'].__dict__[field.name]
+
+                    glue_json['objects'][key][field.name] = field_value
+                    # logging.warning(field.get_internal_type())
+
+    return json.dumps(glue_json)
