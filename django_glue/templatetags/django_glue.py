@@ -15,22 +15,22 @@ def glue_js(context):
 
 
 @register.simple_tag(takes_context=True, name='glue_connect')
-def glue_connect(context, target_string):
-    target_key_list = target_string.split('.')
-    glue_key = ''
-    if len(target_key_list) == 3:
+def glue_connect(context, unique_name_and_field_string):
+    connect_list = unique_name_and_field_string.split('.')
 
-        glue_type = target_key_list[0]
-        glue_object = target_key_list[1]
-        glue_field = target_key_list[2]
+    is_valid_connection = False
+    unique_name = ''
+    field_name = ''
 
-        if glue_type in context['glue']:
-            if glue_object in context['glue'][glue_type]:
-                if glue_type == 'fields':
-                    if glue_field in context['glue'][glue_type][glue_object]:
-                        glue_key = context['glue'][glue_type][glue_object]['django_glue_key']
-                elif glue_type == 'objects':
-                    glue_key = context['glue'][glue_type][glue_object]['django_glue_key']
-        return mark_safe(f'glue-connect glue-key="{ glue_key }" glue-type="{ glue_type }" glue-object="{ glue_object }" glue-field="{ glue_field }"')
+    if len(connect_list) == 2:
+        unique_name = connect_list[0]
+        field_name = connect_list[1]
+
+        if unique_name in context['glue']:
+            if field_name in context['glue'][unique_name]['fields']:
+                is_valid_connection = True
+
+    if is_valid_connection:
+        return mark_safe(f'glue-connect glue-unique-name="{ unique_name }" glue-field-name="{ field_name }"')
     else:
         return mark_safe(f'')
