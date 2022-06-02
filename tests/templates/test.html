@@ -67,7 +67,7 @@
                 </div>
 
                 <div class="card-body">
-                    {% for key, value in request.session.key_dict.super_secret_key.items %}
+                    {% for key, value in request.session.django_glue.items %}
                         <span>{{ key }}: {{ value }}</span><br/>
                     {% endfor %}
                 </div>

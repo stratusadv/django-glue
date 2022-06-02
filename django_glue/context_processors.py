@@ -1,4 +1,3 @@
-from django_glue.utils import generate_glue_dict
 from django.conf import settings
 
 
@@ -9,5 +8,5 @@ def glue(request):
         glue_url = 'django_glue/'
     return {
         'glue_url': glue_url,
-        'glue': generate_glue_dict(),
+        'glue': request.session['django_glue'],
     }
