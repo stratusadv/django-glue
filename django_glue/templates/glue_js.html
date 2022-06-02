@@ -47,39 +47,15 @@
 
     const javascript_data = document.getElementById('javascript-data')
 
-    let glue = JSON.parse('{{ glue_json_string|safe }}')
-    let proxy_glue = JSON.parse('{{ glue_json_string|safe }}')
-
-    {# This is not required anymore #}
-    let glue_change_interval = setInterval(function () {
-        if (JSON.stringify(glue) !== JSON.stringify(proxy_glue)) {
-            {#post_ajax(#}
-            {#    '{% url 'django_glue:glue_handler' %}',#}
-            {#    {#}
-            {#        'something': 'tacos',#}
-            {#        'another': 123,#}
-            {#    },#}
-            {#)#}
-            proxy_glue = JSON.parse(JSON.stringify(glue))
-            javascript_data.innerText = JSON.stringify(glue)
-        }
-    }, 2000);
-
-    javascript_data.innerText = JSON.stringify(glue)
-
     function process_glue_connection(el) {
-        glue_data = glue[el.getAttribute('glue-type')][el.getAttribute('glue-object')]
-        el.value = glue_data[el.getAttribute('glue-field')]
+        el.value = el.getAttribute('glue-field-value')
         el.addEventListener('keyup', function () {
-            glue[el.getAttribute('glue-type')][el.getAttribute('glue-object')][el.getAttribute('glue-field')] = el.value
             debounce(function () {
                 post_ajax(
                     '{% url 'django_glue:glue_handler' %}',
                     {
-                        'key': glue_data['django_glue_key'],
-                        'type': el.getAttribute('glue-type'),
-                        'object': el.getAttribute('glue-object'),
-                        'field': el.getAttribute('glue-field'),
+                        'unique_name': el.getAttribute('glue-unique-name'),
+                        'field_name': el.getAttribute('glue-field-name'),
                         'value': el.value,
                     },
                 )

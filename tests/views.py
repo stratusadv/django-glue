@@ -27,10 +27,10 @@ class TestView(TemplateView):
 
         logging.warning(f'Added TestModel object.')
 
-        # clean_glue_session(self.request)
-        # logging.warning(f'Cleanup Django Glue Session Dictionary')
+        clean_glue_session(self.request)
+        logging.warning(f'Cleanup Django Glue Session Dictionary')
 
-        add_model_object_glue(self.request, 'test_glue', test_model_object, 'write')
+        add_model_object_glue(self.request, 'test_model', test_model_object, 'write')
         logging.warning('Added model field glue for TestModel Object in write mode')
 
         # add_model_object_glue(self.request, test_model_object, 'write')

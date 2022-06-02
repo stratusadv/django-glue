@@ -12,27 +12,25 @@ def glue_ajax_handler_view(request):
 
     logging.warning(f'{body_data = }')
 
-    rs = request.session['django_glue']
+    rs = request.session['glue']
 
     logging.warning(f'{ rs = }')
 
-    model_class = ContentType.objects.get_by_natural_key(rs['content_app_label'], rs['content_model']).model_class()
-    model_object = model_class.objects.get(id=rs['object_id'])
+    if body_data['unique_name'] in rs:
+        if body_data['field_name'] in rs[body_data['unique_name']]['fields']:
 
-    logging.warning(f'{model_object = }')
+            model_class = ContentType.objects.get_by_natural_key(rs[body_data['unique_name']]['content_app_label'], rs[body_data['unique_name']]['content_model']).model_class()
+            model_object = model_class.objects.get(id=rs[body_data['unique_name']]['object_id'])
 
-    if body_data['type'] == 'fields':
-        logging.warning('Updating Field Glue Object')
-        model_object.content_object.__dict__[model_object.field_name] = body_data['value']
-        model_object.content_object.save()
-    if body_data['type'] == 'objects':
-        logging.warning('Updating Object Glue Object')
-        model_object.content_object.__dict__[body_data['field']] = body_data['value']
-        model_object.content_object.save()
+            logging.warning(f'Before Update {model_object = }')
+
+            logging.warning('Updating Model Object Glue Object')
+            model_object.__dict__[body_data['field_name']] = body_data['value']
+            model_object.save()
+            logging.warning(f'After Save {model_object = }')
 
     json_response = {
         'status': True,
     }
-
 
     return JsonResponse(json_response)

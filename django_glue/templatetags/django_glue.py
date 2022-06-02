@@ -31,6 +31,7 @@ def glue_connect(context, unique_name_and_field_string):
                 is_valid_connection = True
 
     if is_valid_connection:
-        return mark_safe(f'glue-connect glue-unique-name="{ unique_name }" glue-field-name="{ field_name }"')
+        field_value = context["glue"][unique_name]["fields"][field_name]["value"]
+        return mark_safe(f'glue-connect glue-unique-name="{ unique_name }" glue-field-name="{ field_name }" glue-field-value="{ field_value }"')
     else:
         return mark_safe(f'')
