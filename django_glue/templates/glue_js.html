@@ -52,7 +52,7 @@
         el.addEventListener('keyup', function () {
             debounce(function () {
                 post_ajax(
-                    '{% url 'django_glue:glue_handler' %}',
+                    '{% url 'django_glue:django_glue_handler' %}',
                     {
                         'unique_name': el.getAttribute('glue-unique-name'),
                         'field_name': el.getAttribute('glue-field-name'),

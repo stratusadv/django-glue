@@ -9,3 +9,15 @@ class TestModel(models.Model):
 
     def __str__(self):
         return self.char
+
+    def django_glue_create(self, request):
+        pass
+
+    def django_glue_read(self, request):
+        pass
+
+    def django_glue_update(self, request):
+        pass
+
+    def django_glue_delete(self, request):
+        pass

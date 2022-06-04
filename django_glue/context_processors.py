@@ -10,5 +10,5 @@ def glue(request):
         glue_url = 'django_glue/'
     return {
         'glue_url': glue_url,
-        'glue': request.session['glue'],
+        'glue': request.session['django_glue'],
     }

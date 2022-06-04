@@ -15,7 +15,7 @@ def glue_js(context):
 
 
 @register.simple_tag(takes_context=True, name='glue_connect')
-def glue_connect(context, unique_name_and_field_string):
+def glue_connect(context, type, unique_name_and_field_string, custom_attributes=''):
     connect_list = unique_name_and_field_string.split('.')
 
     is_valid_connection = False
@@ -32,6 +32,21 @@ def glue_connect(context, unique_name_and_field_string):
 
     if is_valid_connection:
         field_value = context["glue"][unique_name]["fields"][field_name]["value"]
-        return mark_safe(f'glue-connect glue-unique-name="{ unique_name }" glue-field-name="{ field_name }" glue-field-value="{ field_value }"')
+        return mark_safe(f'glue-connect="{type}" glue-unique-name="{ unique_name }" glue-field-name="{ field_name }" glue-field-value="{ field_value }" {custom_attributes}')
     else:
         return mark_safe(f'')
+
+
+@register.simple_tag(takes_context=True, name='glue_input')
+def glue_input(context, unique_name_and_field_string):
+    return glue_connect(context, 'input', unique_name_and_field_string)
+
+
+@register.simple_tag(takes_context=True, name='glue_textarea')
+def glue_textarea(context, unique_name_and_field_string):
+    return glue_connect(context, 'input', unique_name_and_field_string)
+
+
+@register.simple_tag(takes_context=True, name='glue_textarea')
+def glue_submit(context, unique_name_and_field_string):
+    return glue_connect(context, 'submit', unique_name_and_field_string)

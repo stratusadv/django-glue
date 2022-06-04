@@ -32,6 +32,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_glue.middleware.GlueMiddleware',
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -42,12 +43,6 @@ DATABASES = {
         'NAME': 'django_glue_test.db',
     }
 }
-
-MIDDLEWARE_CLASSES = (
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django_glue.middleware.GlueMiddleware'
-)
 
 ROOT_URLCONF = 'tests.urls'
 

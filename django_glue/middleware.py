@@ -1,5 +1,6 @@
-from django.http import Http404
-from django.shortcuts import render
+import logging
+
+from django.urls import resolve
 
 
 class GlueMiddleware(object):
@@ -11,11 +12,8 @@ class GlueMiddleware(object):
         return response
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if 'grouping_slug' in view_kwargs and request.user.is_authenticated:
-            from django_glue import models
-            try:
-                pass
-            except:
-                pass
+        current_url = resolve(request.path_info).url_name
+        if current_url != 'django_glue_handler':
+            request.session['django_glue'] = dict()
 
         return None
