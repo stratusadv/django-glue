@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.messages',
     'django.contrib.admin',
+    'django.contrib.staticfiles',
     'django_glue',
     'tests',
 ]
@@ -72,6 +73,6 @@ TEMPLATES = [
     },
 ]
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 
 DJANGO_GLUE_URL = 'django_glue/'

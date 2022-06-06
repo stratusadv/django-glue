@@ -1,0 +1,1 @@
+alert('STATIC FILES LOADED')
