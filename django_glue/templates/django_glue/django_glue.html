@@ -1,74 +1,10 @@
 {% load static %}
 {% csrf_token %}
 
-<script type="application/ecmascript" src="{% static 'django_glue/js/django_glue.js' %}"></script>
-
 <link rel="stylesheet" href="{% static 'tests.css' %}">
 
-<script type="application/javascript">
-
-    let debounce_method = null
-
-    function debounce(method, interval = 300) {
-        clearTimeout(debounce_method);
-        debounce_method = setTimeout(method, interval)
-    }
-
-    function get_cookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                // Does this cookie string begin with the name we want?
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-
-    const csrf_token = get_cookie('csrftoken');
-
-    function post_ajax(url, data) {
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrf_token,
-            },
-            body: JSON.stringify(data),
-        })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Success:', data)
-            })
-            .catch((error) => {
-                console.error('Error:', error)
-            });
-    }
-
-    const javascript_data = document.getElementById('javascript-data')
-
-    function process_glue_connection(el) {
-        el.value = el.getAttribute('glue-field-value')
-        el.addEventListener('keyup', function () {
-            debounce(function () {
-                post_ajax(
-                    '{% url 'django_glue:django_glue_handler' %}',
-                    {
-                        'unique_name': el.getAttribute('glue-unique-name'),
-                        'field_name': el.getAttribute('glue-field-name'),
-                        'value': el.value,
-                    },
-                )
-            })
-        })
-    }
-
-    document.querySelectorAll('[glue-connect]').forEach(process_glue_connection)
-
-
+<script type="application/ecmascript">
+    const DJANGO_GLUE_AJAX_URL = {% url 'django_glue:django_glue_handler' %}
 </script>
+
+<script type="module" src="{% static 'django_glue/js/django_glue.js' %}"></script>
