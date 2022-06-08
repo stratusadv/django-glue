@@ -1,8 +1,6 @@
 import {post_ajax} from "./ajax.js";
 import {debounce} from "./debouce.js";
 
-const javascript_data = document.getElementById('javascript-data')
-
 function process_glue_connection(el) {
     el.value = el.getAttribute('glue-field-value')
     el.addEventListener('keyup', function () {
