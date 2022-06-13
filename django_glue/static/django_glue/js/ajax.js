@@ -1,4 +1,5 @@
 import {csrf_token} from "./csrf.js";
+import {add_message} from "./message.js";
 
 function post_ajax(url, data) {
     fetch(url, {
@@ -12,6 +13,7 @@ function post_ajax(url, data) {
         .then(response => response.json())
         .then(data => {
             console.log('Success:', data)
+            add_message(data['type'], data['message_title'], data['message_body'])
         })
         .catch((error) => {
             console.error('Error:', error)

@@ -8,6 +8,7 @@ function process_glue_connection(el) {
             post_ajax(
                 DJANGO_GLUE_AJAX_URL,
                 {
+                    'method': 'update',
                     'unique_name': el.getAttribute('glue-unique-name'),
                     'field_name': el.getAttribute('glue-field-name'),
                     'value': el.value,

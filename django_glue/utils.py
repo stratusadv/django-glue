@@ -66,9 +66,9 @@ def camel_to_snake(string):
     return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
 
 
-def generate_json_response(status, type, message):
-    return JsonResponse(json.dumps({
-        'status': status,
+def generate_json_response(status, type, message_title, message_body):
+    return JsonResponse({
         'type': type,
-        'message': message,
-    }))
+        'message_title': message_title,
+        'message_body': message_body,
+    }, status=status)

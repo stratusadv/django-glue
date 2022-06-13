@@ -67,14 +67,27 @@
                 </div>
 
                 <div class="card-body">
-                    {% for key, value in request.session.glue.items %}
+                    {% for key, value in glue.items %}
                         <span>{{ key }}: {{ value }}</span><br/>
                     {% endfor %}
                 </div>
             </div>
         </div>
+
+        <div class="col-4">
+            <div class="card">
+                <div class="card-header h4 text-center">
+                    Message Element
+                </div>
+
+                <div class="card-body">
+{#                    {% glue_message %}#}
+                </div>
+            </div>
+        </div>
     </div>
 
-    {% glue_load %}
+    {% glue_message_viewport %}
+    {% glue_init %}
 
 {% endblock %}

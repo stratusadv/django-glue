@@ -1,18 +1,33 @@
-.glue_message {
+.django-glue-message-list {
+
 }
 
-.glue_message_success {
-    background-color: #9E9;
+.django-glue-message-list-viewport {
+    position: absolute;
+    bottom: 0;
 }
 
-.glue_message_info {
+.django-glue-message {
+    opacity: 1;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.django-glue-message-fade {
+    opacity: 0;
+}
+
+.django-glue-message-success {
+    background-color: #BEB;
+}
+
+.django-glue-message-info {
     background-color: #EEE;
 }
 
-.glue_message_warning {
-    background-color: #EE9;
+.django-glue-message-warning {
+    background-color: #EEB;
 }
 
-.glue_message_error {
-    background-color: #E99;
+.django-glue-message-error {
+    background-color: #EBB;
 }

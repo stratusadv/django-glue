@@ -20,7 +20,7 @@ def glue_ajax_handler_view(request):
                 model_object.__dict__[body_data['field_name']] = body_data['value']
                 model_object.save()
 
-        return generate_json_response('200', 'success', 'Success message goes here and here and here!')
+        return generate_json_response('200', 'success', 'Success', 'The thing you tried to do was completely successful')
 
     else:
-        return generate_json_response('404', 'error', 'Invalid method')
+        return generate_json_response('404', 'error', 'Invalid method', 'The requested process method was not a valid choice please try again.')

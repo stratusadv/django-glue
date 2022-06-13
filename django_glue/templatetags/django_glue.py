@@ -8,10 +8,20 @@ from django.utils.safestring import mark_safe
 register = template.Library()
 
 
-@register.inclusion_tag('django_glue/django_glue.html', takes_context=True, name='glue_load')
-def glue_load(context):
+@register.inclusion_tag('django_glue/django_glue.html', takes_context=True, name='glue_init')
+def glue_init(context):
     context['glue_json_string'] = context['glue']
     return context
+
+
+@register.inclusion_tag('django_glue/message_list.html', name='glue_message')
+def glue_message():
+    return None
+
+
+@register.inclusion_tag('django_glue/message_list_viewport.html', name='glue_message_viewport')
+def glue_message_viewport():
+    return None
 
 
 @register.simple_tag(takes_context=True, name='glue_connect')
