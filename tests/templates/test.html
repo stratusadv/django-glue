@@ -11,7 +11,21 @@
 
     <div class="row g-3">
         <div class="col-4">
-            {% include 'card/test_live_update_form_card.html' %}
+            {% include 'card/live_update_form_card.html' %}
+        </div>
+
+        <div class="col-4">
+            {% include 'card/button_update_form_card.html' %}
+        </div>
+
+        <div class="col-4">
+            {% include 'card/create_form_card.html' %}
+        </div>
+    </div>
+
+    <div class="row g-3 mt-2">
+        <div class="col-4">
+            {% include 'card/live_read_and_delete_card.html' %}
         </div>
 
         <div class="col-4">
@@ -33,7 +47,7 @@
         </div>
     </div>
 
-    {% glue_message_viewport %}
+{#    {% glue_message_viewport %}#}
 
     {% glue_init %}
 

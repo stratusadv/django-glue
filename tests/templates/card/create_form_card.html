@@ -1,0 +1,23 @@
+{% extends 'card/card.html' %}
+
+{% load django_glue %}
+
+{% block header %}
+    Create Form
+{% endblock %}
+
+{% block body %}
+{#    <label for="char">Char</label>#}
+{#    <input id="char" class="form-control" {% glue_input 'test_model.char' %} />#}
+{##}
+{#    <label for="text">Text</label>#}
+{#    <textarea id="text" class="form-control" {% glue_textarea 'test_model.text' %}></textarea>#}
+{##}
+{#    <label for="integer">Integer</label>#}
+{#    <input class="form-control" id="integer" name="integer"#}
+{#           value="" {% glue_input 'test_model.integer' %} />#}
+{##}
+{#    <label for="decimal">Decimal</label>#}
+{#    <input class="form-control" id="decimal" name="decimal"#}
+{#           value="" {% glue_input 'test_model.decimal' %} />#}
+{% endblock %}
