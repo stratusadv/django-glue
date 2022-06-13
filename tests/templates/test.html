@@ -11,79 +11,25 @@
 
     <div class="row g-3">
         <div class="col-4">
-            <div class="card bg-100">
-                <div class="card-header h4 text-center">
-                    Test Form
-                </div>
-
-                <div class="card-body">
-                    <label for="char">Char</label>
-                    <input id="char" class="form-control" {% glue_input 'test_model.char' %} />
-
-                    <label for="text">Text</label>
-                    <textarea id="text" class="form-control" {% glue_textarea 'test_model.text' %}></textarea>
-
-                    <label for="integer">Integer</label>
-                    <input class="form-control" id="integer" name="integer"
-                           value="" {% glue_input 'test_model.integer' %} />
-
-                    <label for="decimal">Decimal</label>
-                    <input class="form-control" id="decimal" name="decimal"
-                           value="" {% glue_input 'test_model.decimal' %} />
-                </div>
-            </div>
+            {% include 'card/test_live_update_form_card.html' %}
         </div>
 
         <div class="col-4">
-            <div class="card">
-                <div class="card-header h4 text-center">
-                    Context Data
-                </div>
-
-                <div class="card-body">
-                    {{ glue }}
-                </div>
-            </div>
+            {% include 'card/context_data_card.html' %}
         </div>
 
         <div class="col-4">
-            <div class="card">
-                <div class="card-header h4 text-center">
-                    Javascript Data
-                </div>
-
-                <div id="javascript-data" class="card-body">
-                    Nothing to See Yet!!!
-                </div>
-            </div>
+            {% include 'card/javascript_data_card.html' %}
         </div>
     </div>
 
     <div class="row g-3 mt-2">
         <div class="col-4">
-            <div class="card">
-                <div class="card-header h4 text-center">
-                    Session Data
-                </div>
-
-                <div class="card-body">
-                    {% for key, value in glue.items %}
-                        <span>{{ key }}: {{ value }}</span><br/>
-                    {% endfor %}
-                </div>
-            </div>
+            {% include 'card/session_data_card.html' %}
         </div>
 
         <div class="col-4">
-            <div class="card">
-                <div class="card-header h4 text-center">
-                    Message Element
-                </div>
-
-                <div class="card-body">
-{#                    {% glue_message %}#}
-                </div>
-            </div>
+            {% include 'card/message_card.html' %}
         </div>
     </div>
 

@@ -1,0 +1,11 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    Session Data
+{% endblock %}
+
+{% block body %}
+    {% for key, value in glue.items %}
+        <span>{{ key }}: {{ value }}</span><br/>
+    {% endfor %}
+{% endblock %}
