@@ -1,7 +1,7 @@
 {% load static %}
 {% csrf_token %}
 
-<link rel="stylesheet" href="{% static 'tests.css' %}">
+<link rel="stylesheet" href="{% static 'django_glue/css/django_glue.css' %}">
 
 <script type="application/ecmascript">
     const DJANGO_GLUE_AJAX_URL = {% url 'django_glue:django_glue_handler' %}

@@ -1,7 +1,8 @@
-import logging
+import logging, json
 from uuid import uuid4
 
 from django.contrib.contenttypes.models import ContentType
+from django.http import JsonResponse
 
 
 GLUE_METHOD_CHOICES = (
@@ -63,3 +64,11 @@ def get_fields_from_model(model):
 
 def camel_to_snake(string):
     return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
+
+
+def generate_json_response(status, type, message):
+    return JsonResponse(json.dumps({
+        'status': status,
+        'type': type,
+        'message': message,
+    }))

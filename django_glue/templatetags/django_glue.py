@@ -8,8 +8,8 @@ from django.utils.safestring import mark_safe
 register = template.Library()
 
 
-@register.inclusion_tag('django_glue/django_glue.html', takes_context=True, name='glue_js')
-def glue_js(context):
+@register.inclusion_tag('django_glue/django_glue.html', takes_context=True, name='glue_load')
+def glue_load(context):
     context['glue_json_string'] = context['glue']
     return context
 

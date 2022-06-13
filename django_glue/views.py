@@ -4,6 +4,8 @@ import logging
 from django.http import JsonResponse
 from django.contrib.contenttypes.models import ContentType
 
+from django_glue.utils import generate_json_response
+
 
 def glue_ajax_handler_view(request):
     body_data = json.loads(request.body.decode('utf-8'))
@@ -18,8 +20,4 @@ def glue_ajax_handler_view(request):
             model_object.__dict__[body_data['field_name']] = body_data['value']
             model_object.save()
 
-    json_response = {
-        'status': True,
-    }
-
-    return JsonResponse(json_response)
+    return generate_json_response('200', 'success', 'Success message goes here and here and here!')

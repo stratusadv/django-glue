@@ -1,0 +1,18 @@
+.glue_message {
+}
+
+.glue_message_success {
+    background-color: #9E9;
+}
+
+.glue_message_info {
+    background-color: #EEE;
+}
+
+.glue_message_warning {
+    background-color: #EE9;
+}
+
+.glue_message_error {
+    background-color: #E99;
+}
