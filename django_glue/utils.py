@@ -4,11 +4,32 @@ from uuid import uuid4
 from django.contrib.contenttypes.models import ContentType
 from django.http import JsonResponse
 
+GLUE_CONNECT_INPUT_METHODS = (
+    'live',
+    'form',
+)
+
+GLUE_CONNECT_INPUT_TYPES = (
+    'input',
+    'textarea',
+)
+
+GLUE_CONNECT_SUBMIT_METHODS = (
+    'create',
+    'update',
+)
 
 GLUE_METHOD_CHOICES = (
     ('vie', 'View'),
     ('cha', 'Change'),
     ('del', 'Delete'),
+)
+
+GLUE_RESPONSE_TYPES = (
+    'success',
+    'info',
+    'warning',
+    'error',
 )
 
 
@@ -43,6 +64,10 @@ def add_model_object_glue(request, unique_name, model_object, method, fields=Non
         raise TypeError('field argument must be a str object')
 
 
+def camel_to_snake(string):
+    return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
+
+
 def clean_glue_session(request):
     request.session['django_glue'] = dict()
 
@@ -62,13 +87,12 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def camel_to_snake(string):
-    return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
+def generate_json_response(status, response_type: str, message_title, message_body):
+    if response_type not in GLUE_RESPONSE_TYPES:
+        raise ValueError(f'response_type "{response_type}" is not a valid, choices are {GLUE_RESPONSE_TYPES}')
 
-
-def generate_json_response(status, type, message_title, message_body):
     return JsonResponse({
-        'type': type,
+        'type': response_type,
         'message_title': message_title,
         'message_body': message_body,
     }, status=status)
