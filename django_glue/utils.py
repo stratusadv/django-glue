@@ -64,6 +64,10 @@ def add_model_object_glue(request, unique_name, model_object, method, fields=Non
         raise TypeError('field argument must be a str object')
 
 
+def add_model_query_set_glue(request, unique_name, model_object, filter):
+    pass
+
+
 def camel_to_snake(string):
     return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
 
@@ -96,3 +100,8 @@ def generate_json_response(status, response_type: str, message_title, message_bo
         'message_title': message_title,
         'message_body': message_body,
     }, status=status)
+
+
+def generate_json_404_response():
+    return generate_json_response('404', 'error', 'Request not Found',
+                                  'The requested information, object or view you are looking for was not found.')

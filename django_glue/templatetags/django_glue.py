@@ -24,7 +24,6 @@ def glue_message_viewport():
     return None
 
 
-@register.simple_tag(takes_context=True, name='glue_connect_input')
 def glue_connect_input(context, input_type, input_method, unique_name_and_field_string, custom_attributes=''):
     if input_type not in GLUE_CONNECT_INPUT_TYPES:
         raise ValueError(f'input_type "{input_type}" is not valid, choices are {GLUE_CONNECT_INPUT_TYPES}')
@@ -55,7 +54,6 @@ def glue_connect_input(context, input_type, input_method, unique_name_and_field_
         return mark_safe(f'')
 
 
-@register.simple_tag(takes_context=True, name='glue_connect_submit')
 def glue_connect_submit(context, submit_method, unique_name, custom_attributes=''):
     if submit_method not in GLUE_CONNECT_SUBMIT_METHODS:
         raise ValueError(f'submit_method "{submit_method}" is not valid, choices are {GLUE_CONNECT_SUBMIT_METHODS}')
@@ -63,40 +61,31 @@ def glue_connect_submit(context, submit_method, unique_name, custom_attributes='
     return mark_safe(f'glue-connect="submit" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
 
 
-def glue_input(context, unique_name_and_field_string, input_type, input_method):
-    return glue_connect_input(
-        context,
-        input_type,
-        input_method,
-        unique_name_and_field_string
-    )
-
-
 @register.simple_tag(takes_context=True, name='glue_input_live')
 def glue_input_live(context, unique_name_and_field_string):
-    return glue_input(context, unique_name_and_field_string, 'input', 'live')
+    return glue_connect_input(context, 'input', 'live', unique_name_and_field_string)
 
 
 @register.simple_tag(takes_context=True, name='glue_input_form')
 def glue_input_form(context, unique_name_and_field_string):
-    return glue_input(context, unique_name_and_field_string, 'input', 'form')
+    return glue_connect_input(context, 'input', 'form', unique_name_and_field_string)
 
 
 @register.simple_tag(takes_context=True, name='glue_textarea_live')
 def glue_textarea_live(context, unique_name_and_field_string):
-    return glue_input(context, unique_name_and_field_string, 'textarea', 'live')
+    return glue_connect_input(context, 'textarea', 'live', unique_name_and_field_string)
 
 
 @register.simple_tag(takes_context=True, name='glue_textarea_form')
 def glue_textarea_form(context, unique_name_and_field_string):
-    return glue_input(context, unique_name_and_field_string, 'textarea', 'form')
+    return glue_connect_input(context, 'textarea', 'form', unique_name_and_field_string)
 
 
 @register.simple_tag(takes_context=True, name='glue_submit_update')
-def glue_submit_update(context, unique_name_and_field_string):
-    return glue_connect_submit(context, 'update', unique_name_and_field_string)
+def glue_submit_update(context, unique_name):
+    return glue_connect_submit(context, 'update', unique_name)
 
 
 @register.simple_tag(takes_context=True, name='glue_submit_create')
-def glue_submit_create(context, unique_name_and_field_string):
-    return glue_connect_submit(context, 'create', unique_name_and_field_string)
+def glue_submit_create(context, unique_name):
+    return glue_connect_submit(context, 'create', unique_name)
