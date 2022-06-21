@@ -13,6 +13,7 @@ function get_form_values(unique_name) {
 }
 
 function process_glue_connect(el) {
+    let type = el.getAttribute('glue-type')
     let input_method = el.getAttribute('glue-method')
     let input_type = el.getAttribute('glue-connect')
     let input_value = el.getAttribute('glue-field-value')
@@ -25,6 +26,7 @@ function process_glue_connect(el) {
                 post_ajax(
                     DJANGO_GLUE_AJAX_URL,
                     {
+                        'type': type,
                         'method': 'update',
                         'unique_name': unique_name,
                         'field_name': el.getAttribute('glue-field-name'),

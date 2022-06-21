@@ -2,6 +2,7 @@ import json
 
 from django.conf import settings
 
+from django_glue.utils import GLUE_SESSION_NAME
 
 def glue(request):
     if settings.DJANGO_GLUE_URL:
@@ -11,5 +12,5 @@ def glue(request):
 
     return {
         'glue_url': glue_url,
-        'glue': request.session['django_glue'],
+        'glue': request.session[GLUE_SESSION_NAME]['context'],
     }

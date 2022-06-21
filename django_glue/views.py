@@ -9,14 +9,15 @@ from django_glue.utils import generate_json_response, generate_json_404_response
 def glue_ajax_handler_view(request):
     body_data = json.loads(request.body.decode('utf-8'))
 
-    rs = request.session['django_glue']
+    rsc = request.session['django_glue']['context']
+    rsq = request.session['django_glue']['query_sets']
 
     if 'method' in body_data:
-        if body_data['unique_name'] in rs:
-            model_class = ContentType.objects.get_by_natural_key(rs[body_data['unique_name']]['content_app_label'],
-                                                                 rs[body_data['unique_name']][
+        if body_data['unique_name'] in rsc:
+            model_class = ContentType.objects.get_by_natural_key(rsc[body_data['unique_name']]['content_app_label'],
+                                                                 rsc[body_data['unique_name']][
                                                                      'content_model']).model_class()
-            model_object = model_class.objects.get(id=rs[body_data['unique_name']]['object_id'])
+            model_object = model_class.objects.get(id=rsc[body_data['unique_name']]['object_id'])
 
             if body_data['method'] == 'update':
 
@@ -26,7 +27,7 @@ def glue_ajax_handler_view(request):
                         model_object.__dict__[key] = val
                     model_object.save()
                 elif 'field_name' in body_data:
-                    if body_data['field_name'] in rs[body_data['unique_name']]['fields']:
+                    if body_data['field_name'] in rsc[body_data['unique_name']]['fields']:
                         model_object.__dict__[body_data['field_name']] = body_data['value']
                         model_object.save()
 

@@ -36,62 +36,58 @@ GLUE_RESPONSE_TYPES = (
 
 
 def add_model_object_glue(request, unique_name, model_object, method, fields=None, **kwargs):
-    rs = get_glue_session(request)
+    from django.db.models import Model
+    if isinstance(model_object, Model):
+        rs = get_glue_session(request)
 
-    content_type = ContentType.objects.get_for_model(model_object)
+        content_type = ContentType.objects.get_for_model(model_object)
 
-    # Todo: Write check to ensure unique name does not exist in session data
-    rs[unique_name] = {
-        'method': method,
-        'model': 'test_model',
-        'content_app_label': content_type.app_label,
-        'content_model': content_type.model,
-        'object_id': model_object.pk,
-    }
+        # Todo: Write check to ensure unique name does not exist in session data
+        rs['context'][unique_name] = {
+            'type': 'model_object',
+            'method': method,
+            'model': 'test_model',
+            'content_app_label': content_type.app_label,
+            'content_model': content_type.model,
+            'object_id': model_object.pk,
+        }
 
-    model = type(model_object)
-    if type(fields) is str:
-        rs[unique_name]['fields'] = generate_field_dict(model._meta.get_field(fields), model_object)
+        model = type(model_object)
+        if type(fields) is str:
+            rs['context'][unique_name]['fields'] = generate_field_dict(model._meta.get_field(fields), model_object)
 
-    elif fields is None:
-        fields_dict = dict()
-        for field in model._meta.fields:
-            fields_dict[field.name] = generate_field_dict(field, model_object)
+        elif fields is None:
+            fields_dict = dict()
+            for field in model._meta.fields:
+                fields_dict[field.name] = generate_field_dict(field, model_object)
 
-        rs[unique_name]['fields'] = fields_dict
+            rs['context'][unique_name]['fields'] = fields_dict
+        else:
+            raise TypeError('field argument must be a str object')
     else:
-        raise TypeError('field argument must be a str object')
+        raise TypeError('model_object is not valid it must be a Model')
 
 
-def add_model_query_set_glue(request, unique_name, model_object, model_query_set, method):
-    import pickle
-    import base64
+def add_query_set_glue(request, unique_name, model_query_set, method):
+    from django.db.models.query import QuerySet
+    if isinstance(model_query_set, QuerySet):
 
-    rs = get_glue_session(request)
+        rs = get_glue_session(request)
 
-    content_type = ContentType.objects.get_for_model(model_object)
+        content_type = ContentType.objects.get_for_model(model_query_set.query.model)
 
-    query_set = model_query_set.only('id')
+        rs['context'][unique_name] = {
+            'type': 'query_set',
+            'method': method,
+            'model': 'test_model',
+            'content_app_label': content_type.app_label,
+            'content_model': content_type.model,
+        }
 
-    logging.warning(pickle.dumps(query_set))
+        rs['query_sets'][unique_name] = encode_query_set_to_str(model_query_set)
 
-    encoded_query_set = encode_query_set_to_str(query_set)
-    logging.warning(encoded_query_set)
-
-    decoded_query_set = decode_query_set_from_str(encoded_query_set)
-    logging.warning(decode_query_set_from_str(encoded_query_set))
-
-    for thing in decoded_query_set:
-        logging.warning(thing.id)
-
-    rs[unique_name] = {
-        'method': method,
-        'model': 'test_model',
-        'content_app_label': content_type.app_label,
-        'content_model': content_type.model,
-        'object_id': model_object.pk,
-        'query_set': encode_query_set_to_str(model_query_set),
-    }
+    else:
+        raise TypeError(f'model_query_set is not valid it must be a QuerySet')
 
 
 def camel_to_snake(string):
@@ -103,16 +99,23 @@ def clean_glue_session(request):
 
 
 def decode_query_set_from_str(query_set_string):
-    return pickle.loads(base64.b64decode(query_set_string))
+    query = pickle.loads(base64.b64decode(query_set_string))
+    decoded_query_set = query.model.objects.all()
+    decoded_query_set.query = query
+    return decoded_query_set
 
 
 def encode_query_set_to_str(query_set):
-    return base64.b64encode(pickle.dumps(query_set)).decode()
+    return base64.b64encode(pickle.dumps(query_set.query)).decode()
 
 
 def get_glue_session(request):
     if GLUE_SESSION_NAME not in request.session:
         request.session[GLUE_SESSION_NAME] = dict()
+    if 'context' not in request.session[GLUE_SESSION_NAME]:
+        request.session[GLUE_SESSION_NAME]['context'] = dict()
+    if 'query_sets' not in request.session[GLUE_SESSION_NAME]:
+        request.session[GLUE_SESSION_NAME]['query_sets'] = dict()
 
     return request.session[GLUE_SESSION_NAME]
 

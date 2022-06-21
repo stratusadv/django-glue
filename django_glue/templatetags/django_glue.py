@@ -36,6 +36,7 @@ def glue_connect_input(context, input_type, input_method, unique_name_and_field_
     is_valid_connection = False
 
     unique_name = ''
+
     field_name = ''
     field_value = ''
 
@@ -45,11 +46,11 @@ def glue_connect_input(context, input_type, input_method, unique_name_and_field_
 
         if unique_name in context['glue']:
             if field_name in context['glue'][unique_name]['fields']:
-                field_value = context["glue"][unique_name]["fields"][field_name]["value"]
+                field_value = context['glue'][unique_name]['fields'][field_name]['value']
                 is_valid_connection = True
 
     if is_valid_connection:
-        return mark_safe(f'glue-connect="{input_type}" glue-method="{input_method}" glue-unique-name="{unique_name}" glue-field-name="{field_name}" glue-field-value="{field_value}" {custom_attributes}')
+        return mark_safe(f'glue-connect="{input_type}" glue-type="{context["glue"][unique_name]["type"]}" glue-method="{input_method}" glue-unique-name="{unique_name}" glue-field-name="{field_name}" glue-field-value="{field_value}" {custom_attributes}')
     else:
         return mark_safe(f'')
 
@@ -71,6 +72,11 @@ def glue_input_form(context, unique_name_and_field_string):
     return glue_connect_input(context, 'input', 'form', unique_name_and_field_string)
 
 
+@register.simple_tag(takes_context=True, name='glue_query_set_display')
+def glue_query_set_display(context, unique_name):
+    return None
+
+
 @register.simple_tag(takes_context=True, name='glue_textarea_live')
 def glue_textarea_live(context, unique_name_and_field_string):
     return glue_connect_input(context, 'textarea', 'live', unique_name_and_field_string)
@@ -89,3 +95,4 @@ def glue_submit_update(context, unique_name):
 @register.simple_tag(takes_context=True, name='glue_submit_create')
 def glue_submit_create(context, unique_name):
     return glue_connect_submit(context, 'create', unique_name)
+

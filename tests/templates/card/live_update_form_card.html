@@ -8,16 +8,16 @@
 
 {% block body %}
     <label for="char">Char</label>
-    <input id="char" class="form-control" {% glue_input_live 'test_model.char' %} />
+    <input id="char" class="form-control" {% glue_input_live 'test_model_live.char' %} />
 
     <label for="text">Text</label>
-    <textarea id="text" class="form-control" {% glue_textarea_live 'test_model.text' %}></textarea>
+    <textarea id="text" class="form-control" {% glue_textarea_live 'test_model_live.text' %}></textarea>
 
     <label for="integer">Integer</label>
     <input class="form-control" id="integer" name="integer"
-           value="" {% glue_input_live 'test_model.integer' %} />
+           value="" {% glue_input_live 'test_model_live.integer' %} />
 
     <label for="decimal">Decimal</label>
     <input class="form-control" id="decimal" name="decimal"
-           value="" {% glue_input_live 'test_model.decimal' %} />
+           value="" {% glue_input_live 'test_model_live.decimal' %} />
 {% endblock %}
