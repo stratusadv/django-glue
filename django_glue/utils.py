@@ -149,3 +149,14 @@ def generate_json_response(status, response_type: str, message_title, message_bo
 def generate_json_404_response():
     return generate_json_response('404', 'error', 'Request not Found',
                                   'The requested information, object or view you are looking for was not found.')
+
+
+def process_and_save_form_values(model_object, form_values_dict):
+    for key, val in form_values_dict.items():
+        model_object.__dict__[key] = val
+    model_object.save()
+
+
+def process_and_save_field_value(model_object, field, value):
+    model_object.__dict__[field] = value
+    model_object.save()

@@ -55,11 +55,15 @@ def glue_connect_input(context, input_type, input_method, unique_name_and_field_
         return mark_safe(f'')
 
 
+def glue_connect_query_set(context, unique_name):
+    return mark_safe(f'glue-connect="query_set" glue-type="{context["glue"][unique_name]["type"]}" glue-unique-name="{unique_name}"')
+
+
 def glue_connect_submit(context, submit_method, unique_name, custom_attributes=''):
     if submit_method not in GLUE_CONNECT_SUBMIT_METHODS:
         raise ValueError(f'submit_method "{submit_method}" is not valid, choices are {GLUE_CONNECT_SUBMIT_METHODS}')
 
-    return mark_safe(f'glue-connect="submit" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
+    return mark_safe(f'glue-connect="submit" glue-type="{context["glue"][unique_name]["type"]}" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
 
 
 @register.simple_tag(takes_context=True, name='glue_input_live')
@@ -74,7 +78,7 @@ def glue_input_form(context, unique_name_and_field_string):
 
 @register.simple_tag(takes_context=True, name='glue_query_set_display')
 def glue_query_set_display(context, unique_name):
-    return None
+    return glue_connect_query_set(context, unique_name)
 
 
 @register.simple_tag(takes_context=True, name='glue_textarea_live')

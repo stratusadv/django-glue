@@ -5,7 +5,7 @@ function get_form_values(unique_name) {
     let form_input_list = document.querySelectorAll('[glue-connect]')
     let form_json = {}
 
-    for(let i = 0; i < form_input_list.length; i++) {
+    for (let i = 0; i < form_input_list.length; i++) {
         form_json[form_input_list[i].getAttribute('glue-field-name')] = form_input_list[i].value
     }
 
@@ -45,6 +45,7 @@ function process_glue_connect(el) {
                 post_ajax(
                     DJANGO_GLUE_AJAX_URL,
                     {
+                        'type': type,
                         'method': 'update',
                         'unique_name': unique_name,
                         'form_values': get_form_values(unique_name),
@@ -54,6 +55,7 @@ function process_glue_connect(el) {
                 post_ajax(
                     DJANGO_GLUE_AJAX_URL,
                     {
+                        'type': type,
                         'method': 'create',
                         'unique_name': unique_name,
                         'form_values': get_form_values(unique_name),
@@ -61,6 +63,17 @@ function process_glue_connect(el) {
                 )
             }
         })
+    }
+
+    if (input_type === 'query_set') {
+        el.innerHTML = post_ajax(
+            DJANGO_GLUE_AJAX_URL,
+            {
+                'type': type,
+                'method': 'view',
+                'unique_name': unique_name,
+            },
+        )
     }
 
 }
