@@ -5,6 +5,7 @@
 
 <script type="application/ecmascript">
     const DJANGO_GLUE_AJAX_URL = {% url 'django_glue:django_glue_handler' %}
+    const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
 </script>
 
 <script type="module" src="{% static 'django_glue/js/django_glue.js' %}"></script>

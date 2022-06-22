@@ -55,11 +55,15 @@ def glue_connect_input(context, input_type, input_method, unique_name_and_field_
         return mark_safe(f'')
 
 
+def glue_connect_query_set(context, unique_name):
+    return mark_safe(f'glue-connect="query_set" glue-type="{context["glue"][unique_name]["type"]}" glue-unique-name="{unique_name}"')
+
+
 def glue_connect_submit(context, submit_method, unique_name, custom_attributes=''):
     if submit_method not in GLUE_CONNECT_SUBMIT_METHODS:
         raise ValueError(f'submit_method "{submit_method}" is not valid, choices are {GLUE_CONNECT_SUBMIT_METHODS}')
 
-    return mark_safe(f'glue-connect="submit" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
+    return mark_safe(f'glue-connect="submit" glue-type="{context["glue"][unique_name]["type"]}" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
 
 
 @register.simple_tag(takes_context=True, name='glue_input_live')
@@ -72,9 +76,24 @@ def glue_input_form(context, unique_name_and_field_string):
     return glue_connect_input(context, 'input', 'form', unique_name_and_field_string)
 
 
-@register.simple_tag(takes_context=True, name='glue_query_set_display')
-def glue_query_set_display(context, unique_name):
-    return None
+@register.tag(name='glue_query_set_template_display')
+def glue_query_set_template_display(parser, token):
+    try:
+        tag_name, unique_name, template_name = token.split_contents()
+    except ValueError:
+        raise template.TemplateSyntaxError(f'{token.split_contents()[0]} tag requires exactly two arguments')
+
+    return GlueQuerySetTemplateDisplayNode(unique_name[1:-1], template_name[1:-1])
+
+
+class GlueQuerySetTemplateDisplayNode(template.Node):
+    def __init__(self, unique_name, template_name):
+        self.unique_name = unique_name
+        self.template_name = template_name
+
+    def render(self, context):
+        from django.template import loader
+        return mark_safe(f'<div glue-connect="query_set" glue-type="query_set" glue-template-display="{self.unique_name}" glue-unique-name="{self.unique_name}">{loader.get_template(self.template_name).render(context.flatten())}</div>')
 
 
 @register.simple_tag(takes_context=True, name='glue_textarea_live')
@@ -96,3 +115,32 @@ def glue_submit_update(context, unique_name):
 def glue_submit_create(context, unique_name):
     return glue_connect_submit(context, 'create', unique_name)
 
+
+@register.tag(name='glue_template')
+def glue_template(parser, token):
+    node_list = parser.parse(('end_glue_template',))
+    parser.delete_first_token()
+    try:
+        tag_name, template_name = token.split_contents()
+    except ValueError:
+        raise template.TemplateSyntaxError(f'{token.split_contents()[0]} tag requires exactly one argument')
+
+    return GlueTemplateNode(node_list, template_name[1:-1])
+
+
+class GlueTemplateNode(template.Node):
+    def __init__(self, node_list, template_name):
+        self.template_name = template_name
+        self.node_list = node_list
+
+    def render(self, context):
+        output = self.node_list.render(context)
+        try:
+            return mark_safe(f'<template glue-template="{self.template_name}">{output}</template>')
+        except template.VariableDoesNotExist:
+            return ''
+
+
+@register.simple_tag(name='glue_template_value')
+def glue_template_value(model_name_and_field):
+    return mark_safe(f'glue-template-value="{model_name_and_field}"')

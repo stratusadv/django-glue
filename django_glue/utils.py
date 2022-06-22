@@ -135,7 +135,7 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def generate_json_response(status, response_type: str, message_title, message_body):
+def generate_json_response(status, response_type: str, message_title, message_body, additional_data=None):
     if response_type not in GLUE_RESPONSE_TYPES:
         raise ValueError(f'response_type "{response_type}" is not a valid, choices are {GLUE_RESPONSE_TYPES}')
 
@@ -143,9 +143,21 @@ def generate_json_response(status, response_type: str, message_title, message_bo
         'type': response_type,
         'message_title': message_title,
         'message_body': message_body,
+        'data': additional_data
     }, status=status)
 
 
 def generate_json_404_response():
     return generate_json_response('404', 'error', 'Request not Found',
                                   'The requested information, object or view you are looking for was not found.')
+
+
+def process_and_save_form_values(model_object, form_values_dict):
+    for key, val in form_values_dict.items():
+        model_object.__dict__[key] = val
+    model_object.save()
+
+
+def process_and_save_field_value(model_object, field, value):
+    model_object.__dict__[field] = value
+    model_object.save()
