@@ -135,7 +135,7 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def generate_json_response(status, response_type: str, message_title, message_body):
+def generate_json_response(status, response_type: str, message_title, message_body, additional_data=None):
     if response_type not in GLUE_RESPONSE_TYPES:
         raise ValueError(f'response_type "{response_type}" is not a valid, choices are {GLUE_RESPONSE_TYPES}')
 
@@ -143,6 +143,7 @@ def generate_json_response(status, response_type: str, message_title, message_bo
         'type': response_type,
         'message_title': message_title,
         'message_body': message_body,
+        'data': additional_data
     }, status=status)
 
 

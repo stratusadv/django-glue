@@ -22,6 +22,9 @@ class TestView(TemplateView):
             decimal=258.369,
         )
 
+        exlude_test_model = TestModel.objects.all()[:9]
+        TestModel.objects.exclude(pk__in=exlude_test_model).delete()
+
         # test_model_object = TestModel.objects.all().latest('id')
         logging.warning(f'Added TestModel object.')
 
@@ -29,7 +32,7 @@ class TestView(TemplateView):
         add_model_object_glue(self.request, 'test_model_form', test_model_object, 'change')
         logging.warning('Added model object glue for TestModel Object in write mode')
 
-        add_query_set_glue(self.request, 'test_model_set', TestModel.objects.filter(id__gte=5).filter(id__lte=10), 'read')
+        add_query_set_glue(self.request, 'test_model_set', TestModel.objects.filter(id__gte=1).filter(id__lte=1000), 'read')
         logging.warning('Added model query set glue for TestModel Object in read mode')
 
         return context_data

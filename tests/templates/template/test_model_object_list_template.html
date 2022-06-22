@@ -1,0 +1,19 @@
+{% load django_glue %}
+
+{% glue_template 'test_model_list_item' %}
+    <div class="row border mb-3 mx-1 p-2 shadow-sm rounded-3">
+        <div class="col-1" {% glue_template_value 'test_model_set.id' %}>
+        </div>
+        <div class="col-2" {% glue_template_value 'test_model_set.char' %}>
+        </div>
+        <div class="col-5" {% glue_template_value 'test_model_set.text' %}>
+        </div>
+        <div class="col-2" {% glue_template_value 'test_model_set.integer' %}>
+        </div>
+        <div class="col-1" {% glue_template_value 'test_model_set.decimal' %}>
+        </div>
+        <div class="col-1">
+            Delete
+        </div>
+    </div>
+{% end_glue_template %}

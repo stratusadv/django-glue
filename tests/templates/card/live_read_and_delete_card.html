@@ -7,6 +7,5 @@
 {% endblock %}
 
 {% block body %}
-    <div {% glue_query_set_display 'test_model_set' %}>
-    </div>
+    {% glue_query_set_template_display 'test_model_set' 'template/test_model_object_list_template.html' %}
 {% endblock %}

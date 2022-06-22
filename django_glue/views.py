@@ -43,11 +43,13 @@ def glue_ajax_handler_view(request):
 
             if bd['type'] == 'query_set':
                 if bd['method'] == 'view':
+                    from django.forms.models import model_to_dict
                     working_query_set = decode_query_set_from_str(rsq[bd['unique_name']])
+                    model_object_list = dict()
                     for model_object in working_query_set:
-                        logging.warning(model_object)
+                        model_object_list[model_object.id] = model_to_dict(model_object)
 
                     return generate_json_response('200', 'success', 'View Query Set Success',
-                                                  'The thing you tried to create was completely successful')
+                                                  'The thing you tried to create was completely successful', additional_data=model_object_list)
 
     return generate_json_404_response()
