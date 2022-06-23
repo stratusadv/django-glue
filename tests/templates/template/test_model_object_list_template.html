@@ -1,6 +1,6 @@
 {% load django_glue %}
 
-{% glue_template 'test_model_list_item' %}
+{% glue_template 'test_model_list_item' 'id'%}
     <div class="row border mb-3 mx-1 p-2 shadow-sm rounded-3">
         <div class="col-1" {% glue_template_value 'test_model_set.id' %}>
         </div>
@@ -13,7 +13,9 @@
         <div class="col-1" {% glue_template_value 'test_model_set.decimal' %}>
         </div>
         <div class="col-1">
-            Delete
+            <div class="btn btn-warning px-1 py-0" {% glue_template_event 'test_model_set' 'onclick' 'delete' %}>
+                Delete
+            </div>
         </div>
     </div>
 {% end_glue_template %}

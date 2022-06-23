@@ -135,6 +135,14 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
+def generate_glue_attribute_string(unique_name, glue_type, method, **kwargs):
+    attribute_string = f'glue-unique-name="{unique_name}" glue-type="{glue_type}" glue-method="{method}"'
+    for key, val in kwargs.items():
+        attribute_string += f' glue-{key.replace("_", "-")}="{val}"'
+
+    return attribute_string
+
+
 def generate_json_response(status, response_type: str, message_title, message_body, additional_data=None):
     if response_type not in GLUE_RESPONSE_TYPES:
         raise ValueError(f'response_type "{response_type}" is not a valid, choices are {GLUE_RESPONSE_TYPES}')
