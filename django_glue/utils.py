@@ -32,6 +32,7 @@ GLUE_RESPONSE_TYPES = (
     'info',
     'warning',
     'error',
+    'debug',
 )
 
 
@@ -158,6 +159,27 @@ def generate_json_response(status, response_type: str, message_title, message_bo
 def generate_json_404_response():
     return generate_json_response('404', 'error', 'Request not Found',
                                   'The requested information, object or view you are looking for was not found.')
+
+
+def run_glue_method(request, model_object, method):
+    if hasattr(model_object, method):
+        getattr(model_object, method)(request)
+
+
+def create_model_object(request, model_object, **kwargs):
+    run_glue_method(request, model_object, 'django_glue_create')
+
+
+def delete_model_object(request, model_object, **kwargs):
+    run_glue_method(request, model_object, 'django_glue_delete')
+
+
+def update_model_object(request, model_object, **kwargs):
+    run_glue_method(request, model_object, 'django_glue_update')
+
+
+def view_model_object(request, model_object, **kwargs):
+    run_glue_method(request, model_object, 'django_glue_view')
 
 
 def process_and_save_form_values(model_object, form_values_dict):

@@ -41,7 +41,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'django_glue_test.db',
+        'NAME': 'test.db',
     }
 }
 
