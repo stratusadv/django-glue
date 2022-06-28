@@ -22,8 +22,8 @@ class TestView(TemplateView):
             decimal=258.369,
         )
 
-        exlude_test_model = TestModel.objects.all()[:9]
-        TestModel.objects.exclude(pk__in=exlude_test_model).delete()
+        exclude_test_model = TestModel.objects.all()[:9]
+        TestModel.objects.exclude(pk__in=exclude_test_model).delete()
 
         # test_model_object = TestModel.objects.all().latest('id')
         logging.warning(f'Added TestModel object.')
