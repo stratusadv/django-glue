@@ -3,6 +3,8 @@ from uuid import uuid4
 
 from django.contrib.contenttypes.models import ContentType
 from django.http import JsonResponse
+from django.db.models import Model
+from django.db.models.query import QuerySet
 
 GLUE_SESSION_NAME = 'django_glue'
 
@@ -36,8 +38,16 @@ GLUE_RESPONSE_TYPES = (
 )
 
 
+def add_glue(request, unique_name, target, access, fields=None, **kwargs):
+    if isinstance(target, Model):
+        add_model_object_glue(request, unique_name, target, access, fields, **kwargs)
+    elif isinstance(target, QuerySet):
+        add_query_set_glue(request, unique_name, target, access, fields, **kwargs)
+    else:
+        raise TypeError(f'target is not a valid type must be django Model or QuerySet')
+
+
 def add_model_object_glue(request, unique_name, model_object, method, fields=None, **kwargs):
-    from django.db.models import Model
     if isinstance(model_object, Model):
         rs = get_glue_session(request)
 
@@ -69,8 +79,7 @@ def add_model_object_glue(request, unique_name, model_object, method, fields=Non
         raise TypeError('model_object is not valid it must be a Model')
 
 
-def add_query_set_glue(request, unique_name, model_query_set, method):
-    from django.db.models.query import QuerySet
+def add_query_set_glue(request, unique_name, model_query_set, method, fields=None, **kwargs):
     if isinstance(model_query_set, QuerySet):
 
         rs = get_glue_session(request)
