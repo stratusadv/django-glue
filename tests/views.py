@@ -14,13 +14,13 @@ class TestView(TemplateView):
 
         # TestModel.objects.all().delete()
         # logging.warning('Purged database of testing objects.')
-
-        test_model_object = TestModel.objects.create(
-            char='Some Characters',
-            text='Alot of text goes into this text field to be tested and manipulated',
-            integer=789456123,
-            decimal=258.369,
-        )
+        for i in range(0, 1):
+            test_model_object = TestModel.objects.create(
+                char='Some Characters',
+                text='Alot of text goes into this text field to be tested and manipulated',
+                integer=789456123,
+                decimal=258.369,
+            )
 
         exclude_test_model = TestModel.objects.all()[:9]
         TestModel.objects.exclude(pk__in=exclude_test_model).delete()
