@@ -3,7 +3,7 @@ import logging
 from django import template
 from django.utils.safestring import mark_safe
 
-from django_glue.utils import GLUE_CONNECT_INPUT_METHODS, GLUE_CONNECT_INPUT_TYPES, GLUE_CONNECT_SUBMIT_METHODS, generate_glue_attribute_string
+from django_glue.utils import GLUE_CONNECT_INPUT_METHODS, GLUE_CONNECT_INPUT_TYPES, GLUE_CONNECT_SUBMIT_METHODS, generate_safe_glue_attribute_string
 
 register = template.Library()
 
@@ -67,8 +67,8 @@ def glue_connect_submit(context, submit_method, unique_name, custom_attributes='
 
 
 @register.simple_tag(takes_context=True)
-def glue_event(context, unique_name, event, method):
-    return generate_glue_attribute_string(unique_name=unique_name, glue_type=context["glue"][unique_name]["type"], method=method, event=event)
+def glue_event(context, unique_name, event, update):
+    return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)
 
 
 @register.simple_tag(takes_context=True)
@@ -158,5 +158,5 @@ def glue_template_value(model_name_and_field):
 
 
 @register.simple_tag(takes_context=True)
-def glue_template_event(context, unique_name, event, method):
-    return mark_safe(generate_glue_attribute_string(unique_name=unique_name, glue_type=context["glue"][unique_name]["type"], method=method, template_event=event))
+def glue_template_event(context, unique_name, event, update):
+    return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)

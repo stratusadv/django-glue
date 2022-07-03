@@ -145,14 +145,23 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def generate_glue_attribute_string(
+def generate_safe_glue_attribute_string(
         unique_name,
-        **kwargs):
-    attribute_string = f'glue-unique-name="{unique_name}"'
-    for key, val in kwargs.items():
-        attribute_string += f' glue-{key.replace("_", "-")}="{val}"'
+        connect=None,
+        event=None,
+        id=None,
+        update=None,
+        target=None,
+        category=None,
+):
 
-    return attribute_string
+    attribute_string = ''
+    for key, val in locals().items():
+        if val is not None:
+            attribute_string += f'glue-{key.replace("_", "-")}="{val}" '
+
+    from django.utils.safestring import mark_safe
+    return mark_safe(attribute_string[-1])
 
 
 def generate_json_response(status, response_type: str, message_title, message_body, additional_data=None):

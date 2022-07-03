@@ -5,6 +5,11 @@ Used in: Template
 
 What type of connection the glue is making on the template end.
 
+## Event
+Used in: Template
+
+determines the type of event required for triggering.
+
 ## Fields
 Used in: View, Template
 
