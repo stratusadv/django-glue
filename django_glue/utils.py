@@ -145,8 +145,10 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def generate_glue_attribute_string(unique_name, glue_type, method, **kwargs):
-    attribute_string = f'glue-unique-name="{unique_name}" glue-type="{glue_type}" glue-method="{method}"'
+def generate_glue_attribute_string(
+        unique_name,
+        **kwargs):
+    attribute_string = f'glue-unique-name="{unique_name}"'
     for key, val in kwargs.items():
         attribute_string += f' glue-{key.replace("_", "-")}="{val}"'
 
