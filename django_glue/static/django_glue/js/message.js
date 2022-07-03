@@ -1,7 +1,7 @@
 const message_list = document.getElementById('django-glue-message-list')
 
 function add_message(type, title, body) {
-    const message_template = document.getElementById('django-glue-message-template')
+    const message_template = document.getElementById('django-glue-message-component')
     let node_message = message_template.content.cloneNode(true)
     node_message.getElementById('django-glue-message-title').innerText = title
     node_message.getElementById('django-glue-message-body').innerText = body

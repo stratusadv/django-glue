@@ -10,14 +10,15 @@ class TestModel(models.Model):
     def __str__(self):
         return self.char
 
-    def django_glue_create(self, request):
+    def django_glue_add(self, request):
+        pass
+
+    def django_glue_change(self, request):
+        pass
+
+    def django_glue_delete(self, request):
         pass
 
     def django_glue_view(self, request):
         pass
 
-    def django_glue_update(self, request):
-        pass
-
-    def django_glue_delete(self, request):
-        pass

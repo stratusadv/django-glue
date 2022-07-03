@@ -72,8 +72,8 @@ function process_glue_connect(el) {
             },
         ).then(response => response.json())
             .then(data => {
-                const template_display = document.querySelector('[glue-template-display="' + unique_name + '"]')
-                const template = template_display.querySelector('[glue-template]')
+                const template_display = document.querySelector('[glue-component-display="' + unique_name + '"]')
+                const template = template_display.querySelector('[glue-component]')
 
 
                 for (let id in data['data']) {
@@ -81,12 +81,12 @@ function process_glue_connect(el) {
                     let node_display = template.content.cloneNode(true)
                     for (let field in model_object) {
                         let value = model_object[field]
-                        let template_value = node_display.querySelector('[glue-template-value="' + unique_name + '.'+field+'"]')
+                        let template_value = node_display.querySelector('[glue-component-value="' + unique_name + '.'+field+'"]')
                         if(template_value !== null) {
                             template_value.innerHTML = value
                         }
                     }
-                    // node_display.querySelector('[glue-template-value="' + unique_name + '.char"]').innerHTML = model_object['char']
+                    // node_display.querySelector('[glue-component-value="' + unique_name + '.char"]').innerHTML = model_object['char']
 
                     el.appendChild(node_display)
                 }

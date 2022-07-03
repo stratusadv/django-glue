@@ -1,19 +1,12 @@
 import json
 
-from django.conf import settings
-
-from django_glue.utils import GLUE_SESSION_NAME
-import django_glue
+from django_glue import settings, __version__
 
 
 def glue(request):
-    if settings.DJANGO_GLUE_URL:
-        django_glue_url = settings.DJANGO_GLUE_URL
-    else:
-        django_glue_url = 'django_glue/'
-
     return {
-        'django_glue_url': django_glue_url,
-        'django_glue_version': django_glue.__version__,
-        'glue': request.session[GLUE_SESSION_NAME]['context'],
+        'django_glue_url': settings.DJANGO_GLUE_URL,
+        'django_glue_version': __version__,
+        'django_glue_attribute_prefix': settings.DJANGO_GLUE_ATTRIBUTE_PREFIX,
+        settings.DJANGO_GLUE_CONTEXT_NAME: request.session[settings.DJANGO_GLUE_SESSION_NAME]['context'],
     }

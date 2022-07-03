@@ -5,6 +5,7 @@
 
 <script type="application/ecmascript">
     const DJANGO_GLUE_AJAX_URL = {% url 'django_glue:django_glue_handler' %}
+    const DJANGO_GLUE_ATTRIBUTE_PREFIX = {{ django_glue_attribute_prefix }}
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
 </script>
 

@@ -45,10 +45,10 @@ Determines the level of access the glue has to the given model object or query s
 #### View
 Allows you to only read data from the targets.
 
-#### Create
+#### Add
 Allows you to read and create data in the targets.
 
-#### Update
+#### Change
 Allows you to read, create and change the data in the targets.
 
 #### Delete
