@@ -11,15 +11,14 @@ def glue_ajax_handler_view(request):
     bd = body_data
 
     rsc = request.session['django_glue']['context']
-    rsq = request.session['django_glue']['query_sets']
+    rsq = request.session['django_glue']['query_set']
 
     if 'type' in bd and 'method' in bd:
         if bd['unique_name'] in rsc:
             if bd['type'] == 'model_object':
                 model_class = ContentType.objects.get_by_natural_key(
                     rsc[bd['unique_name']]['content_app_label'],
-                    rsc[bd['unique_name']][
-                        'content_model']).model_class()
+                    rsc[bd['unique_name']]['content_model']).model_class()
                 model_object = model_class.objects.get(id=rsc[bd['unique_name']]['object_id'])
 
                 if bd['method'] == 'update':

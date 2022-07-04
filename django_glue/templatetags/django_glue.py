@@ -24,44 +24,39 @@ def glue_message_viewport():
     return None
 
 
-def glue_connect_input(context, input_method, unique_name_and_field_string, custom_attributes=''):
-
-    if input_method not in GLUE_ACCESS_TYPES:
-        raise ValueError(f'input_method "{input_method}" is not valid, choices are {GLUE_ACCESS_TYPES}')
-
-    connect_list = unique_name_and_field_string.split('.')
+@register.simple_tag(takes_context=True)
+def glue_connect(context, unique_name, field, update='none', access='view'):
+    if access not in GLUE_ACCESS_TYPES:
+        raise ValueError(f'access "{access}" is not valid, choices are {GLUE_ACCESS_TYPES}')
 
     is_valid_connection = False
 
-    unique_name = ''
-
-    field_name = ''
-    field_value = ''
-
-    if len(connect_list) == 2:
-        unique_name = connect_list[0]
-        field_name = connect_list[1]
-
-        if unique_name in context[settings.DJANGO_GLUE_CONTEXT_NAME]:
-            if field_name in context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['fields']:
-                field_value = context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['fields'][field_name]['value']
-                is_valid_connection = True
+    field_value = None
+    if unique_name in context[settings.DJANGO_GLUE_CONTEXT_NAME]:
+        if field in context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['fields']:
+            field_value = context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['fields'][field]['value']
+            is_valid_connection = True
 
     if is_valid_connection:
-        return mark_safe(f'glue-connect="{input_type}" glue-type="{context["glue"][unique_name]["type"]}" glue-method="{input_method}" glue-unique-name="{unique_name}" glue-field-name="{field_name}" glue-field-value="{field_value}" {custom_attributes}')
+        return generate_safe_glue_attribute_string(
+            unique_name=unique_name,
+            connection=context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['connection'],
+            update=update,
+            field_name=field,
+            field_value=field_value,
+        )
     else:
         return mark_safe(f'')
 
 
-def glue_connect_query_set(context, unique_name):
-    return mark_safe(f'glue-connect="query_set" glue-type="{context["glue"][unique_name]["type"]}" glue-unique-name="{unique_name}"')
-
-
-def glue_connect_submit(context, submit_method, unique_name, custom_attributes=''):
+def glue_connect_submit(context, submit_method, unique_name):
     if submit_method not in GLUE_FORM_SUBMIT_TYPES:
         raise ValueError(f'submit_method "{submit_method}" is not valid, choices are {GLUE_FORM_SUBMIT_TYPES}')
 
-    return mark_safe(f'glue-connect="submit" glue-type="{context["glue"][unique_name]["type"]}" glue-method="{submit_method}" glue-unique-name="{unique_name}" {custom_attributes}')
+    return generate_safe_glue_attribute_string(
+        unique_name=unique_name,
+        connection=context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['connection'],
+    )
 
 
 @register.simple_tag(takes_context=True)
@@ -69,29 +64,14 @@ def glue_event(context, unique_name, event, update):
     return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)
 
 
-@register.simple_tag(takes_context=True)
-def glue_input_live(context, unique_name_and_field_string):
-    return glue_connect_input(context, 'input', 'live', unique_name_and_field_string)
-
-
-@register.simple_tag(takes_context=True)
-def glue_input_form(context, unique_name_and_field_string):
-    return glue_connect_input(context, 'input', 'form', unique_name_and_field_string)
-
-
-@register.simple_tag(takes_context=True)
-def glue_live(context, unique_name_and_field_string):
-    return glue_connect_input(context, 'input', 'live', unique_name_and_field_string)
-
-
 class GlueQuerySetComponentDisplayNode(template.Node):
-    def __init__(self, unique_name, component_name):
+    def __init__(self, unique_name, component_template_name):
         self.unique_name = unique_name
-        self.component_name = component_name
+        self.component_template_name = component_template_name
 
     def render(self, context):
         from django.template import loader
-        return mark_safe(f'<div glue-connect="query_set" glue-type="query_set" glue-template-display="{self.unique_name}" glue-unique-name="{self.unique_name}">{loader.get_template(self.template_name).render(context.flatten())}</div>')
+        return mark_safe(f'<div glue-connect="query_set" glue-type="query_set" glue-template-display="{self.unique_name}" glue-unique-name="{self.unique_name}">{loader.get_template(self.component_template_name).render(context.flatten())}</div>')
 
 
 @register.tag
@@ -102,16 +82,6 @@ def glue_query_set_component_display(parser, token):
         raise template.TemplateSyntaxError(f'{token.split_contents()[0]} tag requires exactly two arguments')
 
     return GlueQuerySetComponentDisplayNode(unique_name[1:-1], template_name[1:-1])
-
-
-@register.simple_tag(takes_context=True)
-def glue_textarea_live(context, unique_name_and_field_string):
-    return glue_connect_input(context, 'textarea', 'live', unique_name_and_field_string)
-
-
-@register.simple_tag(takes_context=True)
-def glue_textarea_form(context, unique_name_and_field_string):
-    return glue_connect_input(context, 'textarea', 'form', unique_name_and_field_string)
 
 
 @register.simple_tag(takes_context=True)
@@ -151,10 +121,10 @@ def glue_component(parser, token):
 
 
 @register.simple_tag
-def glue_component_value(model_name_and_field):
-    return generate_safe_glue_attribute_string(template_value=model_name_and_field)
+def glue_component_value(field):
+    return generate_safe_glue_attribute_string(template_field=field)
 
 
 @register.simple_tag(takes_context=True)
-def glue_component_event(context, unique_name, event, update):
-    return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)
+def glue_component_event(context, event, process):
+    return generate_safe_glue_attribute_string(event=event, process=process)

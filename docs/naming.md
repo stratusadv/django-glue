@@ -1,6 +1,6 @@
 # Django Glue Naming Conventions
 
-## Connect
+## Connect ** DO NOT USE **
 Used in: Template
 
 What type of connection the glue is making on the template end.
@@ -73,7 +73,7 @@ the model object or query set being used in the glue.
 
 #### Query Set
 
-## Category
+## Connection
 Used in: View, Template
 
 Determines what category of connection is being used with glue

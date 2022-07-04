@@ -8,18 +8,18 @@
 
 {% block body %}
     <label for="char">Char</label>
-    <input type="text" id="char" class="form-control" {% glue_input_form 'test_model_form.char' %} />
+    <input type="text" id="char" class="form-control" {% glue_connect 'test_model_form' 'char' 'form' %} />
 
     <label for="text">Text</label>
-    <textarea id="text" class="form-control" {% glue_textarea_form 'test_model_form.text' %}></textarea>
+    <textarea id="text" class="form-control" {% glue_connect 'test_model_form' 'text' 'form' %}></textarea>
 
     <label for="integer">Integer</label>
     <input type="number"  class="form-control" id="integer" name="integer"
-           value="" {% glue_input_form 'test_model_form.integer' %} />
+           value="" {% glue_connect 'test_model_form' 'integer' 'form' %} />
 
     <label for="decimal">Decimal</label>
     <input type="number"  class="form-control" id="decimal" name="decimal"
-           value="" {% glue_input_form 'test_model_form.decimal' %} />
+           value="" {% glue_connect 'test_model_form' 'decimal' 'form' %} />
 
     <label for="submit">&nbsp;</label>
     <input type='submit' class="form-control" id="submit" name="submit" value="Update"
