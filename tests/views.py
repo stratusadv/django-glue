@@ -21,7 +21,7 @@ class TestView(TemplateView):
             decimal=258.369,
         )
 
-        exclude_test_model = TestModel.objects.all()[:9]
+        exclude_test_model = TestModel.objects.all().order_by('-id')[:9]
         TestModel.objects.exclude(pk__in=exclude_test_model).delete()
 
         # test_model_object = TestModel.objects.all().latest('id')

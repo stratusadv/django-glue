@@ -54,6 +54,23 @@ Allows you to read, create and change the data in the targets.
 #### Delete
 Allows you to manipulate the targets in any way possible.
 
+## Method
+Used in: View, Template
+
+The action to be used on events or requests.
+
+#### Read
+Allows you to only read data from the targets.
+
+#### Create
+Allows you to read and create data in the targets.
+
+#### Update
+Allows you to read, create and change the data in the targets.
+
+#### Delete
+Allows you to manipulate the targets in any way possible.
+
 ## Request
 Used in: Views, Model
 

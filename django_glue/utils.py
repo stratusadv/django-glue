@@ -209,6 +209,7 @@ def process_and_save_form_values(model_object, form_values_dict):
 
 
 def process_and_save_field_value(model_object, field, value):
+    logging.warning(f'{field = } {value = }')
     model_object.__dict__[field] = value
     model_object.save()
 
