@@ -19,6 +19,6 @@ class TestModel(models.Model):
     def django_glue_delete(self, request):
         pass
 
-    def django_glue_read(self, request):
+    def django_glue_view(self, request):
         pass
 

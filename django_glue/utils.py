@@ -13,11 +13,6 @@ GLUE_UPDATE_TYPES = (
     'form',
 )
 
-GLUE_FORM_SUBMIT_TYPES = (
-    'create',
-    'update',
-)
-
 GLUE_ACCESS_TYPES = (
     'view',
     'add',
@@ -148,6 +143,7 @@ def generate_safe_glue_attribute_string(
         update=None,
         target=None,
         category=None,
+        action=None,
         **kwargs,
 ):
 
@@ -203,9 +199,11 @@ def view_model_object(request, model_object, **kwargs):
 
 
 def process_and_save_form_values(model_object, form_values_dict):
+    logging.warning(f'{model_object = }')
     for key, val in form_values_dict.items():
         model_object.__dict__[key] = val
     model_object.save()
+    logging.warning(f'{model_object = }')
 
 
 def process_and_save_field_value(model_object, field, value):

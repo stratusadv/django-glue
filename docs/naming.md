@@ -1,14 +1,14 @@
 # Django Glue Naming Conventions
 
-## Connect ** DO NOT USE **
+## Action
 Used in: Template
 
-What type of connection the glue is making on the template end.
+Determines the type of action the glue tag is performing.
 
 ## Event
 Used in: Template
 
-determines the type of event required for triggering.
+Determines the type of event required for triggering.
 
 ## Fields
 Used in: View, Template
@@ -25,17 +25,6 @@ the value contained with in that field on that object.
 Used in: Template
 
 This is used to affect a specific object in templates and query handling.
-
-## Update
-Used in: Template
-
-This controls how the glue updates datas back to the model object or query set.
-
-#### Live
-the updates are sent live on change.
-
-#### Form
-the updates require a submit button to be clicked to send the update.
 
 ## Access
 Used in: View, Template
@@ -59,7 +48,7 @@ Used in: View, Template
 
 The action to be used on events or requests.
 
-#### Read
+#### View
 Allows you to only read data from the targets.
 
 #### Create

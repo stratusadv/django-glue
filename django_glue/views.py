@@ -14,7 +14,7 @@ def glue_ajax_handler_view(request):
     rsc = request.session[settings.DJANGO_GLUE_SESSION_NAME]['context']
     rsq = request.session[settings.DJANGO_GLUE_SESSION_NAME]['query_set']
 
-    if 'method' in bd:
+    if 'action' in bd:
         if bd['unique_name'] in rsc:
             if rsc[bd['unique_name']]['connection'] == 'model_object':
                 model_class = ContentType.objects.get_by_natural_key(
@@ -23,7 +23,7 @@ def glue_ajax_handler_view(request):
 
                 model_object = model_class.objects.get(id=rsc[bd['unique_name']]['object_id'])
 
-                if bd['method'] == 'update':
+                if bd['action'] == 'update':
 
                     if 'form_values' in bd:
                         process_and_save_form_values(model_object, bd['form_values'])
@@ -35,7 +35,7 @@ def glue_ajax_handler_view(request):
                     return generate_json_response('200', 'success', 'Update Successful',
                                                   'The thing you tried to update was completely successful')
 
-                elif bd['method'] == 'create':
+                elif bd['action'] == 'create':
                     new_model_object = model_class()
                     process_and_save_form_values(new_model_object, bd['form_values'])
 
@@ -43,7 +43,7 @@ def glue_ajax_handler_view(request):
                                                   'The thing you tried to create was completely successful')
 
             if rsc[bd['unique_name']]['connection'] == 'query_set':
-                if bd['method'] == 'read':
+                if bd['action'] == 'view':
                     from django.forms.models import model_to_dict
                     working_query_set = decode_query_set_from_str(rsq[bd['unique_name']])
                     model_object_list = dict()

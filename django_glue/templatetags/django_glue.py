@@ -4,7 +4,7 @@ from django import template
 from django.utils.safestring import mark_safe
 
 from django_glue import settings
-from django_glue.utils import GLUE_UPDATE_TYPES, GLUE_ACCESS_TYPES, GLUE_FORM_SUBMIT_TYPES, generate_safe_glue_attribute_string
+from django_glue.utils import GLUE_UPDATE_TYPES, GLUE_ACCESS_TYPES, generate_safe_glue_attribute_string
 
 register = template.Library()
 
@@ -49,13 +49,11 @@ def glue_connect(context, unique_name, field, update='none', access='view'):
         return mark_safe(f'')
 
 
-def glue_connect_submit(context, submit_method, unique_name):
-    if submit_method not in GLUE_FORM_SUBMIT_TYPES:
-        raise ValueError(f'submit_method "{submit_method}" is not valid, choices are {GLUE_FORM_SUBMIT_TYPES}')
-
+def glue_connect_submit(context, submit_action, unique_name):
     return generate_safe_glue_attribute_string(
         unique_name=unique_name,
         connection=context[settings.DJANGO_GLUE_CONTEXT_NAME][unique_name]['connection'],
+        action=submit_action,
     )
 
 
@@ -64,46 +62,46 @@ def glue_event(context, unique_name, event, update):
     return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)
 
 
-class GlueQuerySetComponentDisplayNode(template.Node):
+class GlueQuerySetComponentListDisplayNode(template.Node):
     def __init__(self, unique_name, component_template_name):
         self.unique_name = unique_name
         self.component_template_name = component_template_name
 
     def render(self, context):
         from django.template import loader
-        return mark_safe(f'<div glue-connect="query_set" glue-type="query_set" glue-template-display="{self.unique_name}" glue-unique-name="{self.unique_name}">{loader.get_template(self.component_template_name).render(context.flatten())}</div>')
+        return mark_safe(f'<div {generate_safe_glue_attribute_string(unique_name=self.unique_name, connection="query_set", action="list_display")}>{loader.get_template(self.component_template_name).render(context.flatten())}</div>')
 
 
 @register.tag
-def glue_query_set_component_display(parser, token):
+def glue_query_set_component_list_display(parser, token):
     try:
-        tag_name, unique_name, template_name = token.split_contents()
+        tag_name, unique_name, component_template_name = token.split_contents()
     except ValueError:
         raise template.TemplateSyntaxError(f'{token.split_contents()[0]} tag requires exactly two arguments')
 
-    return GlueQuerySetComponentDisplayNode(unique_name[1:-1], template_name[1:-1])
+    return GlueQuerySetComponentListDisplayNode(unique_name[1:-1], component_template_name[1:-1])
 
 
 @register.simple_tag(takes_context=True)
 def glue_submit_update(context, unique_name):
-    return glue_connect_submit(context, 'update', unique_name)
+    return glue_connect_submit(context, 'submit_update', unique_name)
 
 
 @register.simple_tag(takes_context=True)
 def glue_submit_create(context, unique_name):
-    return glue_connect_submit(context, 'create', unique_name)
+    return glue_connect_submit(context, 'submit_create', unique_name)
 
 
 class GlueComponentNode(template.Node):
     def __init__(self, node_list, component_name, id_field_name):
-        self.template_name = component_name
+        self.component_name = component_name
         self.id_field_name = id_field_name
         self.node_list = node_list
 
     def render(self, context):
         output = self.node_list.render(context)
         try:
-            return mark_safe(f'<template glue-template="{self.template_name}" glue-id-field="{self.id_field_name}">{output}</template>')
+            return mark_safe(f'<template {generate_safe_glue_attribute_string(component=self.component_name,id_field=self.id_field_name)}>{output}</template>')
         except template.VariableDoesNotExist:
             return ''
 
@@ -122,7 +120,7 @@ def glue_component(parser, token):
 
 @register.simple_tag
 def glue_component_value(field):
-    return generate_safe_glue_attribute_string(template_field=field)
+    return generate_safe_glue_attribute_string(component_field=field)
 
 
 @register.simple_tag(takes_context=True)

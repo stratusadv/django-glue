@@ -3,7 +3,7 @@
 {% load django_glue %}
 
 {% block header %}
-    Submit Create Form
+    Submit Update Form
 {% endblock %}
 
 {% block body %}
@@ -22,6 +22,11 @@
            value="" {% glue_connect 'test_model_form' 'decimal' 'form' %} />
 
     <label for="submit">&nbsp;</label>
+    <input type='submit' class="form-control" id="submit" name="submit" value="Update"
+           value="" {% glue_submit_update 'test_model_form' %} />
+
+        <label for="submit">&nbsp;</label>
     <input type='submit' class="form-control" id="submit" name="submit" value="Create"
            value="" {% glue_submit_create 'test_model_form' %} />
+
 {% endblock %}

@@ -1,4 +1,4 @@
-import logging
+import logging, random
 
 from django.views.generic import TemplateView
 
@@ -17,8 +17,8 @@ class TestView(TemplateView):
         test_model_object = TestModel.objects.create(
             char='Some Characters',
             text='Alot of text goes into this text field to be tested and manipulated',
-            integer=789456123,
-            decimal=258.369,
+            integer=random.randint(10, 999999),
+            decimal=round(random.uniform(10.0, 999.9), 2),
         )
 
         exclude_test_model = TestModel.objects.all().order_by('-id')[:9]
