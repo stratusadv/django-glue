@@ -85,8 +85,16 @@ function process_glue_connection(el) {
                 const template = el.querySelector('[' + get_attribute_string('component') + ']')
 
                 for (let id in data['data']) {
-                    let model_object = data['data'][id]
                     let node_display = template.content.cloneNode(true)
+                    const event_list = node_display.querySelectorAll('[' + get_attribute_string('event') + ']')
+                    for (let i = 0; i < event_list.length; i++) {
+                        event_list[i].addEventListener('click', function () {
+                            alert('DELETE')
+                        })
+                    }
+
+                    let model_object = data['data'][id]
+
                     for (let field in model_object) {
                         let value = model_object[field]
                         let template_value = node_display.querySelector('[glue-component-field="' + field + '"]')
