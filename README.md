@@ -64,7 +64,9 @@ TEMPLATES = [
 
 ## Roadmap
 
-- [ ] Prototype (2022-07-31)
+- [x] Prototype (2022-07-12)
+- [ ] Alpha (2022-08-31)
+- [ ] Beta (2023-06-31)
 
 ## Authors
 
