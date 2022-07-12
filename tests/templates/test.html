@@ -15,16 +15,12 @@
         </div>
 
         <div class="col-6">
-            {% include 'card/submit_update_form_card.html' %}
+            {% include 'card/submit_form_card.html' %}
         </div>
     </div>
 
     <div class="row g-3 mt-2">
-        <div class="col-6">
-            {% include 'card/submit_create_form_card.html' %}
-        </div>
-
-        <div class="col-6">
+        <div class="col-12">
             {% include 'card/message_card.html' %}
         </div>
     </div>
@@ -35,27 +31,17 @@
         </div>
     </div>
 
-    {#    <div class="row g-3 mt-2">#}
-{#        <div class="col-6">#}
-{#            {% include 'card/context_data_card.html' %}#}
-{#        </div>#}
-{##}
-{#        <div class="col-6">#}
-{#            {% include 'card/javascript_data_card.html' %}#}
-{#        </div>#}
-{#    </div>#}
-{##}
-{#    <div class="row g-3 mt-2">#}
-{#        <div class="col-6">#}
-{#            {% include 'card/session_data_card.html' %}#}
-{#        </div>#}
-{##}
-{#        <div class="col-6">#}
-{#            {% include 'card/message_card.html' %}#}
-{#        </div>#}
-{#    </div>#}
+    <div class="row g-3 mt-2">
+        <div class="col-6">
+            {% include 'card/context_data_card.html' %}
+        </div>
 
-{#    {% glue_message_viewport %}#}
+        <div class="col-6">
+            {% include 'card/session_data_card.html' %}
+        </div>
+    </div>
+
+    {#    {% glue_message_viewport %}#}
 
     {% glue_init %}
 

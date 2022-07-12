@@ -3,101 +3,129 @@ import {debounce} from "./debouce.js";
 import {add_message} from "./message.js";
 
 function get_form_values(unique_name) {
-    let form_input_list = document.querySelectorAll('[glue-connect]')
+    let form_input_list = document.querySelectorAll('[glue-connection]')
     let form_json = {}
 
     for (let i = 0; i < form_input_list.length; i++) {
         form_json[form_input_list[i].getAttribute('glue-field-name')] = form_input_list[i].value
     }
 
+    console.log(form_json)
+
     return form_json
 }
 
-function process_glue_connect(el) {
-    let type = el.getAttribute('glue-type')
-    let input_method = el.getAttribute('glue-method')
-    let input_type = el.getAttribute('glue-connect')
-    let input_value = el.getAttribute('glue-field-value')
-    let unique_name = el.getAttribute('glue-unique-name')
+function get_attribute_string(attribute) {
+    return DJANGO_GLUE_ATTRIBUTE_PREFIX + '-' + attribute
+}
 
-    if (input_method === 'live') {
-        el.value = input_value
-        el.addEventListener('keyup', function () {
-            debounce(function () {
-                post_ajax(
-                    {
-                        'type': type,
-                        'method': 'update',
-                        'unique_name': unique_name,
-                        'field_name': el.getAttribute('glue-field-name'),
-                        'value': el.value,
-                    },
-                )
+function live_value_update(unique_name, action, field_name, value) {
+    return debounce(function () {
+        post_ajax(
+            {
+                'unique_name': unique_name,
+                'action': action,
+                'field_name': field_name,
+                'value': value,
+            },
+        )
+    })
+}
+
+function process_glue_connection(el) {
+    let update = el.getAttribute(get_attribute_string('update'))
+    let action = el.getAttribute(get_attribute_string('action'))
+    let connection = el.getAttribute(get_attribute_string('connection'))
+    let field_name = el.getAttribute(get_attribute_string('field-name'))
+    let field_value = el.getAttribute(get_attribute_string('field-value'))
+    let unique_name = el.getAttribute(get_attribute_string('unique-name'))
+
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+        if (el.type === 'submit') {
+            el.addEventListener('click', function () {
+                if (action === 'submit_update') {
+                    post_ajax(
+                        {
+                            'connection': connection,
+                            'action': 'update',
+                            'unique_name': unique_name,
+                            'form_values': get_form_values(unique_name),
+                        },
+                    )
+                } else if (action === 'submit_create') {
+                    post_ajax(
+                        {
+                            'connection': connection,
+                            'action': 'create',
+                            'unique_name': unique_name,
+                            'form_values': get_form_values(unique_name),
+                        },
+                    )
+                }
             })
-        })
-    } else if (input_method === 'form') {
-        el.value = input_value
-    }
-
-    if (input_type === 'submit') {
-        el.addEventListener('click', function () {
-            if (input_method === 'update') {
-                post_ajax(
-                    {
-                        'type': type,
-                        'method': 'update',
-                        'unique_name': unique_name,
-                        'form_values': get_form_values(unique_name),
-                    },
-                )
-            } else if (input_method === 'create') {
-                post_ajax(
-                    {
-                        'type': type,
-                        'method': 'create',
-                        'unique_name': unique_name,
-                        'form_values': get_form_values(unique_name),
-                    },
-                )
+        } else if (connection === 'model_object') {
+            el.value = field_value
+            if (update === 'live') {
+                el.addEventListener('keyup', function () {
+                    live_value_update(unique_name, 'update', field_name, el.value)
+                })
             }
-        })
+        }
     }
 
-    if (input_type === 'query_set') {
+    if (action === 'list_display') {
         post_ajax_return(
             {
-                'type': type,
-                'method': 'view',
+                'connection': connection,
+                'action': 'view',
                 'unique_name': unique_name,
             },
         ).then(response => response.json())
             .then(data => {
-                const template_display = document.querySelector('[glue-template-display="' + unique_name + '"]')
-                const template = template_display.querySelector('[glue-template]')
-
+                const template = el.querySelector('[' + get_attribute_string('component') + ']')
 
                 for (let id in data['data']) {
                     let model_object = data['data'][id]
                     let node_display = template.content.cloneNode(true)
+
+                    const node_id = model_object[template.getAttribute(get_attribute_string('id-field'))]
+                    const event_list = node_display.querySelectorAll('[' + get_attribute_string('event') + ']')
+
+                    let node_section = node_display.querySelector('[' + get_attribute_string('id') + ']')
+                    node_section.setAttribute(get_attribute_string('unique-name'), unique_name)
+                    node_section.setAttribute(get_attribute_string('id'), node_id)
+
+                    for (let i = 0; i < event_list.length; i++) {
+                        event_list[i].addEventListener('click', function () {
+                            post_ajax_return(
+                                {
+                                    'connection': connection,
+                                    'action': event_list[i].getAttribute(get_attribute_string('action')),
+                                    'id': node_id,
+                                    'unique_name': unique_name,
+                                },
+                            ).then(response => response.json())
+                                .then(data => {
+                                    el.querySelector('[' + get_attribute_string("id") + '="' + node_id +'"]').remove()
+                                    add_message(data['type'], data['message_title'], data['message_body'])
+                                })
+                        })
+                    }
+
                     for (let field in model_object) {
                         let value = model_object[field]
-                        let template_value = node_display.querySelector('[glue-template-value="' + unique_name + '.'+field+'"]')
-                        if(template_value !== null) {
+                        let template_value = node_display.querySelector('[glue-component-field="' + field + '"]')
+                        if (template_value !== null) {
                             template_value.innerHTML = value
                         }
                     }
-                    // node_display.querySelector('[glue-template-value="' + unique_name + '.char"]').innerHTML = model_object['char']
-
                     el.appendChild(node_display)
                 }
-
-                // el.innerHTML = JSON.stringify(data['data'])
-                // console.log(data['data'])
                 add_message(data['type'], data['message_title'], data['message_body'])
             })
     }
 
 }
 
-document.querySelectorAll('[glue-connect]').forEach(process_glue_connect)
+document.querySelectorAll('[' + get_attribute_string("connection") + ']').forEach(process_glue_connection)
 
