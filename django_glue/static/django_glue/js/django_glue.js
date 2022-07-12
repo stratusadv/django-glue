@@ -85,15 +85,32 @@ function process_glue_connection(el) {
                 const template = el.querySelector('[' + get_attribute_string('component') + ']')
 
                 for (let id in data['data']) {
+                    let model_object = data['data'][id]
                     let node_display = template.content.cloneNode(true)
+
+                    const node_id = model_object[template.getAttribute(get_attribute_string('id-field'))]
                     const event_list = node_display.querySelectorAll('[' + get_attribute_string('event') + ']')
+
+                    let node_section = node_display.querySelector('[' + get_attribute_string('id') + ']')
+                    node_section.setAttribute(get_attribute_string('unique-name'), unique_name)
+                    node_section.setAttribute(get_attribute_string('id'), node_id)
+
                     for (let i = 0; i < event_list.length; i++) {
                         event_list[i].addEventListener('click', function () {
-                            alert('DELETE')
+                            post_ajax_return(
+                                {
+                                    'connection': connection,
+                                    'action': event_list[i].getAttribute(get_attribute_string('action')),
+                                    'id': node_id,
+                                    'unique_name': unique_name,
+                                },
+                            ).then(response => response.json())
+                                .then(data => {
+                                    el.querySelector('[' + get_attribute_string("id") + '="' + node_id +'"]').remove()
+                                    add_message(data['type'], data['message_title'], data['message_body'])
+                                })
                         })
                     }
-
-                    let model_object = data['data'][id]
 
                     for (let field in model_object) {
                         let value = model_object[field]
@@ -104,7 +121,6 @@ function process_glue_connection(el) {
                     }
                     el.appendChild(node_display)
                 }
-
                 add_message(data['type'], data['message_title'], data['message_body'])
             })
     }

@@ -43,6 +43,13 @@ def glue_ajax_handler_view(request):
                                                   'The thing you tried to create was completely successful')
 
             if rsc[bd['unique_name']]['connection'] == 'query_set':
+                if bd['action'] == 'delete':
+                    from django.forms.models import model_to_dict
+                    working_query_set = decode_query_set_from_str(rsq[bd['unique_name']])
+                    working_query_set.filter(id=bd['id']).delete()
+                    return generate_json_response('200', 'success', 'Delete Object in Query Set Success',
+                                                  'The thing you tried to delete was successful')
+
                 if bd['action'] == 'view':
                     from django.forms.models import model_to_dict
                     working_query_set = decode_query_set_from_str(rsq[bd['unique_name']])

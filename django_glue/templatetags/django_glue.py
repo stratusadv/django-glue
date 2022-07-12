@@ -59,7 +59,8 @@ def glue_connect_submit(context, submit_action, unique_name):
 
 @register.simple_tag(takes_context=True)
 def glue_event(context, unique_name, event, update):
-    return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"], update=update, event=event)
+    return generate_safe_glue_attribute_string(unique_name=unique_name, category=context["glue"][unique_name]["type"],
+                                               update=update, event=event)
 
 
 class GlueQuerySetComponentListDisplayNode(template.Node):
@@ -69,7 +70,8 @@ class GlueQuerySetComponentListDisplayNode(template.Node):
 
     def render(self, context):
         from django.template import loader
-        return mark_safe(f'<div {generate_safe_glue_attribute_string(unique_name=self.unique_name, connection="query_set", action="list_display")}>{loader.get_template(self.component_template_name).render(context.flatten())}</div>')
+        return mark_safe(
+            f'<div {generate_safe_glue_attribute_string(unique_name=self.unique_name, connection="query_set", action="list_display")}>{loader.get_template(self.component_template_name).render(context.flatten())}</div>')
 
 
 @register.tag
@@ -101,7 +103,13 @@ class GlueComponentNode(template.Node):
     def render(self, context):
         output = self.node_list.render(context)
         try:
-            return mark_safe(f'<template {generate_safe_glue_attribute_string(component=self.component_name,id_field=self.id_field_name)}>{output}</template>')
+            return mark_safe(f'''
+            <template {generate_safe_glue_attribute_string(component=self.component_name, id_field=self.id_field_name)}>
+            <section {generate_safe_glue_attribute_string(id='')}>
+            {output}
+            </section>
+            </template>
+                             ''')
         except template.VariableDoesNotExist:
             return ''
 
@@ -124,5 +132,5 @@ def glue_component_value(field):
 
 
 @register.simple_tag(takes_context=True)
-def glue_component_event(context, event, process):
-    return generate_safe_glue_attribute_string(event=event, process=process)
+def glue_component_event(context, event, action):
+    return generate_safe_glue_attribute_string(event=event, action=action)
