@@ -17,6 +17,11 @@ Education is also a big part of what we do and our focus is on teaching our peop
 - Django 3.2+ or 4.0+
 - Python 3.8+
 
+## Dependencies
+
+- Alpine JS
+- Axios
+
 ## Installation
 
 Start by install django-glue using pip.
