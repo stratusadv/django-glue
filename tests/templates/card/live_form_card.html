@@ -1,0 +1,14 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    Live Form
+{% endblock %}
+
+{% block body %}
+    <div x-data class="row">
+        <div class="col-12" x-text="$store.glue"></div>
+        <div class="col-12"></div>
+        <div class="col-12"></div>
+        <div class="col-12"></div>
+    </div>
+{% endblock %}

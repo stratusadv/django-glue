@@ -1,3 +1,3 @@
-let glue = {
-    'data': DJANGO_GLUE_DATA,
-}
+Alpine.store('glue', {
+    data: DJANGO_GLUE_DATA,
+})
