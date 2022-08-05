@@ -5,13 +5,13 @@
 {% endblock %}
 
 {% block body %}
-    <div x-data="glue" class="row">
+    <div x-data="test_model_live" class="row">
         <div class="col-12">
-            <form x-on:keyup.debounce="test_model_live.create()">
-                <input type="text" class="form-control mb-2" x-model="test_model_live.char">
-                <input type="text" class="form-control mb-2" x-model="test_model_live.text">
-                <input type="text" class="form-control mb-2" x-model="test_model_live.integer">
-                <input type="text" class="form-control mb-2" x-model="test_model_live.decimal">
+            <form x-on:keyup.debounce="update()">
+                <input type="text" class="form-control mb-2" x-model="char">
+                <input type="text" class="form-control mb-2" x-model="text">
+                <input type="text" class="form-control mb-2" x-model="integer">
+                <input type="text" class="form-control mb-2" x-model="decimal">
             </form>
         </div>
     </div>
