@@ -6,16 +6,23 @@ from tests.models import TestModel
 from django_glue.utils import add_glue
 
 FIRST_NAME_TUPLE = (
+    'Nathan',
     'Ted',
     'Janet',
     'Fred',
     'Jane',
+    'Johnny',
+    'Robert',
 )
 
 LAST_NAME_TUPLE = (
+    'Wilson',
     'Hansen',
+    'Waldern',
     'Smith',
     'Doe',
+    'Johnson',
+    'Mancal',
 )
 
 DESCRIPTION_WORD_TUPLE = (
@@ -25,7 +32,26 @@ DESCRIPTION_WORD_TUPLE = (
     'cat',
     'fly',
     'when',
+    'handy',
     'taco',
+    'stupid',
+    'are'
+    'there',
+    'I',
+    'you',
+    'awesome',
+    'cool',
+    'ugly',
+    'she',
+    'want',
+    'need',
+    'have',
+    'fast',
+    'when',
+    'loves cars',
+    'boring',
+    'artsy',
+    'wood carving'
 )
 
 
@@ -39,7 +65,7 @@ class TestView(TemplateView):
         # logging.warning('Purged database of testing objects.')
 
         new_description = ''
-        for x in range(len(DESCRIPTION_WORD_TUPLE)):
+        for x in range(10):
             new_description += f'{DESCRIPTION_WORD_TUPLE[random.randint(0, (len(DESCRIPTION_WORD_TUPLE) - 1))]} '
 
         test_model_object = TestModel.objects.create(
@@ -56,8 +82,8 @@ class TestView(TemplateView):
         # test_model_object = TestModel.objects.all().latest('id')
         logging.warning(f'Added TestModel object.')
 
-        add_glue(self.request, 'test_model_live', test_model_object, 'change')
-        add_glue(self.request, 'test_model_form', test_model_object, 'change')
+        add_glue(self.request, 'test_model_live', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        add_glue(self.request, 'test_model_form', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
         logging.warning('Added model object glue for TestModel Object in write mode')
 
         add_glue(self.request, 'test_model_set', TestModel.objects.filter(id__gte=1).filter(id__lte=1000), 'read')

@@ -8,10 +8,16 @@
     <div x-data="test_model_live" class="row">
         <div class="col-12">
             <form x-on:keyup.debounce="update()">
-                <input type="text" class="form-control mb-2" x-model="char">
-                <input type="text" class="form-control mb-2" x-model="text">
-                <input type="text" class="form-control mb-2" x-model="integer">
-                <input type="text" class="form-control mb-2" x-model="decimal">
+                <label for="first_name">First Name</label>
+                <input id="first_name" type="text" class="form-control mb-2" x-model="first_name">
+                <label for="last_name">Last Name</label>
+                <input id="last_name" type="text" class="form-control mb-2" x-model="last_name">
+                <label for="description">Description</label>
+                <textarea id="description" type="text" class="form-control mb-2" x-model="description"></textarea>
+                <label for="favorite_number">Favorite Number</label>
+                <input id="favorite_number" type="text" class="form-control mb-2" x-model="favorite_number">
+                <label for="weight_lbs">Weight (lbs)</label>
+                <input id="weight_lbs" type="text" class="form-control mb-2" x-model="weight_lbs">
             </form>
         </div>
     </div>
