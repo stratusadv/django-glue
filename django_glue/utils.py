@@ -131,35 +131,6 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def generate_glue_attribute(name, value):
-    return f'{settings.DJANGO_GLUE_ATTRIBUTE_PREFIX}-{name.replace("_", "-")}="{value}" '
-
-
-def generate_safe_glue_attribute_string(
-        unique_name=None,
-        connection=None,
-        event=None,
-        id=None,
-        update=None,
-        target=None,
-        category=None,
-        action=None,
-        **kwargs,
-):
-
-    attribute_string = ''
-    for key, val in locals().items():
-        if val is not None and key != 'kwargs' and key != 'attribute_string':
-            attribute_string += generate_glue_attribute(name=key, value=val)
-
-    for key, val in kwargs.items():
-        attribute_string += generate_glue_attribute(name=key, value=val)
-
-    from django.utils.safestring import mark_safe
-
-    return mark_safe(attribute_string)
-
-
 def generate_json_response(status, response_type: str, message_title, message_body, additional_data=None):
     if response_type not in GLUE_RESPONSE_TYPES:
         raise ValueError(f'response_type "{response_type}" is not a valid, choices are {GLUE_RESPONSE_TYPES}')

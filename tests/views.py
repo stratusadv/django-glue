@@ -5,6 +5,29 @@ from django.views.generic import TemplateView
 from tests.models import TestModel
 from django_glue.utils import add_glue
 
+FIRST_NAME_TUPLE = (
+    'Ted',
+    'Janet',
+    'Fred',
+    'Jane',
+)
+
+LAST_NAME_TUPLE = (
+    'Hansen',
+    'Smith',
+    'Doe',
+)
+
+DESCRIPTION_WORD_TUPLE = (
+    'has',
+    'a',
+    'dog',
+    'cat',
+    'fly',
+    'when',
+    'taco',
+)
+
 
 class TestView(TemplateView):
     template_name = 'test.html'
@@ -14,11 +37,17 @@ class TestView(TemplateView):
 
         # TestModel.objects.all().delete()
         # logging.warning('Purged database of testing objects.')
+
+        new_description = ''
+        for x in range(len(DESCRIPTION_WORD_TUPLE)):
+            new_description += f'{DESCRIPTION_WORD_TUPLE[random.randint(0, (len(DESCRIPTION_WORD_TUPLE) - 1))]} '
+
         test_model_object = TestModel.objects.create(
-            char='Some Characters',
-            text='Alot of text goes into this text field to be tested and manipulated',
-            integer=random.randint(10, 999999),
-            decimal=round(random.uniform(10.0, 999.9), 2),
+            first_name=FIRST_NAME_TUPLE[random.randint(0, (len(FIRST_NAME_TUPLE) - 1))],
+            last_name=LAST_NAME_TUPLE[random.randint(0, (len(LAST_NAME_TUPLE) - 1))],
+            description=new_description,
+            favorite_number=random.randint(0, 999),
+            weight_lbs=round(random.uniform(80.0, 400.0), 1),
         )
 
         exclude_test_model = TestModel.objects.all().order_by('-id')[:5]
