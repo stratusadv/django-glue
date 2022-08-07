@@ -9,30 +9,28 @@ function get_field_data(obj) {
 }
 
 function process_model_object(unique_name, model_object) {
-    const fields = model_object['fields']
-    let data = {
-        create() {
-        },
-        update() {
-            post_ajax(
-                unique_name,
-                'update',
-                {form_values: get_field_data(this)},
-            ).then((response) => {
-                console.log(response.data)
-            })
-        },
-        delete() {
-        },
-        view() {
-        }
+    const field_data = model_object['fields']
+    let data = {}
+
+    data.update = () => {
+        post_ajax(
+            unique_name,
+            'update',
+            {
+                form_values: get_field_data(this)
+            },
+        ).then((response) => {
+            this.response = response.data
+            console.log(response.data)
+        })
     }
 
-    data['fields'] = []
+    data.fields = []
 
-    for (let key in fields) {
-        data['fields'].push(key)
-        data[key] = fields[key].value
+
+    for (let key in field_data) {
+        data.fields.push(key)
+        data[key] = field_data[key].value
     }
 
     return data
