@@ -17,7 +17,7 @@ function process_model_object(unique_name, model_object) {
             post_ajax(
                 unique_name,
                 'update',
-                get_field_data(this),
+                {form_values: get_field_data(this)},
             ).then((response) => {
                 console.log(response.data)
             })

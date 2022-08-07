@@ -25,12 +25,12 @@ def glue_ajax_handler_view(request):
 
                 if bd['action'] == 'update':
 
-                    if 'form_values' in bd:
-                        process_and_save_form_values(model_object, bd['form_values'])
+                    if 'form_values' in bd['data']:
+                        process_and_save_form_values(model_object, bd['data']['form_values'])
 
-                    elif 'field_name' in bd:
-                        if bd['field_name'] in rsc[bd['unique_name']]['fields']:
-                            process_and_save_field_value(model_object, bd['field_name'], bd['value'])
+                    elif 'field_name' in bd['data']:
+                        if bd['data']['field_name'] in rsc[bd['unique_name']]['fields']:
+                            process_and_save_field_value(model_object, bd['data']['field_name'], bd['data']['value'])
 
                     return generate_json_response('200', 'success', 'Update Successful',
                                                   'The thing you tried to update was completely successful')

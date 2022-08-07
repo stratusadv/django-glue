@@ -9,10 +9,8 @@ function post_ajax(unique_name, action, data) {
             'X-CSRFToken': csrf_token,
         },
         data: {
-            'connection': 'model_object',
             'action': action,
             'unique_name': unique_name,
-            'form_values': {},
             'data': data,
         }
     })
