@@ -1,8 +1,8 @@
-import {post_ajax} from "./ajax.js";
+import {ajax_request} from "./ajax.js";
 
 function get_field_data(obj) {
     let data = {}
-    for (const field of obj.fields) {
+    for (const field of obj['fields']) {
         data[field] = obj[field]
     }
     return data
@@ -13,23 +13,21 @@ function process_model_object(unique_name, model_object) {
     let data = {}
 
     data.update = () => {
-        post_ajax(
+        ajax_request(
+            'PUT',
             unique_name,
-            'update',
             {
-                form_values: get_field_data(this)
+                form_values: get_field_data(data)
             },
         ).then((response) => {
-            this.response = response.data
-            console.log(response.data)
+            data['response'] = response.data
         })
     }
 
-    data.fields = []
-
+    data['fields'] = []
 
     for (let key in field_data) {
-        data.fields.push(key)
+        data['fields'].push(key)
         data[key] = field_data[key].value
     }
 

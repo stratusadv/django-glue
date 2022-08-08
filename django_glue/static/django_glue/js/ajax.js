@@ -1,19 +1,18 @@
 import {csrf_token} from "./csrf.js";
 
-function post_ajax(unique_name, action, data) {
+function ajax_request(method, unique_name, data) {
     return axios({
-        method: 'post',
+        method: method,
         url: DJANGO_GLUE_AJAX_URL,
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': csrf_token,
         },
         data: {
-            'action': action,
             'unique_name': unique_name,
             'data': data,
         }
     })
 }
 
-export {post_ajax,}
+export {ajax_request,}
