@@ -10,19 +10,31 @@ function get_field_data(obj) {
 
 function process_model_object(unique_name, model_object) {
     const field_data = model_object['fields']
-    let data = {}
+    let data = {
+        response: null,
+        create() {
 
-    data.update = () => {
-        ajax_request(
-            'PUT',
-            unique_name,
-            {
-                form_values: get_field_data(data)
-            },
-        ).then((response) => {
-            data['response'] = response.data
-        })
+        },
+        delete() {
+
+        },
+        update() {
+            ajax_request(
+                'PUT',
+                unique_name,
+                {
+                    form_values: get_field_data(this)
+                },
+            ).then((response) => {
+                this['response'] = response.data
+                console.log(this.response)
+            })
+        },
+        view() {
+
+        },
     }
+
 
     data['fields'] = []
 
@@ -36,7 +48,20 @@ function process_model_object(unique_name, model_object) {
 
 function process_query_set(query_set) {
     let data = {}
-    return 'Query Set'
+
+    data.create = () => {
+    }
+
+    data.delete = () => {
+    }
+
+    data.update = () => {
+    }
+
+    data.view = () => {
+    }
+
+    return data
 }
 
 

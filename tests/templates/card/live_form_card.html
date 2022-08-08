@@ -19,6 +19,11 @@
                 <label for="weight_lbs">Weight (lbs)</label>
                 <input id="weight_lbs" type="text" class="form-control mb-2" x-model="weight_lbs">
             </form>
+            <template x-if="response">
+                <span x-text="response.message_title">
+
+                </span>
+            </template>
         </div>
     </div>
 
