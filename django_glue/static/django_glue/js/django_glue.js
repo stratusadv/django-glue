@@ -8,15 +8,34 @@ function get_field_data(obj) {
     return data
 }
 
+function handle_response(response, object) {
+    object['response'] = response.data
+    console.log(object.response)
+}
+
 function process_model_object(unique_name, model_object) {
     const field_data = model_object['fields']
     let data = {
         response: null,
         create() {
-
+            ajax_request(
+                'POST',
+                unique_name,
+                {
+                    form_values: get_field_data(this)
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
         },
         delete() {
-
+            ajax_request(
+                'DELETE',
+                unique_name,
+                {},
+            ).then((response) => {
+                handle_response(response, this)
+            })
         },
         update() {
             ajax_request(
@@ -26,12 +45,17 @@ function process_model_object(unique_name, model_object) {
                     form_values: get_field_data(this)
                 },
             ).then((response) => {
-                this['response'] = response.data
-                console.log(this.response)
+                handle_response(response, this)
             })
         },
         view() {
-
+            ajax_request(
+                'GET',
+                unique_name,
+                {},
+            ).then((response) => {
+                handle_response(response, this)
+            })
         },
     }
 
@@ -46,19 +70,60 @@ function process_model_object(unique_name, model_object) {
     return data
 }
 
-function process_query_set(query_set) {
-    let data = {}
-
-    data.create = () => {
+function process_query_set(unique_name, query_set) {
+    const field_data = model_object['fields']
+    let data = {
+        response: null,
+        create() {
+            ajax_request(
+                'POST',
+                unique_name,
+                {
+                    form_values: get_field_data(this),
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        delete(id) {
+            ajax_request(
+                'DELETE',
+                unique_name,
+                {
+                    id: id,
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        update(id) {
+            ajax_request(
+                'PUT',
+                unique_name,
+                {
+                    id: id,
+                    form_values: get_field_data(this),
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        view() {
+            ajax_request(
+                'GET',
+                unique_name,
+                {},
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        }
     }
 
-    data.delete = () => {
-    }
+    data['fields'] = []
 
-    data.update = () => {
-    }
-
-    data.view = () => {
+    for (let key in field_data) {
+        data['fields'].push(key)
+        data[key] = field_data[key].value
     }
 
     return data

@@ -1,11 +1,11 @@
 {% extends 'card/card.html' %}
 
 {% block header %}
-    Live Form
+    PUT Model Object Form
 {% endblock %}
 
 {% block body %}
-    <div x-data="test_model_live" class="row">
+    <div x-data="test_model_1" class="row">
         <div class="col-12">
             <form x-on:keyup.debounce="update()">
                 <label for="first_name">First Name</label>

@@ -1,0 +1,30 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    POST Model Object Form
+{% endblock %}
+
+{% block body %}
+    <div x-data="test_model_2" x-init="" class="row">
+        <div class="col-12">
+            <form x-on:keyup.debounce="create()">
+                <label for="first_name">First Name</label>
+                <input id="first_name" type="text" class="form-control mb-2" x-model="first_name">
+                <label for="last_name">Last Name</label>
+                <input id="last_name" type="text" class="form-control mb-2" x-model="last_name">
+                <label for="description">Description</label>
+                <textarea id="description" class="form-control mb-2" x-model="description"></textarea>
+                <label for="favorite_number">Favorite Number</label>
+                <input id="favorite_number" type="text" class="form-control mb-2" x-model="favorite_number">
+                <label for="weight_lbs">Weight (lbs)</label>
+                <input id="weight_lbs" type="text" class="form-control mb-2" x-model="weight_lbs">
+            </form>
+            <template x-if="response">
+                <span x-text="response.message_title">
+
+                </span>
+            </template>
+        </div>
+    </div>
+
+{% endblock %}

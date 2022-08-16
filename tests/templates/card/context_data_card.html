@@ -5,5 +5,18 @@
 {% endblock %}
 
 {% block body %}
-    {{ django_glue }}
+    {% for key, val in django_glue.items %}
+        <span class="fw-bold">{{ key }}</span><br />
+        {% for key2, val2 in val.items %}
+            {% if key2 == 'fields' %}
+                <span>{{ key2 }}:</span><br />
+                {% for key3, val3 in val2.items %}
+                    <li class="ps-2">{{ key3 }}: {{ val3 }}</li>
+                {% endfor %}
+            {% else %}
+                <span>{{ key2 }}: {{ val2 }}</span><br />
+            {% endif %}
+        {% endfor %}
+        <br />
+    {% endfor %}
 {% endblock %}
