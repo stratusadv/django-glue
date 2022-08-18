@@ -6,7 +6,7 @@ from django.http import Http404
 
 from django_glue.json import generate_json_response, generate_json_404_response
 from django_glue.utils import process_and_save_field_value, process_and_save_form_values, get_glue_session, \
-    decode_query_set_from_str, run_glue_method
+    decode_query_set_from_str, run_glue_method, glue_access_check, generate_simple_field_dict
 from django_glue import settings
 
 
@@ -18,6 +18,7 @@ class GlueRequestHandler:
         self.is_query_set = False
 
         if request.content_type == 'application/json':
+            logging.warning(request.body.decode('utf-8'))
             self.body_data = json.loads(request.body.decode('utf-8'))
         else:
             raise Http404
@@ -33,35 +34,41 @@ class GlueRequestHandler:
             self.model_class = ContentType.objects.get_by_natural_key(
                 self.context[self.unique_name]['app_label'],
                 self.context[self.unique_name]['model']).model_class()
+            self.access = self.context[self.unique_name]['access']
 
             if self.context[self.unique_name]['connection'] == 'model_object':
                 self.is_model_object = True
-                self.model_object = self.model_class.objects.get(id=self.context[self.unique_name]['object_id'])
+                try:
+                    self.model_object = self.model_class.objects.get(id=self.context[self.unique_name]['object_id'])
+                except self.model_class.DoesNotExist:
+                    raise Http404
 
             elif self.context[self.unique_name]['connection'] == 'query_set':
                 self.is_query_set = True
                 self.query_set = self.glue_session['query_set']
+        else:
+            raise Http404
 
     def process_response(self):
         if self.is_model_object:
-            if self.method == 'DELETE':
+            if self.method == 'DELETE' and glue_access_check(self.access, 'delete'):
                 return self.delete_model_object_handler()
-            elif self.method == 'GET':
-                return self.get_model_object_handler()
-            elif self.method == 'POST':
+            elif self.method == 'QUERY' and glue_access_check(self.access, 'view'):
+                return self.query_model_object_handler()
+            elif self.method == 'POST' and glue_access_check(self.access, 'add'):
                 return self.post_model_object_handler()
-            elif self.method == 'PUT':
+            elif self.method == 'PUT' and glue_access_check(self.access, 'change'):
                 return self.put_model_object_handler()
             else:
                 return generate_json_404_response()
         elif self.is_query_set:
-            if self.method == 'DELETE':
+            if self.method == 'DELETE' and glue_access_check(self.access, 'delete'):
                 return self.delete_query_set_handler()
-            elif self.method == 'GET':
-                return self.get_query_set_handler()
-            elif self.method == 'POST':
+            elif self.method == 'QUERY' and glue_access_check(self.access, 'view'):
+                return self.query_query_set_handler()
+            elif self.method == 'POST' and glue_access_check(self.access, 'add'):
                 return self.post_query_set_handler()
-            elif self.method == 'PUT':
+            elif self.method == 'PUT' and glue_access_check(self.access, 'change'):
                 return self.put_query_set_handler()
             else:
                 return generate_json_404_response()
@@ -69,31 +76,33 @@ class GlueRequestHandler:
             return generate_json_404_response()
 
     def delete_model_object_handler(self):
-        if self.glue_session['access'] == 'delete':
-            run_glue_method(self.request, self.model_object, 'django_glue_delete')
+        run_glue_method(self.request, self.model_object, 'django_glue_delete')
 
-            if settings.DJANGO_GLUE_AUTO_DELETE:
-                self.model_object.delete()
+        if settings.DJANGO_GLUE_AUTO_DELETE:
+            self.model_object.delete()
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Delete Object Success',
-                                          'The object you are trying to delete was completed successful')
-        else:
-            return generate_json_404_response()
+        return generate_json_response('200',
+                                      'success',
+                                      'Delete Object Success',
+                                      'The object you are trying to delete was completed successful')
 
-    def get_model_object_handler(self):
+    def query_model_object_handler(self):
         run_glue_method(self.request, self.model_object, 'django_glue_view')
 
         return generate_json_response('200',
                                       'success',
                                       'Retrieve Object Data Success',
                                       'The object data you are trying to receive was successful',
-                                      additional_data=model_to_dict(self.model_object))
+                                      additional_data=generate_simple_field_dict(
+                                          self.model_object,
+                                          self.glue_session['fields'][self.unique_name],
+                                          self.glue_session['exclude'][self.unique_name],
+                                      )
+                                      )
 
     def post_model_object_handler(self):
         new_model_object = self.model_class()
-        process_and_save_form_values(new_model_object, self.body_data['form_values'])
+        process_and_save_form_values(new_model_object, self.body_data['data']['form_values'])
 
         run_glue_method(self.request, new_model_object, 'django_glue_create')
 
@@ -101,7 +110,12 @@ class GlueRequestHandler:
                                       'success',
                                       'Create Object Success',
                                       'The thing you tried to create was completely successful',
-                                      additional_data=model_to_dict(new_model_object))
+                                      additional_data=generate_simple_field_dict(
+                                          new_model_object,
+                                          self.glue_session['fields'][self.unique_name],
+                                          self.glue_session['exclude'][self.unique_name],
+                                      )
+                                      )
 
     def put_model_object_handler(self):
         if 'form_values' in self.body_data['data']:
@@ -139,7 +153,7 @@ class GlueRequestHandler:
         else:
             return generate_json_404_response()
 
-    def get_query_set_handler(self):
+    def query_query_set_handler(self):
         if id in self.body_data:
             try:
                 model_object = self.query_set.get(id=self.body_data['id'])
@@ -150,7 +164,12 @@ class GlueRequestHandler:
                                           'success',
                                           'Retrieve Object Data in Query Set Success',
                                           'The object data in query set you are trying to receive was successful',
-                                          additional_data=model_to_dict(model_object))
+                                          additional_data=generate_simple_field_dict(
+                                              self.model_object,
+                                              self.glue_session['fields'][self.unique_name],
+                                              self.glue_session['exclude'][self.unique_name],
+                                          )
+                                          )
         else:
             working_query_set = decode_query_set_from_str(self.query_set[self.unique_name])
             model_object_list = dict()
@@ -172,7 +191,12 @@ class GlueRequestHandler:
                                       'success',
                                       'Create Object in Queryset Success',
                                       'The thing you tried to create was completely successful',
-                                      additional_data=model_to_dict(new_model_object))
+                                      additional_data=generate_simple_field_dict(
+                                          new_model_object,
+                                          self.glue_session['fields'][self.unique_name],
+                                          self.glue_session['exclude'][self.unique_name],
+                                      )
+                                      )
 
     def put_query_set_handler(self):
         if id in self.body_data:

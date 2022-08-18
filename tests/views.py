@@ -90,10 +90,13 @@ class TestView(TemplateView):
 
         add_glue(self.request, 'test_model_1', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
         add_glue(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
-        add_glue(self.request, 'test_model_3', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        add_glue(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
+        add_glue(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
         logging.warning('Added model object glue for TestModel Object in write mode')
 
-        add_glue(self.request, 'test_model_set', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'read')
+        add_glue(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'view')
+        add_glue(self.request, 'test_query_2', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'view')
+        add_glue(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'view')
         logging.warning('Added model query set glue for TestModel Object in read mode')
 
         return context_data

@@ -2,22 +2,24 @@ import {ajax_request} from "./ajax.js";
 
 function get_field_data(obj) {
     let data = {}
-    for (const field of obj['fields']) {
+    for (const field of obj['glue_fields']) {
         data[field] = obj[field]
     }
     return data
 }
 
 function handle_response(response, object) {
-    object['response'] = response.data
-    console.log(object.response)
+    object['glue_response'] = response.data
+    console.log(object.glue_response)
 }
 
 function process_model_object(unique_name, model_object) {
-    const field_data = model_object['fields']
+    const glue_field_data = model_object['fields']
     let data = {
-        response: null,
-        create() {
+        glue_fields: [],
+        glue_response: null,
+        glue_is_deleted: false,
+        glue_create() {
             ajax_request(
                 'POST',
                 unique_name,
@@ -28,16 +30,31 @@ function process_model_object(unique_name, model_object) {
                 handle_response(response, this)
             })
         },
-        delete() {
+        glue_delete() {
             ajax_request(
                 'DELETE',
                 unique_name,
                 {},
             ).then((response) => {
                 handle_response(response, this)
+                if (response.data.type === 'success') {
+                    this.glue_is_deleted = true
+                }
             })
         },
-        update() {
+        glue_empty_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = ''
+            }
+        },
+        glue_load_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = glue_field_data[key].value
+            }
+        },
+        glue_update() {
             ajax_request(
                 'PUT',
                 unique_name,
@@ -48,33 +65,31 @@ function process_model_object(unique_name, model_object) {
                 handle_response(response, this)
             })
         },
-        view() {
+        glue_view() {
             ajax_request(
-                'GET',
+                'QUERY',
                 unique_name,
                 {},
             ).then((response) => {
                 handle_response(response, this)
+                for (let key in glue_field_data) {
+                    this[key] = response.data.data[key]
+                }
             })
         },
     }
 
-
-    data['fields'] = []
-
-    for (let key in field_data) {
-        data['fields'].push(key)
-        data[key] = field_data[key].value
-    }
+    data.glue_empty_data()
 
     return data
 }
 
 function process_query_set(unique_name, query_set) {
-    const field_data = model_object['fields']
+    const glue_field_data = []
     let data = {
-        response: null,
-        create() {
+        glue_fields: [],
+        glue_response: null,
+        glue_create() {
             ajax_request(
                 'POST',
                 unique_name,
@@ -85,7 +100,7 @@ function process_query_set(unique_name, query_set) {
                 handle_response(response, this)
             })
         },
-        delete(id) {
+        glue_delete(id) {
             ajax_request(
                 'DELETE',
                 unique_name,
@@ -96,7 +111,7 @@ function process_query_set(unique_name, query_set) {
                 handle_response(response, this)
             })
         },
-        update(id) {
+        glue_update(id) {
             ajax_request(
                 'PUT',
                 unique_name,
@@ -108,22 +123,22 @@ function process_query_set(unique_name, query_set) {
                 handle_response(response, this)
             })
         },
-        view() {
+        glue_view(id=0) {
             ajax_request(
-                'GET',
+                'QUERY',
                 unique_name,
-                {},
+                {
+                    id: id,
+                },
             ).then((response) => {
                 handle_response(response, this)
             })
         }
     }
 
-    data['fields'] = []
-
-    for (let key in field_data) {
+    for (let key in glue_field_data) {
         data['fields'].push(key)
-        data[key] = field_data[key].value
+        data[key] = glue_field_data[key].value
     }
 
     return data
