@@ -9,18 +9,21 @@ function get_field_data(obj) {
 }
 
 function handle_response(response, object) {
+    console.log(object.glue_response)
     object['glue_response'] = response.data
     console.log(object.glue_response)
 }
 
 function process_model_object(unique_name, model_object) {
-    const glue_field_data = model_object['fields']
+    const glue_field_data = model_object.fields
     let data = {
         glue_fields: [],
-        glue_response: null,
+        glue_response: {
+            data: {},
+        },
         glue_is_deleted: false,
         glue_create() {
-            ajax_request(
+            return ajax_request(
                 'POST',
                 unique_name,
                 {
@@ -31,7 +34,7 @@ function process_model_object(unique_name, model_object) {
             })
         },
         glue_delete() {
-            ajax_request(
+            return ajax_request(
                 'DELETE',
                 unique_name,
                 {},
@@ -55,7 +58,7 @@ function process_model_object(unique_name, model_object) {
             }
         },
         glue_update() {
-            ajax_request(
+            return ajax_request(
                 'PUT',
                 unique_name,
                 {
@@ -66,7 +69,7 @@ function process_model_object(unique_name, model_object) {
             })
         },
         glue_view() {
-            ajax_request(
+            return ajax_request(
                 'QUERY',
                 unique_name,
                 {},
@@ -85,12 +88,14 @@ function process_model_object(unique_name, model_object) {
 }
 
 function process_query_set(unique_name, query_set) {
-    const glue_field_data = []
+    const glue_field_data = query_set.fields
     let data = {
         glue_fields: [],
-        glue_response: null,
+        glue_response: {
+            data: {}
+        },
         glue_create() {
-            ajax_request(
+            return ajax_request(
                 'POST',
                 unique_name,
                 {
@@ -101,7 +106,7 @@ function process_query_set(unique_name, query_set) {
             })
         },
         glue_delete(id) {
-            ajax_request(
+            return ajax_request(
                 'DELETE',
                 unique_name,
                 {
@@ -111,8 +116,20 @@ function process_query_set(unique_name, query_set) {
                 handle_response(response, this)
             })
         },
+        glue_empty_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = ''
+            }
+        },
+        glue_load_data(id) {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = glue_field_data[key].value
+            }
+        },
         glue_update(id) {
-            ajax_request(
+            return ajax_request(
                 'PUT',
                 unique_name,
                 {
@@ -124,7 +141,7 @@ function process_query_set(unique_name, query_set) {
             })
         },
         glue_view(id=0) {
-            ajax_request(
+            return ajax_request(
                 'QUERY',
                 unique_name,
                 {
@@ -136,10 +153,7 @@ function process_query_set(unique_name, query_set) {
         }
     }
 
-    for (let key in glue_field_data) {
-        data['fields'].push(key)
-        data[key] = glue_field_data[key].value
-    }
+    data.glue_empty_data()
 
     return data
 }

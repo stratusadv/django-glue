@@ -24,7 +24,7 @@
                 Create
             </button>
 
-            <template x-if="glue_response">
+            <template x-if="glue_response.message_title">
                 <div x-data="glue_response" >
                     Message: <span x-text="message_title"></span><br>
                     First_name: <span x-text="data.first_name"></span>

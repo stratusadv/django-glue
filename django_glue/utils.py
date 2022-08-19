@@ -59,6 +59,7 @@ def add_glue(request, unique_name: str, target, access: str, fields=('__all__',)
                         'model': content_type.model,
                     }
 
+                    glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields, exclude)
                     glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
                 else:

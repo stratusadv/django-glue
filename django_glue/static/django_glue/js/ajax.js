@@ -1,6 +1,6 @@
 import {csrf_token} from "./csrf.js";
 
-function ajax_request(method, unique_name, data) {
+async function ajax_request(method, unique_name, data) {
     return axios({
         method: method,
         url: DJANGO_GLUE_AJAX_URL,
