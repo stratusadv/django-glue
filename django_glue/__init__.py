@@ -1,4 +1,4 @@
-__version__ = "0.0.2"
+__version__ = "0.1.0"
 
 from django.conf import settings as user_settings
 from . import settings as default_settings
