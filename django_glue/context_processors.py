@@ -1,6 +1,7 @@
 import json
 
-from django_glue import settings, __version__
+from django_glue.conf import settings
+from django_glue import __version__
 
 
 def glue(request):

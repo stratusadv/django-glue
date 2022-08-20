@@ -7,7 +7,7 @@ from django.http import Http404
 from django_glue.json import generate_json_response, generate_json_404_response
 from django_glue.utils import process_and_save_field_value, process_and_save_form_values, get_glue_session, \
     decode_query_set_from_str, run_glue_method, glue_access_check, generate_simple_field_dict
-from django_glue import settings
+from django_glue.conf import settings
 
 
 class GlueRequestHandler:

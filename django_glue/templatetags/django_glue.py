@@ -3,7 +3,7 @@ import logging, json
 from django import template
 from django.utils.safestring import mark_safe
 
-from django_glue import settings
+from django_glue.conf import settings
 
 register = template.Library()
 

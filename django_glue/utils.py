@@ -5,7 +5,7 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import Http404
 
-from django_glue import settings
+from django_glue.conf import settings
 
 GLUE_ACCESS_TYPES = (
     'view',
