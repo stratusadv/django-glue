@@ -67,10 +67,14 @@ TEMPLATES = [
 ]
 ```
 
+## Usage
+
+Please refer to tests folder for examples on how to implement Django-Glue.
+
 ## Roadmap
 
 - [x] Prototype (2022-07-12)
-- [ ] Alpha (2022-08-31)
+- [x] Alpha (2022-08-31)
 - [ ] Beta (2023-06-31)
 
 ## Authors
