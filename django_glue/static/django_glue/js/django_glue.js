@@ -1,131 +1,180 @@
-import {post_ajax, post_ajax_return} from "./ajax.js";
-import {debounce} from "./debouce.js";
-import {add_message} from "./message.js";
+import {ajax_request} from "./ajax.js"
 
-function get_form_values(unique_name) {
-    let form_input_list = document.querySelectorAll('[glue-connection]')
-    let form_json = {}
-
-    for (let i = 0; i < form_input_list.length; i++) {
-        form_json[form_input_list[i].getAttribute('glue-field-name')] = form_input_list[i].value
+function get_field_data(obj) {
+    let data = {}
+    for (const field of obj['glue_fields']) {
+        data[field] = obj[field]
     }
-
-    console.log(form_json)
-
-    return form_json
+    return data
 }
 
-function get_attribute_string(attribute) {
-    return DJANGO_GLUE_ATTRIBUTE_PREFIX + '-' + attribute
+function handle_response(response, object) {
+    object['glue_response'] = response.data
 }
 
-function live_value_update(unique_name, action, field_name, value) {
-    return debounce(function () {
-        post_ajax(
-            {
-                'unique_name': unique_name,
-                'action': action,
-                'field_name': field_name,
-                'value': value,
-            },
-        )
-    })
-}
-
-function process_glue_connection(el) {
-    let update = el.getAttribute(get_attribute_string('update'))
-    let action = el.getAttribute(get_attribute_string('action'))
-    let connection = el.getAttribute(get_attribute_string('connection'))
-    let field_name = el.getAttribute(get_attribute_string('field-name'))
-    let field_value = el.getAttribute(get_attribute_string('field-value'))
-    let unique_name = el.getAttribute(get_attribute_string('unique-name'))
-
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        if (el.type === 'submit') {
-            el.addEventListener('click', function () {
-                if (action === 'submit_update') {
-                    post_ajax(
-                        {
-                            'connection': connection,
-                            'action': 'update',
-                            'unique_name': unique_name,
-                            'form_values': get_form_values(unique_name),
-                        },
-                    )
-                } else if (action === 'submit_create') {
-                    post_ajax(
-                        {
-                            'connection': connection,
-                            'action': 'create',
-                            'unique_name': unique_name,
-                            'form_values': get_form_values(unique_name),
-                        },
-                    )
+function process_model_object(unique_name, model_object) {
+    const glue_field_data = model_object.fields
+    let data = {
+        glue_fields: [],
+        glue_response: {
+            data: {},
+        },
+        glue_is_deleted: false,
+        glue_create() {
+            return ajax_request(
+                'POST',
+                unique_name,
+                {
+                    form_values: get_field_data(this)
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        glue_delete() {
+            return ajax_request(
+                'DELETE',
+                unique_name,
+                {},
+            ).then((response) => {
+                handle_response(response, this)
+                if (response.data.type === 'success') {
+                    this.glue_is_deleted = true
                 }
             })
-        } else if (connection === 'model_object') {
-            el.value = field_value
-            if (update === 'live') {
-                el.addEventListener('keyup', function () {
-                    live_value_update(unique_name, 'update', field_name, el.value)
-                })
+        },
+        glue_empty_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = ''
             }
+        },
+        glue_load_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = glue_field_data[key].value
+            }
+        },
+        glue_update() {
+            return ajax_request(
+                'PUT',
+                unique_name,
+                {
+                    form_values: get_field_data(this)
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        glue_view() {
+            return ajax_request(
+                'QUERY',
+                unique_name,
+                {},
+            ).then((response) => {
+                handle_response(response, this)
+                for (let key in glue_field_data) {
+                    this[key] = this.glue_response.data[key]
+                }
+            })
+        },
+    }
+
+    data.glue_empty_data()
+
+    return data
+}
+
+function process_query_set(unique_name, query_set) {
+    const glue_field_data = query_set.fields
+    let data = {
+        glue_fields: [],
+        glue_response: {
+            data: {}
+        },
+        glue_create() {
+            return ajax_request(
+                'POST',
+                unique_name,
+                {
+                    form_values: get_field_data(this),
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        glue_delete(id) {
+            return ajax_request(
+                'DELETE',
+                unique_name,
+                {
+                    id: id,
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        glue_empty_data() {
+            for (let key in glue_field_data) {
+                this.glue_fields.push(key)
+                this[key] = ''
+            }
+        },
+        glue_load_data(id) {
+            this.glue_view(id).then(() => {
+                for (let key in glue_field_data) {
+                    this[key] = this.glue_response.data[key]
+                }
+            })
+        },
+        glue_update(id) {
+            return ajax_request(
+                'PUT',
+                unique_name,
+                {
+                    id: id,
+                    form_values: get_field_data(this),
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
+        },
+        glue_view(id=0) {
+            return ajax_request(
+                'QUERY',
+                unique_name,
+                {
+                    id: id,
+                },
+            ).then((response) => {
+                handle_response(response, this)
+            })
         }
     }
 
-    if (action === 'list_display') {
-        post_ajax_return(
-            {
-                'connection': connection,
-                'action': 'view',
-                'unique_name': unique_name,
-            },
-        ).then(response => response.json())
-            .then(data => {
-                const template = el.querySelector('[' + get_attribute_string('component') + ']')
+    data.glue_empty_data()
 
-                for (let id in data['data']) {
-                    let model_object = data['data'][id]
-                    let node_display = template.content.cloneNode(true)
-
-                    const node_id = model_object[template.getAttribute(get_attribute_string('id-field'))]
-                    const event_list = node_display.querySelectorAll('[' + get_attribute_string('event') + ']')
-
-                    let node_section = node_display.querySelector('[' + get_attribute_string('id') + ']')
-                    node_section.setAttribute(get_attribute_string('unique-name'), unique_name)
-                    node_section.setAttribute(get_attribute_string('id'), node_id)
-
-                    for (let i = 0; i < event_list.length; i++) {
-                        event_list[i].addEventListener('click', function () {
-                            post_ajax_return(
-                                {
-                                    'connection': connection,
-                                    'action': event_list[i].getAttribute(get_attribute_string('action')),
-                                    'id': node_id,
-                                    'unique_name': unique_name,
-                                },
-                            ).then(response => response.json())
-                                .then(data => {
-                                    el.querySelector('[' + get_attribute_string("id") + '="' + node_id +'"]').remove()
-                                    add_message(data['type'], data['message_title'], data['message_body'])
-                                })
-                        })
-                    }
-
-                    for (let field in model_object) {
-                        let value = model_object[field]
-                        let template_value = node_display.querySelector('[glue-component-field="' + field + '"]')
-                        if (template_value !== null) {
-                            template_value.innerHTML = value
-                        }
-                    }
-                    el.appendChild(node_display)
-                }
-                add_message(data['type'], data['message_title'], data['message_body'])
-            })
-    }
-
+    return data
 }
 
-document.querySelectorAll('[' + get_attribute_string("connection") + ']').forEach(process_glue_connection)
+document.addEventListener('alpine:init', () => {
+    let glue_data = {}
 
+    for (let key in DJANGO_GLUE_DATA) {
+        let data
+
+        if (DJANGO_GLUE_DATA[key].connection === 'model_object') {
+            data = process_model_object(key, DJANGO_GLUE_DATA[key])
+        }
+
+        if (DJANGO_GLUE_DATA[key].connection === 'query_set') {
+            data = process_query_set(key, DJANGO_GLUE_DATA[key])
+        }
+
+        glue_data[key] = data
+
+        Alpine.data(key, () => (data))
+    }
+
+    // Alpine.data('glue', () => (glue_data))
+})

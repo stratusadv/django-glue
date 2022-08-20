@@ -1,0 +1,55 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    DELETE & VIEW Query Set
+{% endblock %}
+
+{% block body %}
+    <div x-data="test_query_3" x-init="glue_view()" class="row">
+        <div class="col-12">
+
+            <div class="row pb-2">
+                <div class="col-8">
+                    <small class="text-muted">Data is automatically loaded</small>
+                </div>
+                <div class="col-4">
+                    <button x-on:click="glue_view()" class="btn btn-outline-secondary py-0 pb-1 float-end">
+                        Refresh View
+                    </button>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <template x-for="test_model in glue_response.data">
+                        <div class="row py-1">
+                            <div class="col-1">
+                                <span x-text="test_model.id"></span>
+                            </div>
+                            <div class="col-2">
+                                <span x-text="test_model.first_name"></span>
+                            </div>
+                            <div class="col-3">
+                                <span x-text="test_model.last_name"></span>
+                            </div>
+                            <div class="col-2">
+                                <span x-text="test_model.favorite_number"></span>
+                            </div>
+                            <div class="col-2">
+                                <span x-text="test_model.weight_lbs"></span>
+                            </div>
+                            <div class="col-2">
+                                <button x-on:click="glue_delete(test_model.id).then(() => { glue_view() })"
+                                        class="btn btn-outline-danger p-2 py-0 float-end">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+{% endblock %}

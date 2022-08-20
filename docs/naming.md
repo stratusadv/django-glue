@@ -46,18 +46,18 @@ Allows you to manipulate the targets in any way possible.
 ## Method
 Used in: View, Template
 
-The action to be used on events or requests.
+The action to be used on events or requests as per normal REST frameworks.
 
-#### View
+#### GET
 Allows you to only read data from the targets.
 
-#### Create
+#### POST
 Allows you to read and create data in the targets.
 
-#### Update
+#### PUT
 Allows you to read, create and change the data in the targets.
 
-#### Delete
+#### DELETE
 Allows you to manipulate the targets in any way possible.
 
 ## Request

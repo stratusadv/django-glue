@@ -1,14 +1,17 @@
 {% load static %}
+
+{% load django_glue %}
+
 {% csrf_token %}
 
 <link rel="stylesheet" href="{% static 'django_glue/css/django_glue.css' %}?v={{ DJANGO_GLUE_VERSION }}">
 
 <script type="application/ecmascript">
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_handler' %}'
-    const DJANGO_GLUE_ATTRIBUTE_PREFIX = '{{ DJANGO_GLUE_ATTRIBUTE_PREFIX }}'
+    const DJANGO_GLUE_DATA = JSON.parse('{% glue_context_data_str %}')
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
 </script>
 
 <script type="module" src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script src="{% static 'django_glue/js/alpine.min.js' %}?v={{ DJANGO_GLUE_VERSION }}" defer></script>
 <script src="{% static 'django_glue/js/axios.min.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script src="{% static 'django_glue/js/alpine.min.js' %}?v={{ DJANGO_GLUE_VERSION }}" defer></script>

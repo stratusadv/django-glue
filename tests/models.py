@@ -1,14 +1,18 @@
 from django.db import models
+from django.utils.timezone import now
 
 
 class TestModel(models.Model):
-    char = models.CharField(max_length=32)
-    text = models.TextField()
-    integer = models.IntegerField()
-    decimal = models.DecimalField(max_digits=10, decimal_places=3)
+    first_name = models.CharField(max_length=32)
+    last_name = models.CharField(max_length=32)
+    description = models.TextField()
+    favorite_number = models.IntegerField()
+    anniversary_datetime = models.DateTimeField(default=now)
+    birth_date = models.DateField(default=now)
+    weight_lbs = models.DecimalField(max_digits=7, decimal_places=3)
 
     def __str__(self):
-        return self.char
+        return f'{self.first_name} {self.last_name}'
 
     def django_glue_create(self, request):
         pass

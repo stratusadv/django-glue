@@ -1,0 +1,18 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    DELETE Model Object
+{% endblock %}
+
+{% block body %}
+    <div x-data="test_model_3" x-init="glue_load_data()" class="row">
+        <div x-show="!glue_is_deleted" x-transition class="col-12">
+            <span x-text="first_name"></span>
+            <span x-text="last_name"></span>
+            <button x-on:click="glue_delete()" class="btn btn-outline-danger px-2 py-0 float-end">
+                Delete
+            </button>
+        </div>
+    </div>
+
+{% endblock %}
