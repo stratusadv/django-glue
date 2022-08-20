@@ -6,7 +6,7 @@ setup(
     name="django-glue",
     version=__version__,
     description="Industrial Strength Glue for Django Backends and Frontends!",
-    long_description=open("README.md").read(),
+    # long_description=open("README.md").read(),
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",
