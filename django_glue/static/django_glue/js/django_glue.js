@@ -1,4 +1,4 @@
-import {ajax_request} from "./ajax.js";
+import {ajax_request} from "./ajax.js"
 
 function get_field_data(obj) {
     let data = {}
@@ -9,9 +9,7 @@ function get_field_data(obj) {
 }
 
 function handle_response(response, object) {
-    console.log(object.glue_response)
     object['glue_response'] = response.data
-    console.log(object.glue_response)
 }
 
 function process_model_object(unique_name, model_object) {
@@ -76,7 +74,7 @@ function process_model_object(unique_name, model_object) {
             ).then((response) => {
                 handle_response(response, this)
                 for (let key in glue_field_data) {
-                    this[key] = response.data.data[key]
+                    this[key] = this.glue_response.data[key]
                 }
             })
         },
@@ -123,10 +121,11 @@ function process_query_set(unique_name, query_set) {
             }
         },
         glue_load_data(id) {
-            for (let key in glue_field_data) {
-                this.glue_fields.push(key)
-                this[key] = glue_field_data[key].value
-            }
+            this.glue_view(id).then(() => {
+                for (let key in glue_field_data) {
+                    this[key] = this.glue_response.data[key]
+                }
+            })
         },
         glue_update(id) {
             return ajax_request(
@@ -158,7 +157,6 @@ function process_query_set(unique_name, query_set) {
     return data
 }
 
-
 document.addEventListener('alpine:init', () => {
     let glue_data = {}
 
@@ -178,5 +176,5 @@ document.addEventListener('alpine:init', () => {
         Alpine.data(key, () => (data))
     }
 
-    Alpine.data('glue', () => (glue_data))
+    // Alpine.data('glue', () => (glue_data))
 })

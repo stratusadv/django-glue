@@ -9,8 +9,8 @@
         <div class="col-12">
             <div class="row">
                 <div class="col-12">
-                    <input type="text" class="form-control mb-2" placeholder="Test Model ID">
-                    <button x-on:click="glue_view()" class="btn btn-outline-secondary px-2 pt-0 pb-1 float-end">
+                    <input x-ref="test_model_id_input" type="text" class="form-control mb-2" placeholder="Test Model ID">
+                    <button x-on:click="glue_load_data($refs.test_model_id_input.value)" class="btn btn-outline-secondary px-2 py-0 float-end">
                         Load Model to Edit
                     </button>
                 </div>
@@ -18,7 +18,7 @@
 
             <div class="row">
                 <div class="col-12">
-                    <form x-on:keyup.debounce="glue_update()">
+                    <form x-on:keyup.debounce="glue_update(id)">
                         <label for="first_name">First Name</label>
                         <input id="first_name" type="text" class="form-control mb-2" x-model="first_name">
                         <label for="last_name">Last Name</label>

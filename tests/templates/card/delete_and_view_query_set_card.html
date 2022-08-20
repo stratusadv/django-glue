@@ -13,7 +13,7 @@
                     <small class="text-muted">Data is automatically loaded</small>
                 </div>
                 <div class="col-4">
-                    <button x-on:click="glue_view()" class="btn btn-outline-secondary px-2 pt-0 pb-1 float-end">
+                    <button x-on:click="glue_view()" class="btn btn-outline-secondary py-0 pb-1 float-end">
                         Refresh View
                     </button>
                 </div>
@@ -23,7 +23,10 @@
                 <div class="col-12">
                     <template x-for="test_model in glue_response.data">
                         <div class="row py-1">
-                            <div class="col-3">
+                            <div class="col-1">
+                                <span x-text="test_model.id"></span>
+                            </div>
+                            <div class="col-2">
                                 <span x-text="test_model.first_name"></span>
                             </div>
                             <div class="col-3">
@@ -37,7 +40,7 @@
                             </div>
                             <div class="col-2">
                                 <button x-on:click="glue_delete(test_model.id).then(() => { glue_view() })"
-                                        class="btn btn-outline-danger p-2 pt-0 pb-1 float-end">
+                                        class="btn btn-outline-danger p-2 py-0 float-end">
                                     Delete
                                 </button>
                             </div>
