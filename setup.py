@@ -1,10 +1,10 @@
 from setuptools import find_packages, setup
 
-import django_glue
+from django_glue import __version__
 
 setup(
     name="django-glue",
-    version=django_glue.__version__,
+    version=__version__,
     description="Industrial Strength Glue for Django Backends and Frontends!",
     long_description=open("README.md").read(),
     classifiers=[
