@@ -3,7 +3,7 @@ import logging, random
 from django.views.generic import TemplateView
 
 from tests.models import TestModel
-from django_glue.utils import add_glue
+from django_glue.glue import add_glue
 
 FIRST_NAME_TUPLE = (
     'Fred',

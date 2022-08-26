@@ -1,4 +1,4 @@
-from django_glue.utils import GLUE_RESPONSE_TYPES
+from django_glue.glue import GLUE_RESPONSE_TYPES
 from django.http import JsonResponse
 
 

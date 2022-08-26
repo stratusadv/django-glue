@@ -5,8 +5,9 @@ from django.forms import model_to_dict
 from django.http import Http404
 
 from django_glue.json import generate_json_response, generate_json_404_response
-from django_glue.utils import process_and_save_field_value, process_and_save_form_values, get_glue_session, \
-    decode_query_set_from_str, run_glue_method, glue_access_check, generate_simple_field_dict
+from django_glue.glue import glue_run_method, glue_access_check, get_glue_session
+from django_glue.utils import process_and_save_field_value, process_and_save_form_values, decode_query_set_from_str, \
+    generate_simple_field_dict
 from django_glue.conf import settings
 
 
@@ -78,7 +79,7 @@ class GlueRequestHandler:
 
     def delete_model_object_handler(self):
         if self.model_object is not None:
-            run_glue_method(self.request, self.model_object, 'django_glue_delete')
+            glue_run_method(self.request, self.model_object, 'django_glue_delete')
 
             if settings.DJANGO_GLUE_AUTO_DELETE:
                 self.model_object.delete()
@@ -92,7 +93,7 @@ class GlueRequestHandler:
 
     def query_model_object_handler(self):
         if self.model_object is not None:
-            run_glue_method(self.request, self.model_object, 'django_glue_view')
+            glue_run_method(self.request, self.model_object, 'django_glue_view')
 
             return generate_json_response('200',
                                           'success',
@@ -111,7 +112,7 @@ class GlueRequestHandler:
         new_model_object = self.model_class()
         process_and_save_form_values(new_model_object, self.body_data['data']['form_values'])
 
-        run_glue_method(self.request, new_model_object, 'django_glue_create')
+        glue_run_method(self.request, new_model_object, 'django_glue_create')
 
         return generate_json_response('200',
                                       'success',
@@ -128,14 +129,24 @@ class GlueRequestHandler:
         if self.model_object is not None:
 
             if 'form_values' in self.body_data['data']:
-                process_and_save_form_values(self.model_object, self.body_data['data']['form_values'])
+                process_and_save_form_values(
+                    self.model_object,
+                    self.body_data['data']['form_values'],
+                    self.glue_session['fields'][self.unique_name],
+                    self.glue_session['exclude'][self.unique_name],
+                )
 
             elif 'field_name' in self.body_data['data']:
                 if self.body_data['data']['field_name'] in self.context[self.unique_name]['fields']:
-                    process_and_save_field_value(self.model_object, self.body_data['data']['field_name'],
-                                                 self.body_data['data']['value'])
+                    process_and_save_field_value(
+                        self.model_object,
+                        self.body_data['data']['field_name'],
+                        self.body_data['data']['value'],
+                        self.glue_session['fields'][self.unique_name],
+                        self.glue_session['exclude'][self.unique_name],
+                    )
 
-            run_glue_method(self.request, self.model_object, 'django_glue_update')
+            glue_run_method(self.request, self.model_object, 'django_glue_update')
 
             return generate_json_response('200',
                                           'success',
@@ -152,7 +163,7 @@ class GlueRequestHandler:
                 logging.error('Handler: Object not Found')
                 return generate_json_404_response()
 
-            run_glue_method(self.request, model_object, 'django_glue_delete')
+            glue_run_method(self.request, model_object, 'django_glue_delete')
 
             if settings.DJANGO_GLUE_AUTO_DELETE:
                 model_object.delete()
@@ -200,7 +211,7 @@ class GlueRequestHandler:
         new_model_object = self.model_class()
         process_and_save_form_values(new_model_object, self.body_data['data']['form_values'])
 
-        run_glue_method(self.request, new_model_object, 'django_glue_create')
+        glue_run_method(self.request, new_model_object, 'django_glue_create')
 
         return generate_json_response('200',
                                       'success',
@@ -228,7 +239,7 @@ class GlueRequestHandler:
                     process_and_save_field_value(model_object, self.body_data['data']['field_name'],
                                                  self.body_data['data']['value'])
 
-            run_glue_method(self.request, model_object, 'django_glue_update')
+            glue_run_method(self.request, model_object, 'django_glue_update')
 
             return generate_json_response('200',
                                           'success',
