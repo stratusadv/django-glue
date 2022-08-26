@@ -1,10 +1,6 @@
 import logging, pickle, base64, json
 
-from django.contrib.contenttypes.models import ContentType
 from django.core import exceptions
-from django.db.models import Model
-from django.db.models.query import QuerySet
-from django.http import Http404
 
 from django_glue.conf import settings
 
@@ -86,24 +82,34 @@ def process_and_save_form_values(model_object, form_values_dict, fields, exclude
 
     except exceptions.ValidationError as e:
         logging.warning(f'Validation Failed {e = }')
-        return False
+        return {
+            'type': 'error',
+            'message_dict': e.message_dict
+        }
 
     else:
         logging.warning(f'Validation Successful')
-        return True
+        return {
+            'type': 'success',
+        }
 
 
 def process_and_save_field_value(model_object, field_name, value, fields, exclude):
     logging.warning(f'{field_name = } {value = }')
     try:
         if field_name_included(field_name, fields, exclude):
-            model_object.__dict__[field_name].clean(value, model_object)
+            model_object.__dict__[field_name] = value
             model_object.full_clean()
             model_object.save()
 
     except exceptions.ValidationError as e:
         logging.warning(f'Validation Failed {e = }')
-        return e.message_dict
+        return {
+            'type': 'error',
+            'message_dict': e.message_dict
+        }
 
     else:
-        return True
+        return {
+            'type': 'success',
+        }

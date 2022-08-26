@@ -17,3 +17,7 @@ def glue_init(context):
 def glue_context_data_str(context):
     return mark_safe(str(json.dumps(context[settings.DJANGO_GLUE_CONTEXT_NAME])))
 
+
+@register.simple_tag(takes_context=True)
+def glue_attr(context, unique_name):
+    return ''
