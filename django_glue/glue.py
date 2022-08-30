@@ -12,14 +12,6 @@ GLUE_ACCESS_TYPES = (
     'delete',
 )
 
-GLUE_RESPONSE_TYPES = (
-    'success',
-    'info',
-    'warning',
-    'error',
-    'debug',
-)
-
 GLUE_SESSION_TYPES = (
     'context',
     'query_set',

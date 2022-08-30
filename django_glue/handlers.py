@@ -84,10 +84,10 @@ class GlueRequestHandler:
             if settings.DJANGO_GLUE_AUTO_DELETE:
                 self.model_object.delete()
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Delete Object Success',
-                                          'The object you are trying to delete was completed successful')
+            return generate_json_response(
+                'Delete Object Success',
+                'The object you are trying to delete was completed successful'
+            )
         else:
             return generate_json_404_response()
 
@@ -95,16 +95,15 @@ class GlueRequestHandler:
         if self.model_object is not None:
             glue_run_method(self.request, self.model_object, 'django_glue_view')
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Retrieve Object Data Success',
-                                          'The object data you are trying to receive was successful',
-                                          additional_data=generate_simple_field_dict(
-                                              self.model_object,
-                                              self.glue_session['fields'][self.unique_name],
-                                              self.glue_session['exclude'][self.unique_name],
-                                          )
-                                          )
+            return generate_json_response(
+                'Retrieve Object Data Success',
+                'The object data you are trying to receive was successful',
+                additional_data=generate_simple_field_dict(
+                    self.model_object,
+                    self.glue_session['fields'][self.unique_name],
+                    self.glue_session['exclude'][self.unique_name],
+                )
+            )
         else:
             return generate_json_404_response()
 
@@ -114,16 +113,15 @@ class GlueRequestHandler:
 
         glue_run_method(self.request, new_model_object, 'django_glue_create')
 
-        return generate_json_response('200',
-                                      'success',
-                                      'Create Object Success',
-                                      'The thing you tried to create was completely successful',
-                                      additional_data=generate_simple_field_dict(
-                                          new_model_object,
-                                          self.glue_session['fields'][self.unique_name],
-                                          self.glue_session['exclude'][self.unique_name],
-                                      )
-                                      )
+        return generate_json_response(
+            'Create Object Success',
+            'The thing you tried to create was completely successful',
+            additional_data=generate_simple_field_dict(
+                new_model_object,
+                self.glue_session['fields'][self.unique_name],
+                self.glue_session['exclude'][self.unique_name],
+            )
+        )
 
     def put_model_object_handler(self):
         if self.model_object is not None:
@@ -148,10 +146,10 @@ class GlueRequestHandler:
 
             glue_run_method(self.request, self.model_object, 'django_glue_update')
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Update Object Successful',
-                                          'The thing you tried to update was completely successful')
+            return generate_json_response(
+                'Update Object Successful',
+                'The thing you tried to update was completely successful'
+            )
         else:
             return generate_json_404_response()
 
@@ -168,10 +166,10 @@ class GlueRequestHandler:
             if settings.DJANGO_GLUE_AUTO_DELETE:
                 model_object.delete()
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Delete Object in Query Set Success',
-                                          'The thing you tried to delete was successful')
+            return generate_json_response(
+                'Delete Object in Query Set Success',
+                'The thing you tried to delete was successful'
+            )
         else:
             logging.error('Handler: ID not in Body')
             return generate_json_404_response()
@@ -185,25 +183,25 @@ class GlueRequestHandler:
                 except self.model_class.DoesNotExist:
                     return generate_json_404_response()
 
-                return generate_json_response('200',
-                                              'success',
-                                              'Retrieve Object Data in Query Set Success',
-                                              'The object data in query set you are trying to receive was successful',
-                                              additional_data=generate_simple_field_dict(
-                                                  model_object,
-                                                  self.glue_session['fields'][self.unique_name],
-                                                  self.glue_session['exclude'][self.unique_name],
-                                              )
-                                              )
+                return generate_json_response(
+                    'Retrieve Object Data in Query Set Success',
+                    'The object data in query set you are trying to receive was successful',
+                    additional_data=generate_simple_field_dict(
+                        model_object,
+                        self.glue_session['fields'][self.unique_name],
+                        self.glue_session['exclude'][self.unique_name],
+                    )
+                )
             else:
                 model_object_list = dict()
                 for model_object in self.query_set:
                     model_object_list[model_object.id] = model_to_dict(model_object)
 
-                return generate_json_response('200',
-                                              'success', 'View Query Set Success',
-                                              'The thing you tried to create was completely successful',
-                                              additional_data=model_object_list)
+                return generate_json_response(
+                    'View Query Set Success',
+                    'The thing you tried to create was completely successful',
+                    additional_data=model_object_list
+                )
         else:
             return generate_json_404_response()
 
@@ -213,16 +211,15 @@ class GlueRequestHandler:
 
         glue_run_method(self.request, new_model_object, 'django_glue_create')
 
-        return generate_json_response('200',
-                                      'success',
-                                      'Create Object in Queryset Success',
-                                      'The thing you tried to create was completely successful',
-                                      additional_data=generate_simple_field_dict(
-                                          new_model_object,
-                                          self.glue_session['fields'][self.unique_name],
-                                          self.glue_session['exclude'][self.unique_name],
-                                      )
-                                      )
+        return generate_json_response(
+            'Create Object in Queryset Success',
+            'The thing you tried to create was completely successful',
+            additional_data=generate_simple_field_dict(
+                new_model_object,
+                self.glue_session['fields'][self.unique_name],
+                self.glue_session['exclude'][self.unique_name],
+            )
+        )
 
     def put_query_set_handler(self):
         if 'id' in self.body_data['data']:
@@ -241,9 +238,9 @@ class GlueRequestHandler:
 
             glue_run_method(self.request, model_object, 'django_glue_update')
 
-            return generate_json_response('200',
-                                          'success',
-                                          'Update Successful',
-                                          'The thing you tried to update was completely successful')
+            return generate_json_response(
+                'Update Successful',
+                'The thing you tried to update was completely successful'
+            )
         else:
             return generate_json_404_response()

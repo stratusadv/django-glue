@@ -51,3 +51,18 @@ class BigTestModel(models.Model):
     time_field = models.TimeField()
     url_field = models.URLField()
     uuid_field = models.UUIDField()
+
+    def __str__(self):
+        return f'{self.char_field}'
+
+    def django_glue_create(self, request):
+        pass
+
+    def django_glue_update(self, request):
+        pass
+
+    def django_glue_delete(self, request):
+        pass
+
+    def django_glue_view(self, request):
+        pass
