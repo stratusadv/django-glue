@@ -1,6 +1,6 @@
 import logging, pickle, base64, json
 
-from django.core import exceptions
+from django.core import exceptions, serializers
 
 from django_glue.conf import settings
 
@@ -113,3 +113,7 @@ def process_and_save_field_value(model_object, field_name, value, fields, exclud
         return {
             'type': 'success',
         }
+
+
+def serialize_object_json(model_object, fields, exclude):
+    return serializers.serialize('json', [model_object, ])

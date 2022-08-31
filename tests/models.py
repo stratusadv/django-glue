@@ -37,7 +37,7 @@ class BigTestModel(models.Model):
     decimal_field = models.DecimalField(decimal_places=2, max_digits=6)
     duration_field = models.DurationField()
     email_field = models.EmailField()
-    file_path_field = models.FilePathField()
+    file_path_field = models.FilePathField(path='/static')
     float_field = models.FloatField()
     generic_ip_address_field = models.GenericIPAddressField()
     ip_address_field = models.GenericIPAddressField()
