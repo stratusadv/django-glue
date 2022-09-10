@@ -229,7 +229,12 @@ class GlueRequestHandler:
                 return generate_json_404_response()
 
             if 'form_values' in self.body_data['data']:
-                process_and_save_form_values(model_object, self.body_data['data']['form_values'])
+                process_and_save_form_values(
+                    model_object,
+                    self.body_data['data']['form_values'],
+                    self.glue_session['fields'][self.unique_name],
+                    self.glue_session['exclude'][self.unique_name],
+                )
 
             elif 'field_name' in self.body_data['data']:
                 if self.body_data['data']['field_name'] in self.context[self.unique_name]['fields']:

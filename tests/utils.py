@@ -75,7 +75,7 @@ def generate_randomized_test_model(limit=5):
         last_name=LAST_NAME_TUPLE[random.randint(0, (len(LAST_NAME_TUPLE) - 1))],
         description=new_description,
         favorite_number=random.randint(0, 999),
-        weight_lbs=round(random.uniform(80.0, 400.0), 1),
+        weight_lbs=round(random.uniform(80.001, 400.123), 3),
     )
 
     exclude_test_model = TestModel.objects.all().order_by('-id')[:limit]

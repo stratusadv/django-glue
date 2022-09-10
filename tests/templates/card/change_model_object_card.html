@@ -1,5 +1,7 @@
 {% extends 'card/card.html' %}
 
+{% load django_glue %}
+
 {% block header %}
     CHANGE Model Object
 {% endblock %}
@@ -9,7 +11,7 @@
         <div class="col-12">
             <form x-on:keyup.debounce="glue_update()">
                 <label for="first_name">First Name</label>
-                <input id="first_name" type="text" class="form-control mb-2" x-model="first_name">
+                <input id="first_name" type="text" class="form-control mb-2" x-model="first_name" {% glue_html_attr test_model_1.first_name  %}>
                 <label for="last_name">Last Name</label>
                 <input id="last_name" type="text" class="form-control mb-2" x-model="last_name">
                 <label for="description">Description</label>

@@ -1,6 +1,7 @@
 import logging, pickle, base64, json
 
 from django.core import exceptions, serializers
+from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.conf import settings
 
@@ -33,22 +34,36 @@ def field_name_included(name, fields, exclude):
     return included
 
 
+def generate_field_attr_dict(field):
+    form_field = field.formfield()
+    return form_field.widget_attrs(form_field.widget)
+
+
 def generate_field_dict(model_object, fields, exclude):
     fields_dict = dict()
 
     model = type(model_object)
+    json_model = json.loads(serialize_object_to_json(model_object, fields, exclude))[0]
 
     for field in model._meta.fields:
         try:
             if field_name_included(field.name, fields, exclude):
                 if hasattr(field, 'get_internal_type'):
+                    if field.name == 'id':
+                        field_value = json_model['pk']
+                        field_attr = ''
+                    else:
+                        field_value = json_model['fields'][field.name]
+                        field_attr = generate_field_attr_dict(field)
+
                     fields_dict[field.name] = {
                         'type': field.get_internal_type(),
-                        'value': getattr(model_object, field.name)
+                        'value': field_value,
+                        'html_attr': field_attr,
                     }
 
         except:
-            raise f'Invalid field or exclude for model type {model.name}'
+            raise f'Invalid field or exclude for model type {model.__class__.__name__}'
 
     return fields_dict
 
@@ -115,5 +130,5 @@ def process_and_save_field_value(model_object, field_name, value, fields, exclud
         }
 
 
-def serialize_object_json(model_object, fields, exclude):
+def serialize_object_to_json(model_object, fields, exclude):
     return serializers.serialize('json', [model_object, ])
