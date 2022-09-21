@@ -207,7 +207,12 @@ class GlueRequestHandler:
 
     def post_query_set_handler(self):
         new_model_object = self.model_class()
-        process_and_save_form_values(new_model_object, self.body_data['data']['form_values'])
+        process_and_save_form_values(
+            new_model_object,
+            self.body_data['data']['form_values'],
+            self.glue_session['fields'][self.unique_name],
+            self.glue_session['exclude'][self.unique_name],
+        )
 
         glue_run_method(self.request, new_model_object, 'django_glue_create')
 

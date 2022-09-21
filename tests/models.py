@@ -21,7 +21,7 @@ class TestModel(models.Model):
         pass
 
     def django_glue_delete(self, request):
-        pass
+        self.delete()
 
     def django_glue_view(self, request):
         pass
@@ -62,7 +62,7 @@ class BigTestModel(models.Model):
         pass
 
     def django_glue_delete(self, request):
-        pass
+        self.delete()
 
     def django_glue_view(self, request):
         pass
