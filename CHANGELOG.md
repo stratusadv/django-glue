@@ -7,7 +7,7 @@
 
 
 #### Changes
-
+- Clean up internal functions to more efficient.
 
 #### Bugs
 

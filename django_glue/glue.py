@@ -1,3 +1,5 @@
+from types import FunctionType
+
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 from django.db.models.query import QuerySet
@@ -20,7 +22,14 @@ GLUE_SESSION_TYPES = (
 )
 
 
-def add_glue(request, unique_name: str, target, access: str, fields=('__all__',), exclude=('__none__',), **kwargs):
+def add_glue(
+        request,
+        unique_name: str,
+        target, access: str,
+        fields=('__all__',),
+        exclude=('__none__',),
+        **kwargs,
+):
     if access in GLUE_ACCESS_TYPES:
         if isinstance(fields, (list, tuple)) and isinstance(exclude, (list, tuple)):
             if glue_unique_name_unused(request, unique_name):
@@ -52,8 +61,11 @@ def add_glue(request, unique_name: str, target, access: str, fields=('__all__',)
                     glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields, exclude)
                     glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
+                elif isinstance(target, FunctionType):
+                    pass
+
                 else:
-                    raise TypeError(f'target is not a valid type must be Django Model or QuerySet')
+                    raise TypeError(f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
 
                 glue_session['fields'][unique_name] = fields
                 glue_session['exclude'][unique_name] = exclude
@@ -66,11 +78,9 @@ def add_glue(request, unique_name: str, target, access: str, fields=('__all__',)
 
 
 def get_glue_session(request):
-    if settings.DJANGO_GLUE_SESSION_NAME not in request.session:
-        request.session[settings.DJANGO_GLUE_SESSION_NAME] = dict()
+    request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
     for session_type in GLUE_SESSION_TYPES:
-        if session_type not in request.session[settings.DJANGO_GLUE_SESSION_NAME]:
-            request.session[settings.DJANGO_GLUE_SESSION_NAME][session_type] = dict()
+        request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type, dict())
 
     return request.session[settings.DJANGO_GLUE_SESSION_NAME]
 
