@@ -53,7 +53,7 @@ def add_glue(request, unique_name: str, target, access: str, fields=('__all__',)
                     glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
                 else:
-                    raise TypeError(f'target is not a valid type must be django Model or QuerySet')
+                    raise TypeError(f'target is not a valid type must be Django Model or QuerySet')
 
                 glue_session['fields'][unique_name] = fields
                 glue_session['exclude'][unique_name] = exclude
