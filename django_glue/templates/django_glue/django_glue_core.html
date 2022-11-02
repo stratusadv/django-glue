@@ -1,0 +1,18 @@
+{% load static %}
+
+{% load django_glue %}
+
+<!-- This is required to force a csrf_token to be used -->
+{% csrf_token %}
+
+<script type="application/ecmascript">
+    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_handler' %}'
+    const DJANGO_GLUE_DATA = JSON.parse('{% glue_context_data_str %}')
+    const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
+</script>
+
+<script type="module" src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+
+{% block django_glue_required_inludes %}
+
+{% endblock %}

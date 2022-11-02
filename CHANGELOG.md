@@ -2,17 +2,26 @@
 
 ## 0.3.0
 
-### Changes
+#### Features
+- You can now glue methods.
 
 
-### Bugs
+#### Changes
 
+
+#### Bugs
+
+## 0.2.2
+
+#### Changes
+- Removed css files for old messaging system.
+- Added glue_init_core to allow people to include their own alpine and axios files.
 
 ## 0.2.1
 
-### Changes
-- Updated middleware to use settings glue name
+#### Changes
+- Updated middleware to use settings glue name.
 
-### Bugs
+#### Bugs
 - Fixed context processor key error.
-- Fixed templates and static package error
+- Fixed templates and static package error.
