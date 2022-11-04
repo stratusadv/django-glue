@@ -1,9 +1,11 @@
 from types import FunctionType
+from time import time
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 from django.db.models.query import QuerySet
 
+from django_glue.classes import GlueKey
 from django_glue.conf import settings
 from django_glue.utils import encode_query_set_to_str, generate_field_dict
 
@@ -58,17 +60,21 @@ def add_glue(
                         'model': content_type.model,
                     }
 
-                    glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields, exclude)
+                    glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields,
+                                                                                         exclude)
                     glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
                 elif isinstance(target, FunctionType):
                     pass
 
                 else:
-                    raise TypeError(f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
+                    raise TypeError(
+                        f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
 
                 glue_session['fields'][unique_name] = fields
                 glue_session['exclude'][unique_name] = exclude
+
+                set_glue_expiry_key(request, unique_name)
             else:
                 raise ValueError(f'unique_name "{unique_name}" is already being used.')
         else:
@@ -77,12 +83,24 @@ def add_glue(
         raise TypeError(f'access "{access}" is not a valid, choices are {GLUE_ACCESS_TYPES}')
 
 
+def clean_glue_session(request):
+    glue_expiry_keys_session = get_glue_expiry_keys_session(request)
+    for key, val in glue_expiry_keys_session.items():
+        if time() > val.expire_time:
+            for unique_name in val.unique_name_list:
+                purge_unique_name_from_glue_session(request, unique_name)
+
+
 def get_glue_session(request):
     request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
     for session_type in GLUE_SESSION_TYPES:
         request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type, dict())
 
     return request.session[settings.DJANGO_GLUE_SESSION_NAME]
+
+
+def get_glue_expiry_keys_session(request):
+    return request.session.setdefault(settings.DJANGO_GLUE_EXPIRY_KEYS_SESSION_NAME, dict())
 
 
 def glue_access_check(access, access_level):
@@ -102,5 +120,27 @@ def glue_unique_name_unused(request, unique_name):
 def glue_run_method(request, model_object, method):
     if hasattr(model_object, method):
         getattr(model_object, method)(request)
+
+
+def purge_unique_name_from_glue_session(request, unique_name):
+    glue_session = get_glue_session(request)
+    for session_type in GLUE_SESSION_TYPES:
+        glue_session[session_type].pop(unique_name)
+
+
+def set_glue_expiry_key(request, unique_name):
+    glue_expiry_keys_session = get_glue_expiry_keys_session(request)
+    glue_key = GlueKey()
+    print(glue_key.value)
+
+    glue_expiry_keys_session.setdefault(
+        glue_key.value,
+        {
+            'expire_time': time() + settings.DJANGO_GLUE_EXPIRY_KEY_TIME,
+            'unique_name_list': [],
+        }
+    )
+
+    glue_expiry_keys_session[glue_key.value]['unique_name_list'].append(unique_name)
 
 

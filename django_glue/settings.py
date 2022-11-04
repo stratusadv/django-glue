@@ -1,4 +1,9 @@
 DJANGO_GLUE_URL = 'django_glue/'
+
 DJANGO_GLUE_CONTEXT_NAME = 'django_glue'
 DJANGO_GLUE_SESSION_NAME = 'django_glue'
+DJANGO_GLUE_EXPIRY_KEYS_SESSION_NAME = 'django_glue_expiry_keys'
+
+DJANGO_GLUE_EXPIRY_KEY_TIME = 120.0
+
 DJANGO_GLUE_AUTO_DELETE = False

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% load django_glue %}
+
+{% block base_content %}
+    <div class="row">
+        <div class="col-12 mb-3 h3 text-center">
+            No Glue Test Page
+            <a href="{% url 'test' %}">Back To Glue</a>
+        </div>
+    </div>
+{% endblock %}
