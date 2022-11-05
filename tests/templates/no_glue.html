@@ -9,4 +9,15 @@
             <a href="{% url 'test' %}">Back To Glue</a>
         </div>
     </div>
+
+    <div class="row g-3">
+        <div class="col-6">
+            {% include 'card/context_data_card.html' %}
+        </div>
+        <div class="col-6">
+            {% include 'card/context_keys_card.html' %}
+        </div>
+    </div>
+
+
 {% endblock %}

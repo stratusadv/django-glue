@@ -1,4 +1,5 @@
 import logging, json
+from abc import ABC, abstractmethod
 
 from django.contrib.contenttypes.models import ContentType
 from django.forms import model_to_dict
@@ -11,12 +12,9 @@ from django_glue.utils import process_and_save_field_value, process_and_save_for
 from django_glue.conf import settings
 
 
-class GlueRequestHandler:
+class GlueRequestHandler(ABC):
     def __init__(self, request):
         self.request = request
-
-        self.is_model_object = False
-        self.is_query_set = False
 
         if request.content_type == 'application/json':
             logging.warning(request.body.decode('utf-8'))
@@ -24,12 +22,23 @@ class GlueRequestHandler:
         else:
             raise Http404
 
+    @abstractmethod
+    def process_response(self):
+        pass
+
+class GlueDataRequestHandler(GlueRequestHandler):
+    def __init__(self, request):
+        super().__init__(request)
+
         self.unique_name = self.body_data['unique_name']
 
         self.glue_session = get_glue_session(request)
         self.context = self.glue_session['context']
 
         self.method = request.method
+
+        self.is_model_object = False
+        self.is_query_set = False
 
         if self.unique_name in self.context:
             self.model_class = ContentType.objects.get_by_natural_key(
@@ -254,3 +263,11 @@ class GlueRequestHandler:
             )
         else:
             return generate_json_404_response()
+
+
+class GlueKeysRequestHandler(GlueRequestHandler):
+    def __init__(self, request):
+        super().__init__(request)
+
+    def process_response(self):
+        print(self.body_data)

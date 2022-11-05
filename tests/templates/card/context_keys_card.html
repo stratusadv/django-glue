@@ -3,17 +3,17 @@
 {% load django_glue %}
 
 {% block header %}
-    Context Data
+    Context Keys
 {% endblock %}
 
 {% block body %}
-    {% for key, val in django_glue.items %}
+    {% for key, val in django_glue_expiry_keys.items %}
         <span class="fw-bold">{{ key }}</span><br>
         {% for key2, val2 in val.items %}
-            {% if key2 == 'fields' %}
+            {% if key2 == 'unique_name_list' %}
                 <span>{{ key2 }}:</span><br>
-                {% for key3, val3 in val2.items %}
-                    <li class="ps-2">{{ key3 }}: {{ val3 }}</li>
+                {% for unique_name in val2 %}
+                    <li class="ps-2">{{ unique_name }}</li>
                 {% endfor %}
             {% else %}
                 <span>{{ key2 }}: {{ val2 }}</span><br>

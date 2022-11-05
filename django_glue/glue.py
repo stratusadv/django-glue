@@ -85,10 +85,26 @@ def add_glue(
 
 def clean_glue_session(request):
     glue_expiry_keys_session = get_glue_expiry_keys_session(request)
+
+    expired_key_list = list()
+
+    expired_unique_name_set = set()
+    active_unique_name_set = set()
+
     for key, val in glue_expiry_keys_session.items():
-        if time() > val.expire_time:
-            for unique_name in val.unique_name_list:
-                purge_unique_name_from_glue_session(request, unique_name)
+        if time() > val['expire_time']:
+            expired_unique_name_set.update(val['unique_name_list'])
+            expired_key_list.append(key)
+        else:
+            active_unique_name_set.update(val['unique_name_list'])
+
+    for expired_key in expired_key_list:
+        glue_expiry_keys_session.pop(expired_key)
+
+    removable_unique_name_set = expired_unique_name_set.difference(active_unique_name_set)
+
+    for unique_name in removable_unique_name_set:
+        purge_unique_name_from_glue_session(request, unique_name)
 
 
 def get_glue_session(request):
@@ -125,10 +141,12 @@ def glue_run_method(request, model_object, method):
 def purge_unique_name_from_glue_session(request, unique_name):
     glue_session = get_glue_session(request)
     for session_type in GLUE_SESSION_TYPES:
-        glue_session[session_type].pop(unique_name)
+        if unique_name in glue_session[session_type]:
+            glue_session[session_type].pop(unique_name)
 
 
 def set_glue_expiry_key(request, unique_name):
+    # Todo: Look at combining keys to reduce pings and data usage
     glue_expiry_keys_session = get_glue_expiry_keys_session(request)
     glue_key = GlueKey()
     print(glue_key.value)
@@ -141,6 +159,7 @@ def set_glue_expiry_key(request, unique_name):
         }
     )
 
-    glue_expiry_keys_session[glue_key.value]['unique_name_list'].append(unique_name)
+    if unique_name not in glue_expiry_keys_session[glue_key.value]['unique_name_list']:
+        glue_expiry_keys_session[glue_key.value]['unique_name_list'].append(unique_name)
 
 

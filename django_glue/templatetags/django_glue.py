@@ -24,6 +24,11 @@ def glue_context_data_str(context):
     return mark_safe(str(json.dumps(context[settings.DJANGO_GLUE_CONTEXT_NAME])))
 
 
+@register.simple_tag(takes_context=True)
+def glue_context_keys_str(context):
+    return mark_safe(str(json.dumps(context[settings.DJANGO_GLUE_EXPIRY_KEYS_CONTEXT_NAME])))
+
+
 @register.tag
 def glue_html_attr(parser, token):
     try:
