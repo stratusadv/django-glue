@@ -11,6 +11,11 @@
 
 #### Bugs
 
+## 0.2.3
+
+#### Features
+- Can handle multiple tabs or webpages open at the same time.
+
 ## 0.2.2
 
 #### Changes
