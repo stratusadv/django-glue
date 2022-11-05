@@ -5,7 +5,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 from django.db.models.query import QuerySet
 
-from django_glue.classes import GlueKey
 from django_glue.conf import settings
 from django_glue.utils import encode_query_set_to_str, generate_field_dict
 
@@ -74,7 +73,7 @@ def add_glue(
                 glue_session['fields'][unique_name] = fields
                 glue_session['exclude'][unique_name] = exclude
 
-                set_glue_expiry_key(request, unique_name)
+                set_glue_keep_live(request, unique_name)
             else:
                 raise ValueError(f'unique_name "{unique_name}" is already being used.')
         else:
@@ -84,22 +83,22 @@ def add_glue(
 
 
 def clean_glue_session(request):
-    glue_expiry_keys_session = get_glue_expiry_keys_session(request)
+    glue_keep_live_session = get_glue_keep_live_session(request)
 
-    expired_key_list = list()
+    expired_session_list = list()
 
     expired_unique_name_set = set()
     active_unique_name_set = set()
 
-    for key, val in glue_expiry_keys_session.items():
+    for key, val in glue_keep_live_session.items():
         if time() > val['expire_time']:
             expired_unique_name_set.update(val['unique_name_list'])
-            expired_key_list.append(key)
+            expired_session_list.append(key)
         else:
             active_unique_name_set.update(val['unique_name_list'])
 
-    for expired_key in expired_key_list:
-        glue_expiry_keys_session.pop(expired_key)
+    for expired_session in expired_session_list:
+        glue_keep_live_session.pop(expired_session)
 
     removable_unique_name_set = expired_unique_name_set.difference(active_unique_name_set)
 
@@ -115,8 +114,12 @@ def get_glue_session(request):
     return request.session[settings.DJANGO_GLUE_SESSION_NAME]
 
 
-def get_glue_expiry_keys_session(request):
-    return request.session.setdefault(settings.DJANGO_GLUE_EXPIRY_KEYS_SESSION_NAME, dict())
+def get_glue_keep_live_next_expire_time():
+    return time() + settings.DJANGO_GLUE_KEEP_LIVE_TIME
+
+
+def get_glue_keep_live_session(request):
+    return request.session.setdefault(settings.DJANGO_GLUE_KEEP_LIVE_SESSION_NAME, dict())
 
 
 def glue_access_check(access, access_level):
@@ -145,21 +148,22 @@ def purge_unique_name_from_glue_session(request, unique_name):
             glue_session[session_type].pop(unique_name)
 
 
-def set_glue_expiry_key(request, unique_name):
-    # Todo: Look at combining keys to reduce pings and data usage
-    glue_expiry_keys_session = get_glue_expiry_keys_session(request)
-    glue_key = GlueKey()
-    print(glue_key.value)
+def set_glue_keep_live(request, unique_name):
+    glue_keep_live_session = get_glue_keep_live_session(request)
 
-    glue_expiry_keys_session.setdefault(
-        glue_key.value,
+    glue_keep_live_session.setdefault(
+        request.path,
         {
-            'expire_time': time() + settings.DJANGO_GLUE_EXPIRY_KEY_TIME,
+            'expire_time': get_glue_keep_live_next_expire_time(),
             'unique_name_list': [],
         }
     )
 
-    if unique_name not in glue_expiry_keys_session[glue_key.value]['unique_name_list']:
-        glue_expiry_keys_session[glue_key.value]['unique_name_list'].append(unique_name)
+    if unique_name not in glue_keep_live_session[request.path]['unique_name_list']:
+        glue_keep_live_session[request.path]['unique_name_list'].append(unique_name)
 
+def update_glue_keep_live(request, keep_live_path):
+    glue_keep_live_session = get_glue_keep_live_session(request)
+    if keep_live_path in glue_keep_live_session:
+        glue_keep_live_session[keep_live_path]['expire_time'] = get_glue_keep_live_next_expire_time()
 
