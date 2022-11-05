@@ -263,11 +263,3 @@ class GlueDataRequestHandler(GlueRequestHandler):
             )
         else:
             return generate_json_404_response()
-
-
-class GlueKeysRequestHandler(GlueRequestHandler):
-    def __init__(self, request):
-        super().__init__(request)
-
-    def process_response(self):
-        print(self.body_data)

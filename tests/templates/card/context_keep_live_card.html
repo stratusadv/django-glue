@@ -3,11 +3,11 @@
 {% load django_glue %}
 
 {% block header %}
-    Context Keys
+    Context Keep Live
 {% endblock %}
 
 {% block body %}
-    {% for key, val in django_glue_expiry_keys.items %}
+    {% for key, val in django_glue_keep_live.items %}
         <span class="fw-bold">{{ key }}</span><br>
         {% for key2, val2 in val.items %}
             {% if key2 == 'unique_name_list' %}

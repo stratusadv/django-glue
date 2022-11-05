@@ -10,10 +10,6 @@ def camel_to_snake(string):
     return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
 
 
-def clean_glue_session(request):
-    request.session[settings.DJANGO_GLUE_SESSION_NAME] = dict()
-
-
 def decode_query_set_from_str(query_set_string):
     query = pickle.loads(base64.b64decode(query_set_string))
     decoded_query_set = query.model.objects.all()
