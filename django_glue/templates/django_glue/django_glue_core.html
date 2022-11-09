@@ -9,13 +9,13 @@
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
     const DJANGO_GLUE_DATA = JSON.parse('{% glue_context_data_str %}')
-    const DJANGO_GLUE_KEYS = JSON.parse('{% glue_context_keys_str %}')
-    const DJANGO_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}?keep_live_path={{ request.path|urlencode }}'
+    const DJANGO_GLUE_KEEP_LIVE = JSON.parse('{% glue_context_keep_live_str %}')
+    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}?keep_live_path={{ request.path|urlencode }}'
 
-    fetch(DJANGO_KEEP_LIVE_URL)
+    fetch(DJANGO_GLUE_KEEP_LIVE_URL)
 
     setInterval(() => {
-        fetch(DJANGO_KEEP_LIVE_URL)
+        fetch(DJANGO_GLUE_KEEP_LIVE_URL)
     }, 30000)
 </script>
 

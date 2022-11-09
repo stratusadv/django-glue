@@ -74,6 +74,8 @@ def add_glue(
                 glue_session['exclude'][unique_name] = exclude
 
                 set_glue_keep_live(request, unique_name)
+
+                set_glue_session_modified(request)
             else:
                 raise ValueError(f'unique_name "{unique_name}" is already being used.')
         else:
@@ -105,9 +107,12 @@ def clean_glue_session(request):
     for unique_name in removable_unique_name_set:
         purge_unique_name_from_glue_session(request, unique_name)
 
+    set_glue_session_modified(request)
+
 
 def get_glue_session(request):
     request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
+
     for session_type in GLUE_SESSION_TYPES:
         request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type, dict())
 
@@ -161,6 +166,13 @@ def set_glue_keep_live(request, unique_name):
 
     if unique_name not in glue_keep_live_session[request.path]['unique_name_list']:
         glue_keep_live_session[request.path]['unique_name_list'].append(unique_name)
+
+    set_glue_session_modified(request)
+
+
+def set_glue_session_modified(request):
+    request.session.modified = True
+
 
 def update_glue_keep_live(request, keep_live_path):
     glue_keep_live_session = get_glue_keep_live_session(request)

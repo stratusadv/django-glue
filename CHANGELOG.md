@@ -9,7 +9,10 @@
 #### Changes
 - Clean up internal functions to more efficient.
 
+## 0.2.4
+
 #### Bugs
+- Fixed a session data saving issues to make sure when using new keep life it saves all session data.
 
 ## 0.2.3
 

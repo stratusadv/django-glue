@@ -1,5 +1,4 @@
 import logging, json
-from abc import ABC, abstractmethod
 
 from django.contrib.contenttypes.models import ContentType
 from django.forms import model_to_dict
@@ -12,7 +11,7 @@ from django_glue.utils import process_and_save_field_value, process_and_save_for
 from django_glue.conf import settings
 
 
-class GlueRequestHandler(ABC):
+class GlueDataRequestHandler:
     def __init__(self, request):
         self.request = request
 
@@ -21,14 +20,6 @@ class GlueRequestHandler(ABC):
             self.body_data = json.loads(request.body.decode('utf-8'))
         else:
             raise Http404
-
-    @abstractmethod
-    def process_response(self):
-        pass
-
-class GlueDataRequestHandler(GlueRequestHandler):
-    def __init__(self, request):
-        super().__init__(request)
 
         self.unique_name = self.body_data['unique_name']
 

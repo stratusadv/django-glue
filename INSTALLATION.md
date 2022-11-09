@@ -43,6 +43,16 @@ TEMPLATES = [
 ]
 ```
 
+Add the following to the bottom of your main urls
+
+```python
+urlpatterns = [
+    ...
+    path("django_glue/", include('django_glue.urls', namespace='django_glue')),
+]
+```
+
+
 Add the required template tags to your base template
 
 ```html

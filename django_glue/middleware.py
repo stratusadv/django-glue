@@ -1,6 +1,5 @@
 from django.urls import resolve
 
-from django_glue.conf import settings
 from django_glue.glue import clean_glue_session
 
 
@@ -17,6 +16,5 @@ class GlueMiddleware(object):
 
         if current_url != 'django_glue_handler':
             clean_glue_session(request)
-            request.session[settings.DJANGO_GLUE_SESSION_NAME] = dict()
 
         return None

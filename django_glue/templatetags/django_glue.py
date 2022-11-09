@@ -25,7 +25,7 @@ def glue_context_data_str(context):
 
 
 @register.simple_tag(takes_context=True)
-def glue_context_keys_str(context):
+def glue_context_keep_live_str(context):
     return mark_safe(str(json.dumps(context[settings.DJANGO_GLUE_KEEP_LIVE_CONTEXT_NAME])))
 
 
