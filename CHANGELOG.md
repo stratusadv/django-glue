@@ -9,6 +9,11 @@
 #### Changes
 - Clean up internal functions to more efficient.
 
+## 0.2.6
+
+#### Bugs
+- Fixed issue with building context dictionaries on non glue views.
+
 ## 0.2.5
 
 #### Bugs
