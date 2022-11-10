@@ -9,6 +9,11 @@
 #### Changes
 - Clean up internal functions to more efficient.
 
+## 0.2.5
+
+#### Bugs
+- Fixed issue with overwriting unique_names
+
 ## 0.2.4
 
 #### Bugs

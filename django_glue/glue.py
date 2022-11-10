@@ -34,50 +34,51 @@ def add_glue(
     if access in GLUE_ACCESS_TYPES:
         if isinstance(fields, (list, tuple)) and isinstance(exclude, (list, tuple)):
             if glue_unique_name_unused(request, unique_name):
-                glue_session = get_glue_session(request)
+                purge_unique_name_from_glue_session(request, unique_name)
 
-                if isinstance(target, Model):
-                    content_type = ContentType.objects.get_for_model(target)
+            glue_session = get_glue_session(request)
 
-                    glue_session['context'][unique_name] = {
-                        'connection': 'model_object',
-                        'access': access,
-                        'app_label': content_type.app_label,
-                        'model': content_type.model,
-                        'object_id': target.pk,
-                    }
+            if isinstance(target, Model):
+                content_type = ContentType.objects.get_for_model(target)
 
-                    glue_session['context'][unique_name]['fields'] = generate_field_dict(target, fields, exclude)
+                glue_session['context'][unique_name] = {
+                    'connection': 'model_object',
+                    'access': access,
+                    'app_label': content_type.app_label,
+                    'model': content_type.model,
+                    'object_id': target.pk,
+                }
 
-                elif isinstance(target, QuerySet):
-                    content_type = ContentType.objects.get_for_model(target.query.model)
+                glue_session['context'][unique_name]['fields'] = generate_field_dict(target, fields, exclude)
 
-                    glue_session['context'][unique_name] = {
-                        'connection': 'query_set',
-                        'access': access,
-                        'app_label': content_type.app_label,
-                        'model': content_type.model,
-                    }
+            elif isinstance(target, QuerySet):
+                content_type = ContentType.objects.get_for_model(target.query.model)
 
-                    glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields,
-                                                                                         exclude)
-                    glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
+                glue_session['context'][unique_name] = {
+                    'connection': 'query_set',
+                    'access': access,
+                    'app_label': content_type.app_label,
+                    'model': content_type.model,
+                }
 
-                elif isinstance(target, FunctionType):
-                    pass
+                glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields,
+                                                                                     exclude)
+                glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
-                else:
-                    raise TypeError(
-                        f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
+            elif isinstance(target, FunctionType):
+                pass
 
-                glue_session['fields'][unique_name] = fields
-                glue_session['exclude'][unique_name] = exclude
-
-                set_glue_keep_live(request, unique_name)
-
-                set_glue_session_modified(request)
             else:
-                raise ValueError(f'unique_name "{unique_name}" is already being used.')
+                raise TypeError(
+                    f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
+
+            glue_session['fields'][unique_name] = fields
+            glue_session['exclude'][unique_name] = exclude
+
+            set_glue_keep_live(request, unique_name)
+
+            set_glue_session_modified(request)
+
         else:
             raise TypeError(f'fields or exclude is not a valid type must be a list or tuple')
     else:
