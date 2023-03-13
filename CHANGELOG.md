@@ -8,6 +8,7 @@
 
 #### Changes
 - Clean up internal functions to more efficient.
+- Remove Alpine.js and return to vanilla so that people can use their own libraries.
 
 ## 0.2.6
 

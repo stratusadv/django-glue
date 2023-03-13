@@ -1,7 +1,6 @@
-import logging, json
+import json
 
 from django import template
-from django.template.defaultfilters import stringfilter
 from django.utils.safestring import mark_safe
 
 from django_glue.conf import settings
@@ -11,11 +10,6 @@ register = template.Library()
 
 @register.inclusion_tag('django_glue/django_glue.html', takes_context=True)
 def glue_init(context):
-    return context
-
-
-@register.inclusion_tag('django_glue/django_glue_core.html', takes_context=True)
-def glue_init_core(context):
     return context
 
 
