@@ -7,26 +7,27 @@
 {% endblock %}
 
 {% block body %}
-    <div x-data="test_model_1" x-init="glue_load_data()" class="row">
+    <div x-data="{test_model_1}"  class="row">
         <div class="col-12">
-            <form x-on:keyup.debounce="glue_update()">
+            <span x-text="test_model_1.first_name"></span>
+            <form @keyup.debounce="test_model_1.glue_update">
                 <label for="first_name">First Name</label>
-                <input id="first_name" type="text" class="form-control mb-2" x-model="first_name" {% glue_html_attr test_model_1.first_name  %}>
+                <input id="first_name" type="text" class="form-control mb-2" x-model="test_model_1.first_name" {% glue_html_attr test_model_1.first_name  %}>
                 <label for="last_name">Last Name</label>
-                <input id="last_name" type="text" class="form-control mb-2" x-model="last_name">
+                <input id="last_name" type="text" class="form-control mb-2" x-model="test_model_1.last_name">
                 <label for="description">Description</label>
-                <textarea id="description" class="form-control mb-2" x-model="description"></textarea>
+                <textarea id="description" class="form-control mb-2" x-model="test_model_1.description"></textarea>
                 <label for="favorite_number">Favorite Number</label>
-                <input id="favorite_number" type="text" class="form-control mb-2" x-model="favorite_number">
+                <input id="favorite_number" type="text" class="form-control mb-2" x-model="test_model_1.favorite_number">
                 <label for="weight_lbs">Weight (lbs)</label>
-                <input id="weight_lbs" type="text" class="form-control mb-2" x-model="weight_lbs">
+                <input id="weight_lbs" type="text" class="form-control mb-2" x-model="test_model_1.weight_lbs">
             </form>
 
-            <template x-if="glue_response.message_title">
-                <div x-data="glue_response">
-                    Message: <span x-text="message_title"></span>
-                </div>
-            </template>
+{#            <template x-if="glue_response.message_title">#}
+{#                <div x-data="glue_response">#}
+{#                    Message: <span x-text="message_title"></span>#}
+{#                </div>#}
+{#            </template>#}
         </div>
     </div>
 {% endblock %}

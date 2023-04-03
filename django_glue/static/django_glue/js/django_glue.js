@@ -1,5 +1,26 @@
 import {ajax_request} from "./ajax.js"
 
+window.DJANGO_GLUE_PROCESSED_DATA = process_glue_data()
+
+function process_glue_data() {
+    let glue_data = {}
+
+    for (let key in DJANGO_GLUE_DATA) {
+        let data
+
+        if (DJANGO_GLUE_DATA[key].connection === 'model_object') {
+            data = process_model_object(key, DJANGO_GLUE_DATA[key])
+        }
+
+        if (DJANGO_GLUE_DATA[key].connection === 'query_set') {
+            data = process_query_set(key, DJANGO_GLUE_DATA[key])
+        }
+
+        glue_data[key] = data
+    }
+    return glue_data
+}
+
 function get_field_data(obj) {
     let data = {}
     for (const field of obj['glue_fields']) {
@@ -156,5 +177,4 @@ function process_query_set(unique_name, query_set) {
 
     return data
 }
-
 
