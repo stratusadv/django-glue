@@ -26,7 +26,8 @@ GLUE_SESSION_TYPES = (
 def add_glue(
         request,
         unique_name: str,
-        target, access: str,
+        target,
+        access: str,
         fields=('__all__',),
         exclude=('__none__',),
         **kwargs,
@@ -66,6 +67,7 @@ def add_glue(
                 glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
             elif isinstance(target, FunctionType):
+                # Handle method calls
                 pass
 
             else:
@@ -121,7 +123,7 @@ def get_glue_session(request):
 
 
 def get_glue_keep_live_next_expire_time():
-    return time() + settings.DJANGO_GLUE_KEEP_LIVE_TIME
+    return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS
 
 
 def get_glue_keep_live_session(request):

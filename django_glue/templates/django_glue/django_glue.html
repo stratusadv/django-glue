@@ -13,10 +13,9 @@
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}?keep_live_path={{ request.path|urlencode }}'
 
     fetch(DJANGO_GLUE_KEEP_LIVE_URL)
-
     setInterval(() => {
         fetch(DJANGO_GLUE_KEEP_LIVE_URL)
-    }, 30000)
+    }, {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 </script>
 
 <script type="module" src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
