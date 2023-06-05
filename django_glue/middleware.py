@@ -11,6 +11,7 @@ class GlueMiddleware(object):
         response = self.get_response(request)
         return response
 
+    @staticmethod
     def process_view(self, request, view_func, view_args, view_kwargs):
         current_url = resolve(request.path_info).url_name
 

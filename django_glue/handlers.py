@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.forms import model_to_dict
 from django.http import Http404
 
-from django_glue.json import generate_json_response, generate_json_404_response
+from django_glue.responses import generate_json_response, generate_json_404_response
 from django_glue.glue import glue_run_method, glue_access_check, get_glue_session
 from django_glue.utils import process_and_save_field_value, process_and_save_form_values, decode_query_set_from_str, \
     generate_simple_field_dict

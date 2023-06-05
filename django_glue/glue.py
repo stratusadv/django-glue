@@ -6,7 +6,7 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 
 from django_glue.conf import settings
-from django_glue.utils import encode_query_set_to_str, generate_field_dict
+from django_glue.utils import encode_query_set_to_str, generate_field_dict, generate_method_list
 
 GLUE_ACCESS_TYPES = (
     'view',
@@ -20,6 +20,7 @@ GLUE_SESSION_TYPES = (
     'query_set',
     'fields',
     'exclude',
+    'methods',
 )
 
 
@@ -30,6 +31,7 @@ def add_glue(
         access: str,
         fields=('__all__',),
         exclude=('__none__',),
+        methods=('__none__',),
         **kwargs,
 ):
     if access in GLUE_ACCESS_TYPES:
@@ -51,6 +53,7 @@ def add_glue(
                 }
 
                 glue_session['context'][unique_name]['fields'] = generate_field_dict(target, fields, exclude)
+                glue_session['context'][unique_name]['methods'] = generate_method_list(target, methods)
 
             elif isinstance(target, QuerySet):
                 content_type = ContentType.objects.get_for_model(target.query.model)
@@ -64,15 +67,15 @@ def add_glue(
 
                 glue_session['context'][unique_name]['fields'] = generate_field_dict(target.query.model(), fields,
                                                                                      exclude)
+                glue_session['context'][unique_name]['methods'] = generate_method_list(target.query.model(), methods)
                 glue_session['query_set'][unique_name] = encode_query_set_to_str(target)
 
             elif isinstance(target, FunctionType):
-                # Handle method calls
                 pass
 
             else:
                 raise TypeError(
-                    f'target is not a valid type must be a Python Method, Django Model or Django QuerySet')
+                    f'target is not a valid type must be a Django Glue Decorated Python Function, Django Model or Django QuerySet')
 
             glue_session['fields'][unique_name] = fields
             glue_session['exclude'][unique_name] = exclude

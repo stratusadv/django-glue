@@ -59,9 +59,28 @@ def generate_field_dict(model_object, fields, exclude):
                     }
 
         except:
-            raise f'Invalid field or exclude for model type {model.__class__.__name__}'
+            raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'
 
     return fields_dict
+
+
+def generate_method_list(model_object, methods: tuple) -> list:
+    methods_list = list()
+
+    model = type(model_object)
+
+    if methods[0] != '__none__':
+        for method in methods:
+            try:
+                if hasattr(model_object, method):
+                    if getattr(getattr(model_object, method), '_is_glue_function'):
+                        methods_list.append(method)
+                    else:
+                        raise f'Method "{method}" on model type "{model.__class__.__name__}" is not decorated with "django_glue.decorators.glue_method"'
+            except:
+                raise f'Method "{method}" is invalid for model type "{model.__class__.__name__}"'
+    else:
+        return methods_list
 
 
 def generate_simple_field_dict(model_object, fields, exclude):
@@ -128,3 +147,5 @@ def process_and_save_field_value(model_object, field_name, value, fields, exclud
 
 def serialize_object_to_json(model_object, fields, exclude):
     return serializers.serialize('json', [model_object, ])
+
+
