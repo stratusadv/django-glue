@@ -1,15 +1,5 @@
 # Django Glue Naming Conventions
 
-## Action
-Used in: Template
-
-Determines the type of action the glue tag is performing.
-
-## Event
-Used in: Template
-
-Determines the type of event required for triggering.
-
 ## Fields
 Used in: View, Template
 

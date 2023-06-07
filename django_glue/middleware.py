@@ -1,6 +1,6 @@
 from django.urls import resolve
 
-from django_glue.glue import clean_glue_session
+from django_glue.sessions import GlueSession, GlueKeepLiveSession
 
 
 class GlueMiddleware(object):
@@ -12,10 +12,13 @@ class GlueMiddleware(object):
         return response
 
     @staticmethod
-    def process_view(self, request, view_func, view_args, view_kwargs):
+    def process_view(request, view_func, view_args, view_kwargs):
         current_url = resolve(request.path_info).url_name
 
         if current_url != 'django_glue_handler':
-            clean_glue_session(request)
+            glue_session = GlueSession(request)
+            glue_keep_live_session = GlueKeepLiveSession(request)
+
+            glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_name_set())
 
         return None

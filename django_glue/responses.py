@@ -1,30 +1,23 @@
+from typing import Optional
+
 from django.http import JsonResponse
 
-JSON_RESPONSE_TYPES = (
-    'success',
-    'info',
-    'warning',
-    'error',
-    'debug',
-)
-
+from django_glue.enums import GlueJsonResponseType
 
 def generate_json_response(
-        message_title,
-        message_body,
-        message_dict=None,
-        response_status='200',
-        response_type='success',
-        additional_data=None
+        message_title: str,
+        message_body: str,
+        message_dict: Optional[dict] = None,
+        response_status: str = '200',
+        response_type: str = 'success',
+        additional_data = None
 ):
+
     if message_dict is None:
         message_dict = dict()
 
-    if response_type not in JSON_RESPONSE_TYPES:
-        raise ValueError(f'response_type "{response_type}" is not a valid, choices are {JSON_RESPONSE_TYPES}')
-
     return JsonResponse({
-        'type': response_type,
+        'type': GlueJsonResponseType(response_type).value,
         'message_title': message_title,
         'message_body': message_body,
         'message_dict': message_dict,

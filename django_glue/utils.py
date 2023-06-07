@@ -4,6 +4,7 @@ from django.core import exceptions, serializers
 from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.conf import settings
+from django_glue.types import GlueModelField
 
 
 def camel_to_snake(string):
@@ -39,7 +40,7 @@ def generate_field_dict(model_object, fields, exclude):
     fields_dict = dict()
 
     model = type(model_object)
-    json_model = json.loads(serialize_object_to_json(model_object, fields, exclude))[0]
+    json_model = json.loads(serialize_object_to_json(model_object))[0]
 
     for field in model._meta.fields:
         try:
@@ -52,11 +53,11 @@ def generate_field_dict(model_object, fields, exclude):
                         field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
-                    fields_dict[field.name] = {
-                        'type': field.get_internal_type(),
-                        'value': field_value,
-                        'html_attr': field_attr,
-                    }
+                    fields_dict[field.name] = GlueModelField(
+                        type=field.get_internal_type(),
+                        value=field_value,
+                        html_attr=field_attr,
+                    ).to_dict()
 
         except:
             raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'
@@ -71,16 +72,12 @@ def generate_method_list(model_object, methods: tuple) -> list:
 
     if methods[0] != '__none__':
         for method in methods:
-            try:
-                if hasattr(model_object, method):
-                    if getattr(getattr(model_object, method), '_is_glue_function'):
-                        methods_list.append(method)
-                    else:
-                        raise f'Method "{method}" on model type "{model.__class__.__name__}" is not decorated with "django_glue.decorators.glue_method"'
-            except:
+            if hasattr(model_object, method):
+                methods_list.append(method)
+            else:
                 raise f'Method "{method}" is invalid for model type "{model.__class__.__name__}"'
-    else:
-        return methods_list
+
+    return methods_list
 
 
 def generate_simple_field_dict(model_object, fields, exclude):
@@ -145,7 +142,7 @@ def process_and_save_field_value(model_object, field_name, value, fields, exclud
         }
 
 
-def serialize_object_to_json(model_object, fields, exclude):
+def serialize_object_to_json(model_object):
     return serializers.serialize('json', [model_object, ])
 
 

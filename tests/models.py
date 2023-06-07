@@ -1,8 +1,6 @@
 from django.db import models
 from django.utils.timezone import now
 
-from django_glue.decorators import glue_method
-
 
 class TestModel(models.Model):
     first_name = models.CharField(max_length=32)
@@ -16,7 +14,6 @@ class TestModel(models.Model):
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
 
-    @glue_method
     def decorated_method(self, request):
         pass
 
