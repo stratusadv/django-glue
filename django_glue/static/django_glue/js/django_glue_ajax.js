@@ -1,6 +1,4 @@
-import {csrf_token} from "./csrf.js";
-
-async function ajax_request(method, unique_name, data) {
+async function glue_ajax_request(method, unique_name, data) {
     const requestOptions = {
         method: method,
         headers: {
@@ -20,5 +18,3 @@ async function ajax_request(method, unique_name, data) {
 
     return await response.json();
 }
-
-export {ajax_request,}

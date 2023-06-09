@@ -1,4 +1,4 @@
-function get_cookie(name) {
+function glue_get_cookie(name) {
     let cookieValue = null
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';')
@@ -13,5 +13,3 @@ function get_cookie(name) {
     }
     return cookieValue
 }
-
-export const csrf_token = get_cookie('csrftoken')

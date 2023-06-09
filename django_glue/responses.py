@@ -9,32 +9,32 @@ from django_glue.enums import GlueJsonResponseType, GlueJsonResponseStatus
 def generate_json_200_response(
         message_title: str,
         message_body: str,
-        message_dict: Optional[dict] = None,
-        additional_data: Optional[dict] = None
+        data: Optional[dict] = None,
+        optional_message_data: Optional[dict] = None,
 ) -> JsonResponse:
 
     return generate_json_200_response_data(
         message_title=message_title,
         message_body=message_body,
-        message_dict=message_dict,
-        additional_data=additional_data,
+        data=data,
+        optional_message_data=optional_message_data,
     ).to_django_json_response()
 
 
 def generate_json_200_response_data(
         message_title: str,
         message_body: str,
-        message_dict: Optional[dict] = None,
-        additional_data: Optional[dict] = None,
+        data: Optional[dict] = None,
+        optional_message_data: Optional[dict] = None,
 ) -> GlueJsonResponseData:
 
     return GlueJsonResponseData(
         message_title=message_title,
         message_body=message_body,
+        data=data,
+        optional_message_data=optional_message_data,
         response_status=GlueJsonResponseStatus.SUCCESS,
         response_type=GlueJsonResponseType.SUCCESS,
-        message_dict=message_dict,
-        additional_data=additional_data,
     )
 
 

@@ -1,4 +1,4 @@
-import {ajax_request} from "./ajax.js"
+import {ajax_request} from "./django_glue_ajax.js"
 
 window.DJANGO_GLUE_PROCESSED_DATA = process_glue_data()
 

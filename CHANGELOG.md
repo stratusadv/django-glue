@@ -3,12 +3,16 @@
 ## 0.3.0
 
 #### Features
-- You can now glue methods.
-
+- You can now glue django model methods (this works on both model objects and query sets).
+- Now works with all javascript not just alpine.
 
 #### Changes
 - Clean up internal functions to more efficient.
 - Remove Alpine.js and return to vanilla so that people can use their own libraries.
+- Complete overhaul of the server side code.
+
+#### Bugs
+- stuff
 
 ## 0.2.6
 

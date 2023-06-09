@@ -26,6 +26,10 @@ class GlueBodyData:
     def action(self) -> GlueAction:
         return self.glue_action
 
+    @property
+    def unique_name(self) -> str:
+        return self.data['unique_name']
+
 
 @dataclass
 class GlueContextData:
@@ -42,20 +46,20 @@ class GlueContextData:
 class GlueJsonResponseData:
     message_title: str
     message_body: str
+    data: Optional[dict] = None
+    optional_message_data: Optional[dict] = None
     response_type: GlueJsonResponseType = GlueJsonResponseType.SUCCESS
     response_status: GlueJsonResponseStatus = GlueJsonResponseStatus.SUCCESS
-    message_dict: Optional[dict] = None
-    additional_data: Optional[dict] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     def to_django_json_response(self) -> JsonResponse:
-        if self.message_dict is None:
-            self.message_dict = dict()
+        if self.data is None:
+            self.data = dict()
 
-        if self.additional_data is None:
-            self.additional_data = dict()
+        if self.optional_message_data is None:
+            self.optional_message_data = dict()
 
         return JsonResponse(asdict(self), status=self.response_status.value)
 

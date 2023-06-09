@@ -5,7 +5,6 @@ from django_glue.responses import generate_json_404_response
 from django_glue.sessions import GlueSession
 from django_glue.data_classes import GlueMetaData, GlueBodyData
 from django_glue.enums import GlueConnection, GlueAccess
-from django_glue.utils import decode_query_set_from_str
 
 
 class GlueDataRequestHandler:
@@ -37,15 +36,6 @@ class GlueDataRequestHandler:
             self.access = GlueAccess(self.context[self.unique_name]['access'])
 
             self.model_class = self.meta_data.model_class
-
-            if self.connection == GlueConnection.MODEL_OBJECT:
-                try:
-                    self.model_object = self.model_class.objects.get(pk=self.meta_data.object_pk)
-                except self.model_class.DoesNotExist:
-                    self.model_object = None
-
-            elif self.connection == GlueConnection.QUERY_SET:
-                self.query_set = decode_query_set_from_str(self.meta_data.query_set_str)
 
         else:
             self.is_valid_request = False

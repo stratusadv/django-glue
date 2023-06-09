@@ -8,7 +8,7 @@
 <script type="application/javascript">
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_DATA = JSON.parse('{% glue_context_data_str %}')
+    const DJANGO_GLUE_CONTEXT_DATA = JSON.parse('{% glue_context_data_str %}')
     const DJANGO_GLUE_KEEP_LIVE = JSON.parse('{% glue_context_keep_live_str %}')
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}?keep_live_url_path={{ request.path|urlencode }}'
 
@@ -18,4 +18,7 @@
     }, {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 </script>
 
-<script type="module" src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/django_glue_csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/django_glue_ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/django_glue_model_object.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/django_glue_query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
