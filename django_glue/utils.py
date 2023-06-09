@@ -1,9 +1,7 @@
 import logging, pickle, base64, json
 
 from django.core import exceptions, serializers
-from django.core.serializers.json import DjangoJSONEncoder
 
-from django_glue.conf import settings
 from django_glue.data_classes import GlueModelFieldData
 
 

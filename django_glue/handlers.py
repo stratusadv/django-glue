@@ -1,7 +1,7 @@
 import logging, json
 
 from django_glue.services import GlueModelObjectService, GlueQuerySetService
-from django_glue.responses import generate_json_response, generate_json_404_response
+from django_glue.responses import generate_json_404_response
 from django_glue.sessions import GlueSession
 from django_glue.data_classes import GlueMetaData, GlueBodyData
 from django_glue.enums import GlueConnection, GlueAccess
