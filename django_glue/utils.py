@@ -4,7 +4,7 @@ from django.core import exceptions, serializers
 from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.conf import settings
-from django_glue.types import GlueModelField
+from django_glue.data_classes import GlueModelFieldData
 
 
 def camel_to_snake(string):
@@ -53,7 +53,7 @@ def generate_field_dict(model_object, fields, exclude):
                         field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
-                    fields_dict[field.name] = GlueModelField(
+                    fields_dict[field.name] = GlueModelFieldData(
                         type=field.get_internal_type(),
                         value=field_value,
                         html_attr=field_attr,

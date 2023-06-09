@@ -6,4 +6,5 @@ exclude *.db
 recursive-include django_glue/templates *
 recursive-include django_glue/static *
 recursive-exclude tests
+recursive-exclude docs
 recursive-exclude .github

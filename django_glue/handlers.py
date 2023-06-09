@@ -1,27 +1,24 @@
 import logging, json
 
-from django.contrib.contenttypes.models import ContentType
-from django.forms import model_to_dict
-from django.http import Http404
-
+from django_glue.services import GlueModelObjectService, GlueQuerySetService
 from django_glue.responses import generate_json_response, generate_json_404_response
 from django_glue.sessions import GlueSession
-from django_glue.types import GlueContextData, GlueMetaData
+from django_glue.data_classes import GlueMetaData, GlueBodyData
 from django_glue.enums import GlueConnection, GlueAccess
-from django_glue.utils import process_and_save_field_value, process_and_save_form_values, decode_query_set_from_str, \
-    generate_simple_field_dict
-from django_glue.conf import settings
+from django_glue.utils import decode_query_set_from_str
 
 
 class GlueDataRequestHandler:
     def __init__(self, request):
         self.request = request
 
+        self.is_valid_request = True
+
         if request.content_type == 'application/json':
             logging.warning(request.body.decode('utf-8'))
-            self.body_data = json.loads(request.body.decode('utf-8'))
+            self.body_data = GlueBodyData(request.body)
         else:
-            raise Http404
+            self.is_valid_request = False
 
         self.unique_name = self.body_data['unique_name']
 
@@ -35,7 +32,8 @@ class GlueDataRequestHandler:
                 **self.glue_session['meta'][self.unique_name]
             )
 
-            self.connection = GlueConnection(self.context[self.unique_name]['connection']),
+            self.connection = GlueConnection(self.context[self.unique_name]['connection'])
+
             self.access = GlueAccess(self.context[self.unique_name]['access'])
 
             self.model_class = self.meta_data.model_class
@@ -50,16 +48,44 @@ class GlueDataRequestHandler:
                 self.query_set = decode_query_set_from_str(self.meta_data.query_set_str)
 
         else:
-            raise Http404
+            self.is_valid_request = False
 
     def process_response(self):
-        if self.method == 'QUERY':
+        if self.method == 'QUERY' and self.is_valid_request:
+
             if self.connection == GlueConnection.MODEL_OBJECT:
-                pass
+                try:
+                    glue_model_object_service = GlueModelObjectService(
+                        self.meta_data.app_label,
+                        self.meta_data.model,
+                        self.meta_data.object_pk,
+                    )
+
+                    json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
+
+                    return json_response_data.to_django_json_response()
+
+                except:
+                    return generate_json_404_response()
+
             elif self.connection == GlueConnection.QUERY_SET:
-                pass
+                try:
+                    glue_query_set_service = GlueQuerySetService(
+                        self.meta_data.app_label,
+                        self.meta_data.model,
+                        self.meta_data.query_set_str,
+                    )
+
+                    json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
+
+                    return json_response_data.to_django_json_response()
+
+                except:
+                    return generate_json_404_response()
+
             else:
                 return generate_json_404_response()
+
         else:
             return generate_json_404_response()
 

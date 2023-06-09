@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from django_glue.conf import settings
 from django_glue.enums import GlueConnection, GlueAccess
-from django_glue.types import GlueContextData, GlueMetaData
+from django_glue.data_classes import GlueContextData, GlueMetaData
 from django_glue.utils import generate_field_dict, generate_method_list, encode_query_set_to_str
 
 GLUE_SESSION_TYPES = (

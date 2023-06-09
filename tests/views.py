@@ -8,7 +8,7 @@ from django_glue.glue import add_glue
 
 
 class TestView(TemplateView):
-    template_name = 'test.html'
+    template_name = 'page/test_glue_page.html'
 
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
@@ -31,5 +31,21 @@ class TestView(TemplateView):
         big_test_model_object = generate_big_test_model()
 
         logging.warning(f'Added BigTestModel object.')
+
+        return context_data
+
+
+class OtherView(TemplateView):
+    template_name = 'page/other_glue_page.html'
+    def get_context_data(self, **kwargs):
+        context_data = super().get_context_data(**kwargs)
+
+        other_test_model_object = generate_randomized_test_model()
+
+        logging.warning(f'Added Other TestModel object.')
+
+        add_glue(self.request, 'other_test_model_1', other_test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime',))
+
+        logging.warning('Added model object glue for Other TestModel Object in write mode')
 
         return context_data
