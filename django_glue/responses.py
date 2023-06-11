@@ -2,14 +2,14 @@ from typing import Optional
 
 from django.http import JsonResponse
 
-from django_glue.data_classes import GlueJsonResponseData
+from django_glue.data_classes import GlueJsonResponseData, GlueJsonData
 from django_glue.enums import GlueJsonResponseType, GlueJsonResponseStatus
 
 
 def generate_json_200_response(
         message_title: str,
         message_body: str,
-        data: Optional[dict] = None,
+        data: Optional[GlueJsonData] = None,
         optional_message_data: Optional[dict] = None,
 ) -> JsonResponse:
 
@@ -24,7 +24,7 @@ def generate_json_200_response(
 def generate_json_200_response_data(
         message_title: str,
         message_body: str,
-        data: Optional[dict] = None,
+        data: Optional[GlueJsonData] = None,
         optional_message_data: Optional[dict] = None,
 ) -> GlueJsonResponseData:
 

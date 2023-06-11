@@ -1,12 +1,10 @@
-from django_glue.data_classes import GlueJsonResponseData, GlueBodyData
+from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData
 from django_glue.services.services import Service
 
 
 class GlueQuerySetService(Service):
-    def __init__(self, app_label, model, query_set):
-        self.app_label = app_label
-        self.model = model
-        self.query_set = query_set
+    def __init__(self, meta_data: GlueMetaData) -> None:
+        self.meta_data = meta_data
 
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         pass

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any, Optional, Union
 from dataclasses import dataclass, asdict
 
 from django.contrib.contenttypes.models import ContentType
 from django.http import JsonResponse
 
-
 from django_glue.enums import GlueConnection, GlueAccess, GlueAction, GlueJsonResponseStatus, GlueJsonResponseType
-
+from django_glue.core.utils import remove_none_value_field_from_data_class_object
 
 class GlueBodyData:
     def __init__(self, request_body):
@@ -43,25 +42,38 @@ class GlueContextData:
 
 
 @dataclass
+class GlueJsonData:
+    fields: Optional[dict] = None
+    simple_fields: Optional[dict] = None
+    custom: Optional[dict] = None
+
+    def to_dict(self):
+        remove_none_value_field_from_data_class_object(self)
+        return asdict(self)
+
+
+
+@dataclass
 class GlueJsonResponseData:
-    message_title: str
-    message_body: str
-    data: Optional[dict] = None
+    message_title: Optional[str] = None
+    message_body: Optional[str] = None
+    data: Optional[GlueJsonData] = None
     optional_message_data: Optional[dict] = None
     response_type: GlueJsonResponseType = GlueJsonResponseType.SUCCESS
     response_status: GlueJsonResponseStatus = GlueJsonResponseStatus.SUCCESS
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        remove_none_value_field_from_data_class_object(self)
+
+        json_response_dict = asdict(self)
+
+        if isinstance(self.data, GlueJsonData):
+            json_response_dict['data'] = self.data.to_dict()
+
+        return json_response_dict
 
     def to_django_json_response(self) -> JsonResponse:
-        if self.data is None:
-            self.data = dict()
-
-        if self.optional_message_data is None:
-            self.optional_message_data = dict()
-
-        return JsonResponse(asdict(self), status=self.response_status.value)
+        return JsonResponse(self.to_dict(), status=self.response_status.value)
 
 
 @dataclass
@@ -80,6 +92,9 @@ class GlueMetaData:
     model: str
     object_pk: int = None
     query_set_str: str = None
+    fields: Union[list, tuple] = None
+    exclude: Union[list, tuple] = None
+    methods: Union[list, tuple] = None
 
     @property
     def model_class(self):

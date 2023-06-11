@@ -1,12 +1,13 @@
-async function glue_ajax_request(method, unique_name, data) {
+async function glue_ajax_request(unique_name, action, data = {}, method='QUERY') {
     const requestOptions = {
         method: method,
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': csrf_token,
+            'X-CSRFToken': glue_get_cookie('csrftoken'),
         },
         body: JSON.stringify({
             'unique_name': unique_name,
+            'action': action,
             'data': data,
         }),
     };

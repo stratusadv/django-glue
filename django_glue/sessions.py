@@ -10,10 +10,6 @@ from django_glue.utils import generate_field_dict, generate_method_list, encode_
 GLUE_SESSION_TYPES = (
     'context',
     'meta',
-    'query_set',
-    'fields',
-    'exclude',
-    'methods',
 )
 
 class GlueSession:
@@ -58,11 +54,10 @@ class GlueSession:
             app_label=content_type.app_label,
             model=content_type.model,
             object_pk=model_object.pk,
+            fields=fields,
+            exclude=exclude,
+            methods=methods,
         ))
-
-        self.add_fields(unique_name, fields)
-        self.add_exclude(unique_name, exclude)
-        self.add_methods(unique_name, methods)
 
     def add_query_set(
             self,
@@ -88,25 +83,17 @@ class GlueSession:
             app_label=content_type.app_label,
             model=content_type.model,
             query_set_str=encode_query_set_to_str(query_set),
+            fields=fields,
+            exclude=exclude,
+            methods=methods,
         ))
 
-        self.add_fields(unique_name, fields)
-        self.add_exclude(unique_name, exclude)
-        self.add_methods(unique_name, methods)
 
     def add_context(self, unique_name, context_data: GlueContextData) -> None:
         self.session['context'][unique_name] = context_data.to_dict()
 
-    def add_fields(self, unique_name, fields: tuple):
-        self.session['fields'][unique_name] = fields
-
-    def add_exclude(self, unique_name, exclude: tuple):
-        self.session['exclude'][unique_name] = exclude
-
     def add_meta(self, unique_name, meta_data: GlueMetaData) -> None:
         self.session['meta'][unique_name] = meta_data.to_dict()
-    def add_methods(self, unique_name, methods: tuple):
-        self.session['methods'][unique_name] = methods
 
     def check_unique_name(self, unique_name):
         if self.unique_name_unused(unique_name):

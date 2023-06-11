@@ -40,37 +40,38 @@ class GlueDataRequestHandler:
         else:
             self.is_valid_request = False
 
+        logging.warning(f'{self.is_valid_request = }')
+
     def process_response(self):
         if self.method == 'QUERY' and self.is_valid_request:
+
 
             if self.connection == GlueConnection.MODEL_OBJECT:
                 try:
                     glue_model_object_service = GlueModelObjectService(
-                        self.meta_data.app_label,
-                        self.meta_data.model,
-                        self.meta_data.object_pk,
+                        self.meta_data,
                     )
 
                     json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
 
                     return json_response_data.to_django_json_response()
 
-                except:
+                except Exception as e:
+                    logging.error(e)
                     return generate_json_404_response()
 
             elif self.connection == GlueConnection.QUERY_SET:
                 try:
                     glue_query_set_service = GlueQuerySetService(
-                        self.meta_data.app_label,
-                        self.meta_data.model,
-                        self.meta_data.query_set_str,
+                        self.meta_data,
                     )
 
                     json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
 
                     return json_response_data.to_django_json_response()
 
-                except:
+                except Exception as e:
+                    logging.error(e)
                     return generate_json_404_response()
 
             else:
