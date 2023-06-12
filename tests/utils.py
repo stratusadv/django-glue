@@ -13,10 +13,12 @@ FIRST_NAME_TUPLE = (
     'Nathan',
     'Robert',
     'Ted',
+    'Wesley',
 )
 
 LAST_NAME_TUPLE = (
     'Doe',
+    'Howery',
     'Hansen',
     'Johnson',
     'Mancal',
