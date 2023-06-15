@@ -21,6 +21,8 @@ class Service(ABC):
                 return self.process_method_action(body_data)
             else:
                 return generate_json_404_response_data()
+        else:
+            return generate_json_404_response_data()
 
     @abstractmethod
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:

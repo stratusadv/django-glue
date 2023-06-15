@@ -44,8 +44,6 @@ class GlueDataRequestHandler:
 
     def process_response(self):
         if self.method == 'QUERY' and self.is_valid_request:
-
-
             if self.connection == GlueConnection.MODEL_OBJECT:
                 try:
                     glue_model_object_service = GlueModelObjectService(

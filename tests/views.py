@@ -17,7 +17,7 @@ class TestView(TemplateView):
 
         logging.warning(f'Added TestModel object.')
 
-        add_glue(self.request, 'test_model_1', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime',))
+        add_glue(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime',))
         add_glue(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
         add_glue(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
         add_glue(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
@@ -49,3 +49,7 @@ class OtherView(TemplateView):
         logging.warning('Added model object glue for Other TestModel Object in write mode')
 
         return context_data
+
+def benchmark_run_view(request):
+    # this view should take an integer that determines how many glue connections to make.
+    pass

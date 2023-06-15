@@ -5,7 +5,9 @@
 {% endblock %}
 
 {% block body %}
-    <div class="row">
+    <div x-data="{
+        test_query_1: new GlueQuerySet('test_query_set_1')
+    }" class="row">
         <div class="col-12">
 
             <div class="row pb-2">

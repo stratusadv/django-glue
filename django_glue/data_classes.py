@@ -10,6 +10,7 @@ from django.http import JsonResponse
 from django_glue.enums import GlueConnection, GlueAccess, GlueAction, GlueJsonResponseStatus, GlueJsonResponseType
 from django_glue.core.utils import remove_none_value_field_from_data_class_object
 
+
 class GlueBodyData:
     def __init__(self, request_body):
         self.data = json.loads(request_body.decode('utf-8'))
@@ -34,8 +35,8 @@ class GlueBodyData:
 class GlueContextData:
     connection: GlueConnection
     access: GlueAccess
-    fields: dict
-    methods: list
+    fields: dict[GlueModelFieldData]
+    methods: list[str]
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -50,7 +51,6 @@ class GlueJsonData:
     def to_dict(self):
         remove_none_value_field_from_data_class_object(self)
         return asdict(self)
-
 
 
 @dataclass

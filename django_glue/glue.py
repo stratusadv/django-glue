@@ -2,14 +2,15 @@ from typing import Union
 
 from django.db.models import Model
 from django.db.models.query import QuerySet
+from django.http import HttpRequest
 
 from django_glue.sessions import GlueSession, GlueKeepLiveSession
 
 
 def add_glue(
-        request,
+        request: HttpRequest,
         unique_name: str,
-        target,
+        target: Union[Model, QuerySet],
         access: str = 'view',
         fields: Union[list, tuple] = ('__all__',),
         exclude: Union[list, tuple] = ('__none__',),

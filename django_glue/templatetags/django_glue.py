@@ -42,7 +42,7 @@ class GlueHTMLAttrNode(template.Node):
     def render(self, context):
         html_attr_str = ''
 
-        for key, val in context[settings.DJANGO_GLUE_CONTEXT_NAME][self.unique_name]['fields'][self.field]['html_attr'].items():
+        for key, val in context[settings.DJANGO_GLUE_CONTEXT_NAME]['context'][self.unique_name]['fields'][self.field]['html_attr'].items():
             html_attr_str = f'{key}="{val}" '
 
         return html_attr_str

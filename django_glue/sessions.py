@@ -12,6 +12,7 @@ GLUE_SESSION_TYPES = (
     'meta',
 )
 
+
 class GlueSession:
     def __init__(self, request):
         self.request = request
@@ -22,7 +23,6 @@ class GlueSession:
             self.request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type, dict())
 
         self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
-
 
     def __getitem__(self, key):
         return self.session[key]
@@ -59,6 +59,8 @@ class GlueSession:
             methods=methods,
         ))
 
+        self.set_modified()
+
     def add_query_set(
             self,
             unique_name: str,
@@ -88,6 +90,7 @@ class GlueSession:
             methods=methods,
         ))
 
+        self.set_modified()
 
     def add_context(self, unique_name, context_data: GlueContextData) -> None:
         self.session['context'][unique_name] = context_data.to_dict()
@@ -157,13 +160,8 @@ class GlueKeepLiveSession:
 
     def set_unique_name(self, unique_name):
 
-        self.session.setdefault(
-            self.request.path,
-            {
-                'expire_time': self.get_next_expire_time(),
-                'unique_name_list': [],
-            }
-        )
+        self.setdefault = self.session.setdefault(self.request.path, {'expire_time': self.get_next_expire_time(),
+                                                                      'unique_name_list': [], })
 
         if unique_name not in self.session[self.request.path]['unique_name_list']:
             self.session[self.request.path]['unique_name_list'].append(unique_name)

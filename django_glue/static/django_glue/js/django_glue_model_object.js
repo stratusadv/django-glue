@@ -50,4 +50,55 @@ class GlueModelObject {
         })
     }
 
+    update(field = null) {
+        let data = {}
+
+        if (field) {
+            data[field] = this[field]
+        }
+        else {
+            for (let key in this.context_data.fields) {
+                data[key] = this[key]
+            }
+        }
+
+        glue_ajax_request(
+            this.unique_name,
+            'update',
+            data
+        ).then((response) => {
+            console.log(response)
+        })
+    }
+
+    create() {
+        let data = {}
+
+        for (let key in this.context_data.fields) {
+            data[key] = this[key]
+        }
+
+        glue_ajax_request(
+            this.unique_name,
+            'create',
+            data
+        ).then((response) => {
+            console.log(response)
+        })
+
+    }
+
+    delete() {
+        glue_ajax_request(
+            this.unique_name,
+            'delete'
+            ).then((response) => {
+                console.log(response)
+            })
+    }
+
+    method() {
+
+    }
+
 }

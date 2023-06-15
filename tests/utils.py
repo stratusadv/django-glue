@@ -9,6 +9,7 @@ FIRST_NAME_TUPLE = (
     'Fred',
     'Jane',
     'Janet',
+    'Austin',
     'Johnny',
     'Nathan',
     'Robert',
@@ -18,13 +19,14 @@ FIRST_NAME_TUPLE = (
 
 LAST_NAME_TUPLE = (
     'Doe',
-    'Howery',
-    'Hansen',
     'Johnson',
+    'Hansen',
     'Mancal',
     'Smith',
     'Waldern',
+    'Howery',
     'Wilson',
+    'Sauer',
 )
 
 DESCRIPTION_WORD_TUPLE = (
