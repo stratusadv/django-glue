@@ -1,21 +1,29 @@
 {% extends 'card/card.html' %}
 
+{% load django_glue %}
+
 {% block header %}
     DELETE & VIEW Query Set
 {% endblock %}
 
 {% block body %}
     <div x-data="{
-        test_query_1: new GlueQuerySet('test_query_set_1')
+        test_model_1: new GlueModelObject('test_model_1'),
+        test_query_1: new GlueQuerySet('test_query_1'),
+
+        test(){
+           let val = this.test_query_1.get(this.test_model_1.id)
+           console.log(val)
+        }
+
     }" class="row">
         <div class="col-12">
-
             <div class="row pb-2">
                 <div class="col-8">
                     <small class="text-muted">Data is automatically loaded</small>
                 </div>
                 <div class="col-4">
-                    <button class="btn btn-outline-secondary py-0 pb-1 float-end">
+                    <button @click="test() " class="btn btn-outline-secondary py-0 pb-1 float-end">
                         Refresh View
                     </button>
                 </div>
@@ -23,7 +31,7 @@
 
             <div class="row">
                 <div class="col-12">
-                    <template x-for="">
+                    <template >
                         <div class="row py-1">
                             <div class="col-1">
                                 <span></span>

@@ -2,9 +2,10 @@ from typing import Optional
 
 from django.db.models import QuerySet
 
-from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData
+from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData, GlueJsonData
+from django_glue.responses import generate_json_200_response_data
 from django_glue.services.services import Service
-from django_glue.utils import decode_query_set_from_str
+from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict
 
 
 class GlueQuerySetService(Service):
@@ -16,8 +17,17 @@ class GlueQuerySetService(Service):
         self.query_set = decode_query_set_from_str(self.meta_data.query_set_str)
 
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
+        self.load_query_set()
 
         model_object = self.query_set.get(id=body_data['data']['id'])
+
+        data = GlueJsonData(simple_fields=generate_simple_field_dict(model_object, self.meta_data.fields, self.meta_data.exclude))
+
+        return generate_json_200_response_data(
+            'THE QUERY GET ACTION',
+            'this is a response from an query set get action',
+            data
+        )
 
     def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         pass

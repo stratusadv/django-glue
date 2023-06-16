@@ -6,10 +6,9 @@ class GlueModelObject {
         console.log(DJANGO_GLUE_CONTEXT_DATA)
 
         if (unique_name in DJANGO_GLUE_CONTEXT_DATA) {
-
             this.context_data = DJANGO_GLUE_CONTEXT_DATA[unique_name]
 
-            if (this.context_data.connection === 'model_object') {
+            if (this.context_data.connection === 'model_object' || this.context_data.connection === 'query_set') {
                 this.load_fields(load_values)
             } else {
                 console.error('"' + unique_name + '" is not a model object')
