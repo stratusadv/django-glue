@@ -5,7 +5,7 @@ from django.db.models import QuerySet
 from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData, GlueJsonData
 from django_glue.responses import generate_json_200_response_data
 from django_glue.services.services import Service
-from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict
+from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict, get_fields_from_model
 
 
 class GlueQuerySetService(Service):
@@ -29,14 +29,38 @@ class GlueQuerySetService(Service):
             data
         )
 
+    def process_filter_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
+        pass
+
     def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         pass
 
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        self.load_query_set()
+
+        model_object = self.meta_data.model_class.objects.get(id=body_data['data']['id'])
+
+        for field in get_fields_from_model(self.meta_data.model_class):
+            if field.name in body_data['data'] and field.name != 'id':
+                model_object.__dict__[field.name] = body_data['data'][field.name]
+
+        model_object.save()
+
+        return generate_json_200_response_data(
+            'THE QUERY UPDATE ACTION',
+            'this is a response from an query set update action!'
+        )
 
     def process_delete_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        self.load_query_set()
+
+        model_object = self.query_set.get(id=body_data['data']['id'])
+        model_object.delete()
+
+        return generate_json_200_response_data(
+            'THE QUERY DELETE ACTION',
+            'this is a response from an query set delete action!'
+        )
 
     def process_method_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         pass

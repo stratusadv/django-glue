@@ -51,7 +51,6 @@ class GlueDataRequestHandler:
                     )
 
                     json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
-
                     return json_response_data.to_django_json_response()
 
                 except Exception as e:
@@ -65,7 +64,6 @@ class GlueDataRequestHandler:
                     )
 
                     json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
-
                     return json_response_data.to_django_json_response()
 
                 except Exception as e:
