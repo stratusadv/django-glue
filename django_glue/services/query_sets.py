@@ -18,10 +18,22 @@ class GlueQuerySetService(Service):
 
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         self.load_query_set()
+        data = []
 
-        model_object = self.query_set.get(id=body_data['data']['id'])
+        if 'filter_params' in body_data['data']:
+            for model_object in self.query_set.filter(**body_data['data']['filter_params']):
+                data.append(GlueJsonData(simple_fields=generate_simple_field_dict(
+                        model_object, self.meta_data.fields, self.meta_data.exclude)))
 
-        data = GlueJsonData(simple_fields=generate_simple_field_dict(model_object, self.meta_data.fields, self.meta_data.exclude))
+        elif 'all' in body_data['data']:
+            for model_object in self.query_set.all():
+                data.append(GlueJsonData(simple_fields=generate_simple_field_dict(
+                        model_object, self.meta_data.fields, self.meta_data.exclude)))
+
+        else:
+            model_object = self.query_set.get(id=body_data['data']['id'])
+            data = GlueJsonData(simple_fields=generate_simple_field_dict(
+                model_object, self.meta_data.fields, self.meta_data.exclude))
 
         return generate_json_200_response_data(
             'THE QUERY GET ACTION',
@@ -29,11 +41,21 @@ class GlueQuerySetService(Service):
             data
         )
 
-    def process_filter_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
-
     def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        self.load_query_set()
+
+        model_object = self.meta_data.model_class()
+
+        for field in get_fields_from_model(self.meta_data.model_class):
+            if field.name in body_data['data'] and field.name != 'id':
+                setattr(model_object, field.name, body_data['data'][field.name])
+
+        model_object.save()
+
+        return generate_json_200_response_data(
+            'THE QUERY CREATE ACTION',
+            'this is a response from an query set create action!'
+        )
 
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         self.load_query_set()
@@ -63,5 +85,10 @@ class GlueQuerySetService(Service):
         )
 
     def process_method_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        self.load_query_set()
 
+        model_object = self.query_set.get(id=body_data['data']['id'])
+
+        method = getattr(model_object, body_data['data']['method'])
+
+        return method(**body_data['data']['kwargs'])

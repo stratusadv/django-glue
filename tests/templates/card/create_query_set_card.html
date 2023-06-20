@@ -1,0 +1,33 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    CREATE Query Set
+{% endblock %}
+
+{% block body %}
+    <div x-data="{
+        test_query_1: new GlueQuerySet('test_query_1'),
+        test_model: new GlueModelObject('test_model_1', load_values=false)
+    }" class="row">
+        <div class="col-12">
+            <form>
+                <label for="first_name">First Name</label>
+                <input x-model="test_model.first_name" id="first_name" type="text" class="form-control mb-2">
+                <label for="last_name">Last Name</label>
+                <input x-model="test_model.last_name" id="last_name" type="text" class="form-control mb-2">
+                <label for="description">Description</label>
+                <textarea x-model="test_model.description" id="description" class="form-control mb-2" ></textarea>
+                <label for="favorite_number">Favorite Number</label>
+                <input x-model="test_model.favorite_number" id="favorite_number" type="text" class="form-control mb-2">
+                <label for="weight_lbs">Weight (lbs)</label>
+                <input x-model="test_model.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
+            </form>
+
+            <button @click="test_query_1.create(test_model)" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
+                Create
+            </button>
+
+        </div>
+    </div>
+
+{% endblock %}

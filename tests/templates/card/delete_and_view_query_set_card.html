@@ -13,8 +13,16 @@
 
         test_model_list: [],
 
-        async refresh_model_list() {
+        async get_model_list() {
             this.test_model_list = await this.test_query_1.get(this.test_model_1.id)
+        },
+
+        async filter_model_list() {
+            this.test_model_list = await this.test_query_1.filter({favorite_number: 1234})
+        },
+
+        async all_model_list(){
+            this.test_model_list = await this.test_query_1.all()
         }
 
     }" class="row">
@@ -24,7 +32,7 @@
                     <small class="text-muted">Data is automatically loaded</small>
                 </div>
                 <div class="col-4">
-                    <button @click="refresh_model_list()" class="btn btn-outline-secondary py-0 pb-1 float-end">
+                    <button @click="all_model_list()" class="btn btn-outline-secondary py-0 pb-1 float-end">
                         Refresh View
                     </button>
                 </div>

@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils.timezone import now
 
+from django_glue.data_classes import GlueJsonResponseData
+
 
 class TestModel(models.Model):
     first_name = models.CharField(max_length=32)
@@ -14,11 +16,9 @@ class TestModel(models.Model):
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
 
-    def decorated_method(self, request):
-        pass
-
-    def undecorated_method(self, request):
-        pass
+    def is_lighter_than(self, check_weight: float) -> GlueJsonResponseData:
+        if self.weight_lbs < check_weight:
+            pass
 
 
 class BigTestModel(models.Model):
