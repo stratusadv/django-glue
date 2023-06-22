@@ -1,13 +1,11 @@
+import inspect
 import logging, pickle, base64, json
+from typing import Optional, Callable
 
-from django.core import exceptions, serializers
-from django.core.serializers.json import DjangoJSONEncoder
+from django.core import exceptions
 
-from django_glue.conf import settings
-
-
-def camel_to_snake(string):
-    return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
+from django_glue.core.utils import serialize_object_to_json
+from django_glue.data_classes import GlueModelFieldData
 
 
 def decode_query_set_from_str(query_set_string):
@@ -39,7 +37,7 @@ def generate_field_dict(model_object, fields, exclude):
     fields_dict = dict()
 
     model = type(model_object)
-    json_model = json.loads(serialize_object_to_json(model_object, fields, exclude))[0]
+    json_model = json.loads(serialize_object_to_json(model_object))[0]
 
     for field in model._meta.fields:
         try:
@@ -52,16 +50,31 @@ def generate_field_dict(model_object, fields, exclude):
                         field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
-                    fields_dict[field.name] = {
-                        'type': field.get_internal_type(),
-                        'value': field_value,
-                        'html_attr': field_attr,
-                    }
+                    fields_dict[field.name] = GlueModelFieldData(
+                        type=field.get_internal_type(),
+                        value=field_value,
+                        html_attr=field_attr,
+                    ).to_dict()
 
         except:
-            raise f'Invalid field or exclude for model type {model.__class__.__name__}'
+            raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'
 
     return fields_dict
+
+
+def generate_method_list(model_object, methods: tuple) -> list:
+    methods_list = list()
+
+    model = type(model_object)
+
+    if methods[0] != '__none__':
+        for method in methods:
+            if hasattr(model_object, method):
+                methods_list.append(method)
+            else:
+                raise f'Method "{method}" is invalid for model type "{model.__class__.__name__}"'
+
+    return methods_list
 
 
 def generate_simple_field_dict(model_object, fields, exclude):
@@ -78,53 +91,25 @@ def get_fields_from_model(model):
     return [field for field in model._meta.fields]
 
 
-def process_and_save_form_values(model_object, form_values_dict, fields, exclude):
-    logging.warning(f'{model_object = }')
-
-    try:
-        for key, val in form_values_dict.items():
-            if key != 'id':
-                if field_name_included(key, fields, exclude):
-                    model_object.__dict__[key] = val
-
-        model_object.full_clean()
-        model_object.save()
-        logging.warning(f'{model_object = }')
-
-    except exceptions.ValidationError as e:
-        logging.warning(f'Validation Failed {e = }')
-        return {
-            'type': 'error',
-            'message_dict': e.message_dict
-        }
-
-    else:
-        logging.warning(f'Validation Successful')
-        return {
-            'type': 'success',
-        }
+def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
+    for kwarg in kwargs:
+        if kwarg not in inspect.signature(method).parameters.keys():
+            return False
+    return True
 
 
-def process_and_save_field_value(model_object, field_name, value, fields, exclude):
-    logging.warning(f'{field_name = } {value = }')
-    try:
-        if field_name_included(field_name, fields, exclude):
-            model_object.__dict__[field_name] = value
-            model_object.full_clean()
-            model_object.save()
+def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
+    type_set_kwargs = {}
 
-    except exceptions.ValidationError as e:
-        logging.warning(f'Validation Failed {e = }')
-        return {
-            'type': 'error',
-            'message_dict': e.message_dict
-        }
+    # This is a dict consisting of all kwargs and there type annotations (If they have type annotations)
+    annotations = inspect.getfullargspec(method).annotations
 
-    else:
-        return {
-            'type': 'success',
-        }
+    for kwarg in kwargs:
+        if kwarg in annotations:
+            # Converts the kwarg to match the type specified in on the methods kwargs
+            type_set_kwargs[kwarg] = inspect.getfullargspec(method).annotations[kwarg](kwargs[kwarg])
+        else:
+            # If there is not a type annotation, the value remains the same
+            type_set_kwargs[kwarg] = kwargs[kwarg]
 
-
-def serialize_object_to_json(model_object, fields, exclude):
-    return serializers.serialize('json', [model_object, ])
+    return type_set_kwargs

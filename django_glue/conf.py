@@ -10,7 +10,7 @@ class DjangoGlueSettings:
         if hasattr(default_settings, name):
             return getattr(default_settings, name)
 
-        raise AttributeError(f'No attribute {name} found in settings.')
+        raise f'No attribute {name} found in settings.'
 
 
 settings = DjangoGlueSettings()

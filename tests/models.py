@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils.timezone import now
 
+from django_glue.data_classes import GlueJsonResponseData
+
 
 class TestModel(models.Model):
     first_name = models.CharField(max_length=32)
@@ -14,17 +16,13 @@ class TestModel(models.Model):
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
 
-    def django_glue_create(self, request):
-        pass
+    def is_lighter_than(self, check_weight: float) -> bool:
+        if self.weight_lbs < check_weight:
+            return True
+        return False
 
-    def django_glue_update(self, request):
-        pass
-
-    def django_glue_delete(self, request):
-        self.delete()
-
-    def django_glue_view(self, request):
-        pass
+    def get_full_name(self):
+        return f'{self.first_name} {self.last_name}'
 
 
 class BigTestModel(models.Model):
@@ -55,14 +53,5 @@ class BigTestModel(models.Model):
     def __str__(self):
         return f'{self.char_field}'
 
-    def django_glue_create(self, request):
-        pass
 
-    def django_glue_update(self, request):
-        pass
 
-    def django_glue_delete(self, request):
-        self.delete()
-
-    def django_glue_view(self, request):
-        pass

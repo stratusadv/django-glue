@@ -1,21 +1,17 @@
-{% extends 'base.html' %}
+{% extends 'base/base.html' %}
 
 {% load django_glue %}
 
 {% block base_content %}
-    <div class="row">
-        <div class="col-12 mb-3 h3 text-center">
-            Django Glue Test Page
-            <a href="{% url 'no_glue' %}">No Glue</a>
-        </div>
-    </div>
+
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Test Page" %}
 
     <div class="row g-3 mb-3">
         <div class="col-6">
-            {% include 'card/change_model_object_card.html' %}
+            {% include 'card/update_model_object_card.html' %}
         </div>
         <div class="col-6">
-            {% include 'card/add_model_object_card.html' %}
+            {% include 'card/create_model_object_card.html' %}
         </div>
     </div>
 
@@ -30,10 +26,19 @@
 
     <div class="row g-3 mb-3">
         <div class="col-6">
-            {% include 'card/change_query_set_card.html' %}
+            {% include 'card/method_model_object_card.html' %}
         </div>
         <div class="col-6">
-            {% include 'card/add_query_set_card.html' %}
+            {% include 'card/method_query_set_card.html' %}
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6">
+            {% include 'card/update_query_set_card.html' %}
+        </div>
+        <div class="col-6">
+            {% include 'card/create_query_set_card.html' %}
         </div>
     </div>
 

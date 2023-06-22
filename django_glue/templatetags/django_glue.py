@@ -1,7 +1,6 @@
-import logging, json
+import json
 
 from django import template
-from django.template.defaultfilters import stringfilter
 from django.utils.safestring import mark_safe
 
 from django_glue.conf import settings
@@ -11,11 +10,6 @@ register = template.Library()
 
 @register.inclusion_tag('django_glue/django_glue.html', takes_context=True)
 def glue_init(context):
-    return context
-
-
-@register.inclusion_tag('django_glue/django_glue_core.html', takes_context=True)
-def glue_init_core(context):
     return context
 
 
@@ -48,7 +42,7 @@ class GlueHTMLAttrNode(template.Node):
     def render(self, context):
         html_attr_str = ''
 
-        for key, val in context[settings.DJANGO_GLUE_CONTEXT_NAME][self.unique_name]['fields'][self.field]['html_attr'].items():
+        for key, val in context[settings.DJANGO_GLUE_CONTEXT_NAME]['context'][self.unique_name]['fields'][self.field]['html_attr'].items():
             html_attr_str = f'{key}="{val}" '
 
         return html_attr_str

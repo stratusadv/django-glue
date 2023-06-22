@@ -1,15 +1,5 @@
 # Django Glue Naming Conventions
 
-## Action
-Used in: Template
-
-Determines the type of action the glue tag is performing.
-
-## Event
-Used in: Template
-
-Determines the type of event required for triggering.
-
 ## Fields
 Used in: View, Template
 
@@ -43,22 +33,12 @@ Allows you to read, create and change the data in the targets.
 #### Delete
 Allows you to manipulate the targets in any way possible.
 
-## Method
-Used in: View, Template
+## Action
+Used in: Handler, Template, Javascript
 
-The action to be used on events or requests as per normal REST frameworks.
+## Sub Action
+Used in: Handler, Template, Javascript
 
-#### GET
-Allows you to only read data from the targets.
-
-#### POST
-Allows you to read and create data in the targets.
-
-#### PUT
-Allows you to read, create and change the data in the targets.
-
-#### DELETE
-Allows you to manipulate the targets in any way possible.
 
 ## Request
 Used in: Views, Model
