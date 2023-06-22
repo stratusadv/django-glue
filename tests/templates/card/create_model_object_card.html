@@ -21,8 +21,7 @@
                 <label for="weight_lbs">Weight (lbs)</label>
                 <input x-model="test_model.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
             </form>
-
-            <button @click="test_model.create()" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
+            <button @click="console.log(await test_model.create())" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
                 Create
             </button>
 

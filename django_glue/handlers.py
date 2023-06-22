@@ -45,34 +45,23 @@ class GlueDataRequestHandler:
     def process_response(self):
         if self.method == 'QUERY' and self.is_valid_request:
             if self.connection == GlueConnection.MODEL_OBJECT:
-                try:
-                    glue_model_object_service = GlueModelObjectService(
-                        self.meta_data,
-                    )
+                glue_model_object_service = GlueModelObjectService(
+                    self.meta_data,
+                )
 
-                    json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
-                    return json_response_data.to_django_json_response()
-
-                except Exception as e:
-                    logging.error(e)
-                    return generate_json_404_response()
+                json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
+                return json_response_data.to_django_json_response()
 
             elif self.connection == GlueConnection.QUERY_SET:
-                try:
-                    glue_query_set_service = GlueQuerySetService(
-                        self.meta_data,
-                    )
+                glue_query_set_service = GlueQuerySetService(
+                    self.meta_data,
+                )
 
-                    json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
-                    return json_response_data.to_django_json_response()
-
-                except Exception as e:
-                    logging.error(e)
-                    return generate_json_404_response()
+                json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
+                return json_response_data.to_django_json_response()
 
             else:
                 return generate_json_404_response()
 
         else:
             return generate_json_404_response()
-

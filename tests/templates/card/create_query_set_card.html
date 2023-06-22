@@ -23,7 +23,7 @@
                 <input x-model="test_model.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
             </form>
 
-            <button @click="test_query_1.create(test_model)" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
+            <button @click="console.log(await test_query_1.create(test_model))" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
                 Create
             </button>
 

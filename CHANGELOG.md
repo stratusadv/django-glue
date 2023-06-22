@@ -7,12 +7,9 @@
 - Now works with all javascript not just alpine.
 
 #### Changes
-- Clean up internal functions to more efficient.
+- Clean up internal functions to more efficient and secure.
 - Remove Alpine.js and return to vanilla so that people can use their own libraries.
-- Complete overhaul of the server side code.
-
-#### Bugs
-- stuff
+- Complete overhaul of the server side and front end code.
 
 ## 0.2.6
 

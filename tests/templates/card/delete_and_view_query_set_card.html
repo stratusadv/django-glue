@@ -23,6 +23,14 @@
 
         async all_model_list(){
             this.test_model_list = await this.test_query_1.all()
+        },
+
+        delete_model_list(){
+            let id_list = []
+            for (let id in this.test_model_list){
+                id_list.push(this.test_model_list[id].id)
+            }
+            this.test_query_1.delete(id_list)
         }
 
     }" class="row">
@@ -32,9 +40,18 @@
                     <small class="text-muted">Data is automatically loaded</small>
                 </div>
                 <div class="col-4">
-                    <button @click="all_model_list()" class="btn btn-outline-secondary py-0 pb-1 float-end">
-                        Refresh View
-                    </button>
+                    <div class="row">
+                        <div class="col-5 me-1">
+                            <button @click="get_model_list()" class="btn btn-outline-secondary py-0 pb-1 float-end">
+                                Refresh View
+                            </button>
+                        </div>
+                        <div class="col-5">
+                            <button @click="delete_model_list()" class="btn btn-outline-danger py-0 pb-1 float-end">
+                                Delete Model List
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -43,14 +60,18 @@
                     <template x-for="test_model in test_model_list">
                         <div class="row py-1">
                             <div class="col-1">
+                                <h6>ID:</h6>
+                                <span x-text="test_model.id"></span>
+                            </div>
+                            <div class="col-1">
                                 <h6>First Name:</h6>
                                 <span x-text="test_model.first_name"></span>
                             </div>
                             <div class="col-2">
-                                    <h6>Last Name:</h6>
-                                    <span x-text="test_model.last_name"></span>
+                                <h6>Last Name:</h6>
+                                <span x-text="test_model.last_name"></span>
                             </div>
-                            <div class="col-3">
+                            <div class="col-2">
                                 <h6>Description:</h6>
                                 <span x-text="test_model.description"></span>
                             </div>
@@ -63,7 +84,8 @@
                                 <span x-text="test_model.weight_lbs"></span>
                             </div>
                             <div class="col-2">
-                                <button @click="test_query_1.delete(test_model.id)" class="btn btn-outline-danger p-2 py-0 float-end">
+                                <button @click="test_query_1.delete(test_model.id)"
+                                        class="btn btn-outline-danger p-2 py-0 float-end">
                                     Delete
                                 </button>
                             </div>

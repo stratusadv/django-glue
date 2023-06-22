@@ -36,8 +36,8 @@ Allows you to manipulate the targets in any way possible.
 ## Action
 Used in: Handler, Template, Javascript
 
-#### Run Method
-command: run_method
+## Sub Action
+Used in: Handler, Template, Javascript
 
 
 ## Request

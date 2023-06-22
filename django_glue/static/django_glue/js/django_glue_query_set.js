@@ -12,12 +12,12 @@ class GlueQuerySet {
         }
     }
 
-     async get(id) {
+    async get(id) {
         let model_object_list = []
         let model_object = null
         return await glue_ajax_request(this.unique_name, 'get', {'id': id})
             .then((response) => {
-               model_object = new GlueModelObject(this.unique_name);
+                model_object = new GlueModelObject(this.unique_name);
                 console.log(response)
                 let simple_fields = response.data.simple_fields;
                 for (let key in simple_fields) {
@@ -28,14 +28,14 @@ class GlueQuerySet {
             });
     }
 
-    async all(){
+    async all() {
         let model_object_list = []
         let model_object = null
 
         return await glue_ajax_request(this.unique_name, 'get', {'all': true})
             .then((response) => {
                 console.log(response)
-                for (let object in response.data){
+                for (let object in response.data) {
                     model_object = new GlueModelObject(this.unique_name);
 
                     let simple_fields = response.data[object].simple_fields;
@@ -54,8 +54,7 @@ class GlueQuerySet {
 
         if (field) {
             data[field] = query_model_object[field]
-        }
-        else {
+        } else {
             for (let key in query_model_object.context_data.fields) {
                 data[key] = query_model_object[key]
             }
@@ -70,14 +69,14 @@ class GlueQuerySet {
         })
     }
 
-    async filter(filter_params){
+    async filter(filter_params) {
         let model_object_list = []
         let model_object = null
 
         return await glue_ajax_request(this.unique_name, 'get', {'filter_params': filter_params})
             .then((response) => {
                 console.log(response)
-                for (let object in response.data){
+                for (let object in response.data) {
                     model_object = new GlueModelObject(this.unique_name);
 
                     let simple_fields = response.data[object].simple_fields;
@@ -91,19 +90,26 @@ class GlueQuerySet {
             });
     }
 
-    create(query_model_object) {
+    async create(query_model_object) {
         let data = {}
 
         for (let key in query_model_object.context_data.fields) {
             data[key] = query_model_object[key]
         }
 
-        glue_ajax_request(
+        return await glue_ajax_request(
             this.unique_name,
             'create',
             data
         ).then((response) => {
             console.log(response)
+            let model_object = new GlueModelObject(this.unique_name)
+
+            let simple_fields = response.data.simple_fields
+            for (let key in simple_fields) {
+                model_object[key] = simple_fields[key]
+            }
+            return model_object
         })
 
     }
@@ -119,8 +125,21 @@ class GlueQuerySet {
         })
     }
 
-    method() {
+    async method(id, method, kwargs = {}) {
+        let data = {
+            'id': id,
+            'method': method,
+            'kwargs': kwargs,
+        }
 
+        return await glue_ajax_request(
+            this.unique_name,
+            'method',
+            data
+        ).then((response) => {
+            console.log(response)
+            return response.data.method_return
+        })
     }
 
 }

@@ -16,9 +16,13 @@ class TestModel(models.Model):
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
 
-    def is_lighter_than(self, check_weight: float) -> GlueJsonResponseData:
+    def is_lighter_than(self, check_weight: float) -> bool:
         if self.weight_lbs < check_weight:
-            pass
+            return True
+        return False
+
+    def get_full_name(self):
+        return f'{self.first_name} {self.last_name}'
 
 
 class BigTestModel(models.Model):

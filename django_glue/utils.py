@@ -1,4 +1,6 @@
+import inspect
 import logging, pickle, base64, json
+from typing import Optional, Callable
 
 from django.core import exceptions
 
@@ -87,3 +89,27 @@ def generate_simple_field_dict(model_object, fields, exclude):
 
 def get_fields_from_model(model):
     return [field for field in model._meta.fields]
+
+
+def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
+    for kwarg in kwargs:
+        if kwarg not in inspect.signature(method).parameters.keys():
+            return False
+    return True
+
+
+def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
+    type_set_kwargs = {}
+
+    # This is a dict consisting of all kwargs and there type annotations (If they have type annotations)
+    annotations = inspect.getfullargspec(method).annotations
+
+    for kwarg in kwargs:
+        if kwarg in annotations:
+            # Converts the kwarg to match the type specified in on the methods kwargs
+            type_set_kwargs[kwarg] = inspect.getfullargspec(method).annotations[kwarg](kwargs[kwarg])
+        else:
+            # If there is not a type annotation, the value remains the same
+            type_set_kwargs[kwarg] = kwargs[kwarg]
+
+    return type_set_kwargs

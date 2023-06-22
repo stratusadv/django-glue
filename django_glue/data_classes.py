@@ -46,6 +46,7 @@ class GlueContextData:
 class GlueJsonData:
     fields: Optional[dict] = None
     simple_fields: Optional[dict] = None
+    method_return: Optional[Any] = None
     custom: Optional[dict] = None
 
     def to_dict(self):
