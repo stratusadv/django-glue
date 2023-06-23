@@ -11,6 +11,7 @@ urlpatterns = [
     path("benchmark/", TemplateView.as_view(template_name='page/benchmark_page.html'), name="benchmark"),
     path("benchmark/run/<int:glue_count>/", TemplateView.as_view(template_name='page/benchmark_page.html'), name="benchmark"),
     path("django_glue/", include('django_glue.urls', namespace='django_glue')),
+    path("view/", TemplateView.as_view(template_name='page/view_page.html'), name="view"),
 ]
 
 urlpatterns += [

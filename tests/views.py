@@ -1,5 +1,6 @@
 import logging
 
+from django.template.response import TemplateResponse
 from django.views.generic import TemplateView
 
 from tests.models import TestModel
@@ -53,3 +54,6 @@ class OtherView(TemplateView):
 def benchmark_run_view(request):
     # this view should take an integer that determines how many glue connections to make.
     pass
+
+def ajax_view_view(request):
+    return TemplateResponse(request, 'page/view_page.html')
