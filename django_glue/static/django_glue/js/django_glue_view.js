@@ -1,23 +1,35 @@
-async function glue_view_ajax_request(url, method= 'GET', headers = {'Content-Type': 'application/json'}, body = {}) {
+async function _glue_view_ajax_request(url, method = 'GET', headers = {}, body = {}) {
     const request_options = {
         method: method,
         headers: {
             ...headers,
             'X-CSRFToken': glue_get_cookie('csrftoken'),
         },
-        body: JSON.stringify(body),
+        // body: JSON.stringify(body),
     };
 
     const response = await fetch(url, request_options);
+
     if (!response.ok) {
         throw new Error(`HTTP error ${response.status}`);
     }
 
-    console.log(response)
+    return response;
 
-    return await response.json();
 }
 
-function glue_view_inner(url) {
-    alert('GLUE A VIEW!!!')
+function glue_load_view_inner(target_element, url) {
+    _glue_view_ajax_request(url).then((response) => {
+        return response.text()
+    }).then((html) => {
+        target_element.innerHTML = html
+    })
+}
+
+function glue_load_view_outer(target_element, url) {
+    _glue_view_ajax_request(url).then((response) => {
+        return response.text()
+    }).then((html) => {
+        target_element.outerHTML = html
+    })
 }
