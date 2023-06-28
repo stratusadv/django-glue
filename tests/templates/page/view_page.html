@@ -6,14 +6,14 @@
 
     {% include 'navigation/top_navigation.html' with navigation_title="Django Glue View Page" %}
 
-    <div class="row g-3 border border-danger" x-data="">
+    <div class="row g-3 p-3 border border-danger" x-data="">
         <p class="text-center">
             ROW DIV CONTENTS
         </p>
-        <div class="col-12 border border-success" x-ref="tacos">
+        <div class="col-12 p-3 border border-success" x-ref="tacos">
             <p class="text-center">
                 <button class="btn btn-outline-info px-2 py-0 mt-2"
-                        x-on:click="glue_load_view_outer($refs.tacos, {% url 'view' %})">Load View Outer HTML
+                        x-on:click="glue_load_view_outer($refs.tacos, '{% url 'view' %}')">Load View Outer HTML
                 </button>
             </p>
             <p class="text-center">
@@ -21,7 +21,7 @@
             </p>
             <p class="text-center">
                 <button class="btn btn-outline-info px-2 py-0 mt-3"
-                        x-on:click="glue_load_view_inner($refs.tacos, {% url 'view' %})">Load View Inner HTML
+                        x-on:click="glue_load_view_inner($refs.tacos, '{% url 'view' %}')">Load View Inner HTML
                 </button>
             </p>
         </div>
