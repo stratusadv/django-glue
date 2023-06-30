@@ -4,7 +4,7 @@
 
 {% block base_content %}
 
-    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Test Page" %}
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Model Object" %}
 
     <div class="row g-3 mb-3">
         <div class="col-6">
@@ -27,24 +27,6 @@
     <div class="row g-3 mb-3">
         <div class="col-6">
             {% include 'card/method_model_object_card.html' %}
-        </div>
-        <div class="col-6">
-            {% include 'card/method_query_set_card.html' %}
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <div class="col-6">
-            {% include 'card/update_query_set_card.html' %}
-        </div>
-        <div class="col-6">
-            {% include 'card/create_query_set_card.html' %}
-        </div>
-    </div>
-
-    <div class="row g-3 mb-3">
-        <div class="col-12">
-            {% include 'card/delete_and_view_query_set_card.html' %}
         </div>
     </div>
 

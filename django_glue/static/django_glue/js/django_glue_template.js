@@ -1,0 +1,4 @@
+class GlueTemplate{
+    constructor() {
+    }
+}

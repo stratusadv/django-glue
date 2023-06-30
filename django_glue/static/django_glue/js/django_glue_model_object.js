@@ -3,8 +3,6 @@ class GlueModelObject {
         this.unique_name = unique_name
         this.context_data = null
 
-        console.log(DJANGO_GLUE_CONTEXT_DATA)
-
         if (unique_name in DJANGO_GLUE_CONTEXT_DATA) {
             this.context_data = DJANGO_GLUE_CONTEXT_DATA[unique_name]
             this.load_fields(load_values)
