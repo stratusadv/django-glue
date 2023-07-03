@@ -1,5 +1,14 @@
 # Changelog for Django Glue
 
+## 0.4.0
+
+#### Features
+- You can now glue templates by submitting a full template path as a string to add_glue function call.
+- You can now load views in your templates with GlueView.
+
+#### Changes
+- All validation moved to server side.
+
 ## 0.3.0
 
 #### Features

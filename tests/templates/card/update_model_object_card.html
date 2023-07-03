@@ -8,10 +8,10 @@
 
 {% block body %}
     <div x-data="{
-        test_model_1: new GlueModelObject('test_model_1'),
         async init() {
             await this.test_model_1.get()
-        }
+        },
+        test_model_1: new GlueModelObject('test_model_1')
     }"
          class="row">
         <div class="col-12">

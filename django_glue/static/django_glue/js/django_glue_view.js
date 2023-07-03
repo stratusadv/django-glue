@@ -1,3 +1,5 @@
+//Todo: Convert into a class object to stay consistent
+
 async function _glue_view_ajax_request(url, method = 'GET', headers = {}, body = {}) {
     const request_options = {
         method: method,
