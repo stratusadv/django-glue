@@ -5,7 +5,7 @@ class GlueModelObject {
 
         if (unique_name in DJANGO_GLUE_CONTEXT_DATA) {
             this.context_data = DJANGO_GLUE_CONTEXT_DATA[unique_name]
-            this.load_fields(load_values)
+            // this.load_fields(load_values)
         } else {
             console.error('"' + unique_name + '" is and invalid glue unique name.')
         }
@@ -27,8 +27,8 @@ class GlueModelObject {
         }
     }
 
-    get() {
-        glue_ajax_request(
+    async get() {
+        await glue_ajax_request(
             this.unique_name,
             'get'
         ).then((response) => {
@@ -40,7 +40,7 @@ class GlueModelObject {
         })
     }
 
-    update(field = null) {
+    async update(field = null) {
         let data = {}
 
         if (field) {
