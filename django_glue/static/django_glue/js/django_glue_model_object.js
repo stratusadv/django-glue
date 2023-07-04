@@ -15,8 +15,7 @@ class GlueModelObject {
             for (let key in simple_fields) {
                 if (load_value) {
                     this[key] = simple_fields[key]
-                }
-                else {
+                } else {
                     this[key] = null
                 }
                 this.context_data.fields.push(key)
@@ -29,8 +28,7 @@ class GlueModelObject {
 
         if (field) {
             data[field] = this[field]
-        }
-        else {
+        } else {
             for (let key in this.context_data.fields) {
                 data[key] = this[key]
             }
@@ -73,9 +71,9 @@ class GlueModelObject {
         glue_ajax_request(
             this.unique_name,
             'delete'
-            ).then((response) => {
-                console.log(response)
-            })
+        ).then((response) => {
+            console.log(response)
+        })
     }
 
     async method(method, kwargs = {}) {
