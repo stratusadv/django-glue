@@ -1,11 +1,21 @@
 class GlueModelObject {
     constructor(unique_name) {
         this.unique_name = unique_name
-        this.context_data = {}
+        this.context_data = {
+            fields: {}
+        }
+        this.first_name = ''
+    }
+
+    generate_field_data() {
+        let data = {}
+        for (let key in this.context_data.fields) {
+            data[key] = this[key]
+        }
+        return data
     }
 
     async get(load_value = true) {
-        this.context_data.fields = []
         await glue_ajax_request(
             this.unique_name,
             'get'
@@ -18,7 +28,8 @@ class GlueModelObject {
                 } else {
                     this[key] = null
                 }
-                this.context_data.fields.push(key)
+
+                this.context_data.fields[key] = simple_fields[key]
             }
         })
     }
@@ -29,9 +40,7 @@ class GlueModelObject {
         if (field) {
             data[field] = this[field]
         } else {
-            for (let key in this.context_data.fields) {
-                data[key] = this[key]
-            }
+            data = this.generate_field_data()
         }
 
         await glue_ajax_request(
@@ -44,11 +53,7 @@ class GlueModelObject {
     }
 
     async create() {
-        let data = {}
-
-        for (let key in this.context_data.fields) {
-            data[key] = this[key]
-        }
+        let data = this.generate_field_data()
 
         return await glue_ajax_request(
             this.unique_name,
