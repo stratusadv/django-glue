@@ -1,12 +1,13 @@
 class GlueTemplate {
-    constructor(unique_name) {
+    constructor(unique_name, shared_context_data = {}) {
         this.unique_name = unique_name
+        this.shared_context_data = shared_context_data
     }
 
     //Todo: Make sure there is not change of injection attack and get understanding of context data in templates
 
     async _render(context_data = {}) {
-        return glue_ajax_request(this.unique_name, 'get', context_data, 'text/html');
+        return glue_ajax_request(this.unique_name, 'get', {...context_data, ...this.shared_context_data}, 'text/html');
     }
 
     render_inner(target_element, context_data = {}) {

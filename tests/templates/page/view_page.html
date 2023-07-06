@@ -6,25 +6,24 @@
 
     {% include 'navigation/top_navigation.html' with navigation_title="Django Glue View" %}
 
-    <div class="row g-3 p-3 border border-danger" x-data="">
+    <div class="row g-3 p-3" x-data="{
+        view_card: new GlueView('{% url "view_card" %}')
+    }">
         <p class="text-center">
-            ROW DIV CONTENTS
+            <button class="btn btn-outline-info px-2 py-0 mt-3"
+                    x-on:click="view_card.render_inner($refs.target_div)">Render View to Inner HTML
+            </button>
         </p>
-        <div class="col-12 p-3 border border-success" x-ref="tacos">
+        <div class="col-12 p-3 border border-success" x-ref="target_div">
             <p class="text-center">
-                <button class="btn btn-outline-info px-2 py-0 mt-2"
-                        x-on:click="glue_load_view_outer($refs.tacos, '{% url 'view' %}')">Load View Outer HTML
-                </button>
-            </p>
-            <p class="text-center">
-                COLUMN DIV CONTENTS
-            </p>
-            <p class="text-center">
-                <button class="btn btn-outline-info px-2 py-0 mt-3"
-                        x-on:click="glue_load_view_inner($refs.tacos, '{% url 'view' %}')">Load View Inner HTML
-                </button>
+                VIEW RENDER TARGET DIV CONTENTS
             </p>
         </div>
+        <p class="text-center">
+            <button class="btn btn-outline-info px-2 py-0 mt-2"
+                    x-on:click="view_card.render_outer($refs.target_div)">Render View to Outer HTML
+            </button>
+        </p>
     </div>
 
 {% endblock %}

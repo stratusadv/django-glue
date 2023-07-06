@@ -1,37 +1,44 @@
-//Todo: Convert into a class object to stay consistent
-
-async function _glue_view_ajax_request(url, method = 'GET', headers = {}, body = {}) {
-    const request_options = {
-        method: method,
-        headers: {
-            ...headers,
-            'X-CSRFToken': glue_get_cookie('csrftoken'),
-        },
-        // body: JSON.stringify(body),
-    };
-
-    const response = await fetch(url, request_options);
-
-    if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+class GlueView {
+    constructor(url) {
+        this.url = url
     }
 
-    return response;
 
-}
+    async _render(method = 'GET', headers = {}) {
+        const request_options = {
+            method: method,
+            headers: {
+                ...headers,
+                'X-CSRFToken': glue_get_cookie('csrftoken'),
+            },
+        };
 
-function glue_load_view_inner(target_element, url) {
-    _glue_view_ajax_request(url).then((response) => {
-        return response.text()
-    }).then((html) => {
-        target_element.innerHTML = html
-    })
-}
+        const response = await fetch(this.url, request_options);
 
-function glue_load_view_outer(target_element, url) {
-    _glue_view_ajax_request(url).then((response) => {
-        return response.text()
-    }).then((html) => {
-        target_element.outerHTML = html
-    })
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+        }
+
+        return response;
+
+    }
+
+    render_inner(target_element) {
+        this._render().then((response) => {
+            return response.text()
+        }).then((html) => {
+            target_element.innerHTML = html
+        })
+
+    }
+
+    render_outer(target_element) {
+        this._render().then((response) => {
+            return response.text()
+        }).then((html) => {
+            target_element.outerHTML = html
+        })
+
+    }
+
 }

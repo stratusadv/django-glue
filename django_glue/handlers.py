@@ -39,9 +39,6 @@ class GlueDataRequestHandler:
 
             self.access = GlueAccess(self.context[self.unique_name]['access'])
 
-            if self.connection != GlueConnection.TEMPLATE:
-                self.model_class = self.meta_data.model_class
-
         else:
             self.is_valid_request = False
 
