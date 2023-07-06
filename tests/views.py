@@ -69,3 +69,9 @@ def benchmark_run_view(request):
 
 def ajax_view_view(request):
     return TemplateResponse(request, 'page/view_page.html')
+
+
+def template_view(request):
+    add_glue(request, 'button_1', 'element/button_element.html')
+
+    return TemplateResponse(request, 'page/template_page.html')

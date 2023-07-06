@@ -95,6 +95,25 @@ class GlueSession:
     def add_context(self, unique_name, context_data: GlueContextData) -> None:
         self.session['context'][unique_name] = context_data.to_dict()
 
+    def add_template(
+            self,
+            unique_name: str,
+            template,
+    ):
+
+        self.check_unique_name(unique_name)
+
+        self.add_context(unique_name, GlueContextData(
+            connection=GlueConnection('template'),
+            access=GlueAccess('view'),
+        ))
+
+        self.add_meta(unique_name, GlueMetaData(
+            template=template,
+        ))
+
+        self.set_modified()
+
     def add_meta(self, unique_name, meta_data: GlueMetaData) -> None:
         self.session['meta'][unique_name] = meta_data.to_dict()
 

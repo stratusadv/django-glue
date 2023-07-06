@@ -2,6 +2,7 @@ import logging, json
 
 from django_glue.services import GlueModelObjectService, GlueQuerySetService
 from django_glue.responses import generate_json_404_response
+from django_glue.services.templates import GlueTemplateService
 from django_glue.sessions import GlueSession
 from django_glue.data_classes import GlueMetaData, GlueBodyData
 from django_glue.enums import GlueConnection, GlueAccess
@@ -14,6 +15,9 @@ class GlueDataRequestHandler:
         self.is_valid_request = True
 
         if request.content_type == 'application/json':
+            logging.warning(request.body.decode('utf-8'))
+            self.body_data = GlueBodyData(request.body)
+        elif request.content_type == 'text/html':
             logging.warning(request.body.decode('utf-8'))
             self.body_data = GlueBodyData(request.body)
         else:
@@ -35,7 +39,8 @@ class GlueDataRequestHandler:
 
             self.access = GlueAccess(self.context[self.unique_name]['access'])
 
-            self.model_class = self.meta_data.model_class
+            if self.connection != GlueConnection.TEMPLATE:
+                self.model_class = self.meta_data.model_class
 
         else:
             self.is_valid_request = False
@@ -59,6 +64,14 @@ class GlueDataRequestHandler:
 
                 json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
                 return json_response_data.to_django_json_response()
+
+            elif self.connection == GlueConnection.TEMPLATE:
+                glue_template_service = GlueTemplateService(
+                    self.meta_data,
+                )
+
+                html_response_data = glue_template_service.process_body_data(self.access, self.body_data)
+                return html_response_data
 
             else:
                 return generate_json_404_response()

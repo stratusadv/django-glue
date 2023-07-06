@@ -4,7 +4,6 @@ class GlueModelObject {
         this.context_data = {
             fields: {}
         }
-        this.first_name = ''
     }
 
     generate_field_data() {

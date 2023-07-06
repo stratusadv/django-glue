@@ -1,8 +1,14 @@
-async function glue_ajax_request(unique_name, action, data = {}, method='QUERY') {
+async function glue_ajax_request(
+    unique_name,
+    action,
+    data = {},
+    content_type = 'application/json',
+    method = 'QUERY',
+) {
     const request_options = {
         method: method,
         headers: {
-            'Content-Type': 'application/json',
+            'Content-Type': content_type,
             'X-CSRFToken': glue_get_cookie('csrftoken'),
         },
         body: JSON.stringify({
@@ -18,6 +24,10 @@ async function glue_ajax_request(unique_name, action, data = {}, method='QUERY')
     }
 
     console.log(response)
-
-    return await response.json();
+    if(content_type === 'application/json') {
+        return response.json();
+    }
+    else {
+        return response;
+    }
 }
