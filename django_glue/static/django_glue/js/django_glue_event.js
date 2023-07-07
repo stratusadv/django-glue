@@ -13,6 +13,7 @@ class GlueEventDispatcher extends EventTarget {
     _notify(event_name = 'glue_event', detail_data = {}) {
         const event = new CustomEvent(event_name, { detail: detail_data });
         this.dispatchEvent(event);
+        console.log(event)
     }
 
     notify_response_message(detail_data) {

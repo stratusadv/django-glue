@@ -2,6 +2,7 @@ class GlueTemplate {
     constructor(unique_name, shared_context_data = {}) {
         this.unique_name = unique_name
         this.shared_context_data = shared_context_data
+        this.event_dispatcher = new GlueEventDispatcher()
     }
 
     //Todo: Make sure there is not change of injection attack and get understanding of context data in templates
@@ -15,6 +16,7 @@ class GlueTemplate {
             return response.text()
         }).then((html) => {
             target_element.innerHTML = html
+            this.event_dispatcher.notify_response_message({message: 'Hello From Render Inner'})
         })
 
     }
