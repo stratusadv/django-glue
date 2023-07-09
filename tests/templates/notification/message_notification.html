@@ -1,15 +1,7 @@
-<script type="application/javascript">
-    window.addEventListener(
-        "glue_response_message_event",
-        (e) => {
-            alert('JAVASCRIPT CAUGHT THIS!')
-        },
-        false,
-    );
-
-</script>
-
-<div x-data="{}" @glue_response_message_event="console.log('event happened')">
+<div x-data="{ logEvent: () => console.log('event happened') }" @glue-response-message-event.window="logEvent">
+    <div>
+        BLURGELLSLLS
+    </div>
     This is a message!!!
-    <button class="btn" @click="$dispatch('glue_response_message_event')">EVENT MAKER !!!</button>
+    <button class="btn" @click="$dispatch('glue-response-message-event'); console.log('hello from the dispatch');">EVENT MAKER !!!</button>
 </div>
