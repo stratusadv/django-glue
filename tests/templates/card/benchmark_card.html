@@ -3,13 +3,22 @@
 {% load django_glue %}
 
 {% block header %}
-    Benchmark
+    Server Side Benchmark
 {% endblock %}
 
 {% block body %}
     <div class="row">
         <div class="col-12">
-            <span >There should be testing to here to test speeds between no glue, little glue, more glue, and lots of glue</span>
+                <div class="row">
+                    <div class="col-6 fw-bold">Loading Test</div>
+                    <div class="col-6 fw-bold">Speed in Seconds</div>
+                </div>
+            {% for key, val in benchmarks.items %}
+                <div class="row">
+                    <div class="col-6">{{ key }}</div>
+                    <div class="col-6">{{ val|floatformat:4 }}</div>
+                </div>
+            {% endfor %}
         </div>
     </div>
 {% endblock %}

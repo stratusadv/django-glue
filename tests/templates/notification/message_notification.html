@@ -1,7 +1,66 @@
-<div x-data="{ logEvent: () => console.log('event happened') }" @glue-response-message-event.window="logEvent">
-    <div>
-        BLURGELLSLLS
-    </div>
-    This is a message!!!
-    <button class="btn" @click="$dispatch('glue-response-message-event'); console.log('hello from the dispatch');">EVENT MAKER !!!</button>
+<div
+        x-data="{
+        notifications: [],
+        add(e) {
+            console.log(e)
+            this.notifications.push({
+                status: e.detail.status,
+                status_text: e.detail.statusText,
+                time_stamp: e.timeStamp,
+            })
+        },
+        remove(notification) {
+            this.notifications = this.notifications.filter(i => i.id !== notification.id)
+        },
+    }"
+        @glue-response-event.window="add($event)"
+        class="d-flex flex-column justify-content-sm-start position-fixed bottom-0 end-0 p-3" style="max-width: 20rem;"
+>
+    <!-- Notification -->
+    <template x-for="notification in notifications" :key="notification.time_stamp">
+        <div
+                x-data="{
+                show: false,
+                init() {
+                    this.$nextTick(() => this.show = true)
+
+                    setTimeout(() => this.transitionOut(), 2000)
+                },
+                transitionOut() {
+                    this.show = false
+
+                    setTimeout(() => this.remove(this.notification), 500)
+                },
+            }"
+                x-show="show"
+                x-transition.duration.500ms
+                class="position-relative w-100 bg-white py-3 px-3 mt-2 shadow border rounded"
+                style="max-width: 30rem; border-color: #e5e7eb;"
+        >
+            <div class="flex items-start">
+                <!-- Icons -->
+                <div x-show="notification.status === 404" class="flex-shrink-0">
+                    <span aria-hidden="true"
+                          class="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-400 text-xl font-bold text-gray-400">!</span>
+                    <span class="sr-only">Information:</span>
+                </div>
+
+                <div x-show="notification.status === 200" class="flex-shrink-0">
+                    <span aria-hidden="true"
+                          class="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-green-600 text-lg font-bold text-green-600">&check;</span>
+                    <span class="sr-only">Success:</span>
+                </div>
+
+                <div x-show="notification.status === 500" class="flex-shrink-0">
+                    <span aria-hidden="true"
+                          class="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-red-600 text-lg font-bold text-red-600">&times;</span>
+                    <span class="sr-only">Error:</span>
+                </div>
+
+                <div class="ml-3 w-0 flex-1 pt-0.5">
+                    <span x-text="notification.status_text" class="text-sm font-medium leading-5 text-gray-900"></span>
+                </div>
+            </div>
+        </div>
+    </template>
 </div>

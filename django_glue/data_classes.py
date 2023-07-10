@@ -42,6 +42,7 @@ class GlueContextData:
         return asdict(self)
 
 
+
 @dataclass
 class GlueJsonData:
     fields: Optional[dict] = None

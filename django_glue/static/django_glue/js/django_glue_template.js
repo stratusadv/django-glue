@@ -13,16 +13,17 @@ class GlueTemplate {
 
     render_inner(target_element, context_data = {}) {
         this._render(context_data).then((response) => {
+            this.event_dispatcher.dispatch_response_event(response)
             return response.text()
         }).then((html) => {
             target_element.innerHTML = html
-            this.event_dispatcher.notify_response_message({message: 'Hello From Render Inner'})
         })
 
     }
 
     render_outer(target_element, context_data = {}) {
         this._render(context_data).then((response) => {
+            this.event_dispatcher.dispatch_response_event(response)
             return response.text()
         }).then((html) => {
             target_element.outerHTML = html

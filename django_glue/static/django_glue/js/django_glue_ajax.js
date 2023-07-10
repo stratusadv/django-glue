@@ -23,7 +23,6 @@ async function glue_ajax_request(
         throw new Error(`HTTP error ${response.status}`);
     }
 
-    console.log(response)
     if(content_type === 'application/json') {
         return response.json();
     }

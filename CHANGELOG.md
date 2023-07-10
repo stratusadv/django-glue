@@ -5,9 +5,11 @@
 #### Features
 - You can now glue templates by submitting a full template path as a string to add_glue function call.
 - You can now load views in your templates with GlueView.
+- Event system implement for responses.
 
 #### Changes
 - All validation moved to server side.
+- Base level of benchmarks complete test at roughly 1ms to run add_glue function.
 
 ## 0.3.0
 

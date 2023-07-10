@@ -55,13 +55,65 @@ class OtherView(TemplateView):
         return context_data
 
 
-def benchmark_run_view(request):
-    # this view should take an integer that determines how many glue connections to make.
-    pass
+def benchmark_view(request):
+    from time import time
+    import random
+    import string
+
+    benchmarks = {}
+
+    test_model_object = generate_randomized_test_model()
+
+    def generate_random_string(length):
+        return ''.join(random.choice(string.ascii_letters) for _ in range(length))
+
+    start = time()
+    stop = time()
+
+    benchmarks['No Glue'] = stop - start
+
+    random_strings = [generate_random_string(5) for _ in range(1)]
+
+    start = time()
+    for unique_name in random_strings:
+        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+    stop = time()
+
+    benchmarks['1 Glue'] = stop - start
+
+    random_strings = [generate_random_string(5) for _ in range(10)]
+
+    start = time()
+    for unique_name in random_strings:
+        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+    stop = time()
+
+    benchmarks['10 Glue'] = stop - start
+
+    random_strings = [generate_random_string(5) for _ in range(100)]
+
+    start = time()
+    for unique_name in random_strings:
+        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+    stop = time()
+
+    benchmarks['100 Glue'] = stop - start
+
+    random_strings = [generate_random_string(5) for _ in range(1000)]
+
+    start = time()
+    for unique_name in random_strings:
+        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+    stop = time()
+
+    benchmarks['1000 Glue'] = stop - start
+
+    return TemplateResponse(request, 'page/benchmark_page.html', {'benchmarks': benchmarks})
 
 
 def view_view(request):
     return TemplateResponse(request, 'page/view_page.html')
+
 
 def view_card_view(request):
     test_model_object = generate_randomized_test_model()

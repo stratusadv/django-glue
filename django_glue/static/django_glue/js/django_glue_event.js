@@ -8,15 +8,12 @@ class GlueEventDispatcher extends EventTarget {
         GlueEventDispatcher._instance = this;
     }
 
-    // Todo: does custom events have to use detail as JSON value?
-
-    _notify(event_name = 'glue-event', detail_data = {}) {
+    _dispatch_event(event_name = 'glue-event', detail_data = {}) {
         let event = new CustomEvent(event_name, { detail: detail_data });
         window.dispatchEvent(event);
-        console.log(event)
     }
 
-    notify_response_message(detail_data) {
-        this._notify('glue-response-message-event', detail_data)
+    dispatch_response_event(detail_data) {
+        this._dispatch_event('glue-response-event', detail_data)
     }
 }
