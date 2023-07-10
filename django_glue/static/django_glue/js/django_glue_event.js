@@ -13,7 +13,7 @@ class GlueEventDispatcher extends EventTarget {
         window.dispatchEvent(event);
     }
 
-    dispatch_response_event(detail_data) {
-        this._dispatch_event('glue-response-event', detail_data)
+    dispatch_response_event(response) {
+        this._dispatch_event('glue-response-event', response)
     }
 }

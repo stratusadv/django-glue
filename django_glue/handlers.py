@@ -14,10 +14,7 @@ class GlueDataRequestHandler:
 
         self.is_valid_request = True
 
-        if request.content_type == 'application/json':
-            logging.warning(request.body.decode('utf-8'))
-            self.body_data = GlueBodyData(request.body)
-        elif request.content_type == 'text/html':
+        if request.content_type == 'application/json' or request.content_type == 'text/html':
             logging.warning(request.body.decode('utf-8'))
             self.body_data = GlueBodyData(request.body)
         else:
