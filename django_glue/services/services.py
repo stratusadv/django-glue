@@ -26,24 +26,19 @@ class Service(ABC):
         else:
             return generate_json_404_response_data()
 
-
     @abstractmethod
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        return generate_json_404_response_data()
 
-    @abstractmethod
     def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        return generate_json_404_response_data()
 
-    @abstractmethod
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        return generate_json_404_response_data()
 
-    @abstractmethod
     def process_delete_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        return generate_json_404_response_data()
 
-    @abstractmethod
     def process_method_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        pass
+        return generate_json_404_response_data()
 

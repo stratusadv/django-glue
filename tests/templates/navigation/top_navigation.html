@@ -3,11 +3,21 @@
         {{ navigation_title }}
     </div>
 </div>
+
 <div class="row mb-3">
     <div class="col-12 mb-3 h5 text-center">
-        <a class="btn btn-outline-primary mx-2" href="{% url 'test_glue' %}">Test Glue</a>
-        <a class="btn btn-outline-primary mx-2" href="{% url 'other_glue' %}">Other Glue</a>
-        <a class="btn btn-outline-primary mx-2" href="{% url 'no_glue' %}">No Glue</a>
-        <a class="btn btn-outline-primary mx-2" href="{% url 'benchmark' %}">Benchmark</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'model_object' %}">Model Object</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'query_set' %}">Query Set</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'other_glue' %}">Other Glue</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'no_glue' %}">No Glue</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'benchmark' %}">Benchmark</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'template' %}">Template</a>
+        <a class="btn btn-outline-primary mx-2 mt-2" href="{% url 'view' %}">View</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12 mb-3 h5 text-center">
+        {% include 'notification/message_notification.html' %}
     </div>
 </div>

@@ -1,4 +1,4 @@
-class GlueResponse {
+class GlueMessage{
     constructor() {
     }
 }

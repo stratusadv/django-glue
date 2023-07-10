@@ -1,0 +1,29 @@
+{% extends 'base/base.html' %}
+
+{% load django_glue %}
+
+{% block base_content %}
+
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue View" %}
+
+    <div class="row g-3 p-3" x-data="{
+        view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+    }">
+        <p class="text-center mt-0">
+            <button class="btn btn-outline-info px-2"
+                    x-on:click="view_card.render_inner($refs.target_div)">Render View to Inner HTML
+            </button>
+        </p>
+        <div class="col-12 p-3 border border-success" x-ref="target_div">
+            <p class="text-center m-0">
+                VIEW RENDER TARGET DIV CONTENTS
+            </p>
+        </div>
+        <p class="text-center">
+            <button class="btn btn-outline-info px-2 mt-3"
+                    x-on:click="view_card.render_outer($refs.target_div)">Render View to Outer HTML
+            </button>
+        </p>
+    </div>
+
+{% endblock %}

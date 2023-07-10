@@ -1,5 +1,24 @@
 # Changelog for Django Glue
 
+## 0.4.1
+
+#### Features
+- Event system implement for responses.
+
+#### Changes
+
+#### Bugs
+
+## 0.4.0
+
+#### Features
+- You can now glue templates by submitting a full template path as a string to add_glue function call.
+- You can now use the experimental load views in your templates with GlueView.
+
+#### Changes
+- All validation moved to server side.
+- Base level of benchmarks complete test at roughly 1ms to run add_glue function.
+
 ## 0.3.0
 
 #### Features

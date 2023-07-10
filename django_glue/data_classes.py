@@ -34,12 +34,13 @@ class GlueBodyData:
 @dataclass
 class GlueContextData:
     connection: GlueConnection
-    access: GlueAccess
-    fields: dict[GlueModelFieldData]
-    methods: list[str]
+    access: GlueAccess = None
+    fields: dict[GlueModelFieldData] = None
+    methods: list[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
+
 
 
 @dataclass
@@ -89,10 +90,11 @@ class GlueModelFieldData:
 
 @dataclass
 class GlueMetaData:
-    app_label: str
-    model: str
+    app_label: str = None
+    model: str = None
     object_pk: int = None
     query_set_str: str = None
+    template: str = None
     fields: Union[list, tuple] = None
     exclude: Union[list, tuple] = None
     methods: Union[list, tuple] = None

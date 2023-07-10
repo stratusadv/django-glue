@@ -6,7 +6,10 @@
 
 {% block body %}
     <div x-data="{
-        test_model: new GlueModelObject('test_model_1', load_values=false)
+        async init() {
+            await this.test_model.get(false)
+        },
+        test_model: new GlueModelObject('test_model_1')
     }" class="row">
         <div class="col-12">
             <form>

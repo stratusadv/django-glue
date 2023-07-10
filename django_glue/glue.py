@@ -10,7 +10,7 @@ from django_glue.sessions import GlueSession, GlueKeepLiveSession
 def add_glue(
         request: HttpRequest,
         unique_name: str,
-        target: Union[Model, QuerySet],
+        target: Union[Model, QuerySet, str],
         access: str = 'view',
         fields: Union[list, tuple] = ('__all__',),
         exclude: Union[list, tuple] = ('__none__',),
@@ -24,6 +24,9 @@ def add_glue(
 
         elif isinstance(target, QuerySet):
             glue_session.add_query_set(unique_name, target, access, fields, exclude, methods)
+
+        elif isinstance(target, str):
+            glue_session.add_template(unique_name, target)
 
         else:
             raise f'target is not a valid type must be a django.db.models.Model or django.db.models.query.QuerySet'
