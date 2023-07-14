@@ -1,6 +1,7 @@
 class GlueModelObject {
     constructor(unique_name) {
         this.unique_name = unique_name
+        window.glue_keep_live.add_unique_name(unique_name)
         this.context_data = {
             fields: {}
         }

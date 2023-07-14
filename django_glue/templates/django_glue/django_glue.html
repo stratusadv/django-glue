@@ -5,17 +5,19 @@
 <!-- This is required to force a csrf_token to be used do not remove -->
 {% csrf_token %}
 
+<script type="application/javascript" src="{% static 'django_glue/js/django_glue_keep_live.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+
 <script type="application/javascript">
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_CONTEXT_DATA = JSON.parse('{% glue_context_data_str %}')
-    const DJANGO_GLUE_KEEP_LIVE = JSON.parse('{% glue_context_keep_live_str %}')
-    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}?keep_live_url_path={{ request.path|urlencode }}'
+    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
 
-    fetch(DJANGO_GLUE_KEEP_LIVE_URL)
+    window.glue_keep_live = new GlueKeepLive()
+
     setInterval(() => {
-        fetch(DJANGO_GLUE_KEEP_LIVE_URL)
-    }, {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
+        window.glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
+    }, 2000)
+
 </script>
 
 <script type="application/javascript" src="{% static 'django_glue/js/django_glue_csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
