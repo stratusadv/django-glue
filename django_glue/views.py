@@ -1,3 +1,5 @@
+import json
+
 from django.shortcuts import HttpResponse
 
 from django_glue.handlers import GlueDataRequestHandler
@@ -9,7 +11,9 @@ def glue_data_ajax_handler_view(request):
 
 
 def glue_keep_live_handler_view(request):
-    keep_live_url_path = request.GET.get('keep_live_url_path', None)
-    if keep_live_url_path:
-        GlueKeepLiveSession(request).update_url_path(keep_live_url_path)
+    data = json.loads(request.body.decode('utf-8'))
+    unique_names = data['unique_names']
+
+    GlueKeepLiveSession(request).update_unique_names(unique_names)
+
     return HttpResponse(status=204)

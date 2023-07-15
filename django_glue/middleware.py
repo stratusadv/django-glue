@@ -19,6 +19,6 @@ class GlueMiddleware(object):
             glue_session = GlueSession(request)
             glue_keep_live_session = GlueKeepLiveSession(request)
 
-            glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_name_set())
+            glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
 
         return None

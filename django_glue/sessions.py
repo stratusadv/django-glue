@@ -121,8 +121,8 @@ class GlueSession:
         if self.unique_name_unused(unique_name):
             self.purge_unique_name(unique_name)
 
-    def clean(self, removable_unique_name_set):
-        for unique_name in removable_unique_name_set:
+    def clean(self, removable_unique_names):
+        for unique_name in removable_unique_names:
             self.purge_unique_name(unique_name)
 
         self.set_modified()
@@ -153,45 +153,35 @@ class GlueKeepLiveSession:
     def __setitem__(self, key, value):
         self.session[key] = value
 
-    def clean_and_get_expired_unique_name_set(self) -> set:
-        expired_session_list = list()
-
-        expired_unique_name_set = set()
-        active_unique_name_set = set()
+    def clean_and_get_expired_unique_names(self) -> list:
+        expired_unique_names = []
 
         for key, val in self.session.items():
-            if time() > val['expire_time']:
-                expired_unique_name_set.update(val['unique_name_list'])
-                expired_session_list.append(key)
-            else:
-                active_unique_name_set.update(val['unique_name_list'])
+            if time() > val:
+                expired_unique_names.append(key)
 
-        for expired_session in expired_session_list:
-            self.session.pop(expired_session)
+        for expired_unique_name in expired_unique_names:
+            self.session.pop(expired_unique_name)
 
         self.set_modified()
 
-        return expired_unique_name_set.difference(active_unique_name_set)
+        return expired_unique_names
 
     @staticmethod
     def get_next_expire_time():
         return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS
 
     def set_unique_name(self, unique_name):
-
-        self.setdefault = self.session.setdefault(self.request.path, {'expire_time': self.get_next_expire_time(),
-                                                                      'unique_name_list': [], })
-
-        if unique_name not in self.session[self.request.path]['unique_name_list']:
-            self.session[self.request.path]['unique_name_list'].append(unique_name)
+        self.session.setdefault(unique_name, self.get_next_expire_time())
 
         self.set_modified()
 
     def set_modified(self):
         self.request.session.modified = True
 
-    def update_url_path(self, url_path):
-        if url_path in self.session:
-            self.session[url_path]['expire_time'] = self.get_next_expire_time()
+    def update_unique_names(self, unique_names: list):
+        for unique_name in unique_names:
+            if unique_name in self.session:
+                self.session[unique_name] = self.get_next_expire_time()
 
         self.set_modified()

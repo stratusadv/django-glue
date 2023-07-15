@@ -16,7 +16,7 @@ async function glue_ajax_request(
             'action': action,
             'data': data,
         }),
-    };
+    }
 
     const response = await fetch(DJANGO_GLUE_AJAX_URL, request_options);
     if (!response.ok) {
