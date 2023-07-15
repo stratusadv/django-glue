@@ -6,8 +6,8 @@
 - Event system implement for responses.
 
 #### Changes
-
-#### Bugs
+- Keep live system update to work with template and view loading.
+- Context removed from Javascript
 
 ## 0.4.0
 
