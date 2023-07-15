@@ -21,6 +21,7 @@ class GlueModelObject {
             'get'
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
             let simple_fields = response.data.simple_fields
             for (let key in simple_fields) {
                 if (load_value) {
@@ -48,6 +49,7 @@ class GlueModelObject {
             'update',
             data
         ).then((response) => {
+            glue_dispatch_response_event(response)
             console.log(response)
         })
     }
@@ -61,6 +63,7 @@ class GlueModelObject {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
             let model_object = new GlueModelObject(this.unique_name)
 
             let simple_fields = response.data.simple_fields
@@ -78,6 +81,7 @@ class GlueModelObject {
             'delete'
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
         })
     }
 
@@ -93,6 +97,7 @@ class GlueModelObject {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
             return response.data.method_return
         })
     }

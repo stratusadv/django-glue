@@ -14,6 +14,7 @@ class GlueQuerySet {
             .then((response) => {
                 model_object = new GlueModelObject(this.unique_name);
                 console.log(response)
+                glue_dispatch_response_event(response)
                 let simple_fields = response.data.simple_fields;
                 for (let key in simple_fields) {
                     model_object[key] = simple_fields[key];
@@ -30,6 +31,7 @@ class GlueQuerySet {
         return await glue_ajax_request(this.unique_name, 'get', {'all': true})
             .then((response) => {
                 console.log(response)
+                glue_dispatch_response_event(response)
                 for (let object in response.data) {
                     model_object = new GlueModelObject(this.unique_name);
 
@@ -61,6 +63,7 @@ class GlueQuerySet {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
         })
     }
 
@@ -71,6 +74,7 @@ class GlueQuerySet {
         return await glue_ajax_request(this.unique_name, 'get', {'filter_params': filter_params})
             .then((response) => {
                 console.log(response)
+                glue_dispatch_response_event(response)
                 for (let object in response.data) {
                     model_object = new GlueModelObject(this.unique_name);
 
@@ -98,6 +102,7 @@ class GlueQuerySet {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
             let model_object = new GlueModelObject(this.unique_name)
 
             let simple_fields = response.data.simple_fields
@@ -117,6 +122,7 @@ class GlueQuerySet {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
         })
     }
 
@@ -133,6 +139,7 @@ class GlueQuerySet {
             data
         ).then((response) => {
             console.log(response)
+            glue_dispatch_response_event(response)
             return response.data.method_return
         })
     }
