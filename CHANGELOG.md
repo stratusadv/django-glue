@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## 0.4.2
+
+### Changes
+- Functions for setting field values on model objects in JS
+- Bug fix to be able to update model objects from a query set
+
 ## 0.4.1
 
 #### Features

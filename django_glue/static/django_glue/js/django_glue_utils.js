@@ -1,4 +1,4 @@
-function debounce(func, wait) {
+function glue_debounce(func, wait) {
     let timeout;
     return function executedFunction(...args) {
         const later = () => {
