@@ -9,7 +9,7 @@
             x-data="{
             async init() {
                 this.test_models = await this.test_models_query.all()
-                const debounce_update = debounce((value) => value.update(), 750);
+                const debounce_update = glue_debounce((value) => value.update(), 750);
                 for (i = 0; i < this.test_models.length; i++) {
                     this.$watch(`test_models[${i}]`, value =>{
                         debounce_update(value)
