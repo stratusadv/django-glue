@@ -7,6 +7,7 @@ from tests import views
 urlpatterns = [
     path("", views.ModelObjectView.as_view(), name="model_object"),
     path("query_set/", views.QuerySetView.as_view(), name="query_set"),
+    path("query_set/list/", views.query_set_list_view, name="query_set_list"),
     path("other/", views.OtherView.as_view(), name="other_glue"),
     path("no_glue/", TemplateView.as_view(template_name='page/no_glue_page.html'), name="no_glue"),
     path("benchmark/", views.benchmark_view, name="benchmark"),
