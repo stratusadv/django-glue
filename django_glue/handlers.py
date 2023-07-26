@@ -24,9 +24,9 @@ class GlueDataRequestHandler:
 
         self.glue_session = GlueSession(request)
         self.context = self.glue_session['context']
+        self.method = request.method
 
         if self.unique_name in self.context:
-            self.method = request.method
 
             self.meta_data: GlueMetaData = GlueMetaData(
                 **self.glue_session['meta'][self.unique_name]

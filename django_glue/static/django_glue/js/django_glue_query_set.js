@@ -16,9 +16,9 @@ class GlueQuerySet {
                 console.log(response)
                 glue_dispatch_response_event(response)
                 let simple_fields = response.data.simple_fields;
-                for (let key in simple_fields) {
-                    model_object[key] = simple_fields[key];
-                }
+                model_object.set_fields(simple_fields)
+                model_object.set_attributes_from_simple_fields(simple_fields)
+
                 model_object_list.push(model_object)
                 return model_object_list
             });
@@ -36,14 +36,18 @@ class GlueQuerySet {
                     model_object = new GlueModelObject(this.unique_name);
 
                     let simple_fields = response.data[object].simple_fields;
-                    for (let key in simple_fields) {
-                        model_object[key] = simple_fields[key];
-                    }
+                    model_object.set_fields(simple_fields)
+                    model_object.set_attributes_from_simple_fields(simple_fields)
                     model_object_list.push(model_object)
                 }
 
                 return model_object_list
             });
+    }
+
+    async debounce_update(query_model_object, field = null, wait = 500) {
+        const debouncedFunc = debounce(() => this.update(query_model_object, field), wait);
+        debouncedFunc();
     }
 
     update(query_model_object, field = null) {
@@ -56,7 +60,6 @@ class GlueQuerySet {
                 data[key] = query_model_object[key]
             }
         }
-
         glue_ajax_request(
             this.unique_name,
             'update',
@@ -79,9 +82,9 @@ class GlueQuerySet {
                     model_object = new GlueModelObject(this.unique_name);
 
                     let simple_fields = response.data[object].simple_fields;
-                    for (let key in simple_fields) {
-                        model_object[key] = simple_fields[key];
-                    }
+                    model_object.set_fields(simple_fields)
+                    model_object.set_attributes_from_simple_fields(simple_fields)
+
                     model_object_list.push(model_object)
                 }
 
@@ -106,9 +109,9 @@ class GlueQuerySet {
             let model_object = new GlueModelObject(this.unique_name)
 
             let simple_fields = response.data.simple_fields
-            for (let key in simple_fields) {
-                model_object[key] = simple_fields[key]
-            }
+            model_object.set_fields(simple_fields)
+            model_object.set_attributes_from_simple_fields(simple_fields)
+
             return model_object
         })
 

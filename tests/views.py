@@ -39,6 +39,14 @@ class QuerySetView(TemplateView):
         return context_data
 
 
+def query_set_list_view(request):
+    add_glue(request, 'test_query_1', TestModel.objects.all(), 'delete')
+    return TemplateResponse(
+        request,
+        template='page/query_set_list_page.html'
+    )
+
+
 class OtherView(TemplateView):
     template_name = 'page/other_glue_page.html'
     def get_context_data(self, **kwargs):
