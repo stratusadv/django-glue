@@ -2,6 +2,8 @@ class GlueModelObject {
     constructor(unique_name) {
         this.unique_name = unique_name
         window.glue_keep_live.add_unique_name(unique_name)
+        // Todo: Rename this to glue context data?
+        // Todo: This needs to be unique. Potential of overriding it with django model fields.
         this.context_data = {
             fields: {}
         }

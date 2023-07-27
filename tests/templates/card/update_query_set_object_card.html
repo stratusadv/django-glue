@@ -1,0 +1,19 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+	Update QuerySet Object
+{% endblock %}
+
+{% block body %}
+    <div
+        x-data="{
+            init(){
+
+            },
+            query_set: new GlueQuerySet('test_query_1'),
+            model_object: {},
+        }"
+        class="">
+
+    </div>
+{% endblock %}

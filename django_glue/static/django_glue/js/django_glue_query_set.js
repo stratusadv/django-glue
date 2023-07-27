@@ -8,6 +8,7 @@ class GlueQuerySet {
     }
 
     async get(id) {
+        // Get on a queryset returns a single object
         let model_object_list = []
         let model_object = null
         return await glue_ajax_request(this.unique_name, 'get', {'id': id})
@@ -20,7 +21,7 @@ class GlueQuerySet {
                 model_object.set_attributes_from_simple_fields(simple_fields)
 
                 model_object_list.push(model_object)
-                return model_object_list
+                return model_object
             });
     }
 
