@@ -1,0 +1,23 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+	Create Object from QuerySet
+{% endblock %}
+
+{% block body %}
+    <div
+        x-data="{
+            init(){
+                console.log(this.query)
+            },
+            query: new GlueQuerySet('test_query_1')
+
+        }"
+        class="row"
+    >
+        <div class="col">
+            <label for="first_name">First Name</label>
+            <input id="first_name" type="text">
+        </div>
+    </div>
+{% endblock %}
