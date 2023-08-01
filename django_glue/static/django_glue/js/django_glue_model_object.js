@@ -1,37 +1,31 @@
 class GlueModelObject {
     constructor(unique_name) {
-        this.unique_name = unique_name
-        window.glue_keep_live.add_unique_name(unique_name)
-        // Todo: Rename this to glue context data?
-        // Todo: This needs to be unique. Potential of overriding it with django model fields.
-        this.context_data = {
-            fields: {}
+        this.glue_unique_name = unique_name
+
+        console.log(window.glue_session_data)
+
+        for (let key in window.glue_session_data['context'][unique_name].fields) {
+            this[key] = null
         }
+
+        window.glue_keep_live.add_unique_name(unique_name)
     }
 
     async create() {
-        let data = this.generate_field_data()
-
         return await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'create',
-            data
+            this.get_properties()
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-            let model_object = new GlueModelObject(this.unique_name)
-
-            let simple_fields = response.data.simple_fields
-            model_object.set_fields(simple_fields)
-            model_object.set_attributes_from_simple_fields(simple_fields)
-            return model_object
+            return this
         })
-
     }
 
     delete() {
         glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'delete'
         ).then((response) => {
             console.log(response)
@@ -39,17 +33,9 @@ class GlueModelObject {
         })
     }
 
-    generate_field_data() {
-        let data = {}
-        for (let key in this.context_data.fields) {
-            data[key] = this[key]
-        }
-        return data
-    }
-
     async get(load_value = true) {
         await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'get'
         ).then((response) => {
             console.log(response)
@@ -68,7 +54,7 @@ class GlueModelObject {
         }
 
         return await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'method',
             data
         ).then((response) => {
@@ -104,13 +90,30 @@ class GlueModelObject {
         }
 
         await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'update',
             data
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)
         })
+    }
+
+    get_properties() {
+        let properties = {}
+        Object.entries(this).forEach(([key, value]) => {
+            if (!key.startsWith('glue')) {
+                data[key] = value
+            }
+        });
+        console.log(properties)
+        return properties
+    }
+
+    set_properties(properties) {
+        for (let key in properties) {
+            this[key] = properties[key]
+        }
     }
 
 }

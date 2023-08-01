@@ -10,7 +10,10 @@
             init(){
                 console.log(this.query)
             },
-            query: new GlueQuerySet('test_query_1')
+            query: new GlueQuerySet('test_query_1'),
+            test() {
+                console.log(window.glue_session_data)
+            }
 
         }"
         class="row"
@@ -18,6 +21,9 @@
         <div class="col">
             <label for="first_name">First Name</label>
             <input id="first_name" type="text">
+        </div>
+        <div class="col">
+            <button @click="test()" class="btn btn-primary">Test!</button>
         </div>
     </div>
 {% endblock %}

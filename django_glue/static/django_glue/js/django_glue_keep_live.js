@@ -22,6 +22,7 @@ class GlueKeepLive {
             }),
         }
         const response = await fetch(keep_live_url, request_options)
+        window.glue_session_data = await response.json()
     }
 }
 
