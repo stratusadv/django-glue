@@ -7,23 +7,33 @@
 {% block body %}
     <div
         x-data="{
-            init(){
-                console.log(this.query)
-            },
+            // Todo: Create model object from queryset and then send to create?
             query: new GlueQuerySet('test_query_1'),
-            test() {
-                console.log(window.glue_session_data)
-            }
+            new_model_object: new GlueModelObject('test_query_1')
 
         }"
         class="row"
     >
-        <div class="col">
-            <label for="first_name">First Name</label>
-            <input id="first_name" type="text">
-        </div>
-        <div class="col">
-            <button @click="test()" class="btn btn-primary">Test!</button>
+        <div class="col-12">
+            <form>
+                <label for="first_name">First Name</label>
+                <input x-model="new_model_object.first_name" id="first_name" type="text" class="form-control mb-2">
+                <label for="last_name">Last Name</label>
+                <input x-model="new_model_object.last_name" id="last_name" type="text" class="form-control mb-2">
+                <label for="description">Description</label>
+                <textarea x-model="new_model_object.description" id="description" class="form-control mb-2"></textarea>
+                <label for="favorite_number">Favorite Number</label>
+                <input x-model="new_model_object.favorite_number" id="favorite_number" type="text" class="form-control mb-2">
+                <label for="weight_lbs">Weight (lbs)</label>
+                <input x-model="new_model_object.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
+                <label for="weight_lbs">Birth Date</label>
+                <input x-model="new_model_object.birth_date" id="weight_lbs" type="date" class="form-control mb-2">
+            </form>
+            <span x-text="new_model_object.first_name"></span>
+            <button @click="await new_model_object.create()" class="btn btn-outline-success px-2 py-0 mt-2 float-end">
+                Create
+            </button>
+
         </div>
     </div>
 {% endblock %}
