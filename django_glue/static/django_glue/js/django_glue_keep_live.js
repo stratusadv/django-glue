@@ -1,6 +1,7 @@
 class GlueKeepLive {
     constructor() {
         window.glue_keep_live_unique_names = []
+        window.glue_session_data = {}
     }
 
     add_unique_name(unique_name) {
@@ -9,7 +10,7 @@ class GlueKeepLive {
         }
     }
 
-    update(keep_live_url) {
+    async update(keep_live_url) {
         const request_options = {
             method: 'QUERY',
             headers: {
@@ -20,8 +21,8 @@ class GlueKeepLive {
                 'unique_names': window.glue_keep_live_unique_names,
             }),
         }
-        const response = fetch(keep_live_url, request_options)
+        const response = await fetch(keep_live_url, request_options)
+        window.glue_session_data = await response.json()
     }
-
 }
 
