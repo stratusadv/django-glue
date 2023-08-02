@@ -3,8 +3,9 @@
 ## 0.4.2
 
 ### Changes
-- Functions for setting field values on model objects in JS
-- Bug fix to be able to update model objects from a query set
+- Context data to construct model object fields in js
+- Session data updated inside of keep live ajax
+- Cleaning js functions (more needed)
 
 ## 0.4.1
 

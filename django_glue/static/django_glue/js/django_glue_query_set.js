@@ -1,26 +1,24 @@
 class GlueQuerySet {
     constructor(unique_name) {
-        window.glue_keep_live.add_unique_name(unique_name)
-        this.unique_name = unique_name
-        this.glue_context_data = {
-            unique_name: unique_name,
-            fields: []
+        this.glue_unique_name = unique_name
+
+        for (let key in window.glue_session_data['context'][unique_name].fields) {
+            this[key] = null
         }
+
+        window.glue_keep_live.add_unique_name(unique_name)
     }
 
     async all() {
         let model_object_list = []
 
-        return await glue_ajax_request(this.unique_name, 'get', {'all': true})
+        return await glue_ajax_request(this.glue_unique_name, 'get', {'all': true})
             .then((response) => {
                 console.log(response)
                 glue_dispatch_response_event(response)
                 for (let object in response.data) {
-                    let model_object = new GlueModelObject(this.unique_name);
-                    let simple_fields = response.data[object].simple_fields;
-
-                    model_object.set_fields(simple_fields)
-                    model_object.set_attributes_from_simple_fields(simple_fields)
+                    let model_object = new GlueModelObject(this.glue_unique_name);
+                    model_object.set_properties(response.data[object].simple_fields)
                     model_object_list.push(model_object)
                 }
 
@@ -36,37 +34,24 @@ class GlueQuerySet {
 
     }
 
-    async create(query_model_object) {
-        // Todo: Create should just take fields and not a model object.
-        let data = {}
-
-        for (let key in query_model_object.context_data.fields) {
-            data[key] = query_model_object[key]
-        }
-
+    async create(model_object) {
+        // Todo: Should this be a model object or should it just be data?
         return await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'create',
-            data
+            model_object.get_properties()
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-            let model_object = new GlueModelObject(this.unique_name)
-
-            let simple_fields = response.data.simple_fields
-            model_object.set_fields(simple_fields)
-            model_object.set_attributes_from_simple_fields(simple_fields)
-
             return model_object
         })
     }
 
     delete(id) {
-        let data = {'id': id}
         glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'delete',
-            data
+            {'id': id}
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
@@ -76,16 +61,13 @@ class GlueQuerySet {
     async filter(filter_params) {
         let model_object_list = []
 
-        return await glue_ajax_request(this.unique_name, 'get', {'filter_params': filter_params})
+        return await glue_ajax_request(this.glue_unique_name, 'get', {'filter_params': filter_params})
             .then((response) => {
                 console.log(response)
                 glue_dispatch_response_event(response)
                 for (let object in response.data) {
-                    let model_object = new GlueModelObject(this.unique_name);
-                    let simple_fields = response.data[object].simple_fields;
-                    model_object.set_fields(simple_fields)
-                    model_object.set_attributes_from_simple_fields(simple_fields)
-
+                    let model_object = new GlueModelObject(this.glue_unique_name);
+                    model_object.set_properties(response.data[object].simple_fields)
                     model_object_list.push(model_object)
                 }
 
@@ -95,14 +77,12 @@ class GlueQuerySet {
 
     async get(id) {
         let model_object = null
-        return await glue_ajax_request(this.unique_name, 'get', {'id': id})
+        return await glue_ajax_request(this.glue_unique_name, 'get', {'id': id})
             .then((response) => {
-                model_object = new GlueModelObject(this.unique_name);
                 console.log(response)
                 glue_dispatch_response_event(response)
-                let simple_fields = response.data.simple_fields;
-                model_object.set_fields(simple_fields)
-                model_object.set_attributes_from_simple_fields(simple_fields)
+                model_object = new GlueModelObject(this.glue_unique_name);
+                model_object.set_properties(response.data.simple_fields)
                 return model_object
             });
     }
@@ -116,7 +96,7 @@ class GlueQuerySet {
         }
 
         return await glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'method',
             data
         ).then((response) => {
@@ -127,7 +107,6 @@ class GlueQuerySet {
     }
 
     update(query_model_object, field = null) {
-        // Todo: How does this work? Is this a bulk update?
         // Todo: Update on queryset should take fields and update all the objects fields to that value.
         // Todo: Should only be able to update fields on the main table.
         // Todo: Be aware that it does not call the save method.
@@ -142,7 +121,7 @@ class GlueQuerySet {
             }
         }
         glue_ajax_request(
-            this.unique_name,
+            this.glue_unique_name,
             'update',
             data
         ).then((response) => {

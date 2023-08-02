@@ -8,7 +8,7 @@
     <div
         x-data="{
             async init(){
-                this.model_object = await this.query_set.get(159);
+                this.model_object = await this.query_set.get({{ model_object_id }});
                 const debounce_update = glue_debounce(value => value.update(), 750);
                 this.$watch('model_object', (value) => {
                     debounce_update(value)

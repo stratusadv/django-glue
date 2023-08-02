@@ -37,8 +37,6 @@ class GlueModelObjectService(Service):
             self.meta_data.exclude,
         )
 
-        # json_data.simple_fields['first_name'] = 'Humbugery'
-
         return generate_json_200_response_data(
             'THE GET ACTION',
             'this is a response from an model object get action!!! stay tuned!',

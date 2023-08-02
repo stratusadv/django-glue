@@ -2,8 +2,6 @@ class GlueModelObject {
     constructor(unique_name) {
         this.glue_unique_name = unique_name
 
-        console.log(window.glue_session_data)
-
         for (let key in window.glue_session_data['context'][unique_name].fields) {
             this[key] = null
         }
@@ -33,17 +31,14 @@ class GlueModelObject {
         })
     }
 
-    async get(load_value = true) {
+    async get() {
         await glue_ajax_request(
             this.glue_unique_name,
             'get'
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-
-            let simple_fields = response.data.simple_fields
-            this.set_fields(simple_fields)
-            this.set_attributes_from_simple_fields(simple_fields, load_value)
+            this.set_properties(response.data.simple_fields)
         })
     }
 
@@ -64,35 +59,11 @@ class GlueModelObject {
         })
     }
 
-    set_fields(simple_fields) {
-        for (let key in simple_fields) {
-            this.context_data.fields[key] = simple_fields[key]
-        }
-    }
-
-    set_attributes_from_simple_fields(simple_fields, load_value = true) {
-        for (let key in simple_fields) {
-            if (load_value) {
-                this[key] = simple_fields[key]
-            } else {
-                this[key] = null
-            }
-        }
-    }
-
     async update(field = null) {
-        let data = {}
-
-        if (field) {
-            data[field] = this[field]
-        } else {
-            data = this.generate_field_data()
-        }
-
         await glue_ajax_request(
             this.glue_unique_name,
             'update',
-            data
+            this.get_properties()
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)
@@ -103,10 +74,9 @@ class GlueModelObject {
         let properties = {}
         Object.entries(this).forEach(([key, value]) => {
             if (!key.startsWith('glue')) {
-                data[key] = value
+                properties[key] = value
             }
         });
-        console.log(properties)
         return properties
     }
 
