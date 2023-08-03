@@ -1,5 +1,5 @@
 from django.db import models
-from django.utils.timezone import now
+from django.utils.timezone import now, localdate
 
 from django_glue.data_classes import GlueJsonResponseData
 
@@ -10,7 +10,7 @@ class TestModel(models.Model):
     description = models.TextField()
     favorite_number = models.IntegerField()
     anniversary_datetime = models.DateTimeField(default=now)
-    birth_date = models.DateField(default=now)
+    birth_date = models.DateField(default=localdate)
     weight_lbs = models.DecimalField(max_digits=7, decimal_places=3)
 
     def __str__(self):

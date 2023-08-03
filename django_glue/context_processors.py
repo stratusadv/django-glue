@@ -6,7 +6,6 @@ from django_glue.sessions import GlueSession
 
 
 def glue(request):
-    print(json.dumps(GlueSession(request).session))
     return {
         'DJANGO_GLUE_VERSION': __version__,
         settings.DJANGO_GLUE_CONTEXT_NAME: request.session.get(settings.DJANGO_GLUE_SESSION_NAME, {}).get('context'),

@@ -3,7 +3,7 @@ class GlueQuerySet {
         this.glue_unique_name = unique_name
 
         for (let key in window.glue_session_data['context'][unique_name].fields) {
-            this[key] = null
+            this[key] = window.glue_session_data['context'][unique_name].fields[key].value
         }
 
         window.glue_keep_live.add_unique_name(unique_name)
