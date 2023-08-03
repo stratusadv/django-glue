@@ -1,7 +1,6 @@
 from django.db import models
 from django.utils.timezone import now, localdate
 
-from django_glue.data_classes import GlueJsonResponseData
 
 
 class TestModel(models.Model):
@@ -37,6 +36,7 @@ class BigTestModel(models.Model):
     email_field = models.EmailField()
     file_path_field = models.FilePathField(path='/static')
     float_field = models.FloatField()
+    foreign_key = models.ForeignKey(TestModel, on_delete=models.CASCADE)
     generic_ip_address_field = models.GenericIPAddressField()
     ip_address_field = models.GenericIPAddressField()
     integer_field = models.IntegerField()

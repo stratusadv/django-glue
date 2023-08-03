@@ -1,0 +1,20 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+	Big Object
+{% endblock %}
+
+{% block body %}
+	<div
+        x-data="{
+            async init() {
+                this.big_model = await new GlueModelObject('big_model').get()
+                console.log(big_model)
+            },
+            big_model: {},
+        }"
+    >
+        <label for="Foreign Key"></label>
+        <input x-model="big_model.foreign_key" id="Foreign Key" type="text">
+    </div>
+{% endblock %}

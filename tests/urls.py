@@ -6,6 +6,7 @@ from tests import views
 
 urlpatterns = [
     path("", views.ModelObjectView.as_view(), name="model_object"),
+    path("big_model", views.big_model_object_view, name="big_model"),
     path("query_set/", views.QuerySetView.as_view(), name="query_set"),
     path("query_set/list/", views.query_set_list_view, name="query_set_list"),
     path("other/", views.OtherView.as_view(), name="other_glue"),
