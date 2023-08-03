@@ -1,5 +1,10 @@
 # Changelog for Django Glue
 
+## 0.4.2.1
+
+### Changes
+- Model default values now work with glue.
+
 ## 0.4.2
 
 ### Changes
