@@ -8,13 +8,13 @@
 	<div
         x-data="{
             async init() {
-                this.big_model = await new GlueModelObject('big_model').get()
-                console.log(big_model)
+                await this.big_model.get()
+                console.log(this.big_model)
             },
-            big_model: {},
+            big_model: new GlueModelObject('big_model')
         }"
     >
-        <label for="Foreign Key"></label>
-        <input x-model="big_model.foreign_key" id="Foreign Key" type="text">
+        <label for="Foreign Key">Foreign Key</label>
+        <input @keyup.debounce.500ms="big_model.update()" x-model="big_model.foreign_key_id" id="Foreign Key" type="text">
     </div>
 {% endblock %}

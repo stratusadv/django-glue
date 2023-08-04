@@ -8,67 +8,49 @@ from django_glue.data_classes import GlueMetaData, GlueBodyData
 from django_glue.enums import GlueConnection, GlueAccess
 
 
-class GlueDataRequestHandler:
-    def __init__(self, request):
-        self.request = request
+class GlueRequestHandler:
+    """
+        This class parses the request, determines the type of request, and then calls the appropriate service.
+    """
+    def __init__(self, glue_session: GlueSession, glue_body_data: GlueBodyData):
+        self.glue_session = glue_session
+        self.glue_body_data = glue_body_data
 
-        self.is_valid_request = True
-
-        if request.content_type == 'application/json' or request.content_type == 'text/html':
-            logging.warning(request.body.decode('utf-8'))
-            self.body_data = GlueBodyData(request.body)
-        else:
-            self.is_valid_request = False
-
-        self.unique_name = self.body_data['unique_name']
-
-        self.glue_session = GlueSession(request)
+        self.unique_name = self.glue_body_data['unique_name']
         self.context = self.glue_session['context']
-        self.method = request.method
 
-        if self.unique_name in self.context:
+        self.meta_data: GlueMetaData = GlueMetaData(
+            **self.glue_session['meta'][self.unique_name]
+        )
 
-            self.meta_data: GlueMetaData = GlueMetaData(
-                **self.glue_session['meta'][self.unique_name]
-            )
-
-            self.connection = GlueConnection(self.context[self.unique_name]['connection'])
-
-            self.access = GlueAccess(self.context[self.unique_name]['access'])
-
-        else:
-            self.is_valid_request = False
-
-        logging.warning(f'{self.is_valid_request = }')
+        self.connection = GlueConnection(self.context[self.unique_name]['connection'])
+        self.access = GlueAccess(self.context[self.unique_name]['access'])
 
     def process_response(self):
-        if self.method == 'QUERY' and self.is_valid_request:
-            if self.connection == GlueConnection.MODEL_OBJECT:
-                glue_model_object_service = GlueModelObjectService(
-                    self.meta_data,
-                )
 
-                json_response_data = glue_model_object_service.process_body_data(self.access, self.body_data)
-                return json_response_data.to_django_json_response()
+        if self.connection == GlueConnection.MODEL_OBJECT:
+            glue_model_object_service = GlueModelObjectService(
+                self.meta_data,
+            )
 
-            elif self.connection == GlueConnection.QUERY_SET:
-                glue_query_set_service = GlueQuerySetService(
-                    self.meta_data,
-                )
+            json_response_data = glue_model_object_service.process_body_data(self.access, self.glue_body_data)
+            return json_response_data.to_django_json_response()
 
-                json_response_data = glue_query_set_service.process_body_data(self.access, self.body_data)
-                return json_response_data.to_django_json_response()
+        elif self.connection == GlueConnection.QUERY_SET:
+            glue_query_set_service = GlueQuerySetService(
+                self.meta_data,
+            )
 
-            elif self.connection == GlueConnection.TEMPLATE:
-                glue_template_service = GlueTemplateService(
-                    self.meta_data,
-                )
+            json_response_data = glue_query_set_service.process_body_data(self.access, self.glue_body_data)
+            return json_response_data.to_django_json_response()
 
-                html_response_data = glue_template_service.process_body_data(self.access, self.body_data)
-                return html_response_data
+        elif self.connection == GlueConnection.TEMPLATE:
+            glue_template_service = GlueTemplateService(
+                self.meta_data,
+            )
 
-            else:
-                return generate_json_404_response()
+            html_response_data = glue_template_service.process_body_data(self.access, self.glue_body_data)
+            return html_response_data
 
         else:
             return generate_json_404_response()

@@ -89,6 +89,10 @@ class GlueModelFieldData:
 
 @dataclass
 class GlueMetaData:
+    """
+        # Todo: Should this handle both queryset and models? Should this be split into two classes?
+        This class is used to store meta data about the model or query set.
+    """
     app_label: str = None
     model: str = None
     object_pk: int = None

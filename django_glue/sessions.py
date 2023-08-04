@@ -14,6 +14,10 @@ GLUE_SESSION_TYPES = (
 
 
 class GlueSession:
+    """
+        Used to add models, query sets, and other objects to the session.
+        Todo: What is context?
+    """
     def __init__(self, request):
         self.request = request
 
@@ -127,6 +131,9 @@ class GlueSession:
 
         self.set_modified()
 
+    def has_unique_name(self, unique_name):
+        return unique_name in self.session['context']
+
     def purge_unique_name(self, unique_name):
         for session_type in GLUE_SESSION_TYPES:
             if unique_name in self.session[session_type]:
@@ -136,13 +143,15 @@ class GlueSession:
         self.request.session.modified = True
 
     def unique_name_unused(self, unique_name):
-        if unique_name in self.session['context']:
-            return False
-        else:
-            return True
+        return unique_name in self.session['context']
+
 
 
 class GlueKeepLiveSession:
+    """
+        Used to keep glue session data live for a set amount of time.
+        Functionality to handle multiple windows/tabs.
+    """
     def __init__(self, request):
         self.request = request
         self.session = request.session.setdefault(settings.DJANGO_GLUE_KEEP_LIVE_SESSION_NAME, dict())

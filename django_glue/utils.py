@@ -1,8 +1,9 @@
 import inspect
 import logging, pickle, base64, json
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 
 from django.core import exceptions
+from django.db.models import Model
 
 from django_glue.core.utils import serialize_object_to_json
 from django_glue.data_classes import GlueModelFieldData
@@ -33,7 +34,7 @@ def generate_field_attr_dict(field):
     return form_field.widget_attrs(form_field.widget)
 
 
-def generate_field_dict(model_object, fields, exclude):
+def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Union[list, tuple]):
     fields_dict = dict()
 
     model = type(model_object)
@@ -50,7 +51,13 @@ def generate_field_dict(model_object, fields, exclude):
                         field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
-                    fields_dict[field.name] = GlueModelFieldData(
+                    # Todo: Field name logic is duplicated
+                    if field.attname == 'foreign_key_id':
+                        field_name = field.name + '_id'
+                    else:
+                        field_name = field.name
+
+                    fields_dict[field_name] = GlueModelFieldData(
                         type=field.get_internal_type(),
                         value=field_value,
                         html_attr=field_attr,
@@ -87,8 +94,17 @@ def generate_simple_field_dict(model_object, fields, exclude):
     return simple_fields_dict
 
 
-def get_fields_from_model(model):
-    return [field for field in model._meta.fields]
+# Todo: Field name logic is duplicated
+def get_field_names_from_model(model) -> list:
+    field_names = []
+
+    for field in model._meta.fields:
+        if field.attname == 'foreign_key_id':
+            field_names.append(field.name + '_id')
+        else:
+            field_names.append(field.name)
+
+    return field_names
 
 
 def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
