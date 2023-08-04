@@ -21,8 +21,7 @@ class GlueKeepLive {
                 'unique_names': window.glue_keep_live_unique_names,
             }),
         }
-        const response = await fetch(keep_live_url, request_options)
-        window.glue_session_data = await response.json()
+        await fetch(keep_live_url, request_options)
     }
 }
 

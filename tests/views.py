@@ -3,9 +3,15 @@ import logging
 from django.template.response import TemplateResponse
 from django.views.generic import TemplateView
 
-from tests.models import TestModel
+from tests.models import TestModel, BigTestModel
 from tests.utils import generate_randomized_test_model, generate_big_test_model
 from django_glue.glue import add_glue
+
+
+def big_model_object_view(request):
+    big_model = BigTestModel.objects.first()
+    add_glue(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
+    return TemplateResponse(request, template='page/big_model_object_page.html')
 
 
 class ModelObjectView(TemplateView):

@@ -1,13 +1,14 @@
 class GlueModelObject {
-    constructor(unique_name) {
-        this.glue_unique_name = unique_name
+    constructor(glue_unique_name) {
+        // Needs to be named glue_unique_name to avoid overriding the unique_name property
+        this.glue_unique_name = glue_unique_name
 
-        for (let key in window.glue_session_data['context'][unique_name].fields) {
-            this[key] = window.glue_session_data['context'][unique_name].fields[key].value
+        for (let key in window.glue_session_data['context'][glue_unique_name].fields) {
+            this[key] = window.glue_session_data['context'][glue_unique_name].fields[key].value
             console.log(key, this[key])
         }
 
-        window.glue_keep_live.add_unique_name(unique_name)
+        window.glue_keep_live.add_unique_name(glue_unique_name)
     }
 
     async create() {
@@ -74,9 +75,7 @@ class GlueModelObject {
     get_properties() {
         let properties = {}
         Object.entries(this).forEach(([key, value]) => {
-            if (!key.startsWith('glue')) {
-                properties[key] = value
-            }
+            properties[key] = value
         });
         return properties
     }

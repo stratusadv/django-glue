@@ -121,6 +121,7 @@ def generate_big_test_model(limit=5):
         duration_field=datetime.timedelta(days=1, minutes=60),
         email_field='me@here.com',
         file_path_field='static.css',
+        foreign_key=TestModel.objects.first(),
         float_field=88.19,
         generic_ip_address_field='127.0.01',
         ip_address_field='0.0.0.0',

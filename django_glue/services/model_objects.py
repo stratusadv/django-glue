@@ -1,4 +1,3 @@
-import inspect
 from typing import Optional
 
 from django.contrib.contenttypes.models import ContentType
@@ -7,8 +6,8 @@ from django.db.models import Model
 from django_glue.data_classes import GlueJsonResponseData, GlueJsonData, GlueBodyData, GlueMetaData
 from django_glue.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.services.services import Service
-from django_glue.utils import generate_simple_field_dict, get_fields_from_model, check_valid_method_kwargs, \
-    type_set_method_kwargs, field_name_included
+from django_glue.utils import generate_simple_field_dict, get_field_names_from_model, check_valid_method_kwargs, \
+    type_set_method_kwargs, generate_field_dict
 
 
 class GlueModelObjectService(Service):
@@ -48,9 +47,10 @@ class GlueModelObjectService(Service):
 
         model_object = self.model_class()
 
-        for field in get_fields_from_model(model_object):
-            if field.name in body_data['data'] and field.name != 'id':
-                model_object.__dict__[field.name] = body_data['data'][field.name]
+        # Todo: This is duplicated code
+        for field_name in get_field_names_from_model(model_object):
+            if field_name in body_data['data'] and field_name != 'id':
+                model_object.__dict__[field_name] = body_data['data'][field_name]
 
         model_object.save()
 
@@ -71,9 +71,9 @@ class GlueModelObjectService(Service):
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         self.load_object()
 
-        for field in get_fields_from_model(self.object):
-            if field.name in body_data['data'] and field.name != 'id' and field_name_included(field.name, self.meta_data.fields, self.meta_data.exclude):
-                self.object.__dict__[field.name] = body_data['data'][field.name]
+        field_dict = generate_field_dict(self.object, self.meta_data.fields, self.meta_data.exclude)
+        for field_name in field_dict.keys():
+            self.object.__dict__[field_name] = body_data['data'][field_name]
 
         self.object.save()
 

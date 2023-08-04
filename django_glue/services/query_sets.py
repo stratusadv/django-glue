@@ -5,7 +5,7 @@ from django.db.models import QuerySet
 from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData, GlueJsonData
 from django_glue.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.services.services import Service
-from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict, get_fields_from_model, \
+from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict, get_field_names_from_model, \
     check_valid_method_kwargs, type_set_method_kwargs, field_name_included
 
 
@@ -48,9 +48,10 @@ class GlueQuerySetService(Service):
 
         model_object = self.meta_data.model_class()
 
-        for field in get_fields_from_model(self.meta_data.model_class):
-            if field.name in body_data['data'] and field.name != 'id':
-                setattr(model_object, field.name, body_data['data'][field.name])
+        # Todo: This is duplicated code
+        for field_name in get_field_names_from_model(self.meta_data.model_class):
+            if field_name in body_data['data'] and field_name != 'id':
+                setattr(model_object, field_name, body_data['data'][field_name])
 
         model_object.save()
 
@@ -73,9 +74,10 @@ class GlueQuerySetService(Service):
 
         model_object = self.meta_data.model_class.objects.get(id=body_data['data']['id'])
 
-        for field in get_fields_from_model(self.meta_data.model_class):
-            if field.name in body_data['data'] and field.name != 'id' and field_name_included(field.name, self.meta_data.fields, self.meta_data.exclude):
-                model_object.__dict__[field.name] = body_data['data'][field.name]
+        # Todo: This is duplicated code
+        for field_name in get_field_names_from_model(self.meta_data.model_class):
+            if field_name in body_data['data'] and field_name != 'id' and field_name_included(field_name, self.meta_data.fields, self.meta_data.exclude):
+                model_object.__dict__[field_name] = body_data['data'][field_name]
 
         model_object.save()
 
