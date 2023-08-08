@@ -3,10 +3,13 @@
 ## 0.4.2.2
 
 ### Changes
+- Improve field logic for many-to-many and one-to-one relationships. 
+
+## 0.4.2.2
+
+### Changes
 - Foreign Key fields now work with glue.
 - Move validation logic from Glue Request Handler to View.  
-
-
 
 ## 0.4.2.1
 

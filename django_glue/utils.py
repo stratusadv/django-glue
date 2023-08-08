@@ -52,7 +52,7 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
                         field_attr = generate_field_attr_dict(field)
 
                     # Todo: Field name logic is duplicated
-                    if field.attname == 'foreign_key_id':
+                    if field.many_to_one or field.one_to_one:
                         field_name = field.name + '_id'
                     else:
                         field_name = field.name
@@ -99,7 +99,7 @@ def get_field_names_from_model(model) -> list:
     field_names = []
 
     for field in model._meta.fields:
-        if field.attname == 'foreign_key_id':
+        if field.many_to_one or field.one_to_one:
             field_names.append(field.name + '_id')
         else:
             field_names.append(field.name)

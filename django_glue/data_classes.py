@@ -44,6 +44,9 @@ class GlueContextData:
 
 @dataclass
 class GlueJsonData:
+    """
+        Used to provide a consistent structure for our glue objects.
+    """
     fields: Optional[dict] = None
     simple_fields: Optional[dict] = None
     method_return: Optional[Any] = None
@@ -56,6 +59,9 @@ class GlueJsonData:
 
 @dataclass
 class GlueJsonResponseData:
+    """
+        Consistent structure for our json responses.
+    """
     message_title: Optional[str] = None
     message_body: Optional[str] = None
     data: Optional[GlueJsonData] = None
