@@ -12,6 +12,7 @@ from django_glue.utils import decode_query_set_from_str, generate_simple_field_d
 class GlueQuerySetService(Service):
     def __init__(self, meta_data: GlueMetaData) -> None:
         self.meta_data = meta_data
+        # Query set is optional for lazy loading. Call load_query_set() before using it.
         self.query_set: Optional[QuerySet] = None
 
     def load_query_set(self):

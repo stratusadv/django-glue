@@ -5,7 +5,6 @@ class GlueModelObject {
 
         for (let key in window.glue_session_data['context'][glue_unique_name].fields) {
             this[key] = window.glue_session_data['context'][glue_unique_name].fields[key].value
-            console.log(key, this[key])
         }
 
         window.glue_keep_live.add_unique_name(glue_unique_name)

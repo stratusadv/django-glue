@@ -11,6 +11,8 @@ from django_glue.glue import add_glue
 def big_model_object_view(request):
     big_model = BigTestModel.objects.first()
     add_glue(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
+    add_glue(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
+
     return TemplateResponse(request, template='page/big_model_object_page.html')
 
 
