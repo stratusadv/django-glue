@@ -1,6 +1,12 @@
 # Changelog for Django Glue
 
-## 0.4.2.2
+## 0.4.2.4
+
+### Changes
+- Versions fix. 
+
+
+## 0.4.2.3
 
 ### Changes
 - Improve field logic for many-to-many and one-to-one relationships. 
