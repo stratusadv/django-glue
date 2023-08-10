@@ -12,7 +12,7 @@ class GlueKeepLive {
 
     async update(keep_live_url) {
         const request_options = {
-            method: 'QUERY',
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': glue_get_cookie('csrftoken'),

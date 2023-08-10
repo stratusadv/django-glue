@@ -10,13 +10,15 @@
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
+    const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
+
 
     window.glue_keep_live = new GlueKeepLive()
     window.glue_session_data = {{ GLUE_SESSION_DATA|safe }}
 
     setInterval(() => {
         window.glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
-    }, 2000)
+    }, DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
 
 </script>
 
