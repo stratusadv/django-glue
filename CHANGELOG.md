@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## 0.4.2.5
+
+### Changes
+- Change to POST Requests for all ajax calls. 
+
+
 ## 0.4.2.4
 
 ### Changes

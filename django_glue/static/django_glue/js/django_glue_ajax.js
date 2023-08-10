@@ -3,7 +3,7 @@ async function glue_ajax_request(
     action,
     data = {},
     content_type = 'application/json',
-    method = 'QUERY',
+    method = 'POST',
 ) {
     const request_options = {
         method: method,
