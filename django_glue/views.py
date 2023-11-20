@@ -24,7 +24,6 @@ def glue_data_ajax_handler_view(request):
         return generate_json_404_response()
 
 
-
 def glue_keep_live_handler_view(request):
     data = json.loads(request.body.decode('utf-8'))
     unique_names = data['unique_names']
