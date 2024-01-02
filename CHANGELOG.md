@@ -1,5 +1,7 @@
 # Changelog for Django Glue
 
+## 0.4.2.6
+
 ## 0.4.2.5
 
 ### Changes
