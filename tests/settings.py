@@ -8,7 +8,7 @@ logging.basicConfig(
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 WSGI_APPLICATION = 'tests.wsgi.application'
 
