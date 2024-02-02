@@ -1,18 +1,17 @@
 class GlueView {
-    constructor(url, shared_get_parameters = {}) {
+    constructor(url, shared_parameters = {}) {
         this.url = url
-        this.shared_get_parameters = shared_get_parameters
+        this.shared_parameters = shared_parameters
     }
 
-
-    // Todo: handle the get parameters
-    async _render(get_parameters = {}, method = 'GET', headers = {}) {
+    async _render(parameters = {}, method = 'POST', headers = {}) {
         const request_options = {
             method: method,
             headers: {
                 ...headers,
                 'X-CSRFToken': glue_get_cookie('csrftoken'),
             },
+            body: JSON.stringify({...parameters, ...this.shared_parameters})
         };
 
         const response = await fetch(this.url, request_options);
@@ -25,8 +24,8 @@ class GlueView {
 
     }
 
-    render_inner(target_element, get_parameters = {}) {
-        this._render(get_parameters).then((response) => {
+    render_inner(target_element, parameters = {}) {
+        this._render(parameters).then((response) => {
             return response.text()
         }).then((html) => {
             target_element.innerHTML = html
@@ -34,8 +33,17 @@ class GlueView {
 
     }
 
-    render_outer(target_element, get_parmeters = {}) {
-        this._render(get_parmeters).then((response) => {
+    render_insert_adjacent(target_element, parameters = {}, position = 'beforeend') {
+        this._render(parameters).then((response) => {
+            return response.text()
+        }).then((html) => {
+            target_element.insertAdjacentHTML(position, html)
+        })
+
+    }
+
+    render_outer(target_element, parameters = {}) {
+        this._render(parameters).then((response) => {
             return response.text()
         }).then((html) => {
             target_element.outerHTML = html
