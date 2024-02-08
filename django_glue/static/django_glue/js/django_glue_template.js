@@ -20,6 +20,15 @@ class GlueTemplate {
 
     }
 
+    render_insert_adjacent(target_element, context_data = {}, position = 'beforeend') {
+        this._render(context_data).then((response) => {
+            return response.text()
+        }).then((html) => {
+            target_element.insertAdjacentHTML(position, html)
+        })
+
+    }
+
     render_outer(target_element, context_data = {}) {
         this._render(context_data).then((response) => {
             glue_dispatch_response_event(response)
