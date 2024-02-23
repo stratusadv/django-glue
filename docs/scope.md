@@ -1,0 +1,5 @@
+- Make Django Read Only to Create Proper Security
+- Have change requests go through validators or glue validators
+- Do changes and deleting bloat glue too much, and you might as well write a view
+- Glue does not need a form module as there is no real benefits it can provide that it doesn't already
+- Limiting what can be changed to specific fields that can be validated
