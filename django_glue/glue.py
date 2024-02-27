@@ -7,35 +7,51 @@ from django.http import HttpRequest
 from django_glue.sessions import GlueSession, GlueKeepLiveSession
 
 
-def add_glue(
+def glue_model(
         request: HttpRequest,
         unique_name: str,
-        target: Union[Model, QuerySet, str],
+        target: Model,
         access: str = 'view',
         fields: Union[list, tuple] = ('__all__',),
         exclude: Union[list, tuple] = ('__none__',),
         methods: Union[list, tuple] = ('__none__',),
-) -> None:
-    if isinstance(fields, (list, tuple)) and isinstance(exclude, (list, tuple)):
-        glue_session = GlueSession(request)
+):
+    glue_session = GlueSession(request)
+    glue_session.add_model_object(unique_name, target, access, fields, exclude, methods)
 
-        if isinstance(target, Model):
-            glue_session.add_model_object(unique_name, target, access, fields, exclude, methods)
+    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session.set_unique_name(unique_name)
 
-        elif isinstance(target, QuerySet):
-            glue_session.add_query_set(unique_name, target, access, fields, exclude, methods)
+    glue_session.set_modified()
 
-        elif isinstance(target, str):
-            glue_session.add_template(unique_name, target)
 
-        else:
-            raise f'target is not a valid type must be a django.db.models.Model or django.db.models.query.QuerySet'
+def glue_query_set(
+        request: HttpRequest,
+        unique_name: str,
+        target: QuerySet,
+        access: str = 'view',
+        fields: Union[list, tuple] = ('__all__',),
+        exclude: Union[list, tuple] = ('__none__',),
+        methods: Union[list, tuple] = ('__none__',),
+):
+    glue_session = GlueSession(request)
+    glue_session.add_query_set(unique_name, target, access, fields, exclude, methods)
 
-        glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session.set_unique_name(unique_name)
 
-        glue_keep_live_session.set_unique_name(unique_name)
+    glue_session.set_modified()
 
-        glue_session.set_modified()
 
-    else:
-        raise f'fields or exclude is not a valid type must be a list or tuple'
+def glue_template(
+        request: HttpRequest,
+        unique_name: str,
+        target: str,
+):
+    glue_session = GlueSession(request)
+    glue_session.add_template(unique_name, target)
+
+    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session.set_unique_name(unique_name)
+
+    glue_session.set_modified()

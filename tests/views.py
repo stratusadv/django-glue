@@ -5,13 +5,13 @@ from django.views.generic import TemplateView
 
 from tests.models import TestModel, BigTestModel
 from tests.utils import generate_randomized_test_model, generate_big_test_model
-from django_glue.glue import add_glue
+from django_glue.glue import glue_model, glue_query_set, glue_template
 
 
 def big_model_object_view(request):
     big_model = BigTestModel.objects.first()
-    add_glue(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
-    add_glue(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
+    glue_model(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
+    glue_query_set(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
 
     return TemplateResponse(request, template='page/big_model_object_page.html')
 
@@ -24,10 +24,10 @@ class ModelObjectView(TemplateView):
 
         test_model_object = generate_randomized_test_model()
 
-        add_glue(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
-        add_glue(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
-        add_glue(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
-        add_glue(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        glue_model(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+        glue_model(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        glue_model(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
+        glue_model(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
 
         big_test_model_object = generate_big_test_model()
 
@@ -40,16 +40,16 @@ class QuerySetView(TemplateView):
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
 
-        add_glue(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
-        add_glue(self.request, 'test_query_2', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'add', exclude=('birth_date', 'anniversary_datetime'))
-        add_glue(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
+        glue_query_set(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
+        glue_query_set(self.request, 'test_query_2', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'add', exclude=('birth_date', 'anniversary_datetime'))
+        glue_query_set(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
 
         context_data['model_object_id'] = TestModel.objects.filter(id__gte=1).filter(id__lte=10000).first().id
         return context_data
 
 
 def query_set_list_view(request):
-    add_glue(request, 'test_query_1', TestModel.objects.all(), 'delete')
+    glue_query_set(request, 'test_query_1', TestModel.objects.all(), 'delete')
     return TemplateResponse(
         request,
         template='page/query_set_list_page.html'
@@ -65,7 +65,7 @@ class OtherView(TemplateView):
 
         logging.warning(f'Added Other TestModel object.')
 
-        add_glue(self.request, 'other_test_model_1', other_test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime',))
+        glue_model(self.request, 'other_test_model_1', other_test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime',))
 
         logging.warning('Added model object glue for Other TestModel Object in write mode')
 
@@ -93,7 +93,7 @@ def benchmark_view(request):
 
     start = time()
     for unique_name in random_strings:
-        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+        glue_model(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
     stop = time()
 
     benchmarks['1 Glue'] = stop - start
@@ -102,7 +102,7 @@ def benchmark_view(request):
 
     start = time()
     for unique_name in random_strings:
-        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+        glue_model(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
     stop = time()
 
     benchmarks['10 Glue'] = stop - start
@@ -111,7 +111,7 @@ def benchmark_view(request):
 
     start = time()
     for unique_name in random_strings:
-        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+        glue_model(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
     stop = time()
 
     benchmarks['100 Glue'] = stop - start
@@ -120,7 +120,7 @@ def benchmark_view(request):
 
     start = time()
     for unique_name in random_strings:
-        add_glue(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
+        glue_model(request, unique_name, test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
     stop = time()
 
     benchmarks['1000 Glue'] = stop - start
@@ -135,12 +135,12 @@ def view_view(request):
 def view_card_view(request):
     test_model_object = generate_randomized_test_model()
 
-    add_glue(request, 'test_model_view_card', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'),
+    glue_model(request, 'test_model_view_card', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'),
              methods=['is_lighter_than', 'get_full_name'])
 
     return TemplateResponse(request, 'card/view_card.html')
 
 def template_view(request):
-    add_glue(request, 'button_1', 'block/button_element.html')
+    glue_template(request, 'button_1', 'element/button_element.html')
 
     return TemplateResponse(request, 'page/template_page.html')
