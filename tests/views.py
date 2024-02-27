@@ -141,6 +141,6 @@ def view_card_view(request):
     return TemplateResponse(request, 'card/view_card.html')
 
 def template_view(request):
-    add_glue(request, 'button_1', 'element/button_element.html')
+    add_glue(request, 'button_1', 'block/button_element.html')
 
     return TemplateResponse(request, 'page/template_page.html')

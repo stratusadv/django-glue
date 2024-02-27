@@ -1,5 +1,15 @@
-- Make Django Read Only to Create Proper Security
-- Have change requests go through validators or glue validators
-- Do changes and deleting bloat glue too much, and you might as well write a view
-- Glue does not need a form module as there is no real benefits it can provide that it doesn't already
-- Limiting what can be changed to specific fields that can be validated
+## Next Version
+- Remove Add because of foreign key and key complications for security
+- Change to be limited to fields that can be validated
+- Delete can stay
+- Class Methods can stay
+- View can stay
+- Templates can stay
+- Add ability to glue a function (path scoping will be required)
+- Seperate add_glue function into multiple seperate function (glue_view, glue_model etc)
+- Compile and minify javascript
+
+## Outstanding Problem
+
+- Unique Name Overlap in Large Projects (Possible solution is to generate names or ids somehow?)
+- Maybe needs to be replaced with something else?
