@@ -4,10 +4,7 @@
 
 ### Changes
 - Remove Add because of foreign key and key complications for security.
-- Change to be limited to fields that can be validated.
-- Add ability to glue a function (path scoping will be required).
 - Separate add_glue function into multiple functions (glue_view, glue_model etc).
-- Compile and minify javascript.
 
 ## 0.4.2.5
 

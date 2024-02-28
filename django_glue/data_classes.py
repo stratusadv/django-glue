@@ -8,7 +8,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.http import JsonResponse
 
 from django_glue.enums import GlueConnection, GlueAccess, GlueAction, GlueJsonResponseStatus, GlueJsonResponseType
-from django_glue.core.utils import remove_none_value_field_from_data_class_object
 
 
 class GlueBodyData:
@@ -53,7 +52,6 @@ class GlueJsonData:
     custom: Optional[dict] = None
 
     def to_dict(self):
-        remove_none_value_field_from_data_class_object(self)
         return asdict(self)
 
 
@@ -70,8 +68,6 @@ class GlueJsonResponseData:
     response_status: GlueJsonResponseStatus = GlueJsonResponseStatus.SUCCESS
 
     def to_dict(self) -> dict:
-        remove_none_value_field_from_data_class_object(self)
-
         json_response_dict = asdict(self)
 
         if isinstance(self.data, GlueJsonData):
