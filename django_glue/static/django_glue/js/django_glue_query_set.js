@@ -34,19 +34,6 @@ class GlueQuerySet {
 
     }
 
-    async create(model_object) {
-        // Todo: Should this be a model object or should it just be data?
-        return await glue_ajax_request(
-            this.glue_unique_name,
-            'create',
-            model_object.get_properties()
-        ).then((response) => {
-            console.log(response)
-            glue_dispatch_response_event(response)
-            return model_object
-        })
-    }
-
     delete(id) {
         glue_ajax_request(
             this.glue_unique_name,

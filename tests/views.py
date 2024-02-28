@@ -41,7 +41,6 @@ class QuerySetView(TemplateView):
         context_data = super().get_context_data(**kwargs)
 
         glue_query_set(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
-        glue_query_set(self.request, 'test_query_2', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'add', exclude=('birth_date', 'anniversary_datetime'))
         glue_query_set(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
 
         context_data['model_object_id'] = TestModel.objects.filter(id__gte=1).filter(id__lte=10000).first().id

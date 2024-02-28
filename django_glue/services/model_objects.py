@@ -42,32 +42,6 @@ class GlueModelObjectService(Service):
             json_data,
         )
 
-    def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        self.load_model_class()
-
-        model_object = self.model_class()
-
-        # Todo: This is duplicated code
-        for field_name in get_field_names_from_model(model_object):
-            if field_name in body_data['data'] and field_name != 'id':
-                model_object.__dict__[field_name] = body_data['data'][field_name]
-
-        model_object.save()
-
-        json_data = GlueJsonData()
-
-        json_data.simple_fields = generate_simple_field_dict(
-            model_object,
-            self.meta_data.fields,
-            self.meta_data.exclude
-        )
-
-        return generate_json_200_response_data(
-            'THE CREATE ACTION',
-            'this is a response from an model object create action!',
-            json_data
-        )
-
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         self.load_object()
 

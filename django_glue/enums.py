@@ -6,10 +6,8 @@ from enum import Enum
 class GlueAccess(str, Enum):
     # The order of these variables controls how the permission cascade each other in the has_access method
     VIEW = 'view'
-    ADD = 'add'
     CHANGE = 'change'
     DELETE = 'delete'
-    ADMIN = 'admin'
 
     def __str__(self):
         return self.value
@@ -24,7 +22,6 @@ class GlueAccess(str, Enum):
 
 class GlueAction(str, Enum):
     GET = 'get'
-    CREATE = 'create'
     UPDATE = 'update'
     DELETE = 'delete'
     METHOD = 'method'
@@ -36,8 +33,6 @@ class GlueAction(str, Enum):
     def required_access(self) -> GlueAccess:
         if self.value == 'get':
             return GlueAccess.VIEW
-        elif self.value == 'create':
-            return GlueAccess.ADD
         elif self.value == 'update':
             return GlueAccess.CHANGE
         elif self.value == 'delete':

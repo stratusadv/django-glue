@@ -13,8 +13,6 @@ class Service(ABC):
         if access.has_access(action.required_access):
             if action == GlueAction.GET:
                 return self.process_get_action(body_data)
-            if action == GlueAction.CREATE:
-                return self.process_create_action(body_data)
             if action == GlueAction.UPDATE:
                 return self.process_update_action(body_data)
             if action == GlueAction.DELETE:
@@ -28,9 +26,6 @@ class Service(ABC):
 
     @abstractmethod
     def process_get_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
-        return generate_json_404_response_data()
-
-    def process_create_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:
         return generate_json_404_response_data()
 
     def process_update_action(self, body_data: GlueBodyData) -> GlueJsonResponseData:

@@ -10,18 +10,6 @@ class GlueModelObject {
         window.glue_keep_live.add_unique_name(glue_unique_name)
     }
 
-    async create() {
-        return await glue_ajax_request(
-            this.glue_unique_name,
-            'create',
-            this.get_properties()
-        ).then((response) => {
-            console.log(response)
-            glue_dispatch_response_event(response)
-            return this
-        })
-    }
-
     delete() {
         glue_ajax_request(
             this.glue_unique_name,
