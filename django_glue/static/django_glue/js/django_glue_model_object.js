@@ -17,7 +17,10 @@ class GlueModelObject {
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-        })
+        }).catch((error) => {
+                glue_dispatch_object_delete_error_event(error)
+            }
+        )
     }
 
     async get() {
@@ -28,7 +31,10 @@ class GlueModelObject {
             console.log(response)
             glue_dispatch_response_event(response)
             this.set_properties(response.data.simple_fields)
-        })
+        }).catch((error) => {
+                glue_dispatch_object_get_error_event(error)
+            }
+        )
     }
 
     async method(method, kwargs = {}) {
@@ -45,7 +51,10 @@ class GlueModelObject {
             console.log(response)
             glue_dispatch_response_event(response)
             return response.data.method_return
-        })
+        }).catch((error) => {
+                glue_dispatch_object_method_error_event(error)
+            }
+        )
     }
 
     async update(field = null) {
@@ -56,7 +65,10 @@ class GlueModelObject {
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)
-        })
+        }).catch((error) => {
+                glue_dispatch_object_update_error_event(error)
+            }
+        )
     }
 
     get_properties() {
