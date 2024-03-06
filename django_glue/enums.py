@@ -25,6 +25,7 @@ class GlueAction(str, Enum):
     UPDATE = 'update'
     DELETE = 'delete'
     METHOD = 'method'
+    FUNCTION = 'function'
 
     def __str__(self):
         return self.value
@@ -45,6 +46,7 @@ class GlueConnection(str, Enum):
     MODEL_OBJECT = 'model_object'
     QUERY_SET = 'query_set'
     TEMPLATE = 'template'
+    FUNCTION = 'function'
 
     def __str__(self):
         return self.value

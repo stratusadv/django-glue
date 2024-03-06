@@ -34,6 +34,24 @@ class GlueSession:
     def __setitem__(self, key, value):
         self.session[key] = value
 
+    def add_function(
+            self,
+            unique_name: str,
+            target,
+    ):
+        self.check_unique_name(unique_name)
+
+        self.add_context(unique_name, GlueContextData(
+            connection=GlueConnection('function'),
+            access=GlueAccess('view'),
+        ))
+
+        self.add_meta(unique_name, GlueMetaData(
+            function=target,
+        ))
+
+        self.set_modified()
+
     def add_model_object(
             self,
             unique_name: str,
