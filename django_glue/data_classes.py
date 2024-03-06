@@ -49,6 +49,7 @@ class GlueJsonData:
     fields: Optional[dict] = None
     simple_fields: Optional[dict] = None
     method_return: Optional[Any] = None
+    function_return: Optional[Any] = None
     custom: Optional[dict] = None
 
     def to_dict(self):
@@ -100,6 +101,7 @@ class GlueMetaData:
     object_pk: int = None
     query_set_str: str = None
     template: str = None
+    function: str = None
     fields: Union[list, tuple] = None
     exclude: Union[list, tuple] = None
     methods: Union[list, tuple] = None

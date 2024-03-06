@@ -141,3 +141,7 @@ def generate_big_test_model(limit=5):
     BigTestModel.objects.exclude(pk__in=exclude_test_model).delete()
 
     return big_test_model
+
+
+def test_glue_function(greeting: str, name: str):
+    return f'{greeting}, {name}!'

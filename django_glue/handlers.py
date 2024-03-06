@@ -1,6 +1,6 @@
 import logging, json
 
-from django_glue.services import GlueModelObjectService, GlueQuerySetService
+from django_glue.services import GlueModelObjectService, GlueQuerySetService, GlueFunctionService
 from django_glue.responses import generate_json_404_response
 from django_glue.services.templates import GlueTemplateService
 from django_glue.sessions import GlueSession
@@ -51,6 +51,13 @@ class GlueRequestHandler:
 
             html_response_data = glue_template_service.process_body_data(self.access, self.glue_body_data)
             return html_response_data
+
+        elif self.connection == GlueConnection.FUNCTION:
+            glue_function_service = GlueFunctionService(
+                self.meta_data,
+            )
+            json_response_data = glue_function_service.process_body_data(self.access, self.glue_body_data)
+            return json_response_data.to_django_json_response()
 
         else:
             return generate_json_404_response()

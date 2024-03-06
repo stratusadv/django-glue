@@ -5,7 +5,7 @@ from django.views.generic import TemplateView
 
 from tests.models import TestModel, BigTestModel
 from tests.utils import generate_randomized_test_model, generate_big_test_model
-from django_glue.glue import glue_model, glue_query_set, glue_template
+from django_glue.glue import glue_model, glue_query_set, glue_template, glue_function
 
 
 def big_model_object_view(request):
@@ -139,7 +139,14 @@ def view_card_view(request):
 
     return TemplateResponse(request, 'card/view_card.html')
 
+
 def template_view(request):
     glue_template(request, 'button_1', 'element/button_element.html')
 
     return TemplateResponse(request, 'page/template_page.html')
+
+
+def function_view(request):
+    glue_function(request, 'test_glue_function', 'tests.utils.test_glue_function')
+
+    return TemplateResponse(request, 'page/function_page.html')

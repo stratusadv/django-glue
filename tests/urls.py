@@ -16,6 +16,7 @@ urlpatterns = [
     path("template/", views.template_view, name="template"),
     path("view/", views.view_view, name="view"),
     path("view/card/", views.view_card_view, name="view_card"),
+    path("function/", views.function_view, name="function"),
 ]
 
 urlpatterns += [

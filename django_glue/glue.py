@@ -7,6 +7,20 @@ from django.http import HttpRequest
 from django_glue.sessions import GlueSession, GlueKeepLiveSession
 
 
+def glue_function(
+        request: HttpRequest,
+        unique_name: str,
+        target: callable,
+):
+    glue_session = GlueSession(request)
+    glue_session.add_function(unique_name, target)
+
+    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session.set_unique_name(unique_name)
+
+    glue_session.set_modified()
+
+
 def glue_model(
         request: HttpRequest,
         unique_name: str,
