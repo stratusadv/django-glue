@@ -1,5 +1,14 @@
 # Changelog for Django Glue
 
+## 0.5.1.0
+
+### Features
+- Can now glue functions using glue_function function.
+
+### Changes
+- Added front end error handling for ajax requests.
+
+
 ## 0.5.0.0
 
 ### Changes
