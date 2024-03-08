@@ -1,0 +1,25 @@
+<div class="position-relative" x-data="dropdown">
+    <div x-data="{
+        choices: [],
+        search: '',
+
+        processSelectedChoice(choice){
+            this.search = ''
+            if ('selectChoice' in this){
+                // This function would be on a parent element and would be used to add functionality to the field
+                this.selectChoice(choice)
+            }
+
+            this.open_dropdown = false
+        },
+        get filteredChoices() {
+               const filtered_array = this.choices.filter(
+                   i => i.value.toLowerCase().includes(this.search.toLowerCase())
+               )
+               return filtered_array.slice(0, 25)
+        }
+
+    }" x-modelable="choices" x-model="{{ choices_x_model_name }}">
+        {% include 'form/element/search_select_dropdown_element.html' %}
+    </div>
+</div>

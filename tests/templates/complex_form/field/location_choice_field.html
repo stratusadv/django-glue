@@ -1,0 +1,7 @@
+<div x-data="{
+    selectChoice(choice){
+        console.log(choice)
+    }
+}">
+    {% include 'form/field/select_field.html' with choices_x_model_name='location_choices' %}
+</div>

@@ -1,0 +1,20 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+	Complex Form Integration
+{% endblock %}
+
+{% block body %}
+    <form action="">
+        <div x-data="{
+            init(){
+                this.location_choices = {{ location_choices }}
+            },
+            location_choices: null
+
+        }">
+            {% include 'complex_form/field/location_choice_field.html' %}
+
+        </div>
+    </form>
+{% endblock %}

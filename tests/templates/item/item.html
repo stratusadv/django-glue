@@ -1,0 +1,28 @@
+<div
+    {% block item_x_data %}{% endblock %}
+    class="item-hover item-container border-bottom border-300 {% block item_padding %}py-3{% endblock %}
+">
+    <div class="row justify-content-center align-items-center position-relative">
+        <div class="col-12 col-lg-{% block item_title_col %}3{% endblock %}">
+            {% block item_title %}
+            {% endblock %}
+        </div>
+        <div class="col">
+            <div class="row justify-content-between align-items-center {% block item_row_content_outer_class %}{% endblock %}">
+                <div class="col">
+                    <div class="row {% block item_content_gutter %}g-2{% endblock %}">
+                        {% block item_row_content %}
+                        {% endblock %}
+                    </div>
+                </div>
+                {% if not hide_button %}
+                    <div class="col-auto top-0 end-0 position-absolute position-lg-static pt-2 pt-lg-0">
+                        {% block item_button %}
+
+                        {% endblock %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>

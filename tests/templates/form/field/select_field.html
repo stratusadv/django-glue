@@ -1,0 +1,16 @@
+<div class="position-relative" x-data="dropdown">
+    <div x-data="{
+        choices: [],
+        selected_value_text: '',
+        processSelectedChoice(choice){
+            this.selected_value_text = choice.value
+            if ('selectChoice' in this){
+                // This function would be on a parent element and would be used to add functionality to the field
+                this.selectChoice(choice)
+            }
+            this.open_dropdown = false
+        }
+    }" x-modelable="choices" x-model="{{ choices_x_model_name }}">
+        {% include 'form/element/select_dropdown_element.html' %}
+    </div>
+</div>
