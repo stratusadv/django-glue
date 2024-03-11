@@ -1,4 +1,4 @@
-<template x-for="(choice, index) in {{ choices }}" :key="index">#}
+<template x-for="(choice, index) in {{ choices }}" :key="index">
     {% block select_item %}
         {% include 'form/item/select_dropdown_item.html' %}
     {% endblock %}

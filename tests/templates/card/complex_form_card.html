@@ -5,16 +5,34 @@
 {% endblock %}
 
 {% block body %}
-    <form action="">
+    <form method="post">
+        {% csrf_token %}
         <div x-data="{
             init(){
                 this.location_choices = {{ location_choices }}
-            },
-            location_choices: null
 
+                let initial = '{{ initial }}'
+                if (initial){
+                    console.log(initial)
+                }
+
+            },
+            location_choices: null,
+            location: null,
+
+            loadLocationTemplate(){
+                if (this.location === 'NYC'){
+                    template = new GlueTemplate('new_york_element')
+                }
+                else if (this.location === 'CHI'){
+                    template = new GlueTemplate('chicago_element')
+                }
+                template.render_inner($refs.location_div)
+            },
         }">
             {% include 'complex_form/field/location_choice_field.html' %}
 
+            <div x-ref="location_div"></div>
         </div>
     </form>
 {% endblock %}

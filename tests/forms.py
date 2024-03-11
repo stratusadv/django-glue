@@ -1,17 +1,14 @@
 from django import forms
 
-from tests.fields import ItemRequestField
+class NewYorkForm(forms.Form):
+    ketchup = forms.BooleanField(required=False)
+    mustard = forms.BooleanField(required=False)
+    extra_toppings = forms.CharField(required=False)
+    order_quantity = forms.IntegerField(min_value=1, max_value=10)
 
-class ComplexFormIntegrationForm(forms.Form):
-    location = forms.ChoiceField()
-    item_request = ItemRequestField()
 
-    def clean(self):
-        cleaned_data = super().clean()
-        password = cleaned_data.get('password')
-        confirm_password = cleaned_data.get('confirm_password')
-
-        if password != confirm_password:
-            raise forms.ValidationError('Passwords do not match')
-
-        return cleaned_data
+class ChicagoForm(forms.Form):
+    cheese = forms.BooleanField()
+    pepperoni = forms.BooleanField(required=False)
+    extra_toppings = forms.CharField(required=False)
+    order_quantity = forms.IntegerField(min_value=1, max_value=5)
