@@ -166,13 +166,12 @@ def complex_form_view(request):
 
     if request.POST:
         print(request.POST)
-
-        # form = get_complex_form_processor(form_data)
-        # if form.is_valid():
-        #     print('Valid!')
-        # else:
-        #     context_data['initial'] = json.dumps(form_data)
-        #     print(form.errors)
+        form = get_complex_form_processor(request.POST)
+        if form.is_valid():
+            print('Valid!')
+        else:
+            context_data['initial'] = json.dumps(request.POST)
+            print(form.errors)
 
     glue_template(request, 'new_york_element', 'complex_form/element/new_york_element.html')
     glue_template(request, 'chicago_element', 'complex_form/element/chicago_element.html')
