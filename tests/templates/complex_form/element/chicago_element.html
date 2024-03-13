@@ -1,4 +1,13 @@
 <div class="pt-2" x-data="{
+    init(){
+        if (this.initial){
+            this.cheese = this.initial.cheese === 'true'
+            this.pepperoni = this.initial.pepperoni === 'true'
+            this.extra_toppings = this.initial.extra_toppings
+            this.order_quantity = this.initial.order_quantity
+        }
+    },
+
     cheese: false,
     pepperoni: false,
     extra_toppings: '',

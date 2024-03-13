@@ -6,7 +6,7 @@
 
 {% block body %}
     <div
-            x-data="{
+        x-data="{
             async init() {
                 this.test_models = await this.test_models_query.all()
                 const debounce_update = glue_debounce((value) => value.update(), 750);

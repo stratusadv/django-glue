@@ -13,12 +13,18 @@
 
                 let initial = '{{ initial }}'
                 if (initial){
-                    console.log(initial)
+                    this.initial = JSON.parse(initial)
+                    this.$nextTick(() => {
+                        this.location = this.initial.location
+                        this.loadLocationTemplate()
+                    })
                 }
+                this.$watch('location', () => this.loadLocationTemplate())
 
             },
             location_choices: null,
             location: null,
+            initial: null,
 
             loadLocationTemplate(){
                 if (this.location === 'NYC'){
@@ -28,9 +34,10 @@
                     template = new GlueTemplate('chicago_element')
                 }
                 template.render_inner($refs.location_div)
-            },
+            }
         }">
-            {% include 'complex_form/field/location_choice_field.html' %}
+            {% include 'form/field/select_field.html' with choices_x_model_name='location_choices' selected_x_model_name='location' %}
+{#            {% include 'complex_form/field/location_choice_field.html' %}#}
 
             <div x-ref="location_div"></div>
         </div>

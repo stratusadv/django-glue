@@ -1,16 +1,22 @@
 <div class="position-relative" x-data="dropdown">
     <div x-data="{
         choices: [],
-        selected_value_text: '',
-        processSelectedChoice(choice){
-            this.selected_value_text = choice.value
-            if ('selectChoice' in this){
-                // This function would be on a parent element and would be used to add functionality to the field
-                this.selectChoice(choice)
-            }
-            this.open_dropdown = false
-        }
+        selected_value: {{ selected_x_model_name }}
     }" x-modelable="choices" x-model="{{ choices_x_model_name }}">
-        {% include 'form/element/select_dropdown_element.html' %}
+        <div x-model="selected_value" x-modelable="{{ selected_x_model_name }}">
+            <select name="{{ selected_x_model_name }}" x-init="$nextTick(()=>{
+                        if (selected_value){
+                            $el.value = selected_value
+                        }
+                    })"
+                    class="select form-select" x-bind="trigger"
+                    x-model="selected_value"
+            >
+                <option @click="selected = choice" value>----------</option>
+                <template x-for="(choice, index) in choices" :key="index">
+                    <option @click="selected = choice" :value="choice.key" x-text="choice.value"></option>
+                </template>
+            </select>
+        </div>
     </div>
 </div>

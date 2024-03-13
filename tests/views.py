@@ -164,6 +164,9 @@ def complex_form_view(request):
         'location_choices': LOCATION_CHOICES,
     }
 
+    glue_template(request, 'new_york_element', 'complex_form/element/new_york_element.html')
+    glue_template(request, 'chicago_element', 'complex_form/element/chicago_element.html')
+
     if request.POST:
         print(request.POST)
         form = get_complex_form_processor(request.POST)
@@ -173,7 +176,11 @@ def complex_form_view(request):
             context_data['initial'] = json.dumps(request.POST)
             print(form.errors)
 
-    glue_template(request, 'new_york_element', 'complex_form/element/new_york_element.html')
-    glue_template(request, 'chicago_element', 'complex_form/element/chicago_element.html')
-
     return render(request, 'complex_form/page/complex_form_page.html', context_data)
+
+
+def complex_model_form_view(request):
+    glue_query_set(request, 'test_queryset', TestModel.objects.all(), 'delete')
+    context_data ={}
+
+    return render(request, 'complex_form/page/complex_model_form_page.html', context_data)
