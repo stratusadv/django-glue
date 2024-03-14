@@ -1,5 +1,6 @@
 import inspect
 import logging, pickle, base64, json
+import urllib.parse
 from typing import Optional, Callable, Union
 
 from django.core import exceptions
@@ -129,3 +130,7 @@ def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
             type_set_kwargs[kwarg] = kwargs[kwarg]
 
     return type_set_kwargs
+
+
+def encode_unique_name(request, unique_name):
+    return urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')

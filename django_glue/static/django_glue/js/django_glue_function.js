@@ -1,11 +1,10 @@
 class GlueFunction {
     constructor(unique_name) {
-        this.unique_name = encodeURIComponent(unique_name + '|' + window.location.pathname)
+        this.unique_name = encodeUniqueName(unique_name)
     }
 
     async call(kwargs = {}) {
         let data = {
-            'function': this.unique_name,
             'kwargs': kwargs,
         }
 

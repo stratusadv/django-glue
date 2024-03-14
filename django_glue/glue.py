@@ -6,6 +6,7 @@ from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
 from django_glue.sessions import GlueSession, GlueKeepLiveSession
+from django_glue.utils import encode_unique_name
 
 
 def glue_function(
@@ -15,8 +16,7 @@ def glue_function(
 ):
     glue_session = GlueSession(request)
 
-    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
-    print(encoded_unique_name)
+    encoded_unique_name = encode_unique_name(request, unique_name)
     glue_session.add_function(encoded_unique_name, target)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
@@ -36,7 +36,7 @@ def glue_model(
 ):
     glue_session = GlueSession(request)
 
-    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    encoded_unique_name = encode_unique_name(request, unique_name)
     glue_session.add_model_object(encoded_unique_name, target, access, fields, exclude, methods)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
@@ -56,7 +56,7 @@ def glue_query_set(
 ):
     glue_session = GlueSession(request)
 
-    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    encoded_unique_name = encode_unique_name(request, unique_name)
     glue_session.add_query_set(encoded_unique_name, target, access, fields, exclude, methods)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
@@ -72,7 +72,7 @@ def glue_template(
 ):
     glue_session = GlueSession(request)
 
-    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    encoded_unique_name = encode_unique_name(request, unique_name)
     glue_session.add_template(encoded_unique_name, target)
 
     glue_keep_live_session = GlueKeepLiveSession(request)

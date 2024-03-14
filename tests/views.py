@@ -150,7 +150,7 @@ def template_view(request):
 
 
 def function_view(request):
-    glue_function(request, 'test_glue_function', 'tests.utils.test_glue_function')
+    glue_function(request, 'function_1', 'tests.utils.test_glue_function')
     return TemplateResponse(request, 'page/function_page.html')
 
 
