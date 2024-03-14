@@ -1,12 +1,15 @@
 class GlueQuerySet {
     constructor(glue_unique_name) {
-        this.glue_unique_name = glue_unique_name
+        this.glue_unique_name = encodeUniqueName(glue_unique_name)
 
-        for (let key in window.glue_session_data['context'][glue_unique_name].fields) {
-            this[key] = window.glue_session_data['context'][glue_unique_name].fields[key].value
+        // We need this value on query to build GlueModelObjects
+        this.decoded_unique_name = glue_unique_name
+
+        for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
+            this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
         }
 
-        window.glue_keep_live.add_unique_name(glue_unique_name)
+        window.glue_keep_live.add_unique_name(this.glue_unique_name)
     }
 
     async all() {
@@ -17,7 +20,7 @@ class GlueQuerySet {
                 console.log(response)
                 glue_dispatch_response_event(response)
                 for (let object in response.data) {
-                    let model_object = new GlueModelObject(this.glue_unique_name);
+                    let model_object = new GlueModelObject(this.decoded_unique_name);
                     model_object.set_properties(response.data[object].simple_fields)
                     model_object_list.push(model_object)
                 }
@@ -53,7 +56,7 @@ class GlueQuerySet {
                 console.log(response)
                 glue_dispatch_response_event(response)
                 for (let object in response.data) {
-                    let model_object = new GlueModelObject(this.glue_unique_name);
+                    let model_object = new GlueModelObject(this.decoded_unique_name);
                     model_object.set_properties(response.data[object].simple_fields)
                     model_object_list.push(model_object)
                 }
@@ -68,7 +71,7 @@ class GlueQuerySet {
             .then((response) => {
                 console.log(response)
                 glue_dispatch_response_event(response)
-                model_object = new GlueModelObject(this.glue_unique_name);
+                model_object = new GlueModelObject(this.decoded_unique_name);
                 model_object.set_properties(response.data.simple_fields)
                 return model_object
             });

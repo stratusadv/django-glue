@@ -34,12 +34,8 @@
             selected_model: '',
             initial: null,
 
-            loadSelectedModel(){
-                for (let i = 0; i < this.test_model_list.length; i++){
-                    if (this.test_model_list[i].id === parseInt(this.selected_choice)){
-                        this.selected_model = this.test_model_list[i]
-                    }
-                }
+            async loadSelectedModel(){
+                this.selected_model = await this.test_models_query.get(parseInt(this.selected_choice))
             }
         }">
             {% include 'form/field/select_field.html' with choices_x_model_name='test_model_choices' selected_x_model_name='selected_choice' %}

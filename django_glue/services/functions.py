@@ -26,7 +26,7 @@ class GlueFunctionService(Service):
         function_return = None
         module = __import__(self.module_name, fromlist=[self.function])
 
-        if body_data['data']['function'] == self.function and hasattr(module, self.function):
+        if hasattr(module, self.function):
             function = getattr(module, self.function)
 
             if check_valid_method_kwargs(function, kwargs):

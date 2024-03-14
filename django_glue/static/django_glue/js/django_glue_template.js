@@ -1,6 +1,6 @@
 class GlueTemplate {
     constructor(unique_name, shared_context_data = {}) {
-        this.unique_name = unique_name
+        this.unique_name = encodeUniqueName(unique_name)
         this.shared_context_data = shared_context_data
     }
 
