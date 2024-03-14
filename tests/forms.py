@@ -1,5 +1,6 @@
 from django import forms
 
+
 class NewYorkForm(forms.Form):
     ketchup = forms.BooleanField(required=False)
     mustard = forms.BooleanField(required=False)
