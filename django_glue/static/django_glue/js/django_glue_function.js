@@ -1,6 +1,6 @@
 class GlueFunction {
     constructor(unique_name) {
-        this.unique_name = unique_name
+        this.unique_name = encodeURIComponent(unique_name + '|' + window.location.pathname)
     }
 
     async call(kwargs = {}) {

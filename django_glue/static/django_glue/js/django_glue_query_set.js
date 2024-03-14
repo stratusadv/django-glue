@@ -1,12 +1,12 @@
 class GlueQuerySet {
     constructor(glue_unique_name) {
-        this.glue_unique_name = glue_unique_name
-
-        for (let key in window.glue_session_data['context'][glue_unique_name].fields) {
-            this[key] = window.glue_session_data['context'][glue_unique_name].fields[key].value
+        this.glue_unique_name = encodeURIComponent(glue_unique_name + '|' + window.location.pathname)
+        console.log(this.glue_unique_name)
+        for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
+            this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
         }
 
-        window.glue_keep_live.add_unique_name(glue_unique_name)
+        window.glue_keep_live.add_unique_name(this.glue_unique_name)
     }
 
     async all() {

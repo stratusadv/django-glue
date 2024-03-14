@@ -1,4 +1,5 @@
 from typing import Union
+import urllib.parse
 
 from django.db.models import Model
 from django.db.models.query import QuerySet
@@ -13,10 +14,13 @@ def glue_function(
         target: callable,
 ):
     glue_session = GlueSession(request)
-    glue_session.add_function(unique_name, target)
+
+    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    print(encoded_unique_name)
+    glue_session.add_function(encoded_unique_name, target)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(unique_name)
+    glue_keep_live_session.set_unique_name(encoded_unique_name)
 
     glue_session.set_modified()
 
@@ -31,10 +35,12 @@ def glue_model(
         methods: Union[list, tuple] = ('__none__',),
 ):
     glue_session = GlueSession(request)
-    glue_session.add_model_object(unique_name, target, access, fields, exclude, methods)
+
+    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    glue_session.add_model_object(encoded_unique_name, target, access, fields, exclude, methods)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(unique_name)
+    glue_keep_live_session.set_unique_name(encoded_unique_name)
 
     glue_session.set_modified()
 
@@ -49,10 +55,12 @@ def glue_query_set(
         methods: Union[list, tuple] = ('__none__',),
 ):
     glue_session = GlueSession(request)
-    glue_session.add_query_set(unique_name, target, access, fields, exclude, methods)
+
+    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    glue_session.add_query_set(encoded_unique_name, target, access, fields, exclude, methods)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(unique_name)
+    glue_keep_live_session.set_unique_name(encoded_unique_name)
 
     glue_session.set_modified()
 
@@ -63,9 +71,11 @@ def glue_template(
         target: str,
 ):
     glue_session = GlueSession(request)
-    glue_session.add_template(unique_name, target)
+
+    encoded_unique_name = urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    glue_session.add_template(encoded_unique_name, target)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(unique_name)
+    glue_keep_live_session.set_unique_name(encoded_unique_name)
 
     glue_session.set_modified()
