@@ -1,0 +1,14 @@
+{% extends 'item/item.html' %}
+
+{% block item_padding %}px-3 pt-2 pb-0 item-select{% endblock %}
+{% block item_row_content_outer_class %}pb-2{% endblock %}
+
+{% block item_x_data %}@click="processSelectedChoice(choice)"{% endblock %}
+
+{% block item_title_col %} d-none{% endblock %}
+
+{% block item_row_content %}
+    <div class="col-12">
+        <span class="inventory-product-code" x-text="choice.value"></span>
+    </div>
+{% endblock %}

@@ -17,6 +17,8 @@ urlpatterns = [
     path("view/", views.view_view, name="view"),
     path("view/card/", views.view_card_view, name="view_card"),
     path("function/", views.function_view, name="function"),
+    path("complex_form/", views.complex_form_view, name="complex_form"),
+    path("complex_model_form/", views.complex_model_form_view, name="complex_model_form"),
 ]
 
 urlpatterns += [

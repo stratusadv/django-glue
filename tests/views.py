@@ -1,9 +1,12 @@
+import json
 import logging
 
+from django.shortcuts import render
 from django.template.response import TemplateResponse
 from django.views.generic import TemplateView
 
 from tests.models import TestModel, BigTestModel
+from tests.processors import get_complex_form_processor
 from tests.utils import generate_randomized_test_model, generate_big_test_model
 from django_glue.glue import glue_model, glue_query_set, glue_template, glue_function
 
@@ -148,5 +151,35 @@ def template_view(request):
 
 def function_view(request):
     glue_function(request, 'test_glue_function', 'tests.utils.test_glue_function')
-
     return TemplateResponse(request, 'page/function_page.html')
+
+
+def complex_form_view(request):
+    LOCATION_CHOICES = [
+        {'key': 'NYC', 'value': 'New York'},
+        {'key': 'CHI', 'value': 'Chicago'},
+    ]
+
+    context_data = {
+        'location_choices': LOCATION_CHOICES,
+    }
+
+    glue_template(request, 'new_york_element', 'complex_form/element/new_york_element.html')
+    glue_template(request, 'chicago_element', 'complex_form/element/chicago_element.html')
+
+    if request.POST:
+        form = get_complex_form_processor(request.POST)
+        if form.is_valid():
+            print('Valid!')
+        else:
+            context_data['initial'] = json.dumps(request.POST)
+            print(form.errors)
+
+    return render(request, 'complex_form/page/complex_form_page.html', context_data)
+
+
+def complex_model_form_view(request):
+    glue_query_set(request, 'test_queryset', TestModel.objects.all(), 'delete')
+    context_data = {}
+
+    return render(request, 'complex_form/page/complex_model_form_page.html', context_data)

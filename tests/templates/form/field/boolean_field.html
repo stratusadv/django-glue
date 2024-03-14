@@ -1,0 +1,13 @@
+<div x-data="{
+    init(){
+        this.$nextTick(() => {
+            if ('{{ initial_value }}'){
+                this.bool_value = ('{{ initial_value }}' === 'true')
+            }
+        })
+    },
+    bool_value: false
+}" x-modelable="bool_value" x-model="{{ x_model_name }}">
+    <input class="form-check-input mb-2 {{ class }}" x-model="bool_value" @change="$event.target.value=bool_value" :value="bool_value" id="id_{{ x_model_name }}" name="{{ x_model_name }}" type="checkbox">
+    <label for="id_{{ x_model_name }}">{{ label }}</label>
+</div>

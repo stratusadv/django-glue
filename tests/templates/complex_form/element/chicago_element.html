@@ -1,0 +1,26 @@
+<div class="pt-2" x-data="{
+    init(){
+        if (this.initial){
+            this.cheese = this.initial.cheese === 'true'
+            this.pepperoni = this.initial.pepperoni === 'true'
+            this.extra_toppings = this.initial.extra_toppings
+            this.order_quantity = this.initial.order_quantity
+        }
+    },
+
+    cheese: false,
+    pepperoni: false,
+    extra_toppings: '',
+    order_quantity: 0,
+
+}">
+{#    <input type="hidden" class="form-control" id="id_complex_form" name="complex_form" x-model="return_value" value="{{ widget.value }}"/>#}
+
+    <h4>Chicago Deep Dish Pizza Order Form</h4>
+    {% include 'form/field/boolean_field.html' with x_model_name='cheese' label='Cheese' %}
+    {% include 'form/field/boolean_field.html' with x_model_name='pepperoni' label='Pepperoni' %}
+    {% include 'form/field/char_field.html' with x_model_name='extra_toppings' label='Extra Toppings' %}
+    {% include 'form/field/integer_field.html' with x_model_name='order_quantity' label='Order Quantity' min_value=1 max_value=10 %}
+
+    <button type="submit" class="btn btn-primary mt-3">Submit</button>
+</div>

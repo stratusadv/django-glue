@@ -1,0 +1,8 @@
+<div x-data="{
+    selectChoice(choice){
+        this.location = choice.key
+        this.loadLocationTemplate()
+    }
+}">
+    {% include 'form/field/select_field.html' with choices_x_model_name='location_choices' %}
+</div>

@@ -1,0 +1,9 @@
+<div class="position-relative" x-data="dropdown">
+    {% block dropdown_trigger %}
+        {# Need to x-bind trigger #}
+    {% endblock %}
+    <div x-bind="dialogue" x-cloak style="z-index: 10" class="position-absolute shadow-lg {% block dropdown_position %}top-100{% endblock %} card border-1 mt-1">
+        {% block dropdown_content %}
+        {% endblock %}
+    </div>
+</div>
