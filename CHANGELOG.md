@@ -1,5 +1,15 @@
 # Changelog for Django Glue
 
+## 0.5.2.0
+
+### Changes
+- Internal Unique Name now allows for unique names to be duplicated in separate views but must remain unique in the same view.
+- Added keep live reload warning if keep live pulse fails
+
+### Bugs
+- Fixed glued functions having invalid comparison and did not work unless unique name matched function name.
+
+
 ## 0.5.1.0
 
 ### Features
