@@ -168,7 +168,6 @@ def complex_form_view(request):
     glue_template(request, 'chicago_element', 'complex_form/element/chicago_element.html')
 
     if request.POST:
-        print(request.POST)
         form = get_complex_form_processor(request.POST)
         if form.is_valid():
             print('Valid!')
@@ -181,6 +180,6 @@ def complex_form_view(request):
 
 def complex_model_form_view(request):
     glue_query_set(request, 'test_queryset', TestModel.objects.all(), 'delete')
-    context_data ={}
+    context_data = {}
 
     return render(request, 'complex_form/page/complex_model_form_page.html', context_data)
