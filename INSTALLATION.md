@@ -71,13 +71,7 @@ Add the required template tags to your base template
     <!-- Your Content Above the Glue Initialization-->
     ...
     
-    <!-- This includes Alpine.js and Axios.js Automatically -->
     {% glue_init %}
-    
-    <!-- Use this initialization if you plan on manually adding Alpine.js and Axios.js -->
-    {% glue_init_core %}
-    
-    <!-- Include Alpine.js and Axios.js here if you use glue_init_core -->
 
 </body>
 
