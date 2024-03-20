@@ -1,5 +1,10 @@
 # Changelog for Django Glue
 
+## 0.5.2.1
+
+### Bugs
+- Fixed issue with templates and function not being added properly to th keep live session.
+
 ## 0.5.2.0
 
 ### Changes

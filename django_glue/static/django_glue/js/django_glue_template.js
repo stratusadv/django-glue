@@ -2,6 +2,7 @@ class GlueTemplate {
     constructor(unique_name, shared_context_data = {}) {
         this.unique_name = encodeUniqueName(unique_name)
         this.shared_context_data = shared_context_data
+        window.glue_keep_live.add_unique_name(this.unique_name)
     }
 
     //Todo: Make sure there is not change of injection attack and get understanding of context data in templates
