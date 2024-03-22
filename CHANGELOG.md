@@ -1,5 +1,10 @@
 # Changelog for Django Glue
 
+## 0.5.2.2
+
+### Changes
+- Render functions on the GlueView object now await the response
+
 ## 0.5.2.1
 
 ### Bugs

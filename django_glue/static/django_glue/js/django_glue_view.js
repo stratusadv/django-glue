@@ -24,8 +24,8 @@ class GlueView {
 
     }
 
-    render_inner(target_element, parameters = {}) {
-        this._render(parameters).then((response) => {
+    async render_inner(target_element, parameters = {}) {
+        await this._render(parameters).then((response) => {
             return response.text()
         }).then((html) => {
             target_element.innerHTML = html
@@ -33,8 +33,8 @@ class GlueView {
 
     }
 
-    render_insert_adjacent(target_element, parameters = {}, position = 'beforeend') {
-        this._render(parameters).then((response) => {
+    async render_insert_adjacent(target_element, parameters = {}, position = 'beforeend') {
+        await this._render(parameters).then((response) => {
             return response.text()
         }).then((html) => {
             target_element.insertAdjacentHTML(position, html)
@@ -42,8 +42,8 @@ class GlueView {
 
     }
 
-    render_outer(target_element, parameters = {}) {
-        this._render(parameters).then((response) => {
+    async render_outer(target_element, parameters = {}) {
+        await this._render(parameters).then((response) => {
             return response.text()
         }).then((html) => {
             target_element.outerHTML = html
