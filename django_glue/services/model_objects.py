@@ -18,7 +18,10 @@ class GlueModelObjectService(Service):
 
     def load_object(self):
         self.load_model_class()
-        self.object = self.model_class.objects.get(pk=self.meta_data.object_pk)
+        try:
+            self.object = self.model_class.objects.get(pk=self.meta_data.object_pk)
+        except self.model_class.DoesNotExist:
+            self.object = self.model_class
 
     def load_model_class(self):
         self.model_class = ContentType.objects.get_by_natural_key(
