@@ -31,8 +31,18 @@ def field_name_included(name, fields, exclude):
 
 
 def generate_field_attr_dict(field):
-    form_field = field.formfield()
-    return form_field.widget_attrs(form_field.widget)
+    return {
+        'name': field.name,
+        'label': ''.join(word.capitalize() for word in field.name.split('_')),
+        'help_text': field.help_text,
+        'required': not field.null,
+        'disabled': not field.editable,
+        'hidden': field.hidden,
+        'choices': field.choices,
+        'max_length': field.max_length,
+    }
+    # form_field = field.formfield()
+    # return form_field.widget_attrs(form_field.widget)
 
 
 def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Union[list, tuple]):

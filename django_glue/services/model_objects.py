@@ -21,7 +21,7 @@ class GlueModelObjectService(Service):
         try:
             self.object = self.model_class.objects.get(pk=self.meta_data.object_pk)
         except self.model_class.DoesNotExist:
-            self.object = self.model_class
+            self.object = self.model_class()
 
     def load_model_class(self):
         self.model_class = ContentType.objects.get_by_natural_key(
@@ -38,6 +38,8 @@ class GlueModelObjectService(Service):
             self.meta_data.fields,
             self.meta_data.exclude,
         )
+
+        json_data.fields = generate_field_dict(self.object, self.meta_data.fields, self.meta_data.exclude)
 
         return generate_json_200_response_data(
             'THE GET ACTION',
