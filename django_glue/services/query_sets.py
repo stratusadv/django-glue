@@ -30,13 +30,15 @@ class GlueQuerySetService(Service):
         elif 'all' in body_data['data']:
             data = []
             for model_object in self.query_set.all():
-                data.append(GlueJsonData(simple_fields=generate_simple_field_dict(
-                        model_object, self.meta_data.fields, self.meta_data.exclude)))
+                data.append(GlueJsonData(
+                    simple_fields=generate_simple_field_dict(model_object, self.meta_data.fields, self.meta_data.exclude)
+                ))
 
         else:
             model_object = self.query_set.get(id=body_data['data']['id'])
-            data = GlueJsonData(simple_fields=generate_simple_field_dict(
-                model_object, self.meta_data.fields, self.meta_data.exclude))
+            data = GlueJsonData(
+                simple_fields=generate_simple_field_dict(model_object, self.meta_data.fields, self.meta_data.exclude)
+            )
 
         return generate_json_200_response_data(
             'THE QUERY GET ACTION',
