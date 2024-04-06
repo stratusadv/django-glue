@@ -6,6 +6,7 @@ from typing import Optional, Callable, Union
 from django.db.models import Model
 from django.core.serializers.json import DjangoJSONEncoder
 
+from django_glue.core.utils import serialize_object_to_json
 from django_glue.data_classes import GlueModelFieldData
 
 
@@ -52,16 +53,19 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
     model = type(model_object)
     # print(model_dict)
     # json_model = json.loads(serialize_object_to_json(model_object))[0]
+    # print(json_model)
 
     for field in model._meta.fields:
         try:
             if field_name_included(field.name, fields, exclude):
                 if hasattr(field, 'get_internal_type'):
                     if field.name == 'id':
+                        # field_value = json_model['pk']
                         field_value = model_object.pk
                         field_attr = ''
                     else:
                         field_value = getattr(model_object, field.name)
+                        # field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
                     # Todo: Field name logic is duplicated
@@ -79,6 +83,10 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
         except:
             raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'
 
+    # for key, val in fields_dict.items():
+    #     print(val)
+    #
+    # return fields_dict
     return json.loads(json.dumps(fields_dict, cls=DjangoJSONEncoder))
 
 
