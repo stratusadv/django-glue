@@ -35,7 +35,8 @@ if os.path.isfile(test_settings):
         '__init__.py',
         'manage.py',
         'automation.py',
-        'run_coverage.py'
+        'run_coverage.py',
+        'setup.py',
     )
 
     coverage_run_cmd = f'coverage run --branch --source=. --omit={",".join(omits)} tests/manage.py test --settings=tests.settings --noinput'
