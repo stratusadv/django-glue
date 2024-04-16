@@ -1,5 +1,12 @@
 # Changelog for Django Glue
 
+## 0.5.2.3
+
+### Changes
+- Glue model object returns a null object if we try to find a id that does not exist.
+- Updated html attributes on glue model objects and added attributes to js model objects. 
+
+
 ## 0.5.2.2
 
 ### Changes

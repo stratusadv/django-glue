@@ -6,6 +6,7 @@
 
 - Nathan Johnson
 - Wesley Howery
+- Austin Sauer
 
 ## Contributors
 
