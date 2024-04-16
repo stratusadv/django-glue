@@ -1,10 +1,10 @@
 import inspect
-import logging, pickle, base64, json
+import pickle, base64, json
 import urllib.parse
 from typing import Optional, Callable, Union
 
-from django.core import exceptions
 from django.db.models import Model
+from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.core.utils import serialize_object_to_json
 from django_glue.data_classes import GlueModelFieldData
@@ -31,25 +31,41 @@ def field_name_included(name, fields, exclude):
 
 
 def generate_field_attr_dict(field):
-    form_field = field.formfield()
-    return form_field.widget_attrs(form_field.widget)
+    return {
+        'name': field.name,
+        'label': ''.join(word.capitalize() for word in field.name.split('_')),
+        'id': f'id_{field.name}',
+        'help_text': field.help_text,
+        'required': not field.null,
+        'disabled': not field.editable,
+        'hidden': field.hidden,
+        'choices': field.choices,
+        'maxlength': field.max_length,
+    }
+    # form_field = field.formfield()
+    # return form_field.widget_attrs(form_field.widget)
 
 
 def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Union[list, tuple]):
-    fields_dict = dict()
+    # Creates a detailed dictionary of model fields
+    fields_dict = {}
 
     model = type(model_object)
-    json_model = json.loads(serialize_object_to_json(model_object))[0]
+    # print(model_dict)
+    # json_model = json.loads(serialize_object_to_json(model_object))[0]
+    # print(json_model)
 
     for field in model._meta.fields:
         try:
             if field_name_included(field.name, fields, exclude):
                 if hasattr(field, 'get_internal_type'):
                     if field.name == 'id':
-                        field_value = json_model['pk']
+                        # field_value = json_model['pk']
+                        field_value = model_object.pk
                         field_attr = ''
                     else:
-                        field_value = json_model['fields'][field.name]
+                        field_value = getattr(model_object, field.name)
+                        # field_value = json_model['fields'][field.name]
                         field_attr = generate_field_attr_dict(field)
 
                     # Todo: Field name logic is duplicated
@@ -67,7 +83,11 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
         except:
             raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'
 
-    return fields_dict
+    # for key, val in fields_dict.items():
+    #     print(val)
+    #
+    # return fields_dict
+    return json.loads(json.dumps(fields_dict, cls=DjangoJSONEncoder))
 
 
 def generate_method_list(model_object, methods: tuple) -> list:

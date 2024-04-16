@@ -4,7 +4,6 @@ class GlueQuerySet {
 
         // We need this value on query to build GlueModelObjects
         this.decoded_unique_name = glue_unique_name
-
         for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
             this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
         }
@@ -24,7 +23,6 @@ class GlueQuerySet {
                     model_object.set_properties(response.data[object].simple_fields)
                     model_object_list.push(model_object)
                 }
-
                 return model_object_list
             });
     }
