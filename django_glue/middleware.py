@@ -1,6 +1,6 @@
 from django.urls import resolve
 
-from django_glue.sessions import GlueSession, GlueKeepLiveSession
+from django_glue.session import GlueSession, GlueKeepLiveSession
 
 
 class GlueMiddleware(object):

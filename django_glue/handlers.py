@@ -1,11 +1,10 @@
-import logging, json
-
 from django_glue.services import GlueModelObjectService, GlueQuerySetService, GlueFunctionService
 from django_glue.responses import generate_json_404_response
 from django_glue.services.templates import GlueTemplateService
-from django_glue.sessions import GlueSession
+from django_glue.session import GlueSession
 from django_glue.data_classes import GlueMetaData, GlueBodyData
-from django_glue.enums import GlueConnection, GlueAccess
+from django_glue.request.enums import GlueConnection
+from django_glue.access.enums import GlueAccess
 
 
 class GlueRequestHandler:

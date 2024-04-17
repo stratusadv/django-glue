@@ -1,8 +1,6 @@
-import inspect
 from abc import ABC, abstractmethod
-from typing import Optional
 
-from django_glue.enums import GlueAction, GlueAccess
+from django_glue.access.enums import GlueAccess, GlueAction
 from django_glue.data_classes import GlueBodyData, GlueJsonResponseData
 from django_glue.responses import generate_json_404_response_data
 

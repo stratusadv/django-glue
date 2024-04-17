@@ -5,7 +5,7 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
-from django_glue.sessions import GlueSession, GlueKeepLiveSession
+from django_glue.session import GlueSession, GlueKeepLiveSession
 from django_glue.utils import encode_unique_name
 
 

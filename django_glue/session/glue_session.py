@@ -1,32 +1,28 @@
-from time import time
-
 from django.contrib.contenttypes.models import ContentType
 
 from django_glue.conf import settings
-from django_glue.enums import GlueConnection, GlueAccess
+from django_glue.request.enums import GlueConnection
+from django_glue.access.enums import GlueAccess
 from django_glue.data_classes import GlueContextData, GlueMetaData
+from django_glue.session.session import Session
 from django_glue.utils import generate_field_dict, generate_method_list, encode_query_set_to_str
-
-GLUE_SESSION_TYPES = (
-    'context',
-    'meta',
-)
+from django_glue.session.enums import GlueSessionTypes
 
 
-class GlueSession:
+class GlueSession(Session):
     """
         Used to add models, query sets, and other objects to the session.
-        Todo: What is context?
     """
     def __init__(self, request):
-        self.request = request
+        super().__init__(request)
 
         self.request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
 
-        for session_type in GLUE_SESSION_TYPES:
-            self.request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type, dict())
+        for session_type in GlueSessionTypes:
+            self.request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type.value, dict())
 
         self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
+        print(self.session)
 
     def __getitem__(self, key):
         return self.session[key]
@@ -153,62 +149,12 @@ class GlueSession:
         return unique_name in self.session['context']
 
     def purge_unique_name(self, unique_name):
-        for session_type in GLUE_SESSION_TYPES:
-            if unique_name in self.session[session_type]:
-                self.session[session_type].pop(unique_name)
+        for session_type in GlueSessionTypes:
+            if unique_name in self.session[session_type.value]:
+                self.session[session_type.value].pop(unique_name)
 
     def set_modified(self):
         self.request.session.modified = True
 
     def unique_name_unused(self, unique_name):
         return unique_name in self.session['context']
-
-
-
-class GlueKeepLiveSession:
-    """
-        Used to keep glue session data live for a set amount of time.
-        Functionality to handle multiple windows/tabs.
-    """
-    def __init__(self, request):
-        self.request = request
-        self.session = request.session.setdefault(settings.DJANGO_GLUE_KEEP_LIVE_SESSION_NAME, dict())
-
-    def __getitem__(self, key):
-        return self.session[key]
-
-    def __setitem__(self, key, value):
-        self.session[key] = value
-
-    def clean_and_get_expired_unique_names(self) -> list:
-        expired_unique_names = []
-
-        for key, val in self.session.items():
-            if time() > val:
-                expired_unique_names.append(key)
-
-        for expired_unique_name in expired_unique_names:
-            self.session.pop(expired_unique_name)
-
-        self.set_modified()
-
-        return expired_unique_names
-
-    @staticmethod
-    def get_next_expire_time():
-        return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS
-
-    def set_unique_name(self, unique_name):
-        self.session.setdefault(unique_name, self.get_next_expire_time())
-
-        self.set_modified()
-
-    def set_modified(self):
-        self.request.session.modified = True
-
-    def update_unique_names(self, unique_names: list):
-        for unique_name in unique_names:
-            if unique_name in self.session:
-                self.session[unique_name] = self.get_next_expire_time()
-
-        self.set_modified()

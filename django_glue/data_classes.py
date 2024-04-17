@@ -7,7 +7,9 @@ from dataclasses import dataclass, asdict
 from django.contrib.contenttypes.models import ContentType
 from django.http import JsonResponse
 
-from django_glue.enums import GlueConnection, GlueAccess, GlueAction, GlueJsonResponseStatus, GlueJsonResponseType
+from django_glue.access.enums import GlueAction, GlueAccess
+from django_glue.request.enums import GlueConnection
+from django_glue.response.enums import GlueJsonResponseType, GlueJsonResponseStatus
 
 
 class GlueBodyData:
