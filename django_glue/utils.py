@@ -7,7 +7,6 @@ from django.db.models import Model
 from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.core.utils import serialize_object_to_json
-from django_glue.data_classes import GlueModelFieldData
 
 
 def decode_query_set_from_str(query_set_string):
@@ -47,6 +46,7 @@ def generate_field_attr_dict(field):
 
 
 def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Union[list, tuple]):
+    # Todo: Is this even being used?
     # Creates a detailed dictionary of model fields
     fields_dict = {}
 
@@ -74,11 +74,11 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
                     else:
                         field_name = field.name
 
-                    fields_dict[field_name] = GlueModelFieldData(
-                        type=field.get_internal_type(),
-                        value=field_value,
-                        html_attr=field_attr,
-                    ).to_dict()
+                    # fields_dict[field_name] = GlueModelFieldData(
+                    #     type=field.get_internal_type(),
+                    #     value=field_value,
+                    #     html_attr=field_attr,
+                    # ).to_dict()
 
         except:
             raise f'Field "{field.name}" is invalid field or exclude for model type "{model.__class__.__name__}"'

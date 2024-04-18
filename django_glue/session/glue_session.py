@@ -2,9 +2,9 @@ from django.contrib.contenttypes.models import ContentType
 
 from django_glue.conf import settings
 from django_glue.entities.model_object.entities import GlueModelObject
-from django_glue.request.enums import GlueConnection
 from django_glue.access.enums import GlueAccess
-from django_glue.data_classes import GlueContextData, GlueMetaData
+from django_glue.handler.enums import GlueConnection
+from django_glue.session.data import GlueContextData, GlueMetaData
 from django_glue.session.session import Session
 from django_glue.utils import generate_field_dict, generate_method_list, encode_query_set_to_str
 from django_glue.session.enums import GlueSessionTypes
@@ -36,6 +36,7 @@ class GlueSession(Session):
             unique_name: str,
             target,
     ):
+        # Todo: Need to change this to a entity
         self.check_unique_name(unique_name)
 
         self.add_context(unique_name, GlueContextData(
@@ -54,6 +55,7 @@ class GlueSession(Session):
             glue_model_object: GlueModelObject,
     ):
 
+        # Todo: Keep the session data light and have slightly more computation.
         self.check_unique_name(glue_model_object.unique_name)
         self.add_context(glue_model_object.unique_name, glue_model_object.to_context_data())
         self.add_meta(glue_model_object.unique_name, glue_model_object.to_meta_data())
@@ -85,6 +87,7 @@ class GlueSession(Session):
             exclude: tuple = ('__none__',),
             methods: tuple = ('__none__',),
     ):
+        # Todo: Need to change this to an entity
         content_type = ContentType.objects.get_for_model(query_set.query.model)
 
         self.check_unique_name(unique_name)
@@ -115,7 +118,7 @@ class GlueSession(Session):
             unique_name: str,
             template,
     ):
-
+        # Todo: Need to change this to an entity
         self.check_unique_name(unique_name)
 
         self.add_context(unique_name, GlueContextData(

@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 
 from django_glue.access.enums import GlueAccess, GlueAction
-from django_glue.data_classes import GlueBodyData, GlueJsonResponseData
-from django_glue.responses import generate_json_404_response_data
+from django_glue.handler.data import GlueBodyData
+from django_glue.response.data import GlueJsonResponseData
+from django_glue.response.responses import generate_json_404_response_data
 
 
 class Service(ABC):

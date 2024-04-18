@@ -6,7 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from django_glue.access.enums import GlueAccess
 from django_glue.entities.model_object.entities import GlueModelField
-from django_glue.request.enums import GlueConnection
+from django_glue.handler.enums import GlueConnection
 
 
 @dataclass

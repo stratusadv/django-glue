@@ -3,10 +3,12 @@ from typing import Optional
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 
-from django_glue.data_classes import GlueJsonResponseData, GlueJsonData, GlueBodyData, GlueMetaData
-from django_glue.responses import generate_json_200_response_data, generate_json_404_response_data
+from django_glue.handler.data import GlueBodyData
+from django_glue.response.data import GlueJsonResponseData, GlueJsonData
+from django_glue.response.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.services.services import Service
-from django_glue.utils import generate_simple_field_dict, get_field_names_from_model, check_valid_method_kwargs, \
+from django_glue.session.data import GlueMetaData
+from django_glue.utils import generate_simple_field_dict, check_valid_method_kwargs, \
     type_set_method_kwargs, generate_field_dict
 
 

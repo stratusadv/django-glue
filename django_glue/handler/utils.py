@@ -1,7 +1,5 @@
-from django_glue.data_classes import GlueBodyData
 from django_glue.handler.enums import GlueConnection
 from django_glue.response.data import GlueJsonResponseData
-from django_glue.session import GlueSession
 
 from django_glue.handler.maps import CONNECTION_TO_HANDLER_MAP
 

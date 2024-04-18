@@ -2,9 +2,11 @@ from typing import Optional
 
 from django.db.models import QuerySet
 
-from django_glue.data_classes import GlueJsonResponseData, GlueBodyData, GlueMetaData, GlueJsonData
-from django_glue.responses import generate_json_200_response_data, generate_json_404_response_data
+from django_glue.handler.data import GlueBodyData
+from django_glue.response.data import GlueJsonResponseData, GlueJsonData
+from django_glue.response.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.services.services import Service
+from django_glue.session.data import GlueMetaData
 from django_glue.utils import decode_query_set_from_str, generate_simple_field_dict, get_field_names_from_model, \
     check_valid_method_kwargs, type_set_method_kwargs, field_name_included
 

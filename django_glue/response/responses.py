@@ -2,7 +2,7 @@ from typing import Optional
 
 from django.http import JsonResponse
 
-from django_glue.data_classes import GlueJsonResponseData, GlueJsonData
+from django_glue.response.data import GlueJsonData, GlueJsonResponseData
 from django_glue.response.enums import GlueJsonResponseStatus, GlueJsonResponseType
 
 

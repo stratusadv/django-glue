@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from django_glue.response.data import GlueContextData, GlueMetaData, GlueJsonData
+from django_glue.response.data import GlueJsonData
+from django_glue.session.data import GlueContextData, GlueMetaData
 
 
 @dataclass

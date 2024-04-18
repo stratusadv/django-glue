@@ -6,12 +6,12 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 
 from django_glue.access.enums import GlueAccess
-from django_glue.data_classes import GlueContextData, GlueMetaData
 from django_glue.form.utils import glue_form_field_from_model_field
 from django_glue.form.fields import GlueFormField
-from django_glue.request.enums import GlueConnection
+from django_glue.handler.enums import GlueConnection
 
 from django_glue.response.data import GlueJsonData
+from django_glue.session.data import GlueContextData, GlueMetaData
 from django_glue.utils import field_name_included
 
 

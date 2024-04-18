@@ -2,17 +2,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from django_glue.entities.model_object.entities import GlueEntity
-from django_glue.services import GlueModelObjectService, GlueQuerySetService, GlueFunctionService
-from django_glue.responses import generate_json_404_response
-from django_glue.services.templates import GlueTemplateService
+from django_glue.handler.data import GlueBodyData
 from django_glue.session import GlueSession
-from django_glue.data_classes import GlueMetaData, GlueBodyData
-from django_glue.request.enums import GlueConnection
-from django_glue.access.enums import GlueAccess
 
 
 @dataclass
-class GlueRequestHandler:
+class GlueRequestHandler(ABC):
     """
         This class parses the request, determines the type of request, and then calls the appropriate service.
     """

@@ -1,9 +1,9 @@
-import logging
-
-from django_glue.data_classes import GlueBodyData, GlueMetaData
+from django_glue.handler.data import GlueBodyData
 from django_glue.services.services import Service
 from django.shortcuts import HttpResponse
 from django.template.loader import render_to_string
+
+from django_glue.session.data import GlueMetaData
 
 
 class GlueTemplateService(Service):
