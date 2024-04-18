@@ -1,11 +1,11 @@
 class GlueModelObject {
+
     constructor(glue_unique_name) {
-        // Needs to be named glue_unique_name to avoid overriding the unique_name property
         this.glue_unique_name = encodeUniqueName(glue_unique_name)
-        this['fields'] = {}
+        this['form_fields'] = {}
         for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
             this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
-            this['fields'][key] = window.glue_session_data['context'][this.glue_unique_name].fields[key]
+            this['form_fields'][key] = window.glue_session_data['context'][this.glue_unique_name].fields[key]
         }
         window.glue_keep_live.add_unique_name(this.glue_unique_name)
     }

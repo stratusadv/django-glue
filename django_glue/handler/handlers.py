@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import ClassVar, Type
 
 from django_glue.entities.model_object.entities import GlueEntity
 from django_glue.handler.data import GlueBodyData
 from django_glue.session import GlueSession
+from django_glue.session.data import GlueContextData, GlueMetaData
 
 
 @dataclass
@@ -14,10 +16,28 @@ class GlueRequestHandler(ABC):
 
     glue_session: GlueSession
     glue_body_data: GlueBodyData
-    glue_entity: GlueEntity = ...
+
+    context_data: GlueContextData
+    meta_data: GlueMetaData
+
+    unique_name: str = ...
+
+    _context_data_class: ClassVar[Type[GlueContextData]] = ...
+    _meta_data_class: ClassVar[Type[GlueMetaData]] = ...
 
     def __post_init__(self):
-        self.glue_entity = self.initialize_glue_entity()
+        if self.context_data is None or self.meta_data is None:
+            raise ValueError('Context data and message data must be set on the handler class.')
+
+        self.unique_name = self.glue_body_data['unique_name']
+        self.context_data = self._context_data_class(self.glue_session[self.unique_name]['context_data'])
+        self.meta_data = self._meta_data_class(self.glue_session[self.unique_name]['meta_data'])
+
+
+    # glue_entity: GlueEntity = ...
+
+    # def __post_init__(self):
+    #     self.glue_entity = self.initialize_glue_entity()
 
     # def __init__(self, glue_session: GlueSession, glue_body_data: GlueBodyData):
     #     self.glue_session = glue_session

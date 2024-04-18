@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from django_glue.entities.model_object.entities import GlueModelField
 from django_glue.response.data import GlueJsonData
 from django_glue.session.data import GlueContextData, GlueMetaData
 
@@ -16,4 +17,5 @@ class GlueModelObjectMetaData(GlueMetaData):
 
 @dataclass
 class GlueModelObjectJsonData(GlueJsonData):
-    pass
+    glue_fields: list[GlueModelField] = field(default_factory=list)
+
