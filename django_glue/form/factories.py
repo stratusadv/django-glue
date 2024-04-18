@@ -1,10 +1,22 @@
-from django.db.models import Model
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
-from django_glue.form.fields import FormField
+from django.db.models import Model, Field
+from django_glue.form import fields
 
 
-def form_field_from_django_model_field(model_field, model_object: Model) -> FormField:
-    # Index the type of field depending on a map
-    # Get the field object
-    # Process the field object from the model field
-    pass
+@dataclass
+class GlueFieldFactory(ABC):
+    model_object: Model
+    model_field: Field
+
+    @abstractmethod
+    def factory_method(self):
+        pass
+
+
+@dataclass
+class GlueCharFieldFactory(GlueFieldFactory):
+
+    def factory_method(self):
+        return fields.CharField()

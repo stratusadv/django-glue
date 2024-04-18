@@ -1,9 +1,7 @@
+from django.db import models
 from enum import Enum
 
 
 class FieldTypes(str, Enum):
-    """
-        Value represents the string how django names their field types
-    """
-    BOOLEAN = 'Boolean'
-    CHAR_FIELD = 'Character Field'
+    BOOLEAN = str(models.BooleanField)
+    CHAR_FIELD = str(models.CharField)

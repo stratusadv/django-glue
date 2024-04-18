@@ -51,27 +51,28 @@ class GlueSession(Session):
 
     def add_model_object(
             self,
-            unique_name: str,
             glue_model_object: GlueModelObject,
     ):
 
-        self.check_unique_name(unique_name)
+        self.check_unique_name(glue_model_object.unique_name)
+        self.add_context(glue_model_object.unique_name, glue_model_object.to_context_data())
+        self.add_meta(glue_model_object.unique_name, glue_model_object.to_meta_data())
 
-        self.add_context(unique_name, GlueContextData(
-            connection=GlueConnection('model_object'),
-            access=GlueAccess(access),
-            fields=generate_field_dict(model_object, fields, exclude),
-            methods=generate_method_list(model_object, methods),
-        ))
+        # self.add_context(unique_name, GlueContextData(
+        #     connection=GlueConnection('model_object'),
+        #     access=GlueAccess(access),
+        #     fields=generate_field_dict(model_object, fields, exclude),
+        #     methods=generate_method_list(model_object, methods),
+        # ))
 
-        self.add_meta(unique_name, GlueMetaData(
-            app_label=content_type.app_label,
-            model=content_type.model,
-            object_pk=model_object.pk,
-            fields=fields,
-            exclude=exclude,
-            methods=methods,
-        ))
+        # self.add_meta(unique_name, GlueMetaData(
+        #     app_label=content_type.app_label,
+        #     model=content_type.model,
+        #     object_pk=model_object.pk,
+        #     fields=fields,
+        #     exclude=exclude,
+        #     methods=methods,
+        # ))
 
         self.set_modified()
 

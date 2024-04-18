@@ -1,14 +1,20 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
 @dataclass
-class FormField(ABC):
+class GlueFormField(ABC):
     pass
 
+    @abstractmethod()
+    def to_dict(self):
+        pass
 
-class CharField(FormField):
-    pass
 
+class GlueCharField(GlueFormField):
+    max_length: int
 
+    def to_dict(self):
+        field_dict = super().to_dict()
+        return field_dict
 

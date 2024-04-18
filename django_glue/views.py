@@ -6,7 +6,7 @@ from django.views.decorators.http import require_http_methods
 
 from django_glue.core.decorators import require_content_types
 from django_glue.data_classes import GlueBodyData
-from django_glue.handlers import GlueRequestHandler
+from django_glue.handler.utils import process_glue_request
 from django_glue.responses import generate_json_404_response
 from django_glue.session import GlueKeepLiveSession, GlueSession
 
@@ -20,7 +20,7 @@ def glue_data_ajax_handler_view(request):
     if glue_session.has_unique_name(glue_body_data.unique_name):
         logging.warning(request.body.decode('utf-8'))
 
-        return GlueRequestHandler(glue_session, glue_body_data).process_response()
+        return process_glue_request(glue_session, glue_body_data)
     else:
         return generate_json_404_response()
 

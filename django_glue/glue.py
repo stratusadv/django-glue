@@ -1,5 +1,4 @@
 from typing import Union
-import urllib.parse
 
 from django.db.models import Model
 from django.db.models.query import QuerySet
@@ -37,21 +36,19 @@ def glue_model(
 ):
     glue_session = GlueSession(request)
 
-    encoded_unique_name = encode_unique_name(request, unique_name)
-
-    # Todo: Initialize a glue model object & pass it here.
     glue_model_object = GlueModelObject(
+        unique_name=encode_unique_name(request, unique_name),
         model_object=target,
         access=access,
-        fields=fields,
-        exclude=exclude,
-        methods=methods
+        included_fields=fields,
+        excluded_fields=exclude,
+        included_methods=methods
     )
 
-    glue_session.add_model_object(encoded_unique_name, target, access, fields, exclude, methods)
+    glue_session.add_model_object(glue_model_object)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(encoded_unique_name)
+    glue_keep_live_session.set_unique_name(glue_model_object.unique_name)
 
     glue_session.set_modified()
 
