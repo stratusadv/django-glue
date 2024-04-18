@@ -57,3 +57,7 @@ Main components would be Session Updating, JS Objects, Request, Processing, Resp
 - Objects can convert themselves back to session data.
 - Objects would have fields 
 - Move handler into core and it is a base class. Each entity would have its own handler and would be able to process itself that way.
+
+### Questions
+- What do we actually need for the field data? On the JS side we want to be able to access the properties. 
+This can all be done by the context on fields... Type and Value

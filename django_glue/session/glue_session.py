@@ -1,6 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 
 from django_glue.conf import settings
+from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.request.enums import GlueConnection
 from django_glue.access.enums import GlueAccess
 from django_glue.data_classes import GlueContextData, GlueMetaData
@@ -51,13 +52,8 @@ class GlueSession(Session):
     def add_model_object(
             self,
             unique_name: str,
-            model_object,
-            access: str = 'view',
-            fields: tuple = ('__all__',),
-            exclude: tuple = ('__none__',),
-            methods: tuple = ('__none__',),
+            glue_model_object: GlueModelObject,
     ):
-        content_type = ContentType.objects.get_for_model(model_object)
 
         self.check_unique_name(unique_name)
 

@@ -5,6 +5,7 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
+from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.session import GlueSession, GlueKeepLiveSession
 from django_glue.utils import encode_unique_name
 
@@ -37,6 +38,16 @@ def glue_model(
     glue_session = GlueSession(request)
 
     encoded_unique_name = encode_unique_name(request, unique_name)
+
+    # Todo: Initialize a glue model object & pass it here.
+    glue_model_object = GlueModelObject(
+        model_object=target,
+        access=access,
+        fields=fields,
+        exclude=exclude,
+        methods=methods
+    )
+
     glue_session.add_model_object(encoded_unique_name, target, access, fields, exclude, methods)
 
     glue_keep_live_session = GlueKeepLiveSession(request)
