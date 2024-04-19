@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Union
 
 from django_glue.access.enums import GlueAccess
@@ -22,7 +21,6 @@ class GlueEntity(ABC):
             self.access = GlueAccess(access)
         else:
             self.access = access
-
 
     @abstractmethod
     def to_session_data(self) -> 'GlueSessionData':

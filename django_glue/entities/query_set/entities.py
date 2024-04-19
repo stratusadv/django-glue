@@ -3,13 +3,12 @@ import pickle
 from typing import Union
 
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Model, QuerySet
+from django.db.models import QuerySet
 
 from django_glue.access.enums import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
 from django_glue.handler.enums import GlueConnection
-from django_glue.utils import generate_field_dict
 
 
 class GlueQuerySet(GlueEntity):
