@@ -48,41 +48,9 @@ class GlueSession(Session):
 
         self.set_modified()
 
-    def add_model_object(self, glue_model_object: 'GlueModelObject'):
-        self.check_unique_name(glue_model_object.unique_name)
-        self.add_session_data(glue_model_object.unique_name, glue_model_object.to_session_data())
-        self.set_modified()
-
-    def add_query_set(
-            self,
-            unique_name: str,
-            query_set,
-            access: str = 'view',
-            fields: tuple = ('__all__',),
-            exclude: tuple = ('__none__',),
-            methods: tuple = ('__none__',),
-    ):
-        # Todo: Need to change this to an entity
-        content_type = ContentType.objects.get_for_model(query_set.query.model)
-
-        self.check_unique_name(unique_name)
-
-        self.add_context(unique_name, GlueSessionData(
-            connection=GlueConnection('query_set'),
-            access=GlueAccess(access),
-            fields=generate_field_dict(query_set.query.model(), fields, exclude),
-            methods=generate_method_list(query_set.query.model(), methods),
-        ))
-
-        self.add_meta(unique_name, GlueMetaData(
-            app_label=content_type.app_label,
-            model=content_type.model,
-            query_set_str=encode_query_set_to_str(query_set),
-            fields=fields,
-            exclude=exclude,
-            methods=methods,
-        ))
-
+    def add_glue_entity(self, glue_entity: 'GlueEntity'):
+        self.check_unique_name(glue_entity.unique_name)
+        self.add_session_data(glue_entity.unique_name, glue_entity.to_session_data())
         self.set_modified()
 
     def add_session_data(self, unique_name, session_data: GlueSessionData) -> None:

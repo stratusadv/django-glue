@@ -4,9 +4,21 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
+from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.entities import GlueModelObject
+from django_glue.entities.query_set.entities import GlueQuerySet
 from django_glue.session import GlueSession, GlueKeepLiveSession
 from django_glue.utils import encode_unique_name
+
+
+def _glue_entity(request: HttpRequest, glue_entity: GlueEntity):
+    glue_session = GlueSession(request)
+    glue_session.add_glue_entity(glue_entity)
+
+    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session.set_unique_name(glue_entity.unique_name)
+
+    glue_session.set_modified()
 
 
 def glue_function(
@@ -34,8 +46,6 @@ def glue_model(
         exclude: Union[list, tuple] = ('__none__',),
         methods: Union[list, tuple] = ('__none__',),
 ):
-    glue_session = GlueSession(request)
-
     glue_model_object = GlueModelObject(
         unique_name=encode_unique_name(request, unique_name),
         model_object=target,
@@ -45,12 +55,7 @@ def glue_model(
         included_methods=methods
     )
 
-    glue_session.add_model_object(glue_model_object)
-
-    glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(glue_model_object.unique_name)
-
-    glue_session.set_modified()
+    _glue_entity(request, glue_model_object)
 
 
 def glue_query_set(
@@ -62,15 +67,16 @@ def glue_query_set(
         exclude: Union[list, tuple] = ('__none__',),
         methods: Union[list, tuple] = ('__none__',),
 ):
-    glue_session = GlueSession(request)
+    glue_queryset = GlueQuerySet(
+        unique_name=encode_unique_name(request, unique_name),
+        query_set=target,
+        access=access,
+        included_fields=fields,
+        excluded_fields=exclude,
+        included_methods=methods
+    )
 
-    encoded_unique_name = encode_unique_name(request, unique_name)
-    glue_session.add_query_set(encoded_unique_name, target, access, fields, exclude, methods)
-
-    glue_keep_live_session = GlueKeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(encoded_unique_name)
-
-    glue_session.set_modified()
+    _glue_entity(request, glue_queryset)
 
 
 def glue_template(
