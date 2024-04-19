@@ -1,50 +1,23 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict, field
-from typing import Any, Type, Optional, Union
+from dataclasses import dataclass, field
+from typing import Type, Optional, Union
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 
 from django_glue.access.enums import GlueAccess
-from django_glue.entities.model_object.data import GlueModelObjectSessionData
-from django_glue.form.utils import glue_form_field_from_model_field
-from django_glue.form.fields import GlueFormField
+from django_glue.entities.base_entity import GlueEntity
+from django_glue.entities.model_object.data import GlueModelField
+from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
-
-from django_glue.response.data import GlueJsonData
-from django_glue.utils import field_name_included
-
-
-@dataclass
-class GlueModelField:
-    name: str
-    value: Any
-    form_field: GlueFormField
-
-    def to_dict(self) -> dict:
-        return {
-            'name': self.name,
-            'value': self.value,
-            'form_field': self.form_field.to_dict()
-        }
-
-
-@dataclass
-class GlueEntity(ABC):
-
-    @abstractmethod
-    def to_session_data(self) -> 'GlueSessionData':
-        pass
-
-    def to_json_data(self) -> GlueJsonData:
-        pass
+from django_glue.utils import generate_field_dict
 
 
 @dataclass
 class GlueModelObject(GlueEntity):
     unique_name: str
     model_object: Model
-    fields: list[GlueModelField] = field(default_factory=list)
+    # fields: list[GlueModelField] = field(default_factory=list)
+    fields: dict = field(default_factory=dict)
 
     access: Union[GlueAccess, str] = GlueAccess.VIEW
     connection: GlueConnection = GlueConnection.MODEL_OBJECT
@@ -71,8 +44,10 @@ class GlueModelObject(GlueEntity):
     def fields_to_dict(self):
         return {field.name: field.to_dict() for field in self.fields}
 
-    def generate_field_data(self) -> list[GlueModelField]:
-        field_data = []
+    # def generate_response_data(self) -> list['GlueModelObjectJsonData']:
+    def generate_field_data(self) -> dict:
+        return generate_field_dict(self.model_object, self.included_fields, self.excluded_fields)
+        # field_data = []
         # Todo: Generate field data
         # for django_field in self.model._meta.fields:
         #     if field_name_included(django_field.name, self.included_fields, self.excluded_fields):
@@ -81,7 +56,8 @@ class GlueModelObject(GlueEntity):
         #             value=getattr(self.model_object, django_field.name),
         #             form_field=glue_form_field_from_model_field(django_field, self.model_object)
         #         ))
-        return field_data
+
+        # return
 
     def generate_method_data(self):
         methods_list = list()

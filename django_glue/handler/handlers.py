@@ -4,6 +4,7 @@ from typing import ClassVar, Type
 
 from django_glue.entities.model_object.entities import GlueEntity
 from django_glue.handler.data import GlueBodyData
+from django_glue.response.data import GlueJsonResponseData
 from django_glue.session import GlueSession
 from django_glue.session.data import GlueSessionData, GlueMetaData
 
@@ -35,5 +36,5 @@ class GlueRequestHandler(ABC):
         pass
 
     @abstractmethod
-    def process_response(self):
+    def process_response(self) -> GlueJsonResponseData:
         pass

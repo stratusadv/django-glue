@@ -6,20 +6,20 @@ from django_glue.response.data import GlueJsonData, GlueJsonResponseData
 from django_glue.response.enums import GlueJsonResponseStatus, GlueJsonResponseType
 
 
-def generate_json_200_response(
-        message_title: str,
-        message_body: str,
-        data: Optional[GlueJsonData] = None,
-        optional_message_data: Optional[dict] = None,
-) -> JsonResponse:
-
-    return generate_json_200_response_data(
-        message_title=message_title,
-        message_body=message_body,
-        data=data,
-        optional_message_data=optional_message_data,
-    ).to_django_json_response()
-
+# def generate_json_200_response(
+#         message_title: str,
+#         message_body: str,
+#         data: Optional[GlueJsonData] = None,
+#         optional_message_data: Optional[dict] = None,
+# ) -> JsonResponse:
+#
+#     return generate_json_200_response_data(
+#         message_title=message_title,
+#         message_body=message_body,
+#         data=data,
+#         optional_message_data=optional_message_data,
+#     ).to_django_json_response()
+#
 
 def generate_json_200_response_data(
         message_title: str,
