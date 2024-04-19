@@ -6,9 +6,10 @@ from django_glue.session.data import GlueSessionData
 
 @dataclass
 class GlueModelObjectSessionData(GlueSessionData):
-    app_label: str = None
-    model_name: str = None
-    object_pk: int = None
-    included_fields: Union[list, tuple] = field(default_factory=tuple)
-    exclude_fields: Union[list, tuple] = field(default_factory=tuple)
-    methods: Union[list, tuple] = field(default_factory=tuple)
+    unique_name: str
+    app_label: str
+    model_name: str
+    object_pk: int
+    included_fields: Union[list, tuple]
+    exclude_fields: Union[list, tuple]
+    methods: Union[list, tuple]

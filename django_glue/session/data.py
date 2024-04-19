@@ -11,7 +11,7 @@ from django_glue.handler.enums import GlueConnection
 @dataclass
 class GlueSessionData(ABC):
     connection: GlueConnection
-    access: GlueAccess = GlueAccess.VIEW
+    access: GlueAccess
 
     def to_dict(self) -> dict:
         return asdict(self)

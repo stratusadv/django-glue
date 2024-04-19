@@ -4,10 +4,7 @@ from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 
 
-def glue_model_object_from_glue_session(
-        unique_name: str,
-        glue_session: GlueModelObjectSessionData,
-) -> GlueModelObject:
+def glue_model_object_from_glue_session(glue_session: GlueModelObjectSessionData,) -> GlueModelObject:
 
     model_class = ContentType.objects.get_by_natural_key(
         glue_session.app_label,
@@ -20,7 +17,7 @@ def glue_model_object_from_glue_session(
         model_object = model_class()
 
     return GlueModelObject(
-        unique_name=unique_name,
+        unique_name=glue_session.unique_name,
         model_object=model_object,
         access=glue_session.access,
         connection=glue_session.connection,

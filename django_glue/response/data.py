@@ -11,7 +11,7 @@ from django_glue.response.enums import GlueJsonResponseType, GlueJsonResponseSta
 
 @dataclass
 class GlueJsonData(ABC):
-    # This is the data that is passed to the ajax response
+    # This is the structure of the data that is passed back to the ajax call
     """
         Used to provide a consistent structure for our glue objects.
     """

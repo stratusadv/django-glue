@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from django_glue.handler.data import GlueBodyData
+
 
 @dataclass
 class GlueModelField:

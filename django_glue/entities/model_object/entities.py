@@ -1,5 +1,4 @@
-from dataclasses import dataclass, field
-from typing import Type, Optional, Union
+from typing import Union
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
@@ -11,37 +10,32 @@ from django_glue.handler.enums import GlueConnection
 from django_glue.utils import generate_field_dict
 
 
-@dataclass
 class GlueModelObject(GlueEntity):
-    unique_name: str
-    model_object: Model
-    # fields: list[GlueModelField] = field(default_factory=list)
-    fields: dict = field(default_factory=dict)
+    def __init__(
+            self,
+            unique_name: str,
+            model_object: Model,
+            access: Union[GlueAccess, str] = GlueAccess.VIEW,
+            connection: GlueConnection = GlueConnection.MODEL_OBJECT,
+            included_fields: tuple = ('__all__',),
+            excluded_fields: tuple = ('__none__',),
+            included_methods: tuple = ('__none__',),
+    ):
+        super().__init__(unique_name, connection, access)
 
-    access: Union[GlueAccess, str] = GlueAccess.VIEW
-    connection: GlueConnection = GlueConnection.MODEL_OBJECT
+        self.model_object = model_object
 
-    included_fields: tuple = ('__all__',),
-    excluded_fields: tuple = ('__none__',),
-    included_methods: tuple = ('__none__',),
+        self.included_fields = included_fields
+        self.excluded_fields = excluded_fields
+        self.included_methods = included_methods
 
-    content_type: ContentType = ...
-    app_label: str = ...
-    model: Type[Model] = ...
-    object_pk: Optional[int] = ...
+        self.fields = self.generate_field_data()
 
-    def __post_init__(self):
         self.content_type = ContentType.objects.get_for_model(self.model_object)
         self.app_label = self.content_type.app_label
         self.model = self.content_type.model_class()
         self.object_pk = self.model_object.pk
         self.fields = self.generate_field_data()
-
-        if isinstance(self.access, str):
-            self.access = GlueAccess(self.access)
-
-    def fields_to_dict(self):
-        return {field.name: field.to_dict() for field in self.fields}
 
     # def generate_response_data(self) -> list['GlueModelObjectJsonData']:
     def generate_field_data(self) -> dict:
@@ -74,6 +68,7 @@ class GlueModelObject(GlueEntity):
         return GlueModelObjectSessionData(
             connection=self.connection,
             access=self.access,
+            unique_name=self.unique_name,
             app_label=self.app_label,
             model_name=self.model._meta.model_name,
             object_pk=self.model_object.pk,
