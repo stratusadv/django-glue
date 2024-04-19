@@ -29,9 +29,13 @@ class GlueModelObject {
             this.glue_unique_name,
             'get'
         ).then((response) => {
-            console.log(response)
             glue_dispatch_response_event(response)
-            this.set_properties(response.data.simple_fields)
+
+            // Set the properties on the object
+            Object.entries(response.data).forEach(([key, field]) => {
+                this[key] = field.value
+            });
+
         }).catch((error) => {
                 glue_dispatch_object_get_error_event(error)
             }

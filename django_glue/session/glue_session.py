@@ -22,7 +22,6 @@ class GlueSession(Session):
             self.request.session[settings.DJANGO_GLUE_SESSION_NAME].setdefault(session_type.value, dict())
 
         self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
-        print(self.session)
 
     def __getitem__(self, key):
         return self.session[key]

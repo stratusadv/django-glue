@@ -74,7 +74,13 @@ def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Uni
                     else:
                         field_name = field.name
 
-                    # fields_dict[field_name] = GlueModelFieldData(
+                    fields_dict[field_name] = {
+                        'type': field.get_internal_type(),
+                        'value': field_value,
+                        'html_attr': field_attr
+                    }
+
+                    #     GlueModelFieldData(
                     #     type=field.get_internal_type(),
                     #     value=field_value,
                     #     html_attr=field_attr,

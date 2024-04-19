@@ -6,7 +6,6 @@ from django.db.models import Model
 
 from django_glue.access.enums import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.model_object.data import GlueModelField
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import generate_field_dict

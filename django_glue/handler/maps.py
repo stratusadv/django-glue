@@ -1,7 +1,7 @@
+from django_glue.entities.model_object.maps import GLUE_MODEL_OBJECT_HANDLER_MAP
 from django_glue.handler.enums import GlueConnection
-from django_glue.entities.model_object.handlers import GetGlueModelObjectHandler
 
 
 CONNECTION_TO_HANDLER_MAP = {
-    GlueConnection.MODEL_OBJECT: GetGlueModelObjectHandler
+    GlueConnection.MODEL_OBJECT: GLUE_MODEL_OBJECT_HANDLER_MAP
 }

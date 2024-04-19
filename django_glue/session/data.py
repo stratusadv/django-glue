@@ -12,8 +12,6 @@ from django_glue.handler.enums import GlueConnection
 class GlueSessionData(ABC):
     connection: GlueConnection
     access: GlueAccess = GlueAccess.VIEW
-    # fields: list['GlueModelField'] = None
-    # methods: list[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
