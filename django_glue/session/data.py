@@ -5,17 +5,15 @@ from typing import Union
 from django.contrib.contenttypes.models import ContentType
 
 from django_glue.access.enums import GlueAccess
-from django_glue.entities.model_object.entities import GlueModelField
 from django_glue.handler.enums import GlueConnection
 
 
 @dataclass
-class GlueContextData(ABC):
-    # Todo: Should context data be dependant on the entity?
+class GlueSessionData(ABC):
     connection: GlueConnection
-    access: GlueAccess = None
-    fields: list[GlueModelField] = None
-    methods: list[str] = None
+    access: GlueAccess = GlueAccess.VIEW
+    # fields: list['GlueModelField'] = None
+    # methods: list[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -27,15 +25,15 @@ class GlueMetaData(ABC):
         # Todo: Should this handle both queryset and models? Should this be split into two classes?
         This class is used to store meta data about the model or query set.
     """
-    app_label: str = None
-    model: str = None
-    object_pk: int = None
+    # app_label: str = None
+    # model: str = None
+    # object_pk: int = None
     query_set_str: str = None
     template: str = None
     function: str = None
-    fields: Union[list, tuple] = None
-    exclude: Union[list, tuple] = None
-    methods: Union[list, tuple] = None
+    # fields: Union[list, tuple] = None
+    # exclude: Union[list, tuple] = None
+    # methods: Union[list, tuple] = None
 
     @property
     def model_class(self):

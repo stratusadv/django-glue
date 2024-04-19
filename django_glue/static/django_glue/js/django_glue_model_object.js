@@ -2,12 +2,13 @@ class GlueModelObject {
 
     constructor(glue_unique_name) {
         this.glue_unique_name = encodeUniqueName(glue_unique_name)
-        this['form_fields'] = {}
-        for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
-            this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
-            this['form_fields'][key] = window.glue_session_data['context'][this.glue_unique_name].fields[key]
-        }
-        window.glue_keep_live.add_unique_name(this.glue_unique_name)
+        //console.log(window.glue_session_data)
+        //this['form_fields'] = {}
+        //for (let key in window.glue_session_data['context'][this.glue_unique_name].fields) {
+        //    this[key] = window.glue_session_data['context'][this.glue_unique_name].fields[key].value
+        //    this['form_fields'][key] = window.glue_session_data['context'][this.glue_unique_name].fields[key]
+        //}
+        //window.glue_keep_live.add_unique_name(this.glue_unique_name)
     }
 
     delete() {

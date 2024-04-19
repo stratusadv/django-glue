@@ -6,7 +6,7 @@ from dataclasses import dataclass
 class GlueFormField(ABC):
     pass
 
-    @abstractmethod()
+    @abstractmethod
     def to_dict(self):
         pass
 

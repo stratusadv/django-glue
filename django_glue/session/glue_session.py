@@ -1,10 +1,9 @@
 from django.contrib.contenttypes.models import ContentType
 
 from django_glue.conf import settings
-from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.access.enums import GlueAccess
 from django_glue.handler.enums import GlueConnection
-from django_glue.session.data import GlueContextData, GlueMetaData
+from django_glue.session.data import GlueSessionData, GlueMetaData
 from django_glue.session.session import Session
 from django_glue.utils import generate_field_dict, generate_method_list, encode_query_set_to_str
 from django_glue.session.enums import GlueSessionTypes
@@ -39,7 +38,7 @@ class GlueSession(Session):
         # Todo: Need to change this to a entity
         self.check_unique_name(unique_name)
 
-        self.add_context(unique_name, GlueContextData(
+        self.add_context(unique_name, GlueSessionData(
             connection=GlueConnection('function'),
             access=GlueAccess('view'),
         ))
@@ -50,32 +49,9 @@ class GlueSession(Session):
 
         self.set_modified()
 
-    def add_model_object(
-            self,
-            glue_model_object: GlueModelObject,
-    ):
-
-        # Todo: Keep the session data light and have slightly more computation.
+    def add_model_object(self, glue_model_object: 'GlueModelObject'):
         self.check_unique_name(glue_model_object.unique_name)
-        self.add_context(glue_model_object.unique_name, glue_model_object.to_context_data())
-        self.add_meta(glue_model_object.unique_name, glue_model_object.to_meta_data())
-
-        # self.add_context(unique_name, GlueContextData(
-        #     connection=GlueConnection('model_object'),
-        #     access=GlueAccess(access),
-        #     fields=generate_field_dict(model_object, fields, exclude),
-        #     methods=generate_method_list(model_object, methods),
-        # ))
-
-        # self.add_meta(unique_name, GlueMetaData(
-        #     app_label=content_type.app_label,
-        #     model=content_type.model,
-        #     object_pk=model_object.pk,
-        #     fields=fields,
-        #     exclude=exclude,
-        #     methods=methods,
-        # ))
-
+        self.add_session_data(glue_model_object.unique_name, glue_model_object.to_session_data())
         self.set_modified()
 
     def add_query_set(
@@ -92,7 +68,7 @@ class GlueSession(Session):
 
         self.check_unique_name(unique_name)
 
-        self.add_context(unique_name, GlueContextData(
+        self.add_context(unique_name, GlueSessionData(
             connection=GlueConnection('query_set'),
             access=GlueAccess(access),
             fields=generate_field_dict(query_set.query.model(), fields, exclude),
@@ -110,8 +86,8 @@ class GlueSession(Session):
 
         self.set_modified()
 
-    def add_context(self, unique_name, context_data: GlueContextData) -> None:
-        self.session['context'][unique_name] = context_data.to_dict()
+    def add_session_data(self, unique_name, session_data: GlueSessionData) -> None:
+        self.session[unique_name] = session_data.to_dict()
 
     def add_template(
             self,
@@ -121,7 +97,7 @@ class GlueSession(Session):
         # Todo: Need to change this to an entity
         self.check_unique_name(unique_name)
 
-        self.add_context(unique_name, GlueContextData(
+        self.add_context(unique_name, GlueSessionData(
             connection=GlueConnection('template'),
             access=GlueAccess('view'),
         ))
@@ -146,7 +122,7 @@ class GlueSession(Session):
         self.set_modified()
 
     def has_unique_name(self, unique_name):
-        return unique_name in self.session['context']
+        return unique_name in self.session
 
     def purge_unique_name(self, unique_name):
         for session_type in GlueSessionTypes:
@@ -157,4 +133,4 @@ class GlueSession(Session):
         self.request.session.modified = True
 
     def unique_name_unused(self, unique_name):
-        return unique_name in self.session['context']
+        return unique_name in self.session

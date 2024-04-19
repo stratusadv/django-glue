@@ -6,12 +6,12 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 
 from django_glue.access.enums import GlueAccess
+from django_glue.entities.model_object.data import GlueModelObjectSessionData
 from django_glue.form.utils import glue_form_field_from_model_field
 from django_glue.form.fields import GlueFormField
 from django_glue.handler.enums import GlueConnection
 
 from django_glue.response.data import GlueJsonData
-from django_glue.session.data import GlueContextData, GlueMetaData
 from django_glue.utils import field_name_included
 
 
@@ -33,11 +33,7 @@ class GlueModelField:
 class GlueEntity(ABC):
 
     @abstractmethod
-    def to_context_data(self) -> GlueContextData:
-        pass
-
-    @abstractmethod
-    def to_meta_data(self) -> GlueMetaData:
+    def to_session_data(self) -> 'GlueSessionData':
         pass
 
     def to_json_data(self) -> GlueJsonData:
@@ -63,11 +59,11 @@ class GlueModelObject(GlueEntity):
     object_pk: Optional[int] = ...
 
     def __post_init__(self):
-        self.fields = self.generate_field_data()
         self.content_type = ContentType.objects.get_for_model(self.model_object)
         self.app_label = self.content_type.app_label
-        self.model = self.content_type.model
+        self.model = self.content_type.model_class()
         self.object_pk = self.model_object.pk
+        self.fields = self.generate_field_data()
 
         if isinstance(self.access, str):
             self.access = GlueAccess(self.access)
@@ -77,13 +73,14 @@ class GlueModelObject(GlueEntity):
 
     def generate_field_data(self) -> list[GlueModelField]:
         field_data = []
-        for django_field in self.model._meta.fields:
-            if field_name_included(django_field.name, self.included_fields, self.excluded_fields):
-                field_data.append(GlueModelField(
-                    name=django_field.name,
-                    value=getattr(self.model_object, django_field.name),
-                    form_field=glue_form_field_from_model_field(django_field, self.model_object)
-                ))
+        # Todo: Generate field data
+        # for django_field in self.model._meta.fields:
+        #     if field_name_included(django_field.name, self.included_fields, self.excluded_fields):
+        #         field_data.append(GlueModelField(
+        #             name=django_field.name,
+        #             value=getattr(self.model_object, django_field.name),
+        #             form_field=glue_form_field_from_model_field(django_field, self.model_object)
+        #         ))
         return field_data
 
     def generate_method_data(self):
@@ -98,21 +95,14 @@ class GlueModelObject(GlueEntity):
 
         return methods_list
 
-    def to_context_data(self) -> GlueContextData:
-        return GlueContextData(
+    def to_session_data(self) -> GlueModelObjectSessionData:
+        return GlueModelObjectSessionData(
             connection=self.connection,
             access=self.access,
-            fields=self.fields,
-            methods=self.generate_method_data(),
-        )
-
-    def to_meta_data(self) -> GlueMetaData:
-        # Todo: not sure of model is the model or model name here
-        return GlueMetaData(
             app_label=self.app_label,
-            model=self.model._meta.model_name,
+            model_name=self.model._meta.model_name,
             object_pk=self.model_object.pk,
-            exclude=self.excluded_fields,
-            methods=self.included_methods,
-            fields=self.fields
+            included_fields=self.included_fields,
+            exclude_fields=self.excluded_fields,
+            methods=self.generate_method_data(),
         )

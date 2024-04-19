@@ -5,7 +5,7 @@
 #
 #
 # @dataclass
-# class GlueContextData:
+# class GlueSessionData:
 #     connection: GlueConnection
 #     access: GlueAccess = None
 #     fields: dict[GlueModelFieldData] = None
