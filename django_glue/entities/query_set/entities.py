@@ -2,7 +2,6 @@ import base64
 import pickle
 from typing import Union
 
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import QuerySet
 
 from django_glue.access.enums import GlueAccess
@@ -30,9 +29,9 @@ class GlueQuerySet(GlueEntity):
         self.excluded_fields = excluded_fields
         self.included_methods = included_methods
 
-        content_type = ContentType.objects.get_for_model(query_set.query.model)
-        self.app_label = content_type.app_label
-        self.model = content_type.model
+        # content_type = ContentType.objects.get_for_model(query_set.query.model)
+        # self.app_label = content_type.app_label
+        # self.model = content_type.model
 
     def encode_query_set(self):
         return base64.b64encode(pickle.dumps(self.query_set.query)).decode()
@@ -43,9 +42,7 @@ class GlueQuerySet(GlueEntity):
             query_set_str=self.encode_query_set(),
             connection=self.connection,
             access=self.access,
-            app_label=self.app_label,
-            model_name=self.model._meta.model_name,
             included_fields=self.included_fields,
-            exclude_fields=self.excluded_fields,
-            methods=self.included_methods,
+            excluded_fields=self.excluded_fields,
+            included_methods=self.included_methods,
         )

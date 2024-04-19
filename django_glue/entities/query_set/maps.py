@@ -1,10 +1,12 @@
-from django_glue.access.enums import GlueAction
+from django_glue.entities.query_set.actions import GlueQuerySetAction
 from django_glue.entities.query_set import handlers
 
 
-GLUE_MODEL_OBJECT_HANDLER_MAP = {
-    GlueAction.GET: handlers.GetGlueQuerySetHandler,
-    GlueAction.UPDATE: handlers.UpdateGlueQuerySetHandler,
-    GlueAction.METHOD: handlers.MethodGlueQuerySetHandler,
-    GlueAction.DELETE: handlers.DeleteGlueQuerySetHandler
+GLUE_QUERY_SET_HANDLER_MAP = {
+    GlueQuerySetAction.ALL: handlers.AllGlueQuerySetHandler,
+    GlueQuerySetAction.FILTER: handlers.FilterGlueQuerySetHandler,
+    GlueQuerySetAction.GET: handlers.GetGlueQuerySetHandler,
+    GlueQuerySetAction.UPDATE: handlers.UpdateGlueQuerySetHandler,
+    GlueQuerySetAction.DELETE: handlers.DeleteGlueQuerySetHandler,
+    GlueQuerySetAction.METHOD: handlers.MethodGlueQuerySetHandler,
 }

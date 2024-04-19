@@ -1,9 +1,35 @@
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
-from django_glue.entities.model_object.data import GlueModelField
+from django.core.serializers.json import DjangoJSONEncoder
+
 from django_glue.response.data import GlueJsonData
 
 
 @dataclass
+class GlueModelField:
+    name: str
+    type: str
+    value: Any
+    # form_field: 'GlueFormField'
+    html_attr: dict
+
+    def to_dict(self) -> dict:
+        return json.loads(json.dumps(
+            obj={
+                'name': self.name,
+                'value': self.value,
+                # 'form_field': self.form_field.to_dict()
+                'html_attr': self.html_attr
+            },
+            cls=DjangoJSONEncoder)
+        )
+
+
+@dataclass
 class GlueModelObjectJsonData(GlueJsonData):
-    fields: list[GlueModelField] = field(default_factory=list)
+    fields: [GlueModelField] = field(default_factory=list)
+
+    def to_dict(self):
+        return {field.name: field.to_dict() for field in self.fields}

@@ -1,32 +1,34 @@
+
 from abc import ABC
 
-from django_glue.entities.model_object.entities import GlueEntity
+from django_glue.entities.model_object.actions import GlueModelObjectAction
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.handlers import GlueRequestHandler
-from django_glue.response.data import GlueJsonResponseData, GlueJsonData
+from django_glue.response.data import GlueJsonData
 from django_glue.response.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
 
 class GlueModelObjectHandler(GlueRequestHandler, ABC):
     _session_data_class = GlueModelObjectSessionData
+    _action_class = GlueModelObjectAction
 
-    def initialize_glue_entity(self) -> GlueEntity:
+    def initialize_glue_entity(self) -> 'GlueEntity':
         return glue_model_object_from_glue_session(self.session_data)
 
 
 class GetGlueModelObjectHandler(GlueModelObjectHandler):
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response(self) -> 'GlueJsonResponseData':
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',
-            data=self.glue_entity.fields
+            data=self.glue_entity.fields_to_dict()
         )
 
 
 class UpdateGlueModelObjectHandler(GlueModelObjectHandler):
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response(self) -> 'GlueJsonResponseData':
         model_object = self.glue_entity.model_object
 
         for key, value in self.glue_body_data.data['data'].items():
@@ -35,15 +37,17 @@ class UpdateGlueModelObjectHandler(GlueModelObjectHandler):
 
         model_object.save()
 
+        self.glue_entity.update()
+
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully updated model object!',
-            data=self.glue_entity.generate_field_data()
+            data=self.glue_entity.fields_to_dict()
         )
 
 
 class DeleteGlueModelObjectHandler(GlueModelObjectHandler):
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response(self) -> 'GlueJsonResponseData':
         self.glue_entity.model_object.delete()
         return generate_json_200_response_data(
             message_title='Success',
@@ -52,7 +56,7 @@ class DeleteGlueModelObjectHandler(GlueModelObjectHandler):
 
 
 class MethodGlueModelObjectHandler(GlueModelObjectHandler):
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response(self) -> 'GlueJsonResponseData':
         kwargs = self.glue_body_data.data['kwargs']
 
         method_return = None
