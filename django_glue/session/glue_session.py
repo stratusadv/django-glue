@@ -32,10 +32,11 @@ class GlueSession(Session):
     def add_function(
             self,
             unique_name: str,
-            target,
+            target: str,
     ):
-        # Todo: Need to change this to a entity
         self.check_unique_name(unique_name)
+
+        self.add_session_data()
 
         self.add_context(unique_name, GlueSessionData(
             connection=GlueConnection('function'),

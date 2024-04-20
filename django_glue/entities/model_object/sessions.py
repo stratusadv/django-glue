@@ -6,7 +6,6 @@ from django_glue.session.data import GlueSessionData
 
 @dataclass
 class GlueModelObjectSessionData(GlueSessionData):
-    unique_name: str
     app_label: str
     model_name: str
     object_pk: int

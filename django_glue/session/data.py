@@ -10,6 +10,7 @@ from django_glue.handler.enums import GlueConnection
 
 @dataclass
 class GlueSessionData(ABC):
+    unique_name: str
     connection: GlueConnection
     access: GlueAccess
 

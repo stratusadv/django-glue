@@ -11,7 +11,7 @@ class GlueFunction {
 
         return await glue_ajax_request(
             this.unique_name,
-            'get',
+            'call',
             data
         ).then((response) => {
             console.log(response)
