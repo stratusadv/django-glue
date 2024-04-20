@@ -21,7 +21,7 @@ class GlueRequestHandler(ABC):
         if self._post_data_class is None:
             self.post_data = glue_body_data.data
         else:
-            self.post_data = self._post_data_class(glue_body_data.data)
+            self.post_data = self._post_data_class(**glue_body_data.data['data'])
 
         self.session_data = self._session_data_class(**glue_session[self.unique_name])  # Expected session data.
 

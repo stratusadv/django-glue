@@ -33,3 +33,17 @@ class GlueModelObjectJsonData(GlueJsonData):
 
     def to_dict(self):
         return {field.name: field.to_dict() for field in self.fields}
+
+
+@dataclass
+class MethodGlueModelObjectJsonData(GlueJsonData):
+    method_return: Any
+
+    def to_dict(self):
+        return json.loads(
+            json.dumps(
+                obj={'method_return': self.method_return},
+                cls=DjangoJSONEncoder
+            )
+        )
+

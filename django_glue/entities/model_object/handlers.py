@@ -1,7 +1,8 @@
 from django_glue.access.decorators import check_access
 from django_glue.entities.model_object.actions import GlueModelObjectAction
-from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData
+from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData, MethodGlueObjectPostData
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
+from django_glue.entities.model_object.responses import MethodGlueModelObjectJsonData
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.handlers import GlueRequestHandler
 from django_glue.response.data import GlueJsonData, GlueJsonResponseData
@@ -31,15 +32,7 @@ class UpdateGlueModelObjectHandler(GlueRequestHandler):
     @check_access
     def process_response(self) -> GlueJsonResponseData:
         glue_model_object = glue_model_object_from_glue_session(self.session_data)
-        model_object = glue_model_object.model_object
-
-        for key, value in self.post_data.fields.items():
-            if hasattr(model_object, key):
-                setattr(model_object, key, value)
-
-        model_object.save()
-        glue_model_object.update()
-
+        glue_model_object.update(self.post_data.fields)
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully updated model object!',
@@ -64,32 +57,16 @@ class DeleteGlueModelObjectHandler(GlueRequestHandler):
 class MethodGlueModelObjectHandler(GlueRequestHandler):
     action = GlueModelObjectAction.METHOD
     _session_data_class = GlueModelObjectSessionData
+    _post_data_class = MethodGlueObjectPostData
 
     @check_access
     def process_response(self) -> GlueJsonResponseData:
-        kwargs = self.glue_body_data.data['kwargs']
 
-        method_return = None
-        method_name = self.glue_body_data.data['method']
-
-        if method_name in self.glue_entity.included_methods and hasattr(self.model_class, method_name):
-            method = getattr(self.object, method_name)
-
-            if check_valid_method_kwargs(method, kwargs):
-                type_set_kwargs = type_set_method_kwargs(method, kwargs)
-
-                method_return = method(**type_set_kwargs)
-            else:
-                return generate_json_404_response_data()
-        else:
-            return generate_json_404_response_data()
-
-        json_data = GlueJsonData()
-
-        json_data.method_return = method_return
+        glue_model_object = glue_model_object_from_glue_session(self.session_data)
+        method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
 
         return generate_json_200_response_data(
             'THE METHOD ACTION',
             'this is a response from an model object method action!',
-            json_data
+            data=MethodGlueModelObjectJsonData(method_return).to_dict()
         )

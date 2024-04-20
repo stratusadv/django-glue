@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Any
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
@@ -8,7 +8,8 @@ from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.responses import GlueModelField, GlueModelObjectJsonData
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
-from django_glue.utils import generate_field_dict, field_name_included, generate_field_attr_dict
+from django_glue.utils import generate_field_dict, field_name_included, generate_field_attr_dict, \
+    check_valid_method_kwargs, type_set_method_kwargs
 
 
 class GlueModelObject(GlueEntity):
@@ -32,6 +33,17 @@ class GlueModelObject(GlueEntity):
         self.included_methods = included_methods
 
         self.fields: list[GlueModelField] = self.generate_field_data()
+
+    def call_method(self, method_name, method_kwargs):
+        if method_name in self.included_methods and hasattr(self.model, method_name):
+            method = getattr(self.model_object, method_name)
+
+            if check_valid_method_kwargs(method, method_kwargs):
+                type_set_kwargs = type_set_method_kwargs(method, method_kwargs)
+
+                return method(**type_set_kwargs)
+
+        return None
 
     def fields_to_dict(self):
         return {field.name: field.to_dict() for field in self.fields}
@@ -76,7 +88,6 @@ class GlueModelObject(GlueEntity):
                         #     value=field_value,
                         #     html_attr=field_attr,
                         # ).to_dict()
-
             except:
                 raise f'Field "{field.name}" is invalid field or exclude for model type "{self.model.__class__.__name__}"'
 
@@ -110,5 +121,11 @@ class GlueModelObject(GlueEntity):
             methods=self.generate_method_data(),
         )
 
-    def update(self):
+    def update(self, updated_fields: dict[str, Any]):
+        for key, value in updated_fields.items():
+            if hasattr(self.model_object, key):
+                setattr(self.model_object, key, value)
+
+        self.model_object.save()
+
         self.fields = self.generate_field_data()

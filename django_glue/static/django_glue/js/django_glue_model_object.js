@@ -53,7 +53,6 @@ class GlueModelObject {
             'method',
             data
         ).then((response) => {
-            console.log(response)
             glue_dispatch_response_event(response)
             return response.data.method_return
         }).catch((error) => {
@@ -66,7 +65,7 @@ class GlueModelObject {
         await glue_ajax_request(
             this.glue_unique_name,
             'update',
-            this.get_properties()
+            {'fields': this.get_properties()}
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)

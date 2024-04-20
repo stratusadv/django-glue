@@ -15,6 +15,7 @@
 
         async model_object_method_call(){
             this.method_return_value = await this.test_model_1.method('is_lighter_than', {'check_weight': this.method_parameter})
+            console.log(this.method_return_value)
             //this.method_return_value = await this.test_model_1.method('get_full_name')
         }
 
