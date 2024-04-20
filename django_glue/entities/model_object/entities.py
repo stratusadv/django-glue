@@ -31,7 +31,7 @@ class GlueModelObject(GlueEntity):
         self.excluded_fields = excluded_fields
         self.included_methods = included_methods
 
-        self.fields: GlueModelField = self.generate_field_data()
+        self.fields: list[GlueModelField] = self.generate_field_data()
 
     def fields_to_dict(self):
         return {field.name: field.to_dict() for field in self.fields}

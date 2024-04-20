@@ -1,6 +1,6 @@
 from django_glue.access.decorators import check_access
 from django_glue.entities.model_object.actions import GlueModelObjectAction
-from django_glue.entities.model_object.body_data import UpdateGlueObjectPostData
+from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.handlers import GlueRequestHandler

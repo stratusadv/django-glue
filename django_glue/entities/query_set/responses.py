@@ -10,3 +10,5 @@ class GlueQuerySetJsonData(GlueJsonData):
 
     def to_dict(self):
         return [model_object.to_dict() for model_object in self.model_objects]
+
+
