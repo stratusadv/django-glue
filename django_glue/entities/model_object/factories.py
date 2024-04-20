@@ -1,21 +1,17 @@
-from django.contrib.contenttypes.models import ContentType
+from django.apps import apps
 from django.db.models import Model
 
 from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 
 
-def glue_model_object_from_glue_session(glue_session: GlueModelObjectSessionData,) -> GlueModelObject:
-
-    model_class = ContentType.objects.get_by_natural_key(
-        glue_session.app_label,
-        glue_session.model_name
-    ).model_class()
+def glue_model_object_from_glue_session(glue_session: GlueModelObjectSessionData) -> GlueModelObject:
+    model = apps.get_model(glue_session.app_label, glue_session.model_name)
 
     try:
-        model_object = model_class.objects.get(pk=glue_session.object_pk)
-    except model_class.DoesNotExist:
-        model_object = model_class()
+        model_object = model.objects.get(pk=glue_session.object_pk)
+    except model.DoesNotExist:
+        model_object = model()
 
     return GlueModelObject(
         unique_name=glue_session.unique_name,

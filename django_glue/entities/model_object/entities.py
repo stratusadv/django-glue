@@ -21,25 +21,20 @@ class GlueModelObject(GlueEntity):
             included_fields: tuple = ('__all__',),
             excluded_fields: tuple = ('__none__',),
             included_methods: tuple = ('__none__',),
-            content_type: ContentType = None,
     ):
         super().__init__(unique_name, connection, access)
 
         self.model_object = model_object
+        self.model = model_object._meta.model
 
         self.included_fields = included_fields
         self.excluded_fields = excluded_fields
         self.included_methods = included_methods
 
-        if content_type is None:
-            self.content_type = ContentType.objects.get_for_model(self.model_object)
-        else:
-            self.content_type = content_type
+        self.fields: GlueModelField = self.generate_field_data()
 
-        self.app_label = self.content_type.app_label
-        self.model = self.content_type.model_class()
-        self.object_pk = self.model_object.pk
-        self.fields = self.generate_field_data()
+    def fields_to_dict(self):
+        return {field.name: field.to_dict() for field in self.fields}
 
     def generate_field_data(self) -> list[GlueModelField]:
         # Todo: This needs to be cleaned up.
@@ -87,12 +82,6 @@ class GlueModelObject(GlueEntity):
 
         return fields
 
-    def fields_to_dict(self):
-        return {field.name: field.to_dict() for field in self.fields}
-
-    def to_object_json_data(self) -> GlueModelObjectJsonData:
-        return GlueModelObjectJsonData(fields=self.fields)
-
     def generate_method_data(self):
         methods_list = list()
 
@@ -105,13 +94,16 @@ class GlueModelObject(GlueEntity):
 
         return methods_list
 
+    def to_response_data(self) -> GlueModelObjectJsonData:
+        return GlueModelObjectJsonData(fields=self.fields)
+
     def to_session_data(self) -> GlueModelObjectSessionData:
         return GlueModelObjectSessionData(
             connection=self.connection,
             access=self.access,
             unique_name=self.unique_name,
-            app_label=self.app_label,
-            model_name=self.model._meta.model_name,
+            app_label=self.model_object._meta.app_label,
+            model_name=self.model_object._meta.model_name,
             object_pk=self.model_object.pk,
             included_fields=self.included_fields,
             exclude_fields=self.excluded_fields,

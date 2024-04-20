@@ -1,4 +1,4 @@
-from django_glue.handler.data import GlueBodyData
+from django_glue.handler.body_data import GlueBodyData
 from django_glue.services.services import Service
 from django.shortcuts import HttpResponse
 from django.template.loader import render_to_string

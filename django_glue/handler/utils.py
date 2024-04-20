@@ -1,4 +1,4 @@
-from django_glue.handler.data import GlueBodyData
+from django_glue.handler.body_data import GlueBodyData
 from django_glue.handler.enums import GlueConnection
 from django_glue.response.data import GlueJsonResponseData
 
@@ -8,10 +8,6 @@ from django_glue.session import GlueSession
 
 def process_glue_request(glue_session: GlueSession, glue_body_data: GlueBodyData) -> GlueJsonResponseData:
     # Todo: Validation errors.
-
-    # If I have the request variable here ...
-    # Initialize the glue session ... Need to know the connection type
-
     connection = GlueConnection(glue_session[glue_body_data.unique_name]['connection'])
 
     handler_class = CONNECTION_TO_HANDLER_MAP[GlueConnection(connection)][glue_body_data.action]

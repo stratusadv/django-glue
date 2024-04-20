@@ -1,4 +1,4 @@
-from django_glue.handler.data import GlueBodyData
+from django_glue.handler.body_data import GlueBodyData
 from django_glue.response.data import GlueJsonResponseData, GlueJsonData
 from django_glue.response.responses import generate_json_200_response_data, generate_json_404_response_data
 from django_glue.services.services import Service

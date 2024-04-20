@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from django_glue.access.enums import GlueAccess, GlueAction
-from django_glue.handler.data import GlueBodyData
+from django_glue.handler.body_data import GlueBodyData
 from django_glue.response.data import GlueJsonResponseData
 from django_glue.response.responses import generate_json_404_response_data
 
