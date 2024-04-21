@@ -17,7 +17,7 @@ def glue_data_ajax_handler_view(request):
     glue_session = GlueSession(request)
     glue_body_data = GlueBodyData(request.body)
 
-    if glue_session.has_unique_name(glue_body_data.unique_name):
+    if glue_body_data.unique_name in glue_session.session:
         logging.warning(request.body.decode('utf-8'))
 
         return process_glue_request(glue_session, glue_body_data).to_django_json_response()

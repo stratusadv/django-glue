@@ -1,4 +1,4 @@
-from django_glue.access.enums import GlueAccess
+from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.function.responses import GlueFunctionJsonData
 from django_glue.entities.function.sessions import FunctionSessionData

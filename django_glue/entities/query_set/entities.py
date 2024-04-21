@@ -4,7 +4,7 @@ from typing import Union
 
 from django.db.models import QuerySet
 
-from django_glue.access.enums import GlueAccess
+from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.entities.query_set.responses import GlueQuerySetJsonData

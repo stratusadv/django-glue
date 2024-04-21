@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Union
 
-from django_glue.access.enums import GlueAccess
+from django_glue.access.access import GlueAccess
 from django_glue.handler.enums import GlueConnection
 
 

@@ -1,7 +1,4 @@
 import json
-from dataclasses import dataclass
-
-from django_glue.access.enums import GlueAction
 
 
 class GlueBodyData:

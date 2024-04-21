@@ -5,8 +5,8 @@ from django_glue.access.access import GlueAccess
 
 
 class GlueRequestHandler(ABC):
-    action: 'GlueAction' = None  # Actually define the glue action on the class.
-    _session_data_class: 'GlueSessionData' = None  # Tell us what data to expect from the session.
+    action: 'GlueAction' = None
+    _session_data_class: 'GlueSessionData' = None
     _post_data_class: Optional['EntityBodyData'] = None
 
     def __init__(self, glue_session: 'GlueSession', glue_body_data: 'GlueBodyData'):
@@ -16,14 +16,14 @@ class GlueRequestHandler(ABC):
         if self.action is None:
             raise ValueError(f'Please initialize class variable action on {self.__class__.__name__}')
 
-        self.unique_name = glue_body_data.unique_name
+        self.unique_name = glue_body_data.unique_name  # Unique name maps what the user is requesting
 
         if self._post_data_class is None:
             self.post_data = glue_body_data.data
         else:
-            self.post_data = self._post_data_class(**glue_body_data.data['data'])
+            self.post_data = self._post_data_class(**glue_body_data.data['data'])  # The data we are expecting in post
 
-        self.session_data = self._session_data_class(**glue_session[self.unique_name])  # Expected session data.
+        self.session_data = self._session_data_class(**glue_session[self.unique_name])  # data we stored in glue session.
 
     def has_access(self):
         glue_access = GlueAccess(self.session_data.access)
@@ -31,4 +31,5 @@ class GlueRequestHandler(ABC):
 
     @abstractmethod
     def process_response(self) -> 'GlueJsonResponseData':
+        # Todo: How to handle error messages. Decorator that is a try and catch?
         pass

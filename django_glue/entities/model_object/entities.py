@@ -1,14 +1,13 @@
 from typing import Union, Any
 
-from django.contrib.contenttypes.models import ContentType
 from django.db.models import Model
 
-from django_glue.access.enums import GlueAccess
+from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.responses import GlueModelField, GlueModelObjectJsonData
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
-from django_glue.utils import generate_field_dict, field_name_included, generate_field_attr_dict, \
+from django_glue.utils import field_name_included, generate_field_attr_dict, \
     check_valid_method_kwargs, type_set_method_kwargs
 
 

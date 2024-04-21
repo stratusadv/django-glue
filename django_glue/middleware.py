@@ -16,6 +16,7 @@ class GlueMiddleware(object):
         current_url = resolve(request.path_info).url_name
 
         if current_url != 'django_glue_handler':
+            #  Todo: The old session data is not being removed.
             glue_session = GlueSession(request)
             glue_keep_live_session = GlueKeepLiveSession(request)
 
