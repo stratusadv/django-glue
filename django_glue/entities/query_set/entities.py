@@ -18,12 +18,11 @@ class GlueQuerySet(GlueEntity):
             unique_name: str,
             query_set: QuerySet,
             access: Union[GlueAccess, str] = GlueAccess.VIEW,
-            connection: GlueConnection = GlueConnection.QUERY_SET,
             included_fields: tuple = ('__all__',),
             excluded_fields: tuple = ('__none__',),
             included_methods: tuple = ('__none__',),
     ):
-        super().__init__(unique_name, connection, access)
+        super().__init__(unique_name, GlueConnection.QUERY_SET, access)
 
         self.query_set = query_set
 

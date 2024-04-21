@@ -5,9 +5,8 @@ from django_glue.entities.model_object.factories import glue_model_object_from_g
 from django_glue.entities.model_object.responses import MethodGlueModelObjectJsonData
 from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
 from django_glue.handler.handlers import GlueRequestHandler
-from django_glue.response.data import GlueJsonData, GlueJsonResponseData
-from django_glue.response.responses import generate_json_200_response_data, generate_json_404_response_data
-from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
+from django_glue.response.data import GlueJsonResponseData
+from django_glue.response.responses import generate_json_200_response_data
 
 
 class GetGlueModelObjectHandler(GlueRequestHandler):
@@ -62,6 +61,7 @@ class MethodGlueModelObjectHandler(GlueRequestHandler):
     @check_access
     def process_response(self) -> GlueJsonResponseData:
         glue_model_object = glue_model_object_from_glue_session(self.session_data)
+        print(self.post_data)
         method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
         return generate_json_200_response_data(
             'THE METHOD ACTION',

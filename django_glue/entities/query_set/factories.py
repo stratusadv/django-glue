@@ -19,7 +19,6 @@ def glue_query_set_from_session_data(session_data: GlueQuerySetSessionData):
         unique_name=session_data.unique_name,
         query_set=decode_query_set_from_str(session_data.query_set_str),
         access=session_data.access,
-        connection=session_data.connection,
         included_fields=session_data.included_fields,
         excluded_fields=session_data.excluded_fields,
         included_methods=session_data.included_methods,

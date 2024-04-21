@@ -9,17 +9,20 @@ class GlueMiddleware(object):
 
     def __call__(self, request):
         response = self.get_response(request)
+
+        glue_session = GlueSession(request)
+        glue_keep_live_session = GlueKeepLiveSession(request)
+        glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
+
         return response
 
     @staticmethod
     def process_view(request, view_func, view_args, view_kwargs):
-        current_url = resolve(request.path_info).url_name
-
-        if current_url != 'django_glue_handler':
-            #  Todo: The old session data is not being removed.
-            glue_session = GlueSession(request)
-            glue_keep_live_session = GlueKeepLiveSession(request)
-
-            glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
+        """
+            Middleware to clean session data on every click...
+            Right now the clean runs and then the variables get added to the session. I think this is causing us to loose
+            Unique names. The Unique names should be updated then removed.
+            Add glue -> Purges old data & adds itself. -> Updates itself in keep live. -> Then remove old data.
+        """
 
         return None

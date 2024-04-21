@@ -28,11 +28,19 @@ class GlueModelField:
 
 
 @dataclass
-class GlueModelObjectJsonData(GlueJsonData):
-    fields: [GlueModelField] = field(default_factory=list)
+class GlueModelFields:
+    fields: list[GlueModelField] = field(default_factory=list)
 
     def to_dict(self):
         return {field.name: field.to_dict() for field in self.fields}
+
+
+@dataclass
+class GlueModelObjectJsonData(GlueJsonData):  # This is a little duplicated but allows us to send more response data.
+    fields: GlueModelFields
+
+    def to_dict(self):
+        return self.fields.to_dict()
 
 
 @dataclass

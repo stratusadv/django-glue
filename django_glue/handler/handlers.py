@@ -31,5 +31,5 @@ class GlueRequestHandler(ABC):
 
     @abstractmethod
     def process_response(self) -> 'GlueJsonResponseData':
-        # Todo: How to handle error messages. Decorator that is a try and catch?
+        # Todo: Do we want to handle an error message here or let the system crash?
         pass
