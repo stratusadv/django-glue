@@ -1,19 +1,21 @@
 class GlueModelObject {
 
     constructor(glue_unique_name) {
-        this.glue_unique_name = encodeUniqueName(glue_unique_name)
+        // We are encoding the unique name twice when
+        this.glue_unique_name = glue_unique_name
+        this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
 
-        this['form_fields'] = {}
-        for (let key in window.glue_session_data[this.glue_unique_name].fields) {
+        // this['form_fields'] = {}
+        for (let key in window.glue_session_data[this.glue_encoded_unique_name].fields) {
            this[key] = ''
-           // this['form_fields'][key] = window.glue_session_data['context'][this.glue_unique_name].fields[key]
+           // this['form_fields'][key] = window.glue_session_data['context'][this.glue_encoded_unique_name].fields[key]
         }
-        window.glue_keep_live.add_unique_name(this.glue_unique_name)
+        window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
     }
 
     delete() {
         glue_ajax_request(
-            this.glue_unique_name,
+            this.glue_encoded_unique_name,
             'delete'
         ).then((response) => {
             console.log(response)
@@ -26,7 +28,7 @@ class GlueModelObject {
 
     async get() {
         await glue_ajax_request(
-            this.glue_unique_name,
+            this.glue_encoded_unique_name,
             'get'
         ).then((response) => {
             glue_dispatch_response_event(response)
@@ -49,7 +51,7 @@ class GlueModelObject {
         }
 
         return await glue_ajax_request(
-            this.glue_unique_name,
+            this.glue_encoded_unique_name,
             'method',
             data
         ).then((response) => {
@@ -63,7 +65,7 @@ class GlueModelObject {
 
     async update(field = null) {
         await glue_ajax_request(
-            this.glue_unique_name,
+            this.glue_encoded_unique_name,
             'update',
             {'fields': this.get_properties()}
         ).then((response) => {

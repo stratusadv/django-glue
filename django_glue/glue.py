@@ -53,8 +53,6 @@ def glue_model(
         included_methods=methods
     )
 
-    print(glue_model_object_entity.to_session_data().to_dict())
-
     _glue_entity(request, glue_model_object_entity)
 
 

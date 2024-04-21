@@ -9,30 +9,6 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django_glue.core.utils import serialize_object_to_json
 
 
-def field_name_included(name, fields, exclude):
-    included = False
-    if name not in exclude or exclude[0] == '__none__':
-        if name in fields or fields[0] == '__all__':
-            included = True
-
-    return included
-
-
-def generate_field_attr_dict(field):
-    return {
-        'name': field.name,
-        'label': ''.join(word.capitalize() for word in field.name.split('_')),
-        'id': f'id_{field.name}',
-        'help_text': field.help_text,
-        'required': not field.null,
-        'disabled': not field.editable,
-        'hidden': field.hidden,
-        'choices': field.choices,
-        'maxlength': field.max_length,
-    }
-    # form_field = field.formfield()
-    # return form_field.widget_attrs(form_field.widget)
-
 #
 # def generate_field_dict(model_object: Model, fields: [list, tuple], exclude: Union[list, tuple]):
 #     # Todo: Is this even being used?

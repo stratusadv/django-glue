@@ -61,7 +61,6 @@ class MethodGlueModelObjectHandler(GlueRequestHandler):
     @check_access
     def process_response(self) -> GlueJsonResponseData:
         glue_model_object = glue_model_object_from_glue_session(self.session_data)
-        print(self.post_data)
         method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
         return generate_json_200_response_data(
             'THE METHOD ACTION',
