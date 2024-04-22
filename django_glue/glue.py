@@ -20,6 +20,7 @@ def _glue_entity(request: HttpRequest, glue_entity: GlueEntity):
     glue_keep_live_session = GlueKeepLiveSession(request)
     glue_keep_live_session.set_unique_name(glue_entity.unique_name)
 
+    # Todo: Check to see if this has actually changed.
     glue_session.set_modified()
 
 

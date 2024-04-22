@@ -26,6 +26,7 @@ class GlueModelObject {
         )
     }
 
+    // Todo: Change this to load values.
     async get() {
         await glue_ajax_request(
             this.glue_encoded_unique_name,

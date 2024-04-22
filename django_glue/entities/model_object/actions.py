@@ -9,9 +9,9 @@ class GlueModelObjectAction(GlueAction):
     METHOD = 'method'
 
     def required_access(self) -> GlueAccess:
-        if self.value in ['get']:
+        if self.value in ['get', 'method']:
             return GlueAccess.VIEW
-        elif self.value in ['update', 'method']:
+        elif self.value in ['update']:
             return GlueAccess.CHANGE
         elif self.value == 'delete':
             return GlueAccess.DELETE

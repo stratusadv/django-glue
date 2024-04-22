@@ -5,8 +5,8 @@ from django.db.models import Model
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.fields import model_object_fields_from_model
-from django_glue.entities.model_object.responses import GlueModelObjectJsonData, GlueModelFields
-from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
+from django_glue.entities.model_object.response_data import GlueModelObjectJsonData, GlueModelFields
+from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 

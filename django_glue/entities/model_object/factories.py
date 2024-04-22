@@ -2,7 +2,7 @@ from django.apps import apps
 from django.db.models import Model, QuerySet
 
 from django_glue.entities.model_object.entities import GlueModelObject
-from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
+from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
 from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
 
 

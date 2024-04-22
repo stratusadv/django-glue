@@ -30,6 +30,6 @@ class GlueRequestHandler(ABC):
         return glue_access.has_access(self.action.required_access())
 
     @abstractmethod
-    def process_response(self) -> 'GlueJsonResponseData':
+    def process_response_data(self) -> 'GlueJsonResponseData':
         # Todo: Do we want to handle an error message here or let the system crash?
         pass

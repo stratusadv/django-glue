@@ -2,8 +2,8 @@ from django_glue.access.decorators import check_access
 from django_glue.entities.model_object.actions import GlueModelObjectAction
 from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData, MethodGlueObjectPostData
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
-from django_glue.entities.model_object.responses import MethodGlueModelObjectJsonData
-from django_glue.entities.model_object.sessions import GlueModelObjectSessionData
+from django_glue.entities.model_object.response_data import MethodGlueModelObjectJsonData
+from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
 from django_glue.handler.handlers import GlueRequestHandler
 from django_glue.response.data import GlueJsonResponseData
 from django_glue.response.responses import generate_json_200_response_data

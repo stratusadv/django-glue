@@ -8,11 +8,13 @@ class GlueMiddleware(object):
         self.get_response = get_response
 
     def __call__(self, request):
-        response = self.get_response(request)
-
+        # Todo: Conditional statement to not clean data on keep live path
+        # Doesn't run on keep live or handler
         glue_session = GlueSession(request)
         glue_keep_live_session = GlueKeepLiveSession(request)
         glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
+
+        response = self.get_response(request)
 
         return response
 

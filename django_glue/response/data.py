@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from abc import ABC
+import json
+from abc import ABC, abstractmethod
 from typing import Any, Optional
 from dataclasses import dataclass, asdict
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import JsonResponse
 
 from django_glue.response.enums import GlueJsonResponseType, GlueJsonResponseStatus
@@ -21,8 +23,20 @@ class GlueJsonData(ABC):
     # function_return: Optional[Any] = None
     # custom: Optional[dict] = None
 
+    @abstractmethod
     def to_dict(self):
         return asdict(self)
+
+    def serialize_data(self):
+        return json.loads(
+            json.dumps(
+                obj=self.to_dict(),
+                cls=DjangoJSONEncoder
+            )
+        )
+
+    def to_json_data(self):
+        return json.dumps(self.serialize_data())
 
 
 @dataclass
