@@ -44,7 +44,6 @@ class GlueModelObject(GlueEntity):
         return None
 
     def generate_field_data(self, include_values: bool = True) -> GlueModelFields:
-        # Todo: Should we serialize the data here?
         glue_model_fields = model_object_fields_from_model(self.model, self.included_fields, self.excluded_fields)
 
         if include_values:

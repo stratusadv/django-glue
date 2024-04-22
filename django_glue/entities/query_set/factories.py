@@ -4,7 +4,7 @@ import pickle
 from django.db.models import QuerySet
 
 from django_glue.entities.query_set.entities import GlueQuerySet
-from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
+from django_glue.entities.query_set.session_data import GlueQuerySetSessionData
 
 
 def decode_query_set_from_str(query_set_string) -> QuerySet:

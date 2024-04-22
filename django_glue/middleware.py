@@ -10,21 +10,14 @@ class GlueMiddleware(object):
     def __call__(self, request):
         # Todo: Conditional statement to not clean data on keep live path
         # Doesn't run on keep live or handler
-        glue_session = GlueSession(request)
-        glue_keep_live_session = GlueKeepLiveSession(request)
-        glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
+
+        current_url = resolve(request.path_info).url_name
+
+        if current_url not in ['django_glue_data_handler', 'django_glue_keep_live_handler']:
+            glue_session = GlueSession(request)
+            glue_keep_live_session = GlueKeepLiveSession(request)
+            glue_session.clean(glue_keep_live_session.clean_and_get_expired_unique_names())
 
         response = self.get_response(request)
 
         return response
-
-    @staticmethod
-    def process_view(request, view_func, view_args, view_kwargs):
-        """
-            Middleware to clean session data on every click...
-            Right now the clean runs and then the variables get added to the session. I think this is causing us to loose
-            Unique names. The Unique names should be updated then removed.
-            Add glue -> Purges old data & adds itself. -> Updates itself in keep live. -> Then remove old data.
-        """
-
-        return None

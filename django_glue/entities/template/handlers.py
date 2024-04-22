@@ -2,7 +2,7 @@ from django_glue.access.decorators import check_access
 from django_glue.entities.template.actions import GlueTemplateAction
 from django_glue.entities.template.post_data import GetGlueTemplatePostData
 
-from django_glue.entities.template.sessions import TemplateSessionData
+from django_glue.entities.template.session_data import TemplateSessionData
 from django_glue.entities.template.entities import GlueTemplate
 from django_glue.handler.handlers import GlueRequestHandler
 from django_glue.response.data import GlueJsonResponseData
@@ -15,7 +15,7 @@ class GetGlueTemplateHandler(GlueRequestHandler):
     _post_data_class = GetGlueTemplatePostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_template = GlueTemplate(
             unique_name=self.session_data.unique_name,
             template_name=self.session_data.template_name

@@ -14,4 +14,4 @@ def process_glue_request(glue_session: GlueSession, glue_body_data: GlueBodyData
     return handler_class(
         glue_session=glue_session,
         glue_body_data=glue_body_data
-    ).process_response()
+    ).process_response_data()

@@ -1,8 +1,6 @@
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model
 
 
@@ -40,15 +38,12 @@ class GlueModelField:
     html_attr: dict
 
     def to_dict(self) -> dict:
-        return json.loads(json.dumps(
-            obj={
+        return {
                 'name': self.name,
                 'value': self.value,
                 # 'form_field': self.form_field.to_dict()
                 'html_attr': self.html_attr
-            },
-            cls=DjangoJSONEncoder)
-        )
+            }
 
 
 @dataclass

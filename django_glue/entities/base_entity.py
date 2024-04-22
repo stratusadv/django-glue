@@ -23,9 +23,5 @@ class GlueEntity(ABC):
             self.access = access
 
     @abstractmethod
-    def to_response_data(self, *args, **kwargs) -> 'GlueJsonData':
-        pass
-
-    @abstractmethod
     def to_session_data(self) -> 'GlueSessionData':
         pass

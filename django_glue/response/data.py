@@ -13,15 +13,6 @@ from django_glue.response.enums import GlueJsonResponseType, GlueJsonResponseSta
 
 @dataclass
 class GlueJsonData(ABC):
-    # This is the structure of the data that is passed back to the ajax call
-    """
-        Used to provide a consistent structure for our glue objects.
-    """
-    # fields: Optional[dict] = None
-    # simple_fields: Optional[dict] = None
-    # method_return: Optional[Any] = None
-    # function_return: Optional[Any] = None
-    # custom: Optional[dict] = None
 
     @abstractmethod
     def to_dict(self):
@@ -35,7 +26,7 @@ class GlueJsonData(ABC):
             )
         )
 
-    def to_json_data(self):
+    def to_json(self):
         return json.dumps(self.serialize_data())
 
 
@@ -52,10 +43,11 @@ class GlueJsonResponseData:
     response_status: GlueJsonResponseStatus = GlueJsonResponseStatus.SUCCESS
 
     def to_dict(self) -> dict:
-        json_response_dict = asdict(self)
 
         if isinstance(self.data, GlueJsonData):
-            json_response_dict['data'] = self.data.to_dict()
+            self.data = self.data.to_json()
+
+        json_response_dict = asdict(self)
 
         return json_response_dict
 

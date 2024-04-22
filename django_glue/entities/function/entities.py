@@ -1,7 +1,7 @@
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.function.responses import GlueFunctionJsonData
-from django_glue.entities.function.sessions import FunctionSessionData
+from django_glue.entities.function.response_data import GlueFunctionJsonData
+from django_glue.entities.function.session_data import FunctionSessionData
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 

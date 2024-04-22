@@ -8,8 +8,8 @@ from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.entities.model_object.fields import model_object_fields_from_model
-from django_glue.entities.query_set.responses import GlueQuerySetJsonData
-from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
+from django_glue.entities.query_set.response_data import GlueQuerySetJsonData
+from django_glue.entities.query_set.session_data import GlueQuerySetSessionData
 from django_glue.handler.enums import GlueConnection
 
 

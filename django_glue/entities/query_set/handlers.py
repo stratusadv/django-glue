@@ -6,7 +6,7 @@ from django_glue.entities.query_set.factories import glue_query_set_from_session
 from django_glue.entities.query_set.post_data import FilterGlueQuerySetPostData, GetGlueQuerySetPostData, \
     DeleteGlueQuerySetPostData, UpdateGlueQuerySetPostData, MethodGlueQuerySetPostData
 
-from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
+from django_glue.entities.query_set.session_data import GlueQuerySetSessionData
 from django_glue.handler.handlers import GlueRequestHandler
 from django_glue.response.data import GlueJsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
@@ -17,7 +17,7 @@ class AllGlueQuerySetHandler(GlueRequestHandler):
     _session_data_class = GlueQuerySetSessionData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
 
         glue_query_set = glue_query_set_from_session_data(self.session_data)
         glue_model_objects = glue_model_objects_from_query_set(glue_query_set.query_set.all(), self.session_data)
@@ -35,7 +35,7 @@ class DeleteGlueQuerySetHandler(GlueRequestHandler):
     _post_data_class = DeleteGlueQuerySetPostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
 
         filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
@@ -53,7 +53,7 @@ class FilterGlueQuerySetHandler(GlueRequestHandler):
     _post_data_class = FilterGlueQuerySetPostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
 
         glue_query_set = glue_query_set_from_session_data(self.session_data)
         filtered_query_set = glue_query_set.query_set.filter(**self.post_data.filter_params)
@@ -72,7 +72,7 @@ class GetGlueQuerySetHandler(GlueRequestHandler):
     _post_data_class = GetGlueQuerySetPostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
 
         model_object = glue_query_set.query_set.get(id=self.post_data.id)
@@ -91,7 +91,7 @@ class UpdateGlueQuerySetHandler(GlueRequestHandler):
     _post_data_class = UpdateGlueQuerySetPostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
 
         model_object = glue_query_set.query_set.get(id=self.post_data.id)
@@ -111,7 +111,7 @@ class MethodGlueQuerySetHandler(GlueRequestHandler):
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = MethodGlueQuerySetPostData
 
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
         filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
 

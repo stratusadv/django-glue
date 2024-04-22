@@ -3,8 +3,8 @@ from django.template.loader import render_to_string
 
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.template.responses import GlueTemplateJsonData
-from django_glue.entities.template.sessions import TemplateSessionData
+from django_glue.entities.template.response_data import GlueTemplateJsonData
+from django_glue.entities.template.session_data import TemplateSessionData
 from django_glue.handler.enums import GlueConnection
 
 

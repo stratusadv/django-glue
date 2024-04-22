@@ -3,7 +3,7 @@ from django.db.models import Model, QuerySet
 
 from django_glue.entities.model_object.entities import GlueModelObject
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
-from django_glue.entities.query_set.sessions import GlueQuerySetSessionData
+from django_glue.entities.query_set.session_data import GlueQuerySetSessionData
 
 
 def glue_model_object_from_glue_session(glue_session: GlueModelObjectSessionData) -> GlueModelObject:

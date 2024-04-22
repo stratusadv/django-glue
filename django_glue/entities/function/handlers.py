@@ -3,7 +3,7 @@ from django_glue.entities.function.actions import GlueFunctionAction
 from django_glue.entities.function.entities import GlueFunction
 from django_glue.entities.function.post_data import CallGlueFunctionPostData
 
-from django_glue.entities.function.sessions import FunctionSessionData
+from django_glue.entities.function.session_data import FunctionSessionData
 from django_glue.handler.handlers import GlueRequestHandler
 from django_glue.response.data import GlueJsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
@@ -15,7 +15,7 @@ class CallGlueFunctionHandler(GlueRequestHandler):
     _post_data_class = CallGlueFunctionPostData
 
     @check_access
-    def process_response(self) -> GlueJsonResponseData:
+    def process_response_data(self) -> GlueJsonResponseData:
         glue_function = GlueFunction(
             unique_name=self.session_data.unique_name,
             function_path=self.session_data.function_path
