@@ -18,9 +18,10 @@ class GlueQuerySet {
         return await glue_ajax_request(this.glue_encoded_unique_name, 'all', {'all': true})
             .then((response) => {
                 glue_dispatch_response_event(response)
-                for (let object in response.data) {
+                let glue_query_set = JSON.parse(response.data)
+                for (let object in glue_query_set) {
                     let model_object = new GlueModelObject(this.glue_unique_name);
-                    model_object.set_properties(this.simplify_fields(response.data[object]))
+                    model_object.set_properties(glue_query_set[object])
                     model_object_list.push(model_object)
                 }
                 return model_object_list
@@ -52,10 +53,11 @@ class GlueQuerySet {
         return await glue_ajax_request(this.glue_encoded_unique_name, 'filter', {'filter_params': filter_params})
             .then((response) => {
                 console.log(response)
+                let glue_query_set = JSON.parse(response.data)
                 glue_dispatch_response_event(response)
-                for (let object in response.data) {
+                for (let object in glue_query_set) {
                     let model_object = new GlueModelObject(this.glue_unique_name)
-                    model_object.set_properties(this.simplify_fields(response.data[object]))
+                    model_object.set_properties(glue_query_set[object])
                     model_object_list.push(model_object)
                 }
 
@@ -69,7 +71,8 @@ class GlueQuerySet {
             .then((response) => {
                 glue_dispatch_response_event(response)
                 model_object = new GlueModelObject(this.glue_unique_name);
-                model_object.set_properties(this.simplify_fields(response.data[0]))
+                let glue_query_set = JSON.parse(response.data)
+                model_object.set_properties(glue_query_set[0])
                 return model_object
             });
     }
@@ -81,7 +84,6 @@ class GlueQuerySet {
             'method': method,
             'kwargs': kwargs,
         }
-
         return await glue_ajax_request(
             this.glue_encoded_unique_name,
             'method',
@@ -89,18 +91,10 @@ class GlueQuerySet {
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-            return response.data.method_return
+            return JSON.parse(response.data).method_return
         })
     }
 
-    simplify_fields(field_data) {
-        let simplified_data = {}
-
-        for (let key in field_data) {
-            simplified_data[key] = field_data[key].value
-        }
-        return simplified_data
-    }
 
     update(query_model_object, field = null) {
         // Todo: Update on queryset should take fields and update all the objects fields to that value.

@@ -16,6 +16,7 @@ class GetGlueModelObjectHandler(GlueRequestHandler):
     @check_access
     def process_response_data(self) -> GlueJsonResponseData:
         glue_model_object = glue_model_object_from_glue_session(self.session_data)
+        print('here again')
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',

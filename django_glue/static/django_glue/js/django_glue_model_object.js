@@ -3,12 +3,17 @@ class GlueModelObject {
     constructor(glue_unique_name) {
         // We are encoding the unique name twice when
         this.glue_unique_name = glue_unique_name
-        this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
+        console.log("Pathname:", window.location.pathname);
 
-        // this['form_fields'] = {}
-        for (let key in window.glue_session_data[this.glue_encoded_unique_name].fields) {
-           this[key] = ''
-           // this['form_fields'][key] = window.glue_session_data['context'][this.glue_encoded_unique_name].fields[key]
+        this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
+        console.log(glue_unique_name)
+        console.log(encodeUniqueName(glue_unique_name))
+        this.glue_fields_set = false
+
+        // this['html_attr'] = {}
+        if (this.glue_encoded_unique_name in window.glue_session_data) {
+            this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
+            this.glue_fields_set = true
         }
         window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
     }
@@ -33,12 +38,7 @@ class GlueModelObject {
             'get'
         ).then((response) => {
             glue_dispatch_response_event(response)
-
-            // Set the properties on the object
-            Object.entries(response.data).forEach(([key, field]) => {
-                this[key] = field.value
-            });
-
+            this.set_properties(JSON.parse(response.data))
         }).catch((error) => {
                 glue_dispatch_object_get_error_event(error)
             }
@@ -57,7 +57,7 @@ class GlueModelObject {
             data
         ).then((response) => {
             glue_dispatch_response_event(response)
-            return response.data.method_return
+            return JSON.parse(response.data).method_return
         }).catch((error) => {
                 glue_dispatch_object_method_error_event(error)
             }
@@ -72,6 +72,9 @@ class GlueModelObject {
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)
+            glue_dispatch_response_event(response)
+            this.set_properties(JSON.parse(response.data))
+
         }).catch((error) => {
                 glue_dispatch_object_update_error_event(error)
             }
@@ -86,13 +89,25 @@ class GlueModelObject {
         return properties
     }
 
-    set_properties(properties) {
+    set_properties(fields) {
         // Only sets properties that are already initialized on the glue object model.
-        for (let key in properties) {
+        if (!this.glue_fields_set) {
+            this.set_fields(fields)
+        }
+        let simple_fields = simplify_model_fields(fields)
+        for (let key in simple_fields) {
             if (key in this) {
-                this[key] = properties[key]
+                this[key] = simple_fields[key]
             }
         }
+    }
+
+    set_fields(fields){
+        for (let key in fields) {
+           this[key] = ''
+           // this['form_fields'][key] = window.glue_session_data['context'][this.glue_encoded_unique_name].fields[key]
+        }
+
     }
 
 }

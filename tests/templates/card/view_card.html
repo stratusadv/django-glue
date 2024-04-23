@@ -10,6 +10,7 @@
     <div x-data="{
         async init() {
             await this.test_model_x.get()
+            console.log(this.test_model_x)
         },
         test_model_x: new GlueModelObject('test_model_view_card')
         }" class="row">
@@ -17,7 +18,7 @@
 
             <div class="row">
                 <div class="col-12">
-                    <button x-on:click="test_model_x.get()" class="btn btn-outline-secondary px-2 py-0 float-end">
+                    <button x-on:click="await test_model_x.get()" class="btn btn-outline-secondary px-2 py-0 float-end">
                         View
                     </button>
                 </div>

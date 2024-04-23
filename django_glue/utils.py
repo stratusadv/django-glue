@@ -28,4 +28,6 @@ def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
 
 
 def encode_unique_name(request, unique_name):
+    # Todo: The path name on requests that render views are different and causes a problem with index session data.
+    print(f'Pathname: {request.path_info}')
     return urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')

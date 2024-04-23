@@ -16,7 +16,7 @@ class GlueFunction {
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
-            return response.data.function_return
+            return JSON.parse(response.data).function_return
         })
     }
 

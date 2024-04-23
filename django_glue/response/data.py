@@ -18,16 +18,8 @@ class GlueJsonData(ABC):
     def to_dict(self):
         return asdict(self)
 
-    def serialize_data(self):
-        return json.loads(
-            json.dumps(
-                obj=self.to_dict(),
-                cls=DjangoJSONEncoder
-            )
-        )
-
     def to_json(self):
-        return json.dumps(self.serialize_data())
+        return json.dumps(self.to_dict(), cls=DjangoJSONEncoder)
 
 
 @dataclass
