@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Union, Any
 
+# Queryset and model object post data need to be the same.
+
 
 @dataclass
 class DeleteGlueQuerySetPostData:

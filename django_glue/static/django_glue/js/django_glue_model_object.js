@@ -3,11 +3,7 @@ class GlueModelObject {
     constructor(glue_unique_name) {
         // We are encoding the unique name twice when
         this.glue_unique_name = glue_unique_name
-        console.log("Pathname:", window.location.pathname);
-
         this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
-        console.log(glue_unique_name)
-        console.log(encodeUniqueName(glue_unique_name))
         this.glue_fields_set = false
 
         // this['html_attr'] = {}
