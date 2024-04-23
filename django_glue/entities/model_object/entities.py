@@ -69,7 +69,6 @@ class GlueModelObject(GlueEntity):
         return GlueModelObjectJsonData(fields=self.fields)
 
     def to_session_data(self) -> GlueModelObjectSessionData:
-        print(self.generate_field_data(include_values=False).to_dict())
         return GlueModelObjectSessionData(
             connection=self.connection,
             access=self.access,

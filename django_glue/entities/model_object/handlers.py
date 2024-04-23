@@ -1,6 +1,6 @@
 from django_glue.access.decorators import check_access
 from django_glue.entities.model_object.actions import GlueModelObjectAction
-from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData, MethodGlueObjectPostData
+from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData, MethodGlueObjectPostData, GetGlueObjectPostData
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
 from django_glue.entities.model_object.response_data import MethodGlueModelObjectJsonData, GlueModelObjectJsonData
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
@@ -16,7 +16,6 @@ class GetGlueModelObjectHandler(GlueRequestHandler):
     @check_access
     def process_response_data(self) -> GlueJsonResponseData:
         glue_model_object = glue_model_object_from_glue_session(self.session_data)
-        print('here again')
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',

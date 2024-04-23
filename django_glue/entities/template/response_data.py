@@ -1,6 +1,5 @@
-from dataclasses import field, dataclass
+from dataclasses import dataclass
 
-from django_glue.entities.model_object.response_data import GlueModelObjectJsonData
 from django_glue.response.data import GlueJsonData
 
 

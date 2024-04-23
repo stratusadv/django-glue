@@ -13,15 +13,16 @@ class GlueModelObject {
         // this['html_attr'] = {}
         if (this.glue_encoded_unique_name in window.glue_session_data) {
             this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
-            this.glue_fields_set = true
         }
+
         window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
     }
 
     delete() {
         glue_ajax_request(
             this.glue_encoded_unique_name,
-            'delete'
+            'delete',
+            {'id': this.id}
         ).then((response) => {
             console.log(response)
             glue_dispatch_response_event(response)
@@ -35,7 +36,10 @@ class GlueModelObject {
     async get() {
         await glue_ajax_request(
             this.glue_encoded_unique_name,
-            'get'
+            'get',
+            {
+                'id': this.id,
+            }
         ).then((response) => {
             glue_dispatch_response_event(response)
             this.set_properties(JSON.parse(response.data))
@@ -47,6 +51,7 @@ class GlueModelObject {
 
     async method(method, kwargs = {}) {
         let data = {
+            'id': this.id,
             'method': method,
             'kwargs': kwargs,
         }
@@ -68,7 +73,10 @@ class GlueModelObject {
         await glue_ajax_request(
             this.glue_encoded_unique_name,
             'update',
-            {'fields': this.get_properties()}
+            {
+                'fields': this.get_properties(),
+                'id': this.id
+            }
         ).then((response) => {
             glue_dispatch_response_event(response)
             console.log(response)
@@ -107,6 +115,7 @@ class GlueModelObject {
            this[key] = ''
            // this['form_fields'][key] = window.glue_session_data['context'][this.glue_encoded_unique_name].fields[key]
         }
+        this.glue_fields_set = true
 
     }
 
