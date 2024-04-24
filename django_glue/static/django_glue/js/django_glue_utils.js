@@ -12,6 +12,7 @@ function glue_debounce(func, wait) {
 
 function encodeUniqueName(unique_name) {
     // This formatting must match the formatting in the Django Glue utils.py file
+    // Format the unique name to match the formatting in the Django Glue utils.py file
     return encodeURIComponent(unique_name + '|' + window.location.pathname)
 }
 

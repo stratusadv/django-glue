@@ -28,5 +28,9 @@ def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
 
 
 def encode_unique_name(request, unique_name):
-    # Todo: The path name on requests that render views are different and causes a problem with index session data.
-    return urllib.parse.quote(f'{unique_name}|{request.path_info}', safe='')
+    if 'glue_encode_path' in request.GET:
+        encode_path = request.GET['glue_encode_path']
+    else:
+        encode_path = request.path_info
+
+    return urllib.parse.quote(f'{unique_name}|{encode_path}', safe='')
