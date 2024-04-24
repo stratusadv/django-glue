@@ -39,7 +39,7 @@ if os.path.isfile(test_settings):
         'setup.py',
     )
 
-    coverage_run_cmd = f'coverage run --branch --source=. --omit={",".join(omits)} tests/manage.py test --settings=tests.settings --noinput'
+    coverage_run_cmd = f'coverage run --branch --source=. --omit={",".join(omits)} tests/manage.py test --settings=settings --noinput'
 
     html_directory = '.coverage_html_report'
     coverage_html_cmd = f'coverage html --directory={html_directory}'
