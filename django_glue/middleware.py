@@ -8,9 +8,6 @@ class GlueMiddleware(object):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Todo: Conditional statement to not clean data on keep live path
-        # Doesn't run on keep live or handler
-
         current_url = resolve(request.path_info).url_name
 
         if current_url not in ['django_glue_data_handler', 'django_glue_keep_live_handler']:

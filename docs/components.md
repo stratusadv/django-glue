@@ -30,13 +30,6 @@
 - Glue Json Response Type
 - Glue Json Response Status
 
-### Services -> Process and return the data
-- Function
-- Model Object
-- Query Sets
-- Template 
-- Services 
-
 
 ## Processes
 - User Adds Glue in View
@@ -50,13 +43,7 @@
 Main components would be Session Updating, JS Objects, Request, Processing, Response.
 
 ### Changes
-- The object should be able to initialize itself depending on the session data. 
-- The object can be passes to a handler that knows how to process it depending on what has been called.
-- The handler would return a JSON Response to the template. 
-- Objects would need a function that would be called by the handlers?
-- Objects can convert themselves back to session data.
-- Objects would have fields 
-- Move handler into core and it is a base class. Each entity would have its own handler and would be able to process itself that way.
+- Glue model objects and glue querysets need to use the same post data.
 
 ### Questions
 - What do we actually need for the field data? On the JS side we want to be able to access the properties. 
