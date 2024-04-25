@@ -6,10 +6,12 @@ class GlueModelObject {
         this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
         this.glue_fields_set = false
 
-        // this['html_attr'] = {}
+        this['fields'] = {}
         if (this.glue_encoded_unique_name in window.glue_session_data) {
             this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
         }
+
+        console.log(this)
 
         window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
     }
@@ -109,7 +111,7 @@ class GlueModelObject {
     set_fields(fields){
         for (let key in fields) {
            this[key] = ''
-           // this['form_fields'][key] = window.glue_session_data['context'][this.glue_encoded_unique_name].fields[key]
+           this['fields'][key] = window.glue_session_data[this.glue_encoded_unique_name].fields[key]
         }
         this.glue_fields_set = true
 

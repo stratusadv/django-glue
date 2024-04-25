@@ -18,7 +18,7 @@ def generate_field_attr_dict(field):
         'name': field.name,
         'label': ''.join(word.capitalize() for word in field.name.split('_')),
         'id': f'id_{field.name}',
-        'help_text': field.help_text,
+        # 'help_text': field.help_text,  # Todo: Was raising an error with proxy field.
         'required': not field.null,
         'disabled': not field.editable,
         'hidden': field.hidden,

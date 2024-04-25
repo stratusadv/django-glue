@@ -1,3 +1,7 @@
+import json
+
+from django.core.serializers.json import DjangoJSONEncoder
+
 from django_glue.conf import settings
 
 from django_glue.session.data import GlueSessionData
@@ -40,3 +44,6 @@ class GlueSession(Session):
 
     def set_modified(self):
         self.request.session.modified = True
+
+    def to_json(self):
+        return json.dumps(self.session, cls=DjangoJSONEncoder)

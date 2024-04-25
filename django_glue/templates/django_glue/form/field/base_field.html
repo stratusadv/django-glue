@@ -1,0 +1,68 @@
+<div x-data="{
+    init(){
+        let initial = '{{ initial }}'
+        let prevent_submit = '{{ prevent_submit }}'
+        let hidden = '{{ hidden }}'
+
+        if (initial){ this.value_modelable = JSON.parse(initial) }
+        if (prevent_submit){ this.prevent_submit = prevent_submit }
+        if (hidden){ this.hidden = true }
+
+    },
+    value: null,
+    prevent_submit: false,
+    hidden: false
+}"
+    {% if x_model_value %}
+        x-modelable="value"
+        x-model="{{ x_model_value }}"
+    {% endif %}
+>
+    <div
+        x-data="{
+            init() {
+                this.$watch('glue_field', value => {
+                    this.set_html_attr()
+                    if (!this.hidden){
+                        this.set_label()
+                    }                   
+                })
+            },
+            glue_field: null,
+            set_html_attr() {
+                $refs.field.setAttribute('id', this.glue_field.html_attr.id)
+                if(!prevent_submit) {
+                    $refs.field.setAttribute('name', this.glue_field.html_attr.name)
+                }                
+
+                if(this.glue_field.html_attr.required) {
+                    $refs.field.setAttribute('required', 'true')                 
+                }
+            },
+            set_label() {
+                $refs.label.setAttribute('for', this.glue_field.html_attr.id)
+                $refs.label.innerText = this.glue_field.html_attr.label
+                
+                if(this.glue_field.html_attr.required) {                    
+                    $refs.label.innerText = $refs.label.innerText + '*'
+                }
+            }
+        }"
+        {% if glue_field %}
+            x-modelable="glue_field"
+            x-model="{{ glue_field }}"
+        {% endif %}
+    >
+        {% if not hidden %}
+            <label
+                x-ref="label"
+                class="form-label"
+                for="{% if name %}id_{{ name }}{% elif label %}id_{% form_label_to_name label %}{% endif %}"
+            >
+                {{ label }}{% if required %}*{% endif %}
+            </label>
+        {% endif %}
+        {% block field_content %}
+        {% endblock %}
+    </div>
+</div>

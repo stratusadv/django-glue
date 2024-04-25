@@ -1,5 +1,7 @@
+import json
 from typing import Union, Any
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model
 
 from django_glue.access.access import GlueAccess
