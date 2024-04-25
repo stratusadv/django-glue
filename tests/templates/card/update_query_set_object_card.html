@@ -9,10 +9,6 @@
         x-data="{
             async init(){
                 this.model_object = await this.query_set.get({{ model_object_id }});
-                const debounce_update = glue_debounce(value => value.update(), 750);
-                this.$watch('model_object', (value) => {
-                    debounce_update(value)
-                })
             },
             query_set: new GlueQuerySet('test_query_1'),
             model_object: {}
@@ -25,6 +21,9 @@
         <div class="col">
             <label for="first_name">Last Name</label>
             <input id="first_name" type="text" x-model="model_object.last_name">
+        </div>
+        <div class="col-12 pt-2">
+            <button type="button" @click="model_object.update()">Save</button>
         </div>
     </div>
 {% endblock %}

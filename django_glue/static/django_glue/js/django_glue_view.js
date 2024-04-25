@@ -1,7 +1,12 @@
 class GlueView {
     constructor(url, shared_parameters = {}) {
-        this.url = url
+        // Need to send the current view path to encode the glue data on the server.
+        let config_url = new URL(window.location.origin + url)
+        config_url.searchParams.append('glue_encode_path', window.location.pathname)
+
+        this.url = config_url.pathname + config_url.search
         this.shared_parameters = shared_parameters
+
     }
 
     async _render(parameters = {}, method = 'POST', headers = {}) {

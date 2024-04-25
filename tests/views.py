@@ -137,8 +137,14 @@ def view_view(request):
 def view_card_view(request):
     test_model_object = generate_randomized_test_model()
 
-    glue_model(request, 'test_model_view_card', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'),
-             methods=['is_lighter_than', 'get_full_name'])
+    glue_model(
+        request=request,
+        unique_name='test_model_view_card',
+        target=test_model_object,
+        access='delete',
+        exclude=('birth_date', 'anniversary_datetime'),
+        methods=['is_lighter_than', 'get_full_name']
+    )
 
     return TemplateResponse(request, 'card/view_card.html')
 
