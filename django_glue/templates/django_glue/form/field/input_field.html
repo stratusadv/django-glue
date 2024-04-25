@@ -9,15 +9,16 @@
         {{ input_attributes }}
         class="form-control"
         x-model.debounce.500ms="value"
-        id="id_{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
+
 
         {% if not prevent_submit %}
             name="{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
+            id="id_{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
         {% endif %}
 
         {% if hidden %}hidden="" {% endif %}
-        {% if required %}required{% endif %}
 
+        {% if required %}required{% endif %}
         {% block input_attributes %}
 
         {% endblock %}

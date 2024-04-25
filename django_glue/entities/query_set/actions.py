@@ -9,9 +9,10 @@ class GlueQuerySetAction(GlueAction):
     UPDATE = 'update'
     DELETE = 'delete'
     METHOD = 'method'
+    NULL_OBJECT = 'null_object'
 
     def required_access(self) -> GlueAccess:
-        if self.value in ['get', 'all', 'filter']:
+        if self.value in ['get', 'all', 'filter', 'null_object']:
             return GlueAccess.VIEW
         elif self.value in ['update', 'method']:
             return GlueAccess.CHANGE

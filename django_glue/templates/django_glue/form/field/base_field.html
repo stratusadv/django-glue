@@ -30,14 +30,15 @@
             },
             glue_field: null,
             set_html_attr() {
-                $refs.field.setAttribute('id', this.glue_field.html_attr.id)
+                // Todo: Should this build an id based on the name?
                 if(!prevent_submit) {
+                    $refs.field.setAttribute('id', this.glue_field.html_attr.id)
                     $refs.field.setAttribute('name', this.glue_field.html_attr.name)
-                }                
-
-                if(this.glue_field.html_attr.required) {
-                    $refs.field.setAttribute('required', 'true')                 
+                    if(this.glue_field.html_attr.required) {
+                        $refs.field.setAttribute('required', 'true')
+                    }
                 }
+
             },
             set_label() {
                 $refs.label.setAttribute('for', this.glue_field.html_attr.id)

@@ -87,6 +87,22 @@ class GetGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
+class NullObjectGlueQuerySetHandler(GlueRequestHandler):
+    action = GlueQuerySetAction.NULL_OBJECT
+    _session_data_class = GlueQuerySetSessionData
+
+    @check_access
+    def process_response_data(self) -> GlueJsonResponseData:
+        glue_query_set = glue_query_set_from_session_data(self.session_data)
+        glue_model_object = glue_model_object_from_glue_query_set_session(glue_query_set.model(), self.session_data)
+
+        return generate_json_200_response_data(
+            message_title='Success',
+            message_body='Successfully retrieved model object!',
+            data=GlueQuerySetJsonData([GlueModelObjectJsonData(glue_model_object.fields)])
+        )
+
+
 class UpdateGlueQuerySetHandler(GlueRequestHandler):
     action = GlueQuerySetAction.UPDATE
     _session_data_class = GlueQuerySetSessionData

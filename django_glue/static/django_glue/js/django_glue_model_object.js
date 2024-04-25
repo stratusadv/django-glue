@@ -40,7 +40,7 @@ class GlueModelObject {
             }
         ).then((response) => {
             glue_dispatch_response_event(response)
-            this.set_properties(JSON.parse(response.data))
+            this._set_properties(JSON.parse(response.data))
         }).catch((error) => {
                 glue_dispatch_object_get_error_event(error)
             }
@@ -77,9 +77,8 @@ class GlueModelObject {
             }
         ).then((response) => {
             glue_dispatch_response_event(response)
-            console.log(response)
             glue_dispatch_response_event(response)
-            this.set_properties(JSON.parse(response.data))
+            this._set_properties(JSON.parse(response.data))
 
         }).catch((error) => {
                 glue_dispatch_object_update_error_event(error)
@@ -95,12 +94,21 @@ class GlueModelObject {
         return properties
     }
 
-    set_properties(fields) {
-        // Only sets properties that are already initialized on the glue object model.
+    _set_properties(fields) {
+        // Used to set fields internally on model object.
         if (!this.glue_fields_set) {
             this.set_fields(fields)
         }
         let simple_fields = simplify_model_fields(fields)
+        for (let key in simple_fields) {
+            if (key in this) {
+                this[key] = simple_fields[key]
+            }
+        }
+    }
+
+    set_properties(simple_fields) {
+        // Used to set initial data to the glue object model after load.
         for (let key in simple_fields) {
             if (key in this) {
                 this[key] = simple_fields[key]
