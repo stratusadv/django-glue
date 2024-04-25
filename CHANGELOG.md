@@ -1,7 +1,19 @@
 # Changelog for Django Glue
 
-## 0.5.2.3
 
+## 0.5.3
+### Changes
+- Created an extendable structure using glue entities as the base objects.
+- Removed meta and context keys from session data. 
+- Handler map based on action called from glue js objects to process response.
+- Dataclass structure for Response, Session and Post data. 
+
+### Bugs
+- Corrected issue on glue views that glue models. Encoded unique name is based on path the user requests the view from. 
+ 
+
+
+## 0.5.2.3
 ### Changes
 - Glue model object returns a null object if we try to find a id that does not exist.
 - Updated html attributes on glue model objects and added attributes to js model objects. 
