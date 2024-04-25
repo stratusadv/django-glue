@@ -46,8 +46,3 @@ class GlueQuerySet(GlueEntity):
             excluded_fields=self.excluded_fields,
             included_methods=self.included_methods,
         )
-
-    def to_response_data(self, glue_model_objects: list[GlueModelObject]) -> GlueQuerySetJsonData:
-        return GlueQuerySetJsonData(
-            model_objects=[glue_model_object.to_response_data() for glue_model_object in glue_model_objects]
-        )

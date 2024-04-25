@@ -65,9 +65,6 @@ class GlueModelObject(GlueEntity):
 
         return methods_list
 
-    def to_response_data(self) -> GlueModelObjectJsonData:
-        return GlueModelObjectJsonData(fields=self.fields)
-
     def to_session_data(self) -> GlueModelObjectSessionData:
         return GlueModelObjectSessionData(
             connection=self.connection,

@@ -1,6 +1,6 @@
 from django_glue.access.decorators import check_access
 from django_glue.entities.model_object.actions import GlueModelObjectAction
-from django_glue.entities.model_object.post_data import UpdateGlueObjectPostData, MethodGlueObjectPostData, GetGlueObjectPostData
+from django_glue.entities.post_data import UpdatePostData, MethodPostData, GetPostData
 from django_glue.entities.model_object.factories import glue_model_object_from_glue_session
 from django_glue.entities.model_object.response_data import MethodGlueModelObjectJsonData, GlueModelObjectJsonData
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
@@ -26,7 +26,7 @@ class GetGlueModelObjectHandler(GlueRequestHandler):
 class UpdateGlueModelObjectHandler(GlueRequestHandler):
     action = GlueModelObjectAction.UPDATE
     _session_data_class = GlueModelObjectSessionData
-    _post_data_class = UpdateGlueObjectPostData
+    _post_data_class = UpdatePostData
 
     @check_access
     def process_response_data(self) -> GlueJsonResponseData:
@@ -56,7 +56,7 @@ class DeleteGlueModelObjectHandler(GlueRequestHandler):
 class MethodGlueModelObjectHandler(GlueRequestHandler):
     action = GlueModelObjectAction.METHOD
     _session_data_class = GlueModelObjectSessionData
-    _post_data_class = MethodGlueObjectPostData
+    _post_data_class = MethodPostData
 
     @check_access
     def process_response_data(self) -> GlueJsonResponseData:
