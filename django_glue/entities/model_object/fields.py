@@ -3,6 +3,8 @@ from typing import Any
 
 from django.db.models import Model
 
+from django_glue.form.factories import glue_field_attrs_from_model_field
+
 
 def field_name_included(name, fields, exclude):
     included = False
@@ -30,23 +32,6 @@ def generate_field_attr_dict(field):
 
 
 @dataclass
-class GlueModelField:
-    name: str
-    type: str
-    value: Any
-    # form_field: 'GlueFormField'
-    html_attr: dict
-
-    def to_dict(self) -> dict:
-        return {
-                'name': self.name,
-                'value': self.value,
-                # 'form_field': self.form_field.to_dict()
-                'html_attr': self.html_attr
-            }
-
-
-@dataclass
 class GlueModelFields:
     fields: list[GlueModelField] = field(default_factory=list)
 
@@ -60,26 +45,32 @@ class GlueModelFields:
 def model_object_fields_from_model(model: Model, included_fields: tuple, excluded_fields: tuple) -> GlueModelFields:
     fields = []
 
-    for field in model._meta.fields:
-        if field_name_included(field.name, included_fields, excluded_fields):
-            if hasattr(field, 'get_internal_type'):
-                # if include_values:
-                #     field_value = getattr(self.model_object, field.name)
-                # else:
-                field_value = None
+    for model_field in model._meta.fields:
+        if field_name_included(model_field.name, included_fields, excluded_fields):
+            fields.append(glue_field_attrs_from_model_field(model_field))
 
-                field_attr = generate_field_attr_dict(field)
 
-                if field.many_to_one or field.one_to_one:
-                    field_name = field.name + '_id'
-                else:
-                    field_name = field.name
 
-                fields.append(GlueModelField(
-                    name=field_name,
-                    type=field.get_internal_type(),
-                    value=field_value,
-                    html_attr=field_attr
-                ))
+
+
+            # if hasattr(field, 'get_internal_type'):
+            #     # if include_values:
+            #     #     field_value = getattr(self.model_object, field.name)
+            #     # else:
+            #     field_value = None
+            #
+            #     field_attr = generate_field_attr_dict(field)
+            #
+            #     if field.many_to_one or field.one_to_one:
+            #         field_name = field.name + '_id'
+            #     else:
+            #         field_name = field.name
+            #
+            #     fields.append(GlueModelField(
+            #         name=field_name,
+            #         type=field.get_internal_type(),
+            #         value=field_value,
+            #         html_attr=field_attr
+            #     ))
 
     return GlueModelFields(fields=fields)

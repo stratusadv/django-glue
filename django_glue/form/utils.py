@@ -1,6 +1,6 @@
 from django.db.models import Model
 
-from django_glue.form.fields import GlueFormField
+from django_glue.form.html_attrs import GlueFormField
 from django_glue.form.maps import FIELD_TYPE_TO_FACTORY_METHOD
 from django_glue.form.enums import FieldTypes
 
