@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Union, Optional
+from typing import Union
 
 from django.db.models import Field
 
@@ -46,7 +46,7 @@ class GlueFieldAttrs(ABC):
             'requried': model_field.blank,
             'hidden': model_field.hidden,
             'disabled': not model_field.editable,
-            'help_text': model_field.help_text,
+            # 'help_text': model_field.help_text,  # Todo: Was raising an error with proxy field.
             'choices': model_field.choices
         }
 
@@ -65,11 +65,11 @@ class GlueFieldAttrs(ABC):
         return {}
 
 
-class GlueBooleanField(GlueFieldAttrs):
+class GlueBooleanFieldAttr(GlueFieldAttrs):
     type = FieldType.BOOLEAN
 
 
-class GlueCharField(GlueFieldAttrs):
+class GlueCharFieldAttr(GlueFieldAttrs):
     type = FieldType.CHAR
 
     def __init__(self, max_length: int, **kwargs):
@@ -89,21 +89,21 @@ class GlueCharField(GlueFieldAttrs):
         }
 
 
-class GlueDateField(GlueFieldAttrs):
+class GlueDateFieldAttr(GlueFieldAttrs):
     type = FieldType.DATE
 
     def extra_html_attrs(self) -> dict:
         return {'input_type': 'date'}
 
 
-class GlueDateTimeField(GlueFieldAttrs):
+class GlueDateTimeFieldAttr(GlueFieldAttrs):
     type = FieldType.DATETIME
 
     def extra_html_attrs(self) -> dict:
         return {'input_type': 'datetime-local'}
 
 
-class GlueDecimalField(GlueFieldAttrs):
+class GlueDecimalFieldAttr(GlueFieldAttrs):
     type = FieldType.DECIMAL
 
     def __init__(self, max_digits: int, decimal_places: int, **kwargs):
@@ -119,28 +119,28 @@ class GlueDecimalField(GlueFieldAttrs):
         }
 
 
-class GlueEmailField(GlueFieldAttrs):
+class GlueEmailFieldAttr(GlueFieldAttrs):
     type = FieldType.EMAIL
 
     def extra_html_attrs(self) -> dict:
         return {'input_type': 'email'}
 
 
-class GlueFloatField(GlueFieldAttrs):
+class GlueFloatFieldAttr(GlueFieldAttrs):
     type = FieldType.FLOAT
 
     def extra_html_attrs(self) -> dict:
         return {'input_type': 'number'}
 
 
-class GlueIntegerField(GlueFieldAttrs):
+class GlueIntegerFieldAttr(GlueFieldAttrs):
     type = FieldType.INTEGER
 
     def extra_html_attrs(self) -> dict:
         return {'input_type': 'number'}
 
 
-class GlueTextField(GlueFieldAttrs):
+class GlueTextFieldAttr(GlueFieldAttrs):
     type = FieldType.TEXT
 
     def extra_html_attrs(self) -> dict:

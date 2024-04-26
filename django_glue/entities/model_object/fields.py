@@ -4,6 +4,7 @@ from typing import Any
 from django.db.models import Model
 
 from django_glue.form.factories import glue_field_attrs_from_model_field
+from django_glue.form.html_attrs import GlueFieldAttrs
 
 
 def field_name_included(name, fields, exclude):
@@ -15,20 +16,19 @@ def field_name_included(name, fields, exclude):
     return included
 
 
-def generate_field_attr_dict(field):
-    return {
-        'name': field.name,
-        'label': ''.join(word.capitalize() for word in field.name.split('_')),
-        'id': f'id_{field.name}',
-        # 'help_text': field.help_text,  # Todo: Was raising an error with proxy field.
-        'required': not field.null,
-        'disabled': not field.editable,
-        'hidden': field.hidden,
-        'choices': field.choices,
-        'maxlength': field.max_length,
-    }
-    # form_field = field.formfield()
-    # return form_field.widget_attrs(form_field.widget)
+@dataclass
+class GlueModelField:
+    name: str
+    type: str
+    value: Any
+    glue_field_attrs: GlueFieldAttrs
+
+    def to_dict(self) -> dict:
+        return {
+                'name': self.name,
+                'value': self.value,
+                'html_attr': self.glue_field_attrs.html_attrs
+            }
 
 
 @dataclass
