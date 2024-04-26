@@ -1,7 +1,7 @@
-from django_glue.form.enums import FieldTypes
-from django_glue.form import factories
+from django_glue.form.enums import FieldType
+from django_glue.form import fields
 
 
-FIELD_TYPE_TO_FACTORY_METHOD = {
-    FieldTypes.CHAR_FIELD: factories.GlueCharFieldFactory
+FIELD_TYPE_TO_GLUE_FIELD = {
+    FieldType.CHAR: fields.GlueCharField
 }
