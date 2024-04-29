@@ -27,7 +27,7 @@ jobs:
 
       - name: Add Directory to PYTHONPATH
         run: |
-          PYTHONPATH="${PYTHONPATH}:/home/runner/work/django-glue/django-glue/"
+          PYTHONPATH="${PYTHONPATH}:$(pwd)"
           export PYTHONPATH
 
       - name: Run Tests
