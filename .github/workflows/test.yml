@@ -27,6 +27,5 @@ jobs:
 
       - name: Run Tests
         run: |
-          PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          export PYTHONPATH
+          export PYTHONPATH="${PYTHONPATH}:$(pwd)"
           python tests/manage.py test --settings=settings --noinput
