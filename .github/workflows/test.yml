@@ -20,5 +20,8 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Add root directory to PATH
+        run: export PATH=\$PATH:./django_glue
+
       - name: Testing
-        run: python -m unittest tests/test_core.py
+        run: python tests/manage.py test --settings=settings --noinput
