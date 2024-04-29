@@ -13,15 +13,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
-      - name: Add root directory to PATH
-        run: export PATH=\$PATH:./django_glue
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt      
 
       - name: Testing
-        run: python tests/manage.py test --settings=settings --noinput
+        run: |
+          export PATH=\$PATH:.
+          python tests/manage.py test --settings=settings --noinput
+          
