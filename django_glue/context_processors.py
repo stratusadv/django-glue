@@ -8,8 +8,6 @@ from django_glue.session import GlueSession
 def glue(request):
     return {
         'DJANGO_GLUE_VERSION': __version__,
-        settings.DJANGO_GLUE_CONTEXT_NAME: request.session.get(settings.DJANGO_GLUE_SESSION_NAME, {}),
-        settings.DJANGO_GLUE_KEEP_LIVE_CONTEXT_NAME: request.session.get(settings.DJANGO_GLUE_KEEP_LIVE_SESSION_NAME, {}),
         'DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS': (settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS / 2.2) * 1000,
         'GLUE_SESSION_DATA': json.dumps(GlueSession(request).session),
     }
