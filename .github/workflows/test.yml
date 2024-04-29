@@ -25,10 +25,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt      
 
-      - name: Add root directory to PYTHONPATH
+      - name: Add Directory to PYTHONPATH
         run: |
-          PYTHONPATH="${PYTHONPATH}:."
+          PYTHONPATH="${PYTHONPATH}:/home/runner/work/django-glue/django-glue/"
           export PYTHONPATH
 
-      - name: Testing
+      - name: Run Tests
         run: python tests/manage.py test --settings=settings --noinput
