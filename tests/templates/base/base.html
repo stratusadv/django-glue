@@ -13,7 +13,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=1.0">
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/css/bootstrap.min.css" rel="stylesheet">
+    {% glue_bootstrap_css %}
 
 </head>
 
@@ -29,8 +29,10 @@
 
 {% glue_init %}
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0-beta1/dist/js/bootstrap.bundle.min.js"></script>
-<script src="//unpkg.com/alpinejs" defer></script>
+{% glue_bootstrap_js %}
+
+{% glue_alpine_js %}
+
 <script src="{% static 'tests.js' %}"></script>
 
 </body>
