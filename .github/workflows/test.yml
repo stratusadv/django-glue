@@ -25,8 +25,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt      
 
+      - name: Add PATH
+        run: export PATH=\$PATH:.
+
       - name: Testing
-        run: |
-          export PATH=\$PATH:.
-          python tests/manage.py test --settings=settings --noinput
-          
+        run: python tests/manage.py test --settings=settings --noinput
