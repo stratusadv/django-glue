@@ -1,13 +1,13 @@
 from django_glue.form.enums import FieldType
-from django_glue.form import html_attrs
+from django_glue.form import factories
 
 
-FIELD_TYPE_TO_GLUE_FIELD = {
+FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     # FieldType.AUTO_FIELD: html_attrs.GlueIntegerFieldAttr,
     # FieldType.BIG_AUTO_FIELD: html_attrs.GlueIntegerFieldAttr,
     # FieldType.SMALL_AUTO_FIELD: html_attrs.GlueIntegerFieldAttr,
     # FieldType.BOOLEAN: html_attrs.GlueBooleanFieldAttr,
-    FieldType.CHAR: html_attrs.GlueFieldAttrs,
+    FieldType.CHAR: factories.GlueCharAttrFactory,
     # FieldType.COMMA_SEPARATED_INTEGER: html_attrs.GlueIntegerFieldAttr,
     # FieldType.DATE: html_attrs.GlueDateFieldAttr,
     # FieldType.DATETIME: html_attrs.GlueDateTimeFieldAttr,

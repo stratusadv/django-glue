@@ -4,7 +4,14 @@
     type="text"
 {% endblock %}
 
-{% block input_attributes %}
-	{% if max_length %}maxlength=""{% endif %}
+{% block extra_attributes %}
+	{% if max_length %}maxlength="{{ max_length }}"{% endif %}
+	{% if min_length %}minlength="{{ min_length }}"{% endif %}
+    {% if pattern %}pattern="{{ pattern }}"{% endif %}
+    {% if placeholder %}pattern="{{ placeholder }}"{% endif %}
+    
+    {% block char_attributes %}
+    {% endblock %}
+    
 {% endblock %}
 

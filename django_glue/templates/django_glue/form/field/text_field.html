@@ -2,15 +2,15 @@
 
 {% block field_content %}
 <textarea
-    x-ref="field"
     type="text"
     class="form-control"
-    x-model.debounce.500ms="value"
-    id="id_{% if name %}id_{{ name }}{% elif label %}id_{% form_label_to_name label %}{% endif %}"
-    name="{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
-    {{ text_area_attributes }}
+
+    {% include 'django_glue/form/elements/base_attribute_elements.html' %}
+
     rows="{% if rows %}{{ rows }}{% else %}3{% endif %}"
-    {% if required %}required{% endif %}
-></textarea>
+
+    cols="{% if cols %}{{ cols }}{% else %}20{% endif %}"
+
+>{{ value }}</textarea>
 {% endblock %}
 

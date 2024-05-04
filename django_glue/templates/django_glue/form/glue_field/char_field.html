@@ -1,0 +1,10 @@
+{% extends 'django_glue/form/field/input_field.html' %}
+
+{% block input_type %}
+    type="text"
+{% endblock %}
+
+{% block extra_attributes %}
+	{% if max_length %}maxlength=""{% endif %}
+{% endblock %}
+

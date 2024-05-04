@@ -4,8 +4,7 @@
     type="number"
 {% endblock %}
 
-{% block extra_attributes %}
+{% block input_attributes %}
 	{% if max %}max="{{ max }}"{% endif %}
     {% if min %}min="{{ min }}"{% endif %}
-    {% if step %}step="{{ step }}"{% else %}step="1"{% endif %}
 {% endblock %}

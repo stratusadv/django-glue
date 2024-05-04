@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Type
 
 from django.db.models import Model
 
-from django_glue.form.factories import glue_field_attrs_from_model_field
+from django_glue.form.utils import glue_field_attr_from_model_field
 from django_glue.form.html_attrs import GlueFieldAttrs
 
 
@@ -42,35 +42,21 @@ class GlueModelFields:
         return {field.name: field.to_dict() for field in self.fields}
 
 
-def model_object_fields_from_model(model: Model, included_fields: tuple, excluded_fields: tuple) -> GlueModelFields:
+def model_object_fields_from_model(
+        model: Type[Model],
+        included_fields: tuple,
+        excluded_fields: tuple
+) -> GlueModelFields:
+
     fields = []
 
     for model_field in model._meta.fields:
         if field_name_included(model_field.name, included_fields, excluded_fields):
-            fields.append(glue_field_attrs_from_model_field(model_field))
-
-
-
-
-
-            # if hasattr(field, 'get_internal_type'):
-            #     # if include_values:
-            #     #     field_value = getattr(self.model_object, field.name)
-            #     # else:
-            #     field_value = None
-            #
-            #     field_attr = generate_field_attr_dict(field)
-            #
-            #     if field.many_to_one or field.one_to_one:
-            #         field_name = field.name + '_id'
-            #     else:
-            #         field_name = field.name
-            #
-            #     fields.append(GlueModelField(
-            #         name=field_name,
-            #         type=field.get_internal_type(),
-            #         value=field_value,
-            #         html_attr=field_attr
-            #     ))
+            fields.append(GlueModelField(
+                name=model_field.name,
+                type=model_field.get_internal_type(),
+                value=None,
+                glue_field_attrs=glue_field_attr_from_model_field(model_field)
+            ))
 
     return GlueModelFields(fields=fields)

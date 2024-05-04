@@ -48,3 +48,10 @@ Main components would be Session Updating, JS Objects, Request, Processing, Resp
 ### Questions
 - What do we actually need for the field data? On the JS side we want to be able to access the properties. 
 This can all be done by the context on fields... Type and Value
+
+### Fields 
+- html_attr -> Information that needs to be sent to the frontend to validate and configure fields.
+- Field Type ->  Matches django model fields. 
+
+### Field Types
+- Option Field 

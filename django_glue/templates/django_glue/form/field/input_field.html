@@ -1,26 +1,17 @@
-{% extends 'django_glue/form/field/base_field.html' %}
+    {% extends 'django_glue/form/field/base_field.html' %}
 
 {% block field_content %}
     <input
-        x-ref="field"
+        class="form-control"
+        value="{{ value }}"
+
         {% block input_type %}
             {% if input_type %}type="{{ input_type }}"{% else %}type="text"{% endif %}
         {% endblock %}
-        {{ input_attributes }}
-        class="form-control"
-        x-model.debounce.500ms="value"
 
+        {% include 'django_glue/form/elements/base_attribute_elements.html' %}
 
-        {% if not prevent_submit %}
-            name="{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
-            id="id_{% if name %}{{ name }}{% elif label %}{% form_label_to_name label %}{% endif %}"
-        {% endif %}
-
-        {% if hidden %}hidden="" {% endif %}
-
-        {% if required %}required{% endif %}
-        {% block input_attributes %}
-
+        {% block extra_attributes %}
         {% endblock %}
     >
 {% endblock %}

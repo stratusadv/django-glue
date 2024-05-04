@@ -5,12 +5,6 @@ from django.db.models import Field
 
 from django_glue.form.enums import FieldType
 
-"""
-    Model attribute names match model field names to dynamically create GlueFieldAttrs instances.
-    html_attrs key represents name of html attribute.
-    
-"""
-
 
 class GlueFieldAttrs(ABC):
     type = None
@@ -18,7 +12,7 @@ class GlueFieldAttrs(ABC):
     def __init__(
             self,
             name: str,
-            requried: bool = False,
+            required: bool = False,
             hidden: bool = False,
             help_text: str = '',
             disabled: bool = True,
@@ -27,32 +21,20 @@ class GlueFieldAttrs(ABC):
         if self.type is None:
             raise Exception(f"Field {self.__class__.__name__} has no type")
 
-        self.requried = requried  # Matches django model fields
+        self.required = required
         self.disabled = disabled
         self.hidden = hidden
         self.name = name
         self.help_text = help_text
         self.choices = choices
 
-        self.html_attrs = self._base_html_attrs() | self.extra_html_attrs()
+    @property
+    def html_attrs(self):
+        return self.base_html_attrs() | self.extra_html_attrs()
 
-    def to_dict(self):
-        pass
-
-    @classmethod
-    def kwargs_from_model_field(cls, model_field: Field) -> dict:
+    def base_html_attrs(self) -> dict:
         return {
-            'name': model_field.name,
-            'requried': model_field.blank,
-            'hidden': model_field.hidden,
-            'disabled': not model_field.editable,
-            # 'help_text': model_field.help_text,  # Todo: Was raising an error with proxy field.
-            'choices': model_field.choices
-        }
-
-    def _base_html_attrs(self) -> dict:
-        return {
-            'required': self.requried,
+            'required': self.required,
             'hidden': self.hidden,
             'label': ' '.join(word.capitalize() for word in self.name.split('_')),
             'id': f'id_{self.name}',
@@ -73,14 +55,8 @@ class GlueCharFieldAttr(GlueFieldAttrs):
     type = FieldType.CHAR
 
     def __init__(self, max_length: int, **kwargs):
-        self.max_length = max_length
         super().__init__(**kwargs)
-
-    @classmethod
-    def kwargs_from_model_field(cls, model_field: Field) -> dict:
-        kwargs = super().kwargs_from_model_field(model_field)
-        kwargs['max_length'] = model_field.max_length
-        return kwargs
+        self.max_length = max_length
 
     def extra_html_attrs(self) -> dict:
         return {

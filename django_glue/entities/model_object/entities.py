@@ -45,7 +45,11 @@ class GlueModelObject(GlueEntity):
 
     def generate_field_data(self, include_values: bool = True) -> GlueModelFields:
 
-        glue_model_fields = model_object_fields_from_model(self.model, self.included_fields, self.excluded_fields)
+        glue_model_fields = model_object_fields_from_model(
+            model=self.model,
+            included_fields=self.included_fields,
+            excluded_fields=self.excluded_fields
+        )
 
         if include_values:
             for field in glue_model_fields:
