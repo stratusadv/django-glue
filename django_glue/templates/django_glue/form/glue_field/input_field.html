@@ -1,4 +1,4 @@
-{% extends 'django_glue/form/field/base_field.html' %}
+{% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
     <input
@@ -8,7 +8,7 @@
         {% endblock %}
         {{ extra_attributes }}
         class="form-control"
-        x-model.debounce.500ms="value"
+        x-model.debounce="value"
 
 
         {% if not prevent_submit %}

@@ -11,30 +11,32 @@ class GlueAttrFactory(ABC):
     def __init__(self, model_field: Field):
         self.model_field = model_field
 
-    def factory_method(self) -> html_attrs.GlueFieldAttrs:
-        kwargs = self.base_kwargs() | self.field_kwargs()
-        print(kwargs)
-        return self.glue_attr(**kwargs)
+    def factory_method(self) -> dict:
+        return self.base_attrs() | self.field_attrs()
 
-    def base_kwargs(self) -> dict:
+    def base_attrs(self) -> dict:
+        print(self.model_field.name)
         return {
             'name': self.model_field.name,
+            'id': f'id_{self.model_field.name}',
+            'label': ' '.join(word.capitalize() for word in self.model_field.name.split('_')),
             'required': self.model_field.blank,
             'hidden': self.model_field.hidden,
             'disabled': not self.model_field.editable,
-            # 'help_text': self.model_field.help_text,  # Todo: Was raising an error with proxy field.
             'choices': self.model_field.choices
+            # 'help_text': self.model_field.help_text,  # Todo: Was raising an error with proxy field.
         }
 
     @abstractmethod
-    def field_kwargs(self) -> dict:
+    def field_attrs(self) -> dict:
         pass
 
 
 class GlueCharAttrFactory(GlueAttrFactory):
     glue_attr = html_attrs.GlueCharFieldAttr
 
-    def field_kwargs(self) -> dict:
+    def field_attrs(self) -> dict:
         return {
-            'max_length': self.model_field.max_length,
+            'maxlength': self.model_field.max_length,
+            'type': 'text'
         }

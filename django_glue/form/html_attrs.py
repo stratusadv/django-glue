@@ -3,6 +3,8 @@ from typing import Union
 
 from django_glue.form.enums import FieldType
 
+# Todo: Delete this file and move into factories.
+
 
 class GlueFieldAttrs(ABC):
     type = None

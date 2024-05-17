@@ -21,14 +21,14 @@ class GlueModelField:
     name: str
     type: str
     value: Any
-    glue_field_attrs: GlueFieldAttrs
+    html_attrs: dict
 
     def to_dict(self) -> dict:
         return {
-                'name': self.name,
-                'value': self.value,
-                'html_attr': self.glue_field_attrs.html_attrs
-            }
+            'name': self.name,
+            'value': self.value,
+            'html_attr': self.html_attrs
+        }
 
 
 @dataclass
@@ -47,7 +47,6 @@ def model_object_fields_from_model(
         included_fields: tuple,
         excluded_fields: tuple
 ) -> GlueModelFields:
-
     fields = []
 
     for model_field in model._meta.fields:
@@ -56,7 +55,7 @@ def model_object_fields_from_model(
                 name=model_field.name,
                 type=model_field.get_internal_type(),
                 value=None,
-                glue_field_attrs=glue_field_attr_from_model_field(model_field)
+                html_attrs=glue_field_attr_from_model_field(model_field)
             ))
 
     return GlueModelFields(fields=fields)

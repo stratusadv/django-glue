@@ -28,9 +28,9 @@
                     }                   
                 })
             },
-            glue_field: null,
+            glue_field: null, // If I update this I think it would cascade through....
             set_html_attr() {
-                // Todo: Should this build an id based on the name?
+                // Should this be more dynamic?
                 if(!prevent_submit) {
                     $refs.field.setAttribute('id', this.glue_field.html_attr.id)
                     $refs.field.setAttribute('name', this.glue_field.html_attr.name)
