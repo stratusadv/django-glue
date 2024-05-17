@@ -1,8 +1,6 @@
 from abc import ABC
 from typing import Union
 
-from django.db.models import Field
-
 from django_glue.form.enums import FieldType
 
 
