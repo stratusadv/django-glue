@@ -1,5 +1,1 @@
-{% extends 'django_glue/form/glue_field/input_field.html' %}
-
-{% block input_type %}
-    type="email"
-{% endblock %}
+{% include 'django_glue/form/glue_field/input_field.html' with input_type='email' %}

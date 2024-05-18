@@ -1,10 +1,1 @@
-{% extends 'django_glue/form/glue_field/input_field.html' %}
-
-{% block input_type %}
-    type="number"
-{% endblock %}
-
-{% block input_attributes %}
-	{% if max %}max="{{ max }}"{% endif %}
-    {% if min %}min="{{ min }}"{% endif %}
-{% endblock %}
+{% include 'django_glue/form/glue_field/input_field.html' with input_type='number' %}

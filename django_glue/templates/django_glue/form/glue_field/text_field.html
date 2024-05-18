@@ -1,16 +1,12 @@
 {% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
-<textarea
-    x-ref="field"
-    type="text"
-    class="form-control"
-    x-model.debounce.500ms="value"
-    id="id_{% if name %}id_{{ name }}{% elif label %}id_{% to_snake_case label %}{% endif %}"
-    name="{% if name %}{{ name }}{% elif label %}{% to_snake_case label %}{% endif %}"
-    {{ text_area_attributes }}
-    rows="{% if rows %}{{ rows }}{% else %}3{% endif %}"
-    {% if required %}required{% endif %}
-></textarea>
+    <textarea
+        x-ref="field"
+        type="text"
+        class="form-control"
+        x-model.debounce.500ms="value"
+        rows="{% if rows %}{{ rows }}{% else %}3{% endif %}"
+    ></textarea>
 {% endblock %}
 
