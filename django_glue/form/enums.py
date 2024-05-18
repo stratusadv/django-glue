@@ -2,6 +2,11 @@ from django.db import models
 from enum import Enum
 
 
+class GlueAttrType(str, Enum):
+    HTML = 'html'
+    FIELD = 'field'
+
+
 class FieldType(str, Enum):
     AUTO_FIELD = models.AutoField.__name__
     BIG_AUTO_FIELD = models.BigAutoField.__class__.__name__
