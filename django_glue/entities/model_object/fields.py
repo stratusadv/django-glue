@@ -21,13 +21,15 @@ class GlueModelField:
     name: str
     type: str
     value: Any
+    field_attrs: dict
     html_attrs: dict
 
     def to_dict(self) -> dict:
         return {
             'name': self.name,
             'value': self.value,
-            'html_attr': self.html_attrs
+            'field_attrs': self.field_attrs,
+            'html_attrs': self.html_attrs
         }
 
 
@@ -51,11 +53,14 @@ def model_object_fields_from_model(
 
     for model_field in model._meta.fields:
         if field_name_included(model_field.name, included_fields, excluded_fields):
+            glue_attrs = glue_field_attr_from_model_field(model_field)
+
             fields.append(GlueModelField(
                 name=model_field.name,
                 type=model_field.get_internal_type(),
                 value=None,
-                html_attrs=glue_field_attr_from_model_field(model_field)
+                field_attrs=glue_attrs['field_attrs'],
+                html_attrs=glue_attrs['html_attrs']
             ))
 
     return GlueModelFields(fields=fields)

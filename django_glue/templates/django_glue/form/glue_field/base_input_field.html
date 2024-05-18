@@ -1,0 +1,28 @@
+<div x-data="{
+    value: null
+}"
+    {% if x_model_value %}
+        x-modelable="value"
+        x-model="{{ x_model_value }}"
+    {% endif %}
+>
+    <div
+        x-data="alpineGlueField"
+        {% if glue_field %}
+            x-modelable="glue_field"
+            x-model="{{ glue_field }}"
+        {% endif %}
+    >
+        {% block field_label %}
+            <label
+                x-ref="label"
+                class="form-label"
+                for="{% if name %}id_{{ name }}{% elif label %}id_{% to_snake_case label %}{% endif %}"
+            >
+                {{ label }}{% if required %}*{% endif %}
+            </label>
+        {% endblock %}
+        {% block field_content %}
+        {% endblock %}
+    </div>
+</div>
