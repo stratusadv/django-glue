@@ -22,7 +22,7 @@ class GlueModelObject {
             'delete',
             {'id': this.id}
         ).then((response) => {
-            console.log(response)
+            // console.log(response)
             glue_dispatch_response_event(response)
         }).catch((error) => {
                 glue_dispatch_object_delete_error_event(error)
@@ -40,6 +40,7 @@ class GlueModelObject {
             }
         ).then((response) => {
             glue_dispatch_response_event(response)
+            // console.log(response.data)
             this._set_properties(JSON.parse(response.data))
         }).catch((error) => {
                 glue_dispatch_object_get_error_event(error)
@@ -99,6 +100,7 @@ class GlueModelObject {
         if (!this.glue_fields_set) {
             this.set_fields(fields)
         }
+
         let simple_fields = simplify_model_fields(fields)
         for (let key in simple_fields) {
             if (key in this) {
@@ -117,9 +119,11 @@ class GlueModelObject {
     }
 
     set_fields(fields){
+        // Fields are set on initialization if data is in the session.
+        // Else we have to set the field data on retrieval of object
         for (let key in fields) {
            this[key] = ''
-           this['fields'][key] = window.glue_session_data[this.glue_encoded_unique_name].fields[key]
+           this['fields'][key] = new GlueField(fields[key].field_attrs)
         }
         this.glue_fields_set = true
 

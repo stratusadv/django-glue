@@ -7,7 +7,16 @@
     {% endif %}
 >
     <div
-        x-data="alpineGlueField"
+        x-data="{
+            init() {
+                    this.$watch('glue_field', value => {
+                    // Have to create a new glue object here becuase of how alpine handles proxy objects...
+                    let glueField = new GlueField(value)
+                    glueField.set_field_element(this.$refs.field)
+                })
+            },
+            glue_field: undefined
+        }"
         {% if glue_field %}
             x-modelable="glue_field"
             x-model="{{ glue_field }}"
