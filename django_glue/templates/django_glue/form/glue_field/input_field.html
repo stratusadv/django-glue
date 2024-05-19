@@ -4,7 +4,7 @@
     <input
         {% if input_type %}type="{{ input_type }}"{% else %}type="text"{% endif %}
         class="form-control"
-        x-ref="field"
+        x-ref="form_field"
         x-model.debounce="value"
     >
 {% endblock %}

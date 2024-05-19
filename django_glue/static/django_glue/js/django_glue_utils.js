@@ -25,3 +25,14 @@ function simplify_model_fields(field_data) {
     }
     return simplified_data
 }
+
+
+function title_string(string) {
+    let words = string.split('_');
+
+    let titledWords = words.map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    );
+
+    return titledWords.join(' ');
+}

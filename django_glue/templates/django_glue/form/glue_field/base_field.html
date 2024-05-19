@@ -11,8 +11,9 @@
             init() {
                     this.$watch('glue_field', value => {
                     // Have to create a new glue object here becuase of how alpine handles proxy objects...
-                    let glueField = new GlueField(value)
-                    glueField.set_field_element(this.$refs.field)
+                    let glue_form_field = new GlueFormField(value)
+                    let glue_form_field_binder = new GlueFormFieldBinder(glue_form_field, this.$refs.form_field)
+                    glue_form_field_binder.bind()
                 })
             },
             glue_field: undefined
