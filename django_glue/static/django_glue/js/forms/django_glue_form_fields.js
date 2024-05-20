@@ -21,6 +21,7 @@ class GlueFormField {
     ) {
 
         // Field attrs is an array for field attr objects.
+        this.value = ''
         this.set_attribute('name', name, GlueFormFieldAttrType.HTML)
         this.set_attribute('label', title_string(name), GlueFormFieldAttrType.FIELD)
         this.set_attribute('id', `id_${name}`.toLocaleLowerCase(), GlueFormFieldAttrType.HTML)
