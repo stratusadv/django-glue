@@ -14,7 +14,7 @@ class GlueFormFieldBinder {
     }
     set_label() {
         this._label_element.setAttribute('for', this.glue_form_field.id.value)
-        this._label_element.innerText = this.glue_form_field.value
+        this._label_element.innerText = this.glue_form_field.label.value
 
         if(this.glue_form_field.required) {
             this._label_element.innerText = this._label_element.innerText + '*'

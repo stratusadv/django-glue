@@ -123,7 +123,7 @@ class GlueModelObject {
         // Else we have to set the field data on retrieval of object
         for (let key in fields) {
            this[key] = ''
-           this['fields'][key] = new GlueFormField(fields[key].field_attrs)
+           this['fields'][key] = glue_model_field_from_field_attrs(fields[key].field_attrs)
         }
         this.glue_fields_set = true
 

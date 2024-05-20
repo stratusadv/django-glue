@@ -10,8 +10,8 @@
         x-data="{
             init() {
                     this.$watch('glue_field', value => {
-                    // Have to create a new glue object here becuase of how alpine handles proxy objects...
-                    let glue_form_field = new GlueFormField(value)
+                    // Have to create a new glue object here because of how alpine handles proxy objects...
+                    let glue_form_field = new GlueFormField(value._name.value, ...Object.values(value))
                     let glue_form_field_binder = new GlueFormFieldBinder(glue_form_field, this.$refs.form_field)
                     glue_form_field_binder.bind()
                 })

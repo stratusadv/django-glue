@@ -5,7 +5,8 @@ const GlueFormFieldAttrType = {
 
 
 class GlueFormFieldAttr {
-    constructor(name, attr_type, value) {
+    // Todo: Can I remove the attr type from this in the future?
+    constructor(name,  value, attr_type) {
         this.name = name
         this.value = value
         this.attr_type = attr_type
@@ -13,40 +14,75 @@ class GlueFormFieldAttr {
 }
 
 
-// has all the logic to apply to glue fields. Needs to act on an element.
 class GlueFormField {
-    // This should be the basic building blocks for the system.
-    // A model object should be turn itself into this...
-    // This just holds attributes for field objects.
-    constructor(name, required = false, ...field_attrs) {
-        // Todo: Need a way to initialize from model and from js....
-        // Todo: Is it possible to have this render different ways? Maybe I do need a factory?
-        this.name = new GlueFormFieldAttr('name', GlueFormFieldAttrType.HTML, name)
-        this.id = new GlueFormFieldAttr('id', GlueFormFieldAttrType.HTML, `id_${name}`)
-        this.label = new GlueFormFieldAttr('label', GlueFormFieldAttrType.FIELD, title_string(name))
+    constructor(
+        name,
+        ...field_attrs
+    ) {
 
-        // Todo: Need to loop through these args somehow
+        // Field attrs is an array for field attr objects.
+        this.set_attribute('name', name, GlueFormFieldAttrType.HTML)
+        this.set_attribute('label', title_string(name), GlueFormFieldAttrType.FIELD)
+        this.set_attribute('id', `id_${name}`.toLocaleLowerCase(), GlueFormFieldAttrType.HTML)
 
+        for (const attr of field_attrs) {
+            this.set_attribute(attr.name, attr.value, attr.attr_type)
+        }
     }
 
-    set_required(value) {
+    get label() {
+        return this._label
+    }
+
+    set label(value) {
+        this.set_attribute('label', value, GlueFormFieldAttrType.FIELD)
+    }
+
+    get id() {
+        return this._id
+    }
+
+    set id(value) {
+        this.set_attribute('id', value, GlueFormFieldAttrType.HTML)
+    }
+
+    get name() {
+        return this._name
+    }
+
+    set name(value) {
+        this.set_attribute('name', value, GlueFormFieldAttrType.HTML)
+    }
+
+    get required() {
+        return this._required || false
+    }
+
+    set required(value) {
         if (value) {
-            this.required = new GlueFormFieldAttr('required', GlueFormFieldAttrType.HTML, 'required')
+            this.set_attribute('required', value, GlueFormFieldAttrType.HTML)
         } else {
-            delete this.required
+            this.remove_attribute('required')
         }
     }
 
     set_attribute(name, value, attr_type) {
-        this[name] = new GlueFormFieldAttr(name, attr_type, value)
+        this[`_${name}`] = new GlueFormFieldAttr(name, value, attr_type)
+    }
+
+    remove_attribute(name) {
+        delete this[`_${name}`]
     }
 }
 
 
-function glue_model_field_to_form_field(model_field) {
-    // How would I do this for the different types of fields?
-    // The binder should be the only thing that is diffreent becuase this thing just holds attributes.
-    let form_field = new GlueFormField(model_field.name)
-    form_field.set_attribute('label', model_field.label, GlueFormFieldAttrType.FIELD)
-    form_field.set_attribute('placeholder', model_field.placeholder, GlueFormFieldAttrType.FIELD)
-    return new GlueFormField()
+function glue_model_field_from_field_attrs(field_attrs) {
+    // Inits from glue model objects and base fields..
+    let form_field = new GlueFormField(field_attrs.name.value)
+    for (const [name, attr_obj] of Object.entries(field_attrs)) {
+        //console.log(name)
+        //console.log(attr_obj)
+        form_field.set_attribute(name, attr_obj.value, attr_obj.attr_type)
+    }
+    return form_field
+}
