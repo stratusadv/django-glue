@@ -31,8 +31,6 @@ class GlueAttrFactory(ABC):
         self.add_attr('id', f'id_{self.model_field.name}', GlueAttrType.HTML)
         self.add_attr('label', str(self.model_field.verbose_name).title(), GlueAttrType.FIELD)
 
-        model_field = self.model_field
-
         if not self.model_field.blank:
             self.add_attr('required', True, GlueAttrType.HTML)
 

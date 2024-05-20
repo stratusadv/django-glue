@@ -24,7 +24,11 @@ class GlueFormFieldBinder {
         // Loop though all attributes on class
         for (const [name, attr_obj] of Object.entries(this.glue_form_field)) {
             if (attr_obj.attr_type === 'html') {
-                this._field_element.setAttribute(name, attr_obj.value)
+                if (name.startsWith('_')) {
+                    this._field_element.setAttribute(name.slice(1), attr_obj.value)
+                } else {
+                    this._field_element.setAttribute(name, attr_obj.value)
+                }
             }
         }
     }

@@ -30,12 +30,32 @@ class GlueFormField {
         }
     }
 
-    get label() {
-        return this._label
+    get choices() {
+        return this._choices || []
     }
 
-    set label(value) {
-        this.set_attribute('label', value, GlueFormFieldAttrType.FIELD)
+    set choices(value) {
+        this.set_attribute('choices', value, GlueFormFieldAttrType.FIELD)
+    }
+
+    get help_text() {
+        return this._help_text || ''
+    }
+
+    set help_text(value) {
+        this.set_attribute('help_text', value, GlueFormFieldAttrType.FIELD)
+    }
+
+    get hidden() {
+        return this._hidden || false
+    }
+
+    set hidden(value) {
+        if (value) {
+            this.set_attribute('hidden', value, GlueFormFieldAttrType.HTML)
+        } else {
+            this.remove_attribute('hidden')
+        }
     }
 
     get id() {
@@ -44,6 +64,14 @@ class GlueFormField {
 
     set id(value) {
         this.set_attribute('id', value, GlueFormFieldAttrType.HTML)
+    }
+
+    get label() {
+        return this._label
+    }
+
+    set label(value) {
+        this.set_attribute('label', value, GlueFormFieldAttrType.FIELD)
     }
 
     get name() {
@@ -66,13 +94,14 @@ class GlueFormField {
         }
     }
 
+    remove_attribute(name) {
+        delete this[`_${name}`]
+    }
+
     set_attribute(name, value, attr_type) {
         this[`_${name}`] = new GlueFormFieldAttr(name, value, attr_type)
     }
 
-    remove_attribute(name) {
-        delete this[`_${name}`]
-    }
 }
 
 
