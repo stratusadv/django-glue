@@ -5,7 +5,6 @@ const GlueFormFieldAttrType = {
 
 
 class GlueFormFieldAttr {
-    // Todo: Can I remove the attr type from this in the future?
     constructor(name,  value, attr_type) {
         this.name = name
         this.value = value
@@ -14,14 +13,17 @@ class GlueFormFieldAttr {
 }
 
 
+// ignore is used for values that can be skipped.
 class GlueFormField {
     constructor(
         name,
+        ignored_attrs = [],
         ...field_attrs
     ) {
 
         // Field attrs is an array for field attr objects.
         this.value = ''
+        this.ignored_attrs = ignored_attrs
         this.set_attribute('name', name, GlueFormFieldAttrType.HTML)
         this.set_attribute('label', title_string(name), GlueFormFieldAttrType.FIELD)
         this.set_attribute('id', `id_${name}`.toLocaleLowerCase(), GlueFormFieldAttrType.HTML)
@@ -29,6 +31,9 @@ class GlueFormField {
         for (const attr of field_attrs) {
             this.set_attribute(attr.name, attr.value, attr.attr_type)
         }
+
+        console.log(`initializing field: ${name}`)
+        console.log(this)
     }
 
     get choices() {
@@ -54,8 +59,9 @@ class GlueFormField {
     set hidden(value) {
         if (value) {
             this.set_attribute('hidden', value, GlueFormFieldAttrType.HTML)
+            this.remove_ignored_attributes('hidden')
         } else {
-            this.remove_attribute('hidden')
+            this.ignore_attribute('hidden')
         }
     }
 
@@ -83,6 +89,16 @@ class GlueFormField {
         this.set_attribute('name', value, GlueFormFieldAttrType.HTML)
     }
 
+    prevent_submit() {
+        this.ignore_attribute('name')
+        this.ignore_attribute('id')
+    }
+
+    allow_submit() {
+        this.remove_ignored_attributes('name')
+        this.remove_ignored_attributes('id')
+    }
+
     get required() {
         return this._required || false
     }
@@ -90,13 +106,24 @@ class GlueFormField {
     set required(value) {
         if (value) {
             this.set_attribute('required', value, GlueFormFieldAttrType.HTML)
+            this.remove_ignored_attributes('required')
         } else {
-            this.remove_attribute('required')
+            this.ignore_attribute('required')
         }
     }
 
-    remove_attribute(name) {
-        delete this[`_${name}`]
+    ignore_attribute(name) {
+        if(!this.ignored_attrs.includes(`_${name}`)) {
+            this.ignored_attrs.push(`_${name}`)
+        }
+    }
+
+    remove_ignored_attributes(name) {
+        console.log(this.ignored_attrs)
+        if (this.ignored_attrs.includes(`_${name}`)) {
+            this.ignored_attrs.splice(this.ignored_attrs.indexOf(`_${name}`), 1)
+        }
+        console.log(this.ignored_attrs)
     }
 
     set_attribute(name, value, attr_type) {
