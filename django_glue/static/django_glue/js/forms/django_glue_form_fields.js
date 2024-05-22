@@ -24,6 +24,7 @@ class GlueFormField {
         // Field attrs is an array for field attr objects.
         this.value = ''
         this.ignored_attrs = ignored_attrs
+
         this.set_attribute('name', name, GlueFormFieldAttrType.HTML)
         this.set_attribute('label', title_string(name), GlueFormFieldAttrType.FIELD)
         this.set_attribute('id', `id_${name}`.toLocaleLowerCase(), GlueFormFieldAttrType.HTML)
@@ -31,9 +32,6 @@ class GlueFormField {
         for (const attr of field_attrs) {
             this.set_attribute(attr.name, attr.value, attr.attr_type)
         }
-
-        console.log(`initializing field: ${name}`)
-        console.log(this)
     }
 
     get choices() {
@@ -119,11 +117,9 @@ class GlueFormField {
     }
 
     remove_ignored_attributes(name) {
-        console.log(this.ignored_attrs)
         if (this.ignored_attrs.includes(`_${name}`)) {
             this.ignored_attrs.splice(this.ignored_attrs.indexOf(`_${name}`), 1)
         }
-        console.log(this.ignored_attrs)
     }
 
     set_attribute(name, value, attr_type) {
@@ -137,8 +133,6 @@ function glue_model_field_from_field_attrs(field_attrs) {
     // Inits from glue model objects and base fields..
     let form_field = new GlueFormField(field_attrs.name.value)
     for (const [name, attr_obj] of Object.entries(field_attrs)) {
-        //console.log(name)
-        //console.log(attr_obj)
         form_field.set_attribute(name, attr_obj.value, attr_obj.attr_type)
     }
     return form_field
