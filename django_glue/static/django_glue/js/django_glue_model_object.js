@@ -11,8 +11,6 @@ class GlueModelObject {
             this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
         }
 
-        console.log(this)
-
         window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
     }
 
@@ -28,6 +26,13 @@ class GlueModelObject {
                 glue_dispatch_object_delete_error_event(error)
             }
         )
+    }
+
+    duplicate() {
+        let model_object = new GlueModelObject(this.glue_unique_name)
+        console.log(this.get_properties())
+        model_object.set_properties(this.get_properties())
+        return model_object
     }
 
     // Todo: Change this to load values.

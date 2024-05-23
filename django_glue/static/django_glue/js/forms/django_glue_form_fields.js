@@ -13,7 +13,6 @@ class GlueFormFieldAttr {
 }
 
 
-// ignore is used for values that can be skipped.
 class GlueFormField {
     constructor(
         name,
@@ -42,6 +41,23 @@ class GlueFormField {
         this.set_attribute('choices', value, GlueFormFieldAttrType.FIELD)
     }
 
+    get disabled() {
+        return this._disabled || false
+    }
+
+    set disabled(value) {
+        if (value) {
+            this.set_attribute('disabled', value, GlueFormFieldAttrType.HTML)
+            this.remove_ignored_attributes('disabled')
+        } else {
+            this.ignore_attribute('disabled')
+        }
+    }
+
+    format_name(name) {
+        return '_' + name
+    }
+
     get help_text() {
         return this._help_text || ''
     }
@@ -57,9 +73,11 @@ class GlueFormField {
     set hidden(value) {
         if (value) {
             this.set_attribute('hidden', value, GlueFormFieldAttrType.HTML)
+            this.ignore_attribute('label')
             this.remove_ignored_attributes('hidden')
         } else {
             this.ignore_attribute('hidden')
+            this.remove_ignored_attributes('label')
         }
     }
 
@@ -111,19 +129,19 @@ class GlueFormField {
     }
 
     ignore_attribute(name) {
-        if(!this.ignored_attrs.includes(`_${name}`)) {
-            this.ignored_attrs.push(`_${name}`)
+        if(!this.ignored_attrs.includes(name)) {
+            this.ignored_attrs.push(name)
         }
     }
 
     remove_ignored_attributes(name) {
-        if (this.ignored_attrs.includes(`_${name}`)) {
-            this.ignored_attrs.splice(this.ignored_attrs.indexOf(`_${name}`), 1)
+        if (this.ignored_attrs.includes(name)) {
+            this.ignored_attrs.splice(this.ignored_attrs.indexOf(name), 1)
         }
     }
 
     set_attribute(name, value, attr_type) {
-        this[`_${name}`] = new GlueFormFieldAttr(name, value, attr_type)
+        this[this.format_name(name)] = new GlueFormFieldAttr(name, value, attr_type)
     }
 
 }

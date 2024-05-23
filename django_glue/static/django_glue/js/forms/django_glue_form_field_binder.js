@@ -7,17 +7,18 @@ class GlueFormFieldBinder {
 
     }
     bind () {
-        let previousElement = this._field_element.previousElementSibling
-        if (previousElement.tagName === 'LABEL') {
-            this._label_element = previousElement
-            this.set_label()
+        let previous_element = this._field_element.previousElementSibling
+
+        // Should this be simpler?
+        if (previous_element.tagName === 'LABEL' && !this.glue_form_field.ignored_attrs.includes('label')) {
+            this.set_label(previous_element)
         }
+
         this.remove_ignored_attributes()
         this.set_html_attrs()
     }
 
     clean_attribute_name(name) {
-        console.log(name)
         if (name.startsWith('_')) {
             return name.slice(1)
         } else {
@@ -25,26 +26,25 @@ class GlueFormFieldBinder {
         }
     }
 
-    set_label() {
-        this._label_element.setAttribute('for', this.glue_form_field.id.value)
-        this._label_element.innerText = this.glue_form_field.label.value
+    set_label(label_element) {
+        label_element.setAttribute('for', this.glue_form_field.id.value)
+        label_element.innerText = this.glue_form_field.label.value
 
-        if(this.glue_form_field.required) {
-            this._label_element.innerText = this._label_element.innerText + '*'
+        if(this.glue_form_field.required && !this.glue_form_field.ignored_attrs.includes('required')) {
+            label_element.innerText = label_element.innerText + '*'
         }
     }
+
     set_html_attrs() {
         for (const [name, attr_obj] of Object.entries(this.glue_form_field)) {
-            if (attr_obj.attr_type === 'html' && !this.glue_form_field.ignored_attrs.includes(name)) {
+            if (attr_obj.attr_type === 'html' && !this.glue_form_field.ignored_attrs.includes(this.clean_attribute_name(name))) {
                 this._field_element.setAttribute(this.clean_attribute_name(name), attr_obj.value)
-
             }
         }
     }
 
     remove_ignored_attributes() {
-        // Is there an easier way to do this? I have to write special logic for the fields like label?
-        for (const [name] of Object.entries(this.glue_form_field.ignored_attrs)) {
+        for (const [index, name] of Object.entries(this.glue_form_field.ignored_attrs)) {
             this._field_element.removeAttribute(this.clean_attribute_name(name))
         }
     }
