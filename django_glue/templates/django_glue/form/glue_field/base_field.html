@@ -11,7 +11,7 @@
             init() {
                     this.$watch('glue_field', value => {
                     let glue_form_field = new GlueFormField(value._name.value, value.ignored_attrs, ...Object.values(value))
-                    let glue_form_field_binder = new GlueFormFieldBinder(glue_form_field, this.$refs.glue_field)
+                    let glue_form_field_binder = glue_binder_factory(glue_form_field, this.$refs.glue_field)
                     glue_form_field_binder.bind()
                 })
             },

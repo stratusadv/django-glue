@@ -34,7 +34,7 @@ class GlueFormField {
     }
 
     get choices() {
-        return this._choices || []
+        return this._choices.value || []
     }
 
     set choices(value) {
@@ -42,7 +42,7 @@ class GlueFormField {
     }
 
     get disabled() {
-        return this._disabled || false
+        return this._disabled.value || false
     }
 
     set disabled(value) {
@@ -59,7 +59,7 @@ class GlueFormField {
     }
 
     get help_text() {
-        return this._help_text || ''
+        return this._help_text.value || ''
     }
 
     set help_text(value) {
@@ -67,7 +67,7 @@ class GlueFormField {
     }
 
     get hidden() {
-        return this._hidden || false
+        return this._hidden.value || false
     }
 
     set hidden(value) {
@@ -82,7 +82,7 @@ class GlueFormField {
     }
 
     get id() {
-        return this._id
+        return this._id.value
     }
 
     set id(value) {
@@ -90,7 +90,7 @@ class GlueFormField {
     }
 
     get label() {
-        return this._label
+        return this._label.value
     }
 
     set label(value) {
@@ -98,7 +98,7 @@ class GlueFormField {
     }
 
     get name() {
-        return this._name
+        return this._name.value
     }
 
     set name(value) {
@@ -116,7 +116,7 @@ class GlueFormField {
     }
 
     get required() {
-        return this._required || false
+        return this._required.value || false
     }
 
     set required(value) {

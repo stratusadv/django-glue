@@ -1,5 +1,13 @@
 
 
+function glue_binder_factory(glue_form_field, form_field_element) {
+    if (form_field_element.tagName === 'SELECT') {
+         return new GlueSelectFieldBinder(glue_form_field, form_field_element)
+    } else {
+        return new GlueFormFieldBinder(glue_form_field, form_field_element)
+    }
+}
+
 class GlueFormFieldBinder {
     constructor(glue_form_field, form_field_element) {
         this.glue_form_field = glue_form_field
@@ -27,8 +35,8 @@ class GlueFormFieldBinder {
     }
 
     set_label(label_element) {
-        label_element.setAttribute('for', this.glue_form_field.id.value)
-        label_element.innerText = this.glue_form_field.label.value
+        label_element.setAttribute('for', this.glue_form_field.id)
+        label_element.innerText = this.glue_form_field.label
 
         if(this.glue_form_field.required && !this.glue_form_field.ignored_attrs.includes('required')) {
             label_element.innerText = label_element.innerText + '*'
@@ -48,5 +56,24 @@ class GlueFormFieldBinder {
             this._field_element.removeAttribute(this.clean_attribute_name(name))
         }
     }
-
 }
+
+
+class GlueSelectFieldBinder extends GlueFormFieldBinder {
+    constructor(glue_form_field, form_field_element) {
+        super(glue_form_field, form_field_element)
+    }
+
+    bind() {
+        super.bind()
+        // Todo: Check to see if glue field is required. Add blank option if not required.
+        // Remove the inner options and replace each time the field is updated.
+        this.glue_form_field.choices.forEach(choice => {
+            const option = document.createElement('option');
+            option.value = choice[0];
+            option.text = choice[1];
+            this._field_element.appendChild(option);
+    });
+    }
+}
+

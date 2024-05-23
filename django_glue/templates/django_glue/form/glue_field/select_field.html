@@ -1,0 +1,7 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <select x-model="value" class="form-select" x-ref="glue_field">
+        <option value="None">------------------</option>
+    </select>
+{% endblock %}
