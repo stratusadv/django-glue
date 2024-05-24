@@ -21,11 +21,20 @@
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.last_name' x_model_value='person.last_name' %}
             </div>
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/select_field.html' with glue_field='person.fields.personality_type' x_model_value='person.personality_type' %}
+            </div>
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/email_field.html' with glue_field='person.fields.email' x_model_value='person.email' %}
+            </div>
             <div class="col-12">
                 {% include 'django_glue/form/glue_field/text_field.html' with glue_field='person.fields.description' x_model_value='person.description' %}
             </div>
             <div class="col-12">
                 {% include 'django_glue/form/glue_field/number_field.html' with glue_field='person.fields.favorite_number' x_model_value='person.favorite_number' %}
+            </div>
+            <div class="col-12">
+                {% include 'django_glue/form/glue_field/number_field.html' with glue_field='person.fields.weight_lbs' x_model_value='person.weight_lbs' %}
             </div>
         </div>
     </form>

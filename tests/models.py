@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils.timezone import now, localdate
 
@@ -6,7 +7,13 @@ class TestModel(models.Model):
     first_name = models.CharField(max_length=32)
     last_name = models.CharField(max_length=32)
     description = models.TextField()
-    favorite_number = models.IntegerField()
+    personality_type = models.CharField(
+        max_length=3,
+        choices=[('int', 'Introvert'), ('ext', 'Extrovert')],
+        default='int'
+    )
+    email = models.EmailField(blank=True, null=True)
+    favorite_number = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(999)])
     anniversary_datetime = models.DateTimeField(default=now)
     birth_date = models.DateField(default=localdate)
     weight_lbs = models.DecimalField(max_digits=7, decimal_places=3)
