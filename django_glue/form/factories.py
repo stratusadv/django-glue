@@ -34,6 +34,7 @@ class GlueAttrFactory(ABC):
         if not self.model_field.blank:
             self.add_attr('required', True, GlueAttrType.HTML)
 
+        # Todo: Need to deal with hidden. The label shouldn't show if it is hidden...
         # if self.model_field.hidden:
         #     self.add_attr('hidden', True, GlueAttrType.HTML)
 
@@ -59,7 +60,23 @@ class GlueCharAttrFactory(GlueAttrFactory):
 class GlueTextAreaAttrFactory(GlueAttrFactory):
     def add_field_attrs(self):
         self.add_attr('cols', 20, GlueAttrType.HTML)
-        self.add_attr('rows', 4, GlueAttrType.HTML)
+        self.add_attr('rows', 3, GlueAttrType.HTML)
 
         if self.model_field.max_length:
             self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
+
+
+class GlueIntegerAttrFactory(GlueTextAreaAttrFactory):
+    def add_field_attrs(self):
+        self.add_attr('step', 1, GlueAttrType.HTML)
+        valid_range = range(-999999999, 999999999) # This is an arbitrary number. Django default creates errors.
+        default_validators = ['min_value', 'max_value']
+        for validator in self.model_field.validators:
+
+            if validator.code in default_validators:
+
+                if validator.limit_value in valid_range:
+                    self.add_attr(validator.code.split('_')[-1], validator.limit_value, GlueAttrType.HTML)
+                else:
+                    self.add_attr('min', None, GlueAttrType.HTML)
+

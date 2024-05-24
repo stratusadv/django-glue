@@ -1,6 +1,5 @@
 from django.db import models
 
-from django_glue.form.enums import FieldType
 from django_glue.form.maps import FIELD_TYPE_TO_GLUE_ATTR_FACTORY
 from django_glue.form.html_attrs import GlueFieldAttrs
 

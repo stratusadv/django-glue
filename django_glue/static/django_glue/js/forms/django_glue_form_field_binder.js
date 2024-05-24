@@ -45,11 +45,6 @@ class GlueFormFieldBinder {
 
     set_html_attrs() {
         for (const [name, attr_obj] of Object.entries(this.glue_form_field)) {
-
-            // console.log(this.glue_form_field)
-            // console.log(name)
-            // console.log(attr_obj)
-            // console.log()
             if (attr_obj.attr_type === 'html' && !this.glue_form_field.ignored_attrs.includes(this.clean_attribute_name(name))) {
                 this._field_element.setAttribute(this.clean_attribute_name(name), attr_obj.value)
             }

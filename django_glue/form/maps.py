@@ -15,7 +15,7 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     # FieldType.DURATION: html_attrs.GlueIntegerFieldAttr,
     # FieldType.EMAIL: html_attrs.GlueEmailFieldAttr,
     # FieldType.FLOAT: html_attrs.GlueFloatFieldAttr,
-    # FieldType.INTEGER: html_attrs.GlueIntegerFieldAttr,
+    FieldType.INTEGER: factories.GlueIntegerAttrFactory,
     # FieldType.BIG_INTEGER: html_attrs.GlueIntegerFieldAttr,
     # FieldType.SMALL_INTEGER: html_attrs.GlueIntegerFieldAttr,
     # FieldType.IP_ADDRESS: html_attrs.GlueCharFieldAttr,

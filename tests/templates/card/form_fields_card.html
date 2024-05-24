@@ -8,7 +8,6 @@
 	<form
         x-data="{
             async init(){
-                this.person.fields.first_name.disabled
                 await this.person.get()
             },
             person: new GlueModelObject('person')
@@ -19,12 +18,15 @@
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.first_name' x_model_value='person.first_name' %}
             </div>
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.last_name' x_model_value='person.last_name' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/text_field.html' with glue_field='person.fields.description' x_model_value='person.description' %}#}
-{#            </div>#}
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.last_name' x_model_value='person.last_name' %}
+            </div>
+            <div class="col-12">
+                {% include 'django_glue/form/glue_field/text_field.html' with glue_field='person.fields.description' x_model_value='person.description' %}
+            </div>
+            <div class="col-12">
+                {% include 'django_glue/form/glue_field/number_field.html' with glue_field='person.fields.favorite_number' x_model_value='person.favorite_number' %}
+            </div>
         </div>
     </form>
 {% endblock %}
