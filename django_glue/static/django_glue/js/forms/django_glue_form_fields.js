@@ -42,7 +42,7 @@ class GlueFormField {
     }
 
     get disabled() {
-        return this._disabled.value || false
+        return !!this._disabled || false
     }
 
     set disabled(value) {
@@ -67,7 +67,7 @@ class GlueFormField {
     }
 
     get hidden() {
-        return this._hidden.value || false
+        return !!this._hidden || false
     }
 
     set hidden(value) {
@@ -116,7 +116,8 @@ class GlueFormField {
     }
 
     get required() {
-        return this._required.value || false
+        // console.log(this)
+        return !!this._required || false
     }
 
     set required(value) {
