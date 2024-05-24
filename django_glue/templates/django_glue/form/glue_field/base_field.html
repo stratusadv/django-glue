@@ -1,3 +1,5 @@
+{% load django_glue %}
+
 <div x-data="{
     value: null
 }"
@@ -10,7 +12,16 @@
         x-data="{
             init() {
                     this.$watch('glue_field', value => {
-                    let glue_form_field = new GlueFormField(value._name.value, value.ignored_attrs, ...Object.values(value))
+
+                    // Find all of the field attrs on the object and send it to construct a new glue field.
+                    const allProperties = Object.keys(value);
+                    const underscoreProperties = allProperties.filter(prop => prop.startsWith('_'));
+                    let field_attrs = []
+                    underscoreProperties.forEach(prop => {
+                        field_attrs.push(value[prop]);
+                    });
+
+                    let glue_form_field = new GlueFormField(value._name.value, value.ignored_attrs, ...field_attrs)
                     let glue_form_field_binder = glue_binder_factory(glue_form_field, this.$refs.glue_field)
                     glue_form_field_binder.bind()
                 })

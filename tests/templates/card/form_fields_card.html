@@ -1,0 +1,30 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+	Form Fields
+{% endblock %}
+
+{% block body %}
+	<form
+        x-data="{
+            async init(){
+                this.person.fields.first_name.disabled
+                await this.person.get()
+            },
+            person: new GlueModelObject('person')
+        }"
+        method="post"
+    >
+        <div class="row g-2">
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.first_name' x_model_value='person.first_name' %}
+            </div>
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.last_name' x_model_value='person.last_name' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/text_field.html' with glue_field='person.fields.description' x_model_value='person.description' %}#}
+{#            </div>#}
+        </div>
+    </form>
+{% endblock %}

@@ -25,7 +25,7 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     # FieldType.POSITIVE_INTEGER: html_attrs.GlueIntegerFieldAttr,
     # FieldType.POSITIVE_SMALL_INTEGER: html_attrs.GlueIntegerFieldAttr,
     # FieldType.SLUG: html_attrs.GlueCharFieldAttr,
-    # FieldType.TEXT: html_attrs.GlueTextFieldAttr,
+    FieldType.TEXT: factories.GlueTextAreaAttrFactory,
     # FieldType.TIME: html_attrs.GlueDateTimeFieldAttr,
     # FieldType.URL: html_attrs.GlueCharFieldAttr,
     # FieldType.UUID: html_attrs.GlueCharFieldAttr

@@ -34,8 +34,8 @@ class GlueAttrFactory(ABC):
         if not self.model_field.blank:
             self.add_attr('required', True, GlueAttrType.HTML)
 
-        if self.model_field.hidden:
-            self.add_attr('hidden', True, GlueAttrType.HTML)
+        # if self.model_field.hidden:
+        #     self.add_attr('hidden', True, GlueAttrType.HTML)
 
         if self.model_field.help_text:
             self.add_attr('help_text', str(self.model_field.help_text), GlueAttrType.FIELD)
@@ -52,5 +52,14 @@ class GlueAttrFactory(ABC):
 
 class GlueCharAttrFactory(GlueAttrFactory):
     def add_field_attrs(self):
+        if self.model_field.max_length:
+            self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
+
+
+class GlueTextAreaAttrFactory(GlueAttrFactory):
+    def add_field_attrs(self):
+        self.add_attr('cols', 20, GlueAttrType.HTML)
+        self.add_attr('rows', 4, GlueAttrType.HTML)
+
         if self.model_field.max_length:
             self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)

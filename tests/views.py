@@ -159,6 +159,12 @@ def function_view(request):
     return TemplateResponse(request, 'page/function_page.html')
 
 
+def form_field_view(request):
+    person = generate_randomized_test_model()
+    glue_model(request, 'person', person)
+    return TemplateResponse(request, 'page/form_fields_page.html')
+
+
 def complex_form_view(request):
     LOCATION_CHOICES = [
         {'key': 'NYC', 'value': 'New York'},

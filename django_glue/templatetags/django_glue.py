@@ -34,6 +34,11 @@ def glue_html_attr(parser, token):
     return GlueHTMLAttrNode(unique_name, field)
 
 
+@register.simple_tag()
+def to_snake_case(label: str) -> str:
+    return label.replace(' ', '_').lower()
+
+
 class GlueHTMLAttrNode(template.Node):
     def __init__(self, unique_name, field):
         self.unique_name = unique_name
