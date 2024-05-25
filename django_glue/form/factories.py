@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from decimal import Decimal
 from typing import Union
 
 from django.db.models import Field
@@ -17,7 +16,7 @@ class GlueAttrFactory(ABC):
     def add_attr(
             self,
             name: str,
-            value: Union[str, int, bool, float, None],
+            value: Union[str, int, bool, None],
             attr_type: GlueAttrType
     ) -> None:
         attr = GlueFieldAttr(name=name, value=value, attr_type=attr_type)
@@ -39,14 +38,14 @@ class GlueAttrFactory(ABC):
         # if self.model_field.hidden:
         #     self.add_attr('hidden', True, GlueAttrType.HTML)
 
+        if self.model_field.max_length:
+            self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
+
         if self.model_field.help_text:
             self.add_attr('help_text', str(self.model_field.help_text), GlueAttrType.FIELD)
 
         if self.model_field.choices:
             self.add_attr('choices', self.model_field.choices, GlueAttrType.FIELD)
-
-        if self.model_field.max_length:
-            self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
 
     def factory_method(self) -> GlueFieldAttrs:
         self.glue_field_attrs = GlueFieldAttrs()
@@ -58,15 +57,6 @@ class GlueAttrFactory(ABC):
 class GlueCharAttrFactory(GlueAttrFactory):
     def add_field_attrs(self):
         pass
-        # if self.model_field.max_length:
-        #     self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
-
-
-class GlueCharAttrFactory(GlueAttrFactory):
-    def add_field_attrs(self):
-        pass
-        # if self.model_field.max_length:
-        #     self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
 
 
 class GlueTextAreaAttrFactory(GlueAttrFactory):
@@ -78,16 +68,16 @@ class GlueTextAreaAttrFactory(GlueAttrFactory):
             self.add_attr('maxlength', self.model_field.max_length, GlueAttrType.HTML)
 
 
-class GlueIntegerAttrFactory(GlueAttrFactory):
-
+class GlueIntegerAttrFactory(GlueTextAreaAttrFactory):
     def add_field_attrs(self):
-        self.max_min_validator_attrs()
-        self.add_attr('step', 1, GlueAttrType.HTML)
+        self.max_min_validation_attr()
+        self.step_attr()
 
-    def max_min_validator_attrs(self):
+    def max_min_validation_attr(self):
+        valid_range = range(-999999999, 999999999)  # This is an arbitrary number. Django default creates errors.
         max_min_validators = ['min_value', 'max_value']
-        valid_range = range(-999999999, 999999999)
         for validator in self.model_field.validators:
+
             if hasattr(validator, 'code') and validator.code in max_min_validators:
 
                 if validator.limit_value in valid_range:
@@ -95,18 +85,15 @@ class GlueIntegerAttrFactory(GlueAttrFactory):
                 else:
                     self.add_attr(validator.code.split('_')[0], None, GlueAttrType.HTML)
 
-    def step_attrs(self):
+    def step_attr(self):
         self.add_attr('step', 1, GlueAttrType.HTML)
+
 
 
 class GlueDecimalAttrFactory(GlueIntegerAttrFactory):
     def add_field_attrs(self):
         super().add_field_attrs()
 
-    def step_attrs(self):
-        for validator in self.model_field.validators:
-            if hasattr(validator, 'decimal_places'):
-                step_value = Decimal('1') / (10 ** validator.decimal_places)
-                self.add_attr('step', float(step_value), GlueAttrType.HTML)
-            else:
-                self.add_attr('step', .01, GlueAttrType.HTML)
+    def step_attr(self):
+        pass
+

@@ -36,7 +36,6 @@ class GlueFieldAttrs:
         return GlueFieldAttrs(attrs=combined_attrs)
 
     def _merge_attrs(self, new_attrs: list[GlueFieldAttr]) -> list[GlueFieldAttr]:
-        # Use dict keys to not duplicate attribute names.
         attr_dict: dict[str, GlueFieldAttr] = {attr.name: attr for attr in self.attrs}
         for attr in new_attrs:
             attr_dict[attr.name] = attr
