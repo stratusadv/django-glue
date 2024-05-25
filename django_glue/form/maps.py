@@ -9,8 +9,8 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     FieldType.BOOLEAN: factories.GlueBooleanAttrFactory,
     FieldType.CHAR: factories.GlueCharAttrFactory,
     FieldType.COMMA_SEPARATED_INTEGER: factories.GlueIntegerAttrFactory,  # Now depreciated in django.
-    # FieldType.DATE: html_attrs.GlueDateFieldAttr,
-    # FieldType.DATETIME: html_attrs.GlueDateTimeFieldAttr,
+    FieldType.DATE: factories.GlueDateAttrFactory,
+    FieldType.DATETIME: factories.GlueDateAttrFactory,
     FieldType.DECIMAL: factories.GlueDecimalAttrFactory,
     FieldType.DURATION: factories.GlueCharAttrFactory,
     FieldType.EMAIL: factories.GlueCharAttrFactory,

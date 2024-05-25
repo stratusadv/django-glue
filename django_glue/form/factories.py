@@ -69,6 +69,12 @@ class GlueCharAttrFactory(GlueAttrFactory):
         pass
 
 
+class GlueDateAttrFactory(GlueAttrFactory):
+    def add_field_attrs(self):
+        self.add_attr('max', None, GlueAttrType.HTML)
+        self.add_attr('min', None, GlueAttrType.HTML)
+
+
 class GlueTextAreaAttrFactory(GlueAttrFactory):
     def add_field_attrs(self):
         self.add_attr('cols', 20, GlueAttrType.HTML)

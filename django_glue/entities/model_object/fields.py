@@ -40,7 +40,6 @@ class GlueModelField:
                 except Exception:
                     formatted_value = self.value.strftime('%Y-%m-%d')
 
-
         return {
             'name': self.name,
             'value': formatted_value,
