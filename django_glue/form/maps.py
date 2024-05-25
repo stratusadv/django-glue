@@ -20,7 +20,7 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     FieldType.SMALL_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.IP_ADDRESS: factories.GlueCharAttrFactory,
     FieldType.GENERIC_IP_ADDRESS: factories.GlueCharAttrFactory,
-    # FieldType.NULL_BOOLEAN: html_attrs.GlueBooleanFieldAttr,
+    FieldType.NULL_BOOLEAN: factories.GlueBooleanAttrFactory,  # Now depreciated in django
     FieldType.POSITIVE_BIG_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.POSITIVE_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.POSITIVE_SMALL_INTEGER: factories.GlueIntegerAttrFactory,
