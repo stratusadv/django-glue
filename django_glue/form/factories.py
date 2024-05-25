@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import Union
+from typing import Union, Any
 
 from django.db.models import Field
 
@@ -17,7 +17,7 @@ class GlueAttrFactory(ABC):
     def add_attr(
             self,
             name: str,
-            value: Union[str, int, bool, float, None],
+            value: Any,
             attr_type: GlueAttrType
     ) -> None:
         attr = GlueFieldAttr(name=name, value=value, attr_type=attr_type)
@@ -53,6 +53,15 @@ class GlueAttrFactory(ABC):
         self.add_base_attrs()
         self.add_field_attrs()
         return self.glue_field_attrs
+
+
+class GlueBooleanAttrFactory(GlueAttrFactory):
+    def add_field_attrs(self):
+        bool_choices = [
+            (True, 'Yes'),
+            (False, 'No')
+        ]
+        self.add_attr('choices', bool_choices, GlueAttrType.FIELD)
 
 
 class GlueCharAttrFactory(GlueAttrFactory):

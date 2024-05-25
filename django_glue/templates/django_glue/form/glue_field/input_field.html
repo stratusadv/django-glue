@@ -3,7 +3,7 @@
 {% block field_content %}
     <input
         {% if input_type %}type="{{ input_type }}"{% else %}type="text"{% endif %}
-        class="form-control"
+        class=""
         x-ref="glue_field"
         x-model.debounce="value"
     >

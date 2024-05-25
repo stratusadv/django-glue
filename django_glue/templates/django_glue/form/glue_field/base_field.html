@@ -36,7 +36,7 @@
         {% block field_label %}
             <label
                 x-ref="label"
-                class="form-label"
+                class=""
                 for="{% if name %}id_{{ name }}{% elif label %}id_{% to_snake_case label %}{% endif %}"
             >
                 {{ label }}{% if required %}*{% endif %}

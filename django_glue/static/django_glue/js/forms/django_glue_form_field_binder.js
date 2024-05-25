@@ -3,23 +3,29 @@
 function glue_binder_factory(glue_form_field, form_field_element) {
     if (form_field_element.tagName === 'SELECT') {
          return new GlueSelectFieldBinder(glue_form_field, form_field_element)
-    } else {
-        return new GlueFormFieldBinder(glue_form_field, form_field_element)
     }
+    else if (form_field_element.tagName === 'INPUT') {
+        if (form_field_element.type === 'checkbox') {
+            return new GlueCheckboxFieldBinder(glue_form_field, form_field_element)
+        } else {
+            return new GlueFormFieldBinder(glue_form_field, form_field_element)
+        }
+    }
+
+    return new GlueFormFieldBinder(glue_form_field, form_field_element)
+
 }
 
 class GlueFormFieldBinder {
     constructor(glue_form_field, form_field_element) {
         this.glue_form_field = glue_form_field
         this._field_element = form_field_element
-
     }
     bind () {
-        let previous_element = this._field_element.previousElementSibling
-
         // Should this be simpler?
-        if (previous_element.tagName === 'LABEL' && !this.glue_form_field.ignored_attrs.includes('label')) {
-            this.set_label(previous_element)
+        this.set_field_class()
+        if (!this.glue_form_field.ignored_attrs.includes('label')) {
+            this.set_label()
         }
 
         this.remove_ignored_attributes()
@@ -34,13 +40,23 @@ class GlueFormFieldBinder {
         }
     }
 
-    set_label(label_element) {
-        label_element.setAttribute('for', this.glue_form_field.id)
-        label_element.innerText = this.glue_form_field.label
+    get label() {
+        return this._field_element.previousElementSibling
+    }
+
+    set_label() {
+        let label = this.label
+        label.classList.add('form-label')
+        label.setAttribute('for', this.glue_form_field.id)
+        label.innerText = this.glue_form_field.label
 
         if(this.glue_form_field.required && !this.glue_form_field.ignored_attrs.includes('required')) {
-            label_element.innerText = label_element.innerText + '*'
+            label.innerText = label.innerText + '*'
         }
+    }
+
+    set_field_class() {
+        this._field_element.classList.add('form-control')
     }
 
     set_html_attrs() {
@@ -59,21 +75,53 @@ class GlueFormFieldBinder {
 }
 
 
+class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
+    constructor(glue_form_field, form_field_element) {
+        super(glue_form_field, form_field_element)
+    }
+
+    set_label(label_element) {
+        let label = this.label
+        this.label.classList.add('form-check-label')
+        label.setAttribute('for', this.glue_form_field.id)
+        label.innerText = this.glue_form_field.label
+        this._field_element.insertAdjacentElement('afterend', label);
+    }
+
+    set_field_class() {
+        this._field_element.classList.add('form-check-input')
+        this._field_element.classList.add('me-2')
+    }
+}
+
+
+
 class GlueSelectFieldBinder extends GlueFormFieldBinder {
     constructor(glue_form_field, form_field_element) {
         super(glue_form_field, form_field_element)
     }
 
+    add_option(key, value) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.text = value;
+        this._field_element.appendChild(option);
+    }
+
     bind() {
         super.bind()
-        // Todo: Check to see if glue field is required. Add blank option if not required.
-        // Remove the inner options and replace each time the field is updated.
+
+        this._field_element.innerHTML = ''
+
+        if (!this.glue_form_field.required) {
+            this.add_option(null, '----------------')
+        }
+
         this.glue_form_field.choices.forEach(choice => {
-            const option = document.createElement('option');
-            option.value = choice[0];
-            option.text = choice[1];
-            this._field_element.appendChild(option);
-    });
+            this.add_option(choice[0], choice[1])
+
+        });
     }
 }
+
 

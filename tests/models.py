@@ -18,6 +18,8 @@ class TestModel(models.Model):
     birth_date = models.DateField(default=localdate)
     weight_lbs = models.DecimalField(max_digits=7, decimal_places=3)
 
+    likes_to_party = models.BooleanField(default=True)
+
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
 

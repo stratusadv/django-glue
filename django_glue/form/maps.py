@@ -6,9 +6,9 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     FieldType.AUTO_FIELD: factories.GlueIntegerAttrFactory,
     FieldType.BIG_AUTO_FIELD: factories.GlueIntegerAttrFactory,
     FieldType.SMALL_AUTO_FIELD: factories.GlueIntegerAttrFactory,
-    # FieldType.BOOLEAN: html_attrs.GlueBooleanFieldAttr,
+    FieldType.BOOLEAN: factories.GlueBooleanAttrFactory,
     FieldType.CHAR: factories.GlueCharAttrFactory,
-    FieldType.COMMA_SEPARATED_INTEGER: factories.GlueIntegerAttrFactory,
+    FieldType.COMMA_SEPARATED_INTEGER: factories.GlueIntegerAttrFactory,  # Now depreciated in django.
     # FieldType.DATE: html_attrs.GlueDateFieldAttr,
     # FieldType.DATETIME: html_attrs.GlueDateTimeFieldAttr,
     FieldType.DECIMAL: factories.GlueDecimalAttrFactory,
