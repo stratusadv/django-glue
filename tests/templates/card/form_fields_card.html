@@ -8,6 +8,7 @@
     <form
             x-data="{
             async init(){
+                console.log(this.person)
                 await this.person.get()
             },
             person: new GlueModelObject('person')
@@ -20,6 +21,12 @@
             </div>
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.last_name' x_model_value='person.last_name' %}
+            </div>
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/date_field.html' with glue_field='person.fields.birth_date' x_model_value='person.birth_date' %}
+            </div>
+            <div class="col-6">
+                {% include 'django_glue/form/glue_field/datetime_field.html' with glue_field='person.fields.anniversary_datetime' x_model_value='person.anniversary_datetime' %}
             </div>
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/select_field.html' with glue_field='person.fields.personality_type' x_model_value='person.personality_type' %}

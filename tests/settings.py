@@ -50,6 +50,7 @@ ROOT_URLCONF = 'tests.urls'
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
 USE_TZ = True
+TIME_ZONE = 'America/Edmonton'
 
 TEMPLATES = [
     {
@@ -76,3 +77,4 @@ TEMPLATES = [
 STATIC_URL = '/static/'
 
 DJANGO_GLUE_URL = 'django_glue/'
+

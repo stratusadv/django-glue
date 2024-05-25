@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Type
 
 from django.db.models import Model
+from django.utils import timezone
 
 from django_glue.form.utils import glue_field_attr_from_model_field
 from django_glue.form.html_attrs import GlueFieldAttrs
@@ -24,9 +25,25 @@ class GlueModelField:
     field_attrs: GlueFieldAttrs
 
     def to_dict(self) -> dict:
+        # Todo: Create a more extendable way to format values.
+        formatted_value = self.value
+
+        if self.value is not None:
+            if self.type == 'DateTimeField':
+                try:
+                    formatted_value = timezone.localtime(self.value).strftime('%Y-%m-%dT%H:%M')
+                except Exception:
+                    formatted_value = self.value.strftime('%Y-%m-%dT%H:%M')
+            elif self.type == 'DateField':
+                try:
+                    formatted_value = timezone.localdate(self.value).strftime('%Y-%m-%d')
+                except Exception:
+                    formatted_value = self.value.strftime('%Y-%m-%d')
+
+
         return {
             'name': self.name,
-            'value': self.value,
+            'value': formatted_value,
             'field_attrs': self.field_attrs.to_dict(),
         }
 
