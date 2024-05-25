@@ -26,6 +26,9 @@
                 {% include 'django_glue/form/glue_field/date_field.html' with glue_field='person.fields.birth_date' x_model_value='person.birth_date' %}
             </div>
             <div class="col-6">
+                {% include 'django_glue/form/glue_field/time_field.html' with glue_field='person.fields.bed_time' x_model_value='person.bed_time' %}
+            </div>
+            <div class="col-6">
                 {% include 'django_glue/form/glue_field/datetime_field.html' with glue_field='person.fields.anniversary_datetime' x_model_value='person.anniversary_datetime' %}
             </div>
             <div class="col-6">
@@ -45,7 +48,7 @@
             </div>
             <div class="col-12">
                 <div class="form-label">Does thou like to party?</div>
-                {% include 'django_glue/form/glue_field/select_field.html' with glue_field='person.fields.likes_to_party' x_model_value='person.likes_to_party' %}
+                {% include 'django_glue/form/glue_field/radio_field.html' with glue_field='person.fields.likes_to_party' x_model_value='person.likes_to_party' %}
             </div>
         </div>
     </form>

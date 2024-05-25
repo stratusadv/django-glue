@@ -18,15 +18,19 @@ FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
     FieldType.INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.BIG_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.SMALL_INTEGER: factories.GlueIntegerAttrFactory,
-    FieldType.IP_ADDRESS: factories.GlueCharAttrFactory,
     FieldType.GENERIC_IP_ADDRESS: factories.GlueCharAttrFactory,
+    FieldType.IP_ADDRESS: factories.GlueCharAttrFactory,
+    FieldType.FOREIGN_KEY: factories.GlueIntegerAttrFactory,
+    FieldType.ONE_TO_ONE: factories.GlueIntegerAttrFactory,
+    FieldType.MANY_TO_MANY: factories.GlueCharAttrFactory,
+    FieldType.JSON: factories.GlueTextAreaAttrFactory,
     FieldType.NULL_BOOLEAN: factories.GlueBooleanAttrFactory,  # Now depreciated in django
     FieldType.POSITIVE_BIG_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.POSITIVE_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.POSITIVE_SMALL_INTEGER: factories.GlueIntegerAttrFactory,
     FieldType.SLUG: factories.GlueCharAttrFactory,
     FieldType.TEXT: factories.GlueTextAreaAttrFactory,
-    # FieldType.TIME: html_attrs.GlueDateTimeFieldAttr,
+    FieldType.TIME: factories.GlueDateAttrFactory,
     FieldType.URL: factories.GlueCharAttrFactory,
     FieldType.UUID: factories.GlueCharAttrFactory
 }

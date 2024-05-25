@@ -22,11 +22,15 @@ class FieldType(str, Enum):
     FILE = models.FileField.__name__
     FILE_PATH = models.FilePathField.__name__
     FLOAT = models.FloatField.__name__
+    FOREIGN_KEY = models.ForeignKey.__name__
+    ONE_TO_ONE = models.OneToOneField.__name__
+    MANY_TO_MANY = models.ManyToManyField.__name__
     INTEGER = models.IntegerField.__name__
     BIG_INTEGER = models.BigIntegerField.__name__
     SMALL_INTEGER = models.SmallIntegerField.__name__
     IP_ADDRESS = models.IPAddressField.__name__
     GENERIC_IP_ADDRESS = models.GenericIPAddressField.__name__
+    JSON = models.JSONField.__name__
     NULL_BOOLEAN = models.NullBooleanField.__name__
     POSITIVE_BIG_INTEGER = models.PositiveBigIntegerField.__name__
     POSITIVE_INTEGER = models.PositiveIntegerField.__name__

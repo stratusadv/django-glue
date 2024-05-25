@@ -7,6 +7,9 @@ function glue_binder_factory(glue_form_field, form_field_element) {
     else if (form_field_element.tagName === 'INPUT') {
         if (form_field_element.type === 'checkbox') {
             return new GlueCheckboxFieldBinder(glue_form_field, form_field_element)
+        }
+           else if (form_field_element.type === 'radio') {
+            return new GlueRadioFieldBinder(glue_form_field, form_field_element)
         } else {
             return new GlueFormFieldBinder(glue_form_field, form_field_element)
         }
@@ -77,9 +80,6 @@ class GlueFormFieldBinder {
 
 
 class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
-    constructor(glue_form_field, form_field_element) {
-        super(glue_form_field, form_field_element)
-    }
 
     set_label(label_element) {
         let label = this.label
@@ -97,9 +97,6 @@ class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
 
 
 class GlueSelectFieldBinder extends GlueFormFieldBinder {
-    constructor(glue_form_field, form_field_element) {
-        super(glue_form_field, form_field_element)
-    }
 
     add_option(key, value) {
         const option = document.createElement('option');
@@ -108,7 +105,7 @@ class GlueSelectFieldBinder extends GlueFormFieldBinder {
         this._field_element.appendChild(option);
     }
 
-    bind() {
+    bind(){
         super.bind()
 
         this._field_element.innerHTML = ''
@@ -122,4 +119,55 @@ class GlueSelectFieldBinder extends GlueFormFieldBinder {
 
         });
     }
+}
+
+
+class GlueRadioFieldBinder extends GlueFormFieldBinder {
+
+    add_radio_input(key, value, index) {
+        let parent_div = document.createElement('div')
+        parent_div.classList.add('form-check')
+
+        let radio_input = this._field_element.cloneNode(true)
+        let increment_id = `${radio_input.id}${index}`
+
+        radio_input.setAttribute('id', increment_id)
+        radio_input.setAttribute('value', key)
+
+        let radio_label = this.label.cloneNode(true)
+        radio_label.setAttribute('for', increment_id)
+        radio_label.innerText = value
+
+        parent_div.appendChild(radio_input)
+        parent_div.appendChild(radio_label)
+
+        this.label.insertAdjacentElement('beforebegin', parent_div);
+
+
+    }
+
+    bind(){
+        // Adds attributes to label and field
+        super.bind()
+
+        // Duplicates label and field and appends to area
+        this.glue_form_field.choices.forEach((choice, index) => {
+            this.add_radio_input(choice[0], choice[1], index)
+        });
+
+        // Hide original label and field.
+        this._field_element.classList.add('d-none')
+        this.label.classList.add('d-none')
+    }
+
+    set_label() {
+        super.set_label();
+        this.label.classList.add('mb-0')
+    }
+
+    set_field_class() {
+        this._field_element.classList.add('form-check-input')
+        this._field_element.classList.add('me-2')
+    }
+
 }
