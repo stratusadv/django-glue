@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from decimal import Decimal
 from typing import Union
 
 from django.db.models import Field
@@ -16,7 +17,7 @@ class GlueAttrFactory(ABC):
     def add_attr(
             self,
             name: str,
-            value: Union[str, int, bool, None],
+            value: Union[str, int, bool, float, None],
             attr_type: GlueAttrType
     ) -> None:
         attr = GlueFieldAttr(name=name, value=value, attr_type=attr_type)
@@ -89,11 +90,18 @@ class GlueIntegerAttrFactory(GlueTextAreaAttrFactory):
         self.add_attr('step', 1, GlueAttrType.HTML)
 
 
-
 class GlueDecimalAttrFactory(GlueIntegerAttrFactory):
     def add_field_attrs(self):
         super().add_field_attrs()
 
     def step_attr(self):
-        pass
+        validator = next((v for v in self.model_field.validators if hasattr(v, 'decimal_places')), None)
+
+        if validator:
+            step_value = Decimal('1') / (10 ** validator.decimal_places)
+            self.add_attr('step', float(step_value), GlueAttrType.HTML)
+        else:
+            self.add_attr('step', 0.01, GlueAttrType.HTML)
+
+
 
