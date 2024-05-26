@@ -11,10 +11,15 @@ def glue_init(context):
 @register.inclusion_tag('django_glue/django_glue_bootstrap_css.html')
 def glue_bootstrap_css(): ...
 
-
+  
 @register.inclusion_tag('django_glue/django_glue_bootstrap_js.html')
 def glue_bootstrap_js(): ...
 
 
 @register.inclusion_tag('django_glue/django_glue_alpine_js.html')
 def glue_alpine_js(): ...
+
+
+@register.simple_tag()
+def to_snake_case(label: str) -> str:
+  return label.replace(' ', '_').lower()

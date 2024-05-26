@@ -1,0 +1,10 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <input
+        {% if input_type %}type="{{ input_type }}"{% else %}type="text"{% endif %}
+        class=""
+        x-ref="glue_field"
+        x-model.debounce="value"
+    >
+{% endblock %}

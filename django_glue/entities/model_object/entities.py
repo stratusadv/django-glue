@@ -5,7 +5,7 @@ from django.db.models import Model
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
 from django_glue.entities.model_object.fields import model_object_fields_from_model
-from django_glue.entities.model_object.response_data import GlueModelObjectJsonData, GlueModelFields
+from django_glue.entities.model_object.response_data import GlueModelFields
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
@@ -44,7 +44,12 @@ class GlueModelObject(GlueEntity):
         return None
 
     def generate_field_data(self, include_values: bool = True) -> GlueModelFields:
-        glue_model_fields = model_object_fields_from_model(self.model, self.included_fields, self.excluded_fields)
+
+        glue_model_fields = model_object_fields_from_model(
+            model=self.model,
+            included_fields=self.included_fields,
+            excluded_fields=self.excluded_fields
+        )
 
         if include_values:
             for field in glue_model_fields:

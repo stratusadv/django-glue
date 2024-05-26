@@ -26,15 +26,14 @@ class ModelObjectView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
-
         context_data.update(django_glue_context_data(self.request))
 
         test_model_object = generate_randomized_test_model()
 
         glue_model(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
-        glue_model(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
-        glue_model(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
-        glue_model(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        # glue_model(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        # glue_model(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
+        # glue_model(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
 
         big_test_model_object = generate_big_test_model()
 
@@ -167,6 +166,12 @@ def template_view(request):
 def function_view(request):
     glue_function(request, 'function_1', 'tests.utils.test_glue_function')
     return TemplateResponse(request, 'page/function_page.html')
+
+
+def form_field_view(request):
+    person = generate_randomized_test_model()
+    glue_model(request, 'person', person)
+    return TemplateResponse(request, 'page/form_fields_page.html')
 
 
 def complex_form_view(request):

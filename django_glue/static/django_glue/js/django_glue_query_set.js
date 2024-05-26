@@ -21,19 +21,11 @@ class GlueQuerySet {
                 let glue_query_set = JSON.parse(response.data)
                 for (let object in glue_query_set) {
                     let model_object = new GlueModelObject(this.glue_unique_name);
-                    model_object.set_properties(glue_query_set[object])
+                    model_object._set_properties(glue_query_set[object])
                     model_object_list.push(model_object)
                 }
                 return model_object_list
             });
-    }
-
-    async bulk_create(query_model_object_list) {
-
-    }
-
-    async bulk_update(query_model_object_list) {
-
     }
 
     delete(id) {
@@ -57,7 +49,7 @@ class GlueQuerySet {
                 glue_dispatch_response_event(response)
                 for (let object in glue_query_set) {
                     let model_object = new GlueModelObject(this.glue_unique_name)
-                    model_object.set_properties(glue_query_set[object])
+                    model_object._set_properties(glue_query_set[object])
                     model_object_list.push(model_object)
                 }
 
@@ -72,7 +64,7 @@ class GlueQuerySet {
                 glue_dispatch_response_event(response)
                 model_object = new GlueModelObject(this.glue_unique_name);
                 let glue_query_set = JSON.parse(response.data)
-                model_object.set_properties(glue_query_set[0])
+                model_object._set_properties(glue_query_set[0])
                 return model_object
             });
     }
@@ -95,6 +87,22 @@ class GlueQuerySet {
         })
     }
 
+    async null_object() {
+        console.log('null object')
+        let data = {}
+        return await glue_ajax_request(
+            this.glue_encoded_unique_name,
+            'null_object',
+            data
+        ).then((response) => {
+            glue_dispatch_response_event(response)
+            console.log(response)
+            let glue_query_set = JSON.parse(response.data)
+            let model_object = new GlueModelObject(this.glue_unique_name)
+            model_object._set_properties(glue_query_set[0])
+            return model_object
+        })
+    }
 
     update(query_model_object, field = null) {
         // Todo: Update on queryset should take fields and update all the objects fields to that value.

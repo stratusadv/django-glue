@@ -1,0 +1,29 @@
+{% extends 'django_glue/form/field/base_field.html' %}
+
+{% block field_content %}
+    <input
+        class="form-control"
+        value="{{ value }}"
+        x-model.debounce="value"
+
+        {% block input_type %}
+            {% if input_type %}type="{{ input_type }}"{% else %}type="text"{% endif %}
+        {% endblock %}
+
+
+        {% if not prevent_submit %}
+            name="{% if name %}{{ name }}{% elif label %}{% to_snake_case label %}{% endif %}"
+            id="id_{% if name %}{{ name }}{% elif label %}{% to_snake_case label %}{% endif %}"
+        {% endif %}
+
+        {% if hidden %}hidden=""{% endif %}
+        {% if disabled %}disabled=""{% endif %}
+        {% if required %}required{% endif %}
+
+        {{ extra_attributes }}
+
+
+        {% block extra_attributes %}
+        {% endblock %}
+    >
+{% endblock %}

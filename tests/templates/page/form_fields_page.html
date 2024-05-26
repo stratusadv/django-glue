@@ -1,0 +1,10 @@
+{% extends 'base/base.html' %}
+
+{% block base_content %}
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Model Object" %}
+    <div class="row">
+        <div class="col">
+            {% include 'card/form_fields_card.html' %}
+        </div>
+    </div>
+{% endblock %}
