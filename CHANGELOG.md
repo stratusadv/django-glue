@@ -1,5 +1,13 @@
 # Changelog for Django Glue
 
+## 0.6.0
+### Changes
+- System to build form field attributes from model fields. 
+- HTML form fields (input, select, check radio).
+- Glue js field objects bind to HTML form fields to set attributes and expose values.
+- Ability to have full control over reactivity in forms in js that work with or without glue model objects.
+ 
+
 
 ## 0.5.3
 ### Changes
