@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
 
-from django_glue.entities.model_object.fields import GlueModelField
+from django_glue.entities.model_object.fields.entities import GlueModelField
 from django_glue.session.data import GlueSessionData
 
 

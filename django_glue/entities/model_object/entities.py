@@ -4,8 +4,9 @@ from django.db.models import Model
 
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.model_object.fields import model_object_fields_from_model
-from django_glue.entities.model_object.response_data import GlueModelFields
+from django_glue.entities.model_object.fields.entities import GlueModelFields
+from django_glue.entities.model_object.fields.factories import model_object_fields_from_model
+from django_glue.entities.model_object.fields.utils import get_field_value_from_model_object
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
@@ -53,7 +54,7 @@ class GlueModelObject(GlueEntity):
 
         if include_values:
             for field in glue_model_fields:
-                field.value = getattr(self.model_object, field.name)
+                field.value = get_field_value_from_model_object(self.model_object, field)
 
         return glue_model_fields
 

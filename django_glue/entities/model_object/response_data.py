@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-
-from django_glue.entities.model_object.fields import GlueModelFields
+from django_glue.entities.model_object.fields.entities import GlueModelFields
 from django_glue.response.data import GlueJsonData
 
 

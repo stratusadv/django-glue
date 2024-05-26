@@ -14,7 +14,7 @@ from django_glue.glue import glue_model, glue_query_set, glue_template, glue_fun
 
 
 def big_model_object_view(request):
-    big_model = BigTestModel.objects.first()
+    big_model = generate_big_test_model()
     glue_model(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
     glue_query_set(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
 
