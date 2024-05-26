@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block body %}
-    {% for key, val in django_glue.items %}
+    {% for key, val in django_glue_session_data.items %}
         <span class="fw-bold">{{ key }}</span><br>
         {% for key2, val2 in val.items %}
             {% if key2 == 'fields' %}

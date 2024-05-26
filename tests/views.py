@@ -8,6 +8,8 @@ from django.views.generic import TemplateView
 from tests.models import TestModel, BigTestModel
 from tests.processors import get_complex_form_processor
 from tests.utils import generate_randomized_test_model, generate_big_test_model
+from tests.context_data import django_glue_context_data
+
 from django_glue.glue import glue_model, glue_query_set, glue_template, glue_function
 
 
@@ -24,6 +26,8 @@ class ModelObjectView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
+        context_data.update(django_glue_context_data(self.request))
+
         test_model_object = generate_randomized_test_model()
 
         glue_model(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
@@ -42,6 +46,8 @@ class QuerySetView(TemplateView):
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
 
+        context_data.update(django_glue_context_data(self.request))
+
         glue_query_set(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
         glue_query_set(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
 
@@ -59,8 +65,11 @@ def query_set_list_view(request):
 
 class OtherView(TemplateView):
     template_name = 'page/other_glue_page.html'
+
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
+
+        context_data.update(django_glue_context_data(self.request))
 
         other_test_model_object = generate_randomized_test_model()
 

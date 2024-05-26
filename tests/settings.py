@@ -75,6 +75,3 @@ TEMPLATES = [
 ]
 
 STATIC_URL = '/static/'
-
-DJANGO_GLUE_URL = 'django_glue/'
-

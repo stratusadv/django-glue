@@ -12,7 +12,6 @@
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 
-
     window.glue_keep_live = new GlueKeepLive()
     window.glue_session_data = {{ GLUE_SESSION_DATA|safe }}
 

@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block body %}
-    {% for key, val in django_glue_keep_live.items %}
+    {% for key, val in django_glue_keep_live_session_data.items %}
         <span class="fw-bold">{{ key }}</span><br>
         <span>{{ val }}</span><br>
         <br>
