@@ -32,6 +32,19 @@ class GlueFormField {
                 this.add_attribute(attr.name, attr.value, attr.attr_type)
             }
         }
+
+        // Return a proxy object that controls how new properties are set on the object.
+        return new Proxy(this, {
+            set: (target, property, value) => {
+                if (!(property in target)) {
+                    target.add_attribute(property, value, GlueFormFieldAttrType.HTML);
+                } else {
+                    target[property] = value;
+                }
+                return true;
+            },
+
+        });
     }
 
     add_attribute(name, value, attr_type) {
@@ -45,7 +58,6 @@ class GlueFormField {
           return this[`_${glue_field_attr.name}`].value;
         },
         set: function(value) {
-            // Value is false then we need to add it to the ignored list?
             this[`_${glue_field_attr.name}`].value = value;
             if (!value){
                 this.ignore_attribute(glue_field_attr.name)

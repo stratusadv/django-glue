@@ -116,6 +116,12 @@ class GlueModelObject {
 
     set_properties(simple_fields) {
         // Used to set initial data to the glue object model after load.
+        // Send django context data and it will parse it into an object.
+        
+        if (typeof simple_fields === 'string') {
+            simple_fields = parse_json_data(simple_fields)
+        }
+
         for (let key in simple_fields) {
             if (key in this) {
                 this[key] = simple_fields[key]

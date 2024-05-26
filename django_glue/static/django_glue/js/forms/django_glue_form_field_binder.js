@@ -14,9 +14,7 @@ function glue_binder_factory(glue_form_field, form_field_element) {
             return new GlueFormFieldBinder(glue_form_field, form_field_element)
         }
     }
-
     return new GlueFormFieldBinder(glue_form_field, form_field_element)
-
 }
 
 

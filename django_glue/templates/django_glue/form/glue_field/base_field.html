@@ -1,32 +1,37 @@
 {% load django_glue %}
 
 <div x-data="{
-    value: null
-}"
-    {% if x_model_value %}
-        x-modelable="value"
-        x-model="{{ x_model_value }}"
-    {% endif %}
+        value: null
+    }"
+        {% if x_model_value %}
+            x-modelable="value"
+            x-model="{{ x_model_value }}"
+        {% endif %}
 >
     <div
         x-data="{
             init() {
                     this.$watch('glue_field', value => {
-
-                    // Find all of the field attrs on the object and send it to construct a new glue field.
-                    const allProperties = Object.keys(value);
-                    const underscoreProperties = allProperties.filter(prop => prop.startsWith('_'));
-                    let field_attrs = []
-                    underscoreProperties.forEach(prop => {
-                        field_attrs.push(value[prop]);
-                    });
-
-                    let glue_form_field = new GlueFormField(value._name.value, value.ignored_attrs, ...field_attrs)
-                    let glue_form_field_binder = glue_binder_factory(glue_form_field, this.$refs.glue_field)
-                    glue_form_field_binder.bind()
-                })
+                        this.bind_glue(value)
+                        console.log(this.glue_field)
+                    })
             },
-            glue_field: undefined
+            glue_field: undefined,
+            bind_glue(glue_field) {
+                let field_attrs = this.build_glue_field_attrs(glue_field)
+                let glue_form_field = new GlueFormField(glue_field._name.value, glue_field.ignored_attrs, ...field_attrs)
+                let glue_form_field_binder = glue_binder_factory(glue_form_field, this.$refs.glue_field)
+                glue_form_field_binder.bind()
+            },
+            build_glue_field_attrs(glue_field) {
+                const allProperties = Object.keys(glue_field);
+                const underscoreProperties = allProperties.filter(prop => prop.startsWith('_'));
+                let field_attrs = []
+                underscoreProperties.forEach(prop => {
+                    field_attrs.push(glue_field[prop]);
+                });
+                return field_attrs
+            }
         }"
         {% if glue_field %}
             x-modelable="glue_field"
