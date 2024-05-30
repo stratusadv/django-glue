@@ -6,7 +6,8 @@ from django_glue.entities.query_set.actions import GlueQuerySetAction
 from django_glue.entities.query_set.factories import glue_query_set_from_session_data
 from django_glue.entities.post_data import GetPostData, DeletePostData, UpdatePostData, MethodPostData
 from django_glue.entities.query_set.post_data import FilterGlueQuerySetPostData
-from django_glue.entities.query_set.response_data import GlueQuerySetJsonData, MethodGlueQuerySetJsonData
+from django_glue.entities.query_set.response_data import GlueQuerySetJsonData, MethodGlueQuerySetJsonData, \
+    ToChoicesGlueQuerySetJsonData
 
 from django_glue.entities.query_set.session_data import GlueQuerySetSessionData
 from django_glue.handler.handlers import GlueRequestHandler
@@ -103,6 +104,29 @@ class NullObjectGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
+class MethodGlueQuerySetHandler(GlueRequestHandler):
+    action = GlueQuerySetAction.METHOD
+    _session_data_class = GlueQuerySetSessionData
+    _post_data_class = MethodPostData
+
+    def process_response_data(self) -> GlueJsonResponseData:
+        glue_query_set = glue_query_set_from_session_data(self.session_data)
+        filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
+
+        method_return_data = []
+
+        for model_object in filtered_query_set:
+            glue_model_object = glue_model_object_from_glue_query_set_session(model_object, self.session_data)
+            method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
+            method_return_data.append(MethodGlueModelObjectJsonData(method_return))
+
+        return generate_json_200_response_data(
+            message_title='Success',
+            message_body='Successfully updated model object!',
+            data=MethodGlueQuerySetJsonData(method_return_data)
+        )
+
+
 class UpdateGlueQuerySetHandler(GlueRequestHandler):
     action = GlueQuerySetAction.UPDATE
     _session_data_class = GlueQuerySetSessionData
@@ -124,24 +148,20 @@ class UpdateGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class MethodGlueQuerySetHandler(GlueRequestHandler):
-    action = GlueQuerySetAction.METHOD
+class ToChoicesGlueQuerySetHandler(GlueRequestHandler):
+    action = GlueQuerySetAction.TO_CHOICES
     _session_data_class = GlueQuerySetSessionData
-    _post_data_class = MethodPostData
+    _post_data_class = FilterGlueQuerySetPostData
 
+    @check_access
     def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
-        filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
-
-        method_return_data = []
-
-        for model_object in filtered_query_set:
-            glue_model_object = glue_model_object_from_glue_query_set_session(model_object, self.session_data)
-            method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
-            method_return_data.append(MethodGlueModelObjectJsonData(method_return))
+        filtered_query_set = glue_query_set.query_set.filter(**self.post_data.filter_params)
+        glue_model_objects = glue_model_objects_from_query_set(filtered_query_set, self.session_data)
+        choices = [(glue_model_obj.model_object.pk, str(glue_model_obj.model_object)) for glue_model_obj in glue_model_objects]
 
         return generate_json_200_response_data(
             message_title='Success',
-            message_body='Successfully updated model object!',
-            data=MethodGlueQuerySetJsonData(method_return_data)
+            message_body='Successfully retrieved model object!',
+            data=ToChoicesGlueQuerySetJsonData(choices)
         )
