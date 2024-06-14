@@ -111,20 +111,34 @@ class MethodGlueQuerySetHandler(GlueRequestHandler):
 
     def process_response_data(self) -> GlueJsonResponseData:
         glue_query_set = glue_query_set_from_session_data(self.session_data)
-        filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
 
-        method_return_data = []
-
-        for model_object in filtered_query_set:
+        if isinstance(self.post_data.id, int):
+            # Called from a glue queryset on a model object
+            model_object = glue_query_set.query_set.get(id=self.post_data.id)
             glue_model_object = glue_model_object_from_glue_query_set_session(model_object, self.session_data)
             method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
-            method_return_data.append(MethodGlueModelObjectJsonData(method_return))
 
-        return generate_json_200_response_data(
-            message_title='Success',
-            message_body='Successfully updated model object!',
-            data=MethodGlueQuerySetJsonData(method_return_data)
-        )
+            return generate_json_200_response_data(
+                message_title='Success',
+                message_body='Successfully updated model object!',
+                data=MethodGlueModelObjectJsonData(method_return)
+            )
+        else:
+            # Called from a glue queryset
+            filtered_query_set = glue_query_set.query_set.filter(id__in=self.post_data.id)
+
+            method_return_data = []
+
+            for model_object in filtered_query_set:
+                glue_model_object = glue_model_object_from_glue_query_set_session(model_object, self.session_data)
+                method_return = glue_model_object.call_method(self.post_data.method, self.post_data.kwargs)
+                method_return_data.append(MethodGlueModelObjectJsonData(method_return))
+
+            return generate_json_200_response_data(
+                message_title='Success',
+                message_body='Successfully updated model object!',
+                data=MethodGlueQuerySetJsonData(method_return_data)
+            )
 
 
 class UpdateGlueQuerySetHandler(GlueRequestHandler):
