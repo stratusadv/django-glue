@@ -20,6 +20,7 @@ urlpatterns = [
     path("form/fields/", views.form_field_view, name="form_fields"),
     path("complex_form/", views.complex_form_view, name="complex_form"),
     path("complex_model_form/", views.complex_model_form_view, name="complex_model_form"),
+    path("uuid_model/", views.uuid_model_view, name="uuid_model"),
 ]
 
 urlpatterns += [

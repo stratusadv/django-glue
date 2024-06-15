@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.utils.timezone import now, localdate
@@ -33,6 +35,19 @@ class TestModel(models.Model):
         return f'{self.first_name} {self.last_name}'
 
 
+class UuidTestModel(models.Model):
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+
+    title = models.CharField(max_length=32)
+
+    def __str__(self):
+        return self.title
+
+
 class BigTestModel(models.Model):
     big_integer_field = models.BigIntegerField()
     binary_field = models.BinaryField()
@@ -61,6 +76,3 @@ class BigTestModel(models.Model):
 
     def __str__(self):
         return f'{self.char_field}'
-
-
-

@@ -1,5 +1,12 @@
 # Changelog for Django Glue
 
+## 0.6.1
+### Bugs
+- Fixed the template tags for bootstrap and alpine
+- Fixed bug with using UUID primary keys
+
+
+
 ## 0.6.0
 ### Changes
 - System to build form field attributes from model fields. 
