@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.template.response import TemplateResponse
 from django.views.generic import TemplateView
 
-from tests.models import TestModel, BigTestModel
+from tests.models import TestModel, BigTestModel, UuidTestModel
 from tests.processors import get_complex_form_processor
 from tests.utils import generate_randomized_test_model, generate_big_test_model
 from tests.context_data import django_glue_context_data
@@ -203,3 +203,9 @@ def complex_model_form_view(request):
     context_data = {}
 
     return render(request, 'complex_form/page/complex_model_form_page.html', context_data)
+
+
+def uuid_model_view(request):
+    uuid_title_model = UuidTestModel.objects.create(title='New Title of Function')
+    glue_model(request, 'uuid_title_model', uuid_title_model)
+    return TemplateResponse(request, 'page/uuid_model_page.html')
