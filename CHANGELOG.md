@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## 0.6.2
+### Features
+- Added a glue_fetch function for a quick an easy shortcut for making a fetch.
+
+
+
 ## 0.6.1
 ### Bugs
 - Fixed the template tags for bootstrap and alpine
