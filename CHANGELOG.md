@@ -1,5 +1,12 @@
 # Changelog for Django Glue
 
+## 0.6.3
+### Features
+- Glue Query Set entities now can return themselves as choices for a select field.
+### Bugs
+- Correct form key naming on relational model fields 
+
+
 ## 0.6.2
 ### Features
 - Added a glue_fetch function for a quick an easy shortcut for making a fetch.
