@@ -47,6 +47,8 @@ class GlueAttrFactory(ABC):
 
         if self.model_field.choices:
             self.add_attr('choices', self.model_field.choices, GlueAttrType.FIELD)
+        else:
+            self.add_attr('choices', [(False, '--------------')], GlueAttrType.FIELD)
 
     def factory_method(self) -> GlueFieldAttrs:
         self.glue_field_attrs = GlueFieldAttrs()

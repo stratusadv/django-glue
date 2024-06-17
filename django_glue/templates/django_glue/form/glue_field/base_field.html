@@ -24,10 +24,10 @@
                 glue_form_field_binder.bind()
             },
             build_glue_field_attrs(glue_field) {
-                const allProperties = Object.keys(glue_field);
-                const underscoreProperties = allProperties.filter(prop => prop.startsWith('_'));
+                const properties = Object.keys(glue_field);
+                const underscore_properties = properties.filter(prop => prop.startsWith('_'));
                 let field_attrs = []
-                underscoreProperties.forEach(prop => {
+                underscore_properties.forEach(prop => {
                     field_attrs.push(glue_field[prop]);
                 });
                 return field_attrs

@@ -105,16 +105,11 @@ class GlueSelectFieldBinder extends GlueFormFieldBinder {
 
     bind(){
         super.bind()
-
         this._field_element.innerHTML = ''
-
-        if (!this.glue_form_field.required) {
-            this.add_option(null, '----------------')
-        }
+        this.add_option(null, '----------------')
 
         this.glue_form_field.choices.forEach(choice => {
             this.add_option(choice[0], choice[1])
-
         });
     }
 }

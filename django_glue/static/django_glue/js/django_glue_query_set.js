@@ -128,4 +128,12 @@ class GlueQuerySet {
         })
     }
 
+    async to_choices(filter_params= {}) {
+        return await glue_ajax_request(this.glue_encoded_unique_name, 'to_choices', {'filter_params': filter_params})
+            .then((response) => {
+                glue_dispatch_response_event(response)
+                return JSON.parse(response.data)
+            });
+    }
+
 }

@@ -20,40 +20,48 @@ else:
 
 pip_install_coverage_cmd = 'pip install coverage'
 
-test_settings = os.path.join(os.path.dirname(__file__), 'tests', 'settings.py')
+django_settings = 'tests.settings'
 
-if os.path.isfile(test_settings):
-    print('Running coverage with django tests ...\n')
+django_settings_path = os.path.join(os.path.dirname(__file__), *django_settings.split('.')[:-1],
+                                    django_settings.split('.')[-1] + '.py')
 
-    omits = (
-        '*/system/*',
-        '*/tests/*',
-        '*/migrations/*',
-        '*/static/*',
-        '*/.venv/*',
-        'apps.py',
-        '__init__.py',
-        'manage.py',
-        'automation.py',
-        'run_coverage.py',
-        'setup.py',
-    )
+if not os.path.isfile(django_settings_path):
+    raise Exception(f'Django test settings "{django_settings_path}" not found.')
 
-    coverage_run_cmd = f'coverage run --branch --source=. --omit={",".join(omits)} tests/manage.py test --settings=settings --noinput'
+print('Running coverage with django tests ...\n')
 
-    html_directory = '.coverage_html_report'
-    coverage_html_cmd = f'coverage html --directory={html_directory}'
+omits = (
+    '*/system/*',
+    '*/tests/*',
+    '*/migrations/*',
+    '*/static/*',
+    '*/.venv/*',
+    'apps.py',
+    '__init__.py',
+    'manage.py',
+    'automation.py',
+    'run_coverage.py'
+)
 
-    coverage_erase_cmd = f'coverage erase'
+coverage_run_cmd = f'coverage run --branch --source=. --omit={",".join(omits)} manage.py test --settings={django_settings} --noinput'
 
-    open_browser_cmd = f'start "" "{os.path.dirname(__file__)}/{html_directory}/index.html"'
+html_directory = '.coverage_html_report'
+coverage_html_cmd = f'coverage html --directory={html_directory}'
 
-    cmd_call = f'call {activate_virtualenv_cmd} & {pip_install_coverage_cmd} & {coverage_run_cmd} & {coverage_html_cmd} & {coverage_erase_cmd} & {open_browser_cmd}'
-    subprocess.run(cmd_call, shell=True)
+coverage_erase_cmd = f'coverage erase'
 
-    print('\nDone!')
+open_browser_cmd = f'start "" "{os.path.dirname(__file__)}/{html_directory}/index.html"'
 
-else:
-    raise Exception(f'Django test settings "{test_settings}" not found.')
+cmd_call = (
+    f'call {activate_virtualenv_cmd}'
+    f' & {pip_install_coverage_cmd}'
+    f' & {coverage_run_cmd}'
+    f' & {coverage_html_cmd}'
+    f' & {coverage_erase_cmd}'
+    f' & {open_browser_cmd}'
+)
 
+subprocess.run(cmd_call, shell=True)
+
+print('\nDone!')
 
