@@ -13,6 +13,72 @@ class GlueFormFieldAttr {
 }
 
 
+
+class GlueBaseFormField {
+    constructor(name, id = '', label= '', required = true, help_text = '') {
+        // Temporary object to hold initial values
+
+        if (id === '') {
+            // make a copy of the name
+            id = name.replace(/\s/g, '_')
+            id = `id_${name}`.toLocaleLowerCase()
+        }
+
+        if (label === '') {
+            label = name.replace(/_/g, ' ')
+            label = label.replace(/\w\S*/g, (w) => {
+                return w.replace(w[0], w[0].toUpperCase());
+            })
+        }
+
+        const initialValues = { name, id, label, required, help_text };
+
+        // Create the proxy object first
+        const proxy = new Proxy(this, {
+            set: (target, property, value) => {
+                if (property in target) {
+                    target[`_${property}`].value = value;
+                } else {
+                    target.add_attribute(property, value, GlueFormFieldAttrType.HTML);
+                }
+                return true;
+            },
+            get: (target, property) => {
+                if (property.startsWith('_') && property in target) {
+                    return target[property];
+                } else if (property in target) {
+                    return target[property];
+                } else if (`_${property}` in target) {
+                    return target[`_${property}`].value;
+                }
+                return undefined;
+            },
+            ownKeys: (target) => {
+                return Reflect.ownKeys(target).concat(
+                    Object.keys(target).filter(key => key.startsWith('_'))
+                );
+            },
+            getOwnPropertyDescriptor: (target, property) => {
+                return Object.getOwnPropertyDescriptor(target, property) ||
+                    Object.getOwnPropertyDescriptor(target, `_${property}`);
+            }
+        });
+
+        // Set initial values using the proxy
+        for (const [key, value] of Object.entries(initialValues)) {
+            proxy[key] = value;
+        }
+
+        return proxy;
+    }
+
+    add_attribute(name, value, attr_type) {
+        let glue_field_attr = new GlueFormFieldAttr(name, value, attr_type);
+        this[`_${name}`] = glue_field_attr;
+    }
+}
+
+
 class GlueFormField {
     constructor(
         name,
@@ -43,7 +109,6 @@ class GlueFormField {
                 }
                 return true;
             },
-
         });
     }
 
