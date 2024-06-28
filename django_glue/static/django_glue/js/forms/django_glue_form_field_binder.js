@@ -19,11 +19,12 @@ function glue_binder_factory(glue_form_field, form_field_element) {
 
 
 class GlueFormFieldBinder {
-    constructor(glue_form_field, form_field_element) {
-        this.glue_form_field = glue_form_field
+    constructor(form_field_element) {
+        this.glue_form_field = null
         this._field_element = form_field_element
     }
-    bind () {
+    bind (glue_form_field) {
+        this.glue_form_field = glue_form_field
         this.set_field_class()
 
         if (!this.glue_form_field.ignored_attrs.includes('label')) {

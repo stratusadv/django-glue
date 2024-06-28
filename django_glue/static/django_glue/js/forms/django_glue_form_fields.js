@@ -13,40 +13,40 @@ class GlueFormFieldAttr {
 }
 
 
-
 class GlueBaseFormField {
-    constructor(name, id = '', label= '', required = true, help_text = '') {
-        // Temporary object to hold initial values
-
+    static field_binder = null;
+    constructor(name, id = '', label = '', required = true, help_text = '') {
         if (id === '') {
-            // make a copy of the name
-            id = name.replace(/\s/g, '_')
-            id = `id_${name}`.toLocaleLowerCase()
+            id = name.replace(/\s/g, '_').toLowerCase();
+            id = `id_${id}`;
         }
 
         if (label === '') {
-            label = name.replace(/_/g, ' ')
+            label = name.replace(/_/g, ' ');
             label = label.replace(/\w\S*/g, (w) => {
                 return w.replace(w[0], w[0].toUpperCase());
-            })
+            });
         }
 
-        const initialValues = { name, id, label, required, help_text };
+        this.attrs = {};
 
-        // Create the proxy object first
-        const proxy = new Proxy(this, {
+        // Create the proxy for the attrs object
+        const attrsProxy = new Proxy(this.attrs, {
             set: (target, property, value) => {
-                if (property in target) {
-                    target[`_${property}`].value = value;
+                if (property.startsWith('_')) {
+                    // Direct set for internal use, bypassing proxy logic
+                    target[property] = value;
+                    return true;
+                }
+                if (!target[`_${property}`]) {
+                    this.add_attribute(property, value, GlueFormFieldAttrType.HTML);
                 } else {
-                    target.add_attribute(property, value, GlueFormFieldAttrType.HTML);
+                    target[`_${property}`].value = value;
                 }
                 return true;
             },
             get: (target, property) => {
                 if (property.startsWith('_') && property in target) {
-                    return target[property];
-                } else if (property in target) {
                     return target[property];
                 } else if (`_${property}` in target) {
                     return target[`_${property}`].value;
@@ -54,9 +54,7 @@ class GlueBaseFormField {
                 return undefined;
             },
             ownKeys: (target) => {
-                return Reflect.ownKeys(target).concat(
-                    Object.keys(target).filter(key => key.startsWith('_'))
-                );
+                return Reflect.ownKeys(target);
             },
             getOwnPropertyDescriptor: (target, property) => {
                 return Object.getOwnPropertyDescriptor(target, property) ||
@@ -65,16 +63,35 @@ class GlueBaseFormField {
         });
 
         // Set initial values using the proxy
+        const initialValues = { name, id, label, required, help_text };
         for (const [key, value] of Object.entries(initialValues)) {
-            proxy[key] = value;
+            attrsProxy[key] = value;
         }
 
-        return proxy;
+        this.attrs = attrsProxy;
     }
 
     add_attribute(name, value, attr_type) {
         let glue_field_attr = new GlueFormFieldAttr(name, value, attr_type);
-        this[`_${name}`] = glue_field_attr;
+        this.attrs[`_${name}`] = glue_field_attr; // Directly set the underscore-prefixed property
+    }
+}
+
+
+class GlueCharField extends GlueBaseFormField {
+    constructor(
+        name,
+        value = '',
+        id = '',
+        label = '',
+        required = true,
+        help_text = '',
+        max_length = 255,
+        min_length = 0
+    ) {
+        super(name, value, id, label, required, help_text);
+        this.add_attribute('maxlength', max_length, GlueFormFieldAttrType.HTML);
+        this.add_attribute('minlength', min_length, GlueFormFieldAttrType.HTML);
     }
 }
 
