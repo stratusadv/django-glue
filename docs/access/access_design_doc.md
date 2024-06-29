@@ -90,3 +90,6 @@ class GetGlueModelObjectHandler(GlueRequestHandler):
             data=GlueModelObjectJsonData(glue_model_object.fields)
     )
 ```
+
+## Improvements 
+- Is the decorator the best location to check for access? It requires us to add the decorator to each handler created. 

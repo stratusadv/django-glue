@@ -1,4 +1,4 @@
-# Handler Design Document 
+# Glue Model Object Design Document 
 Last Updated: Wesley Howery 2024-06-29
 
 # Overview
