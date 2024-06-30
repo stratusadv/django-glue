@@ -1,105 +1,73 @@
-# Glue Model Object Design Document 
-Last Updated: Wesley Howery 2024-06-29
+# Glue Query Set Design Document 
+Last Updated: Wesley Howery 2024-06-30
 
 # Overview
 ### Purpose of Component 
-The Glue Request Handler is responsible for processing actions from Glue Entities. It provides a consistent and
-extendable way to add and maintain processing glue entity requests from JS objects.
-
-### Definitions, Acronyms and Abbreviations
-- Handler - Handles the steps to receive, process and respond a Djagno Glue Request.    
+Glue Query Sets allow django glue to access the functionality of django query sets and exposes functionality to our client.
 
 ### Reason To Change
-The handler would change if we need to manipulate how we are processing data from the body or glue session.
+- When more actions are added to Glue Model Objects or onto Query Sets themselves.
 
-## Actor Diagram
-### Handler Processing  a Request
-```mermaid
-sequenceDiagram
-    actor js_glue_entity as JS Glue Entity
-    participant handler_view as Handler View
-    participant handler_map as Handler Map
-    participant request_handler as Request Handler
-    participant glue_session_data as Glue Session Data
-    participant glue_entity as Glue Entity
-        
-    js_glue_entity ->> handler_view: Post Request
-    handler_view ->> handler_map: Finds Handler from Action Type 
-    handler_map -->> handler_view: Handler Class
-    handler_view ->> request_handler: Process Response Data
-    request_handler ->> glue_session_data: Collects Session Data
-    glue_session_data -->> request_handler: Entity Session Data
-    request_handler ->> glue_entity: Constructs Entity
-    glue_entity -->> request_handler: Glue Entity
-    request_handler -->> handler_view: Response Data
-    handler_view -->> js_glue_entity: Seralized Data
-    
-    
-    
-```
+### Dependencies
+- Glue Query Sets return a list of Glue Model Objects.
+- On the client side, glued query sets will have a connection type of query_set. 
+  - Glue Model Objects will be created to for the client. 
+  - Glue Model Objects created from a query set will use the query set handler. 
+  - **This means all glue model object functionality needs to be accessible through the Query Set Handler.** 
 
-## Class Diagram
-### Glue Request Handler
-The Glue Request Handler is a stable abstract class that is inherited to provide action functionality on glue entities. 
-- Inherit the Glue Request Handler to process new glue entities. 
-- Add actions to inherited handlers to provide unique functionality. 
-- **Handler Map** is responsible for returning the correct handler class based on connection and action. 
-- Add connections and actions to maps that allows the glue to return the correct handler. 
-- **Glue Body Data** defines what the handler expects from JS Objects to be able to correctly process the request. 
+## Class Diagram 
+### Glue Query Set Actions 
+- **All**: Returns all objects in the query set as glue model objects. 
+- **Filter**: Returns filtered objects in the query set as glue model objects. Uses django's ORM filtering system.
+- **Get**: Returns a specific glue model object. 
+- **Update**: NOT IMPLEMENTED 
+- **Delete**: Deletes all the model objects from the database. 
+- **Method**: Calls a specific method on all the model objects in the query set.
+- **Null Object**: Returns a null object with the default values of the model and a pk of None. 
+- **To Choices**: Returns the query set as a list of lists that replicates how django choice fields define choices.   
+
+### Glue Query Set Session Data 
+- **Query Set Str**: A encoded pickled string of the SQL query. This can be loaded to re-create the Query Set Object. 
+- **Fields**: The model object fields that the query set is linked to. 
+  - This allows us to use Glue Form Fields with Glue Query Set Objects. 
+- **Included / Excluded Fields & Methods** Control on server side on areas we want to expose to the client. 
 
 ```mermaid
 classDiagram
-    direction LR
-    namespace ActionComponent {
-        class GlueAction { 
-            Get
-            Update Delete
-        }
+    direction TB
+    class GlueQuerySet {
+        Included Fields
+        Excluded Fields
+        Included Methods
+        
+        Query Set: str
+        Model
     }
-    
-    namespace GlueEntityComponent {
-        class GlueModelObjectEntity { }
-        class GlueQuerySetEntity { }
-        class GlueFunctionEntity { }
-        class GlueTemplateEntity { }
+    class GlueModelObject
+    class GlueQuerySetAction {
+        <<enumeration>>
+        ALL
+        FILTER
+        GET
+        UPDATE
+        DELETE
+        METHOD
+        NULL_OBJECT
+        TO_CHOICES
     }
-    
-    namespace HandlerComponent {
-        class GlueRequestHandler {
-            <<abstract>>
-            Action 
-            Session Data 
-            Post Data
-            process_response_data()
-        }
-        class ModelObjectRequestHandler { }
-        class QuerySetObjectRequestHandler { }
-        class FunctionObjectRequestHandler { }
-        class TemplateObjectRequestHandler { }
-     
-        class GlueConnection {
-            Model Object
-            Query Set 
-            Template
-            Function
-        }
-        class HandlerMap { }
-        class GlueBodyData { } 
+    class GlueQuerySetSessionData {
+        Query Set Str
+        Fields
+        Included Fields
+        Excluded Fields
+        Included Methods
     }
+    class GlueQuerySetResponseData { 
+        
+    }
+    GlueModelObject <-- GlueQuerySet
     
-    GlueRequestHandler <-- ModelObjectRequestHandler :inherits
-    GlueRequestHandler <-- QuerySetObjectRequestHandler :inherits
-    GlueRequestHandler <-- FunctionObjectRequestHandler :inherits
-    GlueRequestHandler <-- TemplateObjectRequestHandler :inherits
-    HandlerMap --|> GlueConnection :uses
-    HandlerMap --|> GlueRequestHandler :uses
-    
-    GlueRequestHandler --|> GlueBodyData :uses
-    GlueRequestHandler --|> GlueAction :uses
-    
-    ModelObjectRequestHandler --|> GlueModelObjectEntity :uses
-    QuerySetObjectRequestHandler --|> GlueQuerySetEntity :uses
-    FunctionObjectRequestHandler --|> GlueFunctionEntity :uses
-    TemplateObjectRequestHandler --|> GlueTemplateEntity :uses
-    
+    GlueQuerySet --|> GlueQuerySetAction
+    GlueQuerySet --|> GlueQuerySetSessionData
+    GlueQuerySet --|> GlueQuerySetResponseData
 ```

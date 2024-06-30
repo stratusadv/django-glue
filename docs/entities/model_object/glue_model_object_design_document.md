@@ -1,15 +1,12 @@
 # Glue Model Object Design Document 
-Last Updated: Wesley Howery 2024-06-29
+Last Updated: Wesley Howery 2024-06-30
 
 # Overview
 ### Purpose of Component 
-Glue Model Objects replicate the functionality of model objects in django. 
-
-### Definitions, Acronyms and Abbreviations
-- Handler - Handles the steps to receive, process and respond a Djagno Glue Request.    
+Glue Model Objects replicate the functionality of model objects in django.
 
 ### Reason To Change
-The handler would change if we need to manipulate how we are processing data from the body or glue session.
+Glue Model Objects will change when more actions are added. 
 
 ### Dependencies
 - Glue Query Set objects initialize glue model objects into a list. This means Glue Query Set's are heavily dependent on Glue Model Objects.
@@ -83,5 +80,6 @@ classDiagram
 
 ## Improvements
 - Glue Fields need to be improved. Move extra information into meta data.
-- Response data needs to live in a clear spot? Currently it is in the base because it is shared by query set and model object.
-  - I think this should just live in model object because Query set is dependent on model objects. 
+- Response data needs to live in a clear spot? Currently, it is in the base because it is shared by query set and model object.
+  - I think this should just live in model object because Query set is dependent on model objects.
+- Change Methods in Session data to included_methods to be more consistent. 
