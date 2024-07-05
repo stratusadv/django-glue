@@ -9,7 +9,7 @@ from django_glue.form.html_attrs import GlueFieldAttrs
 class GlueModelFieldMeta:
     type: str
     name: str
-    glue_field: GlueFormField
+    glue_field: 'GlueFormField'
 
 
 @dataclass
