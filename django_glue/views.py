@@ -25,12 +25,12 @@ def glue_data_ajax_handler_view(request):
 
 
 def glue_keep_live_handler_view(request):
-    data = json.loads(request.body.decode('utf-8'))
-    unique_names = data['unique_names']
+    data = json.loads(request.body)
+    unique_names = data.get('unique_names', [])
 
-    GlueKeepLiveSession(request).update_unique_names(unique_names)
+    if len(unique_names) > 0:
+        GlueKeepLiveSession(request).update_unique_names(unique_names)
 
     return JsonResponse(
         data=GlueSession(request).session
     )
-
