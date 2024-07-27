@@ -1,7 +1,9 @@
 function glue_get_cookie(name) {
     let cookie_value = null
+
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';')
+
         for (let i = 0; i < cookies.length; i++) {
             const cookie = cookies[i].trim()
 
@@ -11,5 +13,6 @@ function glue_get_cookie(name) {
             }
         }
     }
+
     return cookie_value
 }

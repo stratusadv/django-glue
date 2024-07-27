@@ -17,7 +17,7 @@ def field_name_included(name, fields, exclude):
 
 def get_field_value_from_model_object(model_object: Model, field: GlueModelField):
     relational = ['ForeignKey', 'BinaryField', 'OnetoOneField']
-    if field.type in relational:
+    if field._meta.type in relational:
         return getattr(model_object, f'{field.name}_id')
     else:
         return getattr(model_object, field.name)

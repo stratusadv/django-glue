@@ -19,5 +19,4 @@ class GlueFunction {
             return JSON.parse(response.data).function_return
         })
     }
-
 }

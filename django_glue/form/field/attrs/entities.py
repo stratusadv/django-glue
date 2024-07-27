@@ -1,24 +1,15 @@
 from dataclasses import dataclass, field
 from typing import Union
 
-from django_glue.form.enums import GlueAttrType
-
-
-# Todo: Delete this file and move into factories.
-
 
 @dataclass
 class GlueFieldAttr:
     name: str
-    attr_type: GlueAttrType
     value: Union[str, int, bool, None] = None
 
     def to_dict(self) -> dict:
         return {
-            self.name: {
-                'attr_type': self.attr_type.value,
-                'value': self.value
-            }
+            self.name: self.value
         }
 
 

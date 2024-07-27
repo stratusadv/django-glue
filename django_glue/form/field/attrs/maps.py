@@ -1,5 +1,5 @@
-from django_glue.form.enums import FieldType
-from django_glue.form import factories
+from django_glue.form.field.attrs import factories
+from django_glue.form.field.enums import FieldType
 
 
 FIELD_TYPE_TO_GLUE_ATTR_FACTORY = {
