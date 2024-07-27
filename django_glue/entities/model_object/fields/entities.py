@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 from django_glue.entities.model_object.fields.seralizers import serialize_field_value
-from django_glue.form.field.attrs.entities import GlueFieldAttrs
 from django_glue.form.field.entities import GlueFormField
 
 
@@ -23,17 +22,14 @@ class GlueModelFieldMeta:
 @dataclass
 class GlueModelField:
     name: str
-    type: str
     value: Any
-    field_attrs: GlueFieldAttrs  # Todo: needs to be deleted in the future.
     _meta: Union[GlueModelFieldMeta, dict] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
             'name': self.name,
-            'type': self.type,
             'value': serialize_field_value(self),
-            'field_attrs': self.field_attrs.to_dict(),
+            '_meta': self._meta.to_dict()
         }
 
 

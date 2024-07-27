@@ -82,7 +82,6 @@ classDiagram
 ```
 
 ## Improvements
-- Remove Glue Attr Types. Glue fields will require the information needed.
 - Do I need to create a glue form field for each field type or is the base information the same? 
   - Keep the map for attrs because they change for each. 
 - Glue form fields should work independently of model fields. Factory used to convert.  
