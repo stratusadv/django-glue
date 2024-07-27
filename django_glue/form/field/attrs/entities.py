@@ -32,10 +32,11 @@ class GlueFieldAttrs:
             attr_dict[attr.name] = attr
         return list(attr_dict.values())
 
-    def to_dict(self) -> dict:
-        attr_dict = {}
-
-        for attr in self.attrs:
-            attr_dict.update(attr.to_dict())
-
-        return attr_dict
+    def to_dict(self) -> list:
+        return [attr.to_dict() for attr in self.attrs]
+        # attr_dict = {}
+        #
+        # for attr in self.attrs:
+        #     attr_dict.update(attr.to_dict())
+        #
+        # return attr_dict
