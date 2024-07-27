@@ -1,7 +1,7 @@
 from django.db import models
 
-from django_glue.form.maps import FIELD_TYPE_TO_GLUE_ATTR_FACTORY
-from django_glue.form.html_attrs import GlueFieldAttrs
+from django_glue.form.field.attrs.entities import GlueFieldAttrs
+from django_glue.form.field.attrs.maps import FIELD_TYPE_TO_GLUE_ATTR_FACTORY
 
 
 def glue_field_attr_from_model_field(model_field) -> GlueFieldAttrs:

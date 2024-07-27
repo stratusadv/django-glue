@@ -1,10 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Union
 
-from django_glue.form.enums import GlueAttrType
-
-
-# Todo: Delete this file and move into factories.
+from django_glue.form.field.attrs.enums import GlueAttrType
 
 
 @dataclass

@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
-from typing import Union, Any
+from typing import  Any
 
 from django.db.models import Field
 
-from django_glue.form.enums import GlueAttrType
-from django_glue.form.html_attrs import GlueFieldAttrs, GlueFieldAttr
+from django_glue.form.field.attrs.entities import GlueFieldAttrs, GlueFieldAttr
+from django_glue.form.field.attrs.enums import GlueAttrType
 
 
 class GlueAttrFactory(ABC):

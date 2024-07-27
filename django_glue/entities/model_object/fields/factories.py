@@ -4,7 +4,7 @@ from django.db.models import Model
 
 from django_glue.entities.model_object.fields.entities import GlueModelFields, GlueModelField
 from django_glue.entities.model_object.fields.utils import field_name_included
-from django_glue.form.utils import glue_field_attr_from_model_field
+from django_glue.form.field.factories import glue_field_attr_from_model_field
 
 
 def model_object_fields_from_model(

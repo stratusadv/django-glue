@@ -1,3 +1,20 @@
+const task = {
+    name: 'Get Eggs',
+    exipry_date: '2024`-01-01',
+    is_completed: false,
+    _meta: {
+        'fields': {
+            'name': {
+                'type': 'string',
+                'glue_field': {
+                    'data': 'name',
+                }
+            }
+        }
+    },
+};
+
+
 class GlueModelObject {
 
     constructor(glue_unique_name) {

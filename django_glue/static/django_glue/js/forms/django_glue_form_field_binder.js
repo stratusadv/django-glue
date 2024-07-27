@@ -1,21 +1,3 @@
-
-const task = {
-  name: 'Get Eggs',
-    exipry_date: '2024`-01-01',
-    is_completed: false,
-  _meta: {
-    fields: {
-      name: 'Field object here',
-      exipry_date: 'Field object here',
-      is_completed: 'Field object here',
-    },
-  },
-};
-
-console.log(field.getMetaField('glue_field', 'name')); // Outputs: Glue Name
-
-
-
 function glue_binder_factory(glue_form_field, form_field_element) {
     if (form_field_element.tagName === 'SELECT') {
          return new GlueSelectFieldBinder(glue_form_field, form_field_element)
