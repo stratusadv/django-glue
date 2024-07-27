@@ -6,7 +6,6 @@ class GlueView {
 
         this.url = config_url.pathname + config_url.search
         this.shared_parameters = shared_parameters
-
     }
 
     async _render(parameters = {}, method = 'POST', headers = {}) {
@@ -17,16 +16,15 @@ class GlueView {
                 'X-CSRFToken': glue_get_cookie('csrftoken'),
             },
             body: JSON.stringify({...parameters, ...this.shared_parameters})
-        };
-
-        const response = await fetch(this.url, request_options);
-
-        if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}`);
         }
 
-        return response;
+        const response = await fetch(this.url, request_options)
 
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`)
+        }
+
+        return response
     }
 
     async render_inner(target_element, parameters = {}) {
@@ -35,7 +33,6 @@ class GlueView {
         }).then((html) => {
             target_element.innerHTML = html
         })
-
     }
 
     async render_insert_adjacent(target_element, parameters = {}, position = 'beforeend') {
@@ -44,7 +41,6 @@ class GlueView {
         }).then((html) => {
             target_element.insertAdjacentHTML(position, html)
         })
-
     }
 
     async render_outer(target_element, parameters = {}) {
@@ -53,7 +49,5 @@ class GlueView {
         }).then((html) => {
             target_element.outerHTML = html
         })
-
     }
-
 }

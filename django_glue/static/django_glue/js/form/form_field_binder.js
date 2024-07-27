@@ -12,6 +12,7 @@ function glue_binder_factory(glue_form_field, form_field_element) {
             return new GlueFormFieldBinder(glue_form_field, form_field_element)
         }
     }
+
     return new GlueFormFieldBinder(glue_form_field, form_field_element)
 }
 
@@ -21,8 +22,10 @@ class GlueFormFieldBinder {
         this.glue_form_field = null
         this._field_element = form_field_element
     }
-    bind (glue_form_field) {
+
+    bind(glue_form_field) {
         this.glue_form_field = glue_form_field
+        console.log(this.glue_form_field)
         this.set_field_class()
 
         if (!this.glue_form_field.ignored_attrs.includes('label')) {
@@ -77,13 +80,12 @@ class GlueFormFieldBinder {
 
 
 class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
-
     set_label(label_element) {
         let label = this.label
         this.label.classList.add('form-check-label')
         label.setAttribute('for', this.glue_form_field.id)
         label.innerText = this.glue_form_field.label
-        this._field_element.insertAdjacentElement('afterend', label);
+        this._field_element.insertAdjacentElement('afterend', label)
     }
 
     set_field_class() {
@@ -94,28 +96,26 @@ class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
 
 
 class GlueSelectFieldBinder extends GlueFormFieldBinder {
-
     add_option(key, value) {
-        const option = document.createElement('option');
-        option.value = key;
-        option.text = value;
-        this._field_element.appendChild(option);
+        const option = document.createElement('option')
+        option.value = key
+        option.text = value
+        this._field_element.appendChild(option)
     }
 
-    bind(){
+    bind() {
         super.bind()
         this._field_element.innerHTML = ''
         this.add_option(null, '----------------')
 
         this.glue_form_field.choices.forEach(choice => {
             this.add_option(choice[0], choice[1])
-        });
+        })
     }
 }
 
 
 class GlueRadioFieldBinder extends GlueFormFieldBinder {
-
     add_radio_input(key, value, index) {
         let parent_div = document.createElement('div')
         parent_div.classList.add('form-check')
@@ -133,19 +133,17 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
         parent_div.appendChild(radio_input)
         parent_div.appendChild(radio_label)
 
-        this.label.insertAdjacentElement('beforebegin', parent_div);
-
-
+        this.label.insertAdjacentElement('beforebegin', parent_div)
     }
 
-    bind(){
+    bind() {
         // Adds attributes to label and field
         super.bind()
 
         // Duplicates label and field and appends to area
         this.glue_form_field.choices.forEach((choice, index) => {
             this.add_radio_input(choice[0], choice[1], index)
-        });
+        })
 
         // Hide original label and field.
         this._field_element.classList.add('d-none')
@@ -153,7 +151,7 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
     }
 
     set_label() {
-        super.set_label();
+        super.set_label()
         this.label.classList.add('mb-0')
     }
 
@@ -161,5 +159,4 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
         this._field_element.classList.add('form-check-input')
         this._field_element.classList.add('me-2')
     }
-
 }

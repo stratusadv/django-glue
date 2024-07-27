@@ -1,19 +1,21 @@
 function choice_verbose(choice, choices) {
-    const choices_object = Object.fromEntries(choices);
+    const choices_object = Object.fromEntries(choices)
     console.log(choices_object)
     return choices_object[choice]
 }
 
 
 function glue_debounce(func, wait) {
-    let timeout;
+    let timeout
+
     return function executedFunction(...args) {
         const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
+            clearTimeout(timeout)
+            func(...args)
+        }
+
+        clearTimeout(timeout)
+        timeout = setTimeout(later, wait)
     }
 }
 
@@ -25,27 +27,23 @@ function encodeUniqueName(unique_name) {
 }
 
 
-function parse_json_data(json_data) {
-    return JSON.parse(json_data)
-}
-
-
 function simplify_model_fields(field_data) {
     let simplified_data = {}
 
     for (let key in field_data) {
         simplified_data[key] = field_data[key].value
     }
+
     return simplified_data
 }
 
 
 function title_string(string) {
-    let words = string.split('_');
+    let words = string.split('_')
 
     let titledWords = words.map(word =>
         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-    );
+    )
 
-    return titledWords.join(' ');
+    return titledWords.join(' ')
 }

@@ -21,14 +21,15 @@ class GlueKeepLive {
                 'unique_names': window.glue_keep_live_unique_names,
             }),
         }
+
         const response = await fetch(keep_live_url, request_options)
 
         if (!response.ok) {
             let confirmation = confirm('Session expired. Do you want to reload the page?')
-                if (confirmation){
-                    window.location.reload()
-                }
+
+            if (confirmation) {
+                window.location.reload()
+            }
         }
     }
 }
-

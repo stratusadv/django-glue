@@ -10,7 +10,6 @@ async function glue_ajax_request(
         'action': action,
         'data': data,
     })
-
 }
 
 
@@ -29,18 +28,16 @@ async function glue_fetch(
         body: JSON.stringify(body),
     }
 
-    const response = await fetch(url, request_options);
+    const response = await fetch(url, request_options)
 
     if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+        throw new Error(`HTTP error ${response.status}`)
     }
 
-    if(content_type === 'application/json') {
-        return response.json();
+    if (content_type === 'application/json') {
+        return response.json()
     }
     else {
-        return response;
+        return response
     }
 }
-
-

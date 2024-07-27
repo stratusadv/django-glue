@@ -4,7 +4,7 @@
 
 {% csrf_token %}
 
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_keep_live.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/session/keep_live.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
 <script type="application/javascript">
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
@@ -18,19 +18,18 @@
     setInterval(() => {
         window.glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
     }, DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
-
 </script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_event.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/forms/django_glue_form_fields.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/forms/django_glue_form_field_binder.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_response.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_message.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_model_object.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/django_glue_shortcuts.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+
+<script type="application/javascript" src="{% static 'django_glue/js/session/csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/core/ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/response/event.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/form/form_field.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/form/form_field_binder.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/entities/function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/response/response.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/entities/model_object.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/entities/query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/entities/template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/entities/view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/core/utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/shortcuts/shortcuts.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
