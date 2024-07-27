@@ -19,13 +19,15 @@ class GlueQuerySet {
             .then((response) => {
                 glue_dispatch_response_event(response)
                 let glue_query_set = JSON.parse(response.data)
+
                 for (let object in glue_query_set) {
-                    let model_object = new GlueModelObject(this.glue_unique_name);
+                    let model_object = new GlueModelObject(this.glue_unique_name)
                     model_object._set_properties(glue_query_set[object])
                     model_object_list.push(model_object)
                 }
+
                 return model_object_list
-            });
+            })
     }
 
     delete(id) {
@@ -47,6 +49,7 @@ class GlueQuerySet {
                 console.log(response)
                 let glue_query_set = JSON.parse(response.data)
                 glue_dispatch_response_event(response)
+
                 for (let object in glue_query_set) {
                     let model_object = new GlueModelObject(this.glue_unique_name)
                     model_object._set_properties(glue_query_set[object])
@@ -54,19 +57,20 @@ class GlueQuerySet {
                 }
 
                 return model_object_list
-            });
+            })
     }
 
     async get(id) {
         let model_object = null
+
         return await glue_ajax_request(this.glue_encoded_unique_name, 'get', {'id': id})
             .then((response) => {
                 glue_dispatch_response_event(response)
-                model_object = new GlueModelObject(this.glue_unique_name);
+                model_object = new GlueModelObject(this.glue_unique_name)
                 let glue_query_set = JSON.parse(response.data)
                 model_object._set_properties(glue_query_set[0])
                 return model_object
-            });
+            })
     }
 
     async method(id, method, kwargs = {}) {
@@ -89,7 +93,9 @@ class GlueQuerySet {
 
     async null_object() {
         console.log('null object')
+
         let data = {}
+
         return await glue_ajax_request(
             this.glue_encoded_unique_name,
             'null_object',
@@ -133,7 +139,6 @@ class GlueQuerySet {
             .then((response) => {
                 glue_dispatch_response_event(response)
                 return JSON.parse(response.data)
-            });
+            })
     }
-
 }

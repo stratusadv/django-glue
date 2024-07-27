@@ -1,6 +1,7 @@
+// Todo: Make sure this gets deleted
 const task = {
     name: 'Get Eggs',
-    exipry_date: '2024`-01-01',
+    expiry_date: '2024`-01-01',
     is_completed: false,
     _meta: {
         'fields': {
@@ -12,11 +13,10 @@ const task = {
             }
         }
     },
-};
+}
 
 
 class GlueModelObject {
-
     constructor(glue_unique_name) {
         // We are encoding the unique name twice when
         this.glue_unique_name = glue_unique_name
@@ -24,6 +24,7 @@ class GlueModelObject {
         this.glue_fields_set = false
 
         this['fields'] = {}
+
         if (this.glue_encoded_unique_name in window.glue_session_data) {
             this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
         }
@@ -47,6 +48,7 @@ class GlueModelObject {
 
     duplicate() {
         let model_object = new GlueModelObject(this.glue_unique_name)
+
         console.log(this.get_properties())
         model_object.set_properties(this.get_properties())
         return model_object
@@ -57,9 +59,7 @@ class GlueModelObject {
         await glue_ajax_request(
             this.glue_encoded_unique_name,
             'get',
-            {
-                'id': this.id,
-            }
+            {'id': this.id}
         ).then((response) => {
             glue_dispatch_response_event(response)
             // console.log(response.data)
@@ -93,8 +93,7 @@ class GlueModelObject {
     async update(field = null) {
         await glue_ajax_request(
             this.glue_encoded_unique_name,
-            'update',
-            {
+            'update', {
                 'fields': this.get_properties(),
                 'id': this.id
             }
@@ -111,9 +110,11 @@ class GlueModelObject {
 
     get_properties() {
         let properties = {}
+
         Object.entries(this).forEach(([key, value]) => {
             properties[key] = value
-        });
+        })
+
         return properties
     }
 
@@ -146,15 +147,15 @@ class GlueModelObject {
         }
     }
 
-    set_fields(fields){
+    set_fields(fields) {
         // Fields are set on initialization if data is in the session.
         // Else we have to set the field data on retrieval of object
+
         for (let key in fields) {
            this[key] = ''
            this['fields'][key] = glue_model_field_from_field_attrs(fields[key].field_attrs)
         }
+
         this.glue_fields_set = true
-
     }
-
 }
