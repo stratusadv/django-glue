@@ -1,15 +1,22 @@
-
 class GlueModelObject {
-    constructor(glue_unique_name) {
+    constructor(glue_unique_name, fields = []) {
         this['_meta'] = {
             'glue_unique_name': glue_unique_name,
             'glue_encoded_unique_name': encodeUniqueName(glue_unique_name),
             'glue_fields_set': false
         }
 
+        if (fields.length === 0) {
+            let glue_session_fields = construct_glue_fields(window.glue_session_data[this['_meta']['glue_encoded_unique_name']].fields)
+            for (let field of glue_session_fields) {
+                fields.push(field)
+            }
+        }
+
+        this._set_properties(fields)
+        this.set_fields(fields)
+
         if (this['_meta']['glue_encoded_unique_name'] in window.glue_session_data) {
-            const glue_fields = construct_glue_fields(window.glue_session_data[this['_meta']['glue_encoded_unique_name']].fields)
-            this.set_fields(glue_fields)
         }
 
         window.glue_keep_live.add_unique_name(this['_meta']['glue_encoded_unique_name'])
@@ -127,9 +134,9 @@ class GlueModelObject {
     }
 
     set_fields(fields) {
-         // Array of glue model field objects
+        // Array of glue model field objects
         for (let field of fields) {
-           this['_meta'][field.name] = field
+            this['_meta'][field.name] = field
         }
 
         this['_meta']['glue_fields_set'] = true

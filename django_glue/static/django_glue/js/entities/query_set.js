@@ -20,9 +20,9 @@ class GlueQuerySet {
                 glue_dispatch_response_event(response)
                 let glue_query_set = JSON.parse(response.data)
 
-                for (let object in glue_query_set) {
-                    let model_object = new GlueModelObject(this.glue_unique_name)
-                    model_object._set_properties(glue_query_set[object])
+                for (let glue_field_data of glue_query_set) {
+                    let glue_fields = construct_glue_fields(glue_field_data)
+                    let model_object = new GlueModelObject(this.glue_unique_name, glue_fields)
                     model_object_list.push(model_object)
                 }
 
@@ -36,7 +36,6 @@ class GlueQuerySet {
             'delete',
             {'id': id}
         ).then((response) => {
-            console.log(response)
             glue_dispatch_response_event(response)
         })
     }
@@ -46,13 +45,12 @@ class GlueQuerySet {
 
         return await glue_ajax_request(this.glue_encoded_unique_name, 'filter', {'filter_params': filter_params})
             .then((response) => {
-                console.log(response)
                 let glue_query_set = JSON.parse(response.data)
                 glue_dispatch_response_event(response)
 
-                for (let object in glue_query_set) {
-                    let model_object = new GlueModelObject(this.glue_unique_name)
-                    model_object._set_properties(glue_query_set[object])
+                for (let glue_field_data of glue_query_set) {
+                    let glue_fields = construct_glue_fields(glue_field_data)
+                    let model_object = new GlueModelObject(this.glue_unique_name, glue_fields)
                     model_object_list.push(model_object)
                 }
 
@@ -66,9 +64,9 @@ class GlueQuerySet {
         return await glue_ajax_request(this.glue_encoded_unique_name, 'get', {'id': id})
             .then((response) => {
                 glue_dispatch_response_event(response)
-                model_object = new GlueModelObject(this.glue_unique_name)
-                let glue_query_set = JSON.parse(response.data)
-                model_object._set_properties(glue_query_set[0])
+                let response_data = JSON.parse(response.data)
+                let glue_fields = construct_glue_fields(response_data[0])
+                model_object = new GlueModelObject(this.glue_unique_name, glue_fields)
                 return model_object
             })
     }
@@ -85,15 +83,12 @@ class GlueQuerySet {
             'method',
             data
         ).then((response) => {
-            console.log(response)
             glue_dispatch_response_event(response)
             return JSON.parse(response.data).method_return
         })
     }
 
     async null_object() {
-        console.log('null object')
-
         let data = {}
 
         return await glue_ajax_request(
@@ -102,10 +97,9 @@ class GlueQuerySet {
             data
         ).then((response) => {
             glue_dispatch_response_event(response)
-            console.log(response)
             let glue_query_set = JSON.parse(response.data)
-            let model_object = new GlueModelObject(this.glue_unique_name)
-            model_object._set_properties(glue_query_set[0])
+            let glue_fields = construct_glue_fields(glue_query_set[0])
+            let model_object = new GlueModelObject(this.glue_unique_name, glue_fields)
             return model_object
         })
     }
@@ -129,7 +123,6 @@ class GlueQuerySet {
             'update',
             data
         ).then((response) => {
-            console.log(response)
             glue_dispatch_response_event(response)
         })
     }
