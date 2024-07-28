@@ -6,8 +6,6 @@ class GlueModelObject {
 
         const glue_fields = construct_glue_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
 
-        console.log(glue_fields)
-
         this.glue_fields_set = false
 
         this['fields'] = {}

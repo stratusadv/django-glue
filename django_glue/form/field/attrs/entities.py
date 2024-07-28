@@ -9,7 +9,8 @@ class GlueFieldAttr:
 
     def to_dict(self) -> dict:
         return {
-            self.name: self.value
+            'name': self.name,
+            'value': self.value
         }
 
 

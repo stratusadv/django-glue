@@ -17,5 +17,8 @@ class GlueFormField:
         return {
             'name': self.name,
             'type': self.type,
-            'attrs': self.attrs.to_dict()
+            'attrs': self.attrs.to_dict(),
+            'label': self.label,
+            'help_text': self.help_text,
+            'choices': self.choices
         }

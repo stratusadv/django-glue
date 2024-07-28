@@ -1,11 +1,13 @@
 function construct_glue_form_field(glue_field_data) {
     let glue_form_field = new GlueBaseFormField(
         glue_field_data.name,
-        glue_field_data.id,
+        glue_field_data.type,
+        [],
         glue_field_data.label,
-        glue_field_data.required,
-        glue_field_data.help_text
+        glue_field_data.help_text,
+        glue_field_data.choices,
     )
+
 
     let field_attrs = construct_form_field_attrs(glue_field_data.attrs)
 

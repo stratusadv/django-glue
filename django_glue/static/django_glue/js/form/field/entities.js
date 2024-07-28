@@ -4,21 +4,28 @@ class GlueBaseFormField {
 
     constructor(
         name,
-        id = '',
+        type,
+        attrs = [],
         label = '',
-        required = true,
         help_text = '',
-        attrs = []
+        choices = [],
     ) {
         this.name = name
-        this.id = id
+        this.type = type
+        this.attrs = attrs
         this.label = label
-        this.required = required
         this.help_text = help_text
+        this.choices = choices
     }
 
     set_attribute(name, value) {
-        this[name] = value
+        const existingAttrIndex = this.attrs.findIndex(attr => attr.name === name);
+
+        if (existingAttrIndex !== -1) {
+            this.attrs[existingAttrIndex].value = value;
+        } else {
+            this.attrs.push({ name, value });
+        }
     }
 }
 
