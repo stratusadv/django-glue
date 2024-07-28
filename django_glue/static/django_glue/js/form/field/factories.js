@@ -1,5 +1,4 @@
 function construct_glue_form_field(glue_field_data) {
-    console.log(glue_field_data)
     let glue_form_field = new GlueBaseFormField(
         glue_field_data.name,
         {

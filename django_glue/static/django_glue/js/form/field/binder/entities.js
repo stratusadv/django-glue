@@ -19,8 +19,6 @@ class GlueFormFieldBinder {
         label.classList.add('form-label')
         label.setAttribute('for', this.glue_form_field.id)
         label.innerText = this.glue_form_field.label
-
-        console.log(this.glue_form_field)
         if(this.glue_form_field.is_required()) {
             label.innerText = label.innerText + '*'
         }
