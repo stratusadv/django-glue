@@ -1,18 +1,20 @@
 
+
+
 class GlueBaseFormField {
     static field_binder = null
 
     constructor(
         name,
-        type,
-        attrs = [],
-        label = '',
-        help_text = '',
-        choices = [],
+        {
+            label = '',
+            help_text = '',
+            choices = [],
+        } = {},
     ) {
         this.name = name
-        this.type = type
-        this.attrs = attrs
+        this.value = ''
+        this.attrs = []
         this.label = label
         this.help_text = help_text
         this.choices = choices
@@ -33,16 +35,52 @@ class GlueBaseFormField {
 class GlueCharField extends GlueBaseFormField {
     constructor(
         name,
-        value = '',
-        id = '',
+        value = false,
+        max_length = null,
+        min_length = null,
         label = '',
-        required = true,
         help_text = '',
-        max_length = 255,
-        min_length = 0
+        choices = [],
     ) {
-        super(name, value, id, label, required, help_text)
-        this.add_attribute('maxlength', max_length, GlueFormFieldAttrType.HTML)
-        this.add_attribute('minlength', min_length, GlueFormFieldAttrType.HTML)
+        super(name, label, help_text, choices)
+        if (Number.isInteger(max_length)) {
+            this.set_attribute(new GlueFormFieldAttr('maxLength', max_length))
+        }
+
+        if (Number.isInteger(min_length)) {
+            this.set_attribute(new GlueFormFieldAttr('minLength', min_length))
+        }
+    }
+}
+
+
+class GlueBooleanField extends GlueBaseFormField {
+    constructor(
+        name,
+        attrs = [],
+        label = '',
+        help_text = '',
+        choices = [],
+    ) {
+        super(name, attrs, label, help_text, choices)
+        if (choices.length === 0) {
+            this.choices = [[true, 'Yes'], [false, 'No']]
+        }
+    }
+}
+
+
+class GlueDateField extends GlueBaseFormField {
+    constructor(
+        name,
+        attrs = [],
+        label = '',
+        help_text = '',
+        choices = [],
+    ) {
+        super(name, attrs, label, help_text, choices)
+        if (choices.length === 0) {
+            this.choices = [[true, 'Yes'], [false, 'No']]
+        }
     }
 }

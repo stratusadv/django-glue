@@ -1,7 +1,6 @@
 function construct_glue_form_field(glue_field_data) {
     let glue_form_field = new GlueBaseFormField(
         glue_field_data.name,
-        glue_field_data.type,
         [],
         glue_field_data.label,
         glue_field_data.help_text,
