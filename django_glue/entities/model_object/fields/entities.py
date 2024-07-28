@@ -41,4 +41,6 @@ class GlueModelFields:
         return self.fields.__iter__()
 
     def to_dict(self):
+        # Todo: Should this just be a list of fields?
+        # A model object is just a list of fields!
         return {field.name: field.to_dict() for field in self.fields}
