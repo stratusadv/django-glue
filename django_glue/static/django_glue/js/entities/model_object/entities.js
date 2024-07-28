@@ -1,29 +1,26 @@
 
 class GlueModelObject {
     constructor(glue_unique_name) {
-        this.glue_unique_name = glue_unique_name
-        this.glue_encoded_unique_name = encodeUniqueName(glue_unique_name)
-
-        const glue_fields = construct_glue_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
-
-        this.glue_fields_set = false
-
-        this['fields'] = {}
-
-        if (this.glue_encoded_unique_name in window.glue_session_data) {
-            this.set_fields(window.glue_session_data[this.glue_encoded_unique_name].fields)
+        this['_meta'] = {
+            'glue_unique_name': glue_unique_name,
+            'glue_encoded_unique_name': encodeUniqueName(glue_unique_name),
+            'glue_fields_set': false
         }
 
-        window.glue_keep_live.add_unique_name(this.glue_encoded_unique_name)
+        if (this['_meta']['glue_encoded_unique_name'] in window.glue_session_data) {
+            const glue_fields = construct_glue_fields(window.glue_session_data[this['_meta']['glue_encoded_unique_name']].fields)
+            this.set_fields(glue_fields)
+        }
+
+        window.glue_keep_live.add_unique_name(this['_meta']['glue_encoded_unique_name'])
     }
 
     delete() {
         glue_ajax_request(
-            this.glue_encoded_unique_name,
+            this['_meta']['glue_encoded_unique_name'],
             'delete',
             {'id': this.id}
         ).then((response) => {
-            // console.log(response)
             glue_dispatch_response_event(response)
         }).catch((error) => {
                 glue_dispatch_object_delete_error_event(error)
@@ -33,8 +30,6 @@ class GlueModelObject {
 
     duplicate() {
         let model_object = new GlueModelObject(this.glue_unique_name)
-
-        console.log(this.get_properties())
         model_object.set_properties(this.get_properties())
         return model_object
     }
@@ -42,13 +37,13 @@ class GlueModelObject {
     // Todo: Change this to load values.
     async get() {
         await glue_ajax_request(
-            this.glue_encoded_unique_name,
+            this['_meta']['glue_encoded_unique_name'],
             'get',
             {'id': this.id}
         ).then((response) => {
             glue_dispatch_response_event(response)
-            // console.log(response.data)
-            this._set_properties(JSON.parse(response.data))
+            let glue_fields = construct_glue_fields(JSON.parse(response.data))
+            this._set_properties(glue_fields)
         }).catch((error) => {
                 glue_dispatch_object_get_error_event(error)
             }
@@ -63,7 +58,7 @@ class GlueModelObject {
         }
 
         return await glue_ajax_request(
-            this.glue_encoded_unique_name,
+            this['_meta']['glue_encoded_unique_name'],
             'method',
             data
         ).then((response) => {
@@ -77,7 +72,7 @@ class GlueModelObject {
 
     async update(field = null) {
         await glue_ajax_request(
-            this.glue_encoded_unique_name,
+            this['_meta']['glue_encoded_unique_name'],
             'update', {
                 'fields': this.get_properties(),
                 'id': this.id
@@ -104,17 +99,16 @@ class GlueModelObject {
     }
 
     _set_properties(fields) {
+        // Array of glue model field objects
         // Used to set fields internally on model object.
-        if (!this.glue_fields_set) {
+        if (!this['_meta']['glue_fields_set']) {
             this.set_fields(fields)
         }
 
-        let simple_fields = simplify_model_fields(fields)
-        for (let key in simple_fields) {
-            if (key in this) {
-                this[key] = simple_fields[key]
-            }
+        for (let field of fields) {
+            this[field.name] = field.value
         }
+
     }
 
     set_properties(simple_fields) {
@@ -133,14 +127,11 @@ class GlueModelObject {
     }
 
     set_fields(fields) {
-        // Fields are set on initialization if data is in the session.
-        // Else we have to set the field data on retrieval of object
-
-        for (let key in fields) {
-           this[key] = ''
-           this['fields'][key] = glue_model_field_from_field_attrs(fields[key].field_attrs)
+         // Array of glue model field objects
+        for (let field of fields) {
+           this['_meta'][field.name] = field
         }
 
-        this.glue_fields_set = true
+        this['_meta']['glue_fields_set'] = true
     }
 }
