@@ -12,18 +12,20 @@
                 console.log(this.person)
                 // Todo: This needs to be improved... ?
                 this.person._meta.first_name._meta.glue_field.label = 'Hello Mom'
-                let reason = new GlueCharField('reason', {max_length: 99})
+
                 console.log('reason')
                 console.log(reason)
-
+                this.person.glue_field.first_name.label = ''
+                this.reason. = 'Set'
             },
+            reason: new GlueCharField('reason', {max_length: 99}),
             person: new GlueModelObject('person')
         }"
             method="post"
     >
         <div class="row g-2">
             <div class="col-6">
-                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
+                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='reason' %}
             </div>
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}
