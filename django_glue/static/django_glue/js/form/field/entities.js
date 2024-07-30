@@ -4,13 +4,14 @@ class GlueBaseFormField {
     constructor(
         name,
         {
+            value = '',
             label = '',
             help_text = '',
             choices = [],
         } = {},
     ) {
         this.name = name
-        this.value = ''
+        this.value = value
         this.attrs = []
         this.label = label
         this.help_text = help_text
@@ -44,7 +45,7 @@ class GlueCharField extends GlueBaseFormField {
             label = '',
             help_text = '',
             choices = [],
-        }
+        } = {},
     ) {
         super(name, {
             value,

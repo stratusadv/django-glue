@@ -3,19 +3,26 @@
 <div x-data="{
         value: null
     }"
-        {% if x_model_value %}
+        {% if glue_model_field %}
             x-modelable="value"
-            x-model="{{ x_model_value }}"
+            x-model="{{ glue_model_field }}"
         {% endif %}
 >
     <div
         x-data="{
             init() {
-                    // Todo: Probably don't have to re-bind the field every time the object changes.
+                    let glue_model_field_name = '{{ glue_model_field }}'
+                    if (glue_model_field_name) {
+                        let path = glue_model_field_name.split('.')
+                        this.glue_field = this[`${path[0]}`]['_meta'][`${path[1]}`]['_meta']['glue_field']
+                        this.bind_glue(this.glue_field)
+                    }
+
                     this.$watch('glue_field', value => {
                         // Have to construct the object here because fo how alpine serializes that objects.
-                        let glue_field = construct_glue_form_field(value)
-                        this.bind_glue(glue_field)
+                        console.log('binding')
+                        // let glue_field = construct_glue_form_field(value)
+                        this.bind_glue(this.glue_field)
                     })
             },
             glue_field: undefined,
@@ -25,9 +32,10 @@
             },
         }"
         {% if glue_field %}
-            x-modelable="glue_field"
-            x-model="{{ glue_field }}"
+{#            x-modelable="glue_field"#}
+{#            x-model="{{ glue_field }}"#}
         {% endif %}
+                 
     >
         {% block field_label %}
             <label

@@ -43,12 +43,12 @@ class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
         this.label.classList.add('form-check-label')
         label.setAttribute('for', this.glue_form_field.id)
         label.innerText = this.glue_form_field.label
-        this._field_element.insertAdjacentElement('afterend', label)
+        this.field_element.insertAdjacentElement('afterend', label)
     }
 
     set_field_class() {
-        this._field_element.classList.add('form-check-input')
-        this._field_element.classList.add('me-2')
+        this.field_element.classList.add('form-check-input')
+        this.field_element.classList.add('me-2')
     }
 }
 
@@ -58,12 +58,12 @@ class GlueSelectFieldBinder extends GlueFormFieldBinder {
         const option = document.createElement('option')
         option.value = key
         option.text = value
-        this._field_element.appendChild(option)
+        this.field_element.appendChild(option)
     }
 
     bind() {
         super.bind()
-        this._field_element.innerHTML = ''
+        this.field_element.innerHTML = ''
         this.add_option(null, '----------------')
 
         this.glue_form_field.choices.forEach(choice => {
@@ -79,7 +79,7 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
         let parent_div = document.createElement('div')
         parent_div.classList.add('form-check')
 
-        let radio_input = this._field_element.cloneNode(true)
+        let radio_input = this.field_element.cloneNode(true)
         let increment_id = `${radio_input.id}${index}`
 
         radio_input.setAttribute('id', increment_id)
@@ -105,7 +105,7 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
         })
 
         // Hide original label and field.
-        this._field_element.classList.add('d-none')
+        this.field_element.classList.add('d-none')
         this.label.classList.add('d-none')
     }
 
@@ -115,8 +115,8 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
     }
 
     set_field_class() {
-        this._field_element.classList.add('form-check-input')
-        this._field_element.classList.add('me-2')
+        this.field_element.classList.add('form-check-input')
+        this.field_element.classList.add('me-2')
     }
 
 }
