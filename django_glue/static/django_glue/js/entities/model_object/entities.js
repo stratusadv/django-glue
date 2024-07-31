@@ -57,6 +57,21 @@ class GlueModelObject {
         )
     }
 
+    get glue_fields() {
+        return new Proxy({}, {
+            get: (target, prop) =>
+            {
+                if (!this._meta || !this._meta[prop] || !this._meta[prop]._meta) {
+                  return undefined;
+                }
+                return this._meta[prop]._meta.glue_field;
+            }
+        });
+    }
+
+    glue_field(field_name) {
+      }
+
     async method(method, kwargs = {}) {
         let data = {
             'id': this.id,
