@@ -14,36 +14,34 @@
                     let glue_model_field_name = '{{ glue_model_field }}'
                     if (glue_model_field_name) {
                         let path = glue_model_field_name.split('.')
-                        this.glue_field = this[`${path[0]}`]['_meta'][`${path[1]}`]['_meta']['glue_field']
+                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
                         this.bind_glue(this.glue_field)
                     }
 
                     this.$watch('glue_field', value => {
-                        // Have to construct the object here because fo how alpine serializes that objects.
-                        console.log('binding')
-                        // let glue_field = construct_glue_form_field(value)
-                        this.bind_glue(this.glue_field)
+                        this.bind_glue()
                     })
             },
             glue_field: undefined,
-            bind_glue(glue_field) {
-                let glue_form_field_binder = glue_binder_factory(glue_field, this.$refs.glue_field)
+            bind_glue() {
+                let glue_form_field_binder = glue_binder_factory(this.glue_field, this.$refs.glue_field, this.$refs.label)
                 glue_form_field_binder.bind()
-            },
+            }
+
         }"
-        {% if glue_field %}
+{#        {% if glue_field %}#}
 {#            x-modelable="glue_field"#}
 {#            x-model="{{ glue_field }}"#}
-        {% endif %}
+{#        {% endif %}#}
                  
     >
         {% block field_label %}
             <label
                 x-ref="label"
-                class=""
-                for="{% if name %}id_{{ name }}{% elif label %}id_{% to_snake_case label %}{% endif %}"
+                class="form-label"
+                :for="glue_field.id"
             >
-                {{ label }}{% if required %}*{% endif %}
+                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.is_required()">*</span>
             </label>
         {% endblock %}
         {% block field_content %}

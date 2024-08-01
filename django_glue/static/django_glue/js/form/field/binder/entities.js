@@ -1,31 +1,12 @@
 class GlueFormFieldBinder {
-    constructor(glue_form_field, field_element) {
+    constructor(glue_form_field, field_element, label_element) {
         this.glue_form_field = glue_form_field
         this.field_element = field_element
+        this.label_element = label_element
     }
 
     bind() {
-        this.set_field_class()
         this.set_html_attrs()
-        this.set_label()
-    }
-
-    get label() {
-        return this.field_element.previousElementSibling
-    }
-
-    set_label() {
-        let label = this.label
-        label.classList.add('form-label')
-        label.setAttribute('for', this.glue_form_field.id)
-        label.innerText = this.glue_form_field.label
-        if(this.glue_form_field.is_required()) {
-            label.innerText = label.innerText + '*'
-        }
-    }
-
-    set_field_class() {
-        this.field_element.classList.add('form-control')
     }
 
     set_html_attrs() {
@@ -39,8 +20,8 @@ class GlueFormFieldBinder {
 class GlueCheckboxFieldBinder extends GlueFormFieldBinder {
 
     set_label(label_element) {
-        let label = this.label
-        this.label.classList.add('form-check-label')
+        let label = this.label_element
+        this.label_element.classList.add('form-check-label')
         label.setAttribute('for', this.glue_form_field.id)
         label.innerText = this.glue_form_field.label
         this.field_element.insertAdjacentElement('afterend', label)
@@ -85,14 +66,14 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
         radio_input.setAttribute('id', increment_id)
         radio_input.setAttribute('value', key)
 
-        let radio_label = this.label.cloneNode(true)
+        let radio_label = this.label_element.cloneNode(true)
         radio_label.setAttribute('for', increment_id)
         radio_label.innerText = value
 
         parent_div.appendChild(radio_input)
         parent_div.appendChild(radio_label)
 
-        this.label.insertAdjacentElement('beforebegin', parent_div)
+        this.label_element.insertAdjacentElement('beforebegin', parent_div)
     }
 
     bind() {
@@ -106,12 +87,12 @@ class GlueRadioFieldBinder extends GlueFormFieldBinder {
 
         // Hide original label and field.
         this.field_element.classList.add('d-none')
-        this.label.classList.add('d-none')
+        this.label_element.classList.add('d-none')
     }
 
     set_label() {
         super.set_label()
-        this.label.classList.add('mb-0')
+        this.label_element.classList.add('mb-0')
     }
 
     set_field_class() {
