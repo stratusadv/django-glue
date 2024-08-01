@@ -62,6 +62,7 @@ class GlueCharField extends GlueBaseFormField {
             value,
             label,
             help_text,
+            id,
             choices,
         })
         if (max_length) {
@@ -90,6 +91,7 @@ class GlueBooleanField extends GlueBaseFormField {
             value,
             label,
             help_text,
+            id,
             choices,
         })
         if (choices.length === 0) {
@@ -116,6 +118,7 @@ class GlueDateField extends GlueBaseFormField {
             value,
             label,
             help_text,
+            id,
             choices,
         })
 
@@ -148,6 +151,7 @@ class GlueIntegerField extends GlueBaseFormField {
             value,
             label,
             help_text,
+            id,
             choices,
         })
 
@@ -184,6 +188,7 @@ class GlueDecimalField extends GlueIntegerField {
             value,
             label,
             help_text,
+            id,
             choices,
             max,
             min,
