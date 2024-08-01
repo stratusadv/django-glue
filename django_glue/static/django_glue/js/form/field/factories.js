@@ -5,6 +5,7 @@ function construct_glue_form_field(glue_field_data) {
             label: glue_field_data.label,
             help_text: glue_field_data.help_text,
             choices: glue_field_data.choices,
+            id: glue_field_data.id,
         }
     )
 

@@ -9,9 +9,17 @@ class GlueFormField:
     name: str
     type: str
     attrs: GlueFieldAttrs
-    label: Optional[str]
+    label: Optional[str] = None
+    id: Optional[str] = None
     help_text: str = ''
     choices: Optional[list] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.id is None:
+            self.id = f'id_{self.name}'
+
+        if self.label is None:
+            self.label = ' '.join(self.name.split('_')).title()
 
     def to_dict(self) -> dict:
         return {

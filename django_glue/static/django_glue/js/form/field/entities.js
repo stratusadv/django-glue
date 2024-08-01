@@ -7,6 +7,7 @@ class GlueBaseFormField {
             value = '',
             label = '',
             help_text = '',
+            id = '',
             choices = [],
         } = {},
     ) {
@@ -16,6 +17,16 @@ class GlueBaseFormField {
         this.label = label
         this.help_text = help_text
         this.choices = choices
+
+        if (id === '') {
+            this.id = 'id_' + name
+        } else {
+            this.id = id
+        }
+    }
+
+    hide_label() {
+        this.label = ''
     }
 
     set_attribute(name, value) {
@@ -28,8 +39,7 @@ class GlueBaseFormField {
         }
     }
 
-    is_required() {
-        console.log(this.attrs.find(attr => attr.name === 'required') ?? false)
+    get is_required() {
         return this.attrs.find(attr => attr.name === 'required') ?? false
     }
 }
@@ -44,6 +54,7 @@ class GlueCharField extends GlueBaseFormField {
             min_length = null,
             label = '',
             help_text = '',
+            id = '',
             choices = [],
         } = {},
     ) {
@@ -71,6 +82,7 @@ class GlueBooleanField extends GlueBaseFormField {
             value = false,
             label = '',
             help_text = '',
+            id = '',
             choices = [],
         }
     ) {
@@ -94,6 +106,7 @@ class GlueDateField extends GlueBaseFormField {
             value = '',
             label = '',
             help_text = '',
+            id = '',
             choices = [],
             max = null,
             min = null,
@@ -124,6 +137,7 @@ class GlueIntegerField extends GlueBaseFormField {
             value = '',
             label = '',
             help_text = '',
+            id = '',
             choices = [],
             max = null,
             min = null,
@@ -159,6 +173,7 @@ class GlueDecimalField extends GlueIntegerField {
             value = '',
             label = '',
             help_text = '',
+            id = '',
             choices = [],
             max = null,
             min = null,
@@ -176,4 +191,3 @@ class GlueDecimalField extends GlueIntegerField {
         })
     }
 }
-

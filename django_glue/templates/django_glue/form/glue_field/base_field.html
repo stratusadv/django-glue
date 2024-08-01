@@ -14,20 +14,24 @@
                     let glue_model_field_name = '{{ glue_model_field }}'
                     if (glue_model_field_name) {
                         let path = glue_model_field_name.split('.')
-                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
-                        this.bind_glue(this.glue_field)
+                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]                                                
                     }
+                    
+                    if (this.glue_field) {
+                        this.set_field_attrs()
+                    }                                        
 
                     this.$watch('glue_field', value => {
-                        this.bind_glue()
+                        this.set_field_attrs()
                     })
             },
             glue_field: undefined,
-            bind_glue() {
-                let glue_form_field_binder = glue_binder_factory(this.glue_field, this.$refs.glue_field, this.$refs.label)
-                glue_form_field_binder.bind()
-            }
-
+            set_field_attrs() {
+                let form_field = this.$refs.glue_field                        
+                for (attr of this.glue_field.attrs) {                            
+                    form_field.setAttribute(attr.name, attr.value)
+                }
+            },
         }"
 {#        {% if glue_field %}#}
 {#            x-modelable="glue_field"#}
@@ -37,11 +41,13 @@
     >
         {% block field_label %}
             <label
+                x-cloak
+                x-show="glue_field.label"
                 x-ref="label"
                 class="form-label"
                 :for="glue_field.id"
             >
-                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.is_required()">*</span>
+                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.is_required">*</span>
             </label>
         {% endblock %}
         {% block field_content %}
