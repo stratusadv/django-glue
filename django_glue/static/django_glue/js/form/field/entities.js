@@ -8,6 +8,11 @@ class GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
         } = {},
     ) {
         this.name = name
@@ -16,6 +21,11 @@ class GlueBaseFormField {
         this.label = label
         this.help_text = help_text
         this.choices = choices
+        this.required = required
+        this.hidden = hidden
+        this.read_only = readonly
+        this.autofocus = autofocus
+        this.disabled = disabled
 
         // Keeps a list of all attributes added to glue field.
         this._historic_attr_names = []
@@ -59,6 +69,14 @@ class GlueBaseFormField {
         this.label = ''
     }
 
+    get hidden() {
+        return this._get_boolean_attr('hidden');
+    }
+
+    set hidden(value) {
+        this._set_boolean_attr('hidden', value);
+    }
+
     _set_boolean_attr(name, value) {
         if (value === true){
             this.set_attribute(name, value);
@@ -77,9 +95,13 @@ class GlueBaseFormField {
         if (attr_index !== -1) {
             this.attrs[attr_index].value = value;
         } else {
-            this.attrs.push({ name, value });
+            this.attrs.push(new GlueFormFieldAttr(name, value));
             this._historic_attr_names.push(name);
         }
+    }
+
+    get has_label() {
+        return !this.hidden && !!this.label
     }
 
     get read_only() {
@@ -111,6 +133,11 @@ class GlueCharField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
         } = {},
     ) {
         super(name, {
@@ -119,13 +146,18 @@ class GlueCharField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            required,
+            disabled,
+            readonly,
+            hidden,
+            autofocus,
         })
         if (max_length) {
-            this.set_attribute(new GlueFormFieldAttr('maxLength', max_length))
+            this.set_attribute('maxLength', max_length)
         }
 
         if (min_length) {
-            this.set_attribute(new GlueFormFieldAttr('minLength', min_length))
+            this.set_attribute('minLength', min_length)
         }
     }
 }
@@ -140,6 +172,11 @@ class GlueBooleanField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
         }
     ) {
         super(name, {
@@ -148,6 +185,11 @@ class GlueBooleanField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            required,
+            disabled,
+            readonly,
+            hidden,
+            autofocus,
         })
         if (choices.length === 0) {
             this.choices = [[true, 'Yes'], [false, 'No']]
@@ -165,6 +207,11 @@ class GlueDateField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
             max = null,
             min = null,
         }
@@ -175,14 +222,19 @@ class GlueDateField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            required,
+            disabled,
+            readonly,
+            hidden,
+            autofocus,
         })
 
         if (max) {
-            this.set_attribute(new GlueFormFieldAttr('max', max))
+            this.set_attribute('max', max)
         }
 
         if (min) {
-            this.set_attribute(new GlueFormFieldAttr('min', min))
+            this.set_attribute('min', min)
         }
     }
 }
@@ -197,6 +249,11 @@ class GlueIntegerField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
             max = null,
             min = null,
             step = 1,
@@ -208,18 +265,23 @@ class GlueIntegerField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            required,
+            disabled,
+            readonly,
+            hidden,
+            autofocus,
         })
 
         if (max) {
-            this.set_attribute(new GlueFormFieldAttr('max', max))
+            this.set_attribute('max', max)
         }
 
         if (min) {
-            this.set_attribute(new GlueFormFieldAttr('min', min))
+            this.set_attribute('min', min)
         }
 
         if (step) {
-            this.set_attribute(new GlueFormFieldAttr('step', step))
+            this.set_attribute('step', step)
         }
     }
 }
@@ -234,6 +296,11 @@ class GlueDecimalField extends GlueIntegerField {
             help_text = '',
             id = '',
             choices = [],
+            required = false,
+            disabled = false,
+            readonly = false,
+            hidden = false,
+            autofocus = false,
             max = null,
             min = null,
             step = 0.1,
@@ -245,6 +312,11 @@ class GlueDecimalField extends GlueIntegerField {
             help_text,
             id,
             choices,
+            required,
+            disabled,
+            readonly,
+            hidden,
+            autofocus,
             max,
             min,
             step,

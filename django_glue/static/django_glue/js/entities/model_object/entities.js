@@ -69,9 +69,6 @@ class GlueModelObject {
         });
     }
 
-    glue_field(field_name) {
-      }
-
     async method(method, kwargs = {}) {
         let data = {
             'id': this.id,

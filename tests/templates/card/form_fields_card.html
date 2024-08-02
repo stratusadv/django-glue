@@ -9,12 +9,18 @@
             x-data="{
             async init(){
                 await this.person.get()
+                // this.person.glue_fields.first_name.hidden = true
             },
             person: new GlueModelObject('person')
         }"
             method="post"
     >
         <div class="row g-2">
+            <div class="col-12">
+                <div @click="console.log(person.likes_to_party)" class="btn btn-primary w-100">
+                    Testing
+                </div>
+            </div>
             <div class="col-6">
                 {# Need to be able to initialize these with Model Fields or GlueFormFields #}
                 {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
@@ -34,7 +40,7 @@
             <div class="col-6">
                 {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' %}
             </div>
-            <div class="col-6">
+            <div class="col-12">
                 {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}
             </div>
             <div class="col-12">
@@ -44,7 +50,7 @@
                 {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' %}
             </div>
             <div class="col-12">
-                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.weight_lbs' %}
+                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}
             </div>
             <div class="col-12">
                 {% include 'django_glue/form/glue_field/checkbox_field.html' with glue_model_field='person.likes_to_party' %}

@@ -1,1 +1,11 @@
-{% include 'django_glue/form/glue_field/input_field.html' with input_type='number' %}
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <input
+        {% if input_type %}type="{{ input_type }}"{% else %}type="number"{% endif %}
+        class="form-control"
+        x-ref="glue_field"
+        x-model.number="value"
+        :id="glue_field.id"
+    >
+{% endblock %}

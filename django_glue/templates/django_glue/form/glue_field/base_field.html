@@ -56,7 +56,7 @@
         {% block field_label %}
             <label
                 x-cloak
-                x-show="glue_field.label"
+                x-show="glue_field.has_label"
                 x-ref="label"
                 class="form-label"
                 :for="glue_field.id"

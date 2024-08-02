@@ -2,7 +2,9 @@
 
 {% block field_content %}
     <select x-model="value" class="form-select" x-ref="glue_field">
-        <option value="">---------</option>
+        <template x-if="!glue_field.required">
+            <option value="">---------</option>
+        </template>
         <template x-for="(choice, index) in glue_field.choices" :key="choice[0]">
             <option :value="choice[0]" x-text="choice[1]"></option>
         </template>
