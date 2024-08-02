@@ -1,5 +1,4 @@
 class GlueBaseFormField {
-    static field_binder = null
 
     constructor(
         name,
@@ -18,29 +17,85 @@ class GlueBaseFormField {
         this.help_text = help_text
         this.choices = choices
 
-        if (id === '') {
-            this.id = 'id_' + name
-        } else {
-            this.id = id
+        // Keeps a list of all attributes added to glue field.
+        this._historic_attr_names = []
+        for (const attr of this.attrs) {
+            this._historic_attr_names.push(attr.name)
         }
+
+        this.id = id === '' ? 'id_' + name : id;
+    }
+
+    get _attr_names(){
+        return this.attrs.map(attr => attr.name)
+    }
+
+    get autofocus() {
+        return this._get_boolean_attr('autofocus');
+    }
+
+    set autofocus(value) {
+        this._set_boolean_attr('autofocus', value);
+    }
+
+    get disabled() {
+        return this._get_boolean_attr('disabled');
+    }
+
+    set disabled(value) {
+        this._set_boolean_attr('disabled', value);
+    }
+
+    _get_attr(name) {
+        let attr = this.attrs.find(attr => attr.name === name)
+        return attr ? attr.value : null;
+    }
+
+    _get_boolean_attr(name) {
+        return this._get_attr(name) === true
     }
 
     hide_label() {
         this.label = ''
     }
 
-    set_attribute(name, value) {
-        const existingAttrIndex = this.attrs.findIndex(attr => attr.name === name);
-
-        if (existingAttrIndex !== -1) {
-            this.attrs[existingAttrIndex].value = value;
+    _set_boolean_attr(name, value) {
+        if (value === true){
+            this.set_attribute(name, value);
         } else {
-            this.attrs.push({ name, value });
+            this.remove_attribute(name);
         }
     }
 
-    get is_required() {
-        return this.attrs.find(attr => attr.name === 'required') ?? false
+    remove_attribute(name) {
+        this.attrs = this.attrs.filter(attr => attr.name !== name);
+    }
+
+    set_attribute(name, value) {
+        const attr_index = this.attrs.findIndex(attr => attr.name === name);
+
+        if (attr_index !== -1) {
+            this.attrs[attr_index].value = value;
+        } else {
+            this.attrs.push({ name, value });
+            this._historic_attr_names.push(name);
+        }
+    }
+
+    get read_only() {
+        return this._get_boolean_attr('readOnly');
+    }
+
+    set read_only(value) {
+        this._set_boolean_attr('readOnly', value);
+    }
+
+    get required() {
+        return this._get_boolean_attr('required');
+    }
+
+    set required(value) {
+        this._set_boolean_attr('required', value);
     }
 }
 

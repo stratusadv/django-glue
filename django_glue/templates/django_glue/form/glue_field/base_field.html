@@ -10,28 +10,40 @@
 >
     <div
         x-data="{
+            glue_field: undefined,
             init() {
                     let glue_model_field_name = '{{ glue_model_field }}'
                     if (glue_model_field_name) {
                         let path = glue_model_field_name.split('.')
-                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]                                                
+                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
                     }
-                    
+
                     if (this.glue_field) {
                         this.set_field_attrs()
-                    }                                        
+                    }
 
                     this.$watch('glue_field', value => {
                         this.set_field_attrs()
                     })
             },
-            glue_field: undefined,
             set_field_attrs() {
-                let form_field = this.$refs.glue_field                        
-                for (attr of this.glue_field.attrs) {                            
+                let form_field = this.$refs.glue_field
+
+                if (!this.glue_field || !form_field) return;
+
+                // Remove attrs that no longer exist
+                let attr_names = this.glue_field._attr_names
+                for (const attr_name of this.glue_field._historic_attr_names) {
+                        if (!attr_names.includes(attr_name)) {
+                            form_field.removeAttribute(attr_name)
+                        }
+                    }
+
+                // Set attrs on field
+                for (let attr of this.glue_field.attrs) {
                     form_field.setAttribute(attr.name, attr.value)
                 }
-            },
+            }
         }"
 
 {# Todo: Need to be able to bind glue form fields #}
@@ -49,7 +61,7 @@
                 class="form-label"
                 :for="glue_field.id"
             >
-                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.is_required">*</span>
+                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.required">*</span>
             </label>
         {% endblock %}
         {% block field_content %}
