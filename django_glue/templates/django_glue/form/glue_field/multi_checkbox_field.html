@@ -1,0 +1,54 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <div
+        class="form-group"
+        x-ref="glue_field"
+        x-data="{
+            selectedValues: [],
+            initializeValue() {
+                console.log('init value', this.value);
+                if (this.value === null || this.value === undefined) {
+                    this.selectedValues = [];
+                } else if (Array.isArray(this.value)) {
+                    this.selectedValues = [...this.value];
+                } else {
+                    this.selectedValues = [this.value];
+                }
+                console.log('ending value', this.selectedValues);
+            },
+            updateValue() {
+                this.value = this.selectedValues.length > 0 ? this.selectedValues : null;
+            },
+            toggleValue(choiceValue) {
+                if (this.selectedValues.includes(choiceValue)) {
+                    this.selectedValues = this.selectedValues.filter(v => v !== choiceValue);
+                } else {
+                    this.selectedValues.push(choiceValue);
+                }
+                this.updateValue();
+            }
+        }"
+        x-init="initializeValue()"
+        x-effect="initializeValue()"
+    >
+        <template x-for="choice in glue_field.choices" :key="choice[0]">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :id="glue_field.id + '_' + choice[0]"
+                    :name="glue_field.name"
+                    :value="choice[0]"
+                    :checked="selectedValues.includes(choice[0])"
+                    @change="toggleValue(choice[0])"
+                >
+                <label
+                    class="form-check-label"
+                    :for="glue_field.id + '_' + choice[0]"
+                    x-text="choice[1]"
+                ></label>
+            </div>
+        </template>
+    </div>
+{% endblock %}

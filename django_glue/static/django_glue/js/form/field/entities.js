@@ -27,6 +27,8 @@ class GlueBaseFormField {
         this.autofocus = autofocus
         this.disabled = disabled
 
+        this._hide_label = false
+
         // Keeps a list of all attributes added to glue field.
         this._historic_attr_names = []
         for (const attr of this.attrs) {
@@ -66,7 +68,11 @@ class GlueBaseFormField {
     }
 
     hide_label() {
-        this.label = ''
+        this._hide_label = true
+    }
+
+    show_label() {
+        this._hide_label = false
     }
 
     get hidden() {
@@ -75,6 +81,12 @@ class GlueBaseFormField {
 
     set hidden(value) {
         this._set_boolean_attr('hidden', value);
+        if (value === true) {
+            this.hide_label()
+        } else {
+            this.show_label()
+        }
+
     }
 
     _set_boolean_attr(name, value) {
@@ -100,9 +112,6 @@ class GlueBaseFormField {
         }
     }
 
-    get has_label() {
-        return !this.hidden && !!this.label
-    }
 
     get read_only() {
         return this._get_boolean_attr('readOnly');

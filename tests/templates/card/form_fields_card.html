@@ -9,7 +9,7 @@
             x-data="{
             async init(){
                 await this.person.get()
-                // this.person.glue_fields.first_name.hidden = true
+                console.log('after get')
             },
             person: new GlueModelObject('person')
         }"
@@ -53,7 +53,7 @@
                 {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}
             </div>
             <div class="col-12">
-                {% include 'django_glue/form/glue_field/checkbox_field.html' with glue_model_field='person.likes_to_party' %}
+                {% include 'django_glue/form/glue_field/multi_checkbox_field.html' with glue_model_field='person.likes_to_party' %}
             </div>
         </div>
     </form>
