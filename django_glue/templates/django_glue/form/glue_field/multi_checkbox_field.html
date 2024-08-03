@@ -5,32 +5,29 @@
         class="form-group"
         x-ref="glue_field"
         x-data="{
-            selectedValues: [],
-            initializeValue() {
-                console.log('init value', this.value);
-                if (this.value === null || this.value === undefined) {
+            selected_values: [],
+            init_value(value) {                
+                if (value === null || value === undefined) {
                     this.selectedValues = [];
-                } else if (Array.isArray(this.value)) {
-                    this.selectedValues = [...this.value];
+                } else if (Array.isArray(value)) {
+                    this.selectedValues = [...value];
                 } else {
-                    this.selectedValues = [this.value];
-                }
-                console.log('ending value', this.selectedValues);
+                    this.selectedValues = [value];
+                }                
             },
-            updateValue() {
+            update_value() {
                 this.value = this.selectedValues.length > 0 ? this.selectedValues : null;
             },
-            toggleValue(choiceValue) {
-                if (this.selectedValues.includes(choiceValue)) {
-                    this.selectedValues = this.selectedValues.filter(v => v !== choiceValue);
+            toggle_value(choice) {
+                if (this.selectedValues.includes(choice)) {
+                    this.selectedValues = this.selectedValues.filter(v => v !== choice);
                 } else {
-                    this.selectedValues.push(choiceValue);
+                    this.selectedValues.push(choice);
                 }
-                this.updateValue();
+                this.update_value();
             }
         }"
-        x-init="initializeValue()"
-        x-effect="initializeValue()"
+        x-effect="init_value(value)"
     >
         <template x-for="choice in glue_field.choices" :key="choice[0]">
             <div class="form-check">
@@ -41,7 +38,7 @@
                     :name="glue_field.name"
                     :value="choice[0]"
                     :checked="selectedValues.includes(choice[0])"
-                    @change="toggleValue(choice[0])"
+                    @change="toggle_value(choice[0])"
                 >
                 <label
                     class="form-check-label"

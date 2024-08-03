@@ -1,7 +1,7 @@
 {% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
-    <div class="form-group" x-ref="glue_field">
+    <div class="form-group">
         <template x-for="choice in glue_field.choices" :key="choice[0]">
             <div class="form-check">
                 <input
@@ -10,7 +10,8 @@
                     :id="glue_field.id + '_' + choice[0]"
                     :name="glue_field.name"
                     :value="choice[0]"
-                    x-model="value"
+                    :checked="value == choice[0]"
+                    @change="this.value =choice[0]"
                 >
                 <label
                     class="form-check-label"
