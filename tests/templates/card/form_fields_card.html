@@ -1,66 +1,85 @@
 {% extends 'card/card.html' %}
 
 {% block header %}
-    Form Fields
+    GlueHub Developer Profile
 {% endblock %}
 
 {% block body %}
-    <form
-        x-data="{
-        //person: new GlueModelObject('person'),
-        best_friend: new GlueCharField('best_friend', {label: 'Joey'}),
-        async init(){
-            // await this.person.get()
-            console.log(this.best_friend)
-        }
-    }"
-        method="post"
-    >
-        {% csrf_token %}
-        {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' %}
-{#        <div class="row g-2">#}
-{#            <div class="col-12">#}
-{#                <div @click="console.log(person.likes_to_party)" class="btn btn-primary w-100">#}
-{#                    Testing#}
-{#                </div>#}
-{#            </div>#}
-{#            <div class="col-6">#}
-                {# Need to be able to initialize these with Model Fields or GlueFormFields #}
-{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}#}
-{#            </div>#}
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}#}
-{#            </div>#}
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' %}#}
-{#            </div>#}
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/time_field.html' with glue_model_field='person.bed_time' %}#}
-{#            </div>#}
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/datetime_field.html' with glue_model_field='person.anniversary_datetime' %}#}
-{#            </div>#}
-{#            <div class="col-6">#}
-{#                {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/text_field.html' with glue_model_field='person.description' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#                {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' %}#}
-{#            </div>#}
-{#            <div class="col-12">#}
-{#            </div>#}
-{#        </div>#}
-                <button class="btn btn-outline-primary" type="submit">Submit</button>
-    </form>
+    <h1 class="text-center mb-4">GlueHub: Where Django Developers Connect</h1>
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h2 class="mb-0">Create Your Developer Profile</h2>
+                </div>
+                <div class="card-body">
+                    <p class="lead mb-4">Welcome to GlueHub, the premier platform for Django developers! We're using Django Glue to create a seamless experience. Fill out this form to showcase your skills and connect with other passionate developers.</p>
+
+                    <form
+                        x-data="{
+                        person: new GlueModelObject('person'),
+                        best_friend: new GlueCharField('best_friend', {label: 'Favorite Code Editor'}),
+                        ideal_date: new GlueCharField('ideal_date', {label: 'Describe your ideal coding session'}),
+                        relationship_goals: new GlueCharField('relationship_goals', {
+                            label: 'What are your coding goals?',
+                            choices: [
+                                ['learn', 'Learn New Skills'],
+                                ['contribute', 'Contribute to Open Source'],
+                                ['career', 'Advance My Career'],
+                                ['teach', 'Teach Others']
+                            ]
+                        }),
+                        async init(){
+                            await this.person.get()
+                        }
+                    }"
+                        method="post"
+                    >
+                        {% csrf_token %}
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' label='Coding Since' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' label='Programming Paradigm' %}
+                            </div>
+                            <div class="col-12">
+                                {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}
+                            </div>
+                            <div class="col-12">
+                                {% include 'django_glue/form/glue_field/text_field.html' with glue_model_field='person.description' label='About Your Coding Journey' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' label='Favorite HTTP Status Code' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' label='Hours Spent Coding Weekly' %}
+                            </div>
+                            <div class="col-12">
+                                {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' label='Prefer Hackathons?' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' %}
+                            </div>
+                            <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/select_field.html' with glue_field='relationship_goals' %}
+                            </div>
+                            <div class="col-12">
+                                {% include 'django_glue/form/glue_field/text_field.html' with glue_field='ideal_date' %}
+                            </div>
+                            <div class="col-12 mt-4">
+                                <button class="btn btn-success w-100" type="submit">Create My GlueHub Profile</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
