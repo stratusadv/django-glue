@@ -6,58 +6,61 @@
 
 {% block body %}
     <form
-            x-data="{
-            async init(){
-                await this.person.get()
-            },
-            person: new GlueModelObject('person')
-        }"
-            method="post"
+        x-data="{
+        //person: new GlueModelObject('person'),
+        best_friend: new GlueCharField('best_friend', {label: 'Joey'}),
+        async init(){
+            // await this.person.get()
+            console.log(this.best_friend)
+        }
+    }"
+        method="post"
     >
         {% csrf_token %}
-        <div class="row g-2">
-            <div class="col-12">
-                <div @click="console.log(person.likes_to_party)" class="btn btn-primary w-100">
-                    Testing
-                </div>
-            </div>
-            <div class="col-6">
+        {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' %}
+{#        <div class="row g-2">#}
+{#            <div class="col-12">#}
+{#                <div @click="console.log(person.likes_to_party)" class="btn btn-primary w-100">#}
+{#                    Testing#}
+{#                </div>#}
+{#            </div>#}
+{#            <div class="col-6">#}
                 {# Need to be able to initialize these with Model Fields or GlueFormFields #}
-                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
-            </div>
-            <div class="col-6">
-                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}
-            </div>
-            <div class="col-6">
-                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' %}
-            </div>
-            <div class="col-6">
-                {% include 'django_glue/form/glue_field/time_field.html' with glue_model_field='person.bed_time' %}
-            </div>
-            <div class="col-6">
-                {% include 'django_glue/form/glue_field/datetime_field.html' with glue_model_field='person.anniversary_datetime' %}
-            </div>
-            <div class="col-6">
-                {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' %}
-            </div>
-            <div class="col-12">
-                {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}
-            </div>
-            <div class="col-12">
-                {% include 'django_glue/form/glue_field/text_field.html' with glue_model_field='person.description' %}
-            </div>
-            <div class="col-12">
-                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' %}
-            </div>
-            <div class="col-12">
-                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}
-            </div>
-            <div class="col-12">
-                {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' %}
-            </div>
-            <div class="col-12">
+{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}#}
+{#            </div>#}
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}#}
+{#            </div>#}
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' %}#}
+{#            </div>#}
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/time_field.html' with glue_model_field='person.bed_time' %}#}
+{#            </div>#}
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/datetime_field.html' with glue_model_field='person.anniversary_datetime' %}#}
+{#            </div>#}
+{#            <div class="col-6">#}
+{#                {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/text_field.html' with glue_model_field='person.description' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#                {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' %}#}
+{#            </div>#}
+{#            <div class="col-12">#}
+{#            </div>#}
+{#        </div>#}
                 <button class="btn btn-outline-primary" type="submit">Submit</button>
-            </div>
-        </div>
     </form>
 {% endblock %}

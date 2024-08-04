@@ -22,6 +22,11 @@ class GlueBaseFormField {
         this.label = label
         this.help_text = help_text
         this.choices = choices
+
+        this._historic_attr_names = []
+        this._hide_label = false
+
+        // Getters & Setters
         this.required = required
         this.hidden = hidden
         this.read_only = readonly
@@ -29,15 +34,19 @@ class GlueBaseFormField {
         this.disabled = disabled
         this.prevent_submit = prevent_submit
 
-        this._hide_label = false
-
         // Keeps a list of all attributes added to glue field.
-        this._historic_attr_names = []
         for (const attr of this.attrs) {
-            this._historic_attr_names.push(attr.name)
+            this._add_historic_name(attr.name)
         }
 
         this.id = id === '' ? 'id_' + name : id;
+        this.label = label === '' ? name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : label
+    }
+
+    _add_historic_name(name) {
+        if (!this._historic_attr_names.includes(name)) {
+            this._historic_attr_names.push(name)
+        }
     }
 
     get _attr_names(){
@@ -92,7 +101,7 @@ class GlueBaseFormField {
     }
 
     get prevent_submit(){
-        return Boolean(this._get_attr('name'))
+        return !Boolean(this._get_attr('name'))
     }
 
     set prevent_submit(value){
@@ -121,8 +130,8 @@ class GlueBaseFormField {
         if (attr_index !== -1) {
             this.attrs[attr_index].value = value;
         } else {
-            this.attrs.push(new GlueFormFieldAttr(name, value));
-            this._historic_attr_names.push(name);
+            this.attrs.push(new GlueFormFieldAttr(name, value))
+            this._add_historic_name(name)
         }
     }
 

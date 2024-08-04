@@ -7,15 +7,23 @@
             x-modelable="value"
             x-model="{{ glue_model_field }}"
         {% endif %}
+
+        {% if glue_field %}
+            x-modelable="value"
+            x-model="{{ glue_field }}.value"
+        {% endif %}
 >
     <div
         x-data="{
             glue_field: undefined,
             init() {
                     let glue_model_field_name = '{{ glue_model_field }}'
+                    let glue_field_name = '{{ glue_field }}'
+
                     if (glue_model_field_name) {
-                        let path = glue_model_field_name.split('.')
-                        this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
+                        this.init_glue_model_field(glue_model_field_name)
+                    } else if (glue_field_name) {
+                        this.init_glue_field(glue_field_name)                 
                     }
 
                     if (this.glue_field) {
@@ -25,6 +33,13 @@
                     this.$watch('glue_field', value => {
                         this.set_field_attrs()
                     })
+            },
+            init_glue_model_field(glue_model_field_name) {
+                let path = glue_model_field_name.split('.')
+                this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
+            },
+            init_glue_field(glue_field_name) {
+                this.glue_field = this[glue_field_name]
             },
             set_field_attrs() {
                 let form_field = this.$refs.glue_field
