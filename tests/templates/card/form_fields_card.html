@@ -9,12 +9,12 @@
             x-data="{
             async init(){
                 await this.person.get()
-                console.log('after get')
             },
             person: new GlueModelObject('person')
         }"
             method="post"
     >
+        {% csrf_token %}
         <div class="row g-2">
             <div class="col-12">
                 <div @click="console.log(person.likes_to_party)" class="btn btn-primary w-100">
@@ -54,6 +54,9 @@
             </div>
             <div class="col-12">
                 {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' %}
+            </div>
+            <div class="col-12">
+                <button class="btn btn-outline-primary" type="submit">Submit</button>
             </div>
         </div>
     </form>

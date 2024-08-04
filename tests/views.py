@@ -171,6 +171,8 @@ def function_view(request):
 def form_field_view(request):
     person = generate_randomized_test_model()
     glue_model(request, 'person', person)
+    if request.method == 'POST':
+        print(request.POST)
     return TemplateResponse(request, 'page/form_fields_page.html')
 
 

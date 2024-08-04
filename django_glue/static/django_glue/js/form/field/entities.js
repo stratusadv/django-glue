@@ -13,6 +13,7 @@ class GlueBaseFormField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false
         } = {},
     ) {
         this.name = name
@@ -26,6 +27,7 @@ class GlueBaseFormField {
         this.read_only = readonly
         this.autofocus = autofocus
         this.disabled = disabled
+        this.prevent_submit = prevent_submit
 
         this._hide_label = false
 
@@ -89,6 +91,18 @@ class GlueBaseFormField {
 
     }
 
+    get prevent_submit(){
+        return Boolean(this._get_attr('name'))
+    }
+
+    set prevent_submit(value){
+        if (value){
+            this.remove_attribute('name')
+        } else {
+            this.set_attribute('name', this.name)
+        }
+    }
+
     _set_boolean_attr(name, value) {
         if (value === true){
             this.set_attribute(name, value);
@@ -147,6 +161,7 @@ class GlueCharField extends GlueBaseFormField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false,
         } = {},
     ) {
         super(name, {
@@ -160,6 +175,7 @@ class GlueCharField extends GlueBaseFormField {
             readonly,
             hidden,
             autofocus,
+            prevent_submit
         })
         if (max_length) {
             this.set_attribute('maxLength', max_length)
@@ -186,6 +202,7 @@ class GlueBooleanField extends GlueBaseFormField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false,
         }
     ) {
         super(name, {
@@ -199,6 +216,7 @@ class GlueBooleanField extends GlueBaseFormField {
             readonly,
             hidden,
             autofocus,
+            prevent_submit
         })
         if (choices.length === 0) {
             this.choices = [[true, 'Yes'], [false, 'No']]
@@ -221,6 +239,7 @@ class GlueDateField extends GlueBaseFormField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false,
             max = null,
             min = null,
         }
@@ -236,6 +255,7 @@ class GlueDateField extends GlueBaseFormField {
             readonly,
             hidden,
             autofocus,
+            prevent_submit
         })
 
         if (max) {
@@ -263,6 +283,7 @@ class GlueIntegerField extends GlueBaseFormField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false,
             max = null,
             min = null,
             step = 1,
@@ -279,6 +300,7 @@ class GlueIntegerField extends GlueBaseFormField {
             readonly,
             hidden,
             autofocus,
+            prevent_submit
         })
 
         if (max) {
@@ -310,6 +332,7 @@ class GlueDecimalField extends GlueIntegerField {
             readonly = false,
             hidden = false,
             autofocus = false,
+            prevent_submit = false,
             max = null,
             min = null,
             step = 0.1,
@@ -326,9 +349,11 @@ class GlueDecimalField extends GlueIntegerField {
             readonly,
             hidden,
             autofocus,
+            prevent_submit,
             max,
             min,
             step,
+
         })
     }
 }

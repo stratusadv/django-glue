@@ -10,7 +10,7 @@
                     :id="glue_field.id + '_' + choice[0]"
                     :name="glue_field.name"
                     :value="choice[0]"
-                    :checked="value == choice[0]"
+                    :checked="value === choice[0]"
                     @change="this.value =choice[0]"
                 >
                 <label
