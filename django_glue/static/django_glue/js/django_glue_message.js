@@ -1,4 +1,0 @@
-class GlueMessage{
-    constructor() {
-    }
-}

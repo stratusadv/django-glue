@@ -1,3 +1,7 @@
+[x-clock]  {
+    display: none !important;
+}
+
 body {
     color: black;
 }

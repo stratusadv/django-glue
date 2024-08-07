@@ -1,4 +1,0 @@
-class GlueResponse {
-    constructor() {
-    }
-}

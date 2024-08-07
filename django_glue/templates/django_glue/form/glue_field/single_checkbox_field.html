@@ -1,0 +1,26 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <div
+        class="form-group"
+        x-init="glue_field.hide_label()"
+    >
+        <div>
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :id="glue_field.id"
+                    :name="glue_field.name"
+                    x-model="value"
+                    x-ref="glue_field"
+                >
+                <label
+                    class="form-check-label"
+                    :for="glue_field.id"
+                    x-text="glue_field.label"
+                ></label>
+            </div>
+        </div>
+    </div>
+{% endblock %}

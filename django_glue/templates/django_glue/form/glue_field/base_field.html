@@ -3,48 +3,80 @@
 <div x-data="{
         value: null
     }"
-        {% if x_model_value %}
+        {% if glue_model_field %}
             x-modelable="value"
-            x-model="{{ x_model_value }}"
+            x-model="{{ glue_model_field }}"
+        {% endif %}
+
+        {% if glue_field %}
+            x-modelable="value"
+            x-model="{{ glue_field }}.value"
         {% endif %}
 >
     <div
         x-data="{
+            glue_field: undefined,
             init() {
+                    let glue_model_field_name = '{{ glue_model_field }}'
+                    let glue_field_name = '{{ glue_field }}'
+
+                    if (glue_model_field_name) {
+                        this.init_glue_model_field(glue_model_field_name)
+                    } else if (glue_field_name) {
+                        this.init_glue_field(glue_field_name)                 
+                    }
+
+                    if (this.glue_field) {
+                        this.set_field_attrs()
+                    }
+
                     this.$watch('glue_field', value => {
-                        this.bind_glue(value)
-                        console.log(this.glue_field)
+                        this.set_field_attrs()
                     })
             },
-            glue_field: undefined,
-            bind_glue(glue_field) {
-                let field_attrs = this.build_glue_field_attrs(glue_field)
-                let glue_form_field = new GlueFormField(glue_field._name.value, glue_field.ignored_attrs, ...field_attrs)
-                let glue_form_field_binder = glue_binder_factory(glue_form_field, this.$refs.glue_field)
-                glue_form_field_binder.bind()
+            init_glue_model_field(glue_model_field_name) {
+                let path = glue_model_field_name.split('.')
+                this.glue_field = this[`${path[0]}`]['glue_fields'][`${path[1]}`]
             },
-            build_glue_field_attrs(glue_field) {
-                const properties = Object.keys(glue_field);
-                const underscore_properties = properties.filter(prop => prop.startsWith('_'));
-                let field_attrs = []
-                underscore_properties.forEach(prop => {
-                    field_attrs.push(glue_field[prop]);
-                });
-                return field_attrs
+            init_glue_field(glue_field_name) {
+                this.glue_field = this[glue_field_name]
+            },
+            set_field_attrs() {
+                let form_field = this.$refs.glue_field
+
+                if (!this.glue_field || !form_field) return;
+
+                // Remove attrs that no longer exist
+                let attr_names = this.glue_field._attr_names
+                for (const attr_name of this.glue_field._historic_attr_names) {
+                        if (!attr_names.includes(attr_name)) {
+                            form_field.removeAttribute(attr_name)
+                        }
+                    }
+
+                // Set attrs on field
+                for (let attr of this.glue_field.attrs) {
+                    form_field.setAttribute(attr.name, attr.value)
+                }
             }
         }"
-        {% if glue_field %}
-            x-modelable="glue_field"
-            x-model="{{ glue_field }}"
-        {% endif %}
+
+{# Todo: Need to be able to bind glue form fields #}
+{#        {% if glue_field %}#}
+{#            x-modelable="glue_field"#}
+{#            x-model="{{ glue_field }}"#}
+{#        {% endif %}#}
+                 
     >
         {% block field_label %}
             <label
+                x-cloak
+                x-show="!glue_field._hide_label"
                 x-ref="label"
-                class=""
-                for="{% if name %}id_{{ name }}{% elif label %}id_{% to_snake_case label %}{% endif %}"
+                class="form-label"
+                :for="glue_field.id"
             >
-                {{ label }}{% if required %}*{% endif %}
+                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.required">*</span>
             </label>
         {% endblock %}
         {% block field_content %}

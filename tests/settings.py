@@ -1,5 +1,6 @@
 import os
 import logging
+import sys
 
 logging.basicConfig(
     format='[%(asctime)-15s] Django Glue: "%(message)s"',
@@ -13,6 +14,7 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 WSGI_APPLICATION = 'tests.wsgi.application'
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
 
 INSTALLED_APPS = [
     'django.contrib.auth',
