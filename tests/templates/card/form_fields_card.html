@@ -1,7 +1,7 @@
 {% extends 'card/card.html' %}
 
 {% block header %}
-    GlueHub Developer Profile
+    Glue Form Fields
 {% endblock %}
 
 {% block body %}
@@ -18,7 +18,8 @@
                     <form
                         x-data="{
                         person: new GlueModelObject('person'),
-                        best_friend: new GlueCharField('best_friend', {label: 'Favorite Code Editor'}),
+                        people_query_set: new GlueQuerySet('people'),
+                        best_friend: new GlueCharField('best_friend', {required: true}),
                         ideal_date: new GlueCharField('ideal_date', {label: 'Describe your ideal coding session'}),
                         relationship_goals: new GlueCharField('relationship_goals', {
                             label: 'What are your coding goals?',
@@ -31,6 +32,7 @@
                         }),
                         async init(){
                             await this.person.get()
+                            this.best_friend.choices = await this.people_query_set.to_choices()
                         }
                     }"
                         method="post"
@@ -65,7 +67,7 @@
                                 {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' label='Prefer Hackathons?' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' %}
+                                {% include 'django_glue/form/glue_field/select_field.html' with glue_field='best_friend' %}
                             </div>
                             <div class="col-md-6">
                                 {% include 'django_glue/form/glue_field/select_field.html' with glue_field='relationship_goals' %}
