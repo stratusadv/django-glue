@@ -1,5 +1,19 @@
 # Changelog for Django Glue
 
+## 0.7.0
+### Changes 
+- Extra data used for glue configuration has moved to _meta on objects. 
+  - Shortcuts have been written for glue functionality to access metadata. 
+- JS files have been refactored to match python directory structure.
+- Attr factories refactored into specific directory. 
+- Glue form field entity and js objects to match backend entities. 
+- Glue form fields require base information that surround the field and attrs are now specific to field attrs. 
+- Removed binder js and constructed fields with alpine js. 
+- Enhanced how glue form fields and glue model fields pass data to templates. 
+- Factories to create all objects. 
+- Simplified how glue form fields can be constructed. 
+
+
 ## 0.6.3
 ### Features
 - Glue Query Set entities now can return themselves as choices for a select field.
