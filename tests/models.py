@@ -20,6 +20,13 @@ class TestModel(models.Model):
     birth_date = models.DateField(default=localdate)
     weight_lbs = models.DecimalField(max_digits=7, decimal_places=3)
 
+    best_friend = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True
+    )
+
     bed_time = models.TimeField(default='20:00')
     likes_to_party = models.BooleanField(default=True)
 

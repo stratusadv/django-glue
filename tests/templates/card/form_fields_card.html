@@ -19,7 +19,9 @@
                         x-data="{
                         person: new GlueModelObject('person'),
                         people_query_set: new GlueQuerySet('people'),
-                        best_friend: new GlueCharField('best_friend', {required: true}),
+                        best_friend: new GlueIntegerField('best_friend', {
+                            required: true
+                        }),
                         ideal_date: new GlueCharField('ideal_date', {label: 'Describe your ideal coding session'}),
                         relationship_goals: new GlueCharField('relationship_goals', {
                             label: 'What are your coding goals?',
@@ -32,7 +34,9 @@
                         }),
                         async init(){
                             await this.person.get()
+                            console.log(this.person)
                             this.best_friend.choices = await this.people_query_set.to_choices()
+                            this.best_friend.value = this.person.best_friend
                         }
                     }"
                         method="post"

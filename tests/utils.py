@@ -92,6 +92,7 @@ def custom_test_function(request):
 
 def generate_randomized_test_model(limit=5):
     new_description = ''
+
     for x in range(20):
         new_description += f'{DESCRIPTION_WORD_TUPLE[random.randint(0, (len(DESCRIPTION_WORD_TUPLE) - 1))]} '
 
@@ -101,6 +102,7 @@ def generate_randomized_test_model(limit=5):
         description=new_description,
         favorite_number=random.randint(0, 999),
         weight_lbs=round(random.uniform(80.001, 400.123), 3),
+        best_friend=TestModel.objects.first()
     )
 
     exclude_test_model = TestModel.objects.all().order_by('-id')[:limit]

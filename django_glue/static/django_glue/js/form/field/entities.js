@@ -212,7 +212,7 @@ class GlueBooleanField extends GlueBaseFormField {
             hidden = false,
             autofocus = false,
             prevent_submit = false,
-        }
+        } = {}
     ) {
         super(name, {
             value,
@@ -251,7 +251,7 @@ class GlueDateField extends GlueBaseFormField {
             prevent_submit = false,
             max = null,
             min = null,
-        }
+        } = {}
     ) {
         super(name, {
             value,
@@ -296,7 +296,7 @@ class GlueIntegerField extends GlueBaseFormField {
             max = null,
             min = null,
             step = 1,
-        }
+        } = {}
     ) {
         super(name, {
             value,
@@ -345,7 +345,7 @@ class GlueDecimalField extends GlueIntegerField {
             max = null,
             min = null,
             step = 0.1,
-        }
+        } = {}
     ) {
         super(name, {
             value,
