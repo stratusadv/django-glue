@@ -18,12 +18,13 @@ async function glue_ajax_request(
 
 
 function format_get_url(url, payload = {}) {
-    let formatted_url = new URL(url);
+    let formatted_url = new URL(window.location.origin + url)
+
     Object.entries(payload).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
-    });
-    formatted_url = url.toString();
-    return formatted_url;
+        formatted_url.searchParams.append(key, value)
+    })
+
+    return formatted_url.pathname + formatted_url.search
 }
 
 
@@ -46,7 +47,7 @@ async function glue_fetch(
             'X-CSRFToken': csrf_token,
             ...headers,
         },
-    };
+    }
 
     if (method !== 'GET' && method !== 'HEAD') {
         request_options.body = JSON.stringify(payload)
@@ -55,25 +56,25 @@ async function glue_fetch(
     }
 
     try {
-        const response = await fetch(url, request_options);
+        const response = await fetch(url, request_options)
 
         if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`HTTP error ${response.status}: ${errorBody}`);
+            const errorBody = await response.text()
+            throw new Error(`HTTP error ${response.status}: ${errorBody}`)
         }
 
         switch (response_type) {
             case 'json':
-                return await response.json();
+                return await response.json()
             case 'text':
-                return await response.text();
+                return await response.text()
             case 'blob':
-                return await response.blob();
+                return await response.blob()
             default:
-                return response;
+                return response
         }
     } catch (error) {
-        console.error('Fetch error:', error);
-        throw error;
+        console.error('Fetch error:', error)
+        throw error
     }
 }

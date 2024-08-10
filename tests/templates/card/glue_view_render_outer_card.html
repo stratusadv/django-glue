@@ -1,0 +1,32 @@
+{% extends 'card/card.html' %}
+
+{% load django_glue %}
+
+{% block header %}
+    Render Outer
+{% endblock %}
+
+{% block body %}
+    <div
+        x-data="{
+            view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+        }"
+        class="row g-3 p-3"
+    >
+        <div class="col-12">
+            <button
+                class="btn btn-secondary px-2 w-100"
+                x-on:click="await view_card.render_outer($refs.target_div)"
+            >
+                Render View to Outer HTML
+            </button>
+        </div>
+        <div class="col-12">
+            <div class="col-12 p-3 border border-success" x-ref="target_div">
+                <p class="text-center m-0">
+                    VIEW RENDER TARGET DIV CONTENTS
+                </p>
+            </div>
+        </div>
+    </div>
+{% endblock %}
