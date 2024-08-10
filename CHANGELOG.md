@@ -1,5 +1,23 @@
 # Changelog for Django Glue
 
+## 0.7.1
+### Changes 
+- glue_fetch refactored to be more extendable.
+- glue_view uses glue_fetch with shortcut functions for both get and post requests.
+  - glue view _render refactored to _fetch_view
+- GlueView's will have to be refactored to use the new parameter passing. 
+```js
+    // Old Method
+    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+    view_card._render({'page': 2}, 'POST')
+    
+    // Refactored Method
+    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+    view_card.post({'page': 2})
+    view_card.get({'page': 2})
+```
+
+
 ## 0.7.0
 ### Changes 
 - Extra data used for glue configuration has moved to _meta on objects. 
@@ -11,7 +29,29 @@
 - Removed binder js and constructed fields with alpine js. 
 - Enhanced how glue form fields and glue model fields pass data to templates. 
 - Factories to create all objects. 
-- Simplified how glue form fields can be constructed. 
+- Simplified how glue form fields can be constructed.
+
+```js
+    let person = new GlueModelObject('person')
+    await person.get()
+    
+    // Old Method
+    person.fields.first_name  // Returns glue field data
+
+    // Refactored Method
+    person.glue_fields.first_name  // Returns glue field object
+
+```
+
+```html
+    // Old Method
+    {% include 'django_glue/form/glue_field/char_field.html' with glue_field='person.fields.first_name' x_model_value='person.first_name' %}
+    {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' x_model_value='best_friend.value' %}
+    
+    // Refactored Method
+    {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
+    {% include 'django_glue/form/glue_field/char_field.html' with glue_field='best_friend' %}
+```
 
 
 ## 0.6.3

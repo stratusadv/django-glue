@@ -1,51 +1,49 @@
 class GlueView {
-    constructor(url, shared_parameters = {}) {
+    constructor(url, shared_payload = {}) {
         // Need to send the current view path to encode the glue data on the server.
         let config_url = new URL(window.location.origin + url)
         config_url.searchParams.append('glue_encode_path', window.location.pathname)
 
         this.url = config_url.pathname + config_url.search
-        this.shared_parameters = shared_parameters
+        this.shared_payload = shared_payload
     }
 
-    async _render(parameters = {}, method = 'POST', headers = {}) {
-        const request_options = {
-            method: method,
-            headers: {
-                ...headers,
-                'X-CSRFToken': glue_get_cookie('csrftoken'),
-            },
-            body: JSON.stringify({...parameters, ...this.shared_parameters})
-        }
-
-        const response = await fetch(this.url, request_options)
-
-        if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}`)
-        }
-
-        return response
+    async get(payload = {}) {
+        return await this._fetch_view(payload, 'GET')
     }
 
-    async render_inner(target_element, parameters = {}) {
-        await this._render(parameters).then((response) => {
-            return response.text()
+    async post(payload = {}) {
+        return await this._fetch_view(payload)
+    }
+
+    async _fetch_view(payload = {}, method = 'POST', headers = {}) {
+        return  await glue_fetch(this.url, {
+            method,
+            payload: {...this.shared_payload, ...payload},
+            response_type: 'text',
+            headers
+        })
+    }
+
+    async render_inner(target_element, payload = {}) {
+        await this._fetch_view(payload).then((response) => {
+            return response
         }).then((html) => {
             target_element.innerHTML = html
         })
     }
 
-    async render_insert_adjacent(target_element, parameters = {}, position = 'beforeend') {
-        await this._render(parameters).then((response) => {
-            return response.text()
+    async render_insert_adjacent(target_element, payload = {}, position = 'beforeend') {
+        await this._fetch_view(payload).then((response) => {
+            return response
         }).then((html) => {
             target_element.insertAdjacentHTML(position, html)
         })
     }
 
-    async render_outer(target_element, parameters = {}) {
-        await this._render(parameters).then((response) => {
-            return response.text()
+    async render_outer(target_element, payload = {}) {
+        await this._fetch_view(payload).then((response) => {
+            return response
         }).then((html) => {
             target_element.outerHTML = html
         })
