@@ -1,21 +1,5 @@
 # Changelog for Django Glue
 
-## 0.7.1
-### Changes 
-- glue_fetch refactored to be more extendable.
-- glue_view uses glue_fetch with shortcut functions for both get and post requests.
-  - glue view _render refactored to _fetch_view
-- GlueView's will have to be refactored to use the new parameter passing. 
-```js
-    // Old Method
-    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
-    view_card._render({'page': 2}, 'POST')
-    
-    // Refactored Method
-    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
-    view_card.post({'page': 2})
-    view_card.get({'page': 2})
-```
 
 
 ## 0.7.0
