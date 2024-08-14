@@ -106,7 +106,7 @@ def generate_randomized_test_model(limit=5):
     )
 
     exclude_test_model = TestModel.objects.all().order_by('-id')[:limit]
-    TestModel.objects.exclude(pk__in=exclude_test_model).delete()
+    TestModel.objects.exclude(pk__in=[x.id for x in exclude_test_model]).delete()
 
     return test_model_object
 

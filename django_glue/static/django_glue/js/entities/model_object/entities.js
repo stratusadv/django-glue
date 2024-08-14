@@ -41,7 +41,6 @@ class GlueModelObject {
         return model_object
     }
 
-    // Todo: Change this to load values.
     async get() {
         await glue_ajax_request(
             this['_meta']['glue_encoded_unique_name'],
@@ -111,7 +110,9 @@ class GlueModelObject {
         let properties = {}
 
         Object.entries(this).forEach(([key, value]) => {
-            properties[key] = value
+            if (!key.startsWith('_')) {
+                properties[key] = value
+            }
         })
 
         return properties

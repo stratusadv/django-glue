@@ -4,12 +4,19 @@
 
 {% csrf_token %}
 
+{# Core Scripts #}
+<script type="application/javascript" src="{% static 'django_glue/js/session/csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/core/utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/core/ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/shortcuts/shortcuts.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 <script type="application/javascript" src="{% static 'django_glue/js/session/keep_live.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/session/session.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
 <script type="application/javascript">
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
     const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
+    const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:django_glue_session_data' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 
     window.glue_keep_live = new GlueKeepLive()
@@ -19,12 +26,6 @@
         window.glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
     }, DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
 </script>
-
-{# Core Scripts #}
-<script type="application/javascript" src="{% static 'django_glue/js/session/csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/core/ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/core/utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/shortcuts/shortcuts.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
 {# Responses #}
 <script type="application/javascript" src="{% static 'django_glue/js/response/event.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>

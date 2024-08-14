@@ -34,8 +34,8 @@ async function glue_fetch(
         payload = {},
         method = 'POST',
         content_type = 'application/json',
-        headers = {},
         response_type = 'json',
+        header_options = {},
     } = {}
 ) {
     const csrf_token = glue_get_cookie('csrftoken')
@@ -45,7 +45,7 @@ async function glue_fetch(
         headers: {
             'Content-Type': content_type,
             'X-CSRFToken': csrf_token,
-            ...headers,
+            ...header_options,
         },
     }
 

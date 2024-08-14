@@ -26,6 +26,9 @@ class GlueBaseFormField {
         this._historic_attr_names = []
         this._hide_label = false
 
+        this.id = id === '' ? 'id_' + name : id;
+        this.label = label === '' ? name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : label
+
         // Getters & Setters
         this.required = required
         this.hidden = hidden
@@ -38,9 +41,6 @@ class GlueBaseFormField {
         for (const attr of this.attrs) {
             this._add_historic_name(attr.name)
         }
-
-        this.id = id === '' ? 'id_' + name : id;
-        this.label = label === '' ? name.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') : label
     }
 
     _add_historic_name(name) {

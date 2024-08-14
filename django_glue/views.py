@@ -34,3 +34,12 @@ def glue_keep_live_handler_view(request):
     return JsonResponse(
         data=GlueSession(request).session
     )
+
+
+def glue_session_data_view(request):
+    glue_session = GlueSession(request)
+    return JsonResponse(
+        data=glue_session.session
+    )
+
+
