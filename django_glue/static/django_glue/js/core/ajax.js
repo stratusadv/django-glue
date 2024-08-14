@@ -34,7 +34,6 @@ async function glue_fetch(
         payload = {},
         method = 'POST',
         content_type = 'application/json',
-        headers = {},
         response_type = 'json',
     } = {}
 ) {

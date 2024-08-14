@@ -16,13 +16,13 @@ class GlueView {
         return await this._fetch_view(payload)
     }
 
-    async _fetch_view(payload = {}, method = 'POST', headers = {}) {
+    async _fetch_view(payload = {}, method = 'POST') {
         return  await glue_fetch(this.url, {
             method,
             payload: {...this.shared_payload, ...payload},
             response_type: 'text',
-            headers
         })
+        // Todo: Call to update the session data.
     }
 
     async render_inner(target_element, payload = {}) {
