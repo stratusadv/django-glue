@@ -41,8 +41,9 @@ class GlueModelObject {
         return model_object
     }
 
-    // Todo: Change this to load values.
     async get() {
+        // Todo: Where is it getting the ID to load the fields?
+        console.log(this.id)
         await glue_ajax_request(
             this['_meta']['glue_encoded_unique_name'],
             'get',
