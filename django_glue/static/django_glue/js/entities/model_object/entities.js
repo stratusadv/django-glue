@@ -111,7 +111,9 @@ class GlueModelObject {
         let properties = {}
 
         Object.entries(this).forEach(([key, value]) => {
-            properties[key] = value
+            if (!key.startsWith('_')) {
+                properties[key] = value
+            }
         })
 
         return properties

@@ -150,7 +150,7 @@ def view_card_view(request):
         unique_name='test_model_view_card',
         target=test_model_object,
         access='delete',
-        exclude=('birth_date', 'anniversary_datetime'),
+        exclude=('birth_date', 'anniversary_datetime', 'best_friend'),
         methods=['is_lighter_than', 'get_full_name']
     )
 
