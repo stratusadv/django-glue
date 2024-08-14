@@ -15,11 +15,10 @@ class GlueTemplate {
             'get',
             {'context_data': combined_context_data}
         )
-        console.log(response)
+
         await update_session_data()
         glue_dispatch_response_event(response)
         return response.data.rendered_template
-
     }
 
     render_inner(target_element, context_data = {}) {

@@ -42,7 +42,6 @@ class GlueModelObject {
     }
 
     async get() {
-        console.log(this.id)
         await glue_ajax_request(
             this['_meta']['glue_encoded_unique_name'],
             'get',
