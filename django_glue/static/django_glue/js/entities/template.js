@@ -10,15 +10,16 @@ class GlueTemplate {
     async _render(context_data = {}) {
         let combined_context_data = Object.assign({}, this.shared_context_data, context_data);
 
-        return await glue_ajax_request(
+        let response = await glue_ajax_request(
             this.unique_name,
             'get',
             {'context_data': combined_context_data}
-        ).then((response) => {
-            console.log(response)
-            glue_dispatch_response_event(response)
-            return response.data.rendered_template
-        })
+        )
+        console.log(response)
+        await update_session_data()
+        glue_dispatch_response_event(response)
+        return response.data.rendered_template
+
     }
 
     render_inner(target_element, context_data = {}) {

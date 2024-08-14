@@ -144,6 +144,7 @@ def view_view(request):
 
 def view_card_view(request):
     test_model_object = generate_randomized_test_model()
+    print(test_model_object.id)
 
     glue_model(
         request=request,

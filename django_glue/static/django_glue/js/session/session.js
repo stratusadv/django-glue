@@ -1,7 +1,12 @@
 async function update_session_data() {
-    let response = await glue_fetch(DJANGO_SESSION_DATA_URL, {
+    let session_data = await glue_fetch(DJANGO_SESSION_DATA_URL, {
         method: 'GET',
         response_type: 'json',
     })
-    console.log(response)
+
+    window.glue_session_data = session_data
+
+    for (key in window.glue_session_data) {
+        window.glue_keep_live.add_unique_name(key)
+    }
 }
