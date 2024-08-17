@@ -31,6 +31,8 @@
             },
         }"
     >
+        {#  Todo: Need to show the error message when the html 5 validation fails. #}
+        <input type="text" :required="glue_field.required" hidden x-model="value" :name="glue_field.name">
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
