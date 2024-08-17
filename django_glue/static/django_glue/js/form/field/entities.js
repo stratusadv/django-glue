@@ -149,6 +149,11 @@ class GlueBaseFormField {
     }
 
     set required(value) {
+        if (!value && !this.choices.some(choice => choice[1] === '----------')) {
+            this.choices.unshift(['false', '----------']);
+        } else if (value && this.choices.some(choice => choice[1] === '----------')) {
+            this.choices = this.choices.filter(choice => choice[1] !== '----------');
+        }
         this._set_boolean_attr('required', value);
     }
 }
