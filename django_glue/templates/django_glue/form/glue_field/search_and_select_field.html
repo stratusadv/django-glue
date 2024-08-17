@@ -1,0 +1,88 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    <div
+        class="position-relative"
+        x-data="{
+            show_dropdown: false,
+            search: '',
+            init() {
+                let choices = [];
+                for (let i = 0; i < 100; i++) {
+                    choices.push([i, `Choice ${i}`]);
+                }
+                glue_field.choices = choices;
+            },
+            get filtered_choices() {
+                return glue_field.choices.filter(choice => {
+                    const label = choice[1].toLowerCase();
+                    const search = this.search.toLowerCase();
+                    return label.includes(search);
+                });
+            },
+            choice_verbose(key) {
+                if (!glue_field.choices.some(choice => choice[0] === key)) {
+                    return '------------';
+                } else {
+                    return glue_field.choices.find(
+                        choice => choice[0] === key
+                    )?.[1];
+                }
+            },
+            focus_input() {
+                setTimeout(() => this.$refs.search_input.focus(), 100)
+                if (this.show_dropdown) {
+                    this.$refs.search_input.focus()
+                }
+            },
+        }"
+    >
+        <button
+            class="form-control text-start"
+            type="button"
+            @click="show_dropdown = !show_dropdown; focus_input();"
+        >
+            <span x-text="choice_verbose(glue_field.value)"></span>
+        </button>
+        <div
+            x-cloak
+            x-show="show_dropdown"
+            @click.outside="show_dropdown = false"
+            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100"
+            style="max-height: 300px; overflow-y: auto;"
+            @keydown.escape="show_dropdown = false"
+            x-trap.inert="show_dropdown"
+        >
+            <div class="fs--2 fw-bold ms-2">
+                Select <span x-text="glue_field.label"></span>
+            </div>
+            <div class="my-1">
+                <input
+                    x-model="search"
+                    class="form-control py-1 fs-6"
+                    placeholder="Search..."
+                    type="text"
+                    x-ref="search_input"
+                    @keydown.enter.prevent="glue_field.value = filtered_choices[0][0]; show_dropdown = false"
+                >
+            </div>
+            <template x-if="!glue_field.required">
+                <div
+                    class="ms-3 text-hover-primary-soft cursor-pointer"
+                    @click="glue_field.value = null; show_dropdown = false"
+                >
+                    <span>----------</span>
+                </div>
+            </template>
+            <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
+                <div
+                    class="ms-3 text-hover-primary-soft cursor-pointer py-1"
+                    @click="glue_field.value = choice[0]; show_dropdown = false"
+                >
+                    <span x-text="choice[1]"></span>
+                </div>
+            </template>
+
+        </div>
+    </div>
+{% endblock %}
