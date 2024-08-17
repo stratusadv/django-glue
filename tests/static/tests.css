@@ -1,5 +1,7 @@
 :root {
     --primary: #007bff;
+    --primary-soft: #007bff80;
+    --secondary-soft: #6c757d80;
     --secondary: #6c757d;
 }
 
@@ -25,6 +27,10 @@ body {
 }
 
 
-.text-hover-primary-soft:hover {
-    color: var(--primary) !important;
+.bg-hover-secondary-soft:hover {
+    background-color: var(--secondary-soft) !important;
+}
+
+.text-hover-secondary-soft:hover {
+    color: var(--secondary-soft) !important;
 }

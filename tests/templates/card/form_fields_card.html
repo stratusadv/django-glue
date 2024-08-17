@@ -53,6 +53,9 @@
 {#                                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' %}#}
 {#                            </div>#}
                             <div class="col-md-6">
+                                {% include 'django_glue/form/glue_field/select_field.html' with glue_model_field='person.personality_type' %}
+                            </div>
+                            <div class="col-md-6">
                                 {% include 'django_glue/form/glue_field/search_and_select_field.html' with glue_model_field='person.personality_type' %}
                             </div>
 {#                            <div class="col-12">#}
