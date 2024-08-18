@@ -37,6 +37,9 @@ class GlueBaseFormField {
         this.disabled = disabled
         this.prevent_submit = prevent_submit
 
+        // Static Fields
+        this.error = ''
+
         // Keeps a list of all attributes added to glue field.
         for (const attr of this.attrs) {
             this._add_historic_name(attr.name)

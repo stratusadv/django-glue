@@ -1,12 +1,17 @@
 {% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
+    <input
+            type="text"
+            x-model="value"
+            x-ref="glue_field"
+            hidden
+    >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            search: '',
-            focused_index: 0,
+            search: '',            
             get filtered_choices() {
                 return glue_field.choices.filter(choice => {
                     const label = choice[1].toLowerCase();
@@ -30,9 +35,7 @@
                 }
             },
         }"
-    >
-        {#  Todo: Need to show the error message when the html 5 validation fails. #}
-        <input type="text" :required="glue_field.required" hidden x-model="value" :name="glue_field.name">
+    >     
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"

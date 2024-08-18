@@ -1,6 +1,12 @@
 {% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
+    <input
+            type="text"
+            x-model="value"
+            x-ref="glue_field"
+            hidden
+    >
     <div
         class="position-relative"
         x-data="{
@@ -16,9 +22,6 @@
             },
         }"
     >
-        
-        <input type="text" hidden x-model="value" :name="glue_field.name">
-        
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"

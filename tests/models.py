@@ -12,7 +12,7 @@ class TestModel(models.Model):
     personality_type = models.CharField(
         max_length=3,
         choices=[('int', 'Introvert'), ('ext', 'Extrovert')],
-        # default='int',
+        default='int',
     )
     email = models.EmailField(blank=True, null=True)
     favorite_number = models.IntegerField(validators=[MinValueValidator(0), MaxValueValidator(999)])
