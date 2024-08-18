@@ -1,5 +1,24 @@
 # Changelog for Django Glue
 
+## 0.7.3
+### Features 
+- Search & Select Field
+- Alpine focus added into alpine js requirements and init for field keyboard shortcuts.
+- Glue Field Error Messages
+  - Glue fields show html validation errors by default.
+  - Will have to update how errors disappear and improve error functionality in the future.
+
+
+```js
+  glue_field.error = 'This field is required.'
+```
+
+### Changes
+- Updated select to use alpine js dropdown for consistency between search and the search & select fields. 
+- Glue field factory updated to use setters and getters for specific attribute methods.
+- When select fields are not required, it automatically adds a '----------' option. 
+
+
 ## 0.7.2
 ### Bugs 
 - Added endpoint to retrieve glue session data.

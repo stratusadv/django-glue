@@ -35,6 +35,7 @@
                         if (this.is_valid_glue_field()) {
                             this.set_field_attrs()
                         }
+
                     })
             },
             init_glue_model_field(glue_model_field_name) {
@@ -60,15 +61,12 @@
                     form_field.setAttribute(attr.name, attr.value)
                 }
             },
-            add_error_event_listener() {
-                if (!this.is_valid_glue_field) return;
-
+            add_error_event_listener() {                
                 this.$refs.glue_field.addEventListener('invalid', (e) => {
                     e.preventDefault();
                     this.glue_field.error = e.target.validationMessage
                     this.$refs.glue_field.scrollIntoView({ behavior: 'smooth', block: 'center' })
                 })
-                
             },
             is_valid_glue_field() {
                 return this.glue_field && this.$refs.glue_field
