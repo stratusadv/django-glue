@@ -1,7 +1,36 @@
+:root {
+    --primary: #007bff;
+    --primary-soft: #007bff80;
+    --secondary-soft: #6c757d80;
+    --secondary: #6c757d;
+}
+
 [x-clock]  {
     display: none !important;
 }
 
 body {
     color: black;
+}
+
+
+.cursor-pointer:hover {
+    cursor: pointer;
+}
+
+.fs--1 {
+    font-size: .80rem !important;
+}
+
+.fs--2 {
+    font-size: .75rem !important;
+}
+
+
+.bg-hover-secondary-soft:hover {
+    background-color: var(--secondary-soft) !important;
+}
+
+.text-hover-secondary-soft:hover {
+    color: var(--secondary-soft) !important;
 }

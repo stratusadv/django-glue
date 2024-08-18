@@ -11,6 +11,14 @@
         class="position-relative"
         x-data="{
             show_dropdown: false,
+            search: '',            
+            get filtered_choices() {
+                return glue_field.choices.filter(choice => {
+                    const label = choice[1].toLowerCase();
+                    const search = this.search.toLowerCase();
+                    return label.includes(search);
+                });
+            },
             get choice_verbose() {
                 if (!glue_field.choices.some(choice => choice[0] === this.value)) {
                     return '------------';
@@ -20,12 +28,18 @@
                     )?.[1];
                 }
             },
+            focus_input() {
+                setTimeout(() => this.$refs.search_input.focus(), 100)
+                if (this.show_dropdown) {
+                    this.$refs.search_input.focus()
+                }
+            },
         }"
-    >
+    >     
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
-            @click="show_dropdown = !show_dropdown"
+            @click="show_dropdown = !show_dropdown; focus_input();"
         >
             <span x-text="choice_verbose"></span>
             <span>
@@ -44,7 +58,20 @@
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
-            <template x-for="(choice, index) in glue_field.choices" :key="choice[0]">
+            <div class="fs--2 fw-bold ms-2 my-1">
+                Select <span x-text="glue_field.label"></span>
+            </div>
+            <div class="m-1">
+                <input
+                    x-model="search"
+                    class="form-control py-1 fs-6"
+                    placeholder="Search..."
+                    type="text"
+                    x-ref="search_input"
+                    @keydown.enter.prevent="value = filtered_choices[0][0]; show_dropdown = false"
+                >
+            </div>
+            <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
                     class="bg-hover-secondary-soft cursor-pointer py-1"
                     tabindex="0"

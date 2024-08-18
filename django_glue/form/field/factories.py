@@ -14,12 +14,15 @@ class GlueFormFieldFactory:
 
     def choices(self) -> list:
         if self.model_field.choices:
-            return self.model_field.choices
+            if self.model_field.blank:
+                return [(False, '----------')] + self.model_field.choices
+            else:
+                return self.model_field.choices
         else:
             if self.model_field.get_internal_type() == 'BooleanField':
                 return [(True, 'Yes'), (False, 'No')]
             else:
-                return [(False, '--------------')]
+                return [(False, '----------')]
 
     def factory_method(self):
         return GlueFormField(

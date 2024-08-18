@@ -37,6 +37,9 @@ class GlueBaseFormField {
         this.disabled = disabled
         this.prevent_submit = prevent_submit
 
+        // Static Fields
+        this.error = ''
+
         // Keeps a list of all attributes added to glue field.
         for (const attr of this.attrs) {
             this._add_historic_name(attr.name)
@@ -149,6 +152,11 @@ class GlueBaseFormField {
     }
 
     set required(value) {
+        if (!value && !this.choices.some(choice => choice[1] === '----------')) {
+            this.choices.unshift(['false', '----------']);
+        } else if (value && this.choices.some(choice => choice[1] === '----------')) {
+            this.choices = this.choices.filter(choice => choice[1] !== '----------');
+        }
         this._set_boolean_attr('required', value);
     }
 }
