@@ -36,7 +36,7 @@ class GlueModelObject {
     }
 
     duplicate() {
-        let model_object = new GlueModelObject(this.glue_unique_name)
+        let model_object = new GlueModelObject(this['_meta']['glue_unique_name'])
         model_object.set_properties(this.get_properties())
         return model_object
     }
