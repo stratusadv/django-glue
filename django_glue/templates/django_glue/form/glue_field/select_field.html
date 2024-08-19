@@ -40,7 +40,7 @@
             x-show="show_dropdown"
             @click.outside="show_dropdown = false"
             class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0"
-            style="max-height: 300px; overflow-y: auto;"
+            style="max-height: 300px; overflow-y: auto; z-index: 3;"
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
