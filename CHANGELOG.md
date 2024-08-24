@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## 0.7.4
+### Features
+- Multi-Select Field
+
 ## 0.7.3
 ### Features 
 - Search & Select Field
