@@ -75,8 +75,8 @@
                 <div
                     class="bg-hover-secondary-soft cursor-pointer py-1"
                     tabindex="0"
-                    @click="value = choice[0]; show_dropdown = false"
-                    @keydown.enter.prevent="value = choice[0]; show_dropdown = false"
+                    @click="value = choice[0]; search = ''; show_dropdown = false"
+                    @keydown.enter.prevent="value = choice[0]; search = ''; show_dropdown = false"
                 >
                     <template x-if="value === choice[0]">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" class="bi bi-check ms-1" viewBox="0 0 16 16">
