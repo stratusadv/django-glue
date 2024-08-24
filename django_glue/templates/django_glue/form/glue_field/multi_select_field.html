@@ -19,18 +19,14 @@
             init() {
                 // Remove the '---------' option from choices
                 this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------')
-                
                 // Loop through keys and create key, value pairs. Append to selected_choices
                 this.$watch('initial_value', (new_value) => {
-                    console.log('fired')
-                    console.log(this.initial_value)
                     if (!this.initial_set && this.initial_value){
                         this.set_initial_value()
                     }
                 })
             },
             set_initial_value(){
-                console.log('setting', this.initial_value)
                 if (Array.isArray(this.initial_value)) {
                     Array.from(value).forEach(choice_key => {
                         let choice = glue_field.choices.find(choice => choice[0] === choice_key)
@@ -84,6 +80,10 @@
                     <span class="badge rounded-pill bg-light text-dark m-1">
                         <span x-text="choice[1]"></span>
                     </span>
+                </template>
+
+                <template x-if="selected_choices.length === 0">
+                    <span class="">----------</span>
                 </template>
             </span>
             <span>
