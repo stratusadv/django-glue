@@ -6,7 +6,7 @@
             x-model="value"
             x-ref="glue_field"
             hidden
-    >
+    > 
     <div
         class="position-relative"
         x-data="{
@@ -44,6 +44,9 @@
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
+            {% block select_dropdown_header %}
+            {% endblock %}
+                
             <template x-for="(choice, index) in glue_field.choices" :key="choice[0]">
                 <div
                     class="bg-hover-secondary-soft cursor-pointer py-1"
@@ -62,6 +65,9 @@
                     <span x-text="choice[1]"></span>
                 </div>
             </template>
+
+            {% block select_dropdown_footer %}
+            {% endblock %}
         </div>
     </div>
 {% endblock %}

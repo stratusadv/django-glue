@@ -1,0 +1,159 @@
+{% extends 'django_glue/form/glue_field/base_field.html' %}
+
+{% block field_content %}
+    {# This needs to be outside of the child x-data for x-ref to be set correctly #}
+    <input
+            type="text"
+            x-model="value"
+            x-ref="glue_field"
+            hidden
+    >
+    <div
+        class="position-relative"
+        x-data="{
+            show_dropdown: false,
+            initial_value: '',
+            initial_set: false,
+            selected_choices: [],
+            search: '',
+            init() {
+                // Remove the '---------' option from choices
+                this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------')
+                
+                // Loop through keys and create key, value pairs. Append to selected_choices
+                this.$watch('initial_value', (new_value) => {
+                    console.log('fired')
+                    console.log(this.initial_value)
+                    if (!this.initial_set && this.initial_value){
+                        this.set_initial_value()
+                    }
+                })
+            },
+            set_initial_value(){
+                console.log('setting', this.initial_value)
+                if (Array.isArray(this.initial_value)) {
+                    Array.from(value).forEach(choice_key => {
+                        let choice = glue_field.choices.find(choice => choice[0] === choice_key)
+                        if (choice){
+                            this.selected_choices.push(choice)
+                        }
+                    })
+                } else if (typeof this.initial_value === 'string') {
+                    let choice = glue_field.choices.find(choice => choice[0] === this.initial_value)
+                    if (choice){
+                        this.selected_choices.push(choice)
+                    }
+                }
+                this.initial_set = true
+            },
+            add_choice(choice){
+                this.selected_choices.push(choice)
+                this.update_value()
+            },
+            remove_choice(choice){
+                this.selected_choices = this.selected_choices.filter(i => i[0] !== choice[0])
+                this.update_value()
+            },
+            update_value() {
+                this.value = JSON.stringify(this.selected_choices.map(choice => choice[0]))
+            },
+            get filtered_choices() {
+               let filtered_array = glue_field.choices.filter(
+                   choice => !this.selected_choices.some(selected_choice => choice[0] === selected_choice[0])
+               )
+               const search = this.search.toLowerCase();
+               return filtered_array.filter(filtered_choices => filtered_choices[1].toLowerCase().includes(search));
+            },
+            focus_input() {
+                setTimeout(() => this.$refs.search_input.focus(), 100)
+                if (this.show_dropdown) {
+                    this.$refs.search_input.focus()
+                }
+            },
+        }"
+        x-modelable="initial_value" x-model="value"
+    >
+        <button
+            class="form-control text-start d-flex justify-content-between"
+            type="button"
+            @click="show_dropdown = !show_dropdown; focus_input();"
+        >
+            {#  Display selected choices in dropdown field #}
+            <span class="d-flex flex-wrap align-items-center">
+                <template x-for="(choice, index) in selected_choices" :key="index">
+                    <span class="badge rounded-pill bg-light text-dark m-1">
+                        <span x-text="choice[1]"></span>
+                    </span>
+                </template>
+            </span>
+            <span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                </svg>
+            </span>
+
+        </button>
+        <div
+            x-cloak
+            x-show="show_dropdown"
+            @click.outside="show_dropdown = false"
+            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0"
+            style="max-height: 300px; overflow-y: auto; z-index: 3;"
+            @keydown.escape="show_dropdown = false"
+            x-trap.inert="show_dropdown"
+        >
+            <div class="fs--2 fw-bold ms-2 my-1">
+                Select Many <span x-text="glue_field.label"></span>
+            </div>
+            <div class="m-1">
+                <input
+                    x-model="search"
+                    class="form-control py-1 fs-6"
+                    placeholder="Search..."
+                    type="text"
+                    x-ref="search_input"
+                    @keydown.enter.prevent="value = filtered_choices[0][0]; show_dropdown = false"
+                >
+            </div>
+            {# Loop through selected choices #}
+            <template x-for="(choice, index) in selected_choices" :key="index">
+                <div
+                    class="bg-hover-secondary-soft cursor-pointer py-1"
+                    tabindex="0"
+                    @click="remove_choice(choice)"
+                    @keydown.enter.prevent="remove_choice(choice)"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" class="bi bi-check ms-1 viewBox="0 0 16 16">
+                        <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                    </svg>
+                    <span x-text="choice[1]"></span>
+                </div>
+            </template>
+            <template x-if="selected_choices.length > 0">
+                <div class="py-1">
+                    <div class="border-bottom border-secondary-subtle w-100"></div>
+                </div>
+            </template>
+
+            {# Loop though available choices  #}
+            <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
+                <div
+                    class="bg-hover-secondary-soft cursor-pointer py-1"
+                    tabindex="0"
+                    @click="add_choice(choice)"
+                    @keydown.enter.prevent="add_choice(choice)"
+                >
+                    <span class="ms-3 ps-2"></span>
+                    <span x-text="choice[1]"></span>
+                </div>
+            </template>
+
+            {# Message if no available choices #}
+            <template x-if="filtered_choices.length === 0">
+                <div class="text-center fs--2 py-1">
+                    No available choices
+                </div>
+            </template>
+        </div>
+    </div>
+{% endblock %}
