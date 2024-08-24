@@ -69,30 +69,33 @@
         }"
         x-modelable="initial_value" x-model="value"
     >
-        <button
-            class="form-control text-start d-flex justify-content-between"
-            type="button"
-            @click="show_dropdown = !show_dropdown; focus_input();"
-        >
-            {#  Display selected choices in dropdown field #}
-            <span class="d-flex flex-wrap align-items-center">
-                <template x-for="(choice, index) in selected_choices" :key="index">
-                    <span class="badge rounded-pill bg-light text-dark m-1">
-                        <span x-text="choice[1]"></span>
-                    </span>
-                </template>
 
-                <template x-if="selected_choices.length === 0">
-                    <span class="">----------</span>
-                </template>
-            </span>
-            <span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
-                </svg>
-            </span>
+        {% block selected_choices %}
+            <button
+                class="form-control text-start d-flex justify-content-between"
+                type="button"
+                @click="show_dropdown = !show_dropdown; focus_input();"
+            >
+                {#  Display selected choices in dropdown field #}
+                <span class="d-flex flex-wrap align-items-center">
+                    <template x-for="(choice, index) in selected_choices" :key="index">
+                        <span class="badge rounded-pill bg-light text-dark m-1">
+                            <span x-text="choice[1]"></span>
+                        </span>
+                    </template>
 
-        </button>
+                    <template x-if="selected_choices.length === 0">
+                        <span class="">----------</span>
+                    </template>
+                </span>
+                <span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </span>
+
+            </button>
+        {% endblock %}
         <div
             x-cloak
             x-show="show_dropdown"
