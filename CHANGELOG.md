@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## 0.7.5
+### Features
+- Dynamic Glue Field Indexing
+
 ## 0.7.4
 ### Features
 - Multi-Select Field
