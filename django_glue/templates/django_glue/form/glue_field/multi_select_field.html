@@ -3,73 +3,78 @@
 {% block field_content %}
     {# This needs to be outside of the child x-data for x-ref to be set correctly #}
     <input
-            type="text"
-            x-model="value"
-            x-ref="glue_field"
-            hidden
+        type="text"
+        x-model="value"
+        x-ref="glue_field"
+        hidden
     >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            initial_value: '',
-            initial_set: false,
             selected_choices: [],
             search: '',
             init() {
                 // Remove the '---------' option from choices
-                this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------')
-                // Loop through keys and create key, value pairs. Append to selected_choices
-                this.$watch('initial_value', (new_value) => {
-                    if (!this.initial_set && this.initial_value){
-                        this.set_initial_value()
-                    }
-                })
+                this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------');
+
+                this.update_selected_choices_from_value(this.value);
+
+                this.$watch('value', (new_value) => {
+                    this.update_selected_choices_from_value(new_value);
+                });
             },
-            set_initial_value(){
-                if (Array.isArray(this.initial_value)) {
-                    Array.from(value).forEach(choice_key => {
-                        let choice = glue_field.choices.find(choice => choice[0] === choice_key)
-                        if (choice){
-                            this.selected_choices.push(choice)
+            update_selected_choices_from_value(new_value) {
+                this.selected_choices = [];
+
+                if (new_value) {
+                    let values;
+
+                    if (typeof new_value === 'string') {
+                        try {
+                            values = JSON.parse(new_value);
+                        } catch (e) {
+                            values = [];
                         }
-                    })
-                } else if (typeof this.initial_value === 'string') {
-                    let choice = glue_field.choices.find(choice => choice[0] === this.initial_value)
-                    if (choice){
-                        this.selected_choices.push(choice)
+                    } else if (Array.isArray(new_value)) {
+                        values = new_value;
+                    } else {
+                        values = [];
                     }
+
+                    values.forEach(choice_key => {
+                        let choice = this.glue_field.choices.find(choice => choice[0] == choice_key);
+
+                        if (choice) {
+                            this.selected_choices.push(choice);
+                        }
+                    });
                 }
-                this.initial_set = true
             },
-            add_choice(choice){
-                this.selected_choices.push(choice)
-                this.update_value()
+            add_choice(choice) {
+                this.selected_choices.push(choice);
+                this.update_value();
             },
-            remove_choice(choice){
-                this.selected_choices = this.selected_choices.filter(i => i[0] !== choice[0])
-                this.update_value()
+            remove_choice(choice) {
+                this.selected_choices = this.selected_choices.filter(i => i[0] !== choice[0]);
+                this.update_value();
             },
             update_value() {
-                this.value = JSON.stringify(this.selected_choices.map(choice => choice[0]))
+                this.value = JSON.stringify(this.selected_choices.map(choice => choice[0]));
             },
             get filtered_choices() {
-               let filtered_array = glue_field.choices.filter(
-                   choice => !this.selected_choices.some(selected_choice => choice[0] === selected_choice[0])
-               )
-               const search = this.search.toLowerCase();
-               return filtered_array.filter(filtered_choices => filtered_choices[1].toLowerCase().includes(search));
+                let filtered_array = this.glue_field.choices.filter(
+                    choice => !this.selected_choices.some(selected_choice => choice[0] === selected_choice[0])
+                );
+
+                const search = this.search.toLowerCase();
+                return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
             },
             focus_input() {
-                setTimeout(() => this.$refs.search_input.focus(), 100)
-                if (this.show_dropdown) {
-                    this.$refs.search_input.focus()
-                }
+                setTimeout(() => this.$refs.search_input.focus(), 100);
             },
         }"
-        x-modelable="initial_value" x-model="value"
     >
-
         {% block selected_choices %}
             <button
                 class="form-control text-start d-flex justify-content-between"
@@ -79,7 +84,7 @@
                 {#  Display selected choices in dropdown field #}
                 <span class="d-flex flex-wrap align-items-center">
                     <template x-for="(choice, index) in selected_choices" :key="index">
-                        <span class="badge rounded-pill bg-light text-dark m-1">
+                        <span class="badge rounded-pill bg-secondary-soft fs--1 fw-normal bg-secondary-soft border text-secondary-dark me-1">
                             <span x-text="choice[1]"></span>
                         </span>
                     </template>
@@ -88,12 +93,11 @@
                         <span class="">----------</span>
                     </template>
                 </span>
-                <span>
+                <span class="d-flex align-items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
                     </svg>
                 </span>
-
             </button>
         {% endblock %}
         <div

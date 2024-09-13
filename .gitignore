@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+.vscode/
+.idea
+inspectionProfiles/
+robit.log
+robit_0_4_4.db
+.python-version
+.env
+.python-version
+*.bat
+*.sql

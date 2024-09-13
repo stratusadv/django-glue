@@ -1,9 +1,13 @@
 import os
 import sys
 
+from settings import BASE_DIR
+
 
 def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'tests.settings')
+    sys.path.append(BASE_DIR)
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
