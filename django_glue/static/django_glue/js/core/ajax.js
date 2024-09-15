@@ -2,16 +2,17 @@ async function glue_ajax_request(
     unique_name,
     action,
     data = {},
-    {
-        content_type = 'application/json',
-        method = 'POST',
-    } = {},
+    options = {
+        content_type: 'application/json',
+        method: 'POST',
+    },
 ) {
     return await glue_fetch(DJANGO_GLUE_AJAX_URL, {
+        ...options,
         payload: {
-        'unique_name': unique_name,
-        'action': action,
-        'data': data,
+            'unique_name': unique_name,
+            'action': action,
+            'data': data,
         }
     })
 }
@@ -40,13 +41,18 @@ async function glue_fetch(
 ) {
     const csrf_token = glue_get_cookie('csrftoken')
 
+    const headers = {
+        ...header_options,
+    }
+
+    if (method !== 'GET' && method !== 'HEAD') {
+        headers['Content-Type'] = content_type
+        headers['X-CSRFToken'] = csrf_token
+    }
+
     const request_options = {
         method,
-        headers: {
-            'Content-Type': content_type,
-            'X-CSRFToken': csrf_token,
-            ...header_options,
-        },
+        headers,
     }
 
     if (method !== 'GET' && method !== 'HEAD') {
