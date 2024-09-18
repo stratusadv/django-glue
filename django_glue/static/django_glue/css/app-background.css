@@ -1,0 +1,108 @@
+:root {
+    --app-bg-primary: var(--app-blue);
+    --app-bg-primary-soft: var(--app-blue-soft);
+    --app-bg-primary-dark: var(--app-blue-dark);
+
+    --app-bg-secondary: var(--app-grey);
+    --app-bg-secondary-soft: var(--app-grey-soft);
+    --app-bg-secondary-dark: var(--app-grey-dark);
+
+    --app-bg-accent: var(--app-orange);
+    --app-bg-accent-soft: var(--app-orange-soft);
+    --app-bg-accent-dark: var(--app-orange-dark);
+
+    --app-bg-success: var(--app-green);
+    --app-bg-success-outlined: var(--app-green-soft);
+    --app-bg-success-dark: var(--app-green-dark);
+
+    --app-bg-warning: var(--app-yellow);
+    --app-bg-warning-soft: var(--app-yellow-soft);
+    --app-bg-warning-dark: var(--app-yellow-dark);
+
+    --app-bg-danger: var(--app-red);
+    --app-bg-danger-soft: var(--app-red-soft);
+    --app-bg-danger-dark: var(--app-red-dark);
+
+    --app-bg-layer-one: var(--app-layer-one);
+    --app-bg-layer-two: var(--app-layer-two);
+    --app-bg-layer-three: var(--app-layer-three);
+
+    --app-bg-side-bar: var(--app-side-bar);
+    --app-bg-side-bar-dark: var(--app-side-bar-dark);
+}
+
+.bg-app-primary, .bg-app-primary-hover:hover {
+    background-color: var(--app-bg-primary) !important;
+}
+
+.bg-app-primary-soft, .bg-app-primary-soft-hover:hover {
+    background-color: var(--app-bg-primary-soft) !important;
+}
+
+.bg-app-primary-dark, .bg-app-primary-dark-hover:hover {
+    background-color: var(--app-bg-primary-dark) !important;
+}
+
+.bg-app-secondary, .bg-app-secondary-hover:hover {
+    background-color: var(--app-bg-secondary) !important;
+}
+
+.bg-app-secondary-soft, .bg-app-secondary-soft-hover:hover {
+    background-color: var(--app-bg-secondary-soft) !important;
+}
+
+.bg-app-secondary-dark, .bg-app-secondary-dark-hover:hover {
+    background-color: var(--app-bg-secondary-dark) !important;
+}
+
+.bg-app-accent, .bg-app-accent-hover:hover {
+    background-color: var(--app-bg-accent) !important;
+}
+
+.bg-app-accent-soft, .bg-app-accent-soft-hover:hover {
+    background-color: var(--app-bg-accent-soft) !important;
+}
+
+.bg-app-accent-dark, .bg-app-accent-dark-hover:hover {
+    background-color: var(--app-bg-accent-dark) !important;
+}
+
+.bg-app-warning, .bg-app-warning-hover:hover {
+    background-color: var(--app-bg-warning) !important;
+}
+
+.bg-app-warning-soft, .bg-app-warning-soft-hover:hover {
+    background-color: var(--app-bg-warning-soft) !important;
+}
+
+.bg-app-warning-dark, .bg-app-warning-dark-hover:hover {
+    background-color: var(--app-bg-warning-dark) !important;
+}
+
+.bg-app-danger, .bg-app-danger-hover:hover {
+    background-color: var(--app-bg-danger) !important;
+}
+
+.bg-app-danger-soft, .bg-app-danger-soft-hover:hover {
+    background-color: var(--app-bg-danger-soft) !important;
+}
+
+.bg-app-danger-dark, .bg-app-danger-dark-hover:hover {
+    background-color: var(--app-bg-danger-dark) !important;
+}
+
+.bg-app-layer-one, .bg-app-layer-one-hover:hover {
+    background-color: var(--app-bg-layer-one) !important;
+}
+
+.bg-app-layer-two, .bg-app-layer-one-hover:hover {
+    background-color: var(--app-bg-layer-two) !important;
+}
+
+.bg-app-layer-three, .bg-app-layer-three-hover:hover {
+    background-color: var(--app-bg-layer-three) !important;
+}
+
+.bg-app-side-bar, .bg-app-side-bar-hover:hover {
+    background-color: var(--app-bg-side-bar) !important;
+}

@@ -1,0 +1,40 @@
+@import url('app-background.css');
+@import url('app-border.css');
+@import url('app-button.css');
+@import url('app-text.css');
+
+:root {
+    --app-black: #212529;
+    --app-white: #ffffff;
+
+    --app-grey: #797e7f;
+    --app-grey-soft: #e3e6ed;
+    --app-grey-dark: #313131;
+
+    --app-blue: #385587;
+    --app-blue-soft: #6a8bb8;
+    --app-blue-dark: #0e102f;
+
+    --app-green: #00c853;
+    --app-green-soft: #b9f6ca;
+    --app-green-dark: #007837;
+
+    --app-yellow: #f5dd5d;
+    --app-yellow-soft: #f5dd5d;
+    --app-yellow-dark: #f5dd5d;
+
+    --app-orange: #ff6d00;
+    --app-orange-soft: #ff9e80;
+    --app-orange-dark: #b25400;
+
+    --app-red: #d50000;
+    --app-red-soft: #d50000;
+    --app-red-dark: #d50000;
+
+    --app-layer-one: #f8f9fa;
+    --app-layer-two: #ebebeb;
+    --app-layer-three: #000000;
+
+    --app-side-bar: #325260;
+    --app-side-bar-dark: #001720;
+}

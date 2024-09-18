@@ -1,0 +1,112 @@
+:root {
+    --app-text-black: var(--app-black);
+    --app-text-white: var(--app-white);
+
+    --app-text-primary: var(--app-blue);
+    --app-text-primary-soft: var(--app-blue-soft);
+    --app-text-primary-dark: var(--app-blue-dark);
+
+    --app-text-secondary: var(--app-grey);
+    --app-text-secondary-soft: var(--app-grey-soft);
+    --app-text-secondary-dark: var(--app-grey-dark);
+
+    --app-text-accent: var(--app-orange);
+    --app-text-accent-soft: var(--app-orange-soft);
+    --app-text-accent-dark: var(--app-orange-dark);
+
+    --app-text-success: var(--app-green);
+    --app-text-success-outlined: var(--app-green-soft);
+    --app-text-success-dark: var(--app-green-dark);
+
+    --app-text-warning: var(--app-yellow);
+    --app-text-warning-soft: var(--app-yellow-soft);
+    --app-text-warning-dark: var(--app-yellow-dark);
+
+    --app-text-danger: var(--app-red);
+    --app-text-danger-soft: var(--app-red-soft);
+    --app-text-danger-dark: var(--app-red-dark);
+
+    --app-text-layer-one: var(--app-layer-one);
+    --app-text-layer-two: var(--app-layer-two);
+    --app-text-layer-three: var(--app-layer-three);
+}
+
+.text-app-black, .text-app-black-hover:hover {
+    color: var(--app-text-black) !important;
+}
+
+.text-app-white, .text-app-white-hover:hover {
+    color: var(--app-text-white) !important;
+}
+
+.text-app-primary, .text-app-primary-hover:hover {
+    color: var(--app-text-primary) !important;
+}
+
+.text-app-primary-soft, .text-app-primary-soft-hover:hover {
+    color: var(--app-text-primary-soft) !important;
+}
+
+.text-app-primary-dark, .text-app-primary-dark-hover:hover {
+    color: var(--app-text-primary-dark) !important;
+}
+
+.text-app-secondary, .text-app-secondary-hover:hover {
+    color: var(--app-text-secondary) !important;
+}
+
+.text-app-secondary-soft, .text-app-secondary-soft-hover:hover {
+    color: var(--app-text-secondary-soft) !important;
+}
+
+.text-app-secondary-dark, .text-app-secondary-dark-hover:hover {
+    color: var(--app-text-secondary-dark) !important;
+}
+
+.text-app-accent, .text-app-accent-hover:hover {
+    color: var(--app-text-accent) !important;
+}
+
+.text-app-accent-soft, .text-app-accent-soft-hover:hover {
+    color: var(--app-text-accent-soft) !important;
+}
+
+.text-app-accent-dark, .text-app-accent-dark-hover:hover {
+    color: var(--app-text-accent-dark) !important;
+}
+
+.text-app-warning, .text-app-warning-hover:hover {
+    color: var(--app-text-warning) !important;
+}
+
+.text-app-warning-soft, .text-app-warning-soft-hover:hover {
+    color: var(--app-text-warning-soft) !important;
+}
+
+.text-app-warning-dark, .text-app-warning-dark-hover:hover {
+    color: var(--app-text-warning-dark) !important;
+}
+
+.text-app-danger, .text-app-danger-hover:hover {
+    color: var(--app-text-danger) !important;
+}
+
+.text-app-danger-soft, .text-app-danger-soft-hover:hover {
+    color: var(--app-text-danger-soft) !important;
+}
+
+.text-app-danger-dark, .text-app-danger-dark-hover:hover {
+    color: var(--app-text-danger-dark) !important;
+}
+
+.text-app-layer-one, .text-app-layer-one-hover:hover {
+    color: var(--app-text-layer-one) !important;
+}
+
+.text-app-layer-two, .text-app-layer-one-hover:hover {
+    color: var(--app-text-layer-two) !important;
+}
+
+.text-app-layer-three, .text-app-layer-three-hover:hover {
+    color: var(--app-text-layer-three) !important;
+}

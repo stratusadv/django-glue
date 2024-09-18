@@ -19,17 +19,19 @@
                 // Remove the '---------' option from choices
                 this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------');
 
-                this.$watch('value', (new_value) => {
-                    this.value = new_value;
-                });
+                if (!this.value || !Array.isArray(this.get_selected_values())) {
+                    this.value = '[]';
+                }
+
+                console.log(this.value);
             },
             add_choice(choice) {
-                let selected_values = this.get_selected_values();
+                const selected_values = this.get_selected_values();
                 selected_values.push(choice[0]);
                 this.update_value(selected_values);
             },
             remove_choice(choice) {
-                let selected_values = this.get_selected_values().filter(val => val !== choice[0]);
+                const selected_values = this.get_selected_values().filter(val => val !== choice[0]);
                 this.update_value(selected_values);
             },
             update_value(new_values) {
@@ -37,18 +39,19 @@
             },
             get_selected_values() {
                 try {
-                    return JSON.parse(this.value) || [];
+                    const value = JSON.parse(this.value);
+                    return Array.isArray(value) ? value : [value];
                 } catch (e) {
                     return [];
                 }
             },
             get_selected_choices() {
-                let selected_values = this.get_selected_values();
+                const selected_values = this.get_selected_values();
                 return this.glue_field.choices.filter(choice => selected_values.includes(choice[0]));
             },
             get filtered_choices() {
-                let selected_values = this.get_selected_values();
-                let filtered_array = this.glue_field.choices.filter(
+                const selected_values = this.get_selected_values();
+                const filtered_array = this.glue_field.choices.filter(
                     choice => !selected_values.includes(choice[0])
                 );
 
@@ -70,7 +73,7 @@
                 <span class="d-flex flex-wrap align-items-center">
                     <template x-for="(choice, index) in get_selected_choices()" :key="index">
                         <div class="d-inline-block my-1">
-                            <span class="badge rounded-pill bg-secondary-soft fs--1 fw-normal border text-secondary-dark me-1">
+                            <span class="badge rounded-pill bg-app-secondary-soft fs--1 fw-normal border text-app-black me-1">
                                 <span x-text="choice[1]"></span>
                             </span>
                         </div>
@@ -93,7 +96,7 @@
             x-cloak
             x-show="show_dropdown"
             @click.outside="show_dropdown = false"
-            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0"
+            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0 list-group"
             style="max-height: 350px; overflow-y: auto; z-index: 3;"
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
@@ -105,7 +108,7 @@
             <div class="m-1">
                 <input
                     x-model="search"
-                    class="form-control py-1 fs-6"
+                    class="form-control py-1 fs--2"
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
@@ -119,9 +122,8 @@
                     tabindex="0"
                     @mouseover="selected_hover = index"
                     @mouseleave="selected_hover = -1"
-                    :style="selected_hover === index
-                        ? 'background-color: #f5f6f7; user-select: none;'
-                        : 'user-select: none;'"
+                    :class="selected_hover === index ? 'bg-app-layer-one' : ''"
+                    :style="'user-select: none;'"
                     @click="remove_choice(choice)"
                     @keydown.enter.prevent="remove_choice(choice)"
                 >
@@ -139,9 +141,9 @@
                 </div>
             </template>
 
-            <template x-if="get_selected_choices().length > 0">
-                <div class="py-1 bg-secondary-soft">
-                    <span class="text-muted d-block text-center fs--2"></span>
+            <template x-if="get_selected_choices().length > 0 && filtered_choices.length !== 0">
+                <div class="py-1 bg-app-secondary-soft">
+                    <span class="text-muted d-block text-center fs--2 fw-bold">Choices</span>
                 </div>
             </template>
 
@@ -152,9 +154,8 @@
                     tabindex="0"
                     @mouseover="unselected_hover = index"
                     @mouseleave="unselected_hover = -1"
-                    :style="unselected_hover === index
-                        ? 'background-color: #f5f6f7; user-select: none;'
-                        : 'user-select: none;'"
+                    :class="unselected_hover === index ? 'bg-app-layer-one' : ''"
+                    :style="'user-select: none;'"
                     @click="add_choice(choice)"
                     @keydown.enter.prevent="add_choice(choice)"
                 >
@@ -172,8 +173,8 @@
 
             {# Message if no available choices #}
             <template x-if="filtered_choices.length === 0">
-                <div class="text-center fs--1 py-1">
-                    No available choices
+                <div class="py-1 bg-app-secondary-soft">
+                    <span class="text-muted d-block text-center fs--2 fw-bold">No available choices</span>
                 </div>
             </template>
         </div>
