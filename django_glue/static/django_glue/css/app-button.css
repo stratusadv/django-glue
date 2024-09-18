@@ -28,18 +28,6 @@
     --app-btn-layer-three: var(--app-layer-three);
 }
 
-.btn {
-    position: relative;
-    transition: top 0.3s ease, box-shadow 0.3s ease;
-    box-shadow: 2px 2px 4px 0px rgba(0, 0, 0, 0.1) !important;
-    border-radius: 8px !important;
-}
-
-.btn:hover {
-    top: -1px;
-    box-shadow: 3px 3px 4px 0px rgba(0, 0, 0, 0.3) !important;
-}
-
 .btn-app-primary {
     background-color: var(--app-btn-primary) !important;
     color: var(--app-btn-layer-one) !important;

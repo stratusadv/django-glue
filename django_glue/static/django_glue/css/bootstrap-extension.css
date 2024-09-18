@@ -1,9 +1,4 @@
-:root {
-    --app-a-primary: var(--app-blue);
-}
-
 a {
-    color: var(--app-a-primary) !important;
     text-decoration: none;
 }
 
