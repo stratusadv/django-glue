@@ -15,13 +15,13 @@
             unselected_hover: -1,
             show_dropdown: false,
             search: '',
-            init() {
+            async init() {
+                $watch('glue_field.choices', async (value) => {
+                    this.glue_field.value = JSON.stringify(this.value)
+                });
+
                 // Remove the '---------' option from choices
                 this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------');
-
-                if (!this.value || !Array.isArray(this.get_selected_values())) {
-                    this.value = '[]';
-                }
             },
             add_choice(choice) {
                 const selected_values = this.get_selected_values();
