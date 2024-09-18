@@ -73,7 +73,7 @@
                 <span class="d-flex flex-wrap align-items-center">
                     <template x-for="(choice, index) in get_selected_choices()" :key="index">
                         <div class="d-inline-block my-1">
-                            <span class="badge rounded-pill bg-app-secondary-soft fs--1 fw-normal border text-app-black me-1">
+                            <span class="badge rounded-pill bg-app-glue-secondary-soft glue-fs--1 fw-normal border text-app-glue-black me-1">
                                 <span x-text="choice[1]"></span>
                             </span>
                         </div>
@@ -101,14 +101,14 @@
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
-            <div class="fs--2 fw-bold ms-2 my-1">
+            <div class="glue-fs--2 fw-bold ms-2 my-1">
                 Select Many <span class="text-muted">"<span x-text="glue_field.label"></span>"</span>
             </div>
 
             <div class="m-1">
                 <input
                     x-model="search"
-                    class="form-control py-1 fs--2"
+                    class="form-control py-1 glue-fs--2"
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
@@ -118,12 +118,11 @@
 
             <template x-for="(choice, index) in get_selected_choices()" :key="index">
                 <div
-                    class="cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
+                    class="glue-cursor-pointer glue-user-select py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
                     @mouseover="selected_hover = index"
                     @mouseleave="selected_hover = -1"
                     :class="selected_hover === index ? 'bg-app-layer-one' : ''"
-                    :style="'user-select: none;'"
                     @click="remove_choice(choice)"
                     @keydown.enter.prevent="remove_choice(choice)"
                 >
@@ -142,20 +141,19 @@
             </template>
 
             <template x-if="get_selected_choices().length > 0 && filtered_choices.length !== 0">
-                <div class="py-1 bg-app-secondary-soft">
-                    <span class="text-muted d-block text-center fs--2 fw-bold">Choices</span>
+                <div class="py-1 bg-app-glue-secondary-soft">
+                    <span class="text-muted d-block text-center glue-fs--2 fw-bold">Choices</span>
                 </div>
             </template>
 
             {# Loop though available choices  #}
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
-                    class="cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
+                    class="glue-cursor-pointer glue-user-select py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
                     @mouseover="unselected_hover = index"
                     @mouseleave="unselected_hover = -1"
                     :class="unselected_hover === index ? 'bg-app-layer-one' : ''"
-                    :style="'user-select: none;'"
                     @click="add_choice(choice)"
                     @keydown.enter.prevent="add_choice(choice)"
                 >
@@ -173,8 +171,8 @@
 
             {# Message if no available choices #}
             <template x-if="filtered_choices.length === 0">
-                <div class="py-1 bg-app-secondary-soft">
-                    <span class="text-muted d-block text-center fs--2 fw-bold">No available choices</span>
+                <div class="py-1 bg-app-glue-secondary-soft">
+                    <span class="text-muted d-block text-center glue-fs--2 fw-bold">No available choices</span>
                 </div>
             </template>
         </div>

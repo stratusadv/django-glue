@@ -59,13 +59,13 @@
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
-            <div class="fs--2 fw-bold ms-2 my-1">
+            <div class="glue-fs--2 fw-bold ms-2 my-1">
                 Select <span x-text="glue_field.label"></span>
             </div>
             <div class="m-1">
                 <input
                     x-model="search"
-                    class="form-control py-1 fs-6"
+                    class="form-control py-1 glue-fs--2"
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
@@ -74,7 +74,7 @@
             </div>
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
-                    class="cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
+                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
                     @mouseover="hover = index"
                     @mouseleave="hover = -1"

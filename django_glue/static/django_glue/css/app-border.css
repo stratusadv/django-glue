@@ -1,105 +1,105 @@
 :root {
-    --app-border-primary: var(--app-black);
-    --app-border-primary-soft: var(--app-black);
-    --app-border-primary-dark: var(--app-black);
+    --app-glue-border-primary: var(--app-glue-black);
+    --app-glue-border-primary-soft: var(--app-glue-black);
+    --app-glue-border-primary-dark: var(--app-glue-black);
 
-    --app-border-secondary: var(--app-grey-dark);
-    --app-border-secondary-soft: var(--app-grey-dark);
-    --app-border-secondary-dark: var(--app-grey-dark);
+    --app-glue-border-secondary: var(--app-glue-grey-dark);
+    --app-glue-border-secondary-soft: var(--app-glue-grey-dark);
+    --app-glue-border-secondary-dark: var(--app-glue-grey-dark);
 
-    --app-border-accent: var(--app-orange);
-    --app-border-accent-soft: var(--app-orange);
-    --app-border-accent-dark: var(--app-orange);
+    --app-glue-border-accent: var(--app-glue-orange);
+    --app-glue-border-accent-soft: var(--app-glue-orange);
+    --app-glue-border-accent-dark: var(--app-glue-orange);
 
-    --app-border-success: var(--app-green);
-    --app-border-success-outlined: var(--app-green);
-    --app-border-success-dark: var(--app-green);
+    --app-glue-border-success: var(--app-glue-green);
+    --app-glue-border-success-outlined: var(--app-glue-green);
+    --app-glue-border-success-dark: var(--app-glue-green);
 
-    --app-border-warning: var(--app-yellow);
-    --app-border-warning-soft: var(--app-yellow);
-    --app-border-warning-dark: var(--app-yellow);
+    --app-glue-border-warning: var(--app-glue-yellow);
+    --app-glue-border-warning-soft: var(--app-glue-yellow);
+    --app-glue-border-warning-dark: var(--app-glue-yellow);
 
-    --app-border-danger: var(--app-red);
-    --app-border-danger-soft: var(--app-red);
-    --app-border-danger-dark: var(--app-red);
+    --app-glue-border-danger: var(--app-glue-red);
+    --app-glue-border-danger-soft: var(--app-glue-red);
+    --app-glue-border-danger-dark: var(--app-glue-red);
 
-    --app-border-layer-one: var(--app-layer-one);
-    --app-border-layer-two: var(--app-layer-two);
-    --app-border-layer-three: var(--app-layer-three);
+    --app-glue-border-layer-one: var(--app-glue-layer-one);
+    --app-glue-border-layer-two: var(--app-glue-layer-two);
+    --app-glue-border-layer-three: var(--app-glue-layer-three);
 }
 
-.border-app-none {
+.border-app-glue-none {
     border: none !important;
 }
 
-.border-app-primary {
-    border: 1px solid var(--app-border-primary) !important;
+.border-app-glue-primary {
+    border: 1px solid var(--app-glue-border-primary) !important;
 }
 
-.border-app-primary-soft {
-    border: 1px solid var(--app-border-primary-soft) !important;
+.border-app-glue-primary-soft {
+    border: 1px solid var(--app-glue-border-primary-soft) !important;
 }
 
-.border-app-primary-dark {
-    border: 1px solid var(--app-border-primary-dark) !important;
+.border-app-glue-primary-dark {
+    border: 1px solid var(--app-glue-border-primary-dark) !important;
 }
 
-.border-app-secondary {
-    border: 1px solid var(--app-border-secondary) !important;
+.border-app-glue-secondary {
+    border: 1px solid var(--app-glue-border-secondary) !important;
 }
 
-.border-app-secondary-soft {
-    border: 1px solid var(--app-border-secondary-soft) !important;
+.border-app-glue-secondary-soft {
+    border: 1px solid var(--app-glue-border-secondary-soft) !important;
 }
 
-.border-app-secondary-dark {
-    border: 1px solid var(--app-border-secondary-dark) !important;
+.border-app-glue-secondary-dark {
+    border: 1px solid var(--app-glue-border-secondary-dark) !important;
 }
 
-.border-app-accent {
-    border: 1px solid var(--app-border-accent) !important;
+.border-app-glue-accent {
+    border: 1px solid var(--app-glue-border-accent) !important;
 }
 
-.border-app-accent-soft {
-    border: 1px solid var(--app-border-accent-soft) !important;
+.border-app-glue-accent-soft {
+    border: 1px solid var(--app-glue-border-accent-soft) !important;
 }
 
-.border-app-accent-dark {
-    border: 1px solid var(--app-border-accent-dark) !important;
+.border-app-glue-accent-dark {
+    border: 1px solid var(--app-glue-border-accent-dark) !important;
 }
 
-.border-app-warning {
-    border: 1px solid var(--app-border-warning) !important;
+.border-app-glue-warning {
+    border: 1px solid var(--app-glue-border-warning) !important;
 }
 
-.border-app-warning-soft {
-    border: 1px solid var(--app-border-warning-soft) !important;
+.border-app-glue-warning-soft {
+    border: 1px solid var(--app-glue-border-warning-soft) !important;
 }
 
-.border-app-warning-dark {
-    border: 1px solid var(--app-border-warning-dark) !important;
+.border-app-glue-warning-dark {
+    border: 1px solid var(--app-glue-border-warning-dark) !important;
 }
 
-.border-app-danger {
-    border: 1px solid var(--app-border-danger) !important;
+.border-app-glue-danger {
+    border: 1px solid var(--app-glue-border-danger) !important;
 }
 
-.border-app-danger-soft {
-    border: 1px solid var(--app-border-danger-soft) !important;
+.border-app-glue-danger-soft {
+    border: 1px solid var(--app-glue-border-danger-soft) !important;
 }
 
-.border-app-danger-dark {
-    border: 1px solid var(--app-border-danger-dark) !important;
+.border-app-glue-danger-dark {
+    border: 1px solid var(--app-glue-border-danger-dark) !important;
 }
 
-.border-app-layer-one {
-    border: 1px solid var(--app-border-layer-one) !important;
+.border-app-glue-layer-one {
+    border: 1px solid var(--app-glue-border-layer-one) !important;
 }
 
-.border-app-layer-two {
-    border: 1px solid var(--app-border-layer-two) !important;
+.border-app-glue-layer-two {
+    border: 1px solid var(--app-glue-border-layer-two) !important;
 }
 
-.border-app-layer-three {
-    border: 1px solid var(--app-border-layer-three) !important;
+.border-app-glue-layer-three {
+    border: 1px solid var(--app-glue-border-layer-three) !important;
 }
