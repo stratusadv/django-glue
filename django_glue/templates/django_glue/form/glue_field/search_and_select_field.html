@@ -2,16 +2,17 @@
 
 {% block field_content %}
     <input
-            type="text"
-            x-model="value"
-            x-ref="glue_field"
-            hidden
+        type="text"
+        x-model="value"
+        x-ref="glue_field"
+        hidden
     >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            search: '',            
+            search: '',
+            hover: -1,
             get filtered_choices() {
                 return glue_field.choices.filter(choice => {
                     const label = choice[1].toLowerCase();
@@ -35,7 +36,7 @@
                 }
             },
         }"
-    >     
+    >
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
@@ -73,20 +74,30 @@
             </div>
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
-                    class="bg-hover-secondary-soft cursor-pointer py-1"
+                    class="cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
+                    @mouseover="hover = index"
+                    @mouseleave="hover = -1"
+                    :style="hover === index ? 'background-color: #f5f6f7;' : ''"
                     @click="value = choice[0]; search = ''; show_dropdown = false"
                     @keydown.enter.prevent="value = choice[0]; search = ''; show_dropdown = false"
                 >
-                    <template x-if="value === choice[0]">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" class="bi bi-check ms-1 " viewBox="0 0 16 16">
-                            <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
-                        </svg>
-                    </template>
-                    <template x-if="value != choice[0]">
-                        <span class="ms-3 ps-2"></span>
-                    </template>
-                    <span x-text="choice[1]"></span>
+                    <div class="d-flex align-items-center justify-content-center" style="width: 25px;">
+                        <template x-if="value === choice[0]">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" class="bi bi-check ms-1" viewBox="0 0 16 16">
+                                <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
+                            </svg>
+                        </template>
+                        <template x-if="value != choice[0]">
+                            <span class="ms-3 ps-2"></span>
+                        </template>
+                    </div>
+
+                    {% block choice_information %}
+                        <div class="d-flex align-items-center">
+                            <span class="text-truncate" x-text="choice[1]"></span>
+                        </div>
+                    {% endblock %}
                 </div>
             </template>
         </div>
