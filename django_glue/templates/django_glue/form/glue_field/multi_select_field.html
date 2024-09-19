@@ -131,7 +131,7 @@
                     tabindex="0"
                     @mouseover="selected_hover = index"
                     @mouseleave="selected_hover = -1"
-                    :class="selected_hover === index ? 'bg-app-layer-one' : ''"
+                    :class="selected_hover === index ? 'bg-app-glue-layer-one' : ''"
                     @click="remove_choice(choice)"
                     @keydown.enter.prevent="remove_choice(choice)"
                 >
@@ -160,7 +160,7 @@
                     tabindex="0"
                     @mouseover="unselected_hover = index"
                     @mouseleave="unselected_hover = -1"
-                    :class="unselected_hover === index ? 'bg-app-layer-one' : ''"
+                    :class="unselected_hover === index ? 'bg-app-glue-layer-one' : ''"
                     @click="add_choice(choice)"
                     @keydown.enter.prevent="add_choice(choice)"
                 >
