@@ -17,8 +17,12 @@
             search: '',
             value: '[]',
             init() {
-                $watch('glue_field.value', selection => {
-                    this.value = JSON.stringify(selection);
+                $watch('glue_field', selection => {
+                    if (selection.value) {
+                        if (typeof(selection.value) === 'object') {
+                            this.value = JSON.stringify(selection.value);
+                        }
+                    }
                 });
 
                 // Remove the '---------' option from choices
@@ -33,9 +37,11 @@
                 const selected_values = this.get_selected_values().filter(val => val !== choice[0]);
                 this.update_value(selected_values);
             },
-            update_value(new_values) {
-                this.value = JSON.stringify(new_values);
-                this.$refs.glue_field.value = JSON.stringify(new_values);
+            update_value(values) {
+                value = JSON.stringify(values);
+
+                this.value = value;
+                this.$refs.glue_field.value = value;
             },
             get_selected_values() {
                 try {
