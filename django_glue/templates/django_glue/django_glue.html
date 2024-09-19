@@ -4,6 +4,9 @@
 
 {% csrf_token %}
 
+{# Core CSS #}
+<link rel="stylesheet" href="{% static 'django_glue/css/glue.css' %}?v={{ DJANGO_GLUE_VERSION }}">
+
 {# Core Scripts #}
 <script type="application/javascript" src="{% static 'django_glue/js/session/csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 <script type="application/javascript" src="{% static 'django_glue/js/core/utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>

@@ -2,16 +2,16 @@
 
 {% block field_content %}
     <input
-            type="text"
-            x-model="value"
-            x-ref="glue_field"
-            hidden
+        type="text"
+        x-model="value"
+        x-ref="glue_field"
+        hidden
     >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            search: '',            
+            search: '',
             get filtered_choices() {
                 return glue_field.choices.filter(choice => {
                     const label = choice[1].toLowerCase();
@@ -35,17 +35,15 @@
                 }
             },
         }"
-    >     
+    >
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
             @click="show_dropdown = !show_dropdown; focus_input();"
         >
             <span x-text="choice_verbose"></span>
-            <span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="bi bi-chevron-down" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
-                </svg>
+            <span class="d-flex align-items-center">
+                {% include 'django_glue/form/glue_field/element/select_down_arrow_element.html' %}
             </span>
 
         </button>
@@ -53,18 +51,18 @@
             x-cloak
             x-show="show_dropdown"
             @click.outside="show_dropdown = false"
-            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0"
+            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0 list-group"
             style="max-height: 300px; overflow-y: auto; z-index: 3;"
             @keydown.escape="show_dropdown = false"
             x-trap.inert="show_dropdown"
         >
-            <div class="fs--2 fw-bold ms-2 my-1">
+            <div class="glue-fs--2 fw-bold ms-2 mt-1">
                 Select <span x-text="glue_field.label"></span>
             </div>
-            <div class="m-1">
+            <div class="m-2">
                 <input
                     x-model="search"
-                    class="form-control py-1 fs-6"
+                    class="form-control glue-fs--2"
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
@@ -73,20 +71,14 @@
             </div>
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
-                    class="bg-hover-secondary-soft cursor-pointer py-1"
+                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
                     tabindex="0"
                     @click="value = choice[0]; search = ''; show_dropdown = false"
                     @keydown.enter.prevent="value = choice[0]; search = ''; show_dropdown = false"
                 >
-                    <template x-if="value === choice[0]">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" class="bi bi-check ms-1" viewBox="0 0 16 16">
-                            <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
-                        </svg>
-                    </template>
-                    <template x-if="value != choice[0]">
-                        <span class="ms-3 ps-2"></span>
-                    </template>
-                    <span x-text="choice[1]"></span>
+                    {% block choice_item %}
+                        {% include 'django_glue/form/glue_field/item/select_choice_item.html' %}
+                    {% endblock %}
                 </div>
             </template>
         </div>
