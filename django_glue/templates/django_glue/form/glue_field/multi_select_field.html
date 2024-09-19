@@ -19,8 +19,15 @@
             init() {
                 $watch('glue_field', selection => {
                     if (selection.value) {
-                        if (typeof(selection.value) === 'object') {
+                        if (typeof selection.value === 'object') {
                             this.value = JSON.stringify(selection.value);
+                        } else {
+                            try {
+                                JSON.parse(selection.value);
+                                this.value = selection.value;
+                            } catch (e) {
+                                this.value = JSON.stringify(selection.value);
+                            }
                         }
                     }
                 });
