@@ -15,9 +15,10 @@
             unselected_hover: -1,
             show_dropdown: false,
             search: '',
-            async init() {
-                $watch('glue_field.choices', async (value) => {
-                    this.glue_field.value = JSON.stringify(this.value)
+            value: '[]',
+            init() {
+                $watch('glue_field.value', selection => {
+                    this.value = JSON.stringify(selection);
                 });
 
                 // Remove the '---------' option from choices
@@ -34,6 +35,7 @@
             },
             update_value(new_values) {
                 this.value = JSON.stringify(new_values);
+                this.$refs.glue_field.value = JSON.stringify(new_values);
             },
             get_selected_values() {
                 try {
