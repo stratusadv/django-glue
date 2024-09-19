@@ -10,7 +10,6 @@
     <div
         class="position-relative"
         x-data="{
-            hover: -1,
             show_dropdown: false,
             get choice_verbose() {
                 if (!glue_field.choices.some(choice => choice[0] === this.value)) {
@@ -48,30 +47,14 @@
 
             <template x-for="(choice, index) in glue_field.choices" :key="choice[0]">
                 <div
-                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
+                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
                     tabindex="0"
-                    @mouseover="hover = index"
-                    @mouseleave="hover = -1"
-                    :class="hover === index ? 'bg-app-glue-layer-one' : ''"
                     @click="value = choice[0]; show_dropdown = false"
                     @keydown.enter.prevent="value = choice[0]; show_dropdown = false"
                 >
-                    <div class="d-flex align-items-center justify-content-center" style="width: 35px;">
-                        <template x-if="value === choice[0]">
-                            {% include 'django_glue/form/glue_field/element/select_checkmark_element.html' %}
-                        </template>
-
-                        <template x-if="value != choice[0]">
-                            <span class="ms-3 ps-2"></span>
-                        </template>
-                    </div>
-
-                    {% block choice_information %}
-                        <div class="d-flex align-items-center">
-                            <span class="text-truncate" x-text="choice[1]"></span>
-                        </div>
+                    {% block choice_item %}
+                        {% include 'django_glue/form/glue_field/item/select_choice_item.html' %}
                     {% endblock %}
-                </div>
             </template>
 
             {% block select_dropdown_footer %}
