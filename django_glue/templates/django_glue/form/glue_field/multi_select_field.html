@@ -17,20 +17,18 @@
             search: '',
             value: '[]',
             init() {
-                $watch('glue_field', selection => {
-                    if (selection.value) {
-                        if (typeof selection.value === 'object') {
-                            this.value = JSON.stringify(selection.value);
-                        } else {
-                            try {
-                                JSON.parse(selection.value);
-                                this.value = selection.value;
-                            } catch (e) {
-                                this.value = JSON.stringify(selection.value);
+                if (this.glue_field.value) {
+                    this.glue_field.value = JSON.stringify(this.glue_field.value);
+                    this.value = this.glue_field.value;
+                } else {
+                    $watch('glue_field', field => {
+                        if (field.value) {
+                            if (typeof(field.value) == 'object') {
+                                this.value = JSON.stringify(field.value);
                             }
                         }
-                    }
-                });
+                    });
+                }
 
                 // Remove the '---------' option from choices
                 this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------');
