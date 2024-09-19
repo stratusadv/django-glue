@@ -1,0 +1,41 @@
+:root {
+    --app-glue-black: #212529;
+    --app-glue-grey-soft: #e3e6ed;
+    --app-glue-layer-one: #f8f9fa;
+
+    --app-glue-bg-layer-one: var(--app-glue-layer-one);
+    --app-glue-bg-secondary-soft: var(--app-glue-grey-soft);
+    --app-glue-text-black: var(--app-glue-black);
+}
+
+.bg-app-glue-layer-one, .bg-app-glue-layer-one-hover:hover {
+    background-color: var(--app-glue-bg-layer-one) !important;
+}
+
+.bg-app-glue-secondary-soft, .bg-app-glue-secondary-soft-hover:hover {
+    background-color: var(--app-glue-bg-secondary-soft) !important;
+}
+
+.text-app-glue-black, .text-app-glue-black-hover:hover {
+    color: var(--app-glue-text-black) !important;
+}
+
+.glue-cursor-pointer {
+    cursor: pointer !important;
+}
+
+.glue-user-select {
+    user-select: none !important;
+}
+
+.glue-fs--1 {
+    font-size: .80rem !important;
+}
+
+.glue-fs--2 {
+    font-size: .75rem !important;
+}
+
+.glue-fs-7 {
+    font-size: .85rem !important;
+}
