@@ -1,7 +1,13 @@
 # Changelog for Django Glue
 
+## 0.7.6
+### Changes
+- Blocks to extend / override select choice items.
+- Glue custom css file to look nice out of the box.
+
+
 ## 0.7.5
-### Features
+### Bug Fix
 - Dynamic Glue Field Indexing
 
 ## 0.7.4
