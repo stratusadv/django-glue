@@ -11,9 +11,7 @@
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            search: '',
-            value: [],
-            choices: [],
+            search: '',                        
             add_choice(choice) {
                 const selected_values = this.get_selected_values();
                 selected_values.push(choice[0]);
@@ -38,11 +36,11 @@
             },
             get_selected_choices() {
                 const selected_values = this.get_selected_values();
-                return this.choices.filter(choice => selected_values.includes(choice[0]));
+                return this.glue_field.choices.filter(choice => selected_values.includes(choice[0]));
             },
             get filtered_choices() {
                 const selected_values = this.get_selected_values();
-                const filtered_array = this.choices.filter(
+                const filtered_array = this.glue_field.choices.filter(
                     choice => !selected_values.includes(choice[0])
                 );
 
@@ -54,9 +52,7 @@
             },
         }"
         x-effect="
-            if (choices.length === 0 && glue_field.choices) {
-                choices = glue_field.choices.filter(choice => choice[1] !== '----------');
-            }
+            glue_field.choices = glue_field.choices.filter(choice => choice[1] !== '----------');            
 
             if (glue_field.value) {
                 if (Array.isArray(value) || typeof(glue_field.value) == 'object') {
@@ -113,7 +109,6 @@
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
-                    @keydown.enter.prevent="value = filtered_choices[0][0]; show_dropdown = false"
                 >
             </div>
 
