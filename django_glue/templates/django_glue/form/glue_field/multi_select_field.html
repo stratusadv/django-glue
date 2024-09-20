@@ -1,7 +1,6 @@
 {% extends 'django_glue/form/glue_field/base_field.html' %}
 
 {% block field_content %}
-    {# This needs to be outside of the child x-data for x-ref to be set correctly #}
     <input
         type="text"
         x-model="value"
@@ -13,24 +12,6 @@
         x-data="{
             show_dropdown: false,
             search: '',
-            value: '[]',
-            init() {
-                if (this.glue_field.value) {
-                    this.glue_field.value = JSON.stringify(this.glue_field.value);
-                    this.value = this.glue_field.value;
-                } else {
-                    $watch('glue_field', field => {
-                        if (field.value) {
-                            if (typeof(field.value) == 'object') {
-                                this.value = JSON.stringify(field.value);
-                            }
-                        }
-                    });
-                }
-
-                // Remove the '---------' option from choices
-                this.glue_field.choices = this.glue_field.choices.filter(choice => choice[1] !== '----------');
-            },
             add_choice(choice) {
                 const selected_values = this.get_selected_values();
                 selected_values.push(choice[0]);
@@ -41,10 +22,7 @@
                 this.update_value(selected_values);
             },
             update_value(values) {
-                value = JSON.stringify(values);
-
-                this.value = value;
-                this.$refs.glue_field.value = value;
+                this.value = JSON.stringify(values);
             },
             get_selected_values() {
                 try {
@@ -60,9 +38,7 @@
             },
             get filtered_choices() {
                 const selected_values = this.get_selected_values();
-                const filtered_array = this.glue_field.choices.filter(
-                    choice => !selected_values.includes(choice[0])
-                );
+                const filtered_array = this.glue_field.choices.filter(choice => !selected_values.includes(choice[0]));
 
                 const search = this.search.toLowerCase();
                 return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
@@ -71,6 +47,29 @@
                 setTimeout(() => this.$refs.search_input.focus(), 100);
             },
         }"
+        x-effect="
+            if (glue_field.choices) {
+                glue_field.choices = glue_field.choices.filter(choice => choice[1] !== '----------');
+            }
+
+            if (typeof(glue_field.value) == 'string') {
+                try {
+                    JSON.parse(glue_field.value);
+                } catch (error) {
+                    glue_field.value = JSON.stringify(glue_field.value);
+                }
+            }
+
+            if (Array.isArray(glue_field.value)) {
+                glue_field.value = value = JSON.stringify(glue_field.value);
+            }
+
+            if (Array.isArray(value)) {
+                value = JSON.stringify(value);
+            }
+
+            value = JSON.stringify(get_selected_values());
+        "
     >
         {% block selected_choices %}
             <button
@@ -78,7 +77,6 @@
                 type="button"
                 @click="show_dropdown = !show_dropdown; focus_input();"
             >
-                {#  Display selected choices in dropdown field #}
                 <span class="d-flex flex-wrap align-items-center">
                     <template x-for="(choice, index) in get_selected_choices()" :key="index">
                         <div class="d-inline-block my-1">
@@ -119,7 +117,7 @@
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
-                    @keydown.enter.prevent="value = filtered_choices[0][0]; show_dropdown = false"
+                    @keydown.enter.prevent="add_choice(filtered_choices[0])"
                 >
             </div>
 
@@ -142,7 +140,6 @@
                 </div>
             </template>
 
-            {# Loop though available choices  #}
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
                     class="glue-cursor-pointer glue-user-select py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
@@ -156,7 +153,6 @@
                 </div>
             </template>
 
-            {# Message if no available choices #}
             <template x-if="filtered_choices.length === 0">
                 <div class="py-1 bg-app-glue-secondary-soft">
                     <span class="text-muted d-block glue-fs--2 ms-3">No available choices</span>

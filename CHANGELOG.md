@@ -1,5 +1,12 @@
 # Changelog for Django Glue
 
+## 0.7.7
+### Bugs
+- Simplify how multi-select field binds value & choices.
+- X-effect to parse value into proper array and bind to hidden input field. 
+- Close missing div on select field. 
+
+
 ## 0.7.6
 ### Changes
 - Blocks to extend / override select choice items.
