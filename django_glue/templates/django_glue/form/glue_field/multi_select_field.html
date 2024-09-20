@@ -5,13 +5,12 @@
         type="text"
         x-model="value"
         x-ref="glue_field"
-        hidden
     >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
-            search: '',                        
+            search: '',
             add_choice(choice) {
                 const selected_values = this.get_selected_values();
                 selected_values.push(choice[0]);
@@ -22,9 +21,7 @@
                 this.update_value(selected_values);
             },
             update_value(values) {
-                const value = JSON.stringify(values);
-                this.value = value;
-                this.glue_field.value = value;
+                this.value = JSON.stringify(values);
             },
             get_selected_values() {
                 try {
@@ -40,9 +37,7 @@
             },
             get filtered_choices() {
                 const selected_values = this.get_selected_values();
-                const filtered_array = this.glue_field.choices.filter(
-                    choice => !selected_values.includes(choice[0])
-                );
+                const filtered_array = this.glue_field.choices.filter(choice => !selected_values.includes(choice[0]));
 
                 const search = this.search.toLowerCase();
                 return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
@@ -52,15 +47,27 @@
             },
         }"
         x-effect="
-            glue_field.choices = glue_field.choices.filter(choice => choice[1] !== '----------');            
+            if (glue_field.choices) {
+                glue_field.choices = glue_field.choices.filter(choice => choice[1] !== '----------');
+            }
 
-            if (glue_field.value) {
-                if (Array.isArray(value) || typeof(glue_field.value) == 'object') {
-                    value = JSON.stringify(glue_field.value);
+            if (typeof(glue_field.value) == 'string') {
+                try {
+                    JSON.parse(glue_field.value);
+                } catch (error) {
+                    glue_field.value = JSON.stringify(glue_field.value);
                 }
             }
 
-            glue_field.value = JSON.stringify(get_selected_values());
+            if (Array.isArray(glue_field.value)) {
+                glue_field.value = value = JSON.stringify(glue_field.value);
+            }
+
+            if (Array.isArray(value)) {
+                value = JSON.stringify(value);
+            }
+
+            value = JSON.stringify(get_selected_values());
         "
     >
         {% block selected_choices %}
@@ -109,6 +116,7 @@
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
+                    @keydown.enter.prevent="add_choice(filtered_choices[0])"
                 >
             </div>
 
