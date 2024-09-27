@@ -39,7 +39,7 @@
                 }
             },
             handle_click(event) {
-                if (!this.$refs.search_input.contains(event.target) && !this.is_search_focused) {
+                if (!this.$refs.search_input.contains(event.target) && !this.is_search_focused || this.show_dropdown) {
                     this.show_dropdown = false;
                 }
             },
