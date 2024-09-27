@@ -30,7 +30,7 @@
                 }
             },
             focus_input() {
-                if (window.innerHeight >= 768) {
+                if (!is_touch_device()) {
                     setTimeout(() => this.$refs.search_input.focus(), 100);
 
                     if (this.show_dropdown) {
