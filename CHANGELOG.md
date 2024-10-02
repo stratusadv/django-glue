@@ -1,5 +1,10 @@
 # Changelog for Django Glue
 
+## 0.7.8
+### Bugs
+- The use of x-trap, focus_input() and click.outside seem to cause issues when the user is on mobile, and a keyboard is present.
+- On mobile, the search input field is not focused upon opening the dropdown.
+
 ## 0.7.7
 ### Bugs
 - Simplify how multi-select field binds value & choices.
