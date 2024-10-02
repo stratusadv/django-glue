@@ -27,6 +27,11 @@ function encodeUniqueName(unique_name) {
 }
 
 
+function is_touch_device() {
+    return window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+}
+
+
 function simplify_model_fields(field_data) {
     let simplified_data = {}
 
