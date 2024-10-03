@@ -23,15 +23,14 @@
         }"
     >
         <button
-            class="form-control text-start d-flex justify-content-between"
+            class="form-control text-start d-flex justify-content-between {{ select_padding }}"
             type="button"
             @click="show_dropdown = !show_dropdown"
         >
             <span x-text="choice_verbose"></span>
-            <span class="d-flex align-items-center">
+            <span class="d-flex align-items-center pt-1">
                 {% include 'django_glue/form/glue_field/element/select_down_arrow_element.html' %}
             </span>
-
         </button>
         <div
             x-cloak
