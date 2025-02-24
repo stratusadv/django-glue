@@ -24,6 +24,12 @@
                     });
 
                     this.glue_field.choices = this.glue_field.choices.filter(choice => choice[0] != item);
+
+                    if (this.glue_field.choices.length > 0) {
+                        this.glue_field.value = this.glue_field.choices[0][0];
+                    } else {
+                        this.glue_field.value = '';
+                    }
                 }
             },
 
@@ -44,22 +50,32 @@
         }",
         x-effect="submit()"
     >
-        <div class="row g-2">
-            <div class="col-11">
-                {% include "django_glue/form/glue_field/search_and_select_field.html" with glue_field=glue_field %}
-            </div>
+        <div class="row g-2 mb-2">
+            {% block component_field %}
+                <div class="col-10">
+                    {% include "django_glue/form/glue_field/search_and_select_field.html" with glue_field=glue_field %}
+                </div>
+            {% endblock %}
 
-            <div class="col-1 d-flex align-items-stretch">
-                <button type="button" @click.prevent="add_item()" class="btn btn-primary w-100 h-100">+</button>
-            </div>
+            {% block add_item_button %}
+                <div class="col-2 d-flex align-items-stretch">
+                    <button type="button" @click.prevent="add_item()" class="btn btn-primary w-100 h-100">Add</button>
+                </div>
+            {% endblock %}
         </div>
+
+        <template x-if="selected.length === 0">
+            <div class="mt-4 text-muted">
+                No item(s) selected.
+            </div>
+        </template>
 
         <template x-for="(item, index) in selected" :key="item.id">
             <div class="row align-items-center item-hover item-container border-bottom border-300 py-2">
                 {% block item_row_content %}
                 {% endblock %}
 
-                {% block item_button %}
+                {% block remove_item_button %}
                     <div class="col-md-3 d-flex justify-content-end pt-3">
                         <i @click="remove_item(index)" class="bi bi-trash text-danger cursor-pointer"></i>
                     </div>
