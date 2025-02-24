@@ -3,7 +3,7 @@
 {% block field_content %}
     <div
         x-data="{
-            glue_data: {{ glue_data|default:'{}'|safe }},
+            glue_data: {{ glue_data|default:'{}' }},
             selected: Object.entries({{ glue_data.selected_choices|default:'{}' }}).map(([id, values]) => ({ id, ...values })),
             item: null,
 
@@ -31,9 +31,10 @@
                 let removed = this.selected[index];
                 this.selected.splice(index, 1);
 
-                this.glue_field.choices.push(
-                    [removed.id, removed.name || removed.label || '']
-                );
+                this.glue_field.value = '';
+
+                let label = this.glue_data.display_label;
+                this.glue_field.choices.push([removed.id, removed[label]]);
             },
 
             submit() {
