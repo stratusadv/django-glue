@@ -60,7 +60,7 @@
                     form_field.setAttribute(attr.name, attr.value)
                 }
             },
-            add_error_event_listener() {                
+            add_error_event_listener() {
                 this.$refs.glue_field.addEventListener('invalid', (e) => {
                     e.preventDefault();
                     this.glue_field.error = e.target.validationMessage
