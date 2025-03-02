@@ -4,10 +4,18 @@ from django.db.models import Model
 
 from django_glue.access.access import GlueAccess
 from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.model_object.fields.entities import GlueModelFields
+from django_glue.entities.model_object.fields.entities import (
+    GlueModelField,
+    GlueModelFieldMeta,
+    GlueModelFields
+)
 from django_glue.entities.model_object.fields.factories import model_object_fields_from_model
-from django_glue.entities.model_object.fields.utils import get_field_value_from_model_object
+from django_glue.entities.model_object.fields.utils import (
+    field_name_included,
+    get_field_value_from_model_object
+)
 from django_glue.entities.model_object.session_data import GlueModelObjectSessionData
+from django_glue.form.field.entities import GlueAnnotationField
 from django_glue.handler.enums import GlueConnection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
@@ -45,21 +53,56 @@ class GlueModelObject(GlueEntity):
         return None
 
     def generate_field_data(self, include_values: bool = True) -> GlueModelFields:
-
         glue_model_fields = model_object_fields_from_model(
             model=self.model,
             included_fields=self.included_fields,
             excluded_fields=self.excluded_fields
         )
 
+        field_names = {
+            field.name
+            for field in glue_model_fields.fields
+        }
+
+        instance_dict_keys = set(self.model_object.__dict__.keys())
+        possible_annotated_fields = instance_dict_keys - field_names - {'_state'}
+
+        for attr_name in possible_annotated_fields:
+            if attr_name.startswith('_'):
+                continue
+
+            value = getattr(self.model_object, attr_name)
+
+            if callable(value):
+                continue
+
+            if field_name_included(attr_name, self.included_fields, self.excluded_fields):
+                if not attr_name.endswith('_id'):
+                    _meta = GlueModelFieldMeta(
+                        type='GlueAnnotationField',
+                        name=attr_name,
+                        glue_field=GlueAnnotationField(attr_name)
+                    )
+
+                    field_value = value if include_values else None
+
+                    glue_model_fields.fields.append(
+                        GlueModelField(
+                            name=attr_name,
+                            value=field_value,
+                            _meta=_meta
+                        )
+                    )
+
         if include_values:
-            for field in glue_model_fields:
-                field.value = get_field_value_from_model_object(self.model_object, field)
+            for field in glue_model_fields.fields:
+                if field.name in field_names and field.value is None:
+                    field.value = get_field_value_from_model_object(self.model_object, field)
 
         return glue_model_fields
 
     def generate_method_data(self):
-        methods_list = list()
+        methods_list = []
 
         for method in self.included_methods:
             if hasattr(self.model_object, method):
@@ -72,11 +115,24 @@ class GlueModelObject(GlueEntity):
         return methods_list
 
     def to_session_data(self) -> GlueModelObjectSessionData:
+        session_data_fields = self.generate_field_data(include_values=False).to_dict()
+
+        annotated_value_map = {}
+
+        for field in self.fields.fields:
+            if field._meta.type == 'GlueAnnotationField':
+                annotated_value_map[field.name] = field.value
+
+        for field_name, field_data in session_data_fields.items():
+            if field_data['_meta']['type'] == 'GlueAnnotationField':
+                value = annotated_value_map.get(field_name)
+                field_data['value'] = value
+
         return GlueModelObjectSessionData(
             connection=self.connection,
             access=self.access,
             unique_name=self.unique_name,
-            fields=self.generate_field_data(include_values=False).to_dict(),
+            fields=session_data_fields,
             app_label=self.model_object._meta.app_label,
             model_name=self.model_object._meta.model_name,
             object_pk=self.model_object.pk,

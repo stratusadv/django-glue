@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from django_glue.form.field.attrs.entities import GlueFieldAttrs
+from django_glue.form.field.attrs.entities import GlueFieldAttr, GlueFieldAttrs
 
 
 @dataclass
@@ -30,3 +30,21 @@ class GlueFormField:
             'help_text': self.help_text,
             'choices': self.choices
         }
+
+
+@dataclass
+class GlueAnnotationField(GlueFormField):
+    def __init__(self, name: str):
+        super().__init__(
+            name=name,
+            type='GlueAnnotationField',
+            attrs=GlueFieldAttrs(attrs=[
+                GlueFieldAttr(name='readonly', value=True)
+            ]),
+            label=name.title(),
+            help_text='',
+            choices=[]
+        )
+
+    def to_dict(self) -> dict:
+        return super().to_dict()
