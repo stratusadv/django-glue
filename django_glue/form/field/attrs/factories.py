@@ -44,6 +44,11 @@ class GlueAttrFactory(ABC):
         return self.glue_field_attrs
 
 
+class GlueAnnotationAttrFactory(GlueAttrFactory):
+    def add_field_attrs(self):
+        self.add_attr('readonly', True)
+
+
 class GlueBooleanAttrFactory(GlueAttrFactory):
     def add_field_attrs(self):
         pass
