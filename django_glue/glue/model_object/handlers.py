@@ -4,12 +4,12 @@ from django_glue.glue.post_data import UpdatePostData, MethodPostData
 from django_glue.glue.model_object.factories import glue_model_object_from_glue_session
 from django_glue.glue.model_object.response_data import MethodGlueModelObjectJsonData, GlueModelObjectJsonData
 from django_glue.glue.model_object.session_data import GlueModelObjectSessionData
-from django_glue.handler.handlers import GlueRequestHandler
+from django_glue.handler.handlers import BaseRequestHandler
 from django_glue.response.data import JsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
 
 
-class GetModelObjectGlueHandler(GlueRequestHandler):
+class GetModelObjectGlueHandler(BaseRequestHandler):
     action = ModelObjectGlueAction.GET
     _session_data_class = GlueModelObjectSessionData
 
@@ -23,7 +23,7 @@ class GetModelObjectGlueHandler(GlueRequestHandler):
         )
 
 
-class UpdateModelObjectGlueHandler(GlueRequestHandler):
+class UpdateModelObjectGlueHandler(BaseRequestHandler):
     action = ModelObjectGlueAction.UPDATE
     _session_data_class = GlueModelObjectSessionData
     _post_data_class = UpdatePostData
@@ -39,7 +39,7 @@ class UpdateModelObjectGlueHandler(GlueRequestHandler):
         )
 
 
-class DeleteModelObjectGlueHandler(GlueRequestHandler):
+class DeleteModelObjectGlueHandler(BaseRequestHandler):
     action = ModelObjectGlueAction.DELETE
     _session_data_class = GlueModelObjectSessionData
 
@@ -53,7 +53,7 @@ class DeleteModelObjectGlueHandler(GlueRequestHandler):
         )
 
 
-class MethodModelObjectGlueHandler(GlueRequestHandler):
+class MethodModelObjectGlueHandler(BaseRequestHandler):
     action = ModelObjectGlueAction.METHOD
     _session_data_class = GlueModelObjectSessionData
     _post_data_class = MethodPostData

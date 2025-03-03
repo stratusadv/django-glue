@@ -10,12 +10,12 @@ from django_glue.glue.query_set.response_data import GlueQuerySetJsonData, Metho
     ToChoicesGlueQuerySetJsonData
 
 from django_glue.glue.query_set.session_data import GlueQuerySetSessionData
-from django_glue.handler.handlers import GlueRequestHandler
+from django_glue.handler.handlers import BaseRequestHandler
 from django_glue.response.data import JsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
 
 
-class AllQuerySetGlueHandler(GlueRequestHandler):
+class AllQuerySetGlueHandler(BaseRequestHandler):
     action = QuerySetGlueAction.ALL
     _session_data_class = GlueQuerySetSessionData
 
@@ -32,7 +32,7 @@ class AllQuerySetGlueHandler(GlueRequestHandler):
         )
 
 
-class DeleteGlueQuerySetHandler(GlueRequestHandler):
+class DeleteGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.DELETE
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = DeletePostData
@@ -50,7 +50,7 @@ class DeleteGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class FilterGlueQuerySetHandler(GlueRequestHandler):
+class FilterGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.FILTER
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = FilterGlueQuerySetPostData
@@ -69,7 +69,7 @@ class FilterGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class GetGlueQuerySetHandler(GlueRequestHandler):
+class GetGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.GET
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = GetPostData
@@ -88,7 +88,7 @@ class GetGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class NullObjectGlueQuerySetHandler(GlueRequestHandler):
+class NullObjectGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.NULL_OBJECT
     _session_data_class = GlueQuerySetSessionData
 
@@ -104,7 +104,7 @@ class NullObjectGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class MethodGlueQuerySetHandler(GlueRequestHandler):
+class MethodGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.METHOD
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = MethodPostData
@@ -141,7 +141,7 @@ class MethodGlueQuerySetHandler(GlueRequestHandler):
             )
 
 
-class UpdateGlueQuerySetHandler(GlueRequestHandler):
+class UpdateGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.UPDATE
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = UpdatePostData
@@ -162,7 +162,7 @@ class UpdateGlueQuerySetHandler(GlueRequestHandler):
         )
 
 
-class ToChoicesGlueQuerySetHandler(GlueRequestHandler):
+class ToChoicesGlueQuerySetHandler(BaseRequestHandler):
     action = QuerySetGlueAction.TO_CHOICES
     _session_data_class = GlueQuerySetSessionData
     _post_data_class = FilterGlueQuerySetPostData

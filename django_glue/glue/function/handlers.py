@@ -4,12 +4,12 @@ from django_glue.glue.function.glue import FunctionGlue
 from django_glue.glue.function.post_data import CallFunctionGluePostData
 
 from django_glue.glue.function.session_data import FunctionGlueSessionData
-from django_glue.handler.handlers import GlueRequestHandler
+from django_glue.handler.handlers import BaseRequestHandler
 from django_glue.response.data import JsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
 
 
-class CallFunctionGlueHandler(GlueRequestHandler):
+class CallFunctionGlueHandler(BaseRequestHandler):
     action = FunctionGlueAction.CALL
     _session_data_class = FunctionGlueSessionData
     _post_data_class = CallFunctionGluePostData

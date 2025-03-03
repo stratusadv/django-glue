@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from django_glue.access.actions import BaseAction
 
 
-class GlueRequestHandler(ABC):
+class BaseRequestHandler(ABC):
     action: BaseAction = None
     _session_data_class: 'GlueSessionData' = None
     _post_data_class: Optional['EntityBodyData'] = None
