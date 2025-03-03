@@ -35,7 +35,6 @@
                         if (this.is_valid_glue_field()) {
                             this.set_field_attrs()
                         }
-
                     })
             },
             init_glue_model_field(glue_model_field_name) {
@@ -61,7 +60,7 @@
                     form_field.setAttribute(attr.name, attr.value)
                 }
             },
-            add_error_event_listener() {                
+            add_error_event_listener() {
                 this.$refs.glue_field.addEventListener('invalid', (e) => {
                     e.preventDefault();
                     this.glue_field.error = e.target.validationMessage
@@ -84,8 +83,10 @@
                 <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.required">*</span>
             </label>
         {% endblock %}
+
         {% block field_content %}
         {% endblock %}
+
         <div x-show="glue_field.error">
             <span class="text-danger glue-fs--1" x-text="glue_field.error"></span>
         </div>
