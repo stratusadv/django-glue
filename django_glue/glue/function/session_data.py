@@ -4,6 +4,6 @@ from django_glue.session.data import GlueSessionData
 
 
 @dataclass
-class FunctionSessionData(GlueSessionData):
+class FunctionGlueSessionData(GlueSessionData):
     function_path: str
 

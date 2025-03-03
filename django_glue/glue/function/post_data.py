@@ -3,5 +3,5 @@ from typing import Any
 
 
 @dataclass
-class CallGlueFunctionPostData:
+class CallFunctionGluePostData:
     kwargs: dict[str, Any]
