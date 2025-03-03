@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from django_glue.core.decorators import require_content_types
-from django_glue.handler.body_data import GlueBodyData
+from django_glue.handler.body_data import GlueRequestBody
 from django_glue.handler.utils import process_glue_request
 from django_glue.response.responses import generate_json_404_response
 from django_glue.session import GlueKeepLiveSession, GlueSession
@@ -15,7 +15,7 @@ from django_glue.session import GlueKeepLiveSession, GlueSession
 @require_content_types('application/json', 'text/html')
 def glue_data_ajax_handler_view(request):
     glue_session = GlueSession(request)
-    glue_body_data = GlueBodyData(request.body)
+    glue_body_data = GlueRequestBody(request.body)
 
     if glue_body_data.unique_name in glue_session.session:
         logging.warning(request.body.decode('utf-8'))

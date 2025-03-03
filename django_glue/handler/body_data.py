@@ -1,7 +1,7 @@
 import json
 
-# W T F IS THIS
-class GlueBodyData:
+
+class GlueRequestBody:
     def __init__(self, request_body):
         self.data = json.loads(request_body.decode('utf-8'))
         self.unique_name = self.data['unique_name']
