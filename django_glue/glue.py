@@ -4,16 +4,16 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
-from django_glue.entities.base_entity import GlueEntity
-from django_glue.entities.function.entities import GlueFunction
-from django_glue.entities.model_object.entities import GlueModelObject
-from django_glue.entities.query_set.entities import GlueQuerySet
-from django_glue.entities.template.entities import GlueTemplate
+from django_glue.glue.glue import BaseGlue
+from django_glue.glue.function.glue import FunctionGlue
+from django_glue.glue.model_object.glue import ModelObjectGlue
+from django_glue.glue.query_set.glue import QuerySetGlue
+from django_glue.glue.template.glue import TemplateGlue
 from django_glue.session import GlueSession, GlueKeepLiveSession
 from django_glue.utils import encode_unique_name
 
 
-def _glue_entity(request: HttpRequest, glue_entity: GlueEntity):
+def _glue_entity(request: HttpRequest, glue_entity: BaseGlue):
     glue_session = GlueSession(request)
     glue_session.add_glue_entity(glue_entity)
 
@@ -29,7 +29,7 @@ def glue_function(
         unique_name: str,
         target: str,
 ):
-    glue_function_entity = GlueFunction(
+    glue_function_entity = FunctionGlue(
         unique_name=encode_unique_name(request, unique_name),
         function_path=target
     )
@@ -45,7 +45,7 @@ def glue_model(
         exclude: Union[list, tuple] = ('__none__',),
         methods: Union[list, tuple] = ('__none__',),
 ):
-    glue_model_object_entity = GlueModelObject(
+    glue_model_object_entity = ModelObjectGlue(
         unique_name=encode_unique_name(request, unique_name),
         model_object=target,
         access=access,
@@ -66,7 +66,7 @@ def glue_query_set(
         exclude: Union[list, tuple] = ('__none__',),
         methods: Union[list, tuple] = ('__none__',),
 ):
-    glue_query_set_entity = GlueQuerySet(
+    glue_query_set_entity = QuerySetGlue(
         unique_name=encode_unique_name(request, unique_name),
         query_set=target,
         access=access,
@@ -84,7 +84,7 @@ def glue_template(
         target: str,
 ):
 
-    glue_template_entity = GlueTemplate(
+    glue_template_entity = TemplateGlue(
         unique_name=encode_unique_name(request, unique_name),
         template_name=target
     )

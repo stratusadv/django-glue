@@ -1,11 +1,16 @@
-from abc import ABC, abstractmethod
-from typing import Optional
+from __future__ import annotations
 
-from django_glue.access.access import GlueAccess
+from abc import ABC, abstractmethod
+from typing import Optional, TYPE_CHECKING
+
+from django_glue.access.access import Access
+
+if TYPE_CHECKING:
+    from django_glue.access.actions import BaseAction
 
 
 class GlueRequestHandler(ABC):
-    action: 'GlueAction' = None
+    action: BaseAction = None
     _session_data_class: 'GlueSessionData' = None
     _post_data_class: Optional['EntityBodyData'] = None
 
@@ -26,7 +31,7 @@ class GlueRequestHandler(ABC):
         self.session_data = self._session_data_class(**glue_session[self.unique_name])  # data we stored in glue session.
 
     def has_access(self):
-        glue_access = GlueAccess(self.session_data.access)
+        glue_access = Access(self.session_data.access)
         return glue_access.has_access(self.action.required_access())
 
     @abstractmethod

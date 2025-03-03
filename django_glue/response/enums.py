@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class GlueJsonResponseType(str, Enum):
+class JsonResponseType(str, Enum):
     SUCCESS = 'success'
     INFO = 'info'
     WARNING = 'warning'
@@ -12,7 +12,7 @@ class GlueJsonResponseType(str, Enum):
         return self.value
 
 
-class GlueJsonResponseStatus(str, Enum):
+class JsonResponseStatus(str, Enum):
     SUCCESS = '200'
     SILENT_SUCCESS = '204'
     ERROR = '404'

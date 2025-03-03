@@ -1,0 +1,14 @@
+from django_glue.glue.query_set.actions import QuerySetGlueAction
+from django_glue.glue.query_set import handlers
+
+
+GLUE_QUERY_SET_HANDLER_MAP = {
+    QuerySetGlueAction.ALL: handlers.AllQuerySetGlueHandler,
+    QuerySetGlueAction.DELETE: handlers.DeleteGlueQuerySetHandler,
+    QuerySetGlueAction.FILTER: handlers.FilterGlueQuerySetHandler,
+    QuerySetGlueAction.GET: handlers.GetGlueQuerySetHandler,
+    QuerySetGlueAction.NULL_OBJECT: handlers.NullObjectGlueQuerySetHandler,
+    QuerySetGlueAction.METHOD: handlers.MethodGlueQuerySetHandler,
+    QuerySetGlueAction.UPDATE: handlers.UpdateGlueQuerySetHandler,
+    QuerySetGlueAction.TO_CHOICES: handlers.ToChoicesGlueQuerySetHandler,
+}

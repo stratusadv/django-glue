@@ -7,7 +7,7 @@ from django.db.models import Field
 from django_glue.form.field.attrs.entities import GlueFieldAttrs, GlueFieldAttr
 
 
-class GlueAttrFactory(ABC):
+class GlueBaseAttrFactory(ABC):
     def __init__(self, model_field: Field):
         self.model_field = model_field
         self.glue_field_attrs = GlueFieldAttrs()
@@ -44,23 +44,23 @@ class GlueAttrFactory(ABC):
         return self.glue_field_attrs
 
 
-class GlueBooleanAttrFactory(GlueAttrFactory):
+class GlueBooleanAttrFactory(GlueBaseAttrFactory):
     def add_field_attrs(self):
         pass
 
 
-class GlueCharAttrFactory(GlueAttrFactory):
+class GlueCharAttrFactory(GlueBaseAttrFactory):
     def add_field_attrs(self):
         pass
 
 
-class GlueDateAttrFactory(GlueAttrFactory):
+class GlueDateAttrFactory(GlueBaseAttrFactory):
     def add_field_attrs(self):
         self.add_attr('max', '')
         self.add_attr('min', '')
 
 
-class GlueTextAreaAttrFactory(GlueAttrFactory):
+class GlueTextAreaAttrFactory(GlueBaseAttrFactory):
     def add_field_attrs(self):
         self.add_attr('cols', 20)
         self.add_attr('rows', 3)
