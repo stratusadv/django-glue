@@ -3,8 +3,9 @@
 ## 0.7.9
 ### Bugs
 - Fix CSS of the search_and_select_field to be less jarring when focus is shifted from the button to the search input field.
-- Use $nextTick to decide when to focus on search, instead of using setTimeout.
 - Add a watcher to the select_field and search_and_select_field so the value can be changed/displayed dynamically/programatically.
+### Changes
+- Use $nextTick to decide when to focus on search, instead of using setTimeout.
 
 ## 0.7.8
 ### Bugs
