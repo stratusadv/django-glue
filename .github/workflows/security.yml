@@ -1,0 +1,66 @@
+name: Security Scan
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  security_scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: bandit -c pyproject.toml -r . --severity-level medium --confidence-level low --format txt | tee bandit_report.txt
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: pip-audit | tee pip_audit_report.txt
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
+          sudo mv ./bin/trivy /usr/local/bin/trivy
+
+      - name: Run Trivy
+        run: trivy fs . --severity LOW,MEDIUM,HIGH,CRITICAL --format table | tee trivy_report.txt
+
+      - name: Remove Trufflehog
+        run: |
+          pip uninstall -y trufflehog || true
+
+      - name: Install TruffleHog 3
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+          | sudo sh -s -- -b /usr/local/bin
+
+      - name: Run TruffleHog
+        run: trufflehog filesystem . --json --no-update | tee trufflehog_report.txt
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit_report.txt
+            pip_audit_report.txt
+            trivy_report.txt
+            trufflehog_report.txt
+          retention-days: 7
