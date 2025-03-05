@@ -17,8 +17,8 @@
 
                     <form
                         x-data="{
-                        person: new GlueModelObject('person'),
-                        people_query_set: new GlueQuerySet('people'),
+                        person: new ModelObjectGlue('person'),
+                        people_query_set: new QuerySetGlue('people'),
                         best_friend: new GlueIntegerField('best_friend', {
                             required: true
                         }),
@@ -44,40 +44,40 @@
                         {% csrf_token %}
                         <div class="row g-3">
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.first_name' %}
+                                {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/char_field.html' with glue_model_field='person.last_name' %}
+                                {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.last_name' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/date_field.html' with glue_model_field='person.birth_date' %}
+                                {% include 'django_glue/form/field/date_field.html' with glue_model_field='person.birth_date' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/search_and_select_field.html' with glue_model_field='person.personality_type' %}
+                                {% include 'django_glue/form/field/search_and_select_field.html' with glue_model_field='person.personality_type' %}
                             </div>
                             <div class="col-12">
-                                {% include 'django_glue/form/glue_field/email_field.html' with glue_model_field='person.email' %}
+                                {% include 'django_glue/form/field/email_field.html' with glue_model_field='person.email' %}
                             </div>
                             <div class="col-12">
-                                {% include 'django_glue/form/glue_field/text_field.html' with glue_model_field='person.description' %}
+                                {% include 'django_glue/form/field/text_field.html' with glue_model_field='person.description' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/number_field.html' with glue_model_field='person.favorite_number' %}
+                                {% include 'django_glue/form/field/number_field.html' with glue_model_field='person.favorite_number' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/decimal_field.html' with glue_model_field='person.weight_lbs' %}
+                                {% include 'django_glue/form/field/decimal_field.html' with glue_model_field='person.weight_lbs' %}
                             </div>
                             <div class="col-12">
-                                {% include 'django_glue/form/glue_field/radio_field.html' with glue_model_field='person.likes_to_party' %}
+                                {% include 'django_glue/form/field/radio_field.html' with glue_model_field='person.likes_to_party' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/select_field.html' with glue_field='best_friend' %}
+                                {% include 'django_glue/form/field/select_field.html' with glue_field='best_friend' %}
                             </div>
                             <div class="col-md-6">
-                                {% include 'django_glue/form/glue_field/multi_select_field.html' with glue_field='coding_goals' %}
+                                {% include 'django_glue/form/field/multi_select_field.html' with glue_field='coding_goals' %}
                             </div>
                             <div class="col-12">
-                                {% include 'django_glue/form/glue_field/text_field.html' with glue_field='ideal_coding_session' %}
+                                {% include 'django_glue/form/field/text_field.html' with glue_field='ideal_coding_session' %}
                             </div>
                             <div class="col-12 mt-4">
                                 <button class="btn btn-success w-100" type="submit">Create My GlueHub Profile</button>

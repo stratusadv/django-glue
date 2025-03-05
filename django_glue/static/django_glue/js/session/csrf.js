@@ -1,4 +1,4 @@
-function glue_get_cookie(name) {
+function django_glue_get_cookie(name) {
     let cookie_value = null
 
     if (document.cookie && document.cookie !== '') {

@@ -9,7 +9,7 @@ from django_glue.handler.enums import Connection
 
 
 @dataclass
-class GlueSessionData(ABC):
+class SessionData(ABC):
     unique_name: str
     connection: Connection
     access: Access

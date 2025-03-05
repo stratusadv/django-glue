@@ -2,7 +2,7 @@ from django_glue.glue.query_set.actions import QuerySetGlueAction
 from django_glue.glue.query_set import handlers
 
 
-GLUE_QUERY_SET_HANDLER_MAP = {
+QUERY_SET_GLUE_HANDLER_MAP = {
     QuerySetGlueAction.ALL: handlers.AllQuerySetGlueHandler,
     QuerySetGlueAction.DELETE: handlers.DeleteGlueQuerySetHandler,
     QuerySetGlueAction.FILTER: handlers.FilterGlueQuerySetHandler,

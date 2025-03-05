@@ -16,14 +16,16 @@ class CallFunctionGlueHandler(BaseRequestHandler):
 
     @check_access
     def process_response_data(self) -> JsonResponseData:
-        glue_function = FunctionGlue(
+        function_glue = FunctionGlue(
             unique_name=self.session_data.unique_name,
             function_path=self.session_data.function_path
         )
-        function_return = glue_function.call(self.post_data.kwargs)
+        
+        function_return = function_glue.call(self.post_data.kwargs)
+        
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',
-            data=glue_function.to_response_data(function_return)
+            data=function_glue.to_response_data(function_return)
         )
 

@@ -1,2 +1,2 @@
-from .keep_alive_session import GlueKeepLiveSession
-from .glue_session import GlueSession
+from .keep_alive_session import KeepLiveSession
+from .glue_session import Session

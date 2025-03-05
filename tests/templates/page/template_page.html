@@ -7,7 +7,7 @@
     {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Template" %}
 
     <div class="row g-3 p-3" x-data="{
-        button: new GlueTemplate('button_1', {prefix: 'Start', postfix: 'End'})
+        button: new TemplateGlue('button_1', {prefix: 'Start', postfix: 'End'})
     }">
         <p class="text-center mt-0">
             <button class="btn btn-outline-info px-2 mt-0"

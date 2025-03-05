@@ -1,16 +1,15 @@
 from time import time
 
 from django_glue.conf import settings
-from django_glue.session.session import Session
 
 
-class GlueKeepLiveSession(Session):
+class KeepLiveSession:
     """
         Used to keep glue session data live for a set amount of time.
         Functionality to handle multiple windows/tabs.
     """
     def __init__(self, request):
-        super().__init__(request)
+        self.request = request
         self.session = request.session.setdefault(settings.DJANGO_GLUE_KEEP_LIVE_SESSION_NAME, dict())
 
     def __getitem__(self, key):

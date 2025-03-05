@@ -6,8 +6,8 @@
 
 {% block body %}
     <div x-data="{
-        test_model_1: new GlueModelObject('test_model_1'),
-        test_query_1: new GlueQuerySet('test_query_1'),
+        test_model_1: new ModelObjectGlue('test_model_1'),
+        test_query_1: new QuerySetGlue('test_query_1'),
         method_parameter: null,
         method_return_value: null,
         test_model_list: null,

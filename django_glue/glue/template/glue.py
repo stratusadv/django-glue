@@ -3,7 +3,7 @@ from django.template.loader import render_to_string
 
 from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
-from django_glue.glue.template.response_data import GlueTemplateJsonData
+from django_glue.glue.template.response_data import TemplateGlueJsonData
 from django_glue.glue.template.session_data import TemplateSessionData
 from django_glue.handler.enums import Connection
 
@@ -28,5 +28,5 @@ class TemplateGlue(BaseGlue):
             template_name=self.template_name
         )
 
-    def to_response_data(self, rendered_template: str) -> GlueTemplateJsonData:
-        return GlueTemplateJsonData(rendered_template)
+    def to_response_data(self, rendered_template: str) -> TemplateGlueJsonData:
+        return TemplateGlueJsonData(rendered_template)

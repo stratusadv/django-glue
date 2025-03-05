@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 from django_glue.glue.model_object.fields.seralizers import serialize_field_value
-from django_glue.form.field.entities import GlueFormField
+from django_glue.form.field.field import FormField
 
 
 @dataclass
 class ModelFieldMetaGlue:
     type: str
     name: str
-    glue_field: GlueFormField
+    glue_field: FormField
 
     def to_dict(self) -> dict:
         return {

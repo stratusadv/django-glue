@@ -4,7 +4,7 @@ from django_glue.response.data import BaseJsonData
 
 
 @dataclass
-class GlueTemplateJsonData(BaseJsonData):
+class TemplateGlueJsonData(BaseJsonData):
     rendered_template: str
 
     def to_dict(self):

@@ -1,16 +1,16 @@
 from typing import Optional
 
-from django_glue.form.field.attrs.entities import GlueFieldAttrs
-from django_glue.form.field.entities import GlueFormField
-from django_glue.form.field.attrs.builder import glue_field_attr_from_model_field
+from django_glue.form.field.attributes.attributes import FieldAttributes
+from django_glue.form.field.field import FormField
+from django_glue.form.field.attributes.builder import field_attr_from_model_field
 
 
-class GlueFormFieldFactory:
+class FormFieldFactory:
     def __init__(self, model_field):
         self.model_field = model_field
 
-    def attrs(self) -> GlueFieldAttrs:
-        return glue_field_attr_from_model_field(self.model_field)
+    def attrs(self) -> FieldAttributes:
+        return field_attr_from_model_field(self.model_field)
 
     def choices(self) -> list:
         if self.model_field.choices:
@@ -25,7 +25,7 @@ class GlueFormFieldFactory:
                 return [(False, '----------')]
 
     def factory_method(self):
-        return GlueFormField(
+        return FormField(
             name=self.model_field.name,
             type=self.model_field.get_internal_type(),
             label=self.label(),

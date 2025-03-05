@@ -13,8 +13,8 @@ class Access(str, Enum):
         return self.value
 
     def has_access(self, access_required: Access):
-        glue_access_tuple = tuple(Access.__members__.values())
-        if glue_access_tuple.index(self) >= glue_access_tuple.index(access_required):
+        access_tuple = tuple(Access.__members__.values())
+        if access_tuple.index(self) >= access_tuple.index(access_required):
             return True
         else:
             return False

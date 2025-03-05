@@ -3,6 +3,6 @@ from typing import Any
 
 
 @dataclass
-class GetGlueTemplatePostData:
+class GetTemplateGluePostData:
     context_data: dict[str, Any]
 

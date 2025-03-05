@@ -1,17 +1,17 @@
-from django_glue.handler.body_data import GlueRequestBody
+from django_glue.handler.body import RequestBody
 from django_glue.handler.enums import Connection
 from django_glue.response.data import JsonResponseData
 
 from django_glue.handler.maps import CONNECTION_TO_HANDLER_MAP
-from django_glue.session import GlueSession
+from django_glue.session import Session
 
 
-def process_glue_request(glue_session: GlueSession, glue_body_data: GlueRequestBody) -> JsonResponseData:
+def process_request(session: Session, request_body: RequestBody) -> JsonResponseData:
     # Todo: Validation errors.
-    connection = Connection(glue_session[glue_body_data.unique_name]['connection'])
+    connection = Connection(session[request_body.unique_name]['connection'])
 
-    handler_class = CONNECTION_TO_HANDLER_MAP[Connection(connection)][glue_body_data.action]
+    handler_class = CONNECTION_TO_HANDLER_MAP[Connection(connection)][request_body.action]
     return handler_class(
-        glue_session=glue_session,
-        glue_body_data=glue_body_data
+        session=session,
+        request_body=request_body
     ).process_response_data()

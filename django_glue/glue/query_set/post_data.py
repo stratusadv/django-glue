@@ -2,5 +2,5 @@ from dataclasses import dataclass
 
 
 @dataclass
-class FilterGlueQuerySetPostData:
+class FilterQuerySetGluePostData:
     filter_params: dict[str, str]

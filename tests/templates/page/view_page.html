@@ -7,7 +7,7 @@
     {% include 'navigation/top_navigation.html' with navigation_title="Django Glue View" %}
 
     <div class="row g-3 p-3" x-data="{
-        view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+        view_card: new ViewGlue('{% url &quot;view_card&quot; %}?tacos=hello')
     }">
         <div class="col-6">
             {% include 'card/glue_view_render_inner_card.html' %}

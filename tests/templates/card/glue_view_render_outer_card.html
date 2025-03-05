@@ -9,7 +9,7 @@
 {% block body %}
     <div
         x-data="{
-            view_card: new GlueView('{% url "view_card" %}?tacos=hello')
+            view_card: new ViewGlue('{% url &quot;view_card&quot; %}?tacos=hello')
         }"
         class="row g-3 p-3"
     >

@@ -9,15 +9,15 @@ from django_glue.glue.function.glue import FunctionGlue
 from django_glue.glue.model_object.glue import ModelObjectGlue
 from django_glue.glue.query_set.glue import QuerySetGlue
 from django_glue.glue.template.glue import TemplateGlue
-from django_glue.session import GlueSession, GlueKeepLiveSession
+from django_glue.session import Session, KeepLiveSession
 from django_glue.utils import encode_unique_name
 
 
 def _glue_entity(request: HttpRequest, glue_entity: BaseGlue):
-    glue_session = GlueSession(request)
+    glue_session = Session(request)
     glue_session.add_glue_entity(glue_entity)
 
-    glue_keep_live_session = GlueKeepLiveSession(request)
+    glue_keep_live_session = KeepLiveSession(request)
     glue_keep_live_session.set_unique_name(glue_entity.unique_name)
 
     # Todo: Check to see if this has actually changed.

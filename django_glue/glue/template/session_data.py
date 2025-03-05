@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
-from django_glue.session.data import GlueSessionData
+from django_glue.session.data import SessionData
 
 
 @dataclass
-class TemplateSessionData(GlueSessionData):
+class TemplateSessionData(SessionData):
     template_name: str
 

@@ -6,8 +6,8 @@ from django.db.models import QuerySet
 
 from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
-from django_glue.glue.model_object.fields.factories import model_object_fields_from_model
-from django_glue.glue.query_set.session_data import GlueQuerySetSessionData
+from django_glue.glue.model_object.fields.tools import model_object_fields_from_model
+from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
 from django_glue.handler.enums import Connection
 
 
@@ -33,8 +33,8 @@ class QuerySetGlue(BaseGlue):
     def encode_query_set(self):
         return base64.b64encode(pickle.dumps(self.query_set.query)).decode()
 
-    def to_session_data(self) -> GlueQuerySetSessionData:
-        return GlueQuerySetSessionData(
+    def to_session_data(self) -> QuerySetGlueSessionData:
+        return QuerySetGlueSessionData(
             unique_name=self.unique_name,
             query_set_str=self.encode_query_set(),
             connection=self.connection,

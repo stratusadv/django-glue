@@ -5,9 +5,9 @@ from django.db.models import Model
 from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
-from django_glue.glue.model_object.fields.factories import model_object_fields_from_model
+from django_glue.glue.model_object.fields.tools import model_object_fields_from_model
 from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
-from django_glue.glue.model_object.session_data import GlueModelObjectSessionData
+from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
 from django_glue.handler.enums import Connection
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
@@ -46,17 +46,17 @@ class ModelObjectGlue(BaseGlue):
 
     def generate_field_data(self, include_values: bool = True) -> ModelFieldsGlue:
 
-        glue_model_fields = model_object_fields_from_model(
+        model_fields = model_object_fields_from_model(
             model=self.model,
             included_fields=self.included_fields,
             excluded_fields=self.excluded_fields
         )
 
         if include_values:
-            for field in glue_model_fields:
+            for field in model_fields:
                 field.value = get_field_value_from_model_object(self.model_object, field)
 
-        return glue_model_fields
+        return model_fields
 
     def generate_method_data(self):
         methods_list = list()
@@ -71,8 +71,8 @@ class ModelObjectGlue(BaseGlue):
 
         return methods_list
 
-    def to_session_data(self) -> GlueModelObjectSessionData:
-        return GlueModelObjectSessionData(
+    def to_session_data(self) -> ModelObjectGlueSessionData:
+        return ModelObjectGlueSessionData(
             connection=self.connection,
             access=self.access,
             unique_name=self.unique_name,

@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from typing import Union
 
 from django_glue.glue.model_object.fields.glue import ModelFieldGlue
-from django_glue.session.data import GlueSessionData
+from django_glue.session.data import SessionData
 
 
 @dataclass
-class GlueModelObjectSessionData(GlueSessionData):
+class ModelObjectGlueSessionData(SessionData):
     app_label: str
     model_name: str
     object_pk: Union[int, str, uuid.uuid4]

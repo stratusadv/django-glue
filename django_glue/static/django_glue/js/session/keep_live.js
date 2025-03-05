@@ -1,12 +1,12 @@
-class GlueKeepLive {
+class DjangoGlueKeepLive {
     constructor() {
-        window.glue_keep_live_unique_names = []
-        window.glue_session_data = {}
+        window.django_glue_keep_live_unique_names = []
+        window.django_glue_session_data = {}
     }
 
     add_unique_name(unique_name) {
-        if (!window.glue_keep_live_unique_names.includes(unique_name)) {
-            window.glue_keep_live_unique_names.push(unique_name)
+        if (!window.django_glue_keep_live_unique_names.includes(unique_name)) {
+            window.django_glue_keep_live_unique_names.push(unique_name)
         }
     }
 
@@ -15,10 +15,10 @@ class GlueKeepLive {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': glue_get_cookie('csrftoken'),
+                'X-CSRFToken': django_glue_get_cookie('csrftoken'),
             },
             body: JSON.stringify({
-                'unique_names': window.glue_keep_live_unique_names,
+                'unique_names': window.django_glue_keep_live_unique_names,
             }),
         }
 
