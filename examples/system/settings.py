@@ -13,7 +13,7 @@ ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 WSGI_APPLICATION = 'examples.wsgi.application'
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(BASE_DIR)
 
 INSTALLED_APPS = [
@@ -58,7 +58,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'examples/templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
