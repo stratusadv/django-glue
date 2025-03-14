@@ -4,16 +4,15 @@ from django.core.serializers.json import DjangoJSONEncoder
 
 from django_glue.conf import settings
 
-from django_glue.session.data import GlueSessionData
-from django_glue.session.session import Session
+from django_glue.session.data import SessionData
 
 
-class GlueSession(Session):
+class Session:
     """
         Used to add models, query sets, and other objects to the session.
     """
     def __init__(self, request):
-        super().__init__(request)
+        self.request = request
         self.request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
         self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
 
@@ -30,7 +29,7 @@ class GlueSession(Session):
         self.add_session_data(glue_entity.unique_name, glue_entity.to_session_data())
         self.set_modified()
 
-    def add_session_data(self, unique_name, session_data: GlueSessionData) -> None:
+    def add_session_data(self, unique_name, session_data: SessionData) -> None:
         self.session[unique_name] = session_data.to_dict()
 
     def clean(self, removable_unique_names):

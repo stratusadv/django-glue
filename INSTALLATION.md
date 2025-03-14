@@ -32,14 +32,14 @@ Add django-glue context processor to your project settings.
 TEMPLATES = [
     {
         ...
-        'OPTIONS': {
-            'context_processors': [
-                ...
-                'django_glue.context_processors.glue',
-            ],
-        },
+    'OPTIONS': {
+    'context_processors': [
         ...
-    },
+        'django_glue.context_processors.django_glue',
+    ],
+},
+...
+},
 ]
 ```
 

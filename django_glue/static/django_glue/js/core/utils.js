@@ -5,7 +5,7 @@ function choice_verbose(choice, choices) {
 }
 
 
-function glue_debounce(func, wait) {
+function django_glue_debounce(func, wait) {
     let timeout
 
     return function executedFunction(...args) {

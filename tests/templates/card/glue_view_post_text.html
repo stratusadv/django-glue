@@ -9,7 +9,7 @@
 {% block body %}
     <div
         x-data="{
-            view_card: new GlueView('{% url "view_card" %}?tacos=hello'),
+            view_card: new ViewGlue('{% url "view_card" %}?tacos=hello'),
             async manual_control() {
                 let view_text = await this.view_card.post({'page': 2})
                 this.$refs.target_div.innerHTML = view_text

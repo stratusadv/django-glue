@@ -28,10 +28,10 @@
 
             loadLocationTemplate(){
                 if (this.location === 'NYC'){
-                    template = new GlueTemplate('new_york_element')
+                    template = new TemplateGlue('new_york_element')
                 }
                 else if (this.location === 'CHI'){
-                    template = new GlueTemplate('chicago_element')
+                    template = new TemplateGlue('chicago_element')
                 }
                 template.render_inner($refs.location_div)
             }

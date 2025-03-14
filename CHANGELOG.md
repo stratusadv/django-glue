@@ -57,16 +57,17 @@
 - glue_fetch refactored to be more extendable.
 - glue_view uses glue_fetch with shortcut functions for both get and post requests.
   - glue view _render refactored to _fetch_view
-- GlueView's will have to be refactored to use the new parameter passing and methods. 
+- GlueView's will have to be refactored to use the new parameter passing and methods.
+
 ```js
     // Old Method
-    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
-    view_card._render({'page': 2}, 'POST')
-    
-    // Refactored Method
-    view_card: new GlueView('{% url "view_card" %}?tacos=hello')
-    view_card.post({'page': 2})
-    view_card.get({'page': 2})
+view_card: new ViewGlue('{% url "view_card" %}?tacos=hello')
+view_card._render({'page': 2}, 'POST')
+
+// Refactored Method
+view_card: new ViewGlue('{% url "view_card" %}?tacos=hello')
+view_card.post({'page': 2})
+view_card.get({'page': 2})
 ```
 
 
@@ -84,14 +85,14 @@
 - Simplified how glue form fields can be constructed.
 
 ```js
-    let person = new GlueModelObject('person')
-    await person.get()
-    
-    // Old Method
-    person.fields.first_name  // Returns glue field data
+    let person = new ModelObjectGlue('person')
+await person.get()
 
-    // Refactored Method
-    person.glue_fields.first_name  // Returns glue field object
+// Old Method
+person.fields.first_name  // Returns glue field data
+
+// Refactored Method
+person.glue_fields.first_name  // Returns glue field object
 
 ```
 

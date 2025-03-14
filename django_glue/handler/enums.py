@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class GlueConnection(str, Enum):
+class Connection(str, Enum):
     MODEL_OBJECT = 'model_object'
     QUERY_SET = 'query_set'
     TEMPLATE = 'template'

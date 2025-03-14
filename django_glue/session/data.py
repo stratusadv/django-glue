@@ -4,15 +4,15 @@ from dataclasses import dataclass, asdict
 
 from django.core.serializers.json import DjangoJSONEncoder
 
-from django_glue.access.access import GlueAccess
-from django_glue.handler.enums import GlueConnection
+from django_glue.access.access import Access
+from django_glue.handler.enums import Connection
 
 
 @dataclass
-class GlueSessionData(ABC):
+class SessionData(ABC):
     unique_name: str
-    connection: GlueConnection
-    access: GlueAccess
+    connection: Connection
+    access: Access
 
     def to_dict(self) -> dict:
         return asdict(self)

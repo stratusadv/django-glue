@@ -1,3 +1,3 @@
-class GlueResponse {
+class DjangoGlueResponse {
     constructor() {}
 }

@@ -17,16 +17,16 @@
 
 <script type="application/javascript">
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
+    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_handler' %}'
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
     const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:django_glue_session_data' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 
-    window.glue_keep_live = new GlueKeepLive()
-    window.glue_session_data = {{ GLUE_SESSION_DATA|safe }}
+    window.django_glue_keep_live = new DjangoGlueKeepLive()
+    window.django_glue_session_data = {{ DJANGO_GLUE_SESSION_DATA|safe }}
 
     setInterval(() => {
-        window.glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
+        window.django_glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
     }, DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
 </script>
 
@@ -41,13 +41,13 @@
 <script type="application/javascript" src="{% static 'django_glue/js/form/field/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
 {# Glue Model Objects #}
-<script type="application/javascript" src="{% static 'django_glue/js/entities/model_object/field/entities.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/model_object/field/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/model_object/entities.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/model_object/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/field/fields.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/field/tools.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/model_object.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
 {# Entities #}
-<script type="application/javascript" src="{% static 'django_glue/js/entities/query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/entities/view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script type="application/javascript" src="{% static 'django_glue/js/glue/view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>

@@ -1,4 +1,4 @@
-async function glue_ajax_request(
+async function django_glue_ajax_request(
     unique_name,
     action,
     data = {},
@@ -7,7 +7,7 @@ async function glue_ajax_request(
         method = 'POST',
     } = {},
 ) {
-    return await glue_fetch(DJANGO_GLUE_AJAX_URL, {
+    return await django_glue_fetch(DJANGO_GLUE_AJAX_URL, {
         payload: {
         'unique_name': unique_name,
         'action': action,
@@ -28,7 +28,7 @@ function format_get_url(url, payload = {}) {
 }
 
 
-async function glue_fetch(
+async function django_glue_fetch(
     url,
     {
         payload = {},
@@ -38,7 +38,7 @@ async function glue_fetch(
         header_options = {},
     } = {}
 ) {
-    const csrf_token = glue_get_cookie('csrftoken')
+    const csrf_token = django_glue_get_cookie('csrftoken')
 
     const request_options = {
         method,

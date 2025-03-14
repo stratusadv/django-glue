@@ -1,16 +1,16 @@
-from django.conf import settings as user_settings
-from django_glue import settings as default_settings
+from django.conf import settings as django_settings
+from django_glue import settings as django_glue_default_settings
 
 
-class DjangoGlueSettings:
+class Settings:
     def __getattr__(self, name):
-        if hasattr(user_settings, name):
-            return getattr(user_settings, name)
+        if hasattr(django_settings, name):
+            return getattr(django_settings, name)
 
-        if hasattr(default_settings, name):
-            return getattr(default_settings, name)
+        if hasattr(django_glue_default_settings, name):
+            return getattr(django_glue_default_settings, name)
 
         raise f'No attribute {name} found in settings.'
 
 
-settings = DjangoGlueSettings()
+settings = Settings()
