@@ -21,6 +21,10 @@
                 $watch('value', (value) => {
                     this.update_choice();
                 });
+
+                $watch('glue_field.choices', () => {
+                    this.update_choice();
+                });
             },
 
             update_choice() {
