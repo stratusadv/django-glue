@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## 0.7.10
+
+### Bugs
+
+- Fix select_field.html and search_and_select_field.html to watch for choices to be loaded, which will allow us to display the selected option correctly.
+
 ## 0.7.9
 
 ### Bugs
@@ -188,5 +194,3 @@
 
 - Remove Add because of foreign key and key complications for security.
 - Separate add_glue function into multiple functions (glue_view, glue_model etc).
-
-
