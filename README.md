@@ -1,4 +1,4 @@
-# Django GLue
+# Django Glue
 
 ![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
 ![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
