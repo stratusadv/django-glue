@@ -4,9 +4,10 @@
 
 ---
 
+- Austin Sauer
+- Brayden Carlson
 - Nathan Johnson
 - Wesley Howery
-- Austin Sauer
 
 ## Contributors
 

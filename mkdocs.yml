@@ -1,0 +1,73 @@
+site_name: Django Glue
+site_url: https://django-glue.stratusadv.com
+
+repo_name: stratusadv/django-glue
+repo_url: https://github.com/stratusadv/django-glue
+
+copyright: Copyright (c) 2024 Stratus Advanced Technologies and Contributors
+
+extra_css:
+  - static/css/extra.css
+
+extra_javascript:
+  - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
+  - static/js/extra.js
+
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - tables
+
+nav:
+  - Getting Started:
+      - Welcome: index.md
+      - Installation: getting_started/installation.md
+  - Changelog:
+      - Current: changelog/changelog.md
+      - Archived: changelog/archived_changelog.md
+  - Roadmap:
+      - Current: roadmap/roadmap.md
+  - About:
+      - Contributors: about/contributors.md
+
+plugins:
+  - search
+  - include-markdown
+  - table-reader
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            docstring_style: sphinx
+            show_root_full_path: false
+            show_root_heading: true
+
+theme:
+  name: material
+  custom_dir: docs/templates
+  palette:
+  - media: "(prefers-color-scheme: light)"
+    scheme: default
+    toggle:
+      icon: material/lightbulb
+      name: "Switch to dark mode"
+  - media: "(prefers-color-scheme: dark)"
+    scheme: slate
+    toggle:
+      icon: material/lightbulb-outline
+      name: "Switch to system preference"
+  features:
+    - toc.follow
+    - navigation.tabs
+    - navigation.footer
+  logo: 'static/img/django_glue_logo_white_256.png'
+  favicon: 'favicon.png'
+

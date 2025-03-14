@@ -7,46 +7,61 @@
         x-ref="glue_field"
         hidden
     >
+
     <div
         class="position-relative"
         x-data="{
+            placeholder: '------------',
             show_dropdown: false,
             search: '',
             is_search_focused: false,
+            choice_verbose: this.placeholder,
+
+            init() {
+                this.update_choice();
+
+                $watch('value', (value) => {
+                    this.update_choice();
+                });
+
+                $watch('glue_field.choices', () => {
+                    this.update_choice();
+                });
+            },
+
             get filtered_choices() {
                 return glue_field.choices.filter(choice => {
-                    const label = choice[1].toLowerCase();
-                    const search = this.search.toLowerCase();
+                    let label = choice[1].toLowerCase();
+                    let search = this.search.toLowerCase();
                     return label.includes(search);
                 });
             },
-            get choice_verbose() {
-                if (!glue_field.choices.some(choice => choice[0] === this.value)) {
-                    return '------------';
-                } else {
-                    return glue_field.choices.find(
-                        choice => choice[0] === this.value
-                    )?.[1];
-                }
-            },
+
             focus_input() {
                 if (!is_touch_device()) {
-                    setTimeout(() => this.$refs.search_input.focus(), 100);
-
-                    if (this.show_dropdown) {
-                        this.$refs.search_input.focus();
-                    }
+                    this.$nextTick(() => {
+                        if (this.show_dropdown) {
+                            this.$refs.search_input.focus();
+                        }
+                    });
                 }
             },
+
             handle_click(event) {
                 if (!this.$refs.search_input.contains(event.target) && !this.is_search_focused || !this.is_search_focused && this.show_dropdown) {
                     this.show_dropdown = false;
                 }
             },
+
             select_choice(choice) {
                 this.value = choice[0];
                 this.search = '';
                 this.show_dropdown = false;
+            },
+
+            update_choice() {
+                let match = this.glue_field.choices.find(choice => String(choice[0]) === String(this.value));
+                this.choice_verbose = match ? match[1] : this.placeholder;
             }
         }"
         @click.outside="handle_click"
@@ -54,13 +69,16 @@
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
-            @click="show_dropdown = !show_dropdown; focus_input();"
+            style="outline: none; box-shadow: none; border: 1px solid #ced4da;"
+            @click="$event.target.blur(); focus_input(); show_dropdown = !show_dropdown;"
         >
             <span x-text="choice_verbose"></span>
+
             <span class="d-flex align-items-center">
                 {% include 'django_glue/form/glue_field/element/select_down_arrow_element.html' %}
             </span>
         </button>
+
         <div
             x-show="show_dropdown"
             class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0 list-group"
@@ -70,6 +88,7 @@
             <div class="glue-fs--2 fw-bold ms-2 mt-1">
                 Select <span x-text="glue_field.label"></span>
             </div>
+
             <div class="m-2">
                 <input
                     x-model="search"
@@ -77,11 +96,11 @@
                     placeholder="Search..."
                     type="text"
                     x-ref="search_input"
-                    @focus="is_search_focused = true"
                     @blur="setTimeout(() => is_search_focused = false, 150)"
                     @keydown.enter.prevent="select_choice(filtered_choices[0])"
                 >
             </div>
+
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
                     class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
