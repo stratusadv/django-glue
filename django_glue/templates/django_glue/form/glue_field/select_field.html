@@ -21,10 +21,14 @@
                 $watch('value', (value) => {
                     this.update_choice();
                 });
+
+                $watch('glue_field.choices', () => {
+                    this.update_choice();
+                });
             },
 
             update_choice() {
-                const match = this.glue_field.choices.find(choice => String(choice[0]) === String(this.value));
+                let match = this.glue_field.choices.find(choice => String(choice[0]) === String(this.value));
                 this.choice_verbose = match ? match[1] : this.placeholder;
             }
         }"

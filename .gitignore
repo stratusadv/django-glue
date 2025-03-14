@@ -11,6 +11,11 @@ robit.log
 __pycache__/
 .idea
 .python-version
+.env
+.python-version
+*.bat
+*.sql
+examples/test.db
 .venv*/
 .vscode/
 inspectionProfiles/

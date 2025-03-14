@@ -1,0 +1,41 @@
+<div
+    x-data="{
+        init(){
+            this.$nextTick(() => this.select(this.$id('tab', 1)))
+        },
+        selectedId: null,
+        select(id){
+            this.selectedId = id
+        },
+        isSelected(id){
+            return this.selectedId === id
+        },
+        whichTab(el, parent){
+            return Array.from(parent.children).indexOf(el) + 1
+        }
+    }"
+    x-id="['tab']"
+>
+    {# Tab List   #}
+    <ul
+        @keydown.right.prevent.stop="$focus.wrap().next()"
+        @keydown.home.prevent.stop="$focus.first()"
+        @keydown.page-up.prevent.stop="$focus.first()"
+        @keydown.left.prevent.stop="$focus.wrap().prev()"
+        @keydown.end.prevent.stop="$focus.last()"
+        @keydown.page-down.prevent.stop="$focus.last()"
+        class="d-flex list-unstyled border-bottom border-1"
+        x-ref="tablist"
+        role="tablist"
+    >
+        {% block tab_triggers %}
+        {% endblock %}
+    </ul>
+    {% block tab_function_area %}
+    {% endblock %}
+    {# Panels #}
+    <div>
+        {% block tab_sections %}
+        {% endblock %}
+    </div>
+</div>

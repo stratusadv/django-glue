@@ -1,0 +1,41 @@
+{% load static %}
+
+{% load django_glue %}
+
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+
+<head>
+
+    <title>Django Glue Test Page</title>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=1.0">
+
+    {% glue_bootstrap_css %}
+    <link rel="stylesheet" href="{% static 'examples.css' %}?v={{ DJANGO_GLUE_VERSION }}">
+
+</head>
+
+<body class="">
+
+<main class="main" id="top">
+    <div class="container-fluid p-3">
+        {% block base_content %}
+        {% endblock %}
+    </div>
+</main>
+
+
+{% glue_init %}
+
+{% glue_bootstrap_js %}
+
+{% glue_alpine_js %}
+
+<script src="{% static 'examples.js' %}"></script>
+
+</body>
+
+</html>
