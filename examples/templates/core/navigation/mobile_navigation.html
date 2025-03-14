@@ -1,0 +1,28 @@
+{% load static %}
+<div 
+    x-data="{ show_mobile_nav: false }"
+    id="navbarVerticalCollapse"
+>
+    <span @click="show_mobile_nav = true" class="bi bi-list text-dark fs-1 d-lg-none cursor-pointer mt-2 mx-2"></span>
+
+    <div class="col-auto d-lg-none">
+        <div class="sidebar bg-side-bar px-2"
+             x-show="show_mobile_nav"
+             x-transition
+             x-bind:class="{'show': show_mobile_nav}"
+             x-on:click.away="show_mobile_nav = false"
+             style="display: none; width: 200px">
+            <div class="text-center mt-2">
+                <a href="/" class="text-decoration-none mx-auto">
+                </a>
+            </div>
+            <i class="bi bi-x-lg text-black fs-3 position-absolute top-0 end-0 m-3 mt-2" type="button"
+               @click="show_mobile_nav = false"></i>
+
+            <ul class="nav nav-pills flex-column mt-4 mx-1 p-2">
+                {% include 'core/navigation/navigation_links.html' %}
+            </ul>
+        </div>
+
+    </div>
+</div>

@@ -1,0 +1,45 @@
+ <div
+    x-data="{
+        show: false,
+        init(){
+            this.$nextTick(() => this.show = true)
+            setTimeout(() => this.transitionOut(), 5000)
+        },
+        transitionOut(){
+            this.show = false
+            setTimeout(() => this.remove(this.notification), 500)
+        }
+    }"
+    x-show="show"
+    x-transition.duration.500ms
+    class="ms-auto mt-1 me-sm-3 mx-2 rounded border border-1 bg-white shadow p-3"
+    :class="{
+        'border-success': notification.type === 'success',
+        'border-warning': notification.type === 'warning',
+        'border-danger': notification.type === 'error',
+        'border-primary': notification.type === 'info'
+    }"
+    style="max-width: 400px;
+    pointer-events: auto;"
+>
+    <div class="row align-items-center">
+        <div class="col-auto">
+            <template x-if="notification.type === 'success'">
+                <i class="text-success bi bi-check-circle-fill h4 m-0"></i>
+            </template>
+            <template x-if="notification.type === 'warning'">
+                <i class="text-warning bi bi-cone h4 m-0"></i>
+            </template>
+            <template x-if="notification.type === 'error'">
+                <i class="text-danger bi bi-radioactive h4 m-0"></i>
+            </template>
+            <template x-if="notification.type === 'info'">
+                <i class="text-primary bi bi-info-circle-fill h4 m-0"></i>
+            </template>
+        </div>
+        <div class="col position-relative pe-4">
+            <div x-text="notification.message"></div>
+            <i @click="transitionOut()" class="position-absolute top-0 end-0 mt-n2 me-1 bi bi-x-lg cursor-pointer"></i>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,43 @@
+{% extends 'core/accordion/accordion.html' %}
+
+{% block accordion_toggle %}
+    <div
+        class="d-flex justify-content-center align-items-baseline cursor-pointer text-accent-hover mb-1 ps-1 pe-0 py-1"
+        :class="{'text-primary': show_accordion, 'text-white': !show_accordion}"
+        style="width: 150px"
+    >
+        <i class="fs-6 me-2 {% block nav_icon %}{% endblock %}"></i>
+
+        <span class="h6 mb-0">
+            {% block nav_title %}
+            {% endblock %}
+        </span>
+
+        <span
+            class="ms-auto small"
+            :class="{'bi bi-chevron-right': !show_accordion, 'bi bi-chevron-down text-primary': show_accordion}"
+        ></span>
+
+    </div>
+{% endblock %}
+
+{% block accordion_content %}
+    <div
+        x-data="{
+            current_path: '{{ request.path }}',
+            accordion_paths: [],
+            check_path() {
+                if( this.accordion_paths.includes(this.current_path)) {
+                    this.show_accordion = true
+                }
+            }
+        }"
+        @accordion-link="accordion_paths.push($event.detail.url_path); check_path()"
+        class="ms-2 mb-2 mt-1 border-start border-2">
+        <div style="padding-left: 8px">
+            {% block accordion_links %}
+
+            {% endblock %}
+        </div>
+    </div>
+{% endblock %}
