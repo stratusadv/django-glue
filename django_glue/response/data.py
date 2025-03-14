@@ -8,35 +8,35 @@ from dataclasses import dataclass, asdict
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import JsonResponse
 
-from django_glue.response.enums import GlueJsonResponseType, GlueJsonResponseStatus
+from django_glue.response.enums import JsonResponseType, JsonResponseStatus
 
 
 @dataclass
-class GlueJsonData(ABC):
+class BaseJsonData(ABC):
 
     @abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return asdict(self)
 
-    def to_json(self):
+    def to_json(self) -> str:
         return json.dumps(self.to_dict(), cls=DjangoJSONEncoder)
 
 
 @dataclass
-class GlueJsonResponseData:
+class JsonResponseData:
     """
         Consistent structure for our json responses.
     """
     message_title: Optional[str] = None
     message_body: Optional[str] = None
-    data: Optional[GlueJsonData] = None
+    data: Optional[BaseJsonData] = None
     optional_message_data: Optional[dict] = None
-    response_type: GlueJsonResponseType = GlueJsonResponseType.SUCCESS
-    response_status: GlueJsonResponseStatus = GlueJsonResponseStatus.SUCCESS
+    response_type: JsonResponseType = JsonResponseType.SUCCESS
+    response_status: JsonResponseStatus = JsonResponseStatus.SUCCESS
 
     def to_dict(self) -> dict:
 
-        if isinstance(self.data, GlueJsonData):
+        if isinstance(self.data, BaseJsonData):
             self.data = self.data.to_json()
 
         json_response_dict = asdict(self)

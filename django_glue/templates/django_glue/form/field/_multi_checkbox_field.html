@@ -1,0 +1,51 @@
+{% extends 'django_glue/form/field/base_field.html' %}
+
+{% block field_content %}
+    <div
+        class="form-group"
+        x-ref="glue_field"
+        x-data="{
+            selected_values: [],
+            init_value(value) {                
+                if (value === null || value === undefined) {
+                    this.selectedValues = [];
+                } else if (Array.isArray(value)) {
+                    this.selectedValues = [...value];
+                } else {
+                    this.selectedValues = [value];
+                }                
+            },
+            update_value() {
+                this.value = this.selectedValues.length > 0 ? this.selectedValues : null;
+            },
+            toggle_value(choice) {
+                if (this.selectedValues.includes(choice)) {
+                    this.selectedValues = this.selectedValues.filter(v => v !== choice);
+                } else {
+                    this.selectedValues.push(choice);
+                }
+                this.update_value();
+            }
+        }"
+        x-effect="init_value(value)"
+    >
+        <template x-for="choice in glue_field.choices" :key="choice[0]">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    class="form-check-input"
+                    :id="glue_field.id + '_' + choice[0]"
+                    :name="glue_field.name"
+                    :value="choice[0]"
+                    :checked="selectedValues.includes(choice[0])"
+                    @change="toggle_value(choice[0])"
+                >
+                <label
+                    class="form-check-label"
+                    :for="glue_field.id + '_' + choice[0]"
+                    x-text="choice[1]"
+                ></label>
+            </div>
+        </template>
+    </div>
+{% endblock %}

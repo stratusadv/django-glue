@@ -4,6 +4,7 @@ import urllib.parse
 from typing import Optional, Callable, Union
 
 from django.core.serializers.json import DjangoJSONEncoder
+from django.http import HttpRequest
 
 
 def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
@@ -13,7 +14,7 @@ def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
     return True
 
 
-def encode_unique_name(request, unique_name):
+def encode_unique_name(request: HttpRequest, unique_name: str) -> str:
     if 'glue_encode_path' in request.GET:
         encode_path = request.GET['glue_encode_path']
     else:
