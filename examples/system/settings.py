@@ -69,8 +69,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'django_glue.context_processors.glue',
             ],
-            'builtins': [
-            ],
+            'builtins': [],
             'debug': DEBUG,
         },
     },
