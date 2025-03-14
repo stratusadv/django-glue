@@ -1,7 +1,5 @@
 __VERSION__ = '0.8.0'
 
-from django_glue.handler.maps import GLUE_TYPE_TO_HANDLER_MAP
-
 # App
 APP_NAME = 'django_glue'
 UNIQUE_NAME_KEY = 'unique_name'

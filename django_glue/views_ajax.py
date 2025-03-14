@@ -1,10 +1,9 @@
 import json
-import logging
 
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_http_methods
 
-from django_glue.core.decorators import require_content_types
+from django_glue.decorators import require_content_types
 from django_glue.handler.body import RequestBody
 from django_glue.handler.utils import process_request
 from django_glue.response.responses import generate_json_404_response

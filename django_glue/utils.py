@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import inspect
 import json
 import urllib.parse
 from typing import Optional, Callable, Union
 
+from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Model
 from django.http import HttpRequest
 
 
@@ -42,3 +46,11 @@ def type_set_method_kwargs(method: Callable, kwargs: Optional[dict]) -> dict:
             type_set_kwargs[kwarg] = kwargs[kwarg]
 
     return type_set_kwargs
+
+
+def camel_to_snake(string: str) -> str:
+    return ''.join(['_' + c.lower() if c.isupper() else c for c in string]).lstrip('_')
+
+
+def serialize_object_to_json(model_object: Model) -> str:
+    return serializers.serialize('json', [model_object, ])
