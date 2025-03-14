@@ -8,6 +8,7 @@ copyright: Copyright (c) 2024 Stratus Advanced Technologies and Contributors
 
 extra_css:
   - static/css/extra.css
+  - static/css/mkdocstrings.css
 
 extra_javascript:
   - https://unpkg.com/tablesort@5.3.0/dist/tablesort.min.js
@@ -15,6 +16,8 @@ extra_javascript:
 
 
 markdown_extensions:
+  - admonition
+  - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -22,13 +25,14 @@ markdown_extensions:
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.superfences
-  - pymdownx.snippets
   - tables
+  - attr_list
+
 
 nav:
   - Getting Started:
       - Welcome: index.md
-      - Installation: getting_started/installation.md
+      - Installation: getting_started/installation333333.md
   - Changelog:
       - Current: changelog/changelog.md
       - Archived: changelog/archived_changelog.md
@@ -44,11 +48,21 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
+          inventories:
+            - url: https://docs.python.org/3/objects.inv
+              domains: [py, std]
           options:
             show_source: true
+            show_if_no_docstring: True
             docstring_style: sphinx
-            show_root_full_path: false
+            docstring_section_style: list
+            members_order: source
+            merge_init_into_class: true
+            show_root_full_path: true
             show_root_heading: true
+            show_signature: false
+            show_signature_annotations: false
+            show_symbol_type_heading: true
 
 theme:
   name: material
@@ -71,3 +85,7 @@ theme:
   logo: 'static/img/django_glue_logo_white_256.png'
   favicon: 'favicon.png'
 
+watch:
+  - django_glue
+  - example
+  - tests

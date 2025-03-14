@@ -15,7 +15,7 @@ __pycache__/
 .python-version
 *.bat
 *.sql
-examples/test.db
+example/test.db
 .venv*/
 .vscode/
 inspectionProfiles/

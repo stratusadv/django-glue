@@ -1,9 +1,4 @@
-# Dandy
-
-![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
-![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
-![PyPI Version](https://img.shields.io/pypi/v/django-glue)
-![Downloads](https://img.shields.io/pypi/dm/django-glue)
+# Django Glue
 
 We built Django Glue to help solve the problem of fluid interactions between the front and back ends of a Django application.
 Our end goal is to bring as much front end power to the Django framework as possible while remaining pythonic.
@@ -20,12 +15,16 @@ Education is also a big part of what we do and our focus is on teaching our peop
 We are inspired by how quickly django's model structure, ORM and forms (crispy forms) allow you to create functional web applications.
 Can we build on top of 25+ years of development to create a front end tool that uses the power of django.
 
-## Documentation
+## Forms
 
-Our documentation is available on our [website](https://django-glue.stratusadv.com), including guides, examples, api reference and more.
 
-<p align="center">
-    <a href="https://dandysoftware.com">
-        <img alt="Dandy Logo" src="docs/static/img/django_glue_logo_256.png"/>
-    </a>
-</p>
+## Requirements
+- Django 3.2+ or 4.0+
+- Python 3.8+
+
+## Dependencies
+- Alpine JS
+- Bootstrap 5
+- Axios
+
+

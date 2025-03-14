@@ -1,0 +1,51 @@
+.doc {
+    font-weight: normal;
+
+    .doc-children {
+        padding-left: 5%;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .doc-symbol-parameter::after {
+        content: "Parameter";
+    }
+
+    .doc-children {
+        padding-left: 5%;
+        border-left: 1px solid #e0e0e0;
+    }
+
+    .doc-heading code {
+    }
+
+    .doc-label code {
+    }
+
+    .doc-object code span.n {
+    }
+
+    .doc-symbol-parameter::after {
+        content: "Parameter";
+    }
+
+    .doc-symbol-attribute::after {
+        content: "Attribute";
+    }
+
+    .doc-symbol-function::after {
+        content: "Function";
+    }
+
+    .doc-symbol-method::after {
+        content: "Method";
+    }
+
+    .doc-symbol-class::after {
+        content: "Class";
+    }
+
+    .doc-symbol-module::after {
+        content: "Module";
+    }
+}
+
