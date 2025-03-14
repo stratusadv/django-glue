@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
 
     strategy:
-      max-parallel: 1
       matrix:
         python-version: ['3.11', '3.12', '3.13']
 
