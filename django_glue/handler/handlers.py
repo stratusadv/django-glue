@@ -4,17 +4,22 @@ from abc import ABC, abstractmethod
 from typing import Optional, TYPE_CHECKING
 
 from django_glue.access.access import Access
+from django_glue.glue.post_data import BasePostData
 
 if TYPE_CHECKING:
+    from django_glue.session import Session
+    from django_glue.handler.body import RequestBody
+    from django_glue.response.data import JsonResponseData
     from django_glue.access.actions import BaseAction
+    from django_glue.session.data import SessionData
 
 
 class BaseRequestHandler(ABC):
-    action: BaseAction = None
-    _session_data_class: 'GlueSessionData' = None
-    _post_data_class: Optional['EntityBodyData'] = None
+    action: BaseAction | None = None
+    _session_data_class: SessionData | None = None
+    _post_data_class: BasePostData | None = None
 
-    def __init__(self, session: 'GlueSession', request_body: 'GlueBodyData'):
+    def __init__(self, session: Session, request_body: RequestBody):
         if self._session_data_class is None:
             raise ValueError(f'Please initialize class variable _session_data_class on {self.__class__.__name__}')
 
@@ -35,6 +40,6 @@ class BaseRequestHandler(ABC):
         return access.has_access(self.action.required_access())
 
     @abstractmethod
-    def process_response_data(self) -> 'JsonResponseData':
+    def process_response_data(self) -> JsonResponseData:
         # Todo: Do we want to handle an error message here or let the system crash?
         pass

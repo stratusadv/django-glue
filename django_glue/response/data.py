@@ -15,10 +15,10 @@ from django_glue.response.enums import JsonResponseType, JsonResponseStatus
 class BaseJsonData(ABC):
 
     @abstractmethod
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return asdict(self)
 
-    def to_json(self):
+    def to_json(self) -> str:
         return json.dumps(self.to_dict(), cls=DjangoJSONEncoder)
 
 

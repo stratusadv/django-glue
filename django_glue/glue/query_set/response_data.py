@@ -9,7 +9,7 @@ from django_glue.response.data import BaseJsonData
 class QuerySetGlueJsonData(BaseJsonData):
     model_objects: list[ModelObjectGlueJsonData] = field(default_factory=list)
 
-    def to_dict(self):
+    def to_dict(self) -> list:
         return [model_object.to_dict() for model_object in self.model_objects]
 
 
@@ -17,7 +17,7 @@ class QuerySetGlueJsonData(BaseJsonData):
 class MethodQuerySetGlueJsonData(BaseJsonData):
     method_returns: list[MethodModelObjectGlueJsonData] = field(default_factory=list)
 
-    def to_dict(self):
+    def to_dict(self) -> list:
         return [method_return.to_dict() for method_return in self.method_returns]
 
 

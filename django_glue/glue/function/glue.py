@@ -39,5 +39,6 @@ class FunctionGlue(BaseGlue):
             function_path=self.function_path
         )
 
-    def to_response_data(self, function_return) -> FunctionGlueJsonData:
+    @staticmethod
+    def to_response_data(function_return) -> FunctionGlueJsonData:
         return FunctionGlueJsonData(function_return)

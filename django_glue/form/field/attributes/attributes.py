@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Union, Self
 
 
 @dataclass
@@ -18,7 +18,7 @@ class FieldAttribute:
 class FieldAttributes:
     attrs: list[FieldAttribute] = field(default_factory=list)
 
-    def __add__(self, other):
+    def __add__(self, other) -> Self:
         if isinstance(other, FieldAttributes):
             combined_attrs = self._merge_attrs(other.attrs)
         elif isinstance(other, FieldAttribute):

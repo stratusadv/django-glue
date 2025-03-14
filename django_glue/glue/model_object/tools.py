@@ -1,3 +1,5 @@
+from typing import Type
+
 from django.apps import apps
 from django.db.models import Model, QuerySet
 
@@ -7,7 +9,7 @@ from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
 
 
 def model_object_glue_from_session_data(session_data: ModelObjectGlueSessionData) -> ModelObjectGlue:
-    model = apps.get_model(session_data.app_label, session_data.model_name)
+    model: type | Type[Model] = apps.get_model(session_data.app_label, session_data.model_name)
 
     try:
         model_object = model.objects.get(pk=session_data.object_pk)

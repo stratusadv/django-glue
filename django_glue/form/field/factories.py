@@ -1,4 +1,6 @@
-from typing import Optional
+from typing import Optional, Any, Sequence
+
+from django.db.models import Field
 
 from django_glue.form.field.attributes.attributes import FieldAttributes
 from django_glue.form.field.field import FormField
@@ -6,7 +8,7 @@ from django_glue.form.field.attributes.builder import field_attr_from_model_fiel
 
 
 class FormFieldFactory:
-    def __init__(self, model_field):
+    def __init__(self, model_field: Field):
         self.model_field = model_field
 
     def attrs(self) -> FieldAttributes:
@@ -15,16 +17,16 @@ class FormFieldFactory:
     def choices(self) -> list:
         if self.model_field.choices:
             if self.model_field.blank:
-                return [(False, '----------')] + self.model_field.choices
+                return [(False, '----------')] + list(self.model_field.choices)
             else:
-                return self.model_field.choices
+                return list(self.model_field.choices)
         else:
             if self.model_field.get_internal_type() == 'BooleanField':
                 return [(True, 'Yes'), (False, 'No')]
             else:
                 return [(False, '----------')]
 
-    def factory_method(self):
+    def factory_method(self) -> FormField:
         return FormField(
             name=self.model_field.name,
             type=self.model_field.get_internal_type(),

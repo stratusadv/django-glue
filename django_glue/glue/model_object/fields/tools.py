@@ -7,7 +7,7 @@ from django_glue.glue.model_object.fields.utils import field_name_included
 from django_glue.form.field.factories import FormFieldFactory
 
 
-def model_object_fields_from_model(
+def model_object_fields_glue_from_model(
         model: Type[Model],
         included_fields: tuple,
         excluded_fields: tuple

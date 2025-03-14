@@ -8,7 +8,7 @@ class JsonResponseType(str, Enum):
     ERROR = 'error'
     DEBUG = 'debug'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -17,6 +17,6 @@ class JsonResponseStatus(str, Enum):
     SILENT_SUCCESS = '204'
     ERROR = '404'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 

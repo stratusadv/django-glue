@@ -1,9 +1,14 @@
-from typing import Any
+from __future__ import annotations
+
+from typing import Any, TYPE_CHECKING
 
 from django.utils import timezone
 
+if TYPE_CHECKING:
+    from django_glue.glue.model_object.fields.glue import ModelFieldGlue
 
-def serialize_field_value(model_field_glue: 'GlueModelField') -> Any:
+
+def serialize_field_value(model_field_glue: ModelFieldGlue) -> Any:
     formatted_value = model_field_glue.value
 
     if formatted_value is not None:

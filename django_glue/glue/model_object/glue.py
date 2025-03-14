@@ -1,11 +1,11 @@
-from typing import Union, Any
+from typing import Union, Any, Callable
 
 from django.db.models import Model
 
 from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
-from django_glue.glue.model_object.fields.tools import model_object_fields_from_model
+from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
 from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
 from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
 from django_glue.handler.enums import Connection
@@ -33,7 +33,7 @@ class ModelObjectGlue(BaseGlue):
 
         self.fields: ModelFieldsGlue = self.generate_field_data()
 
-    def call_method(self, method_name, method_kwargs):
+    def call_method(self, method_name: str, method_kwargs: dict) -> Callable | None:
         if method_name in self.included_methods and hasattr(self.model, method_name):
             method = getattr(self.model_object, method_name)
 
@@ -46,7 +46,7 @@ class ModelObjectGlue(BaseGlue):
 
     def generate_field_data(self, include_values: bool = True) -> ModelFieldsGlue:
 
-        model_fields = model_object_fields_from_model(
+        model_fields = model_object_fields_glue_from_model(
             model=self.model,
             included_fields=self.included_fields,
             excluded_fields=self.excluded_fields
@@ -58,7 +58,7 @@ class ModelObjectGlue(BaseGlue):
 
         return model_fields
 
-    def generate_method_data(self):
+    def generate_method_data(self) -> list[str]:
         methods_list = list()
 
         for method in self.included_methods:

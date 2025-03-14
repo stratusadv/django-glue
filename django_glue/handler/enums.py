@@ -7,7 +7,7 @@ class Connection(str, Enum):
     TEMPLATE = 'template'
     FUNCTION = 'function'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 

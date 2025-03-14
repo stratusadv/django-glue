@@ -16,7 +16,7 @@ class BaseAttributeFactory(ABC):
             self,
             name: str,
             value: Any,
-    ) -> None:
+    ):
         attr = FieldAttribute(name=name, value=value)
         self.glue_field_attrs += attr
 
