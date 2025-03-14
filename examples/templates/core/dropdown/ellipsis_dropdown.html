@@ -1,0 +1,21 @@
+{% extends 'core/dropdown/dropdown.html' %}
+
+{% block dropdown_position %}end-0 top-100{% endblock %}
+
+{% block dropdown_trigger %}
+    {% if view_url or edit_url or delete_url %}
+        <span x-bind="trigger" class="bi bi-three-dots-vertical fs-5"></span>
+    {% endif %}
+{% endblock %}
+
+{% block dropdown_content %}
+    {% if view_url %}
+        {% include 'core/dropdown/element/dropdown_link_element.html' with link_text='View' link_url=view_url %}
+    {% endif %}
+    {% if edit_url %}
+        {% include 'core/dropdown/element/dropdown_link_element.html' with link_text='Edit' link_url=edit_url %}
+    {% endif %}
+    {% if delete_url %}
+        {% include 'core/dropdown/element/dropdown_link_element.html' with link_text='Delete' link_url=delete_url link_css='text-danger' %}
+    {% endif %}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% load core_tags %}
+
+{# To dispatch notification in other x-data use  $dispatch('notify', { message, type }) #}
+<div
+    x-data="{
+        notifications: [],
+        init(){
+            this.notifications = {% django_messages_to_json messages %}
+        },
+        add(e){
+            this.notifications.push({
+                'id': e.timeStamp,
+                'type': e.detail.type,
+                'message': e.detail.message
+            })
+        },
+        remove(notification){
+            this.notifications = this.notifications.filter(i => i.id !== notification.id)
+        }
+    }"
+    @notify.window="add($event)"
+    style="pointer-events: none"
+    class="fixed-top">
+    <template x-for="notification in notifications" :key="notification.id">
+        {% include 'core/notification/element/notification_element.html' %}
+    </template>
+</div>

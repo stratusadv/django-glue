@@ -1,0 +1,24 @@
+<div class="row {% block container_outer_class %}{% endblock %}">
+    <div class="col-12">
+        <div class="row justify-content-between align-items-end px-md-3 py-2">
+            <div class="col ps-0">
+                <div class="fs-2 fw-semi-bold">
+                    {% block container_title %}{% endblock %}
+                </div>
+            </div>
+            <div class="col-auto {% block container_button_class %}{% endblock %}">
+                {% block container_button %}{% endblock %}
+            </div>
+        </div>
+
+        {% block container_filter_section %}
+        {% endblock %}
+
+        <div style="{% block container_style %} {% endblock %}" class="row {% block container_class %}{% endblock %}">
+            <div class="col-12 {% block container_column_class %}{% endblock %}">
+                {% block container_content %}
+                {% endblock %}
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,28 @@
+{% extends 'core/page/base_page.html' %}
+
+{% block base_page_content %}
+    <div class="row sticky-top z-2">
+        <div class="col-12">
+            {% block navigation_top %}
+                {% include 'core/navigation/top_navigation.html' with hide_logo=True %}
+            {% endblock %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-auto px-0 d-none d-lg-block" style="width: 180px">
+            {% block navigation_side %}
+            {% endblock %}
+        </div>
+        <div class="col">
+            {% block page_content %}
+            {% endblock %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            {% block navigation_bottom %}
+            {% endblock %}
+        </div>
+    </div>
+    {% include 'core/modal/dispatch_modal.html' %}
+{% endblock %}
