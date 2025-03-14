@@ -1,5 +1,6 @@
 from django.db.models import Model
 
+from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.model_object.fields.glue import ModelFieldGlue
 
 
@@ -10,8 +11,8 @@ def field_name_included(
 ) -> bool:
     included = False
 
-    if name not in exclude or exclude[0] == '__none__':
-        if name in fields or fields[0] == '__all__':
+    if name not in exclude or exclude[0] == NONE_DUNDER_KEY:
+        if name in fields or fields[0] == ALL_DUNDER_KEY:
             included = True
 
     return included

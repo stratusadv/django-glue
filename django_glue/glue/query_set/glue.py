@@ -5,6 +5,7 @@ from typing import Union
 from django.db.models import QuerySet
 
 from django_glue.access.access import Access
+from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
@@ -17,9 +18,9 @@ class QuerySetGlue(BaseGlue):
             unique_name: str,
             query_set: QuerySet,
             access: Union[Access, str] = Access.VIEW,
-            included_fields: tuple = ('__all__',),
-            excluded_fields: tuple = ('__none__',),
-            included_methods: tuple = ('__none__',),
+            included_fields: tuple = (ALL_DUNDER_KEY,),
+            excluded_fields: tuple = (NONE_DUNDER_KEY,),
+            included_methods: tuple = (NONE_DUNDER_KEY,),
     ):
         super().__init__(unique_name, GlueType.QUERY_SET, access)
 

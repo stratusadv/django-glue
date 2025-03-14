@@ -4,6 +4,7 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
+from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.function.glue import FunctionGlue
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.glue import ModelObjectGlue
@@ -41,9 +42,9 @@ def glue_model_object(
         unique_name: str,
         model_object: Model,
         access: str = 'view',
-        fields: Union[list, tuple] = ('__all__',),
-        exclude: Union[list, tuple] = ('__none__',),
-        methods: Union[list, tuple] = ('__none__',),
+        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
+        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
+        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
 ):
     glue_model_object_entity = ModelObjectGlue(
         unique_name=encode_unique_name(request, unique_name),
@@ -62,9 +63,9 @@ def glue_query_set(
         unique_name: str,
         target: QuerySet,
         access: str = 'view',
-        fields: Union[list, tuple] = ('__all__',),
-        exclude: Union[list, tuple] = ('__none__',),
-        methods: Union[list, tuple] = ('__none__',),
+        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
+        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
+        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
 ):
     glue_query_set_entity = QuerySetGlue(
         unique_name=encode_unique_name(request, unique_name),

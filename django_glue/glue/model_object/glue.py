@@ -3,6 +3,7 @@ from typing import Union, Any, Callable
 from django.db.models import Model
 
 from django_glue.access.access import Access
+from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
@@ -18,9 +19,9 @@ class ModelObjectGlue(BaseGlue):
             unique_name: str,
             model_object: Model,
             access: Union[Access, str] = Access.VIEW,
-            included_fields: tuple = ('__all__',),
-            excluded_fields: tuple = ('__none__',),
-            included_methods: tuple = ('__none__',),
+            included_fields: tuple = (ALL_DUNDER_KEY,),
+            excluded_fields: tuple = (NONE_DUNDER_KEY,),
+            included_methods: tuple = (NONE_DUNDER_KEY,),
     ):
         super().__init__(unique_name, GlueType.MODEL_OBJECT, access)
 
@@ -64,7 +65,7 @@ class ModelObjectGlue(BaseGlue):
         for method in self.included_methods:
             if hasattr(self.model_object, method):
                 methods_list.append(method)
-            elif method == '__none__':
+            elif method == NONE_DUNDER_KEY:
                 pass
             else:
                 raise KeyError(f'Method "{method}" is invalid for model type "{self.model.__class__.__name__}"')
