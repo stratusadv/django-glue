@@ -33,12 +33,12 @@ jobs:
 
       - name: Module Tests
         run: |
-          python -m unittest discover -v --top-level .
+          python -m unittest discover -v tests
 
       - name: Example Tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          python example/manage.py test --settings=system.settings --noinput
+          python example/manage.py test example --settings=system.settings --noinput
 
       - name: Documentation Tests
         run: |
