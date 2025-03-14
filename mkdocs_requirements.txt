@@ -1,0 +1,6 @@
+mkdocs
+mkdocs-material
+mkdocstrings-python
+mkdocs-include-markdown-plugin
+mkdocs-table-reader-plugin
+openpyxl

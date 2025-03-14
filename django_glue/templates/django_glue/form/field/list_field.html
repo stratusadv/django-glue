@@ -1,0 +1,112 @@
+{% extends "django_glue/form/glue_field/base_field.html" %}
+
+{% block field_content %}
+    <div
+        x-data="{
+            item: null,
+            available: [],
+            choices: [],
+            selected: [],
+            queryset: [],
+
+            async init() {
+                this.glue_field.available = await this.glue_field.queryset.all();
+                this.glue_field.choices = await this.glue_field.queryset.to_choices();
+                this.glue_field.selected = await this.glue_field.selected.all();
+
+                this.selected = this.glue_field.selected
+                  ? Object.entries(this.glue_field.selected).map(([id, values]) => ({ id, ...values }))
+                  : [];
+            },
+
+            async add_item() {
+                let item = this.glue_field.value;
+                let found = this.glue_field.choices.find(choice => choice[0] == item);
+
+                if (item && found) {
+                    let selection = this.glue_field.available[item - 1];
+
+                    this.selected.push({
+                        id: item,
+                        ...selection
+                    });
+
+                    this.glue_field.choices = this.glue_field.choices.filter(choice => choice[0] != item);
+
+                    if (this.glue_field.choices.length > 0) {
+                        this.glue_field.value = this.glue_field.choices[0][0];
+                    } else {
+                        this.glue_field.value = '';
+                    }
+                }
+            },
+
+            async remove_item(index) {
+                let removed = this.selected[index]
+                this.selected.splice(index, 1)
+
+                this.glue_field.value = ''
+
+                let label = this.glue_field.display_label
+
+                this.glue_field.choices = [
+                    ...this.glue_field.choices,
+                    [removed.id, removed[label]]
+                ]
+
+                this.glue_field.value = removed.id
+            }
+        }"
+        x-effect="
+            glue_field.hide_label();
+        "
+    >
+        <div class="row g-2 mb-2">
+            <div x-ref="component">
+                {% block component_field %}
+                    <div class="col-10">
+                        {% include "django_glue/form/glue_field/search_and_select_field.html" with glue_field=glue_field %}
+                    </div>
+                {% endblock %}
+            </div>
+
+            {% block add_item_button %}
+                <div class="col-2 d-flex align-items-stretch">
+                    <button
+                        type="button"
+                        @click.prevent="add_item()"
+                        class="btn btn-primary w-100 h-100"
+                    >
+                        Add
+                    </button>
+                </div>
+            {% endblock %}
+        </div>
+
+        <template x-if="selected.length === 0">
+            <div class="mt-4 text-muted">
+                No item(s) selected.
+            </div>
+        </template>
+
+        <template x-for="(item, index) in selected" :key="item.id">
+            <div class="row align-items-center item-hover item-container border-bottom border-300 py-2">
+                {% if row %}
+                    {% include row %}
+                {% else %}
+                    {% block item_row_content %}
+                    {% endblock %}
+
+                    {% block remove_item_button %}
+                    {% endblock %}
+                {% endif %}
+            </div>
+        </template>
+
+        <input
+            type="hidden"
+            name="{{ glue_field.name }}"
+            :value="JSON.stringify(selected)"
+        >
+    </div>
+{% endblock %}

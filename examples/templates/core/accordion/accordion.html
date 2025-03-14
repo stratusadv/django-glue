@@ -1,0 +1,22 @@
+<div
+    x-data="{
+        show_accordion: false,
+        toggle() { this.show_accordion = !this.show_accordion }
+    }"
+>
+    <div @click="toggle()">
+        {% block accordion_toggle %}
+            Click Me!
+        {% endblock %}
+    </div>
+    <div
+        x-cloak
+        x-show="show_accordion"
+        x-transition
+    >
+        {% block accordion_content %}
+            This is stuff!
+        {% endblock %}
+    </div>
+
+</div>
