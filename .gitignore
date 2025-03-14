@@ -1,22 +1,18 @@
+__pycache__/
+.venv*/
+.vscode/
+inspectionProfiles/
+site/
+venv*/
+
+.idea
+.python-version
+
+~*.*
 *.bat
 *.db
 *.env
 *.sql
 
-dev_tool.exe
-dev_tool*.exe
 
-robit.log
 
-__pycache__/
-.idea
-.python-version
-.env
-.python-version
-*.bat
-*.sql
-example/test.db
-.venv*/
-.vscode/
-inspectionProfiles/
-venv*/
