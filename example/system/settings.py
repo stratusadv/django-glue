@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django_glue',
-    'examples',
+    'example',
 ]
 
 MIDDLEWARE = [
