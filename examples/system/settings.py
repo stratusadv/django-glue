@@ -11,9 +11,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-WSGI_APPLICATION = 'tests.wsgi.application'
+WSGI_APPLICATION = 'examples.system.wsgi.application'
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(BASE_DIR)
 
 INSTALLED_APPS = [
@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django_glue',
-    'tests',
+    'examples',
 ]
 
 MIDDLEWARE = [
@@ -47,7 +47,7 @@ DATABASES = {
     }
 }
 
-ROOT_URLCONF = 'tests.urls'
+ROOT_URLCONF = 'examples.system.development.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
@@ -58,7 +58,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'examples/templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {

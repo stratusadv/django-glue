@@ -11,3 +11,4 @@ robit_0_4_4.db
 .python-version
 *.bat
 *.sql
+examples/test.db
