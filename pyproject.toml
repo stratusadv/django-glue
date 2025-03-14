@@ -1,6 +1,50 @@
+[project]
+name = "django-glue"
+description = "Industrial Strength Glue for Django Backends and Frontends!"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { file = "LICENSE.md", content-type = "text/markdown" }
+authors = [
+    { name = "Nathan Johnson", email = "nathanj@stratusadv.com" },
+]
+url="https://github.com/stratusadv/django-glue"
+keywords = ["django", "glue", "backend", "frontend", "javascript", "active server pages"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 3",
+    "Framework :: Django :: 4",
+    "Framework :: Django :: 5",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: JavaScript",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://django-glue.stratusadv.com"
+Documentation = "https://django-glue.stratusadv.com"
+Repository = "https://github.com/stratusadv/django-glue"
+Changelog = "https://django-glue.stratusadv.com/changelog/changelog/"
+
 [build-system]
 requires = [
-    "setuptools>=42",
-    "wheel"
+    "build",
+    "setuptools",
+    "wheel",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+pythonVersion = "3.11"
+
+[tool.setuptools.dynamic]
+version = { attr = "django_glue.constants.__VERSION__" }
+dependencies = { file = "requirements.txt" }

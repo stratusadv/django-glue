@@ -17,9 +17,9 @@
 
 <script type="application/javascript">
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_handler' %}'
-    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
-    const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:django_glue_session_data' %}'
+    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:handler' %}'
+    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:keep_live_handler' %}'
+    const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:session_data' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
 
     window.django_glue_keep_live = new DjangoGlueKeepLive()
@@ -51,3 +51,5 @@
 <script type="application/javascript" src="{% static 'django_glue/js/glue/function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 <script type="application/javascript" src="{% static 'django_glue/js/glue/template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 <script type="application/javascript" src="{% static 'django_glue/js/glue/view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+
+

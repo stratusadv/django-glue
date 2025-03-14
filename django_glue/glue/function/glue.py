@@ -2,7 +2,7 @@ from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.function.response_data import FunctionGlueJsonData
 from django_glue.glue.function.session_data import FunctionGlueSessionData
-from django_glue.handler.enums import Connection
+from django_glue.glue.enums import GlueType
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
 
@@ -12,7 +12,7 @@ class FunctionGlue(BaseGlue):
             unique_name: str,
             function_path: str,
     ):
-        super().__init__(unique_name, Connection.FUNCTION, Access.VIEW)
+        super().__init__(unique_name, GlueType.FUNCTION, Access.VIEW)
         self.function_path = function_path
 
         self.module_name = '.'.join(function_path.split('.')[:-1])
@@ -34,7 +34,7 @@ class FunctionGlue(BaseGlue):
     def to_session_data(self) -> FunctionGlueSessionData:
         return FunctionGlueSessionData(
             unique_name=self.unique_name,
-            connection=self.connection,
+            glue_type=self.glue_type,
             access=self.access,
             function_path=self.function_path
         )

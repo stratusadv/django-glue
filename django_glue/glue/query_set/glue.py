@@ -8,7 +8,7 @@ from django_glue.access.access import Access
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
 from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
-from django_glue.handler.enums import Connection
+from django_glue.glue.enums import GlueType
 
 
 class QuerySetGlue(BaseGlue):
@@ -21,7 +21,7 @@ class QuerySetGlue(BaseGlue):
             excluded_fields: tuple = ('__none__',),
             included_methods: tuple = ('__none__',),
     ):
-        super().__init__(unique_name, Connection.QUERY_SET, access)
+        super().__init__(unique_name, GlueType.QUERY_SET, access)
 
         self.query_set = query_set
         self.model = query_set.model
@@ -37,7 +37,7 @@ class QuerySetGlue(BaseGlue):
         return QuerySetGlueSessionData(
             unique_name=self.unique_name,
             query_set_str=self.encode_query_set(),
-            connection=self.connection,
+            glue_type=self.glue_type,
             fields=model_object_fields_glue_from_model(self.model, self.included_fields, self.excluded_fields).to_dict(),
             access=self.access,
             included_fields=self.included_fields,

@@ -8,7 +8,7 @@ from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
 from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
 from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
 from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
-from django_glue.handler.enums import Connection
+from django_glue.glue.enums import GlueType
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
 
@@ -22,7 +22,7 @@ class ModelObjectGlue(BaseGlue):
             excluded_fields: tuple = ('__none__',),
             included_methods: tuple = ('__none__',),
     ):
-        super().__init__(unique_name, Connection.MODEL_OBJECT, access)
+        super().__init__(unique_name, GlueType.MODEL_OBJECT, access)
 
         self.model_object = model_object
         self.model = model_object._meta.model
@@ -73,7 +73,7 @@ class ModelObjectGlue(BaseGlue):
 
     def to_session_data(self) -> ModelObjectGlueSessionData:
         return ModelObjectGlueSessionData(
-            connection=self.connection,
+            glue_type=self.glue_type,
             access=self.access,
             unique_name=self.unique_name,
             fields=self.generate_field_data(include_values=False).to_dict(),

@@ -13,12 +13,12 @@ from django_glue.session import Session, KeepLiveSession
 from django_glue.utils import encode_unique_name
 
 
-def _glue_entity(request: HttpRequest, glue_entity: BaseGlue):
+def _glue_base_function(request: HttpRequest, glue: BaseGlue):
     glue_session = Session(request)
-    glue_session.add_glue(glue_entity)
+    glue_session.add_glue(glue)
 
     glue_keep_live_session = KeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(glue_entity.unique_name)
+    glue_keep_live_session.set_unique_name(glue.unique_name)
 
     # Todo: Check to see if this has actually changed.
     glue_session.set_modified()
@@ -33,13 +33,13 @@ def glue_function(
         unique_name=encode_unique_name(request, unique_name),
         function_path=target
     )
-    _glue_entity(request, glue_function_entity)
+    _glue_base_function(request, glue_function_entity)
 
 
-def glue_model(
+def glue_model_object(
         request: HttpRequest,
         unique_name: str,
-        target: Model,
+        model_object: Model,
         access: str = 'view',
         fields: Union[list, tuple] = ('__all__',),
         exclude: Union[list, tuple] = ('__none__',),
@@ -47,14 +47,14 @@ def glue_model(
 ):
     glue_model_object_entity = ModelObjectGlue(
         unique_name=encode_unique_name(request, unique_name),
-        model_object=target,
+        model_object=model_object,
         access=access,
         included_fields=fields,
         excluded_fields=exclude,
         included_methods=methods
     )
 
-    _glue_entity(request, glue_model_object_entity)
+    _glue_base_function(request, glue_model_object_entity)
 
 
 def glue_query_set(
@@ -75,7 +75,7 @@ def glue_query_set(
         included_methods=methods
     )
 
-    _glue_entity(request, glue_query_set_entity)
+    _glue_base_function(request, glue_query_set_entity)
 
 
 def glue_template(
@@ -89,4 +89,4 @@ def glue_template(
         template_name=target
     )
 
-    _glue_entity(request, glue_template_entity)
+    _glue_base_function(request, glue_template_entity)
