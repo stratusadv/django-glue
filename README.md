@@ -8,7 +8,7 @@
 We built Django Glue to help solve the problem of fluid interactions between the front and back ends of a Django application.
 Our end goal is to bring as much front end power to the Django framework as possible while remaining pythonic.
 
-This project is in prototype phase please look at the tests directory of this code base for examples and instructions.
+This project is in prototype phase please look at the tests directory of this code base for example and instructions.
 
 ## Why?
 We are active web platform developers that want to provide our clients with the best user experience without having to learn a bunch of different technology stacks.
@@ -22,7 +22,7 @@ Can we build on top of 25+ years of development to create a front end tool that 
 
 ## Documentation
 
-Our documentation is available on our [website](https://django-glue.stratusadv.com), including guides, examples, api reference and more.
+Our documentation is available on our [website](https://django-glue.stratusadv.com), including guides, example, api reference and more.
 
 <p align="center">
     <a href="https://dandysoftware.com">

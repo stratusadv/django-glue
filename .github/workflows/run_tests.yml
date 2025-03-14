@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m unittest discover -v --top-level .
 
-      - name: Module Tests
+      - name: Example Tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
           python example/manage.py test --settings=system.settings --noinput

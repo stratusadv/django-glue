@@ -11,7 +11,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-WSGI_APPLICATION = 'examples.system.wsgi.application'
+WSGI_APPLICATION = 'example.system.wsgi.application'
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(BASE_DIR)
@@ -47,7 +47,7 @@ DATABASES = {
     }
 }
 
-ROOT_URLCONF = 'examples.system.development.urls'
+ROOT_URLCONF = 'example.system.development.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
