@@ -8,7 +8,7 @@ if TYPE_CHECKING:
     from django_glue.access.access import Access
 
 
-class BaseAction(str, Enum, ABC):
+class BaseAction(str, Enum):
 
     def __str__(self) -> str:
         return self.value

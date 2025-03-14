@@ -9,10 +9,10 @@ class Access(str, Enum):
     CHANGE = 'change'
     DELETE = 'delete'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
-    def has_access(self, access_required: Access):
+    def has_access(self, access_required: Access) -> bool:
         access_tuple = tuple(Access.__members__.values())
         if access_tuple.index(self) >= access_tuple.index(access_required):
             return True

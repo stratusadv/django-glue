@@ -17,7 +17,7 @@
 
 <script type="application/javascript">
     const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_data_handler' %}'
+    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:django_glue_handler' %}'
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:django_glue_keep_live_handler' %}'
     const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:django_glue_session_data' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})

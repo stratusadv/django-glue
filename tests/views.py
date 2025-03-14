@@ -10,7 +10,7 @@ from tests.processors import get_complex_form_processor
 from tests.utils import generate_randomized_test_model, generate_big_test_model
 from tests.context_data import django_glue_context_data
 
-from django_glue.glue import glue_model, glue_query_set, glue_template, glue_function
+from django_glue.shortcuts import glue_model, glue_query_set, glue_template, glue_function
 
 
 def big_model_object_view(request):
