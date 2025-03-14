@@ -1,1 +1,4 @@
 pyright
+
+-r mkdocs_requirements.txt
+-r requirements.txt
