@@ -6,7 +6,6 @@ from django.http import HttpRequest
 
 from django_glue.conf import settings
 from django_glue.glue.glue import BaseGlue
-
 from django_glue.session.data import SessionData
 
 

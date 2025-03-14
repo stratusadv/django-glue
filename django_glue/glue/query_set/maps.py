@@ -1,6 +1,5 @@
-from django_glue.glue.query_set.actions import QuerySetGlueAction
 from django_glue.glue.query_set import handlers
-
+from django_glue.glue.query_set.actions import QuerySetGlueAction
 
 QUERY_SET_GLUE_HANDLER_MAP = {
     QuerySetGlueAction.ALL: handlers.AllQuerySetGlueHandler,

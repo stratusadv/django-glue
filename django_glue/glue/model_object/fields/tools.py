@@ -2,9 +2,9 @@ from typing import Type
 
 from django.db.models import Model
 
+from django_glue.form.field.factories import FormFieldFactory
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue, ModelFieldGlue, ModelFieldMetaGlue
 from django_glue.glue.model_object.fields.utils import field_name_included
-from django_glue.form.field.factories import FormFieldFactory
 
 
 def model_object_fields_glue_from_model(

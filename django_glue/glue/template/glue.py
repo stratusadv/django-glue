@@ -1,10 +1,10 @@
 from django.template.loader import render_to_string
 
 from django_glue.access.access import Access
+from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.template.response_data import TemplateGlueJsonData
 from django_glue.glue.template.session_data import TemplateSessionData
-from django_glue.glue.enums import GlueType
 
 
 class TemplateGlue(BaseGlue):

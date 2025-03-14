@@ -5,10 +5,10 @@ from typing import Union
 from django.db.models import QuerySet
 
 from django_glue.access.access import Access
+from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
 from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
-from django_glue.glue.enums import GlueType
 
 
 class QuerySetGlue(BaseGlue):

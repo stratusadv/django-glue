@@ -19,8 +19,8 @@ Can we build on top of 25+ years of development to create a front end tool that 
 
 
 ## Requirements
-- Django 3.2+ or 4.0+
-- Python 3.8+
+- Django 3, 4, 5
+- Python 3.11, 3.12, 3.13
 
 ## Dependencies
 - Alpine JS

@@ -1,10 +1,10 @@
-from typing import Optional, Any, Sequence
+from typing import Optional
 
 from django.db.models import Field
 
 from django_glue.form.field.attributes.attributes import FieldAttributes
-from django_glue.form.field.field import FormField
 from django_glue.form.field.attributes.builder import field_attr_from_model_field
+from django_glue.form.field.field import FormField
 
 
 class FormFieldFactory:

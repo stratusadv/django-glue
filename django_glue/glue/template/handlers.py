@@ -1,9 +1,8 @@
 from django_glue.access.decorators import check_access
 from django_glue.glue.template.actions import TemplateGlueAction
-from django_glue.glue.template.post_data import GetTemplateGluePostData
-
-from django_glue.glue.template.session_data import TemplateSessionData
 from django_glue.glue.template.glue import TemplateGlue
+from django_glue.glue.template.post_data import GetTemplateGluePostData
+from django_glue.glue.template.session_data import TemplateSessionData
 from django_glue.handler.handlers import BaseRequestHandler
 from django_glue.response.data import JsonResponseData
 from django_glue.response.responses import generate_json_200_response_data

@@ -4,8 +4,8 @@ from django.db.models import Model
 from django.db.models.query import QuerySet
 from django.http import HttpRequest
 
-from django_glue.glue.glue import BaseGlue
 from django_glue.glue.function.glue import FunctionGlue
+from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.glue import ModelObjectGlue
 from django_glue.glue.query_set.glue import QuerySetGlue
 from django_glue.glue.template.glue import TemplateGlue

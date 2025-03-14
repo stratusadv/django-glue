@@ -1,12 +1,32 @@
 # Changelog for Django Glue
 
-## 0.7.10
+## v0.8.0
+
+### Breaking
+
+- Refactored `glue_model` function to `glue_model_object` to be more clear on the functionality.
+
+### Features
+
+- Added initial documentation for the project, check it out at (https://django-glue.stratusadv.com).
+
+### Changes
+
+- Project internals have been completely refactored to improve project maintainability.
+- New recommended way of using glue is to `import django_glue as dg` which won't work with current implementations.
+	- Usage changes from `glue_model_object` to `dg.glue_model_object`.
+
+### Fixes
+
+- Corrected & updated all the testing functionality for this project.
+
+## v0.7.10
 
 ### Bugs
 
 - Fix select_field.html and search_and_select_field.html to watch for choices to be loaded, which will allow us to display the selected option correctly.
 
-## 0.7.9
+## v0.7.9
 
 ### Bugs
 
@@ -19,7 +39,7 @@
 
 - Use $nextTick to decide when to focus on search, instead of using setTimeout.
 
-## 0.7.8
+## v0.7.8
 
 ### Bugs
 
@@ -27,7 +47,7 @@
   present.
 - On mobile, the search input field is not focused upon opening the dropdown.
 
-## 0.7.7
+## v0.7.7
 
 ### Bugs
 
@@ -35,26 +55,26 @@
 - X-effect to parse value into proper array and bind to hidden input field.
 - Close missing div on select field.
 
-## 0.7.6
+## v0.7.6
 
 ### Changes
 
 - Blocks to extend / override select choice items.
 - Glue custom css file to look nice out of the box.
 
-## 0.7.5
+## v0.7.5
 
 ### Bug Fix
 
 - Dynamic Glue Field Indexing
 
-## 0.7.4
+## v0.7.4
 
 ### Features
 
 - Multi-Select Field
 
-## 0.7.3
+## v0.7.3
 
 ### Features
 
@@ -70,7 +90,7 @@
 - Glue field factory updated to use setters and getters for specific attribute methods.
 - When select fields are not required, it automatically adds a '----------' option.
 
-## 0.7.2
+## v0.7.2
 
 ### Bugs
 
@@ -78,7 +98,7 @@
 - JS function to retrieve glue session data to update window variable and keep live.
 - Gluing Templates and Views now fetches and updates the session data to initialize glue objects properly.
 
-## 0.7.1
+## v0.7.1
 
 ### Changes
 
@@ -87,7 +107,7 @@
     - glue view _render refactored to _fetch_view
 - GlueView's will have to be refactored to use the new parameter passing and methods.
 
-## 0.7.0
+## v0.7.0
 
 ### Changes
 
@@ -102,7 +122,7 @@
 - Factories to create all objects.
 - Simplified how glue form fields can be constructed.
 
-## 0.6.3
+## v0.6.3
 
 ### Features
 
@@ -112,20 +132,20 @@
 
 - Correct form key naming on relational model fields
 
-## 0.6.2
+## v0.6.2
 
 ### Features
 
 - Added a glue_fetch function for a quick an easy shortcut for making a fetch.
 
-## 0.6.1
+## v0.6.1
 
 ### Bugs
 
 - Fixed the template tags for bootstrap and alpine
 - Fixed bug with using UUID primary keys
 
-## 0.6.0
+## v0.6.0
 
 ### Changes
 
@@ -134,7 +154,7 @@
 - Glue js field objects bind to HTML form fields to set attributes and expose values.
 - Ability to have full control over reactivity in forms in js that work with or without glue model objects.
 
-## 0.5.3
+## v0.5.3
 
 ### Changes
 
@@ -147,26 +167,26 @@
 
 - Corrected issue on glue views that glue models. Encoded unique name is based on path the user requests the view from.
 
-## 0.5.2.3
+## v0.5.2.3
 
 ### Changes
 
 - Glue model object returns a null object if we try to find a id that does not exist.
 - Updated html attributes on glue model objects and added attributes to js model objects.
 
-## 0.5.2.2
+## v0.5.2.2
 
 ### Changes
 
 - Render functions on the GlueView object now await the response
 
-## 0.5.2.1
+## v0.5.2.1
 
 ### Bugs
 
 - Fixed issue with templates and function not being added properly to th keep live session.
 
-## 0.5.2.0
+## v0.5.2.0
 
 ### Changes
 
@@ -178,7 +198,7 @@
 
 - Fixed glued functions having invalid comparison and did not work unless unique name matched function name.
 
-## 0.5.1.0
+## v0.5.1.0
 
 ### Features
 
@@ -188,7 +208,7 @@
 
 - Added front end error handling for ajax requests.
 
-## 0.5.0.0
+## v0.5.0.0
 
 ### Changes
 

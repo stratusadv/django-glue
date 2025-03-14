@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any
 
 
 # Model objects can be used from a queryset. Queryset and model object post data must be the same.

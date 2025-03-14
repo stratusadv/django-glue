@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Optional
 from dataclasses import dataclass, asdict
+from typing import Optional
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import JsonResponse

@@ -2,8 +2,8 @@ import json
 
 from django.core.serializers.json import DjangoJSONEncoder
 
-from django_glue.conf import settings
 from django_glue import constants
+from django_glue.conf import settings
 from django_glue.session import Session
 
 

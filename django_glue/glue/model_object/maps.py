@@ -1,6 +1,5 @@
-from django_glue.glue.model_object.actions import ModelObjectGlueAction
 from django_glue.glue.model_object import handlers
-
+from django_glue.glue.model_object.actions import ModelObjectGlueAction
 
 MODEL_OBJECT_GLUE_HANDLER_MAP = {
     ModelObjectGlueAction.GET: handlers.GetModelObjectGlueHandler,

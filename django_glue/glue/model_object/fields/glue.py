@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Union
 
-from django_glue.glue.model_object.fields.seralizers import serialize_field_value
 from django_glue.form.field.field import FormField
+from django_glue.glue.model_object.fields.seralizers import serialize_field_value
 
 
 @dataclass

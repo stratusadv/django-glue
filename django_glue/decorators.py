@@ -1,5 +1,5 @@
-from django.http import JsonResponse
 from django.http import HttpResponse
+from django.http import JsonResponse
 
 
 def require_content_types(*content_types):

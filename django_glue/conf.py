@@ -1,4 +1,5 @@
 from django.conf import settings as django_settings
+
 from django_glue import settings as django_glue_default_settings
 
 

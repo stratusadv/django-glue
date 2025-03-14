@@ -3,12 +3,12 @@ from typing import Union, Any, Callable
 from django.db.models import Model
 
 from django_glue.access.access import Access
+from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
 from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
 from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
 from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
-from django_glue.glue.enums import GlueType
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
 

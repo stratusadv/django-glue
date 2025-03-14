@@ -1,8 +1,8 @@
 from django_glue.access.access import Access
-from django_glue.glue.glue import BaseGlue
+from django_glue.glue.enums import GlueType
 from django_glue.glue.function.response_data import FunctionGlueJsonData
 from django_glue.glue.function.session_data import FunctionGlueSessionData
-from django_glue.glue.enums import GlueType
+from django_glue.glue.glue import BaseGlue
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
 
