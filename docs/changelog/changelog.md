@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## v0.8.0
+## v0.8.0 - Coming Soon
 
 ### Breaking
 
@@ -23,13 +23,13 @@
 
 ## v0.7.10
 
-### Bugs
+### Fixes
 
 - Fix select_field.html and search_and_select_field.html to watch for choices to be loaded, which will allow us to display the selected option correctly.
 
 ## v0.7.9
 
-### Bugs
+### Fixes
 
 - Fix CSS of the search_and_select_field to be less jarring when focus is shifted from the button to the search input
   field.
@@ -42,7 +42,7 @@
 
 ## v0.7.8
 
-### Bugs
+### Fixes
 
 - The use of x-trap, focus_input() and click.outside seem to cause issues when the user is on mobile, and a keyboard is
   present.
@@ -50,7 +50,7 @@
 
 ## v0.7.7
 
-### Bugs
+### Fixes
 
 - Simplify how multi-select field binds value & choices.
 - X-effect to parse value into proper array and bind to hidden input field.
@@ -93,7 +93,7 @@
 
 ## v0.7.2
 
-### Bugs
+### Fixes
 
 - Added endpoint to retrieve glue session data.
 - JS function to retrieve glue session data to update window variable and keep live.
@@ -129,7 +129,7 @@
 
 - Glue Query Set entities now can return themselves as choices for a select field.
 
-### Bugs
+### Fixes
 
 - Correct form key naming on relational model fields
 
@@ -141,7 +141,7 @@
 
 ## v0.6.1
 
-### Bugs
+### Fixes
 
 - Fixed the template tags for bootstrap and alpine
 - Fixed bug with using UUID primary keys
@@ -164,7 +164,7 @@
 - Handler map based on action called from glue js objects to process response.
 - Dataclass structure for Response, Session and Post data.
 
-### Bugs
+### Fixes
 
 - Corrected issue on glue views that glue models. Encoded unique name is based on path the user requests the view from.
 
@@ -183,7 +183,7 @@
 
 ## v0.5.2.1
 
-### Bugs
+### Fixes
 
 - Fixed issue with templates and function not being added properly to th keep live session.
 
@@ -195,7 +195,7 @@
   view.
 - Added keep live reload warning if keep live pulse fails
 
-### Bugs
+### Fixes
 
 - Fixed glued functions having invalid comparison and did not work unless unique name matched function name.
 

@@ -67,17 +67,17 @@
 
 ## v0.2.6
 
-#### Bugs
+#### Fixes
 - Fixed issue with building context dictionaries on non glue views.
 
 ## v0.2.5
 
-#### Bugs
+#### Fixes
 - Fixed issue with overwriting unique_names
 
 ## v0.2.4
 
-#### Bugs
+#### Fixes
 - Fixed a session data saving issues to make sure when using new keep life it saves all session data.
 
 ## v0.2.3
@@ -96,6 +96,6 @@
 #### Changes
 - Updated middleware to use settings glue name.
 
-#### Bugs
+#### Fixes
 - Fixed context processor key error.
 - Fixed templates and static package error.
