@@ -2,7 +2,7 @@ from django.urls import path
 
 from django_glue import views_ajax, constants
 
-app_name = constants.APP_NAME
+app_name = constants.URL_APP_NAME
 
 urlpatterns = [
     # These url path names are used in our middleware to avoid cleaning session data.
