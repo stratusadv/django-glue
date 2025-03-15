@@ -30,14 +30,10 @@ jobs:
           pip install -r development_requirements.txt
           pip install -r mkdocs_requirements.txt
 
-      - name: Module Tests
-        run: |
-          python -m unittest discover -v tests
-
-      - name: Example Tests
+      - name: Package Tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          python example/manage.py test example --settings=system.settings --noinput
+          python example/manage.py test --settings=system.settings --noinput
 
       - name: Documentation Tests
         run: |

@@ -15,6 +15,7 @@
 - Project internals have been completely refactored to improve project maintainability.
 - New recommended way of using glue is to `import django_glue as dg` which won't work with current implementations.
 	- Usage changes from `glue_model_object` to `dg.glue_model_object`.
+- Testing has been completely refactored to match the new project layout.
 
 ### Fixes
 

@@ -1,6 +1,7 @@
-from unittest import TestCase
+from tests.test_base import BaseTestCase
 
-class TestDjangoGlue(TestCase):
+
+class TestDjangoGlue(BaseTestCase):
     def test_import(self):
         try:
             import django_glue as dp
