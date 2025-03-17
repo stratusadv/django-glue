@@ -1,0 +1,54 @@
+{% extends 'base/base.html' %}
+
+{% load django_glue %}
+
+{% block base_content %}
+
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Query Set" %}
+
+    <div class="row">
+        <div class="col-6">
+            <div class="mb-3">
+                {% include 'card/get_query_set_object_card.html' %}
+            </div>
+            {% include 'card/filter_query_set_card.html' %}
+        </div>
+        <div class="col-6">
+{#            <div class="mb-3">#}
+{#                {% include 'card/update_query_set_object_card.html' %}#}
+{#            </div>#}
+        </div>
+    </div>
+
+{#    <div class="row g-3 mb-3">#}
+{#        <div class="col-6">#}
+{#            {% include 'card/update_query_set_card.html' %}#}
+{#        </div>#}
+{#        <div class="col-6">#}
+{#            {% include 'card/create_query_set_card.html' %}#}
+{#        </div>#}
+{#    </div>#}
+{##}
+{#    <div class="row g-3 mb-3">#}
+{#        <div class="col-6">#}
+{#            {% include 'card/method_query_set_card.html' %}#}
+{#        </div>#}
+{#    </div>#}
+{#    <div class="row g-3 mb-3">#}
+{#        <div class="col-12">#}
+{#        <div class="col-12">#}
+{#            {% include 'card/delete_and_view_query_set_card.html' %}#}
+{#        </div>#}
+{#    </div>#}
+
+{#    <div class="row g-3">#}
+{#        <div class="col-6">#}
+{#            {% include 'card/context_data_card.html' %}#}
+{#        </div>#}
+{#        <div class="col-6">#}
+{#            {% include 'card/context_keep_live_card.html' %}#}
+{#        </div>#}
+{#    </div>#}
+
+
+{% endblock %}

@@ -1,0 +1,19 @@
+<div x-data="{
+    init(){
+        this.$nextTick(() => {
+            if ('{{ initial_value }}'){
+                this.integer_value = parseInt('{{ initial_value }}')
+            }
+        })
+    },
+    integer_value: ''
+}" x-modelable="integer_value" x-model="{{ x_model_name }}">
+    <div class="row">
+        <div class="col-12">
+            <label for="id_{{ x_model_name }}">{{ label }}</label>
+        </div>
+        <div class="col-12">
+            <input x-model="integer_value" @change="$event.target.value=integer_value" :value="integer_value" class="form-control mb-2 {{ class }}" min={{ min_value }} max={{ max_value }} id="id_{{ x_model_name }}" name="{{ x_model_name }}" type="number">
+        </div>
+    </div>
+</div>

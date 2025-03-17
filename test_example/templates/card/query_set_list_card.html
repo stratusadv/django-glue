@@ -1,0 +1,51 @@
+{% extends 'card/card.html' %}
+
+{% block header %}
+    QuerySet Lists
+{% endblock %}
+
+{% block body %}
+    <div
+        x-data="{
+            async init() {
+                this.test_models = await this.test_models_query.all()
+                const debounce_update = glue_debounce((value) => value.update(), 750);
+                for (i = 0; i < this.test_models.length; i++) {
+                    this.$watch(`test_models[${i}]`, value =>{
+                        debounce_update(value)
+                    })
+                }
+            },
+            test_models_query: new GlueQuerySet('test_query_1'),
+            test_models: []
+        }"
+    >
+        <template x-if="test_models.length > 0">
+            <template x-for="test_model in test_models" :key="test_model.id">
+                <div class="row pb-2 mb-3 border-bottom">
+                    <div class="col-3">
+                        <label for="first_name">First Name</label>
+                        <input x-model="test_model.first_name" id="first_name" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="last_name">Last Name</label>
+                        <input x-model="test_model.last_name" id="last_name" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="favorite_number">Favorite Number</label>
+                        <input x-model="test_model.favorite_number" id="favorite_number" type="text"
+                               class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="weight_lbs">Weight (lbs)</label>
+                        <input x-model="test_model.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-12">
+                        <label for="description">Description</label>
+                        <textarea x-model="test_model.description" id="description" class="form-control mb-2"></textarea>
+                    </div>
+                </div>
+            </template>
+        </template>
+    </div>
+{% endblock %}

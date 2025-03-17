@@ -1,8 +1,8 @@
 from importlib import import_module
 
 from django.conf import settings
-from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import TestCase, RequestFactory
+
 from example.app.people.models import Person
 
 

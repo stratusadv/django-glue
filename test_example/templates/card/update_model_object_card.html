@@ -1,0 +1,46 @@
+{% extends 'card/card.html' %}
+
+{% load django_glue %}
+
+{% block header %}
+    UPDATE Model Object
+{% endblock %}
+
+{% block body %}
+    <div x-data="{
+        async init() {
+            await this.test_model_1.get()
+        },
+        test_model_1: new GlueModelObject('test_model_1')
+    }"
+         class="row">
+        <div class="col-12">
+            <div class="row">
+                <div class="col-12">
+                    <form>
+                        <label for="first_name">First Name</label>
+                        <input x-model="test_model_1.first_name" id="first_name" type="text" class="form-control mb-2">
+                        <label for="last_name">Last Name</label>
+                        <input x-model="test_model_1.last_name" id="last_name" type="text" class="form-control mb-2">
+                        <label for="description">Description</label>
+                        <textarea x-model="test_model_1.description" id="description"
+                                  class="form-control mb-2"></textarea>
+                        <label for="favorite_number">Favorite Number</label>
+                        <input x-model="test_model_1.favorite_number" id="favorite_number" type="text"
+                               class="form-control mb-2">
+                        <label for="weight_lbs">Weight (lbs)</label>
+                        <input x-model="test_model_1.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
+                    </form>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <button x-on:click="test_model_1.update()"
+                            class="btn btn-outline-secondary px-2 py-0 float-end">
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

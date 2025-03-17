@@ -1,0 +1,78 @@
+
+{% extends 'card/card.html' %}
+
+{% block header %}
+    Complex Model Form Integration
+{% endblock %}
+
+{% block body %}
+    <form method="post">
+        {% csrf_token %}
+        <div x-data="{
+            async init(){
+                this.test_model_list = await this.test_models_query.all()
+
+                for (let i = 0; i < this.test_model_list.length; i++){
+                    this.test_model_choices.push({
+                        'key': this.test_model_list[i].id,
+                        'value': this.test_model_list[i].last_name
+                    })
+                }
+
+                this.$watch('selected_choice', () => this.loadSelectedModel())
+
+                let initial = '{{ initial }}'
+                if (initial){
+                    this.initial = JSON.parse(initial)
+                }
+
+            },
+            test_models_query: new GlueQuerySet('test_queryset'),
+            test_model_list: [],
+            test_model_choices: [],
+            selected_choice: null,
+            selected_model: '',
+            initial: null,
+
+            async loadSelectedModel(){
+                this.selected_model = await this.test_models_query.get(parseInt(this.selected_choice))
+            }
+        }">
+            {% include 'form/field/select_field.html' with choices_x_model_name='test_model_choices' selected_x_model_name='selected_choice' %}
+
+            <div x-cloak x-show="selected_model">
+                <div class="row py-2 mb-3 border-bottom">
+                    <div class="col-3">
+                        <label for="first_name">First Name</label>
+                        <input x-model="selected_model.first_name" id="first_name" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="last_name">Last Name</label>
+                        <input x-model="selected_model.last_name" id="last_name" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="favorite_number">Favorite Number</label>
+                        <input x-model="selected_model.favorite_number" id="favorite_number" type="text"
+                               class="form-control mb-2">
+                    </div>
+                    <div class="col-3">
+                        <label for="weight_lbs">Weight (lbs)</label>
+                        <input x-model="selected_model.weight_lbs" id="weight_lbs" type="text" class="form-control mb-2">
+                    </div>
+                    <div class="col-12">
+                        <label for="description">Description</label>
+                        <textarea x-model="selected_model.description" id="description" class="form-control mb-2"></textarea>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <button type="button" x-on:click="selected_model.update()"
+                                class="btn btn-outline-secondary px-2 py-0 float-end">
+                            Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock %}

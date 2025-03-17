@@ -1,0 +1,25 @@
+{% extends 'card/card.html' %}
+
+{% load django_glue %}
+
+{% block header %}
+    Server Side Benchmark<br>
+    <span class="text-danger h5">This benchmark floods the session data and should only be used when your doing performance testing.</span>
+{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-12">
+                <div class="row">
+                    <div class="col-6 fw-bold">Loading Test</div>
+                    <div class="col-6 fw-bold">Speed in Seconds</div>
+                </div>
+            {% for key, val in benchmarks.items %}
+                <div class="row">
+                    <div class="col-6">{{ key }}</div>
+                    <div class="col-6">{{ val|floatformat:4 }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

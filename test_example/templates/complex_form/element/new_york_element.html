@@ -1,0 +1,14 @@
+<div class="pt-2" x-data="{
+    ketchup: false,
+    mustard: false,
+    extra_toppings: '',
+    order_quantity: 0,
+}">
+    <h4>New York Style Hot Dog Order Form</h4>
+    {% include 'form/field/boolean_field.html' with x_model_name='ketchup' label='Ketchup' %}
+    {% include 'form/field/boolean_field.html' with x_model_name='mustard' label='Mustard' %}
+    {% include 'form/field/char_field.html' with x_model_name='extra_toppings' label='Extra Toppings' %}
+    {% include 'form/field/integer_field.html' with x_model_name='order_quantity' label='Order Quantity' min_value=1 max_value=10 %}
+
+    <button type="submit" class="btn btn-primary mt-3">Submit</button>
+</div>

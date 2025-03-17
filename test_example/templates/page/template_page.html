@@ -1,0 +1,29 @@
+{% extends 'base/base.html' %}
+
+{% load django_glue %}
+
+{% block base_content %}
+
+    {% include 'navigation/top_navigation.html' with navigation_title="Django Glue Template" %}
+
+    <div class="row g-3 p-3" x-data="{
+        button: new GlueTemplate('button_1', {prefix: 'Start', postfix: 'End'})
+    }">
+        <p class="text-center mt-0">
+            <button class="btn btn-outline-info px-2 mt-0"
+                    x-on:click="button.render_inner($refs.target_div, {label: 'This was From Inner Rendering'})">Render Template to Inner HTML
+            </button>
+        </p>
+        <div class="col-12 p-3 border border-success" x-ref="target_div">
+            <p class="text-center m-0">
+                TEMPLATE RENDER TARGET DIV CONTENTS
+            </p>
+        </div>
+        <p class="text-center">
+            <button class="btn btn-outline-info px-2 mt-3"
+                    x-on:click="button.render_outer($refs.target_div, {label: 'From Outer Render'})">Render Template to Outer HTML
+            </button>
+        </p>
+    </div>
+
+{% endblock %}

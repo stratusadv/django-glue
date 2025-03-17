@@ -1,0 +1,23 @@
+<div class="position-relative" x-data="dropdown">
+    <div x-data="{
+        choices: [],
+        selected_value: {{ selected_x_model_name }}
+    }" x-modelable="choices" x-model="{{ choices_x_model_name }}">
+        <div x-model="selected_value" x-modelable="{{ selected_x_model_name }}">
+            <select name="{{ selected_x_model_name }}" x-init="$nextTick(()=>{
+                        if (selected_value){
+                            $el.value = selected_value
+                        }
+                    })"
+                    class="select form-select" x-bind="trigger"
+                    x-model="selected_value"
+            >
+                <option @click="selected = choice" value>----------</option>
+                <template x-for="(choice, index) in choices" :key="index">
+                    <option @click="selected = choice" :value="choice.key" x-text="choice.value"></option>
+                </template>
+            </select>
+        </div>
+    </div>
+</div>
+
