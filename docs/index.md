@@ -15,9 +15,6 @@ Education is also a big part of what we do and our focus is on teaching our peop
 We are inspired by how quickly django's model structure, ORM and forms (crispy forms) allow you to create functional web applications.
 Can we build on top of 25+ years of development to create a front end tool that uses the power of django.
 
-## Forms
-
-
 ## Requirements
 - Django 3, 4, 5
 - Python 3.11, 3.12, 3.13

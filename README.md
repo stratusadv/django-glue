@@ -25,7 +25,7 @@ Can we build on top of 25+ years of development to create a front end tool that 
 Our documentation is available on our [website](https://django-glue.stratusadv.com), including guides, example, api reference and more.
 
 <p align="center">
-    <a href="https://dandysoftware.com">
-        <img alt="Dandy Logo" src="docs/static/img/django_glue_logo_256.png"/>
+    <a href="https://django-glue.stratusadv.com">
+        <img alt="Django Glue Logo" src="https://django-glue.stratusadv.com/static/img/django_glue_logo_256.png"/>
     </a>
 </p>
