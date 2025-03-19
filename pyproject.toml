@@ -46,9 +46,9 @@ build-backend = "setuptools.build_meta"
 [tool.pyright]
 pythonVersion = "3.11"
 
-[tool.setuptools.packages.find]
-include = ["django_glue"]
-
 [tool.setuptools.dynamic]
 version = { attr = "django_glue.constants.__VERSION__" }
 dependencies = { file = "requirements.txt" }
+
+[tool.setuptools.packages.find]
+include = ["django_glue"]
