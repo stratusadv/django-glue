@@ -36,7 +36,15 @@ nav:
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md
+          - FunctionGlue: api/glue/function_glue.md
+          - ModelObjectGlue: api/glue/model_object_glue.md
+          - QuerySetGlue: api/glue/query_set_glue.md
+          - TemplateGlue: api/glue/template_glue.md
       - Javascript:
+          - FunctionGlue: api/javascript/function_glue.md
+          - ModelObjectGlue: api/javascript/model_object_glue.md
+          - QuerySetGlue: api/javascript/query_set_glue.md
+          - TemplateGlue: api/javascript/template_glue.md
           - ViewGlue: api/javascript/view_glue.md
   - Changelog:
       - Current: changelog/changelog.md

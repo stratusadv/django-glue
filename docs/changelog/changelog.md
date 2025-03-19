@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## v0.8.0 - Coming Soon
+## v0.8.0
 
 ### Breaking
 
