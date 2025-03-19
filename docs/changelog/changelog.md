@@ -5,6 +5,14 @@
 ### Breaking
 
 - Refactored `glue_model` function to `glue_model_object` to be more clear on the functionality.
+- All imports that used `django_glue.glue` should be changed to `django_glue`.
+- The `django_glue.middleware.GlueMiddleware` middleware has been renamed to `django_glue.middleware.DjangoGlueMiddleware`.
+- The `django_glue.context_processors.glue` context processor has been renamed to `django_glue.context_processors.django_glue`.
+- The JavaScript Object `GlueModelObject` has been renamed to `ModelObjectGlue`.
+- The JavaScript Object `GlueQuerySet` has been renamed to `QuerySetGlue`.
+- The JavaScript Object `GlueFunction` has been renamed to `FunctionGlue`.
+- The JavaScript Object `GlueView` has been renamed to `ViewGlue`.
+- The JavaScript Object `GlueTemplate` has been renamed to `TemplateGlue`.
 
 ### Features
 
