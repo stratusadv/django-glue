@@ -7,7 +7,6 @@ authors = [
     { name = "Austin Sauer", email = "austins@stratusadv.com" },
     { name = "Nathan Johnson", email = "nathanj@stratusadv.com" },
 ]
-url="https://github.com/stratusadv/django-glue"
 keywords = ["django", "glue", "backend", "frontend", "javascript", "active server pages"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
