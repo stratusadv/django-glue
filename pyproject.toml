@@ -15,6 +15,7 @@ classifiers = [
     "Framework :: Django :: 3",
     "Framework :: Django :: 4",
     "Framework :: Django :: 5",
+    "Framework :: Django :: 5",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: JavaScript",
@@ -44,6 +45,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.pyright]
 pythonVersion = "3.11"
+
+[tool.setuptools.packages.find]
+include = ["django_glue"]
 
 [tool.setuptools.dynamic]
 version = { attr = "django_glue.constants.__VERSION__" }
