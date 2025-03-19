@@ -4,6 +4,7 @@ description = "Industrial Strength Glue for Django Backends and Frontends!"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE.md", content-type = "text/markdown" }
 authors = [
+    { name = "Austin Sauer", email = "austins@stratusadv.com" },
     { name = "Nathan Johnson", email = "nathanj@stratusadv.com" },
 ]
 url="https://github.com/stratusadv/django-glue"
