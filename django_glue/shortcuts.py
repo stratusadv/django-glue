@@ -15,6 +15,7 @@ from django_glue.utils import encode_unique_name
 
 
 def _glue_base_function(request: HttpRequest, glue: BaseGlue):
+
     glue_session = Session(request)
     glue_session.add_glue(glue)
 

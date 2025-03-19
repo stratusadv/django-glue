@@ -24,7 +24,7 @@ markdown_extensions:
       pygments_lang_class: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
-  - pymdownx.superfences
+  - pymdownx.superfences:
   - tables
   - attr_list
 
@@ -33,6 +33,11 @@ nav:
   - Getting Started:
       - Welcome: index.md
       - Installation: getting_started/installation.md
+  - API Reference:
+      - Glue:
+          - shortcuts: api/glue/shortcuts.md
+      - Javascript:
+          - ViewGlue: api/javascript/view_glue.md
   - Changelog:
       - Current: changelog/changelog.md
       - Archived: changelog/archived_changelog.md
@@ -42,9 +47,7 @@ nav:
       - Contributors: about/contributors.md
 
 plugins:
-  - search
   - include-markdown
-  - table-reader
   - mkdocstrings:
       handlers:
         python:
@@ -63,6 +66,9 @@ plugins:
             show_signature: false
             show_signature_annotations: false
             show_symbol_type_heading: true
+  - markdown-exec
+  - search
+  - table-reader
 
 theme:
   name: material
@@ -82,10 +88,12 @@ theme:
     - toc.follow
     - navigation.tabs
     - navigation.footer
+    - navigation.sections
   logo: 'static/img/django_glue_logo_white_256.png'
   favicon: 'favicon.png'
 
 watch:
   - django_glue
   - example
+  - test_example
   - tests

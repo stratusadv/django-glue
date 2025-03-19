@@ -3,3 +3,27 @@
     --md-primary-fg-color--light: #8a5fb1;
     --md-primary-fg-color--dark: #8a5fb1;
 }
+
+@media only screen and (min-width: 1200px) {
+    li.md-nav__item label.md-nav__link span.md-ellipsis {
+        font-size: 0.65rem;
+        font-weight: normal;
+    }
+
+    li.md-nav__item a.md-nav__link {
+        margin-left: 10px;
+    }
+
+}
+
+.md-content .md-content__inner .result {
+    padding: 10px 0 10px 25px;
+}
+
+.md-content .md-content__inner .result::before {
+    font-size: 0.65rem;
+    content: "Output\A";
+    white-space: pre;
+    color: #999999;
+    margin-left: -10px;
+}

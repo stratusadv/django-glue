@@ -1,5 +1,10 @@
 # Django Glue
 
+![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
+![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
+![PyPI Version](https://img.shields.io/pypi/v/django-glue)
+![Downloads](https://img.shields.io/pypi/dm/django-glue)
+
 We built Django Glue to help solve the problem of fluid interactions between the front and back ends of a Django application.
 Our end goal is to bring as much front end power to the Django framework as possible while remaining pythonic.
 
