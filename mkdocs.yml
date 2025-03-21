@@ -33,6 +33,9 @@ nav:
   - Getting Started:
       - Welcome: index.md
       - Installation: getting_started/installation.md
+  - Guides:
+      - Introduction: guides/introduction.md
+      - ModelObjectGlue: guides/model_object_glue.md
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md
