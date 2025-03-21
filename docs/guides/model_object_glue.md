@@ -94,7 +94,7 @@ def person_update_form_view(request, pk):
     
     return TemplateResponse(
         request=request,
-        template='person/update_form.html',
+        template='person/form/update_form.html',
         context={
             'person': person  # Used by the form url.
         }
