@@ -28,7 +28,7 @@ ModelObjectGlue allows the user to access Django Model objects from the front en
 import django_glue as dg
 ```
 2. Get the Django Model Object you need access to on the front end.
-3. Use the shortcut method `glue_model_object(request, <str:unique_name>)` to glue the model object to the session data.
+3. Use the shortcut method `glue_model_object(request, <str:unique_name>)` to glue the model object to the glue session data.
 4. On the front end using AlpineJS, initialize a new glue model object with the same unique name you specified in step 3.
 ```html
 <div 
@@ -91,3 +91,6 @@ def person_update_form_view(request, pk):
     ... update form html ...
 ></form>
 ```
+
+
+[//]: # (Include method and link to JS object for more uses on the front end)
