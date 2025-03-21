@@ -27,72 +27,93 @@ QuerySetGlue allows the user to access a Django QuerySet from the front end.
 ``` python
 import django_glue as dg
 ```
+
 2. Get the Django QuerySet you need access to on the front end.
+``` python
+import django_glue as dg
+
+from app.people.models import Person
+
+
+def person_update_form_view(request, pk):
+    adults = Person.objects.filter(age > 17)
+```
+
 3. Use the shortcut method `glue_queryset_object(request, <str:unique_name>, <QuerySet:query_set>)` to glue the model objects in the query set to the glue session data.
+``` python
+import django_glue as dg
+
+from app.people.models import Person
+
+
+def person_update_form_view(request, pk):
+    adults = Person.objects.filter(age > 17)
+    
+    dg.glue_query_set(request=request, unique_name='adults', query_set=adults)
+    
+    ... update form logic ...
+```
+
 4. On the front end using AlpineJS, initialize a new glue query set with the same unique name you specified in step 3.
 ```html
 <div 
     x-data="{
-        example_model_object: new GlueQuerySet('<str:unique_name>')
+        adult_query_set: new GlueQuerySet('adults')
     }"
 ></div>
 ```
-5. Call the `get` method on the glue model object to retrieve the Django Model Object's data from the session data.
+5. Call the `all` method on the glue query set to retrieve the data from the Django Model Objects in the query set.
 ```html
 <div 
     x-data="{
-        example_model_object: new GlueModelObject('<str:unique_name>'),
+        adults: [],
+        adult_query_set: new GlueQuerySet('adults'),
         async init() {
-            this.example_model_object = await this.example_model_object.get()
+            this.adults = await this.adult_query_set.all()
         }
     }"
 ></div>
 ```
 
-### Example
+### Full Example
 
 #### Back End
 
 ``` python
 import django_glue as dg
 
+from app.people.models import Person
+
+
 def person_update_form_view(request, pk):
-    person = Person.objects.get(pk=pk)
+    adults = Person.objects.filter(age > 17)
     
-    dg.glue_model_object(
-        request=request,
-        unique_name='person',
-        fields=['name']
-    )
+    dg.glue_query_set(request=request, unique_name='adults', query_set=adults)
     
     ... update form logic ...
     
     return TemplateResponse(
         request=request,
-        template='person/update_form.html',
-        context={
-            'person': person  # Used by the form url.
-        }
+        template='person/form/update_form.html',
+        context={}
     )
 ```
 
 #### Front End
 
 ```html
-<form
-    method="POST"
-    action="{% url 'person:form:update_form' pk=person.pk %}"
+<div 
     x-data="{
-        person: new GlueModelObject('person')
+        adults: [],
+        adult_query_set: new GlueQuerySet('adults'),
         async init() {
-            this.person = await this.person.get()
+            this.adults = await this.adult_query_set.all()
         }
     }"
-    ... update form html ...
-></form>
+></div>
 ```
 
 ### More Information
 
-See [ModelObjectGlue](http://django-glue.stratusadv.com/api/javascript/model_object_glue/) 
-for the different methods available for Glue Model Objects on the front end.
+See [QuerySetGlue](http://django-glue.stratusadv.com/api/javascript/query_set_glue/) 
+for the different methods available for QuerySetGlue objects on the front end.
