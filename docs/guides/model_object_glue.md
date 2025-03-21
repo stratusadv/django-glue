@@ -27,49 +27,74 @@ ModelObjectGlue allows the user to access Django Model objects from the front en
 ``` python
 import django_glue as dg
 ```
+
 2. Get the Django Model Object you need access to on the front end.
+``` python
+import django_glue as dg
+
+from app.people.models import Person
+
+
+def person_update_form_view(request, pk):
+    person = Person.objects.get(pk=pk)
+```
+
 3. Use the shortcut method `glue_model_object(request, <str:unique_name>)` to glue the model object to the glue session data.
+``` python
+import django_glue as dg
+
+from app.people.models import Person
+
+
+def person_update_form_view(request, pk):
+    person = Person.objects.get(pk=pk)
+    
+    dg.glue_model_object(request=request, unique_name='person')
+    
+    ... update form logic ...
+```
+
 4. On the front end using AlpineJS, initialize a new glue model object with the same unique name you specified in step 3.
 ```html
 <div 
     x-data="{
-        example_model_object: new GlueModelObject('<str:unique_name>')
+        person: new ModelObjectGlue('person')
     }"
 ></div>
 ```
+
 5. Call the `get` method on the glue model object to retrieve the Django Model Object's data from the session data.
 ```html
 <div 
     x-data="{
-        example_model_object: new GlueModelObject('<str:unique_name>'),
+        person: new ModelObjectGlue('person'),
         async init() {
-            this.example_model_object = await this.example_model_object.get()
+            await this.person.get()
         }
     }"
 ></div>
 ```
 
-### Example
+### Full Example
 
 #### Back End
 
 ``` python
 import django_glue as dg
 
+from app.people.models import Person
+
+
 def person_update_form_view(request, pk):
     person = Person.objects.get(pk=pk)
     
-    dg.glue_model_object(
-        request=request,
-        unique_name='person',
-        fields=['name']
-    )
+    dg.glue_model_object(request=request, unique_name='person')
     
     ... update form logic ...
     
     return TemplateResponse(
         request=request,
-        template='person/update_form.html',
+        template='person/form/update_form.html',
         context={
             'person': person  # Used by the form url.
         }
@@ -83,9 +108,9 @@ def person_update_form_view(request, pk):
     method="POST"
     action="{% url 'person:form:update_form' pk=person.pk %}"
     x-data="{
-        person: new GlueModelObject('person')
+        person: new ModelObjectGlue('person')
         async init() {
-            this.person = await this.person.get()
+            await this.person.get()
         }
     }"
     ... update form html ...
@@ -95,4 +120,4 @@ def person_update_form_view(request, pk):
 ### More Information
 
 See [ModelObjectGlue](http://django-glue.stratusadv.com/api/javascript/model_object_glue/) 
-for the different methods available for Glue Model Objects on the front end.
+for the different methods available for ModelObjectGlue objects on the front end.
