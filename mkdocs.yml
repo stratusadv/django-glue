@@ -36,6 +36,7 @@ nav:
   - Guides:
       - Introduction: guides/introduction.md
       - ModelObjectGlue: guides/model_object_glue.md
+      - QuerySetGlue: guides/query_set_glue.md
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md
