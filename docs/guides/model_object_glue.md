@@ -92,5 +92,7 @@ def person_update_form_view(request, pk):
 ></form>
 ```
 
+### More Information
 
-[//]: # (Include method and link to JS object for more uses on the front end)
+See [ModelObjectGlue](http://django-glue.stratusadv.com/api/javascript/model_object_glue/) 
+for the different methods available for Glue Model Objects on the front end.
