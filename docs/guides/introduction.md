@@ -1,6 +1,16 @@
 # Guides
 
-### Guides will demonstrate
+
+## Before You Get Started
+
+- Make sure to have a strong understanding of how Django works.
+- It's also recommended that you understand how the http protocol works.
+
+!!! warning
+
+    You need to follow the [installation instructions](../getting_started/installation.md) before you start using the guides.
+
+## Guides will demonstrate
 
 - Purpose of the feature.
     - When and when not to use the feature.
@@ -8,7 +18,12 @@
     - In the front and back end.
     - Simple examples will be included.
 
+!!! note
 
-### Guides will not demonstrate
+    This guide will focus on the basics and is not intended to be a complete reference for all features or complex behavior.
 
-- Complex or complicated examples.
+
+<p align="center">
+    <img alt="Flex Seal Meme" src="../../static/img/meme/flex_seal_meme.png"/>
+</p>
+

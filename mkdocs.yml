@@ -35,8 +35,9 @@ nav:
       - Installation: getting_started/installation.md
   - Guides:
       - Introduction: guides/introduction.md
-      - ModelObjectGlue: guides/model_object_glue.md
-      - QuerySetGlue: guides/query_set_glue.md
+      - How to Glue:
+        - Model Object: guides/model_object_glue.md
+        - Query Set: guides/query_set_glue.md
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md

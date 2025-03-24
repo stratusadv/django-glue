@@ -79,7 +79,7 @@ def person_update_form_view(request, pk):
 
 #### Back End
 
-``` python
+``` python title="app/person/views.py"
 import django_glue as dg
 
 from app.people.models import Person
@@ -103,7 +103,7 @@ def person_update_form_view(request, pk):
 
 #### Front End
 
-```html
+```html title="templates/person/person_form.html"
 <form
     method="POST"
     action="{% url 'person:form:update_form' pk=person.pk %}"
