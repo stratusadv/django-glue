@@ -6,6 +6,7 @@
 
 - Refactored `glue_model` function to `glue_model_object` to be more clear on the functionality.
 - All imports that used `django_glue.glue` should be changed to `django_glue`.
+- Template field paths have been changed from `{% include 'django_glue/form/glue_field/<field_name>' %}` to `{% include 'django_glue/form/field/<field_name>' %}`.
 - The `django_glue.middleware.GlueMiddleware` middleware has been renamed to `django_glue.middleware.DjangoGlueMiddleware`.
 - The `django_glue.context_processors.glue` context processor has been renamed to `django_glue.context_processors.django_glue`.
 - The JavaScript Object `GlueModelObject` has been renamed to `ModelObjectGlue`.
