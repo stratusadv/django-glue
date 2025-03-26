@@ -1,13 +1,14 @@
 include README.md
 include LICENSE.md
-include CHANGELOG.md
-include CONTRIBUTORS.md
 recursive-include django_glue/templates *
 recursive-include django_glue/static *
 exclude *.db
-recursive-exclude tests
-recursive-exclude example
-recursive-exclude archived_docs
-recursive-exclude test_example
-recursive-exclude docs
-recursive-exclude .github
+prune .github
+prune .run
+prune .dev
+prune .venv
+prune archived_docs
+prune docs
+prune example
+prune tests
+prune test_example

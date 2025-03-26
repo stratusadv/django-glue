@@ -51,4 +51,11 @@ version = { attr = "django_glue.constants.__VERSION__" }
 dependencies = { file = "requirements.txt" }
 
 [tool.setuptools.packages.find]
-include = ["django_glue"]
+include = ["django_glue*"]
+
+[tool.setuptools.package-data]
+dandy = [
+    "**/*.html",
+    "**/*.js",
+    "**/*.css",
+]
