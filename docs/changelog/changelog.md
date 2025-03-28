@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## v0.8.2
+
+### Fixes
+
+- Fixed CSS classes from `*-django-glue-*` to `*-glue*` to match new naming conventions. 
+
 ## v0.8.1
 
 ### Breaking

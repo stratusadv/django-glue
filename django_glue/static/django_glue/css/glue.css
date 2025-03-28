@@ -1,41 +1,41 @@
 :root {
-    --app-django-glue-black: #212529;
-    --app-django-glue-grey-soft: #e3e6ed;
-    --app-django-glue-layer-one: #f8f9fa;
+    --app-glue-black: #212529;
+    --app-glue-grey-soft: #e3e6ed;
+    --app-glue-layer-one: #f8f9fa;
 
-    --app-django-glue-bg-layer-one: var(--app-django-glue-layer-one);
-    --app-django-glue-bg-secondary-soft: var(--app-django-glue-grey-soft);
-    --app-django-glue-text-black: var(--app-django-glue-black);
+    --app-glue-bg-layer-one: var(--app-glue-layer-one);
+    --app-glue-bg-secondary-soft: var(--app-glue-grey-soft);
+    --app-glue-text-black: var(--app-glue-black);
 }
 
-.bg-app-django-glue-layer-one, .bg-app-django-glue-layer-one-hover:hover {
-    background-color: var(--app-django-glue-bg-layer-one) !important;
+.bg-app-glue-layer-one, .bg-app-glue-layer-one-hover:hover {
+    background-color: var(--app-glue-bg-layer-one) !important;
 }
 
-.bg-app-django-glue-secondary-soft, .bg-app-django-glue-secondary-soft-hover:hover {
-    background-color: var(--app-django-glue-bg-secondary-soft) !important;
+.bg-app-glue-secondary-soft, .bg-app-glue-secondary-soft-hover:hover {
+    background-color: var(--app-glue-bg-secondary-soft) !important;
 }
 
-.text-app-django-glue-black, .text-app-django-glue-black-hover:hover {
-    color: var(--app-django-glue-text-black) !important;
+.text-app-glue-black, .text-app-glue-black-hover:hover {
+    color: var(--app-glue-text-black) !important;
 }
 
-.django-glue-cursor-pointer {
+.glue-cursor-pointer {
     cursor: pointer !important;
 }
 
-.django-glue-user-select {
+.glue-user-select {
     user-select: none !important;
 }
 
-.django-glue-fs--1 {
+.glue-fs--1 {
     font-size: .80rem !important;
 }
 
-.django-glue-fs--2 {
+.glue-fs--2 {
     font-size: .75rem !important;
 }
 
-.django-glue-fs-7 {
+.glue-fs-7 {
     font-size: .85rem !important;
 }
