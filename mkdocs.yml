@@ -38,6 +38,7 @@ nav:
       - How to Glue:
         - Model Object: guides/model_object_glue.md
         - Query Set: guides/query_set_glue.md
+        - ViewGlue: guides/viewglue.md
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md
