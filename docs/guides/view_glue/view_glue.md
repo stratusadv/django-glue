@@ -4,10 +4,11 @@
 ViewGlue allows the user to dynamically render a template given a endpoint.
 
 ### When to use
-When we want to dynamically change data with ease
+- Reduce HTML loading
+- Easily update data on the front end dynamically
 
 ### When not to use
-???
+Only need to hide a small amount of data
 
 ### More Information
 see [ViewGlue](http://django-glue.stratusadv.com/api/javascript/view_glue/)
