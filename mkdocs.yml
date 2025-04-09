@@ -36,11 +36,11 @@ nav:
   - Guides:
       - Introduction: guides/introduction.md
       - How to Glue:
-        - Model Object: guides/model_object_glue.md
-        - Query Set: guides/query_set_glue.md
-        - ViewGlue:
-            ViewGlue: guides/view_glue/view_glue.md
-            Render Inner: guides/view_glue/render_inner.md
+          - Model Object: guides/model_object_glue.md
+          - Query Set: guides/query_set_glue.md
+      - ViewGlue:
+          - ViewGlue: guides/view_glue/view_glue.md
+          - Render Inner: guides/view_glue/render_inner.md
   - API Reference:
       - Glue:
           - shortcuts: api/glue/shortcuts.md
@@ -69,7 +69,7 @@ plugins:
         python:
           inventories:
             - url: https://docs.python.org/3/objects.inv
-              domains: [py, std]
+              domains: [ py, std ]
           options:
             show_source: true
             show_if_no_docstring: True
@@ -90,16 +90,16 @@ theme:
   name: material
   custom_dir: docs/templates
   palette:
-  - media: "(prefers-color-scheme: light)"
-    scheme: default
-    toggle:
-      icon: material/lightbulb
-      name: "Switch to dark mode"
-  - media: "(prefers-color-scheme: dark)"
-    scheme: slate
-    toggle:
-      icon: material/lightbulb-outline
-      name: "Switch to system preference"
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/lightbulb
+        name: "Switch to dark mode"
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/lightbulb-outline
+        name: "Switch to system preference"
   features:
     - toc.follow
     - navigation.tabs
