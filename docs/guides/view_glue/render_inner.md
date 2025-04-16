@@ -1,6 +1,8 @@
 # ViewGlue Guide
 
-##In Progress
+!!! warning
+
+    This guide is currently in progress, There may be future updates or changes to this guide after review. 
 
 ## Purpose
 ViewGlue allows the user to dynamically render a template given a endpoint.
