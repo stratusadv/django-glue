@@ -80,7 +80,41 @@
                 class="form-label"
                 :for="glue_field.id"
             >
-                <span x-text="glue_field.label"></span><span x-cloak x-show="glue_field.required">*</span>
+                <span x-text="glue_field.label"></span>
+                <span x-cloak x-show="glue_field.required">*</span>
+
+                <template x-if="glue_field.help_text && glue_field.help_text.trim() !== ''">
+                    <span
+                        x-data="{ is_tooltip_visible: false }"
+                        class="position-relative mx-2"
+                    >
+                        <button
+                            type="button"
+                            class="btn btn-link p-0 lh-1"
+                            style="text-decoration: none; color: inherit; outline: none !important; box-shadow: none !important;"
+                            @mouseenter="is_tooltip_visible = true"
+                            @mouseleave="is_tooltip_visible = false"
+                            @click="is_tooltip_visible = !is_tooltip_visible; $event.currentTarget.blur();"
+                            @focus="$event.currentTarget.blur();"
+                        >
+                            <i class="bi bi-question-circle-fill" style="font-size: 0.75rem;"></i>
+                        </button>
+                        <div
+                            x-show="is_tooltip_visible"
+                            class="fs-sm position-absolute p-2 rounded mt-2"
+                            style="
+                                min-width: 200px;
+                                z-index: 1000;
+                                top: 100%;
+                                left: 0;
+                                background-color: rgba(33, 37, 41, 0.85);
+                                color: #fff;
+                                font-weight: 400;
+                            "
+                            x-text="glue_field.help_text"
+                        ></div>
+                    </span>
+                </template>
             </label>
         {% endblock %}
 

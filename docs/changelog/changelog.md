@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## v0.8.3
+
+### Features
+
+- Added a help icon and tooltip to a form field label.
+
 ## v0.8.2
 
 ### Fixes
