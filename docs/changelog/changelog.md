@@ -2,9 +2,14 @@
 
 ## v0.8.3
 
+### Fixes
+- Removed JS log statements
+- Added typing throughout application
+
 ### Features
 
 - Added a help icon and tooltip to a form field label.
+- Documentation for `ViewGlue`
 
 ## v0.8.2
 
