@@ -9,7 +9,7 @@
 ### Features
 
 - Added a help icon and tooltip to a form field label.
-- Documentation for `ViewGlue`
+- Added guide for `ViewGlue`
 
 ## v0.8.2
 
