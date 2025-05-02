@@ -1,6 +1,5 @@
 function choice_verbose(choice, choices) {
     const choices_object = Object.fromEntries(choices)
-    console.log(choices_object)
     return choices_object[choice]
 }
 
