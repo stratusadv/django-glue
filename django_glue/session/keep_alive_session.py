@@ -39,15 +39,14 @@ class KeepLiveSession:
     def get_next_expire_time() -> float:
         return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS
 
-    def set_unique_name(self, unique_name: str):
+    def set_unique_name(self, unique_name: str) -> None:
         self.session.setdefault(unique_name, self.get_next_expire_time())
-
         self.set_modified()
 
-    def set_modified(self):
+    def set_modified(self) -> None:
         self.request.session.modified = True
 
-    def update_unique_names(self, unique_names: Iterable[str]):
+    def update_unique_names(self, unique_names: Iterable[str]) -> None:
         for unique_name in unique_names:
             if unique_name in self.session:
                 self.session[unique_name] = self.get_next_expire_time()

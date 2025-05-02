@@ -11,7 +11,7 @@ class ModelObjectGlueSessionData(SessionData):
     app_label: str
     model_name: str
     object_pk: Union[int, str, uuid.uuid4]
-    fields: [ModelFieldGlue]
+    fields: list[ModelFieldGlue]
     included_fields: Union[list, tuple]
     exclude_fields: Union[list, tuple]
     methods: Union[list, tuple]

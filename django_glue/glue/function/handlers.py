@@ -20,9 +20,9 @@ class CallFunctionGlueHandler(BaseRequestHandler):
             unique_name=self.session_data.unique_name,
             function_path=self.session_data.function_path
         )
-        
+
         function_return = function_glue.call(self.post_data.kwargs)
-        
+
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',
