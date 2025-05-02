@@ -14,7 +14,7 @@ from django_glue.session import Session, KeepLiveSession
 from django_glue.utils import encode_unique_name
 
 
-def _glue_base_function(request: HttpRequest, glue: BaseGlue):
+def _glue_base_function(request: HttpRequest, glue: BaseGlue) -> None:
 
     glue_session = Session(request)
     glue_session.add_glue(glue)
@@ -30,7 +30,7 @@ def glue_function(
         request: HttpRequest,
         unique_name: str,
         target: str,
-):
+) -> None:
     glue_function_entity = FunctionGlue(
         unique_name=encode_unique_name(request, unique_name),
         function_path=target
@@ -46,7 +46,7 @@ def glue_model_object(
         fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
         exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
         methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
-):
+) -> None:
     glue_model_object_entity = ModelObjectGlue(
         unique_name=encode_unique_name(request, unique_name),
         model_object=model_object,
@@ -67,7 +67,7 @@ def glue_query_set(
         fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
         exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
         methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
-):
+) -> None:
     glue_query_set_entity = QuerySetGlue(
         unique_name=encode_unique_name(request, unique_name),
         query_set=target,
@@ -84,7 +84,7 @@ def glue_template(
         request: HttpRequest,
         unique_name: str,
         target: str,
-):
+) -> None:
 
     glue_template_entity = TemplateGlue(
         unique_name=encode_unique_name(request, unique_name),

@@ -11,7 +11,7 @@ from django.db.models import Model
 from django.http import HttpRequest
 
 
-def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]):
+def check_valid_method_kwargs(method: Callable, kwargs: Optional[dict]) -> bool:
     for kwarg in kwargs:
         if kwarg not in inspect.signature(method).parameters.keys():
             return False

@@ -14,7 +14,6 @@ class FunctionGlue {
             'call',
             data
         ).then((response) => {
-            console.log(response)
             django_glue_dispatch_response_event(response)
             return JSON.parse(response.data).function_return
         })

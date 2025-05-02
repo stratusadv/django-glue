@@ -24,26 +24,26 @@ class Session:
     def __setitem__(self, key: str, value: Any):
         self.session[key] = value
 
-    def add_glue(self, glue: BaseGlue):
+    def add_glue(self, glue: BaseGlue) -> None:
         if glue.unique_name in self.session:
             self.purge_unique_name(glue.unique_name)
 
         self.add_session_data(glue.unique_name, glue.to_session_data())
         self.set_modified()
 
-    def add_session_data(self, unique_name: str, session_data: SessionData):
+    def add_session_data(self, unique_name: str, session_data: SessionData) -> None:
         self.session[unique_name] = session_data.to_dict()
 
-    def clean(self, removable_unique_names: Iterable[str]):
+    def clean(self, removable_unique_names: Iterable[str]) -> None:
         for unique_name in removable_unique_names:
             self.purge_unique_name(unique_name)
 
         self.set_modified()
 
-    def purge_unique_name(self, unique_name: str):
+    def purge_unique_name(self, unique_name: str) -> None:
         self.session.pop(unique_name)
 
-    def set_modified(self):
+    def set_modified(self) -> None:
         self.request.session.modified = True
 
     def to_json(self) -> str:

@@ -18,7 +18,7 @@ class FunctionGlue(BaseGlue):
         self.module_name = '.'.join(function_path.split('.')[:-1])
         self.function_name = function_path.split('.')[-1]
 
-    def call(self, function_kwargs):
+    def call(self, function_kwargs: dict):
         module = __import__(self.module_name, fromlist=[self.function_name])
 
         if hasattr(module, self.function_name):

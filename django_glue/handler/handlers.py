@@ -35,7 +35,7 @@ class BaseRequestHandler(ABC):
 
         self.session_data = self._session_data_class(**session[self.unique_name])  # data we stored in glue session.
 
-    def has_access(self):
+    def has_access(self) -> bool:
         access = Access(self.session_data.access)
         return access.has_access(self.action.required_access())
 

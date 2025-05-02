@@ -9,7 +9,7 @@ from django_glue.response.data import BaseJsonData
 class ModelObjectGlueJsonData(BaseJsonData):  # This is a little duplicated but allows us to send more response data.
     fields: ModelFieldsGlue
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return self.fields.to_dict()
 
 
@@ -17,5 +17,5 @@ class ModelObjectGlueJsonData(BaseJsonData):  # This is a little duplicated but 
 class MethodModelObjectGlueJsonData(BaseJsonData):
     method_return: Any
 
-    def to_dict(self):
+    def to_dict(self) -> dict:
         return {'method_return': self.method_return}
