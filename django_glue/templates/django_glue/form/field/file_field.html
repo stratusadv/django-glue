@@ -36,6 +36,10 @@
                 }
             },
 
+            truncate_name(name, max = 30) {
+                return name && name.length > max ? name.slice(0, max - 3) + '...' : name;
+            },
+
             handle_files_change(event) {
                 const new_files = Array.from(event.target.files || []);
 
@@ -44,11 +48,21 @@
                 }
 
                 for (const file of new_files) {
-                    const is_duplicate = this.files.some(existing => existing.name === file.name);
+                    let index = this.files.findIndex(existing => existing.name === file.name);
 
-                    if (is_duplicate) {
-                        continue;
+                    if (index !== -1) {
+                        // Remove duplicate
+                        this.files.splice(index, 1);
                     }
+
+                    /**
+                    * FileReader is used here to convert selected files into base64-encoded data URLs.
+                    * This approach provides several benefits:
+                    * - The files are processed entirely client-side before form submission
+                    * - It enables immediate image previews without server roundtrips
+                    * - It allows storing file content directly in form data
+                    * - It works well with both drag-and-drop and file selection interfaces
+                    */
 
                     const reader = new FileReader();
                     const file_id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
@@ -75,6 +89,11 @@
                 }
 
                 this.$refs.file_input.value = '';
+                this.$refs.camera_input.value = '';
+            },
+
+            take_photo() {
+                this.$refs.camera_input.click();
             },
 
             remove_file(file_id) {
@@ -107,29 +126,39 @@
             }
         }"
     >
-        <button
-            class="form-control text-start d-flex justify-content-between"
-            type="button"
-            @click="show_dropdown = !show_dropdown"
-        >
-            <span class="d-flex flex-wrap align-items-center">
-                <template x-if="files.length === 0">
-                    <span>No files selected</span>
-                </template>
+        <div class="d-flex">
+            <button
+                class="form-control text-start d-flex justify-content-between flex-grow-1"
+                type="button"
+                @click="show_dropdown = !show_dropdown"
+            >
+                <span class="d-flex flex-wrap align-items-center">
+                    <template x-if="files.length === 0">
+                        <span>No files selected</span>
+                    </template>
 
-                <template x-if="files.length > 0 && !is_multiple">
-                    <span x-text="files[0].name"></span>
-                </template>
+                    <template x-if="files.length > 0 && !is_multiple">
+                        <span x-text="truncate_name(files[0].name)"></span>
+                    </template>
 
-                <template x-if="files.length > 0 && is_multiple">
-                    <span x-text="files.length + ' files selected'"></span>
-                </template>
-            </span>
+                    <template x-if="files.length > 0 && is_multiple">
+                        <span x-text="files.length + ' files selected'"></span>
+                    </template>
+                </span>
 
-            <span class="d-flex align-items-center">
-                {% include 'django_glue/form/field/element/select_down_arrow_element.html' %}
-            </span>
-        </button>
+                <span class="d-flex align-items-center">
+                    {% include 'django_glue/form/field/element/select_down_arrow_element.html' %}
+                </span>
+            </button>
+
+            <button
+                type="button"
+                class="btn border border-secondary-subtle bg-app-glue-layer-one text-muted ms-2"
+                @click="take_photo()"
+            >
+                <i class="bi bi-camera"></i>
+            </button>
+        </div>
 
         <input
             type="file"
@@ -138,6 +167,15 @@
             @change="handle_files_change"
             :accept="accept_types"
             :multiple="is_multiple"
+        >
+
+        <input
+            type="file"
+            x-ref="camera_input"
+            class="d-none"
+            @change="handle_files_change"
+            accept="image/*"
+            capture="environment"
         >
 
         <div
@@ -166,7 +204,7 @@
                     </div>
 
                     <div class="flex-grow-1 ms-2">
-                        <div class="text-truncate" x-text="file.name"></div>
+                        <div class="text-truncate" x-text="truncate_name(file.name)"></div>
                         <div class="glue-fs--2 text-muted" x-text="format_file_size(file.size)"></div>
                     </div>
 
