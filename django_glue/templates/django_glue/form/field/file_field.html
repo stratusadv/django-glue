@@ -20,7 +20,7 @@
                 if (!this.value) return;
 
                 try {
-                    const handlers = {
+                    let handlers = {
                         multiple: () => Array.isArray(this.value) ? this.value : JSON.parse(this.value),
                         single: () => (typeof this.value === 'string' && this.value.startsWith('data:')) ? [{
                             id: 'single-file',
@@ -36,18 +36,54 @@
                 }
             },
 
+            async compress(file, quality = 0.75, maximum_width = 1920) {
+                try {
+                    let image = await createImageBitmap(file);
+
+                    let scale = Math.min(
+                        1,
+                        maximum_width / Math.max(image.width, image.height)
+                    );
+
+                    let width = image.width * scale;
+                    let height = image.height * scale;
+
+                    let canvas = Object.assign(document.createElement('canvas'), { width: width, height: height });
+                    let ctx = canvas.getContext('2d');
+
+                    ctx.drawImage(image, 0, 0, width, height);
+
+                    return new Promise(result => canvas.toBlob(
+                        blob => result(new File([blob], file.name, { type: 'image/jpeg' })),
+                        'image/jpeg',
+                        quality
+                    ));
+                } catch (error) {
+                    console.error('Compression failed:', error);
+                    return file;
+                }
+            },
+
             truncate_name(name, max = 30) {
                 return name && name.length > max ? name.slice(0, max - 3) + '...' : name;
             },
 
-            handle_files_change(event) {
-                const new_files = Array.from(event.target.files || []);
+            async handle_files_change(event) {
+                // 10MB
+                const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+                let new_files = Array.from(event.target.files || []);
 
                 if (!this.is_multiple) {
                     this.files = [];
                 }
 
-                for (const file of new_files) {
+                for (let file of new_files) {
+                    if (file.size > MAX_FILE_SIZE) {
+                        alert(`The file is too large (${this.format_file_size(file.size)}). Maximum size is ${this.format_file_size(MAX_FILE_SIZE)}.`);
+                        continue;
+                    }
+
                     let index = this.files.findIndex(existing => existing.name === file.name);
 
                     if (index !== -1) {
@@ -56,32 +92,36 @@
                     }
 
                     /**
-                    * FileReader is used here to convert selected files into base64-encoded data URLs.
-                    * This approach provides several benefits:
-                    * - The files are processed entirely client-side before form submission
-                    * - It enables immediate image previews without server roundtrips
-                    * - It allows storing file content directly in form data
-                    * - It works well with both drag-and-drop and file selection interfaces
-                    */
+                     * FileReader encodes files into base64 data URLs in the browser.
+                     * We can show image previews instantly, store file data directly
+                     * in forms, and work with both drag-drop and file picker interfaces
+                     * without needing server processing first.
+                     */
 
-                    const reader = new FileReader();
-                    const file_id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                    let reader = new FileReader();
+                    let file_id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+                    let processed = file;
+
+                    if (file.type.startsWith('image/')) {
+                        processed = await this.compress(file);
+                    }
 
                     reader.onload = (event) => {
                         this.files.push({
                             id: file_id,
                             name: file.name,
-                            size: file.size,
-                            type: file.type,
+                            size: processed.size,
+                            type: processed.type,
                             data: event.target.result,
-                            preview: file.type.startsWith('image/') ? event.target.result : null
+                            preview: processed.type.startsWith('image/') ? event.target.result : null
                         });
 
                         this.update_value();
                         this.show_dropdown = true;
                     };
 
-                    reader.readAsDataURL(file);
+                    reader.readAsDataURL(processed);
 
                     if (!this.is_multiple) {
                         break;
@@ -112,17 +152,17 @@
             format_file_size(bytes) {
                 if (!bytes) return '';
 
-                const units = ['B', 'KB', 'MB', 'GB'];
+                const UNITS = ['B', 'KB', 'MB', 'GB'];
 
                 let size = bytes;
                 let unit_index = 0;
 
-                while (size >= 1024 && unit_index < units.length - 1) {
+                while (size >= 1024 && unit_index < UNITS.length - 1) {
                     size /= 1024;
                     unit_index++;
                 }
 
-                return `${size.toFixed(1)} ${units[unit_index]}`;
+                return `${size.toFixed(1)} ${UNITS[unit_index]}`;
             }
         }"
     >
