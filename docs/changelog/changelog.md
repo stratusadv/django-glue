@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## v0.8.4
+
+### Features
+
+- Introduced `file_field.html` to handle single and multiple file uploads
+
 ## v0.8.3
 
 ### Fixes
