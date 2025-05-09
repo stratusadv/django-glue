@@ -53,8 +53,10 @@
 
                     ctx.drawImage(image, 0, 0, width, height);
 
+                    let filename = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+
                     return new Promise(result => canvas.toBlob(
-                        blob => result(new File([blob], file.name, { type: 'image/jpeg' })),
+                        blob => result(new File([blob], filename, { type: 'image/jpeg' })),
                         'image/jpeg',
                         quality
                     ));
@@ -110,7 +112,7 @@
                     reader.onload = (event) => {
                         this.files.push({
                             id: file_id,
-                            name: file.name,
+                            name: processed.name,
                             size: processed.size,
                             type: processed.type,
                             data: event.target.result,
