@@ -13,27 +13,24 @@
         x-data="{
             show_dropdown: false,
             files: [],
-            is_multiple: {% if multiple %}true{% else %}false{% endif %},
-            accept_types: '{{ accept|default:'' }}',
+            objects: {},
+
+            accept: '{{ accept|default:'' }}',
+            compression: {{ compression|default:'true' }},
+            compression_ratio: {{ compression_ratio|default:'0.75' }},
+            maximum_filesize: {{ maximum_filesize|default:'10' }} * 1024 * 1024,
+            units: ['B', 'KB', 'MB', 'GB'],
 
             init() {
                 if (!this.value) return;
 
                 try {
-                    let handlers = {
-                        multiple: () => Array.isArray(this.value) ? this.value : JSON.parse(this.value),
-                        single: () => (typeof this.value === 'string' && this.value.startsWith('data:')) ? [{
-                            id: 'single-file',
-                            name: 'Selected file',
-                            data: this.value,
-                            preview: this.value.startsWith('data:image/') ? this.value : null
-                        }] : []
-                    };
-
-                    this.files = handlers[this.is_multiple ? 'multiple' : 'single']();
+                    this.files = Array.isArray(this.value) ? this.value : JSON.parse(this.value);
                 } catch(e) {
                     this.files = [];
                 }
+
+                this.update_form_files();
             },
 
             async compress(file, quality = 0.75, maximum_width = 1920) {
@@ -66,108 +63,54 @@
                 }
             },
 
-            truncate_name(name, max = 30) {
-                return name && name.length > max ? name.slice(0, max - 3) + '...' : name;
-            },
+            format_file_size(bytes) {
+                if (!bytes) return '';
 
-            async handle_files_change(event) {
-                // 10MB
-                const MAX_FILE_SIZE = 10 * 1024 * 1024;
+                let size = bytes;
+                let index = 0;
 
-                let new_files = Array.from(event.target.files || []);
-
-                if (!this.is_multiple) {
-                    this.files = [];
+                while (size >= 1024 && index < this.units.length - 1) {
+                    size /= 1024;
+                    index++;
                 }
 
-                for (let file of new_files) {
-                    if (file.size > MAX_FILE_SIZE) {
-                        alert(`The file is too large (${this.format_file_size(file.size)}). Maximum size is ${this.format_file_size(MAX_FILE_SIZE)}.`);
-                        continue;
-                    }
-
-                    let index = this.files.findIndex(existing => existing.name === file.name);
-
-                    if (index !== -1) {
-                        // Remove duplicate
-                        this.files.splice(index, 1);
-                    }
-
-                    /**
-                     * FileReader encodes files into base64 data URLs in the browser.
-                     * We can show image previews instantly, store file data directly
-                     * in forms, and work with both drag-drop and file picker interfaces
-                     * without needing server processing first.
-                     */
-
-                    let reader = new FileReader();
-                    let file_id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-
-                    let processed = file;
-
-                    if (file.type.startsWith('image/')) {
-                        processed = await this.compress(file);
-                    }
-
-                    reader.onload = (event) => {
-                        this.files.push({
-                            id: file_id,
-                            name: processed.name,
-                            size: processed.size,
-                            type: processed.type,
-                            data: event.target.result,
-                            preview: processed.type.startsWith('image/') ? event.target.result : null
-                        });
-
-                        this.update_value();
-                        this.show_dropdown = true;
-                    };
-
-                    reader.readAsDataURL(processed);
-
-                    if (!this.is_multiple) {
-                        break;
-                    }
-                }
-
-                this.$refs.file_input.value = '';
-                this.$refs.camera_input.value = '';
+                return `${size.toFixed(1)} ${this.units[index]}`;
             },
 
             take_photo() {
                 this.$refs.camera_input.click();
             },
 
-            remove_file(file_id) {
-                this.files = this.files.filter(file => file.id !== file_id);
-                this.update_value();
+            truncate_name(name, max = 30) {
+                return name && name.length > max ? name.slice(0, max - 3) + '...' : name;
+            },
+
+            update_form_files() {
+                let transfer = new DataTransfer();
+
+                for (let object in this.objects) {
+                    transfer.items.add(this.objects[object]);
+                }
+
+                this.$refs.upload.files = transfer.files;
             },
 
             update_value() {
-                if (this.is_multiple) {
-                    this.value = this.files.length > 0 ? JSON.stringify(this.files) : null;
-                } else {
-                    this.value = this.files.length > 0 ? this.files[0].data : null;
-                }
+                this.value = this.files.length > 0 ? JSON.stringify(this.files) : null;
             },
 
-            format_file_size(bytes) {
-                if (!bytes) return '';
-
-                const UNITS = ['B', 'KB', 'MB', 'GB'];
-
-                let size = bytes;
-                let unit_index = 0;
-
-                while (size >= 1024 && unit_index < UNITS.length - 1) {
-                    size /= 1024;
-                    unit_index++;
-                }
-
-                return `${size.toFixed(1)} ${UNITS[unit_index]}`;
-            }
+            {% block x-data %}{% endblock %}
         }"
     >
+        <input
+            type="file"
+            :name="{{ glue_field }}.name"
+            x-ref="upload"
+            class="d-none"
+            :accept="accept"
+            {% block upload_attributes %}{% endblock %}
+        >
+
         <div class="d-flex">
             <button
                 class="form-control text-start d-flex justify-content-between flex-grow-1"
@@ -175,17 +118,7 @@
                 @click="show_dropdown = !show_dropdown"
             >
                 <span class="d-flex flex-wrap align-items-center">
-                    <template x-if="files.length === 0">
-                        <span>No files selected</span>
-                    </template>
-
-                    <template x-if="files.length > 0 && !is_multiple">
-                        <span x-text="truncate_name(files[0].name)"></span>
-                    </template>
-
-                    <template x-if="files.length > 0 && is_multiple">
-                        <span x-text="files.length + ' files selected'"></span>
-                    </template>
+                    {% block selection_display %}{% endblock %}
                 </span>
 
                 <span class="d-flex align-items-center">
@@ -207,8 +140,8 @@
             x-ref="file_input"
             class="d-none"
             @change="handle_files_change"
-            :accept="accept_types"
-            :multiple="is_multiple"
+            :accept="accept"
+            {% block file_input_attributes %}{% endblock %}
         >
 
         <input
@@ -218,16 +151,15 @@
             @change="handle_files_change"
             accept="image/*"
             capture="environment"
+            {% block camera_input_attributes %}{% endblock %}
         >
 
         <div
             x-cloak
             x-show="show_dropdown"
             @click.outside="show_dropdown = false"
-            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0 list-group"
-            style="max-height: 350px; overflow-y: auto; z-index: 3;"
-            @keydown.escape="show_dropdown = false"
-            x-trap.inert="show_dropdown"
+            class="shadow border rounded-2 border-secondary-subtle mt-2 bg-white w-100 p-0 list-group"
+            style="max-height: 350px; overflow-y: auto;"
         >
             <template x-for="file in files" :key="file.id">
                 <div
@@ -268,7 +200,7 @@
             >
                 <div class="text-muted">
                     <i class="bi bi-cloud-arrow-up me-2"></i>
-                    <span x-text="is_multiple ? 'Click to add or drag and drop files here' : 'Click to select or drag and drop a file here'"></span>
+                    {% block drop_area_text %}{% endblock %}
                 </div>
             </div>
         </div>
