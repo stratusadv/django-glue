@@ -1,10 +1,16 @@
 # Changelog for Django Glue
 
+## v0.8.5
+
+### Fixes
+
+- Fixed file_field.html to work on iOS and refactored into multi_file_field.html and single_file_field.html
+
 ## v0.8.4
 
 ### Features
 
-- Introduced `file_field.html` to handle single and multiple file uploads
+- Introduced file_field.html to handle single and multiple file uploads
 
 ## v0.8.3
 

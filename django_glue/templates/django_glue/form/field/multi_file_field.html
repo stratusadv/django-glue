@@ -1,0 +1,89 @@
+{% extends 'django_glue/form/field/file_field.html' %}
+
+{% block x-data %}
+    async handle_files_change(event) {
+        let files = Array.from(event.target.files || []);
+
+        for (let file of files) {
+            if (file.size > this.maximum_filesize) {
+                alert(`The file is too large (${this.format_file_size(file.size)}). Maximum size is ${this.format_file_size(this.maximum_filesize)}.`);
+                continue;
+            }
+
+            let index = this.files.findIndex(existing => existing.name === file.name);
+
+            if (index !== -1) {
+                URL.revokeObjectURL(this.files[index].data);
+                URL.revokeObjectURL(this.files[index].preview);
+                this.files.splice(index, 1);
+            }
+
+            let file_id = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            let processed = file;
+
+            if (file.type.startsWith('image/') && file.type !== 'image/svg+xml' && this.compression) {
+                processed = await this.compress(file);
+            }
+
+            this.objects[file_id] = processed;
+
+            let data = URL.createObjectURL(processed);
+
+            this.files.push({
+                id: file_id,
+                name: processed.name,
+                size: processed.size,
+                type: processed.type,
+                data: data,
+                preview: processed.type.startsWith('image/') ? data : null
+            });
+
+            this.show_dropdown = false;
+        }
+
+        this.update_value();
+        this.show_dropdown = true;
+        this.update_form_files();
+
+        this.$refs.file_input.value = '';
+        this.$refs.camera_input.value = '';
+    },
+
+    remove_file(file_id) {
+        let file = this.files.find(file => file.id === file_id);
+
+        if (file) {
+            URL.revokeObjectURL(file.data);
+            if (file.preview) URL.revokeObjectURL(file.preview);
+        }
+
+        delete this.objects[file_id];
+
+        this.files = this.files.filter(file => file.id !== file_id);
+
+        this.update_value();
+        this.update_form_files();
+
+        if (this.files.length === 0) {
+            this.show_dropdown = false;
+        }
+    }
+{% endblock %}
+
+{% block upload_attributes %}multiple{% endblock %}
+{% block file_input_attributes %}multiple{% endblock %}
+{% block camera_input_attributes %}multiple{% endblock %}
+
+{% block selection_display %}
+    <template x-if="files.length === 0">
+        <span>No files selected</span>
+    </template>
+
+    <template x-if="files.length > 0">
+        <span x-text="files.length + ' files selected'"></span>
+    </template>
+{% endblock %}
+
+{% block drop_area_text %}
+    <span>Click to add or drag and drop files here</span>
+{% endblock %}
