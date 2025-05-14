@@ -14,8 +14,9 @@ class Access(str, Enum):
 
     def has_access(self, access_required: Access) -> bool:
         access_tuple = tuple(Access.__members__.values())
+
         if access_tuple.index(self) >= access_tuple.index(access_required):
             return True
-        else:
-            return False
+
+        return False
 

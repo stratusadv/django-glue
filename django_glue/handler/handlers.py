@@ -4,13 +4,13 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from django_glue.access.access import Access
-from django_glue.glue.post_data import BasePostData
 
 if TYPE_CHECKING:
-    from django_glue.session import Session
+    from django_glue.access.actions import BaseAction
+    from django_glue.glue.post_data import BasePostData
     from django_glue.handler.body import RequestBody
     from django_glue.response.data import JsonResponseData
-    from django_glue.access.actions import BaseAction
+    from django_glue.session import Session
     from django_glue.session.data import SessionData
 
 

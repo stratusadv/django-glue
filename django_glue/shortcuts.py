@@ -1,21 +1,27 @@
-from typing import Union
+from __future__ import annotations
 
-from django.db.models import Model
-from django.db.models.query import QuerySet
-from django.http import HttpRequest
+from typing import Any, Callable, TYPE_CHECKING
 
+from django_glue.access.access import Access
 from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
+from django_glue.glue.context.glue import ContextGlue
+from django_glue.glue.context.permissions import create_permission_checker
 from django_glue.glue.function.glue import FunctionGlue
-from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.glue import ModelObjectGlue
 from django_glue.glue.query_set.glue import QuerySetGlue
 from django_glue.glue.template.glue import TemplateGlue
 from django_glue.session import Session, KeepLiveSession
 from django_glue.utils import encode_unique_name
 
+if TYPE_CHECKING:
+    from django.db.models import Model
+    from django.db.models.query import QuerySet
+    from django.http import HttpRequest
+
+    from django_glue.glue.glue import BaseGlue
+
 
 def _glue_base_function(request: HttpRequest, glue: BaseGlue) -> None:
-
     glue_session = Session(request)
     glue_session.add_glue(glue)
 
@@ -26,10 +32,35 @@ def _glue_base_function(request: HttpRequest, glue: BaseGlue) -> None:
     glue_session.set_modified()
 
 
+def glue_context(
+    request: HttpRequest,
+    unique_name: str,
+    context_data: dict[str, Any],
+    access: Access | str = Access.VIEW,
+    exclude: list[str] | set[str] | tuple | None = None,
+    permission_checker: Callable | None = None
+) -> None:
+    user = request.user
+
+    if permission_checker is None and user.is_authenticated:
+        permission_checker = create_permission_checker(user)
+
+    context_glue = ContextGlue(
+        unique_name=encode_unique_name(request, unique_name),
+        context_data=context_data,
+        user=user,
+        permission_checker=permission_checker,
+        access=access,
+        exclude=exclude
+    )
+
+    _glue_base_function(request, context_glue)
+
+
 def glue_function(
-        request: HttpRequest,
-        unique_name: str,
-        target: str,
+    request: HttpRequest,
+    unique_name: str,
+    target: str
 ) -> None:
     glue_function_entity = FunctionGlue(
         unique_name=encode_unique_name(request, unique_name),
@@ -39,13 +70,13 @@ def glue_function(
 
 
 def glue_model_object(
-        request: HttpRequest,
-        unique_name: str,
-        model_object: Model,
-        access: str = 'view',
-        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
-        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
-        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
+    request: HttpRequest,
+    unique_name: str,
+    model_object: Model,
+    access: str = 'view',
+    fields: list | tuple = (ALL_DUNDER_KEY,),
+    exclude: list | tuple = (NONE_DUNDER_KEY,),
+    methods: list | tuple = (NONE_DUNDER_KEY,),
 ) -> None:
     glue_model_object_entity = ModelObjectGlue(
         unique_name=encode_unique_name(request, unique_name),
@@ -60,13 +91,13 @@ def glue_model_object(
 
 
 def glue_query_set(
-        request: HttpRequest,
-        unique_name: str,
-        target: QuerySet,
-        access: str = 'view',
-        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
-        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
-        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
+    request: HttpRequest,
+    unique_name: str,
+    target: QuerySet,
+    access: str = 'view',
+    fields: list | tuple = (ALL_DUNDER_KEY,),
+    exclude: list | tuple = (NONE_DUNDER_KEY,),
+    methods: list | tuple = (NONE_DUNDER_KEY,),
 ) -> None:
     glue_query_set_entity = QuerySetGlue(
         unique_name=encode_unique_name(request, unique_name),
@@ -81,9 +112,9 @@ def glue_query_set(
 
 
 def glue_template(
-        request: HttpRequest,
-        unique_name: str,
-        target: str,
+    request: HttpRequest,
+    unique_name: str,
+    target: str,
 ) -> None:
 
     glue_template_entity = TemplateGlue(

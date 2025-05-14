@@ -6,6 +6,7 @@ class GlueType(str, Enum):
     QUERY_SET = 'query_set'
     TEMPLATE = 'template'
     FUNCTION = 'function'
+    CONTEXT = 'context'
 
     def __str__(self) -> str:
         return self.value

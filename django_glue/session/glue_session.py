@@ -15,7 +15,7 @@ class Session:
     """
     def __init__(self, request: HttpRequest):
         self.request = request
-        self.request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
+        self.request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, {})
         self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
 
     def __getitem__(self, key: str) -> Any:
