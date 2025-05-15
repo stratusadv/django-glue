@@ -8,6 +8,8 @@ import uuid
 from enum import Enum
 from typing import Any, Callable, TYPE_CHECKING
 
+from django_glue.glue.context.permissions import create_permission_checker
+
 from django.core.paginator import Page
 from django.db.models import Model, QuerySet
 from django.forms.models import model_to_dict
@@ -105,38 +107,22 @@ class ModelSerializer(TypeSerializer):
         return isinstance(data, Model)
 
     def serialize(self, data: Any, context: dict[str, Any]) -> Any:
-        if context.get('permission_checker') and not context['permission_checker'](data):
+        permission_checker = context.get('permission_checker')
+
+        if not permission_checker and context.get('user'):
+            permission_checker = create_permission_checker(context['user'])
+
+        if permission_checker and not permission_checker.check_permission(data, 'view'):
             return {'pk': data.pk, '__str__': str(data)}
 
         model_dict = model_to_dict(data)
         model_dict['pk'] = data.pk
         model_dict['__str__'] = str(data)
 
-        for field in data._meta.fields:
-            if field.choices and hasattr(data, f'get_{field.name}_display'):
-                display_method = getattr(data, f'get_{field.name}_display')
-                model_dict[f'{field.name}_display'] = display_method()
-
-            if field.is_relation and field.name not in model_dict:
-                related_obj = getattr(data, field.name, None)
-
-                if related_obj is not None:
-                    model_dict[field.name] = related_obj
-
-        for attr_name, attr_value in data.__dict__.items():
-            if attr_name in model_dict or attr_name.startswith('_'):
-                continue
-
-            if attr_name in ('_state', '_prefetched_objects_cache'):
-                continue
-
-            model_dict[attr_name] = attr_value
-
-        excluded_keys = context['exclude']
-
-        for key in list(model_dict.keys()):
-            if key in excluded_keys:
-                del model_dict[key]
+        model_dict = self._process_model_fields(data, model_dict)
+        model_dict = self._process_annotations(data, model_dict)
+        model_dict = self._filter_by_exclusion(model_dict, context['exclude'])
+        model_dict = self._filter_by_field_permission_level(data, model_dict, permission_checker)
 
         return context['serializer'].serialize(
             model_dict,
@@ -145,6 +131,54 @@ class ModelSerializer(TypeSerializer):
             context['exclude'],
             context['max_depth'] - 1
         )
+
+    def _filter_by_field_permission_level(self, data: Model, model_dict: dict, permission_checker) -> dict:
+        if permission_checker and hasattr(permission_checker, 'get_permitted_fields'):
+            permitted_fields = permission_checker.get_permitted_fields(data, 'view')
+
+            for field in list(model_dict):
+                if field not in permitted_fields and field not in ['pk', '__str__']:
+                    del model_dict[field]
+
+        return model_dict
+
+    def _filter_by_exclusion(self, model_dict: dict, excluded_keys) -> dict:
+        for key in list(model_dict.keys()):
+            if key in excluded_keys:
+                del model_dict[key]
+
+        return model_dict
+
+    def _process_model_fields(self, data: Model, model_dict: dict) -> dict:
+        for field in data._meta.fields:
+            # Process choices fields and add display values
+            if field.choices and hasattr(data, f'get_{field.name}_display'):
+                display_method = getattr(data, f'get_{field.name}_display')
+                model_dict[f'{field.name}_display'] = display_method()
+
+            # Process related fields
+            if field.is_relation and field.name not in model_dict:
+                related_obj = getattr(data, field.name, None)
+
+                if related_obj is not None:
+                    model_dict[field.name] = related_obj
+
+        return model_dict
+
+    def _process_annotations(self, data: Model, model_dict: dict) -> dict:
+        for attr_name, attr_value in data.__dict__.items():
+            # Skip already processed or private attributes
+            if attr_name in model_dict or attr_name.startswith('_'):
+                continue
+
+            # Skip Django internal attributes
+            if attr_name in ('_state', '_prefetched_objects_cache'):
+                continue
+
+            # Include the attribute
+            model_dict[attr_name] = attr_value
+
+        return model_dict
 
 
 class QuerySetSerializer(TypeSerializer):
