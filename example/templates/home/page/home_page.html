@@ -4,6 +4,29 @@
     <div class="row">
         <div class="col-12">
             <h1>Home Page</h1>
+
+            <div
+                x-data="{
+                    object_choices: [
+                        [0, 'None'],
+                        [1, 'One'],
+                        [2, 'Two'],
+                        [3, 'Three'],
+                        [4, 'Four']
+                    ],
+                    selected_objects: [1, 2, 3],
+                    object: new GlueIntegerField('object'),
+                    init() {
+                        this.object.choices = this.object_choices
+                        this.object.disabled_choices = this.selected_objects
+                    }
+                }"
+            >
+                {% include 'django_glue/form/field/select_field.html' with glue_field='object' %}
+                {% include 'django_glue/form/field/search_and_select_field.html' with glue_field='object' %}
+                {% include 'django_glue/form/field/multi_select_field.html' with glue_field='object' %}
+            </div>
+
         </div>
     </div>
 {% endblock %}

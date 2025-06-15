@@ -8,12 +8,13 @@ class GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
             hidden = false,
             autofocus = false,
-            prevent_submit = false
+            prevent_submit = false,
         } = {},
     ) {
         this.name = name
@@ -22,6 +23,7 @@ class GlueBaseFormField {
         this.label = label
         this.help_text = help_text
         this.choices = choices
+        this.disabled_choices = disabled_choices
 
         this._historic_attr_names = []
         this._hide_label = false
@@ -173,6 +175,7 @@ class GlueCharField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
@@ -187,6 +190,7 @@ class GlueCharField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            disabled_choices,
             required,
             disabled,
             readonly,
@@ -214,6 +218,7 @@ class GlueBooleanField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
@@ -228,6 +233,7 @@ class GlueBooleanField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            disabled_choices,
             required,
             disabled,
             readonly,
@@ -251,6 +257,7 @@ class GlueDateField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
@@ -267,6 +274,7 @@ class GlueDateField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            disabled_choices,
             required,
             disabled,
             readonly,
@@ -295,6 +303,7 @@ class GlueIntegerField extends GlueBaseFormField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
@@ -312,6 +321,7 @@ class GlueIntegerField extends GlueBaseFormField {
             help_text,
             id,
             choices,
+            disabled_choices,
             required,
             disabled,
             readonly,
@@ -344,6 +354,7 @@ class GlueDecimalField extends GlueIntegerField {
             help_text = '',
             id = '',
             choices = [],
+            disabled_choices = [],
             required = false,
             disabled = false,
             readonly = false,
@@ -361,6 +372,7 @@ class GlueDecimalField extends GlueIntegerField {
             help_text,
             id,
             choices,
+            disabled_choices,
             required,
             disabled,
             readonly,
