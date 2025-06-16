@@ -1,4 +1,4 @@
-__VERSION__ = '0.8.5'
+__VERSION__ = '0.8.6'
 
 UNIQUE_NAME_KEY = 'unique_name'
 ACTION_KEY = 'action'

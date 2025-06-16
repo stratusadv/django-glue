@@ -24,6 +24,10 @@
     cursor: pointer !important;
 }
 
+.glue-cursor-not-allowed {
+    cursor: not-allowed !important;
+}
+
 .glue-user-select {
     user-select: none !important;
 }

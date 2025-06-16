@@ -1,5 +1,10 @@
 # Changelog for Django Glue
 
+## v0.8.6
+
+### Features
+- Added `disabled_choices` options to `select_field.html`, `search_and_select_field.html` and `multi_select_field.html`'
+
 ## v0.8.5
 
 ### Fixes

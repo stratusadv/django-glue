@@ -103,9 +103,10 @@
 
             <template x-for="(choice, index) in filtered_choices" :key="choice[0]">
                 <div
-                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
+                    class="py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
-                    @click="select_choice(choice)"
+                    @click="glue_field.disabled_choices.includes(choice[0]) ? '' : select_choice(choice)"
+                    :class="glue_field.disabled_choices.includes(choice[0]) ? 'opacity-50 glue-user-select glue-cursor-not-allowed' : 'glue-cursor-pointer bg-app-glue-layer-one-hover'"
                     @keydown.enter.prevent="select_choice(choice)"
                 >
                     {% block choice_item %}
