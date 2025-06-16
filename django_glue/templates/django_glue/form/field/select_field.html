@@ -59,10 +59,10 @@
 
             <template x-for="(choice, index) in glue_field.choices" :key="choice[0]">
                 <div
-                    class="glue-cursor-pointer py-1 d-flex align-items-center list-group-item px-0"
+                    class="py-1 d-flex align-items-center list-group-item px-0"
                     tabindex="0"
                     @click="glue_field.disabled_choices.includes(choice[0]) ? '' : value = choice[0]; show_dropdown = false"
-                    :class="glue_field.disabled_choices.includes(choice[0]) ? 'bg-app-glue-secondary-soft' : 'bg-app-glue-layer-one-hover'"
+                    :class="glue_field.disabled_choices.includes(choice[0]) ? 'opacity-50 glue-user-select glue-cursor-not-allowed' : 'glue-cursor-pointer bg-app-glue-layer-one-hover'"
                     @keydown.enter.prevent="value = choice[0]; show_dropdown = false"
                 >
                     {% block choice_item %}
