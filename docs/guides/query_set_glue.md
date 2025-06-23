@@ -49,7 +49,7 @@ from app.people.models import Person
 def person_update_form_view(request, pk):
     adults = Person.objects.filter(age > 17)
     
-    dg.glue_query_set(request=request, unique_name='adults', query_set=adults)
+    dg.glue_query_set(request=request, unique_name='adults', target=adults)
     
     ... update form logic ...
 ```
@@ -88,7 +88,7 @@ from app.people.models import Person
 def person_update_form_view(request, pk):
     adults = Person.objects.filter(age > 17)
     
-    dg.glue_query_set(request=request, unique_name='adults', query_set=adults)
+    dg.glue_query_set(request=request, unique_name='adults', target=adults)
     
     ... update form logic ...
     
