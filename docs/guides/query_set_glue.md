@@ -58,7 +58,7 @@ def person_update_form_view(request, pk):
 ```html
 <div 
     x-data="{
-        adult_query_set: new GlueQuerySet('adults')
+        adult_query_set: new QuerySetGlue('adults')
     }"
 ></div>
 ```
@@ -67,7 +67,7 @@ def person_update_form_view(request, pk):
 <div 
     x-data="{
         adults: [],
-        adult_query_set: new GlueQuerySet('adults'),
+        adult_query_set: new QuerySetGlue('adults'),
         async init() {
             this.adults = await this.adult_query_set.all()
         }
@@ -105,7 +105,7 @@ def person_update_form_view(request, pk):
 <div 
     x-data="{
         adults: [],
-        adult_query_set: new GlueQuerySet('adults'),
+        adult_query_set: new QuerySetGlue('adults'),
         async init() {
             this.adults = await this.adult_query_set.all()
         }
