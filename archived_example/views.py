@@ -5,18 +5,18 @@ from django.shortcuts import render
 from django.template.response import TemplateResponse
 from django.views.generic import TemplateView
 
-from tests.models import TestModel, BigTestModel, UuidTestModel
-from tests.processors import get_complex_form_processor
-from tests.utils import generate_randomized_test_model, generate_big_test_model
-from tests.context_data import django_glue_context_data
+from test_example.models import TestModel, BigTestModel, UuidTestModel
+from test_example.processors import get_complex_form_processor
+from test_example.utils import generate_randomized_test_model, generate_big_test_model
+from test_example.context_data import django_glue_context_data
 
-from django_glue.glue import glue_model, glue_query_set, glue_template, glue_function
+import django_glue as dg
 
 
 def big_model_object_view(request):
     big_model = generate_big_test_model()
-    glue_model(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
-    glue_query_set(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
+    dg.glue_model_object(request, 'big_model', big_model, 'delete', fields=('foreign_key',))
+    dg.glue_query_set(request, 'big_model_query', BigTestModel.objects.all(), 'delete', fields=('foreign_key',))
 
     return TemplateResponse(request, template='page/big_model_object_page.html')
 
@@ -30,10 +30,7 @@ class ModelObjectView(TemplateView):
 
         test_model_object = generate_randomized_test_model()
 
-        glue_model(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
-        # glue_model(self.request, 'test_model_2', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
-        # glue_model(self.request, 'test_model_3', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'))
-        # glue_model(self.request, 'test_model_4', test_model_object, 'change', exclude=('birth_date', 'anniversary_datetime'))
+        dg.glue_model_object(self.request, 'test_model_1', test_model_object, 'delete', exclude=('birth_date', 'anniversary_datetime'), methods=['is_lighter_than', 'get_full_name'])
 
         big_test_model_object = generate_big_test_model()
 
@@ -48,15 +45,15 @@ class QuerySetView(TemplateView):
 
         context_data.update(django_glue_context_data(self.request))
 
-        glue_query_set(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
-        glue_query_set(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
+        dg.glue_query_set(self.request, 'test_query_1', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'delete', exclude=('anniversary_datetime', 'birth_date'), methods=['is_lighter_than', 'get_full_name'])
+        dg.glue_query_set(self.request, 'test_query_3', TestModel.objects.filter(id__gte=1).filter(id__lte=10000), 'change', exclude=('birth_date', 'anniversary_datetime'))
 
         context_data['model_object_id'] = TestModel.objects.filter(id__gte=1).filter(id__lte=10000).first().id
         return context_data
 
 
 def query_set_list_view(request):
-    glue_query_set(request, 'test_query_1', TestModel.objects.all(), 'delete')
+    dg.glue_query_set(request, 'test_query_1', TestModel.objects.all(), 'delete')
     return TemplateResponse(
         request,
         template='page/query_set_list_page.html'
@@ -171,7 +168,7 @@ def function_view(request):
 def form_field_view(request):
     person = generate_randomized_test_model()
     glue_model(request, 'person', person)
-    glue_query_set(request, 'people', TestModel.objects.all())
+    dg.glue_query_set(request, 'people', TestModel.objects.all())
     if request.method == 'POST':
         print(request.POST)
     return TemplateResponse(request, 'page/form_fields_page.html')
@@ -202,7 +199,7 @@ def complex_form_view(request):
 
 
 def complex_model_form_view(request):
-    glue_query_set(request, 'test_queryset', TestModel.objects.all(), 'delete')
+    dg.glue_query_set(request, 'test_queryset', TestModel.objects.all(), 'delete')
     context_data = {}
 
     return render(request, 'complex_form/page/complex_model_form_page.html', context_data)

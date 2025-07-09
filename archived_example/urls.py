@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
 
-from tests import views
+from test_example import views
 
 urlpatterns = [
     path("", views.ModelObjectView.as_view(), name="model_object"),

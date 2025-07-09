@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 import sys
 
 logging.basicConfig(
@@ -11,9 +11,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-WSGI_APPLICATION = 'tests.wsgi.application'
+WSGI_APPLICATION = 'test_project.system.wsgi.application'
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(BASE_DIR)
 
 INSTALLED_APPS = [
@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django_glue',
-    'tests',
+    'test_project',
 ]
 
 MIDDLEWARE = [
@@ -35,7 +35,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_glue.middleware.GlueMiddleware',
+    'django_glue.middleware.DjangoGlueMiddleware',
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -43,11 +43,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'test.db',
+        'NAME': 'test_project.db',
     }
 }
 
-ROOT_URLCONF = 'tests.urls'
+ROOT_URLCONF = 'test_project.system.development.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
@@ -58,7 +58,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'templates'),
+            os.path.join(BASE_DIR, 'test_project/templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -67,10 +67,9 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'django_glue.context_processors.glue',
+                'django_glue.context_processors.django_glue',
             ],
-            'builtins': [
-            ],
+            'builtins': [],
             'debug': DEBUG,
         },
     },

@@ -3,7 +3,7 @@ import uuid
 
 from django.utils.timezone import now
 
-from tests.models import TestModel, BigTestModel
+from tests_example.models import TestModel, BigTestModel
 
 FIRST_NAME_TUPLE = (
     'Fred',
