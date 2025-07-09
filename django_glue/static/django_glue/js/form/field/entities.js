@@ -155,7 +155,7 @@ class GlueBaseFormField {
 
     set required(value) {
         if (!value && !this.choices.some(choice => choice[1] === '----------')) {
-            this.choices.unshift(['false', '----------']);
+            this.choices.unshift(['', '----------']);
         } else if (value && this.choices.some(choice => choice[1] === '----------')) {
             this.choices = this.choices.filter(choice => choice[1] !== '----------');
         }

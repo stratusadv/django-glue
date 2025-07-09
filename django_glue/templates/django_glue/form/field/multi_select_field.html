@@ -1,6 +1,7 @@
 {% extends 'django_glue/form/field/base_field.html' %}
 
 {% block field_content %}
+    {# This can be removed and need to insert input fields to have getlist and get effect #}
     <input
         type="text"
         x-model="value"
@@ -12,63 +13,39 @@
         x-data="{
             show_dropdown: false,
             search: '',
+            init () {
+                this.value = []
+            },
             add_choice(choice) {
-                const selected_values = this.get_selected_values();
-                selected_values.push(choice[0]);
-                this.update_value(selected_values);
+                value.push(choice[0]);
             },
             remove_choice(choice) {
-                const selected_values = this.get_selected_values().filter(val => val !== choice[0]);
-                this.update_value(selected_values);
-            },
-            update_value(values) {
-                this.value = JSON.stringify(values);
-            },
-            get_selected_values() {
-                try {
-                    const value = JSON.parse(this.value);
-                    return Array.isArray(value) ? value : [value];
-                } catch (e) {
-                    return [];
-                }
+                this.value = this.value.filter(val => val !== choice[0]);
             },
             get_selected_choices() {
-                const selected_values = this.get_selected_values();
-                return this.glue_field.choices.filter(choice => selected_values.includes(choice[0]));
+                return this.glue_field.choices.filter(choice => value.includes(choice[0]));
             },
             get filtered_choices() {
-                const selected_values = this.get_selected_values();
-                const filtered_array = this.glue_field.choices.filter(choice => !selected_values.includes(choice[0]));
+                const filtered_array = this.glue_field.choices.filter(choice => !value.includes(choice[0]));
 
                 const search = this.search.toLowerCase();
                 return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
             },
             focus_input() {
                 setTimeout(() => this.$refs.search_input.focus(), 100);
-            },
-        }"
-        x-effect="
-            if (glue_field.choices) {
-                glue_field.choices = glue_field.choices.filter(choice => choice[1] !== '----------');
             }
-
-            if (typeof(glue_field.value) == 'string') {
-                try {
-                    JSON.parse(glue_field.value);
-                } catch (error) {
-                    glue_field.value = JSON.stringify(glue_field.value);
+        }"
+        x-effect="                        
+            if (typeof(value) == 'string'){
+                if(value.startsWith('[')){
+                    value = JSON.parse(value);
                 }
             }
 
-            if (Array.isArray(glue_field.value)) {
-                glue_field.value = value = JSON.stringify(glue_field.value);
+            if (!Array.isArray(value)) {
+               value = [];
             }
 
-            if (Array.isArray(value)) {
-                value = JSON.stringify(value);
-            }
-
-            value = JSON.stringify(get_selected_values());
         "
     >
         {% block selected_choices %}
