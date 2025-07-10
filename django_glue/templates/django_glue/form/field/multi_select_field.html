@@ -8,7 +8,9 @@
             show_dropdown: false,
             search: '',
             init () {
+                console.log(this.value)
                 this.parse_value()
+                console.log(this.value)
 
                 this.$watch('value', (value) => {
                     this.parse_value()
@@ -16,31 +18,23 @@
                 })
             },
             add_choice(choice) {
-                this.value.push(choice[0]);               
-            },
-            remove_choice(choice) {
-                this.value = this.value.filter(val => val !== choice[0]);
-            },
-            update_inputs(){
-                this.$refs.inputs.innerHTML = '';
-                for (let value of this.value) {
-                    const new_input = document.createElement('input');
-                    new_input.type = 'hidden';
-                    new_input.id = 'input-' + value;
-                    new_input.name = this.glue_field.name;
-                    new_input.value = value;
-                    this.$refs.inputs.appendChild(new_input);
-                }
-            
+                console.log(choice)
+                this.value.push(choice[0])
+                console.log(this.value)
             },
             get get_selected_choices() {
-                return this.glue_field.choices.filter(choice => this.value.includes(choice[0]));
+                return this.glue_field.choices.filter(choice => this.value.includes(choice[0]))
             },
             get filtered_choices() {
-                const filtered_array = this.glue_field.choices.filter(choice => !this.value.includes(choice[0]));
+                
+                
+                const filtered_array = this.glue_field.choices.filter(choice => !this.value.includes(choice[0]) && choice[1] !== '----------')
 
-                const search = this.search.toLowerCase();
-                return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
+                const search = this.search.toLowerCase()
+                return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search))
+            },
+            focus_input() {
+                setTimeout(() => this.$refs.search_input.focus(), 100)
             },
             parse_value(){
 
@@ -51,17 +45,28 @@
 
                 // Parse the initial value into an array.
                 if (typeof(this.value) == 'string' && this.value.startsWith('[')){
-                    value = JSON.parse(this.value);
+                    value = JSON.parse(this.value)
                     return
                 }
 
                 // Must be an array.
-                this.value = [];
-                return
+                this.value = []
 
             },
-            focus_input() {
-                setTimeout(() => this.$refs.search_input.focus(), 100);
+            remove_choice(choice) {
+                this.value = this.value.filter(val => val !== choice[0])
+            },
+            update_inputs(){
+                this.$refs.inputs.innerHTML = ''
+                for (let selected_value of this.value) {
+                    const new_input = document.createElement('input')
+                    new_input.type = 'hidden'
+                    new_input.id = 'input-' + selected_value
+                    new_input.name = this.glue_field.name
+                    new_input.value = selected_value
+                    this.$refs.inputs.appendChild(new_input)
+                }
+
             }
         }"
     >
