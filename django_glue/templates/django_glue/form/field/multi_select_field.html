@@ -2,52 +2,71 @@
 
 {% block field_content %}
     {# This can be removed and need to insert input fields to have getlist and get effect #}
-    <input
-        type="text"
-        x-model="value"
-        x-ref="glue_field"
-        hidden
-    >
     <div
         class="position-relative"
         x-data="{
             show_dropdown: false,
             search: '',
             init () {
-                this.value = []
+                this.parse_value()
+
+                this.$watch('value', (value) => {
+                    this.parse_value()
+                    this.update_inputs()
+                })
             },
             add_choice(choice) {
-                value.push(choice[0]);
+                this.value.push(choice[0]);               
             },
             remove_choice(choice) {
                 this.value = this.value.filter(val => val !== choice[0]);
             },
-            get_selected_choices() {
-                return this.glue_field.choices.filter(choice => value.includes(choice[0]));
+            update_inputs(){
+                this.$refs.inputs.innerHTML = '';
+                for (let value of this.value) {
+                    const new_input = document.createElement('input');
+                    new_input.type = 'hidden';
+                    new_input.id = 'input-' + value;
+                    new_input.name = this.glue_field.name;
+                    new_input.value = value;
+                    this.$refs.inputs.appendChild(new_input);
+                }
+            
+            },
+            get get_selected_choices() {
+                return this.glue_field.choices.filter(choice => this.value.includes(choice[0]));
             },
             get filtered_choices() {
-                const filtered_array = this.glue_field.choices.filter(choice => !value.includes(choice[0]));
+                const filtered_array = this.glue_field.choices.filter(choice => !this.value.includes(choice[0]));
 
                 const search = this.search.toLowerCase();
                 return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search));
+            },
+            parse_value(){
+
+                // It is already an array!
+                if (Array.isArray(this.value)) {
+                    return
+                }
+
+                // Parse the initial value into an array.
+                if (typeof(this.value) == 'string' && this.value.startsWith('[')){
+                    value = JSON.parse(this.value);
+                    return
+                }
+
+                // Must be an array.
+                this.value = [];
+                return
+
             },
             focus_input() {
                 setTimeout(() => this.$refs.search_input.focus(), 100);
             }
         }"
-        x-effect="                        
-            if (typeof(value) == 'string'){
-                if(value.startsWith('[')){
-                    value = JSON.parse(value);
-                }
-            }
-
-            if (!Array.isArray(value)) {
-               value = [];
-            }
-
-        "
     >
+        <div x-ref="inputs"></div>
+
         {% block selected_choices %}
             <button
                 class="form-control text-start d-flex justify-content-between"
@@ -55,7 +74,7 @@
                 @click="show_dropdown = !show_dropdown; focus_input();"
             >
                 <span class="d-flex flex-wrap align-items-center">
-                    <template x-for="(choice, index) in get_selected_choices()" :key="index">
+                    <template x-for="choice in get_selected_choices" :key="choice[0]">
                         <div class="d-inline-block my-1">
                             <span class="badge rounded-pill bg-app-glue-secondary-soft glue-fs--1 fw-normal border text-app-glue-black me-1">
                                 <span x-text="choice[1]"></span>
@@ -63,7 +82,7 @@
                         </div>
                     </template>
 
-                    <template x-if="get_selected_choices().length === 0">
+                    <template x-if="get_selected_choices.length === 0">
                         <span class="">----------</span>
                     </template>
                 </span>
@@ -98,7 +117,7 @@
                 >
             </div>
 
-            <template x-for="(choice, index) in get_selected_choices()" :key="index">
+            <template x-for="(choice, index) in get_selected_choices" :key="index">
                 <div
                     class="glue-cursor-pointer glue-user-select py-1 d-flex align-items-center list-group-item px-0 bg-app-glue-layer-one-hover"
                     tabindex="0"
@@ -111,7 +130,7 @@
                 </div>
             </template>
 
-            <template x-if="get_selected_choices().length > 0 && filtered_choices.length !== 0">
+            <template x-if="get_selected_choices.length > 0 && filtered_choices.length !== 0">
                 <div class="bg-app-glue-secondary-soft">
                     <span class="text-muted d-block glue-fs--2 ms-3">Choices</span>
                 </div>
