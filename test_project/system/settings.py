@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_glue',
     'test_project',
+    'test_project.app.glue_model_object.apps.GlueModelObjectConfig'
 ]
 
 MIDDLEWARE = [
