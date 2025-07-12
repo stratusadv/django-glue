@@ -23,10 +23,15 @@
                 console.log(this.value)
             },
             get get_selected_choices() {
+                if (!Array.isArray(this.value)) {
+                    return []
+                }
                 return this.glue_field.choices.filter(choice => this.value.includes(choice[0]))
             },
             get filtered_choices() {
-                
+                if (!Array.isArray(this.value)) {
+                    return []
+                }
                 
                 const filtered_array = this.glue_field.choices.filter(choice => !this.value.includes(choice[0]) && choice[1] !== '----------')
 
