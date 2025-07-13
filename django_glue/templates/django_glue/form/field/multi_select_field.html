@@ -8,32 +8,27 @@
             show_dropdown: false,
             search: '',
             init () {
-                console.log(this.value)
                 this.parse_value()
-                console.log(this.value)
 
-                this.$watch('value', (value) => {
+                this.$watch('glue_field.value', value => {
                     this.parse_value()
-                    this.update_inputs()
                 })
             },
             add_choice(choice) {
-                console.log(choice)
-                this.value.push(choice[0])
-                console.log(this.value)
+                this.glue_field.value.push(choice[0])
             },
             get get_selected_choices() {
-                if (!Array.isArray(this.value)) {
+                if (!Array.isArray(this.glue_field.value)) {
                     return []
                 }
-                return this.glue_field.choices.filter(choice => this.value.includes(choice[0]))
+                return this.glue_field.choices.filter(choice => this.glue_field.value.includes(choice[0]))
             },
             get filtered_choices() {
-                if (!Array.isArray(this.value)) {
+                if (!Array.isArray(this.glue_field.value)) {
                     return []
                 }
-                
-                const filtered_array = this.glue_field.choices.filter(choice => !this.value.includes(choice[0]) && choice[1] !== '----------')
+
+                const filtered_array = this.glue_field.choices.filter(choice => !this.glue_field.value.includes(choice[0]) && choice[1] !== '----------')
 
                 const search = this.search.toLowerCase()
                 return filtered_array.filter(filtered_choice => filtered_choice[1].toLowerCase().includes(search))
@@ -42,39 +37,29 @@
                 setTimeout(() => this.$refs.search_input.focus(), 100)
             },
             parse_value(){
-
                 // It is already an array!
-                if (Array.isArray(this.value)) {
+                if (Array.isArray(this.glue_field.value)) {
                     return
                 }
 
                 // Parse the initial value into an array.
-                if (typeof(this.value) == 'string' && this.value.startsWith('[')){
-                    value = JSON.parse(this.value)
+                if (typeof(this.glue_field.value) == 'string' && this.glue_field.value.startsWith('[')){
+                    value = JSON.parse(this.glue_field.value)
                     return
                 }
 
                 // Must be an array.
-                this.value = []
-
+                this.glue_field.value = []
             },
             remove_choice(choice) {
-                this.value = this.value.filter(val => val !== choice[0])
+                this.glue_field.value = this.glue_field.value.filter(val => val !== choice[0])
             },
-            update_inputs(){
-                this.$refs.inputs.innerHTML = ''
-                for (let selected_value of this.value) {
-                    const new_input = document.createElement('input')
-                    new_input.type = 'hidden'
-                    new_input.id = 'input-' + selected_value
-                    new_input.name = this.glue_field.name
-                    new_input.value = selected_value
-                    this.$refs.inputs.appendChild(new_input)
-                }
-
-            }
         }"
     >
+        <template x-for="choice in get_selected_choices" :key="choice[0]">
+            <input hidden type="text" :name="glue_field.name" :value="choice[0]">
+
+        </template>
         <div x-ref="inputs"></div>
 
         {% block selected_choices %}
