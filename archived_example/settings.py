@@ -1,5 +1,5 @@
-import logging
 import os
+import logging
 import sys
 
 logging.basicConfig(
@@ -11,9 +11,9 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-WSGI_APPLICATION = 'example.system.wsgi.application'
+WSGI_APPLICATION = 'tests.wsgi.application'
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 INSTALLED_APPS = [
@@ -24,7 +24,7 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django_glue',
-    'example',
+    'tests',
 ]
 
 MIDDLEWARE = [
@@ -35,7 +35,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_glue.middleware.DjangoGlueMiddleware',
+    'django_glue.middleware.GlueMiddleware',
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
@@ -43,11 +43,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'example.db',
+        'NAME': 'test.db',
     }
 }
 
-ROOT_URLCONF = 'example.system.development.urls'
+ROOT_URLCONF = 'test_example.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
@@ -58,7 +58,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            os.path.join(BASE_DIR, 'example/templates'),
+            os.path.join(BASE_DIR, 'templates'),
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -67,9 +67,10 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'django_glue.context_processors.django_glue',
+                'django_glue.context_processors.glue',
             ],
-            'builtins': [],
+            'builtins': [
+            ],
             'debug': DEBUG,
         },
     },

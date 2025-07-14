@@ -3,7 +3,7 @@ from importlib import import_module
 from django.conf import settings
 from django.test import TestCase, RequestFactory
 
-from example.app.people.models import Person
+from test_project.app.people.models import Person
 
 
 class BaseTestCase(TestCase):

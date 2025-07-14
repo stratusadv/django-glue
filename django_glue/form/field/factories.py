@@ -17,7 +17,7 @@ class FormFieldFactory:
     def choices(self) -> list:
         if self.model_field.choices:
             if self.model_field.blank:
-                return [(False, '----------')] + list(self.model_field.choices)
+                return [('', '----------')] + list(self.model_field.choices)
             else:
                 return list(self.model_field.choices)
         else:

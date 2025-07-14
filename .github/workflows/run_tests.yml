@@ -32,7 +32,7 @@ jobs:
       - name: Package Tests
         run: |
           export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-          python example/manage.py test --settings=system.settings --noinput
+          python test_project/manage.py test --settings=system.settings --noinput
 
       - name: Documentation Tests
         run: |

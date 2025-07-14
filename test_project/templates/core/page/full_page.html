@@ -4,16 +4,12 @@
     <div class="row sticky-top z-2">
         <div class="col-12">
             {% block navigation_top %}
-                {% include 'core/navigation/top_navigation.html' with hide_logo=True %}
+                {% include 'core/navigation/top_navigation.html' %}
             {% endblock %}
         </div>
     </div>
     <div class="row">
-        <div class="col-auto px-0 d-none d-lg-block" style="width: 180px">
-            {% block navigation_side %}
-            {% endblock %}
-        </div>
-        <div class="col">
+        <div class="col-12">
             {% block page_content %}
             {% endblock %}
         </div>
@@ -24,5 +20,4 @@
             {% endblock %}
         </div>
     </div>
-    {% include 'core/modal/dispatch_modal.html' %}
 {% endblock %}

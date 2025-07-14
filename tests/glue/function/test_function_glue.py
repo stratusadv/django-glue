@@ -1,4 +1,4 @@
-from example.app.people.utils import check_name_is_valid
+from test_project.app.people.utils import check_name_is_valid
 from tests.test_base import BaseTestCase
 
 import django_glue as dg
@@ -10,7 +10,7 @@ class TestFunctionGlue(BaseTestCase):
             dg.glue_function(
                 self.request,
                 'person_function',
-                'example.app.people.utils.check_name_is_valid'
+                'test_project.app.people.utils.check_name_is_valid'
             )
 
             self.assertTrue(True)
