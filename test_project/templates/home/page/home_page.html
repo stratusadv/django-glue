@@ -6,4 +6,10 @@
             <h1>Home Page</h1>
         </div>
     </div>
+    <div class="row">
+        <div class="col-4">
+            {% url 'glue_model_object:page:list' as glue_model_object_list_url %}
+            {% include 'core/button/base_button.html' with button_text='TestGlueModelObject' button_href=glue_model_object_list_url %}
+        </div>
+    </div>
 {% endblock %}
