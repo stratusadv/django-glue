@@ -33,6 +33,7 @@ INSTALLED_APPS += [
     'test_project.app.glue_queryset.apps.GlueQuerySetConfig',
     'test_project.app.glue_form.apps.GlueFormConfig',
     'test_project.app.glue_function.apps.GlueFunctionConfig',
+    'test_project.app.glue_view.apps.GlueViewConfig',
 ]
 
 
