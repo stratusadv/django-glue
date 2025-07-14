@@ -110,6 +110,6 @@ theme:
 
 watch:
   - django_glue
-  - example
+  - test_project
   - test_example
   - tests
