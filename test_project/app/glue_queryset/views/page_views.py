@@ -25,6 +25,6 @@ def dashboard_view(request):
 
     return TemplateResponse(
         request,
-        template='glue_queryset/page/list_page.html',
+        template='glue_queryset/page/dashboard_page.html',
         context=context_data
     )
