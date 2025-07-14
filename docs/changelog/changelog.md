@@ -1,7 +1,15 @@
 # Changelog for Django Glue
 
-## v0.8.6
+## v0.8.7
+### Breaking
+- Multi Select fields use input fields to send data back in a list
+  - Returned a json string in the past that needed to be parsed.
+- Select field '--------' value returns an empty string 
+  - Returned False in the past.
+### Bug
+- Multi Select fields do no sync with glue model objects.
 
+## v0.8.6
 ### Features
 - Added `disabled_choices` options to `select_field.html`, `search_and_select_field.html` and `multi_select_field.html`'
 
