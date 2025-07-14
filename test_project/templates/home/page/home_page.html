@@ -9,7 +9,22 @@
     <div class="row">
         <div class="col-4">
             {% url 'glue_model_object:page:list' as glue_model_object_list_url %}
-            {% include 'core/button/base_button.html' with button_text='TestGlueModelObject' button_href=glue_model_object_list_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
+        </div>
+        <div class="col-4">
+            {% include 'core/button/base_button.html' with button_text='glue_queryset' %}
+        </div>
+        <div class="col-4">
+            {% include 'core/button/base_button.html' with button_text='glue_form' %}
+        </div>
+        <div class="col-4">
+            {% include 'core/button/base_button.html' with button_text='glue_view' %}
+        </div>
+        <div class="col-4">
+            {% include 'core/button/base_button.html' with button_text='glue_function' %}
+        </div>
+        <div class="col-4">
+            {% include 'core/button/base_button.html' with button_text='' %}
         </div>
     </div>
 {% endblock %}

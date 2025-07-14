@@ -6,4 +6,5 @@ urlpatterns = [
     path('', home_view, name='home'),
     path('django_glue/', include('django_glue.urls'), name='django_glue'),
     path('glue_model_object', include('test_project.app.glue_model_object.urls'), name='glue_model_object'),
+    path('glue_queryset', include('test_project.app.glue_queryset.urls'), name='glue_queryset'),
 ]
