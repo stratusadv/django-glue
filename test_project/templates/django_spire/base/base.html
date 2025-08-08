@@ -2,10 +2,12 @@
 
 {% load static %}
 
-{% block base_head_additional_css %}
-{#    <link rel="stylesheet" href="{% static 'core/css/base.css' %}">#}
+{% block base_head_additional_meta %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jersey+15&display=swap" rel="stylesheet">
 {% endblock %}
 
-{% block base_body_additional_bottom_js %}
-{#    {{ form.media.js }}#}
+{% block base_head_additional_css %}
+	<link rel="stylesheet" href="{% static 'django_spire/css/app-override.css' %}">
 {% endblock %}

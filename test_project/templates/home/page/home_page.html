@@ -3,13 +3,13 @@
 {% block full_page_content %}
     <div class="row">
         <div class="col-12">
-            <h1>Home Page</h1>
+            <h1 class="jersey-15-regular">Home Page</h1>
         </div>
     </div>
     <div class="row">
         <div class="col-4">
             {% url 'glue_model_object:page:list' as glue_model_object_list_url %}
-            {% include 'django_spire/button/primary_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
+            {% include 'django_spire/button/primary_outlined_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
         </div>
         <div class="col-4">
             {% url 'glue_queryset:page:dashboard' as glue_queryset_dashboard_url %}

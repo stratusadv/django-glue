@@ -1,8 +1,3 @@
-/*@import url('app-background.css');*/
-/*@import url('app-border.css');*/
-/*@import url('app-button.css');*/
-/*@import url('app-text.css');*/
-
 :root {
     --app-black: #000000;
     --app-white: #ffffff;
@@ -14,9 +9,9 @@
     --app-secondary-soft: #e2e3e5;
     --app-secondary-dark: #41464b;
 
-    --app-primary: #799968;
-    --app-primary-soft: #d5e5cd;
-    --app-primary-dark: #4c6040;
+    --app-primary: #d3ad4f;
+    --app-primary-soft: #d3ad4f;
+    --app-primary-dark: #d3ad4f;
 
     --app-success: #198754;
     --app-success-soft: #d1e7dd;
