@@ -6,4 +6,26 @@
             <h1>Home Page</h1>
         </div>
     </div>
+    <div class="row">
+        <div class="col-4">
+            {% url 'glue_model_object:page:list' as glue_model_object_list_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
+        </div>
+        <div class="col-4">
+            {% url 'glue_queryset:page:dashboard' as glue_queryset_dashboard_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_queryset' button_href=glue_queryset_dashboard_url %}
+        </div>
+        <div class="col-4">
+            {% url 'glue_form:page:dashboard' as glue_form_dashboard_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_form' button_href=glue_form_dashboard_url %}
+        </div>
+        <div class="col-4">
+            {% url 'glue_view:page:dashboard' as glue_view_dashboard_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_view' button_href=glue_view_dashboard_url %}
+        </div>
+        <div class="col-4">
+            {% url 'glue_function:page:dashboard' as glue_function_dashboard_url %}
+            {% include 'core/button/base_button.html' with button_text='glue_function' button_href=glue_function_dashboard_url %}
+        </div>
+    </div>
 {% endblock %}
