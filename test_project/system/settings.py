@@ -24,8 +24,18 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.staticfiles',
     'django_glue',
-    'test_project',
 ]
+
+# Glue Test Project
+INSTALLED_APPS += [
+    'test_project',
+    'test_project.app.glue_model_object.apps.GlueModelObjectConfig',
+    'test_project.app.glue_queryset.apps.GlueQuerySetConfig',
+    'test_project.app.glue_form.apps.GlueFormConfig',
+    'test_project.app.glue_function.apps.GlueFunctionConfig',
+    'test_project.app.glue_view.apps.GlueViewConfig',
+]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
