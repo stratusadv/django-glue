@@ -36,6 +36,9 @@ INSTALLED_APPS += [
     'test_project.app.glue_view.apps.GlueViewConfig',
 ]
 
+INSTALLED_APPS += [
+    'django_spire.core',
+]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -57,7 +60,7 @@ DATABASES = {
     }
 }
 
-ROOT_URLCONF = 'test_project.system.development.urls'
+ROOT_URLCONF = 'test_project.system.urls'
 
 SECRET_KEY = 'django_glue_secret_key_of_secrets'
 
@@ -78,11 +81,16 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django_glue.context_processors.django_glue',
+                'django_spire.core.context_processors.django_spire',
             ],
-            'builtins': [],
+            'builtins': [
+                'django_spire.core.templatetags.spire_core_tags',
+                'django_spire.contrib.pagination.templatetags.pagination_tags',
+            ],
             'debug': DEBUG,
         },
     },
 ]
 
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'test_project/static')]

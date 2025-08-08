@@ -3,6 +3,7 @@ twine
 build
 setuptools
 wheel
+django-spire==0.12.6
 
 -r mkdocs_requirements.txt
 -r requirements.txt
