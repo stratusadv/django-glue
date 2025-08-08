@@ -3,34 +3,34 @@
     --app-white: #ffffff;
 
     --app-dark: #212529;
-    --app-light: #f8f9fa;
+    --app-light: #f8ecc7;
 
-    --app-secondary: #6c757d;
-    --app-secondary-soft: #e2e3e5;
-    --app-secondary-dark: #41464b;
+    --app-secondary: #749561;
+    --app-secondary-soft: #c9ffb1;
+    --app-secondary-dark: #395232;
 
-    --app-primary: #d3ad4f;
-    --app-primary-soft: #d3ad4f;
-    --app-primary-dark: #d3ad4f;
+    --app-primary: #d4b24e;
+    --app-primary-soft: #fff377;
+    --app-primary-dark: #958446;
 
     --app-success: #198754;
-    --app-success-soft: #d1e7dd;
+    --app-success-soft: #bfe09c;
     --app-success-dark: #0f5132;
 
     --app-warning: #ffc107;
     --app-warning-soft: #fff3cd;
     --app-warning-dark: #664d03;
 
-    --app-accent: #777c7e;
-    --app-accent-soft: #777c7e;
-    --app-accent-dark: #777c7e;
+    --app-accent: #8e6b9e;
+    --app-accent-soft: #d8c1e0;
+    --app-accent-dark: #5d3b6d;
 
     --app-danger: #dc3545;
     --app-danger-soft: #f8d7da;
     --app-danger-dark: #842029;
 
     --app-layer-one: #6f8a61;
-    --app-layer-two: #ebebeb;
+    --app-layer-two: #f8ecc7;
     --app-layer-three: #000000;
     --app-layer-four: #ffffff;
     --app-layer-five: #000000;
