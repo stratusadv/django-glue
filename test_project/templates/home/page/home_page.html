@@ -9,7 +9,7 @@
     <div class="row">
         <div class="col-4">
             {% url 'glue_model_object:page:list' as glue_model_object_list_url %}
-            {% include 'core/button/base_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
+            {% include 'django_spire/button/primary_button.html' with button_text='glue_model_object' button_href=glue_model_object_list_url %}
         </div>
         <div class="col-4">
             {% url 'glue_queryset:page:dashboard' as glue_queryset_dashboard_url %}

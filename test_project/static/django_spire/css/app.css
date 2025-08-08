@@ -14,9 +14,9 @@
     --app-secondary-soft: #e2e3e5;
     --app-secondary-dark: #41464b;
 
-    --app-primary: #0d6efd;
-    --app-primary-soft: #cfe2ff;
-    --app-primary-dark: #084298;
+    --app-primary: #799968;
+    --app-primary-soft: #d5e5cd;
+    --app-primary-dark: #4c6040;
 
     --app-success: #198754;
     --app-success-soft: #d1e7dd;
@@ -34,14 +34,14 @@
     --app-danger-soft: #f8d7da;
     --app-danger-dark: #842029;
 
-    --app-layer-one: #f8f9fa;
+    --app-layer-one: #6f8a61;
     --app-layer-two: #ebebeb;
     --app-layer-three: #000000;
     --app-layer-four: #ffffff;
     --app-layer-five: #000000;
 
-    --app-side-navigation-bg-color: #306178;
-    --app-mobile-navigation-bg-color: #001720;
+    --app-side-navigation-bg-color: #5a7350;
+    --app-mobile-navigation-bg-color: #3c4c35;
 
     --app-side-navigation-width: 200px;
     --app-mobile-navigation-width: 200px;
