@@ -10,4 +10,5 @@ urlpatterns = [
     path('glue_model_object', include('test_project.app.glue_model_object.urls'), name='glue_model_object'),
     path('glue_queryset', include('test_project.app.glue_queryset.urls'), name='glue_queryset'),
     path('glue_view', include('test_project.app.glue_view.urls'), name='glue_view'),
+    path('theme/', include('django_spire.theme.urls', namespace='theme')),
 ]

@@ -38,6 +38,7 @@ INSTALLED_APPS += [
 
 INSTALLED_APPS += [
     'django_spire.core',
+    'django_spire.theme',
 ]
 
 MIDDLEWARE = [
