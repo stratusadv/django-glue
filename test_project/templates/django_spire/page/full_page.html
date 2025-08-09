@@ -32,13 +32,7 @@
     <div class="row border-top border-app-secondary border-3">
         <div class="col-12">
             {% block full_page_bottom_content %}
-                <div class="text-center">
-                    <img height="20px" class="pt-1" src="{% static 'img/bananna.png' %}" alt="Glue Logo">
-                    <img height="20px" class="pt-1" src="{% static 'img/bananna.png' %}" alt="Glue Logo">
-                    <img height="60px" src="{% static 'img/glue_text_logo.png' %}" alt="Glue Logo">
-                    <img height="20px" class="pt-1" src="{% static 'img/bananna.png' %}" alt="Glue Logo">
-                    <img height="20px" class="pt-1" src="{% static 'img/bananna.png' %}" alt="Glue Logo">
-                </div>
+                {% include 'core/navigation/footer.html' %}
             {% endblock %}
         </div>
     </div>

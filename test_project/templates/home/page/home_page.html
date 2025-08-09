@@ -2,36 +2,22 @@
 {% load static %}
 
 {% block full_page_content %}
-    <div class="row mx-auto pt-4">
-        <div class="col-4 p-3 border border-3 border-app-primary">
-            <div class="text-center mb-2">
-                <h2 class="mb-0 text-app-secondary-dark">Choose Your Fighter</h2>
-                <h5 class="mb-1 text-app-primary">(Glue Model Objects)</h5>
-                <img height="100px"
-                     src="{% static 'img/fighters.png' %}"
-                >
-            </div>
-            <div>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
-            </div>
+    <div class="row g-0 pt-4">
+        <div class="col-4">
+            {% static 'img/fighters.png' as fighters_src %}
+            {% include 'home/card/selection_card.html' with name='Choose Your Fighter' description='(Glue Model Objects)' image_src=fighters_src %}
         </div>
         <div class="col-4 text-center">
             <h1>Gorilla Fight Simulator...</h1>
-            <img class="mt-4" height="200px" src="{% static 'img/monkeys.png' %}">
+            <img class="mt-1" height="180px" src="{% static 'img/monkeys.png' %}">
         </div>
-        <div class="col-4 p-3 border border-3 border-app-primary">
-            <div class="text-center mb-2">
-                <h2 class="mb-0 text-app-secondary-dark">Rankings</h2>
-                <h5 class="mb-1 text-app-primary">(Glue Queryset)</h5>
-                <img height="100px" src="{% static 'img/podium.png' %}">
-            </div>
-            <div>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
-            </div>
+        <div class="col-4">
+            {% static 'img/podium.png' as podium_src %}
+            {% include 'home/card/selection_card.html' with name='Rankings' description='(Glue Queryset)' image_src=podium_src %}
         </div>
     </div>
 
-    <div class="row mx-auto">
+    <div class="row g-0">
         <div class="col-4 text-center">
             <img height="200px" src="{% static 'img/swing.png' %}">
             <img height="200px" src="{% static 'img/swing.png' %}">
@@ -46,29 +32,17 @@
         </div>
     </div>
 
-    <div class="row mx-auto pb-4">
-        <div class="col-4 p-3 border border-3 border-app-primary">
-            <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Training Camp</h2>
-                <h5 class="mb-1 text-app-primary">(Glue Form)</h5>
-                <img height="100px" src="{% static 'img/boxing.png' %}">
-            </div>
-            <div>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
-            </div>
+    <div class="row g-0 pb-4">
+        <div class="col-4">
+            {% static 'img/boxing.png' as boxing_src %}
+            {% include 'home/card/selection_card.html' with name='Training Camp' description='(Glue Form)' image_src=boxing_src %}
         </div>
         <div class="col-4 text-center">
             <img class="" height="200px" src="{% static 'img/ladder.png' %}">
         </div>
-        <div class="col-4 p-3 border border-3 border-app-primary">
-            <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Press Conference</h2>
-                <h5 class="mb-1 text-app-primary">(Glue Function)</h5>
-                <img height="100px" src="{% static 'img/media.png' %}">
-            </div>
-            <div>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
-            </div>
+        <div class="col-4">
+            {% static 'img/media.png' as media_src %}
+            {% include 'home/card/selection_card.html' with name='Press Conference' description='(Glue Function)' image_src=media_src %}
         </div>
     </div>
 

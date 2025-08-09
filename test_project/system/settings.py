@@ -26,7 +26,6 @@ INSTALLED_APPS = [
     'django_glue',
 ]
 
-# Glue Test Project
 INSTALLED_APPS += [
     'test_project.app.capability',
     'test_project.app.fight',
@@ -35,6 +34,11 @@ INSTALLED_APPS += [
     'test_project.app.gorilla.capability',
     'test_project.app.home',
     'test_project.app.training',
+]
+
+INSTALLED_APPS += [
+    'test_project.glue.form',
+    'test_project.glue.form.fields',
 ]
 
 INSTALLED_APPS += [
