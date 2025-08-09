@@ -13,16 +13,8 @@ class Capability(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
     type = models.CharField(max_length=100, default='')
-    base_value = models.IntegerField(default=0)
-    max_value = models.IntegerField(default=100)
-    training_difficulty = models.IntegerField(default=1)
-    is_attribute = models.BooleanField(default=False)
-    is_skill = models.BooleanField(default=True)
-    power_level = models.IntegerField(default=0)
-    stamina_cost = models.IntegerField(default=0)
-    cooldown = models.IntegerField(default=0)
-    is_offensive = models.BooleanField(default=False)
-    is_defensive = models.BooleanField(default=False)
+
+    level = models.IntegerChoices()
 
     objects = querysets.CapabilityQuerySet().as_manager()
 

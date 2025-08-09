@@ -7,6 +7,7 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.gorilla import querysets
+from test_project.app.gorilla.choices import FightStyleChoices
 
 
 class Gorilla(HistoryModelMixin):
@@ -15,10 +16,14 @@ class Gorilla(HistoryModelMixin):
     age = models.IntegerField(default=0)
     weight = models.FloatField(default=0.0)
     height = models.FloatField(default=0.0)
-    fight_style = models.CharField(max_length=100, default='')
+
+    fight_style = models.CharField(
+        max_length=20,
+        choices=FightStyleChoices.choices,
+        default=FightStyleChoices.BRAWLER
+    )
+
     rank_points = models.IntegerField(default=0)
-    rank_title = models.CharField(max_length=100, default='')
-    rank_badge_image = models.CharField(max_length=255, blank=True, null=True)
 
     objects = querysets.GorillaQuerySet().as_manager()
 

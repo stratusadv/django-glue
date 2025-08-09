@@ -39,6 +39,8 @@ INSTALLED_APPS += [
 INSTALLED_APPS += [
     'django_spire.core',
     'django_spire.theme',
+    'django_spire.history',
+    'django_spire.contrib.seeding',
 ]
 
 MIDDLEWARE = [
