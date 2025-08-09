@@ -1,3 +1,3 @@
-from test_project.app.gorilla.seeding.seeder import GorillaModelSeeder
+from test_project.app.gorilla.seeding.seeder import GorillaSeeder
 
-GorillaModelSeeder.seed_database(count=10)
+GorillaSeeder.seed_database(count=10)

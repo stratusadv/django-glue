@@ -20,16 +20,11 @@ class FightRound(HistoryModelMixin):
 
     number = models.IntegerField(default=1)
 
-    gorilla1_damage_dealt = models.IntegerField(default=0)
-    gorilla2_damage_dealt = models.IntegerField(default=0)
+    red_corner_damage_dealt = models.IntegerField(default=0)
+    blue_corner_damage_dealt = models.IntegerField(default=0)
 
-    gorilla1_rank_points_earned = models.IntegerField(default=0)
-    gorilla2_rank_points_earned = models.IntegerField(default=0)
-
-    gorilla1_performance_rating = models.CharField(max_length=50, default='')
-    gorilla2_performance_rating = models.CharField(max_length=50, default='')
-
-    duration_seconds = models.IntegerField(default=0)
+    red_corner_rank_points_earned = models.IntegerField(default=0)
+    blue_corner_rank_points_earned = models.IntegerField(default=0)
 
     objects = querysets.RoundQuerySet().as_manager()
 

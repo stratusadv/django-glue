@@ -1,3 +1,3 @@
-from test_project.app.fight.seeding.seeder import FightModelSeeder
+from test_project.app.fight.seeding.seeder import FightSeeder
 
-FightModelSeeder.seed_database(count=10)
+FightSeeder.seed_database(count=20)

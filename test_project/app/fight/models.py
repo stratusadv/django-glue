@@ -5,11 +5,9 @@ from django.urls import reverse
 
 from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
-from test_project.app import gorilla
 
 from test_project.app.fight import querysets
 from test_project.app.fight.choices import LocationChoices, WeatherConditionChoices, TerrainTypeChoices, FightStatusChoices
-from test_project.app.gorilla.models import Gorilla
 
 
 class Fight(HistoryModelMixin):
@@ -47,19 +45,19 @@ class Fight(HistoryModelMixin):
     location = models.CharField(
         max_length=3,
         choices=LocationChoices.choices,
-        default=LocationChoices.ARENA
+        default=LocationChoices.DINOSAUR_ISLAND
     )
     weather_conditions = models.CharField(
         max_length=3,
         choices=WeatherConditionChoices.choices,
-        default=WeatherConditionChoices.CLEAR
+        default=WeatherConditionChoices.ARCTIC_FREEZE
     )
     spectator_count = models.IntegerField(default=0)    
     
     terrain_type = models.CharField(
         max_length=3,
         choices=TerrainTypeChoices.choices,
-        default=TerrainTypeChoices.CAGE
+        default=TerrainTypeChoices.STEEL_DEATH_CAGE
     )    
     status = models.CharField(
         max_length=3,

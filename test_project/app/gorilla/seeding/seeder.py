@@ -5,6 +5,7 @@ from test_project.app.gorilla.models import Gorilla
 class GorillaSeeder(DjangoModelSeeder):
     model_class = Gorilla
     cache_name = 'gorilla_seeder'
+    cache_seed = False
     default_to = 'faker'
 
     fields = {

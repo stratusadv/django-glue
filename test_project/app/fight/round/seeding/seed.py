@@ -1,3 +1,3 @@
-from test_project.app.fight.round.seeding.seeder import RoundModelSeeder
+from test_project.app.fight.round.seeding.seeder import FightRoundSeeder
 
-RoundModelSeeder.seed_database(count=10)
+FightRoundSeeder.seed_database(count=20)
