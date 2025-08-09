@@ -2,15 +2,11 @@
 {% load static %}
 
 {% block full_page_content %}
-    <div class="row py-2">
-        <div class="col-12 text-center">
-            <h1>Choose Your Adventure...</h1>
-        </div>
-    </div>
-    <div class="row mx-auto">
+    <div class="row mx-auto pt-4">
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Glue Model Objects</h2>
+                <h2 class="mb-0 text-app-secondary-dark">Choose Your Fighter</h2>
+                <h5 class="mb-1 text-app-primary">(Glue Model Objects)</h5>
                 <img height="100px"
                      src="{% static 'img/eating_bananna.png' %}"
                 >
@@ -20,11 +16,13 @@
             </div>
         </div>
         <div class="col-4 text-center">
-            <img class="mt-4" height="150px" src="{% static 'img/barrel.png' %}">
+            <h1>Gorilla Fight Simulator...</h1>
+            <img class="mt-4" height="200px" src="{% static 'img/monkeys.png' %}">
         </div>
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Glue Queryset</h2>
+                <h2 class="mb-0 text-app-secondary-dark">Pick Your Opponent</h2>
+                <h5 class="mb-1 text-app-primary">(Glue Queryset)</h5>
                 <img height="100px" src="{% static 'img/banannas.png' %}">
             </div>
             <div>
@@ -39,8 +37,9 @@
         </div>
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Glue View</h2>
-                <img height="100px" src="{% static 'img/painting.png' %}"
+                <h2 class="mb-1 text-app-secondary-dark">Fight Night!!</h2>
+                <h5 class="mb-1 text-app-primary">(Glue View)</h5>
+                <img height="100px" src="{% static 'img/ring.png' %}"
                 >
             </div>
             <div>
@@ -48,14 +47,15 @@
             </div>
         </div>
         <div class="col-4 text-center">
-            <img height="200px" src="{% static 'img/swing.png' %}">
-            <img height="200px" src="{% static 'img/swing.png' %}">
+            <img height="200px" src="{% static 'img/swing.png' %}" style="transform: scaleX(-1)">
+            <img height="200px" src="{% static 'img/swing.png' %}" style="transform: scaleX(-1)">
         </div>
     </div>
-    <div class="row mx-auto mb-4">
+    <div class="row mx-auto pb-4">
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Glue Form</h2>
+                <h2 class="mb-1 text-app-secondary-dark">Training Camp</h2>
+                <h5 class="mb-1 text-app-primary">(Glue Form)</h5>
                 <img height="100px" src="{% static 'img/form.png' %}">
             </div>
             <div>
@@ -63,12 +63,13 @@
             </div>
         </div>
         <div class="col-4 text-center">
-            <img class="mt-4" height="150px" src="{% static 'img/barrel.png' %}">
+            <img class="" height="200px" src="{% static 'img/ladder.png' %}">
         </div>
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Glue Function</h2>
-                <img height="100px" src="{% static 'img/function.png' %}">
+                <h2 class="mb-1 text-app-secondary-dark">Press Conference</h2>
+                <h5 class="mb-1 text-app-primary">(Glue Function)</h5>
+                <img height="100px" src="{% static 'img/smack.png' %}">
             </div>
             <div>
                 {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
