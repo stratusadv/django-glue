@@ -1,3 +1,3 @@
-from test_project.app.capability.seeding.seeder import CapabilityModelSeeder
+from test_project.app.capability.seeding.seeder import CapabilitySeeder
 
-CapabilityModelSeeder.seed_database(count=10)
+CapabilitySeeder.seed_database(count=30)

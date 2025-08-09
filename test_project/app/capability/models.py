@@ -7,7 +7,7 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.capability import querysets
-from test_project.app.capability.choices import CapabilityTypeChoices, CapabilityLevelChoices
+from test_project.app.capability.choices import CapabilityTypeChoices
 
 
 class Capability(HistoryModelMixin):
@@ -18,11 +18,6 @@ class Capability(HistoryModelMixin):
         max_length=3,
         choices=CapabilityTypeChoices.choices,
         default=CapabilityTypeChoices.PHYSICAL_ATTRIBUTE
-    )
-    
-    level = models.IntegerField(
-        choices=CapabilityLevelChoices.choices,
-        default=CapabilityLevelChoices.INTERMEDIATE
     )
 
     objects = querysets.CapabilityQuerySet().as_manager()

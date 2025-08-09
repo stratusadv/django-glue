@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
+from test_project.app import gorilla
 
 from test_project.app.fight import querysets
 from test_project.app.fight.choices import LocationChoices, WeatherConditionChoices, TerrainTypeChoices, FightStatusChoices
@@ -15,44 +16,53 @@ class Fight(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
 
-    gorilla_1 = models.ForeignKey(
+    red_corner = models.ForeignKey(
         'gorilla.Gorilla',
         on_delete=models.CASCADE,
-        related_name='fights_as_gorilla1'
+        related_name='fights_as_red_corner'
     )
 
-    gorilla_2 = models.ForeignKey(
+    blue_corner = models.ForeignKey(
         'gorilla.Gorilla',
         on_delete=models.CASCADE,
-        related_name='fights_as_gorilla2'
+        related_name='fights_as_blue_corner'
     )
 
     winner = models.ForeignKey(
-        Gorilla,
+        'gorilla.Gorilla',
         on_delete=models.SET_NULL,
-        related_name='fights_won',
-        null=True, blank=True
+        related_name='winner',
+        null=True,
+        blank=True
+    )
+
+    loser = models.ForeignKey(
+        'gorilla.Gorilla',
+        on_delete=models.SET_NULL,
+        related_name='loser',
+        null=True,
+        blank=True
     )
 
     location = models.CharField(
-        max_length=20,
+        max_length=3,
         choices=LocationChoices.choices,
         default=LocationChoices.ARENA
     )
     weather_conditions = models.CharField(
-        max_length=20,
+        max_length=3,
         choices=WeatherConditionChoices.choices,
         default=WeatherConditionChoices.CLEAR
     )
     spectator_count = models.IntegerField(default=0)    
     
     terrain_type = models.CharField(
-        max_length=20,
+        max_length=3,
         choices=TerrainTypeChoices.choices,
         default=TerrainTypeChoices.CAGE
     )    
     status = models.CharField(
-        max_length=20,
+        max_length=3,
         choices=FightStatusChoices.choices,
         default=FightStatusChoices.SCHEDULED
     )
