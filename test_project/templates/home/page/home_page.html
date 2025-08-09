@@ -30,27 +30,22 @@
             </div>
         </div>
     </div>
+
     <div class="row mx-auto">
         <div class="col-4 text-center">
             <img height="200px" src="{% static 'img/swing.png' %}">
             <img height="200px" src="{% static 'img/swing.png' %}">
         </div>
-        <div class="col-4 p-3 border border-3 border-app-primary">
-            <div class="text-center mb-2">
-                <h2 class="mb-1 text-app-secondary-dark">Fight Night!!</h2>
-                <h5 class="mb-1 text-app-primary">(Glue View)</h5>
-                <img height="100px" src="{% static 'img/fighting.png' %}"
-                >
-            </div>
-            <div>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='Get Started' button_class='w-100' %}
-            </div>
+        <div class="col-4">
+            {% static 'img/fighting.png' as fighting_src %}
+            {% include 'home/card/selection_card.html' with name='Fight Night!!' description='(Glue View)' image_src=fighting_src %}
         </div>
         <div class="col-4 text-center">
             <img height="200px" src="{% static 'img/swing.png' %}" style="transform: scaleX(-1)">
             <img height="200px" src="{% static 'img/swing.png' %}" style="transform: scaleX(-1)">
         </div>
     </div>
+
     <div class="row mx-auto pb-4">
         <div class="col-4 p-3 border border-3 border-app-primary">
             <div class="text-center mb-2">
@@ -76,4 +71,5 @@
             </div>
         </div>
     </div>
+
 {% endblock %}
