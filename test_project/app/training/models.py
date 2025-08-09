@@ -7,11 +7,20 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.training import querysets
+from test_project.app.gorilla.models import Gorilla
+from test_project.app.capability.models import Capability
 
 
 class Training(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
+    gorilla = models.ForeignKey(Gorilla, on_delete=models.CASCADE, related_name='trainings')
+    training_type = models.CharField(max_length=100, default='')
+    duration_minutes = models.IntegerField(default=0)
+    intensity_level = models.IntegerField(default=1)
+    capability = models.ForeignKey(Capability, on_delete=models.CASCADE, related_name='trainings')
+    capability_gain = models.IntegerField(default=0)
+    training_date = models.DateField(auto_now_add=True)
 
     objects = querysets.TrainingQuerySet().as_manager()
 

@@ -12,6 +12,13 @@ from test_project.app.gorilla import querysets
 class Gorilla(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
+    age = models.IntegerField(default=0)
+    weight = models.FloatField(default=0.0)
+    height = models.FloatField(default=0.0)
+    fight_style = models.CharField(max_length=100, default='')
+    rank_points = models.IntegerField(default=0)
+    rank_title = models.CharField(max_length=100, default='')
+    rank_badge_image = models.CharField(max_length=255, blank=True, null=True)
 
     objects = querysets.GorillaQuerySet().as_manager()
 

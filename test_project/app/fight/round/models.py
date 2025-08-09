@@ -7,23 +7,33 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.fight.round import querysets
+from test_project.app.fight.models import Fight
 
 
-class Round(HistoryModelMixin):
+class FightRound(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
+    fight = models.ForeignKey(Fight, on_delete=models.CASCADE, related_name='rounds')
+    round_number = models.IntegerField(default=1)
+    gorilla1_damage_dealt = models.IntegerField(default=0)
+    gorilla2_damage_dealt = models.IntegerField(default=0)
+    gorilla1_rank_points_earned = models.IntegerField(default=0)
+    gorilla2_rank_points_earned = models.IntegerField(default=0)
+    gorilla1_performance_rating = models.CharField(max_length=50, default='')
+    gorilla2_performance_rating = models.CharField(max_length=50, default='')
+    duration_seconds = models.IntegerField(default=0)
 
     objects = querysets.RoundQuerySet().as_manager()
 
     def __str__(self):
-        return self.name
+        return f"Round {self.round_number} of {self.fight.name}"
 
     @classmethod
     def base_breadcrumb(cls) -> Breadcrumbs:
         crumbs = Breadcrumbs()
 
         crumbs.add_breadcrumb(
-            'Round',
+            'Fight Round',
             reverse('fight:round:page:list')
         )
 
@@ -45,6 +55,6 @@ class Round(HistoryModelMixin):
         return crumbs
 
     class Meta:
-        verbose_name = 'Round'
-        verbose_name_plural = 'Rounds'
+        verbose_name = 'Fight Round'
+        verbose_name_plural = 'Fight Rounds'
         db_table = 'fight_round'

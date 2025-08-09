@@ -7,16 +7,21 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.gorilla.capability import querysets
+from test_project.app.gorilla.models import Gorilla
+from test_project.app.capability.models import Capability as MainCapability
 
 
-class Capability(HistoryModelMixin):
-    name = models.CharField(max_length=255)
-    description = models.TextField(default='')
+class GorillaCapability(HistoryModelMixin):
+    gorilla = models.ForeignKey(Gorilla, on_delete=models.CASCADE, related_name='capabilities')
+    capability = models.ForeignKey(MainCapability, on_delete=models.CASCADE, related_name='gorilla_capabilities')
+    proficiency_level = models.IntegerField(default=0)
+    times_used = models.IntegerField(default=0)
+    acquired_at = models.DateTimeField(auto_now_add=True)
 
     objects = querysets.CapabilityQuerySet().as_manager()
 
     def __str__(self):
-        return self.name
+        return f"{self.gorilla.name}'s {self.capability.name} - Level {self.proficiency_level}"
 
     @classmethod
     def base_breadcrumb(cls) -> Breadcrumbs:
@@ -45,6 +50,6 @@ class Capability(HistoryModelMixin):
         return crumbs
 
     class Meta:
-        verbose_name = 'Capability'
-        verbose_name_plural = 'Capabilitys'
+        verbose_name = 'Gorilla Capability'
+        verbose_name_plural = 'Gorilla Capabilities'
         db_table = 'gorilla_capability'
