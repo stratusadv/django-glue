@@ -11,22 +11,30 @@ from test_project.app.fight.models import Fight
 
 
 class FightRound(HistoryModelMixin):
-    name = models.CharField(max_length=255)
-    description = models.TextField(default='')
-    fight = models.ForeignKey(Fight, on_delete=models.CASCADE, related_name='rounds')
-    round_number = models.IntegerField(default=1)
+    fight = models.ForeignKey(
+        Fight,
+        on_delete=models.CASCADE,
+        related_name='rounds',
+        related_query_name='round'
+    )
+
+    number = models.IntegerField(default=1)
+
     gorilla1_damage_dealt = models.IntegerField(default=0)
     gorilla2_damage_dealt = models.IntegerField(default=0)
+
     gorilla1_rank_points_earned = models.IntegerField(default=0)
     gorilla2_rank_points_earned = models.IntegerField(default=0)
+
     gorilla1_performance_rating = models.CharField(max_length=50, default='')
     gorilla2_performance_rating = models.CharField(max_length=50, default='')
+
     duration_seconds = models.IntegerField(default=0)
 
     objects = querysets.RoundQuerySet().as_manager()
 
     def __str__(self):
-        return f"Round {self.round_number} of {self.fight.name}"
+        return f"Round {self.number} of {self.fight.name}"
 
     @classmethod
     def base_breadcrumb(cls) -> Breadcrumbs:

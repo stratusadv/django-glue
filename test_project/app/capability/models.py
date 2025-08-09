@@ -7,14 +7,23 @@ from django_spire.contrib.breadcrumb import Breadcrumbs
 from django_spire.history.mixins import HistoryModelMixin
 
 from test_project.app.capability import querysets
+from test_project.app.capability.choices import CapabilityTypeChoices, CapabilityLevelChoices
 
 
 class Capability(HistoryModelMixin):
     name = models.CharField(max_length=255)
     description = models.TextField(default='')
-    type = models.CharField(max_length=100, default='')
 
-    level = models.IntegerChoices()
+    type = models.CharField(
+        max_length=3,
+        choices=CapabilityTypeChoices.choices,
+        default=CapabilityTypeChoices.PHYSICAL_ATTRIBUTE
+    )
+    
+    level = models.IntegerField(
+        choices=CapabilityLevelChoices.choices,
+        default=CapabilityLevelChoices.INTERMEDIATE
+    )
 
     objects = querysets.CapabilityQuerySet().as_manager()
 
@@ -49,5 +58,5 @@ class Capability(HistoryModelMixin):
 
     class Meta:
         verbose_name = 'Capability'
-        verbose_name_plural = 'Capabilitys'
-        db_table = 'app_capability'
+        verbose_name_plural = 'Capabilities'
+        db_table = 'capability'
