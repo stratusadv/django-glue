@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 
 from test_project.glue.form.views import page_views
 

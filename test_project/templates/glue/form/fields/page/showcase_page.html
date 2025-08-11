@@ -1,0 +1,43 @@
+{% extends 'django_spire/page/full_page.html' %}
+{% load static %}
+
+{% block full_page_content %}
+	<h1 class="text-center py-3">Glue Form Fields</h1>
+
+    <h4 class="text-app-primary">Input Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Base Input Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h5 class="border-app-primary">Django Char Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Char Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h5 class="border-app-primary">Django Char Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Color Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h5 class="border-app-primary">Django Char Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Decimal Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h5 class="border-app-primary">Django Decimal Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

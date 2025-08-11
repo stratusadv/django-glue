@@ -1,0 +1,19 @@
+{% extends 'django_spire/item/item.html' %}
+
+{% block item_title %}
+	{% include 'django_spire/element/attribute_element.html' with attribute_title='Name' attribute_value='Input Field' %}
+{% endblock %}
+
+{% block item_row_content %}
+	<div class="col">
+        {% include 'django_spire/element/attribute_element.html' with attribute_title='Description' %}
+    </div>
+    <div class="col">
+        {% include 'django_spire/element/attribute_element.html' with attribute_title='Preview' %}
+        <form action="">
+            <input type="text">
+            <input type="submit">
+        </form>
+
+    </div>
+{% endblock %}
