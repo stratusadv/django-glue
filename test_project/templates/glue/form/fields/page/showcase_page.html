@@ -4,20 +4,66 @@
 {% block full_page_content %}
 	<h1 class="text-center py-3">Glue Form Fields</h1>
 
-    <h4 class="text-app-primary">Input Fields</h4>
+    <!-- Base Fields -->
+    <h4 class="text-app-primary mt-5">Base Fields</h4>
     <div class="row">
         <div class="col-2">
             <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Base Input Field</h3>
+                <h3 class="text-app-secondary-dark">Base Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="base field">
+                <h5 class="border-app-primary">Django Base Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Input Field</h3>
                 <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h5 class="border-app-primary">Django Input Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Text Input Fields -->
+    <h4 class="text-app-primary mt-5">Text Input Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Char Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="char field">
                 <h5 class="border-app-primary">Django Char Field</h5>
                 {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
             </div>
         </div>
         <div class="col-2">
             <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Char Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <h3 class="text-app-secondary-dark">Text Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="text field">
+                <h5 class="border-app-primary">Django Text Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Email Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="email field">
+                <h5 class="border-app-primary">Django Email Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Password Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="password field">
+                <h5 class="border-app-primary">Django Password Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Telephone Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="telephone field">
                 <h5 class="border-app-primary">Django Char Field</h5>
                 {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
             </div>
@@ -25,16 +71,145 @@
         <div class="col-2">
             <div class="border border-app-primary border-2 p-3 text-center">
                 <h3 class="text-app-secondary-dark">Color Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="color field">
                 <h5 class="border-app-primary">Django Char Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Numeric Fields -->
+    <h4 class="text-app-primary mt-5">Numeric Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Number Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="number field">
+                <h5 class="border-app-primary">Django Number Field</h5>
                 {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
             </div>
         </div>
         <div class="col-2">
             <div class="border border-app-primary border-2 p-3 text-center">
                 <h3 class="text-app-secondary-dark">Decimal Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="decimal field">
                 <h5 class="border-app-primary">Django Decimal Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Range Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="range field">
+                <h5 class="border-app-primary">Django Range Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Date and Time Fields -->
+    <h4 class="text-app-primary mt-5">Date and Time Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Date Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="date field">
+                <h5 class="border-app-primary">Django Date Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Time Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="time field">
+                <h5 class="border-app-primary">Django Time Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">DateTime Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="datetime field">
+                <h5 class="border-app-primary">Django DateTime Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Selection Fields -->
+    <h4 class="text-app-primary mt-5">Selection Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Select Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="select field">
+                <h5 class="border-app-primary">Django Select Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Multi Select Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="multi select field">
+                <h5 class="border-app-primary">Django Multi Select Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Radio Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="radio field">
+                <h5 class="border-app-primary">Django Radio Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Single Checkbox</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="single checkbox field">
+                <h5 class="border-app-primary">Django Boolean Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Search & Select</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="search and select field">
+                <h5 class="border-app-primary">Django Search Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- File Fields -->
+    <h4 class="text-app-primary mt-5">File Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Single File Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="single file field">
+                <h5 class="border-app-primary">Django File Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">Multi File Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="multi file field">
+                <h5 class="border-app-primary">Django File Field</h5>
+                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Other Fields -->
+    <h4 class="text-app-primary mt-5">Other Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            <div class="border border-app-primary border-2 p-3 text-center">
+                <h3 class="text-app-secondary-dark">List Field</h3>
+                <img height="80px" src="{% static 'img/boxing.png' %}" alt="list field">
+                <h5 class="border-app-primary">Django List Field</h5>
                 {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
             </div>
         </div>
