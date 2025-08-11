@@ -5,7 +5,8 @@
         <div class="text-center">
             <h5 class="text-app-secondary-dark mt-2 mb-n1">Testing Center</h5>
         </div>
-        <a href="">Forms</a>
+        {% url 'glue_forms:page:dashboard' as form_dashboard %}
+        <a href="{{ form_dashboard }}">Forms</a>
         <span class="text-app-secondary-dark">|</span>
         <a href="">Fields</a>
     </div>
