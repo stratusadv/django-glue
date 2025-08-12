@@ -1,0 +1,87 @@
+<div class="row">
+    <div class="col-12 text-center py-3">
+        <h1>{% block field_name %}Input Field{% endblock %}</h1>
+    </div>
+
+    <div class="col-3">
+        <h3>Example</h3>
+        {% block field_example %}
+            <form method="post">
+                {% csrf_token %}
+                <div x-data="{
+                    input_field: new GlueCharField('input_field')
+                }">
+                    {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+                </div>
+                <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
+            </form>
+        {% endblock %}
+    </div>
+    <div class="col-3">
+        <h3>Attributes</h3>
+        <ul>
+            <li>value</li>
+            <li>max_length</li>
+            <li>min_length</li>
+            <li>label</li>
+            <li>help_text</li>
+            <li>id</li>
+            <li>choices</li>
+            <li>disabled_choices</li>
+            <li>required</li>
+            <li>disabled</li>
+            <li>readonly</li>
+            <li>hidden</li>
+            <li>autofocus</li>
+            <li>prevent_submit</li>
+        </ul>
+    </div>
+    <div class="col-3">
+        <h3>Methods</h3>
+        <ul>
+            <li>N/A</li>
+        </ul>
+    </div>
+    <div class="col-3">
+        <h3>Extends</h3>
+        <ul>
+            <li>N/A</li>
+        </ul>
+    </div>
+</div>
+
+
+<div class="row">
+    <div class="col-12">
+        <h3>Common Use Cases</h3>
+    </div>
+    <div class="col-3">
+        <h6>Initializing Through Glue Field</h6>
+        <form method="post">
+            {% csrf_token %}
+            <div x-data="{
+                    input_field: new GlueCharField('input_field', {value: 'Hello World'})
+                }">
+                {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+            </div>
+            <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
+        </form>
+    </div>
+    <div class="col-3">
+        <h6>Initializing By d-data</h6>
+        <form method="post">
+            {% csrf_token %}
+            <div x-data="{
+                    input_field: new GlueCharField('input_field', {value: 'Hello World'}),
+                    init() {
+                        this.input_field.value = 'Hello World'
+                    }
+                }">
+                {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+            </div>
+            <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
+        </form>
+    </div>
+</div>
+
+

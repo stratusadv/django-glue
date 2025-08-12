@@ -2,26 +2,18 @@
 {% load static %}
 
 {% block full_page_content %}
+    {% static 'img/boxing.png' as boxing_src %}
 	<h1 class="text-center py-3">Glue Form Fields</h1>
 
     <!-- Base Fields -->
     <h4 class="text-app-primary mt-5">Base Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Base Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="base field">
-                <h5 class="border-app-primary">Django Field</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Base Field' description='Django Field' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Input Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="input field">
-                <h5 class="border-app-primary">Django Field</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% url 'glue_forms:fields:page:input_field' as input_field_url %}
+            {% include 'core/card/preview_card.html' with name='Input Field' description='Django Field' image_src=boxing_src button_text='View' button_href=input_field_url %}
         </div>
     </div>
     
@@ -29,52 +21,22 @@
     <h4 class="text-app-primary mt-5">Text Input Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Char Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="char field">
-                <h5 class="border-app-primary">Django CharField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Char Field' description='Django CharField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Text Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="text field">
-                <h5 class="border-app-primary">Django TextField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Text Field' description='Django TextField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Email Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="email field">
-                <h5 class="border-app-primary">Django EmailField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Email Field' description='Django EmailField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Password Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="password field">
-                <h5 class="border-app-primary">Django CharField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Password Field' description='Django CharField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Telephone Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="telephone field">
-                <h5 class="border-app-primary">Django Char Field</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Telephone Field' description='Django Char Field' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Color Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="color field">
-                <h5 class="border-app-primary">Django Char Field</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Color Field' description='Django Char Field' image_src=boxing_src button_text='View' %}
         </div>
     </div>
     
@@ -82,28 +44,13 @@
     <h4 class="text-app-primary mt-5">Numeric Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Number Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="number field">
-                <h5 class="border-app-primary">Django IntegerField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Number Field' description='Django IntegerField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Decimal Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="decimal field">
-                <h5 class="border-app-primary">Django DecimalField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Decimal Field' description='Django DecimalField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Range Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="range field">
-                <h5 class="border-app-primary">Django IntegerField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Range Field' description='Django IntegerField' image_src=boxing_src button_text='View' %}
         </div>
     </div>
     
@@ -111,28 +58,13 @@
     <h4 class="text-app-primary mt-5">Date and Time Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Date Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="date field">
-                <h5 class="border-app-primary">Django DateField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Date Field' description='Django DateField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Time Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="time field">
-                <h5 class="border-app-primary">Django TimeField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Time Field' description='Django TimeField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">DateTime Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="datetime field">
-                <h5 class="border-app-primary">Django DateTimeField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='DateTime Field' description='Django DateTimeField' image_src=boxing_src button_text='View' %}
         </div>
     </div>
     
@@ -140,44 +72,19 @@
     <h4 class="text-app-primary mt-5">Selection Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Select Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="select field">
-                <h5 class="border-app-primary">Django CharField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Select Field' description='Django CharField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Multi Select Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="multi select field">
-                <h5 class="border-app-primary">Django ManyToManyField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Multi Select Field' description='Django ManyToManyField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Radio Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="radio field">
-                <h5 class="border-app-primary">Django CharField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Radio Field' description='Django CharField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Single Checkbox</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="single checkbox field">
-                <h5 class="border-app-primary">Django BooleanField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Single Checkbox' description='Django BooleanField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Search & Select</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="search and select field">
-                <h5 class="border-app-primary">Django CharField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Search & Select' description='Django CharField' image_src=boxing_src button_text='View' %}
         </div>
     </div>
     
@@ -185,20 +92,10 @@
     <h4 class="text-app-primary mt-5">File Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Single File Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="single file field">
-                <h5 class="border-app-primary">Django FileField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Single File Field' description='Django FileField' image_src=boxing_src button_text='View' %}
         </div>
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">Multi File Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="multi file field">
-                <h5 class="border-app-primary">Django FileField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='Multi File Field' description='Django FileField' image_src=boxing_src button_text='View' %}
         </div>
     </div>
     
@@ -206,12 +103,7 @@
     <h4 class="text-app-primary mt-5">Other Fields</h4>
     <div class="row">
         <div class="col-2">
-            <div class="border border-app-primary border-2 p-3 text-center">
-                <h3 class="text-app-secondary-dark">List Field</h3>
-                <img height="80px" src="{% static 'img/boxing.png' %}" alt="list field">
-                <h5 class="border-app-primary">Django JSONField</h5>
-                {% include 'django_spire/button/secondary_dark_button.html' with button_text='View' button_class='w-100' %}
-            </div>
+            {% include 'core/card/preview_card.html' with name='List Field' description='Django JSONField' image_src=boxing_src button_text='View' %}
         </div>
     </div>
 
