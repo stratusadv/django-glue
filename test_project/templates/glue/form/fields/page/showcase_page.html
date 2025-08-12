@@ -15,6 +15,14 @@
             {% url 'glue_forms:fields:page:input_field' as input_field_url %}
             {% include 'core/card/preview_card.html' with name='Input Field' description='Django Field' image_src=boxing_src button_text='View' button_href=input_field_url %}
         </div>
+        <div class="col-2">
+            {% url 'glue_forms:fields:page:test_field_one' as test_field_one_url %}
+            {% include 'core/card/preview_card.html' with name='Test Field One' description='Interactive Configuration' image_src=boxing_src button_text='View' button_href=test_field_one_url %}
+        </div>
+        <div class="col-2">
+            {% url 'glue_forms:fields:page:test_field_two' as test_field_two_url %}
+            {% include 'core/card/preview_card.html' with name='Test Field Two' description='Multi-Step Wizard' image_src=boxing_src button_text='View' button_href=test_field_two_url %}
+        </div>
     </div>
     
     <!-- Text Input Fields -->
