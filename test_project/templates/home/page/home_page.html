@@ -5,7 +5,7 @@
     <div class="row g-0 pt-4">
         <div class="col-4">
             {% static 'img/fighters.png' as fighters_src %}
-            {% include 'home/card/selection_card.html' with name='Choose Your Fighter' description='(Glue Model Objects)' image_src=fighters_src %}
+            {% include 'core/card/preview_card.html' with name='Choose Your Fighter' description='(Glue Model Objects)' image_src=fighters_src %}
         </div>
         <div class="col-4 text-center">
             <h1>Gorilla Fight Simulator...</h1>
@@ -13,7 +13,7 @@
         </div>
         <div class="col-4">
             {% static 'img/podium.png' as podium_src %}
-            {% include 'home/card/selection_card.html' with name='Rankings' description='(Glue Queryset)' image_src=podium_src %}
+            {% include 'core/card/preview_card.html' with name='Rankings' description='(Glue Queryset)' image_src=podium_src %}
         </div>
     </div>
 
@@ -24,7 +24,7 @@
         </div>
         <div class="col-4">
             {% static 'img/fighting.png' as fighting_src %}
-            {% include 'home/card/selection_card.html' with name='Fight Night!!' description='(Glue View)' image_src=fighting_src %}
+            {% include 'core/card/preview_card.html' with name='Fight Night!!' description='(Glue View)' image_src=fighting_src %}
         </div>
         <div class="col-4 text-center">
             <img height="200px" src="{% static 'img/swing.png' %}" style="transform: scaleX(-1)">
@@ -35,14 +35,14 @@
     <div class="row g-0 pb-4">
         <div class="col-4">
             {% static 'img/boxing.png' as boxing_src %}
-            {% include 'home/card/selection_card.html' with name='Training Camp' description='(Glue Form)' image_src=boxing_src %}
+            {% include 'core/card/preview_card.html' with name='Training Camp' description='(Glue Form)' image_src=boxing_src %}
         </div>
         <div class="col-4 text-center">
             <img class="" height="200px" src="{% static 'img/ladder.png' %}">
         </div>
         <div class="col-4">
             {% static 'img/media.png' as media_src %}
-            {% include 'home/card/selection_card.html' with name='Press Conference' description='(Glue Function)' image_src=media_src %}
+            {% include 'core/card/preview_card.html' with name='Press Conference' description='(Glue Function)' image_src=media_src %}
         </div>
     </div>
 

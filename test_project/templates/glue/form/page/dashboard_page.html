@@ -7,16 +7,16 @@
     <div class="row">
         <div class="col-4">
             {% static 'img/podium.png' as podium_src %}
-            {% include 'home/card/selection_card.html' with name='Simple Forms' description='Single Django Form' image_src=podium_src %}
+            {% include 'home/card/../../../core/card/preview_card.html' with name='Simple Forms' description='Single Django Form' image_src=podium_src %}
         </div>
         <div class="col-4">
             {% static 'img/podium.png' as podium_src %}
-            {% include 'home/card/selection_card.html' with name='Complex Forms' description='Dynamic Multiple Forms' image_src=podium_src %}
+            {% include 'home/card/../../../core/card/preview_card.html' with name='Complex Forms' description='Dynamic Multiple Forms' image_src=podium_src %}
         </div>
         <div class="col-4">
             {% url 'glue_forms:fields:page:showcase' as showcase_url %}
             {% static 'img/form.png' as podium_src %}
-            {% include 'home/card/selection_card.html' with name='Form Fields' description='Individual Fields' image_src=podium_src button_href=showcase_url %}
+            {% include 'home/card/../../../core/card/preview_card.html' with name='Form Fields' description='Individual Fields' image_src=podium_src button_href=showcase_url %}
         </div>
     </div>
 {% endblock %}
