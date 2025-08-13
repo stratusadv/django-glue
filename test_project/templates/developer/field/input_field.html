@@ -2,10 +2,13 @@
 
 <div class="row justify-content-center align-items-center py-4">
     <div class="col-4">
-        <h2 class="mb-0">Input Field. Input Field. Input Field.</h2>
-        <div>One field.</div>
-        <div>Said Three Times.</div>
-        <div>All your character needs.</div>
+        <h5 class="text-app-secondary-dark mb-n2 ">Django Glue</h5>
+        <h2 class="mb-0">Input Field.</h2>
+        <div>
+            The Input Field is a basic form field that allows users to enter text data.
+            This field is suitable for collecting short text
+            inputs such as names, titles, or other single-line text data.
+        </div>
     </div>
     <div class="col-6 text-center">
         <img height="300px" src="{% static 'img/monkeys.png' %}" alt="">
@@ -15,7 +18,7 @@
 
 <div class="row">
     <div class="col-5">
-        <div class="p-3 border border-app-primary border-3 mb-3">
+        <div class="p-3 bg-app-layer-two mb-3">
             <h3>Simple Example</h3>
             {% block field_example %}
                 <form method="post">
@@ -31,7 +34,7 @@
             {% endblock %}
         </div>
 
-        <div class="p-3 border border-app-primary border-3 mb-3">
+        <div class="p-3 bg-app-layer-two mb-3">
             <h3>Initializing Through Glue Field</h3>
             <form method="post">
                 {% csrf_token %}
@@ -44,7 +47,7 @@
             </form>
         </div>
 
-        <div class="p-3 border border-app-primary border-3">
+        <div class="p-3 bg-app-layer-two">
 
             <h3>Initializing By x-data</h3>
             <form method="post">
@@ -66,76 +69,38 @@
     <!-- Right column for documentation, attributes, and visualization -->
     <div class="col-7">
 
-        <div class="p-3 border border-app-primary border-3 mb-4">
-            <h3 class="text-center mb-2">Extra! Extra! Read all about it.</h3>
-
-            <h4>Description</h4>
-            <p>
-                The Input Field is a basic form field that allows users to enter text data. It is implemented using the
-                GlueCharField class
-                which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as
-                names, titles, or other
-                single-line text data.
-            </p>
-
-            <h4 class="mt-3">Special Considerations</h4>
-            <ul>
-                <li>For password input, use a separate password field type instead of this field</li>
-                <li>For multi-line text, use a text area field instead</li>
-                <li>The field automatically generates a label based on the field name if none is provided</li>
-            </ul>
-        </div>
-
         <!-- Attributes card with checkboxes -->
-        <div class="p-3 border border-primary border-3 rounded bg-light mb-4">
+        <div class="p-3 border border-app-layer-two border-3 mb-4">
             <h3 class="text-center mb-2">Attributes</h3>
 
-            <div x-data="{
-                fieldAttributes: {
-                    required: false,
-                    disabled: false,
-                    readonly: false,
-                    hidden: false,
-                    autofocus: false,
-                    maxLength: null
-                },
-                updateVisualization() {
-                    // This would update the visualization if we were hooking it up
-                }
-            }">
+            <div>
                 <div class="row">
                     <div class="col-6">
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="requiredAttr"
-                                   x-model="fieldAttributes.required" @change="updateVisualization()">
+                            <input class="form-check-input" type="checkbox" id="requiredAttr">
                             <label class="form-check-label" for="requiredAttr">Required</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="disabledAttr"
-                                   x-model="fieldAttributes.disabled" @change="updateVisualization()">
+                            <input class="form-check-input" type="checkbox" id="disabledAttr">
                             <label class="form-check-label" for="disabledAttr">Disabled</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="readonlyAttr"
-                                   x-model="fieldAttributes.readonly" @change="updateVisualization()">
+                            <input class="form-check-input" type="checkbox" id="readonlyAttr">
                             <label class="form-check-label" for="readonlyAttr">Read Only</label>
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="hiddenAttr"
-                                   x-model="fieldAttributes.hidden" @change="updateVisualization()">
+                            <input class="form-check-input" type="checkbox" id="hiddenAttr">
                             <label class="form-check-label" for="hiddenAttr">Hidden</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="autofocusAttr"
-                                   x-model="fieldAttributes.autofocus" @change="updateVisualization()">
+                            <input class="form-check-input" type="checkbox" id="autofocusAttr">
                             <label class="form-check-label" for="autofocusAttr">Autofocus</label>
                         </div>
                         <div class="mb-2">
                             <label for="maxLengthAttr" class="form-label">Max Length:</label>
-                            <input type="number" class="form-control form-control-sm" id="maxLengthAttr"
-                                   x-model="fieldAttributes.maxLength" @change="updateVisualization()">
+                            <input type="number" class="form-control form-control-sm" id="maxLengthAttr">
                         </div>
                     </div>
                 </div>
@@ -143,7 +108,7 @@
         </div>
 
         <!-- Field Visualization (from test_field_one) -->
-        <div class="p-3 border border-success border-3 rounded bg-light">
+        <div class="p-3 border border-app-layer-two border-3 mb-4">
             <h3 class="text-center mb-2">Field Visualization</h3>
 
             <div x-data="{
@@ -163,11 +128,11 @@
                             </div>
                             <div class="card-body">
                                 <pre class="mb-0"><code>new GlueCharField('field_name', {
-  value: '<span x-text="fieldState.value"></span>',
-  required: <span x-text="fieldState.required"></span>,
-  disabled: <span x-text="fieldState.disabled"></span>,
-  readonly: <span x-text="fieldState.readonly"></span>,
-  max_length: <span x-text="fieldState.maxLength || 'null'"></span>
+    value: '<span x-text="fieldState.value"></span>',
+    required: <span x-text="fieldState.required"></span>,
+    disabled: <span x-text="fieldState.disabled"></span>,
+    readonly: <span x-text="fieldState.readonly"></span>,
+    max_length: <span x-text="fieldState.maxLength || 'null'"></span>
 })</code></pre>
                             </div>
                         </div>
@@ -178,39 +143,44 @@
                                 <h5 class="mb-0">HTML Output</h5>
                             </div>
                             <div class="card-body">
-                                <pre class="mb-0"><code>&lt;input 
-  type="text"
-  name="field_name"
-  id="id_field_name"
-  class="form-control"
-  <span x-show="fieldState.value">value="<span x-text="fieldState.value"></span>"</span>
-  <span x-show="fieldState.required">required</span>
-  <span x-show="fieldState.disabled">disabled</span>
-  <span x-show="fieldState.readonly">readonly</span>
-  <span x-show="fieldState.maxLength">maxlength="<span x-text="fieldState.maxLength"></span>"</span>
+                                <pre class="mb-0"><code>&lt;input
+    type="text"
+    name="field_name"
+    id="id_field_name"
+    class="form-control"
+    <span x-show="fieldState.value">value="<span x-text="fieldState.value"></span>"</span>
+    <span x-show="fieldState.required">required</span>
+    <span x-show="fieldState.disabled">disabled</span>
+    <span x-show="fieldState.readonly">readonly</span>
+    <span x-show="fieldState.maxLength">maxlength="<span x-text="fieldState.maxLength"></span>"</span>
 &gt;</code></pre>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <div class="text-center">
-                    <button class="btn btn-sm btn-outline-primary mx-1"
-                            @click="fieldState.required = !fieldState.required">
-                        Toggle Required
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary mx-1"
-                            @click="fieldState.disabled = !fieldState.disabled">
-                        Toggle Disabled
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary mx-1"
-                            @click="fieldState.readonly = !fieldState.readonly">
-                        Toggle Readonly
-                    </button>
-                </div>
             </div>
         </div>
+
     </div>
 </div>
 
+<div class="p-3 mb-4">
+            <h3 class="text-center mb-2">Extra! Extra! Read all about it.</h3>
+
+            <h4>Description</h4>
+            <p>
+                The Input Field is a basic form field that allows users to enter text data. It is implemented using the
+                GlueCharField class
+                which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as
+                names, titles, or other
+                single-line text data.
+            </p>
+
+            <h4 class="mt-3">Special Considerations</h4>
+            <ul>
+                <li>For password input, use a separate password field type instead of this field</li>
+                <li>For multi-line text, use a text area field instead</li>
+                <li>The field automatically generates a label based on the field name if none is provided</li>
+            </ul>
+        </div>
 
