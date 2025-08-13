@@ -1,60 +1,144 @@
 {% extends "django_spire/page/full_page.html" %}
 {% load static %}
 
+{% block head_extra %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+{% endblock %}
 
 {% block full_page_content %}
 <div class="container mt-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h2>Session Data</h2>
+    {% if session_data %}
+        <h2>Session Data</h2>
+        <p class="text-muted mb-0">Session Key: {{ session_data.session_key }}</p>
+        
+        <div class="session-explorer mt-4">
+            {% for key, value in session_data.items %}
+                <div class="session-item">
+                    <div class="session-key" onclick="toggleItem(this)">
+                        <i class="bi bi-caret-right-fill"></i> <strong>{{ key }}</strong>
+                        <button class="expand-all-btn" onclick="expandAll(this, event)"><i class="bi bi-arrows-expand"></i></button>
+                    </div>
+                    <div class="session-value" style="display: none;">
+                        {% include "developer/page/session_value_renderer.html" with value=value depth=1 %}
+                    </div>
                 </div>
-                <div class="card-body">
-
-                    {% if session_data %}
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h4>Django Session Data</h4>
-                                <p class="text-muted mb-0">Session Key: {{ session_data.session_key }}</p>
-                            </div>
-                            <div class="card-body"><div class="table-responsive">
-                                    <table class="table table-striped">
-                                        <thead>
-                                            <tr>
-                                                <th>Key</th>
-                                                <th>Value</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for key, value in session_data.items %}
-                                                <tr>
-                                                    <td><strong>{{ key }}</strong></td>
-                                                    <td>
-                                                        <pre class="mb-0"><code>{{ value }}</code></pre>
-                                                    </td>
-                                                </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                <div class="mt-4">
-                                    <h4>Raw Session Data</h4>
-                                    <div class="bg-light p-3 rounded">
-                                        <pre><code>{{ session_data }}</code></pre>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% else %}
-                        <div class="alert alert-info">
-                            No session data available.
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+            {% endfor %}
         </div>
-    </div>
+
+        <style>
+            .session-explorer {
+                font-family: monospace;
+            }
+            .session-item {
+                margin-bottom: 8px;
+            }
+            .session-key {
+                cursor: pointer;
+                padding: 6px;
+                background-color: #f8f9fa;
+                border-radius: 3px;
+                font-weight: bold;
+                display: flex;
+                align-items: center;
+            }
+            .session-key:hover {
+                background-color: #e9ecef;
+            }
+            .session-value {
+                padding-left: 24px;
+                margin-top: 5px;
+                border-left: 1px solid #dee2e6;
+            }
+            .session-key i {
+                transition: transform 0.2s;
+                margin-right: 6px;
+                color: #6c757d;
+            }
+            .session-key.expanded i {
+                transform: rotate(90deg);
+            }
+            .list-item {
+                margin-bottom: 5px;
+            }
+            .simple-value {
+                padding: 6px;
+                margin-left: 0.5em;
+            }
+            .expand-all-btn {
+                margin-left: auto;
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+                padding: 2px 5px;
+                font-size: 0.8em;
+                border-radius: 3px;
+            }
+            .expand-all-btn:hover {
+                background-color: #e9ecef;
+            }
+        </style>
+
+        <script>
+            function toggleItem(element) {
+                const valueElement = element.nextElementSibling;
+                const isExpanded = element.classList.contains('expanded');
+                
+                if (isExpanded) {
+                    element.classList.remove('expanded');
+                    valueElement.style.display = 'none';
+                } else {
+                    element.classList.add('expanded');
+                    valueElement.style.display = 'block';
+                }
+            }
+            
+            function expandAll(button, event) {
+                // Prevent the parent click event from triggering
+                event.stopPropagation();
+                
+                // Get the parent session-key element
+                const sessionKey = button.closest('.session-key');
+                
+                // Get the session-value container
+                const sessionValue = sessionKey.nextElementSibling;
+                
+                // Make sure the parent container is expanded
+                if (!sessionKey.classList.contains('expanded')) {
+                    sessionKey.classList.add('expanded');
+                    sessionValue.style.display = 'block';
+                }
+                
+                // Check if all nested items are already expanded
+                const nestedKeys = sessionValue.querySelectorAll('.session-key');
+                const allExpanded = Array.from(nestedKeys).every(key => key.classList.contains('expanded'));
+                
+                // Toggle icon on the button
+                const buttonIcon = button.querySelector('i');
+                
+                if (allExpanded) {
+                    // Collapse all nested items
+                    nestedKeys.forEach(key => {
+                        key.classList.remove('expanded');
+                        key.nextElementSibling.style.display = 'none';
+                    });
+                    buttonIcon.classList.remove('bi-arrows-collapse');
+                    buttonIcon.classList.add('bi-arrows-expand');
+                } else {
+                    // Expand all nested items
+                    nestedKeys.forEach(key => {
+                        key.classList.add('expanded');
+                        key.nextElementSibling.style.display = 'block';
+                    });
+                    buttonIcon.classList.remove('bi-arrows-expand');
+                    buttonIcon.classList.add('bi-arrows-collapse');
+                }
+            }
+        </script>
+    {% else %}
+        <div class="alert alert-info">
+            No session data available.
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
