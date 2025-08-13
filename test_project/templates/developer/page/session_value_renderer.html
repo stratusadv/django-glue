@@ -1,0 +1,44 @@
+{% comment %}
+This template recursively renders session values, handling both simple values and nested dictionaries/lists.
+Parameters:
+- value: The value to render
+{% endcomment %}
+
+{% if value|default:None == None %}
+    <span>None</span>
+{% elif value.items|default:False %}
+    {% comment %} Handle dictionary {% endcomment %}
+    <ul>
+    {% for k, v in value.items %}
+        <li>
+            <strong>{{ k }}</strong>: 
+            {% if v.items|default:False or v|default:''|stringformat:'s'|slice:':1' == '[' %}
+                {% include "developer/page/session_value_renderer.html" with value=v %}
+            {% else %}
+                {{ v }}
+            {% endif %}
+        </li>
+    {% empty %}
+        <li>Empty dictionary</li>
+    {% endfor %}
+    </ul>
+{% elif value|default:''|stringformat:'s'|slice:':1' == '[' %}
+    {% comment %} Handle list {% endcomment %}
+    <ul>
+    {% for item in value %}
+        <li>
+            {% if item.items|default:False or item|default:''|stringformat:'s'|slice:':1' == '[' %}
+                <strong>Index {{ forloop.counter0 }}</strong>:
+                {% include "developer/page/session_value_renderer.html" with value=item %}
+            {% else %}
+                <strong>Index {{ forloop.counter0 }}</strong>: {{ item }}
+            {% endif %}
+        </li>
+    {% empty %}
+        <li>Empty list</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    {% comment %} Handle simple value {% endcomment %}
+    {{ value }}
+{% endif %}
