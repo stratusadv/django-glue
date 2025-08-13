@@ -1,0 +1,26 @@
+{% extends "django_spire/page/full_page.html" %}
+{% load static %}
+
+{% block title %}Glue - Main Page{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Welcome to Glue</h2>
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        This is a simple page that links to the session data view.
+                    </p>
+                    <a href="{% url 'glue:page:session_data' %}" class="btn btn-primary">
+                        View Session Data
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

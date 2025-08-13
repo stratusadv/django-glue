@@ -1,27 +1,27 @@
 from dandy.llm import Prompt
 
-def capability_instruction_prompt():
+def session_data_instruction_prompt():
     return (
         Prompt()
-        .title('Capability Operations')
+        .title('Session Data Operations')
         .line_break()
         .heading('Purpose')
-        .text('This prompt provides instructions for Capability operations.')
+        .text('This prompt provides instructions for Session Data operations.')
         .line_break()
         .heading('Instructions')
         .ordered_list([
-            'Instruction 1',
-            'Instruction 2',
-            'Instruction 3',
+            'Process session data requests',
+            'Format session data for display',
+            'Handle session data operations',
         ])
         .line_break()
     )
 
-def capability_user_input_prompt(user_input: str):
+def session_data_user_input_prompt(user_input: str):
 
     return (
         Prompt()
-        .heading('Capability Request')
+        .heading('Session Data Request')
         .text('The user wants to perform the following operation:')
         .text('')
         .text(user_input)

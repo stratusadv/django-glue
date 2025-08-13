@@ -1,3 +1,2 @@
-from test_project.app.capability.seeding.seeder import CapabilitySeeder
-
-CapabilitySeeder.seed_database(count=30)
+# Removed capability seeding code
+# This file is kept as a placeholder for future session data seeding if needed

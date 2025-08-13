@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class CapabilityConfig(AppConfig):
+class GlueConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'glue'
-    label = 'capability'
+    name = 'test_project.glue'
+    label = 'glue'

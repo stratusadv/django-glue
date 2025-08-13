@@ -1,13 +1,15 @@
-# from __future__ import annotations
-#
+from __future__ import annotations
+
+# Note: We're using Django's built-in session system instead of a custom model
+# The SessionDataQuerySet below is commented out as it's no longer needed
+
 # from typing_extensions import TYPE_CHECKING
-#
-# from django_spire.history.querysets import HistoryQuerySet
+# from django.db.models import QuerySet
 #
 # if TYPE_CHECKING:
 #     from django.db.models import QuerySet
 #
 #
-# class CapabilityQuerySet(HistoryQuerySet):
-#     def active(self) -> QuerySet:
-#         return self.filter(is_active=True, is_deleted=False)
+# class SessionDataQuerySet(QuerySet):
+#     def recent(self) -> QuerySet:
+#         return self.order_by('-created_at')

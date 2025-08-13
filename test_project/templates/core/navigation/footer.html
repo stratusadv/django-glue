@@ -23,7 +23,8 @@
         </div>
         <a href="">Load</a>
         <span class="text-app-secondary-dark">|</span>
-        <a href="">Session Data</a>
+        {% url 'glue:page:session_data' as session_data_url %}
+        <a href="{{ session_data_url }}">Session Data</a>
     </div>
 </div>
 
