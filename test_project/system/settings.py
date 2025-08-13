@@ -37,8 +37,8 @@ INSTALLED_APPS += [
 ]
 
 INSTALLED_APPS += [
-    'test_project.glue.form',
-    'test_project.glue.form.fields',
+    'test_project.developer.form',
+    'test_project.developer.field',
 ]
 
 INSTALLED_APPS += [
