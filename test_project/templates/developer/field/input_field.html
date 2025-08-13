@@ -1,32 +1,38 @@
-<div class="row">
-    <div class="col-12 text-center py-3">
-        <h1>{% block field_name %}Input Field{% endblock %}</h1>
+{% load static %}
+
+<div class="row justify-content-center align-items-center py-4">
+    <div class="col-4">
+        <h2 class="mb-0">Input Field. Input Field. Input Field.</h2>
+        <div>One field.</div>
+        <div>Said Three Times.</div>
+        <div>All your character needs.</div>
+    </div>
+    <div class="col-6 text-center">
+        <img height="300px" src="{% static 'img/monkeys.png' %}" alt="">
     </div>
 </div>
 
-Make it more like a landing page where I can have the description and special considerations on the left and then a picture of a gorilla on the right and then under that I want to have the field directly beside the attributes in the test flow so I can see how everything's getting manipulated at the same time while I'm developing
-
 
 <div class="row">
-    <!-- Left column for examples and use cases -->
     <div class="col-5">
-        <div class="bg-app-primary-light p-3 rounded mb-4">
+        <div class="p-3 border border-app-primary border-3 mb-3">
             <h3>Simple Example</h3>
             {% block field_example %}
                 <form method="post">
                     {% csrf_token %}
                     <div x-data="{
-                        input_field: new GlueCharField('input_field')
-                    }">
+                            input_field: new GlueCharField('input_field')
+                        }">
                         {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
                     </div>
-                    <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
+                    <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit
+                    </button>
                 </form>
             {% endblock %}
-            
-            <h3 class="mt-4">Initialization Techniques</h3>
-            
-            <h5 class="mt-3">Initializing Through Glue Field</h5>
+        </div>
+
+        <div class="p-3 border border-app-primary border-3 mb-3">
+            <h3>Initializing Through Glue Field</h3>
             <form method="post">
                 {% csrf_token %}
                 <div x-data="{
@@ -36,8 +42,11 @@ Make it more like a landing page where I can have the description and special co
                 </div>
                 <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
             </form>
-            
-            <h5 class="mt-3">Initializing By x-data</h5>
+        </div>
+
+        <div class="p-3 border border-app-primary border-3">
+
+            <h3>Initializing By x-data</h3>
             <form method="post">
                 {% csrf_token %}
                 <div x-data="{
@@ -50,33 +59,25 @@ Make it more like a landing page where I can have the description and special co
                 </div>
                 <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
             </form>
-            
-            <h5 class="mt-3">Required Field Example</h5>
-            <form method="post">
-                {% csrf_token %}
-                <div x-data="{
-                        input_field: new GlueCharField('input_field', {required: true})
-                    }">
-                    {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
-                </div>
-                <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit</button>
-            </form>
         </div>
+
     </div>
-    
+
     <!-- Right column for documentation, attributes, and visualization -->
     <div class="col-7">
-        <!-- Documentation card (smaller) -->
-        <div class="p-3 border border-warning border-3 rounded bg-light mb-4">
-            <h3 class="text-center mb-2">Documentation</h3>
-            
+
+        <div class="p-3 border border-app-primary border-3 mb-4">
+            <h3 class="text-center mb-2">Extra! Extra! Read all about it.</h3>
+
             <h4>Description</h4>
             <p>
-                The Input Field is a basic form field that allows users to enter text data. It is implemented using the GlueCharField class
-                which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as names, titles, or other
+                The Input Field is a basic form field that allows users to enter text data. It is implemented using the
+                GlueCharField class
+                which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as
+                names, titles, or other
                 single-line text data.
             </p>
-            
+
             <h4 class="mt-3">Special Considerations</h4>
             <ul>
                 <li>For password input, use a separate password field type instead of this field</li>
@@ -84,11 +85,11 @@ Make it more like a landing page where I can have the description and special co
                 <li>The field automatically generates a label based on the field name if none is provided</li>
             </ul>
         </div>
-        
+
         <!-- Attributes card with checkboxes -->
         <div class="p-3 border border-primary border-3 rounded bg-light mb-4">
             <h3 class="text-center mb-2">Attributes</h3>
-            
+
             <div x-data="{
                 fieldAttributes: {
                     required: false,
@@ -105,46 +106,46 @@ Make it more like a landing page where I can have the description and special co
                 <div class="row">
                     <div class="col-6">
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="requiredAttr" 
+                            <input class="form-check-input" type="checkbox" id="requiredAttr"
                                    x-model="fieldAttributes.required" @change="updateVisualization()">
                             <label class="form-check-label" for="requiredAttr">Required</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="disabledAttr" 
+                            <input class="form-check-input" type="checkbox" id="disabledAttr"
                                    x-model="fieldAttributes.disabled" @change="updateVisualization()">
                             <label class="form-check-label" for="disabledAttr">Disabled</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="readonlyAttr" 
+                            <input class="form-check-input" type="checkbox" id="readonlyAttr"
                                    x-model="fieldAttributes.readonly" @change="updateVisualization()">
                             <label class="form-check-label" for="readonlyAttr">Read Only</label>
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="hiddenAttr" 
+                            <input class="form-check-input" type="checkbox" id="hiddenAttr"
                                    x-model="fieldAttributes.hidden" @change="updateVisualization()">
                             <label class="form-check-label" for="hiddenAttr">Hidden</label>
                         </div>
                         <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="autofocusAttr" 
+                            <input class="form-check-input" type="checkbox" id="autofocusAttr"
                                    x-model="fieldAttributes.autofocus" @change="updateVisualization()">
                             <label class="form-check-label" for="autofocusAttr">Autofocus</label>
                         </div>
                         <div class="mb-2">
                             <label for="maxLengthAttr" class="form-label">Max Length:</label>
-                            <input type="number" class="form-control form-control-sm" id="maxLengthAttr" 
+                            <input type="number" class="form-control form-control-sm" id="maxLengthAttr"
                                    x-model="fieldAttributes.maxLength" @change="updateVisualization()">
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <!-- Field Visualization (from test_field_one) -->
         <div class="p-3 border border-success border-3 rounded bg-light">
             <h3 class="text-center mb-2">Field Visualization</h3>
-            
+
             <div x-data="{
                 fieldState: {
                     value: 'Sample text',
@@ -192,17 +193,17 @@ Make it more like a landing page where I can have the description and special co
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="text-center">
-                    <button class="btn btn-sm btn-outline-primary mx-1" 
+                    <button class="btn btn-sm btn-outline-primary mx-1"
                             @click="fieldState.required = !fieldState.required">
                         Toggle Required
                     </button>
-                    <button class="btn btn-sm btn-outline-primary mx-1" 
+                    <button class="btn btn-sm btn-outline-primary mx-1"
                             @click="fieldState.disabled = !fieldState.disabled">
                         Toggle Disabled
                     </button>
-                    <button class="btn btn-sm btn-outline-primary mx-1" 
+                    <button class="btn btn-sm btn-outline-primary mx-1"
                             @click="fieldState.readonly = !fieldState.readonly">
                         Toggle Readonly
                     </button>
