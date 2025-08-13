@@ -4,6 +4,9 @@ from typing_extensions import TYPE_CHECKING
 
 from django.template.response import TemplateResponse
 
+import django_glue as dg
+from test_project.app.gorilla.models import Gorilla
+
 if TYPE_CHECKING:
     from django.core.handlers.wsgi import WSGIRequest
 
@@ -11,7 +14,7 @@ if TYPE_CHECKING:
 def session_data_view(request: WSGIRequest) -> TemplateResponse:
     """View that displays session data."""
 
-    print(request.session)
+    dg.glue_model_object(request, 'test', Gorilla())
 
     return TemplateResponse(
         request=request,

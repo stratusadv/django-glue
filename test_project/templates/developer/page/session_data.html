@@ -1,28 +1,24 @@
 {% extends "django_spire/page/full_page.html" %}
 {% load static %}
 
-{% block title %}Glue - Session Data{% endblock %}
 
-{% block content %}
+{% block full_page_content %}
 <div class="container mt-5">
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h2>Session Data</h2>
-                    <a href="{% url 'glue:page:main' %}" class="btn btn-outline-secondary">
-                        Back to Main
-                    </a>
                 </div>
                 <div class="card-body">
+
                     {% if session_data %}
                         <div class="card mb-4">
                             <div class="card-header">
-                                <h4>Django Session Data</h4>R
+                                <h4>Django Session Data</h4>
                                 <p class="text-muted mb-0">Session Key: {{ session_data.session_key }}</p>
                             </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
+                            <div class="card-body"><div class="table-responsive">
                                     <table class="table table-striped">
                                         <thead>
                                             <tr>
@@ -35,12 +31,19 @@
                                                 <tr>
                                                     <td><strong>{{ key }}</strong></td>
                                                     <td>
-                                                        <pre class="mb-0"><code>{{ value|pprint }}</code></pre>
+                                                        <pre class="mb-0"><code>{{ value }}</code></pre>
                                                     </td>
                                                 </tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
+                                </div>
+                                
+                                <div class="mt-4">
+                                    <h4>Raw Session Data</h4>
+                                    <div class="bg-light p-3 rounded">
+                                        <pre><code>{{ session_data }}</code></pre>
+                                    </div>
                                 </div>
                             </div>
                         </div>
