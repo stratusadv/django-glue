@@ -43,9 +43,20 @@ class FieldViewTestCase(BrowserTestCase):
         self.page.fill('#id_input_field', 'hello work')
         self.assertEqual(self.page.input_value('#id_input_field'), 'hello work')
 
-        submit_button = self.page.get_by_role("button", name="Submit")
-        submit_button.click()
+        ajax_url = reverse('developer:field:page:endpoint_testing')
 
+        # Define what “the save call” looks like:
+        def is_save(resp):
+            return resp.url.endswith(ajax_url) and resp.request.method == "POST"
 
+        # Arm the waiter BEFORE clicking
+        with self.page.expect_response(is_save) as resp_info:
+            self.page.get_by_role("button", name="Submit").click()
 
+        response = resp_info.value
+        self.assertEqual(response.status, 200)
 
+        # Inspect the request that produced this response
+        req = response.request
+        payload = req.post_data_json
+        print(payload)
