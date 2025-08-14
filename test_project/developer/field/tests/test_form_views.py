@@ -1,4 +1,5 @@
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.urls import reverse
 from playwright.sync_api import sync_playwright
 
 import os
@@ -18,6 +19,9 @@ class BrowserTestCase(StaticLiveServerTestCase):
         cls._pw.stop()
         super().tearDownClass()
 
+    def format_url(self, url: str) -> str:
+        return self.live_server_url + url
+
     def setUp(self):
         self.context = self.browser.new_context()
         self.page = self.context.new_page()
@@ -32,11 +36,16 @@ class FieldViewTestCase(BrowserTestCase):
 
     def test_playwright(self):
         # Use the page/context created in setUp
-        self.page.goto("https://example.com", wait_until="domcontentloaded", timeout=5000)
-        print(self.page.title())
+        url = reverse('developer:field:page:input_field')
+        self.page.goto(self.format_url(url), wait_until="domcontentloaded")
 
-    def test_playwright2(self):
-        self.page.goto("https://example.com", wait_until="domcontentloaded", timeout=5000)
-        print(self.page.title())
+        self.page.wait_for_selector('#id_input_field')
+        self.page.fill('#id_input_field', 'hello work')
+        self.assertEqual(self.page.input_value('#id_input_field'), 'hello work')
+
+        submit_button = self.page.get_by_role("button", name="Submit")
+        submit_button.click()
+
+
 
 
