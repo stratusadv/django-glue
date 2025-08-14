@@ -21,6 +21,7 @@ def showcase_view(request: WSGIRequest) -> TemplateResponse:
 
 
 def input_field_view(request: WSGIRequest) -> TemplateResponse:
+    print(request.POST)
     return TemplateResponse(
         request,
         context={},

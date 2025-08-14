@@ -12,28 +12,41 @@
     </div>
     <div class="col-5">
         <div class="p-3 bg-app-layer-two">
-            <div
-                x-data="{
-                    async send() {
-                        console.log('Sending...')
-                        let path = '/developer/field/page/endpoint-testing/'
-                        await django_glue_fetch(path, {
-                            payload: {
-                            'input_field': 'hello',
-                            }
-                        })
-                    }
-                }"
+{#            <div#}
+{#                x-data="{#}
+{#                    async send() {#}
+{#                        console.log('Sending...')#}
+{#                        let path = '/developer/field/page/endpoint-testing/'#}
+{#                        await django_glue_fetch(path, {#}
+{#                            payload: {#}
+{#                            'input_field': 'hello',#}
+{#                            }#}
+{#                        })#}
+{#                    }#}
+{#                }"#}
+{#            >#}
+{#                {% csrf_token %}#}
+{#                <div x-data="{#}
+{#                            input_field: new GlueCharField('input_field')#}
+{#                        }">#}
+{#                    {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}#}
+{#                </div>#}
+{#                <button @click="await send()" type="submit" name="example_form" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit#}
+{#                </button>#}
+{#            </div>#}
+            <form
+                method="post"
             >
                 {% csrf_token %}
                 <div x-data="{
                             input_field: new GlueCharField('input_field')
                         }">
                     {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+                    {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
                 </div>
-                <button @click="await send()" type="submit" name="example_form" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit
+                <button type="submit" role="button" name="Submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit
                 </button>
-            </div>
+            </form>
         </div>
     </div>
     <div class="col-10">

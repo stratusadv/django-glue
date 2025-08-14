@@ -34,7 +34,7 @@ class FieldViewTestCase(BrowserTestCase):
     def setUp(self):
         super().setUp()
 
-    def test_playwright(self):
+    def test_playwright_ajax_endpoint_validation(self):
         # Use the page/context created in setUp
         url = reverse('developer:field:page:input_field')
         self.page.goto(self.format_url(url), wait_until="domcontentloaded")
@@ -60,3 +60,39 @@ class FieldViewTestCase(BrowserTestCase):
         req = response.request
         payload = req.post_data_json
         print(payload)
+
+
+
+    def test_post_form_body_is_correct(self):
+        path = reverse('developer:field:page:input_field')   # your form action path
+        target_url_prefix = self.live_server_url + path
+
+        seen = {}  # will store what the browser sent
+
+        def spy(route, request):
+            # catch the navigation POST to your action URL
+            if request.method == "POST" and request.url.startswith(target_url_prefix):
+                seen["headers"] = request.headers
+                seen["json"] = request.post_data_json
+                seen["raw"] = request.post_data or ""
+                print('In spy!!')
+                print(request.post_data_json)
+            route.continue_()
+
+        # Attach the spy BEFORE interacting
+        self.context.route("**/*", spy)
+
+        # Go fill and submit
+        form_page = self.live_server_url + reverse("developer:field:page:input_field")
+        self.page.goto(form_page, wait_until="domcontentloaded")
+        self.page.fill("#id_input_field", "hello work")
+
+        with self.page.expect_navigation():
+            self.page.get_by_role("button", name="Submit").click()
+
+        # Assert the payload
+        # if seen.get("json") is not None:
+        #     self.assertEqual(seen["json"]["input_field"], "hello work")
+        # else:
+        #     params = parse_qs(seen.get("raw") or "")
+        #     self.assertEqual(params.get("input_field", [""])[0], "hello work")
