@@ -18,5 +18,6 @@ venv*/
 
 dev_tool.exe
 dev_tool*.exe
+.dev
 
 .qodo

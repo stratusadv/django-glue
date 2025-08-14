@@ -6,6 +6,6 @@ urlpatterns = [
     path('', home_view, name='home'),
     path('django_glue/', include('django_glue.urls'), name='django_glue'),
     path('gorilla/', include('test_project.app.gorilla.urls', namespace='gorilla'), ),
-    path('developer/', include('test_project.developer.urls', namespace='glue_forms')),
+    path('developer/', include('test_project.developer.urls', namespace='developer')),
     path('theme/', include('django_spire.theme.urls', namespace='theme')),
 ]

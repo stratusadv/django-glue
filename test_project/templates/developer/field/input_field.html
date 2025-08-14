@@ -11,20 +11,17 @@
         </div>
     </div>
     <div class="col-5">
-        {#        <img height="300px" src="{% static 'img/monkeys.png' %}" alt="">#}
         <div class="p-3 bg-app-layer-two">
-            {% block field_example %}
-                <form method="post">
-                    {% csrf_token %}
-                    <div x-data="{
+            <form method="post">
+                {% csrf_token %}
+                <div x-data="{
                             input_field: new GlueCharField('input_field')
                         }">
-                        {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
-                    </div>
-                    <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit
-                    </button>
-                </form>
-            {% endblock %}
+                    {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+                </div>
+                <button type="submit" class="mt-2 btn btn-sm bg-app-secondary-dark text-app-layer-one">Submit
+                </button>
+            </form>
         </div>
     </div>
     <div class="col-10">
@@ -161,23 +158,28 @@
     </div>
 </div>
 
-<div class="p-3 mb-4">
-    <h3 class="text-center mb-2">Extra! Extra! Read all about it.</h3>
+<div class="row justify-content-center">
+    <div class="col-10">
+        <div class="p-3 mb-4">
+            <h3 class="text-center mb-2">Extra! Extra! Read all about it.</h3>
 
-    <h4>Description</h4>
-    <p>
-        The Input Field is a basic form field that allows users to enter text data. It is implemented using the
-        GlueCharField class
-        which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as
-        names, titles, or other
-        single-line text data.
-    </p>
+            <h4>Description</h4>
+            <p>
+                The Input Field is a basic form field that allows users to enter text data. It is implemented using the
+                GlueCharField class
+                which extends the GlueBaseFormField. This field is suitable for collecting short text inputs such as
+                names, titles, or other
+                single-line text data.
+            </p>
 
-    <h4 class="mt-3">Special Considerations</h4>
-    <ul>
-        <li>For password input, use a separate password field type instead of this field</li>
-        <li>For multi-line text, use a text area field instead</li>
-        <li>The field automatically generates a label based on the field name if none is provided</li>
-    </ul>
+            <h4 class="mt-3">Special Considerations</h4>
+            <ul>
+                <li>For password input, use a separate password field type instead of this field</li>
+                <li>For multi-line text, use a text area field instead</li>
+                <li>The field automatically generates a label based on the field name if none is provided</li>
+            </ul>
+        </div>
+
+
+    </div>
 </div>
-
