@@ -64,6 +64,7 @@ class FieldViewTestCase(BrowserTestCase):
 
 
     def test_post_form_body_is_correct(self):
+        from django.http import QueryDict
         path = reverse('developer:field:page:input_field')   # your form action path
         target_url_prefix = self.live_server_url + path
 
@@ -75,7 +76,10 @@ class FieldViewTestCase(BrowserTestCase):
                 seen["headers"] = request.headers
                 seen["json"] = request.post_data_json
                 seen["raw"] = request.post_data or ""
+                # convert into django querydict for actual django data!
+                q = QueryDict(request.post_data_buffer, encoding="utf-8")
                 print('In spy!!')
+                print(q)
                 print(request.post_data_json)
             route.continue_()
 
