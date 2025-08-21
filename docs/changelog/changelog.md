@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.8
+### Changes
+- File Fields can have camera or file input removed.
+
 ## v0.8.7
 ### Breaking
 - Multi Select fields use input fields to send data back in a list
