@@ -18,6 +18,8 @@
             accept: '{{ accept|default:'' }}',
             compression: {{ compression|default:'true' }},
             compression_ratio: {{ compression_ratio|default:'0.75' }},
+            disable_camera: '{{ disable_camera|default:'False' }}' === 'True',
+            disable_file: '{{ disable_file|default:'False' }}' === 'True',
             maximum_filesize: {{ maximum_filesize|default:'10' }} * 1024 * 1024,
             units: ['B', 'KB', 'MB', 'GB'],
 
@@ -116,6 +118,7 @@
                 class="form-control text-start d-flex justify-content-between flex-grow-1"
                 type="button"
                 @click="show_dropdown = !show_dropdown"
+                :class="disable_file ? 'd-none' : ''"
             >
                 <span class="d-flex flex-wrap align-items-center">
                     {% block selection_display %}{% endblock %}
@@ -130,6 +133,7 @@
                 type="button"
                 class="btn border border-secondary-subtle bg-app-glue-layer-one text-muted ms-2"
                 @click="take_photo()"
+                :class="disable_camera ? 'd-none' : ''"
             >
                 <i class="bi bi-camera"></i>
             </button>
@@ -141,6 +145,7 @@
             class="d-none"
             @change="handle_files_change"
             :accept="accept"
+            :class="disable_file ? 'd-none' : ''"
             {% block file_input_attributes %}{% endblock %}
         >
 
@@ -151,6 +156,7 @@
             @change="handle_files_change"
             accept="image/*"
             capture="environment"
+            :class="disable_camera ? 'd-none' : ''"
             {% block camera_input_attributes %}{% endblock %}
         >
 
