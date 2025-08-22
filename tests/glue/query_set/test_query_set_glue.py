@@ -9,7 +9,7 @@ class TestQuerySetGlue(BaseTestCase):
             dg.glue_query_set(
                 self.request,
                 'person_query_set',
-                self.person_model_class.objects.all()
+                self.gorilla_model_class.objects.all()
             )
 
             self.assertTrue(True)
