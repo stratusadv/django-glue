@@ -4,7 +4,7 @@ build
 setuptools
 wheel
 playwright
-django-spire==0.12.6
+django-spire==0.14.0
 
 -r mkdocs_requirements.txt
 -r requirements.txt
