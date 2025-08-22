@@ -3,7 +3,8 @@ twine
 build
 setuptools
 wheel
-django-spire==0.12.6
+playwright
+django-spire==0.14.0
 
 -r mkdocs_requirements.txt
 -r requirements.txt

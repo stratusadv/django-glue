@@ -1,0 +1,13 @@
+{% load static %}
+
+<div class="p-3 border border-3 border-app-primary">
+    <div class="text-center mb-2">
+        <h2 class="mb-1 text-app-secondary-dark">{{ name }}</h2>
+        <h5 class="mb-1 text-app-primary">{{ description }}</h5>
+        <img height="100px" src="{{ image_src }}" alt="{{ name }}"
+        >
+    </div>
+    <div>
+        {% include 'django_spire/button/secondary_dark_button.html' with button_text=button_text|default:'Get Started'  button_class='w-100' %}
+    </div>
+</div>

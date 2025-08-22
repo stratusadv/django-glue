@@ -9,7 +9,7 @@ class TestModelObjectGlue(BaseTestCase):
             dg.glue_model_object(
                 self.request,
                 'person_model_object',
-                self.person_model_object
+                self.gorilla_model_object
             )
 
             self.assertTrue(True)

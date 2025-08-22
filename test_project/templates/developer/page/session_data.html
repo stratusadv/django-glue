@@ -1,0 +1,26 @@
+{% extends "django_spire/page/full_page.html" %}
+{% load static %}
+
+{% block full_page_content %}
+<div class="container mt-5">
+    {% if session_data %}
+        <h2>Session Data</h2>
+        <p class="text-muted mb-0">Session Key: {{ session_data.session_key }}</p>
+        
+        <div class="mt-4">
+            {% for key, value in session_data.items %}
+                <div>
+                    <strong>{{ key }}</strong>
+                    <div style="margin-left: 20px;">
+                        {% include "developer/page/session_value_renderer.html" with value=value %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            No session data available.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

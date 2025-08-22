@@ -1,0 +1,30 @@
+{% extends 'django_spire/item/item.html' %}
+{% load static %}
+
+{% block item_title %}
+	{% include 'django_spire/element/attribute_element.html' with attribute_title='Name' attribute_value='Input Field' %}
+{% endblock %}
+
+{% block item_row_content %}
+	<div class="col-6">
+        {% include 'django_spire/element/attribute_element.html' with attribute_title='Description' %}
+
+        Character field that allows for a range of inputs
+    </div>
+    <div
+        class="col-6"
+        x-data="{
+            input_field: new GlueCharField('input_field')
+        }"
+    >
+        <form
+            class="d-flex align-items-end"
+            method="post"
+        >
+            {% csrf_token %}
+            {% include 'django_glue/form/field/input_field.html' with glue_field='input_field' %}
+            <input class="ms-2 bg-app-secondary-dark text-white btn btn-sm" type="submit">
+        </form>
+
+    </div>
+{% endblock %}

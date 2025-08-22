@@ -1,7 +1,8 @@
 {% extends 'django_spire/page/page.html' %}
+{% load static %}
 
 {% block page_content %}
-    <div class="row sticky-top">
+    <div class="row sticky-top bg-app-layer-one shadow">
         <div class="col-12">
             {% block full_page_top_navigation %}
                 {% include 'core/navigation/top_navigation.html' %}
@@ -10,16 +11,31 @@
     </div>
 
     <div class="row">
-        <div class="col-12">
+        <div
+            x-data="{
+                init(){
+                    window.addEventListener('resize', this.set_min_height);
+                    this.set_min_height()
+                },
+                set_min_height() {
+                    const min = Math.max(0, window.innerHeight - 170);
+                    document.documentElement.style.setProperty('--min-content-container-height', `${min}px`);
+
+                }
+
+            }"
+            style="min-height: var(--min-content-container-height)"
+            class="col-12 ps-4 pe-3"
+        >
             {% block full_page_content %}
             {% endblock %}
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-12 mt-2">
+    <div class="row border-top border-app-secondary border-3">
+        <div class="col-12">
             {% block full_page_bottom_content %}
-                {% include 'django_spire/footer/footer.html' %}
+                {% include 'core/navigation/footer.html' %}
             {% endblock %}
         </div>
     </div>

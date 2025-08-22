@@ -1,8 +1,0 @@
-{% extends 'core/modal/center_modal.html' %}
-
-{% block modal_trigger_wrapper %}{% endblock %}
-
-{% block modal_content_attributes %}
-    id="dispatch-modal-content"
-    @dispatch-modal.window="dispatch_modal($event.detail.html_content)"
-{% endblock %}

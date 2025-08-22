@@ -26,18 +26,26 @@ INSTALLED_APPS = [
     'django_glue',
 ]
 
-# Glue Test Project
 INSTALLED_APPS += [
-    'test_project',
-    'test_project.app.glue_model_object.apps.GlueModelObjectConfig',
-    'test_project.app.glue_queryset.apps.GlueQuerySetConfig',
-    'test_project.app.glue_form.apps.GlueFormConfig',
-    'test_project.app.glue_function.apps.GlueFunctionConfig',
-    'test_project.app.glue_view.apps.GlueViewConfig',
+    'test_project.app.capability',
+    'test_project.app.fight',
+    'test_project.app.fight.round',
+    'test_project.app.gorilla',
+    'test_project.app.gorilla.capability',
+    'test_project.app.home',
+    'test_project.app.training',
+]
+
+INSTALLED_APPS += [
+    'test_project.developer.form',
+    'test_project.developer.field',
 ]
 
 INSTALLED_APPS += [
     'django_spire.core',
+    'django_spire.theme',
+    'django_spire.history',
+    'django_spire.contrib.seeding',
 ]
 
 MIDDLEWARE = [

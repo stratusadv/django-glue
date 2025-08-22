@@ -1,0 +1,118 @@
+{% extends 'django_spire/page/full_page.html' %}
+{% load static %}
+
+{% block full_page_content %}
+    {% static 'img/boxing.png' as boxing_src %}
+	<h1 class="text-center py-3">Glue Form Fields</h1>
+
+    <!-- Base Fields -->
+    <h4 class="text-app-primary mt-5">Base Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Base Field' description='Django Field' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% url 'developer:fields:page:input_field' as input_field_url %}
+            {% include 'core/card/preview_card.html' with name='Input Field' description='Django Field' image_src=boxing_src button_text='View' button_href=input_field_url %}
+        </div>
+        <div class="col-2">
+            {% url 'developer:fields:page:test_field_one' as test_field_one_url %}
+            {% include 'core/card/preview_card.html' with name='Test Field One' description='Interactive Configuration' image_src=boxing_src button_text='View' button_href=test_field_one_url %}
+        </div>
+        <div class="col-2">
+            {% url 'developer:fields:page:test_field_two' as test_field_two_url %}
+            {% include 'core/card/preview_card.html' with name='Test Field Two' description='Multi-Step Wizard' image_src=boxing_src button_text='View' button_href=test_field_two_url %}
+        </div>
+    </div>
+    
+    <!-- Text Input Fields -->
+    <h4 class="text-app-primary mt-5">Text Input Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Char Field' description='Django CharField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Text Field' description='Django TextField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Email Field' description='Django EmailField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Password Field' description='Django CharField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Telephone Field' description='Django Char Field' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Color Field' description='Django Char Field' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+    
+    <!-- Numeric Fields -->
+    <h4 class="text-app-primary mt-5">Numeric Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Number Field' description='Django IntegerField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Decimal Field' description='Django DecimalField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Range Field' description='Django IntegerField' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+    
+    <!-- Date and Time Fields -->
+    <h4 class="text-app-primary mt-5">Date and Time Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Date Field' description='Django DateField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Time Field' description='Django TimeField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='DateTime Field' description='Django DateTimeField' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+    
+    <!-- Selection Fields -->
+    <h4 class="text-app-primary mt-5">Selection Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Select Field' description='Django CharField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Multi Select Field' description='Django ManyToManyField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Radio Field' description='Django CharField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Single Checkbox' description='Django BooleanField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Search & Select' description='Django CharField' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+    
+    <!-- File Fields -->
+    <h4 class="text-app-primary mt-5">File Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Single File Field' description='Django FileField' image_src=boxing_src button_text='View' %}
+        </div>
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='Multi File Field' description='Django FileField' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+    
+    <!-- Other Fields -->
+    <h4 class="text-app-primary mt-5">Other Fields</h4>
+    <div class="row">
+        <div class="col-2">
+            {% include 'core/card/preview_card.html' with name='List Field' description='Django JSONField' image_src=boxing_src button_text='View' %}
+        </div>
+    </div>
+
+{% endblock %}

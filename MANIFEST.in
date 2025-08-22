@@ -11,4 +11,4 @@ prune archived_docs
 prune docs
 prune example
 prune tests
-prune test_example
+prune test_project
