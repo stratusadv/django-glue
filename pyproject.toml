@@ -15,7 +15,6 @@ classifiers = [
     "Framework :: Django :: 3",
     "Framework :: Django :: 4",
     "Framework :: Django :: 5",
-    "Framework :: Django :: 5",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: JavaScript",
@@ -27,7 +26,32 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.11"
-dynamic = ["version", "dependencies"]
+dynamic = ["version"]
+
+dependencies = [
+    "django>=5",
+]
+
+[project.optional-dependencies]
+development = [
+    "pyright",
+    "twine",
+    "build",
+    "setuptools",
+    "wheel",
+    "playwright",
+    "django-spire==0.14.0",
+]
+
+documentation = [
+    "mkdocs",
+    "markdown-exec[ansi]",
+    "mkdocs-include-markdown-plugin",
+    "mkdocs-material",
+    "mkdocs-table-reader-plugin",
+    "mkdocstrings-python",
+    "openpyxl",
+]
 
 [project.urls]
 Homepage = "https://django-glue.stratusadv.com"
@@ -37,8 +61,7 @@ Changelog = "https://django-glue.stratusadv.com/changelog/changelog/"
 
 [build-system]
 requires = [
-    "build",
-    "setuptools",
+    "setuptools>=45",
     "wheel",
 ]
 build-backend = "setuptools.build_meta"
@@ -48,13 +71,12 @@ pythonVersion = "3.11"
 
 [tool.setuptools.dynamic]
 version = { attr = "django_glue.constants.__VERSION__" }
-dependencies = { file = "requirements.txt" }
 
 [tool.setuptools.packages.find]
 include = ["django_glue*"]
 
 [tool.setuptools.package-data]
-dandy = [
+django_glue = [
     "**/*.html",
     "**/*.js",
     "**/*.css",

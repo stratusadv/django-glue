@@ -1,7 +1,0 @@
-mkdocs
-markdown-exec[ansi]
-mkdocs-include-markdown-plugin
-mkdocs-material
-mkdocs-table-reader-plugin
-mkdocstrings-python
-openpyxl
