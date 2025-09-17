@@ -89,6 +89,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'django_glue.context_processors.django_glue',
+                'django_glue.context_processors.toolbar',
                 'django_spire.core.context_processors.django_spire',
             ],
             'builtins': [

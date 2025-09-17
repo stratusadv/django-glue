@@ -5,7 +5,7 @@
     class="cursor-pointer d-flex align-items-center position-fixed"
     style="top: 50%; z-index: 10000; height: 40px; width: auto;"
     :style="show_accordion ?
-        'top: 50%; z-index: 10000; height: 50px; width: auto; right: 305px;' :
+        'top: 50%; z-index: 10000; height: 50px; width: auto; right: {% if toolbar_width %}{{ toolbar_width }}{% else %}400px{% endif %};' :
         'top: 50%; z-index: 10000; height: 50px; width: auto; right: 0px;'"
 >
     <span
