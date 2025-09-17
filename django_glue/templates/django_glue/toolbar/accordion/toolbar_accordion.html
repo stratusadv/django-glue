@@ -1,0 +1,26 @@
+{% load static %}
+
+<div
+    x-data="{
+        show_accordion: false,
+        toggle() {
+            this.show_accordion = !this.show_accordion
+        }
+    }"
+    class="position-fixed"
+
+>
+   {% include 'django_glue/toolbar/button/toolbar_accordion_toggle_button.html' %}
+
+    <template x-teleport="body">
+        <div
+            x-cloak
+            x-show="show_accordion"
+            class="position-fixed bg-white"
+            style="top:0; bottom: 0; right: 0; width: 300px; z-index: 10000;"
+        >
+            {% include 'django_glue/toolbar/accordion/toolbar_accordion_content.html' %}
+        </div>
+    </template>
+</div>
+
