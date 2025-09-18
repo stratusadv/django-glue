@@ -1,0 +1,18 @@
+{% load variable_types %}
+
+{% for value in list %}
+
+    {% if value|is_dict %}
+        <div style="margin-left: 17px; margin-top: 5px;">
+            <span class="key-text">{<br></span>
+            {% include 'django_spire/forms/elements/dict_element.html' with dict=value %}
+            <span class="key-text">},<br></span>
+        </div>
+    {% elif value|is_list_or_tuple %}
+        <span class="key-text">[<br></span>
+            {% include 'django_glue/toolbar/session_data/session_data_list_element.html' with list=value %}
+        <span class="key-text">[<br></span>
+    {% else %}
+        {% include 'django_glue/toolbar/session_data/session_data_value_element.html' with value=value %}
+    {% endif %}
+{% endfor %}
