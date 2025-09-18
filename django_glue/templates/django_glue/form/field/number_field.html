@@ -5,7 +5,7 @@
         {% if input_type %}type="{{ input_type }}"{% else %}type="number"{% endif %}
         class="form-control"
         x-ref="glue_field"
-        x-model.number="value"
+        x-model="value"
         :id="glue_field.id"
     >
 {% endblock %}

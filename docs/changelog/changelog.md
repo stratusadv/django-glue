@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.10
+### Fixes
+- Updated x-model on number field to prevent issues with decimal places in chromium based browsers.
+
 ## v0.8.8
 ### Changes
 - File Fields can have camera or file input removed.
