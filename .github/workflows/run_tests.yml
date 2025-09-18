@@ -30,7 +30,7 @@ jobs:
         run: uv sync --extra development --extra documentation
 
       - name: Install Playwright Dependencies
-        run: uv run python playwright install
+        run: uv run python -m playwright install
 
       - name: Package Tests
         run: uv run python test_project/manage.py test --settings=system.settings --noinput
