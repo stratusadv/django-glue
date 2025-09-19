@@ -131,7 +131,7 @@
 
             <button
                 type="button"
-                class="btn border border-secondary-subtle bg-app-glue-layer-one text-muted ms-2"
+                class="btn border bg-app-glue-layer-one text-app-glue-muted ms-2"
                 @click="take_photo()"
                 :class="disable_camera ? 'd-none' : ''"
             >
@@ -164,7 +164,7 @@
             x-cloak
             x-show="show_dropdown"
             @click.outside="show_dropdown = false"
-            class="shadow border rounded-2 border-secondary-subtle mt-2 bg-white w-100 p-0 list-group"
+            class="shadow border rounded-2 mt-2 bg-app-glue-layer-one w-100 p-0 list-group"
             style="max-height: 350px; overflow-y: auto;"
         >
             <template x-for="file in files" :key="file.id">
@@ -177,7 +177,7 @@
                         </template>
 
                         <template x-if="!file.preview">
-                            <div class="bg-app-glue-secondary-soft d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px;">
+                            <div class="d-flex align-items-center justify-content-center rounded" style="width: 40px; height: 40px;">
                                 <i class="bi bi-file-earmark"></i>
                             </div>
                         </template>
@@ -185,12 +185,12 @@
 
                     <div class="flex-grow-1 ms-2">
                         <div class="text-truncate" x-text="truncate_name(file.name)"></div>
-                        <div class="glue-fs--2 text-muted" x-text="format_file_size(file.size)"></div>
+                        <div class="glue-fs--2 text-app-glue-muted" x-text="format_file_size(file.size)"></div>
                     </div>
 
                     <div class="d-flex align-items-center">
                         <i
-                            class="bi bi-trash text-danger cursor-pointer mx-2"
+                            class="bi bi-trash text-danger glue-cursor-pointer mx-2"
                             @click="remove_file(file.id)"
                         ></i>
                     </div>
@@ -204,7 +204,7 @@
                 @drop.prevent="$el.classList.remove('border-primary'); handle_files_change({target: {files: $event.dataTransfer.files}})"
                 @click="$refs.file_input.click()"
             >
-                <div class="text-muted">
+                <div class="text-app-glue-muted">
                     <i class="bi bi-cloud-arrow-up me-2"></i>
                     {% block drop_area_text %}{% endblock %}
                 </div>

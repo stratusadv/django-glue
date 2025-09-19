@@ -69,7 +69,7 @@
         <button
             class="form-control text-start d-flex justify-content-between"
             type="button"
-            style="outline: none; box-shadow: none; border: 1px solid #ced4da;"
+            style="outline: none; box-shadow: none;"
             @click="$event.target.blur(); focus_input(); show_dropdown = !show_dropdown;"
         >
             <span x-text="choice_verbose"></span>
@@ -81,7 +81,7 @@
 
         <div
             x-show="show_dropdown"
-            class="shadow border rounded-2 border-secondary-subtle mt-2 position-absolute z-3 bg-white w-100 p-0 list-group"
+            class="shadow border rounded-2 mt-2 position-absolute z-3 bg-app-glue-layer-one w-100 p-0 list-group"
             style="max-height: 300px; overflow-y: auto; z-index: 3;"
             @keydown.escape="show_dropdown = false"
         >

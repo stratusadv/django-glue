@@ -1,23 +1,47 @@
 :root {
-    --app-glue-black: #212529;
-    --app-glue-grey-soft: #e3e6ed;
-    --app-glue-layer-one: #f8f9fa;
+    --glue-primary: var(--app-primary, #0066cc);
+    --glue-primary-soft: var(--app-primary-soft, #f0f6ff);
+    --glue-primary-dark: var(--app-primary-dark, #0052a3);
 
-    --app-glue-bg-layer-one: var(--app-glue-layer-one);
-    --app-glue-bg-secondary-soft: var(--app-glue-grey-soft);
-    --app-glue-text-black: var(--app-glue-black);
+    --glue-secondary: var(--app-secondary, #828c99);
+    --glue-secondary-soft: var(--app-secondary-soft, #f8f9fa);
+    --glue-secondary-dark: var(--app-secondary-dark, #6b7280);
+
+    --glue-success: var(--app-success, #86b300);
+    --glue-warning: var(--app-warning, #f29718);
+    --glue-danger: var(--app-danger, #ff3333);
+
+    --glue-layer-one: var(--app-layer-one, #fafafa);
+    --glue-layer-two: var(--app-layer-two, #f3f4f5);
+    --glue-layer-three: var(--app-layer-three, #edeff1);
+
+    --glue-text-primary: var(--app-default-text-color, #5c6773);
+    --glue-text-muted: var(--app-secondary, #828c99);
+    --glue-border-color: var(--bs-border-color, #edeff1);
 }
 
-.bg-app-glue-layer-one, .bg-app-glue-layer-one-hover:hover {
-    background-color: var(--app-glue-bg-layer-one) !important;
+.bg-app-glue-layer-one {
+    background-color: var(--glue-layer-one) !important;
 }
 
-.bg-app-glue-secondary-soft, .bg-app-glue-secondary-soft-hover:hover {
-    background-color: var(--app-glue-bg-secondary-soft) !important;
+.bg-app-glue-layer-one-hover:hover {
+    background-color: var(--glue-layer-two) !important;
 }
 
-.text-app-glue-black, .text-app-glue-black-hover:hover {
-    color: var(--app-glue-text-black) !important;
+.text-app-glue-primary {
+    color: var(--glue-text-primary) !important;
+}
+
+.text-app-glue-muted {
+    color: var(--glue-text-muted) !important;
+}
+
+.glue-fs--2 {
+    font-size: 0.75rem !important;
+}
+
+.glue-fs--1 {
+    font-size: 0.80rem !important;
 }
 
 .glue-cursor-pointer {
@@ -29,17 +53,5 @@
 }
 
 .glue-user-select {
-    user-select: none !important;
-}
-
-.glue-fs--1 {
-    font-size: .80rem !important;
-}
-
-.glue-fs--2 {
-    font-size: .75rem !important;
-}
-
-.glue-fs-7 {
-    font-size: .85rem !important;
+    user-select: text !important;
 }

@@ -2,18 +2,18 @@
 
 {% block field_content %}
     <div
-        class="form-group"
+        class="glue-form-group"
         x-ref="glue_field"
         x-data="{
             selected_values: [],
-            init_value(value) {                
+            init_value(value) {
                 if (value === null || value === undefined) {
                     this.selectedValues = [];
                 } else if (Array.isArray(value)) {
                     this.selectedValues = [...value];
                 } else {
                     this.selectedValues = [value];
-                }                
+                }
             },
             update_value() {
                 this.value = this.selectedValues.length > 0 ? this.selectedValues : null;
@@ -30,18 +30,19 @@
         x-effect="init_value(value)"
     >
         <template x-for="choice in glue_field.choices" :key="choice[0]">
-            <div class="form-check">
+            <div class="d-flex align-items-center mb-2">
                 <input
                     type="checkbox"
-                    class="form-check-input"
+                    class="glue-form-check-input me-2"
                     :id="glue_field.id + '_' + choice[0]"
                     :name="glue_field.name"
                     :value="choice[0]"
                     :checked="selectedValues.includes(choice[0])"
                     @change="toggle_value(choice[0])"
+                    style="accent-color: var(--glue-primary);"
                 >
                 <label
-                    class="form-check-label"
+                    class="glue-form-check-label glue-text-primary glue-cursor-pointer"
                     :for="glue_field.id + '_' + choice[0]"
                     x-text="choice[1]"
                 ></label>

@@ -2,21 +2,22 @@
 
 {% block field_content %}
     <div
-        class="form-group"
+        class="glue-form-group"
         x-init="glue_field.hide_label()"
     >
         <div>
-            <div class="form-check">
+            <div class="d-flex align-items-center">
                 <input
                     type="checkbox"
-                    class="form-check-input"
+                    class="glue-form-check-input me-2"
                     :id="glue_field.id"
                     :name="glue_field.name"
                     x-model="value"
                     x-ref="glue_field"
+                    style="accent-color: var(--glue-primary);"
                 >
                 <label
-                    class="form-check-label"
+                    class="glue-form-check-label glue-text-primary glue-cursor-pointer"
                     :for="glue_field.id"
                     x-text="glue_field.label"
                 ></label>

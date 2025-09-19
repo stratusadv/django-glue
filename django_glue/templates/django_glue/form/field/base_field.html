@@ -81,7 +81,7 @@
                 :for="glue_field.id"
             >
                 <span x-text="glue_field.label"></span>
-                <span x-cloak x-show="glue_field.required">*</span>
+                <span x-cloak x-show="glue_field.required" class="text-danger">*</span>
 
                 <template x-if="glue_field.help_text && glue_field.help_text.trim() !== ''">
                     <span
