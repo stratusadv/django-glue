@@ -71,14 +71,14 @@
                 <span class="d-flex flex-wrap align-items-center">
                     <template x-for="choice in get_selected_choices" :key="choice[0]">
                         <div class="d-inline-block my-1">
-                            <span class="badge rounded-pill glue-fs--1 fw-normal border me-1">
+                            <span class="badge rounded-pill glue-fs--1 text-app-glue-primary fw-normal border me-1">
                                 <span x-text="choice[1]"></span>
                             </span>
                         </div>
                     </template>
 
                     <template x-if="get_selected_choices.length === 0">
-                        <span class="">----------</span>
+                        <span>----------</span>
                     </template>
                 </span>
 
