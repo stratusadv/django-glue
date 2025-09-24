@@ -1,28 +1,19 @@
 import json
-from typing import Any, Iterable
+from typing import Sequence
 
 from django.core.serializers.json import DjangoJSONEncoder
-from django.http import HttpRequest
 
 from django_glue.conf import settings
 from django_glue.glue.glue import BaseGlue
 from django_glue.session.data import SessionData
+from django_glue.session.session import BaseGlueSession
 
 
-class Session:
+class Session(BaseGlueSession):
     """
         Used to add models, query sets, and other objects to the session.
     """
-    def __init__(self, request: HttpRequest):
-        self.request = request
-        self.request.session.setdefault(settings.DJANGO_GLUE_SESSION_NAME, dict())
-        self.session = self.request.session[settings.DJANGO_GLUE_SESSION_NAME]
-
-    def __getitem__(self, key: str) -> Any:
-        return self.session[key]
-
-    def __setitem__(self, key: str, value: Any):
-        self.session[key] = value
+    _session_key: str = settings.DJANGO_GLUE_SESSION_NAME
 
     def add_glue(self, glue: BaseGlue) -> None:
         if glue.unique_name in self.session:
@@ -34,7 +25,7 @@ class Session:
     def add_session_data(self, unique_name: str, session_data: SessionData) -> None:
         self.session[unique_name] = session_data.to_dict()
 
-    def clean(self, removable_unique_names: Iterable[str]) -> None:
+    def clean(self, removable_unique_names: Sequence[str]) -> None:
         for unique_name in removable_unique_names:
             self.purge_unique_name(unique_name)
 
@@ -42,9 +33,6 @@ class Session:
 
     def purge_unique_name(self, unique_name: str) -> None:
         self.session.pop(unique_name)
-
-    def set_modified(self) -> None:
-        self.request.session.modified = True
 
     def to_json(self) -> str:
         return json.dumps(self.session, cls=DjangoJSONEncoder)
