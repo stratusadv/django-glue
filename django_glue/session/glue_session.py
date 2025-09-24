@@ -1,5 +1,5 @@
 import json
-from typing import Iterable
+from typing import Sequence
 
 from django.core.serializers.json import DjangoJSONEncoder
 
@@ -25,7 +25,7 @@ class Session(BaseGlueSession):
     def add_session_data(self, unique_name: str, session_data: SessionData) -> None:
         self.session[unique_name] = session_data.to_dict()
 
-    def clean(self, removable_unique_names: Iterable[str]) -> None:
+    def clean(self, removable_unique_names: Sequence[str]) -> None:
         for unique_name in removable_unique_names:
             self.purge_unique_name(unique_name)
 

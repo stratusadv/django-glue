@@ -1,5 +1,5 @@
 from time import time
-from typing import Iterable
+from typing import Sequence
 
 from django_glue.conf import settings
 from django_glue.session.session import BaseGlueSession
@@ -34,7 +34,7 @@ class KeepLiveSession(BaseGlueSession):
         self.session.setdefault(unique_name, self.get_next_expire_time())
         self.set_modified()
 
-    def update_unique_names(self, unique_names: Iterable[str]) -> None:
+    def update_unique_names(self, unique_names: Sequence[str]) -> None:
         for unique_name in unique_names:
             if unique_name in self.session:
                 self.session[unique_name] = self.get_next_expire_time()
