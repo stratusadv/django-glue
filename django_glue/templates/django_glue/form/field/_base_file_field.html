@@ -131,7 +131,7 @@
 
             <button
                 type="button"
-                class="btn border bg-app-glue-layer-one text-app-glue-muted ms-2"
+                class="btn border ms-2"
                 @click="take_photo()"
                 :class="disable_camera ? 'd-none' : ''"
             >
@@ -185,7 +185,7 @@
 
                     <div class="flex-grow-1 ms-2">
                         <div class="text-truncate" x-text="truncate_name(file.name)"></div>
-                        <div class="glue-fs--2 text-app-glue-muted" x-text="format_file_size(file.size)"></div>
+                        <div class="glue-fs--2" x-text="format_file_size(file.size)"></div>
                     </div>
 
                     <div class="d-flex align-items-center">
@@ -204,7 +204,7 @@
                 @drop.prevent="$el.classList.remove('border-primary'); handle_files_change({target: {files: $event.dataTransfer.files}})"
                 @click="$refs.file_input.click()"
             >
-                <div class="text-app-glue-muted">
+                <div>
                     <i class="bi bi-cloud-arrow-up me-2"></i>
                     {% block drop_area_text %}{% endblock %}
                 </div>

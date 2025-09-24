@@ -55,12 +55,3 @@
 .glue-user-select {
     user-select: text !important;
 }
-
-[data-theme="dark"] input {
-    color-scheme: dark;
-}
-
-input::-webkit-calendar-picker-indicator {
-    cursor: pointer;
-    opacity: 0.8;
-}

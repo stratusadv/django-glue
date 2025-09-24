@@ -98,7 +98,7 @@
             x-trap.inert="show_dropdown"
         >
             <div class="glue-fs--2 fw-bold ms-2 my-1">
-                Select Many <span class="text-app-glue-muted">"<span x-text="glue_field.label"></span>"</span>
+                Select Many <span>"<span x-text="glue_field.label"></span>"</span>
             </div>
 
             <div class="m-1">
@@ -127,7 +127,7 @@
 
             <template x-if="get_selected_choices.length > 0 && filtered_choices.length !== 0">
                 <div>
-                    <span class="text-app-glue-muted d-block glue-fs--2 ms-3">Choices</span>
+                    <span class="d-block glue-fs--2 ms-3">Choices</span>
                 </div>
             </template>
 
@@ -147,7 +147,7 @@
 
             <template x-if="filtered_choices.length === 0">
                 <div class="py-1">
-                    <span class="text-app-glue-muted d-block glue-fs--2 ms-3">No available choices</span>
+                    <span class="d-block glue-fs--2 ms-3">No available choices</span>
                 </div>
             </template>
         </div>
