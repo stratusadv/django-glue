@@ -1,14 +1,15 @@
 import base64
 import pickle
 from dataclasses import dataclass
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 from django.db.models import Model, QuerySet
 
 from django_glue.glue.model_object.glue import ModelObjectGlue
-from django_glue.glue.query_set.glue import QuerySetGlue
 from django_glue.session.data import SessionData
 
+if TYPE_CHECKING:
+    from django_glue.glue.query_set.glue import QuerySetGlue
 
 @dataclass
 class QuerySetGlueSessionData(SessionData):
@@ -19,6 +20,8 @@ class QuerySetGlueSessionData(SessionData):
     included_methods: Union[list, tuple]
 
     def to_queryset_glue(self):
+        from django_glue.glue.query_set.glue import QuerySetGlue
+
         query = pickle.loads(base64.b64decode(self.query_set_str))
         decoded_query_set = query.model.objects.all()
         decoded_query_set.query = query

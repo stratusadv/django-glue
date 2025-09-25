@@ -1,13 +1,17 @@
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
-from typing import Union, Type
+from typing import Union, Type, TYPE_CHECKING
 
 from django.apps import apps
 from django.db.models import Model
 
 from django_glue.glue.model_object.fields.glue import ModelFieldGlue
-from django_glue.glue.model_object.glue import ModelObjectGlue
 from django_glue.session.data import SessionData
+
+if TYPE_CHECKING:
+    from django_glue.glue.model_object.glue import ModelObjectGlue
 
 
 @dataclass
@@ -29,6 +33,7 @@ class ModelObjectGlueSessionData(SessionData):
             self.object_pk = str(self.object_pk)
 
     def to_model_object_glue(self) -> ModelObjectGlue:
+        from django_glue.glue.model_object.glue import ModelObjectGlue
         model: type | Type[Model] = apps.get_model(
             self.app_label,
             self.model_name

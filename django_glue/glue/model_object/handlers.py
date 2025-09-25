@@ -2,7 +2,6 @@ from django_glue.access.decorators import check_access
 from django_glue.glue.model_object.actions import ModelObjectGlueAction
 from django_glue.glue.model_object.response_data import MethodModelObjectGlueJsonData, ModelObjectGlueJsonData
 from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
-from django_glue.glue.model_object.tools import model_object_glue_from_session_data
 from django_glue.glue.post_data import UpdatePostData, MethodPostData
 from django_glue.handler.handlers import BaseRequestHandler
 from django_glue.response.data import JsonResponseData
@@ -15,7 +14,7 @@ class GetModelObjectGlueHandler(BaseRequestHandler):
 
     @check_access
     def process_response_data(self) -> JsonResponseData:
-        model_object_glue = model_object_glue_from_session_data(self.session_data)
+        model_object_glue = self.session_data.to_model_object_glue()
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',
@@ -30,7 +29,7 @@ class UpdateModelObjectGlueHandler(BaseRequestHandler):
 
     @check_access
     def process_response_data(self) -> JsonResponseData:
-        model_object_glue = model_object_glue_from_session_data(self.session_data)
+        model_object_glue = self.session_data.to_model_object_glue()
         model_object_glue.update(self.post_data.fields)
         return generate_json_200_response_data(
             message_title='Success',
@@ -45,7 +44,7 @@ class DeleteModelObjectGlueHandler(BaseRequestHandler):
 
     @check_access
     def process_response_data(self) -> JsonResponseData:
-        model_object_glue = model_object_glue_from_session_data(self.session_data)
+        model_object_glue = self.session_data.to_model_object_glue()
         model_object_glue.model_object.delete()
         return generate_json_200_response_data(
             message_title='Success',
@@ -60,7 +59,7 @@ class MethodModelObjectGlueHandler(BaseRequestHandler):
 
     @check_access
     def process_response_data(self) -> JsonResponseData:
-        model_object_glue = model_object_glue_from_session_data(self.session_data)
+        model_object_glue = self.session_data.to_model_object_glue()
         method_return = model_object_glue.call_method(self.post_data.method, self.post_data.kwargs)
         return generate_json_200_response_data(
             'THE METHOD ACTION',
