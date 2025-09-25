@@ -57,14 +57,14 @@ class FilterGlueQuerySetHandler(BaseRequestHandler):
     def process_response_data(self) -> JsonResponseData:
         query_set_glue = self.session_data.to_queryset_glue()
         filtered_query_set = query_set_glue.query_set.filter(**self.post_data.filter_params)
-        model_objects_glue = self.session_data.extract_model_object_glues_matching_queryset(
+        model_object_glues = self.session_data.extract_model_object_glues_matching_queryset(
             filtered_query_set
         )
 
         return generate_json_200_response_data(
             message_title='Success',
             message_body='Successfully retrieved model object!',
-            data=QuerySetGlueJsonData([ModelObjectGlueJsonData(glue_model_object.fields) for glue_model_object in model_objects_glue])
+            data=QuerySetGlueJsonData([ModelObjectGlueJsonData(glue_model_object.fields) for glue_model_object in model_object_glues])
         )
 
 
