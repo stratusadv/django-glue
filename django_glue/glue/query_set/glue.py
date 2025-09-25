@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import base64
 import pickle
 from typing import Union
@@ -8,7 +10,7 @@ from django_glue.access.access import Access
 from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
-from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
+from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
 from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
 
 
@@ -31,15 +33,16 @@ class QuerySetGlue(BaseGlue):
         self.excluded_fields = excluded_fields
         self.included_methods = included_methods
 
-    def encode_query_set(self) -> str:
-        return base64.b64encode(pickle.dumps(self.query_set.query)).decode()
-
     def to_session_data(self) -> QuerySetGlueSessionData:
         return QuerySetGlueSessionData(
+            query_set_str=base64.b64encode(pickle.dumps(self.query_set.query)).decode(),
+            fields=ModelFieldsGlue.from_model_object(
+                model=self.model,
+                included_fields=self.included_fields,
+                excluded_fields=self.excluded_fields
+            ).to_dict(),
             unique_name=self.unique_name,
-            query_set_str=self.encode_query_set(),
             glue_type=self.glue_type,
-            fields=model_object_fields_glue_from_model(self.model, self.included_fields, self.excluded_fields).to_dict(),
             access=self.access,
             included_fields=self.included_fields,
             excluded_fields=self.excluded_fields,
