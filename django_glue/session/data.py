@@ -1,21 +1,25 @@
-import json
 from abc import ABC
-from dataclasses import dataclass, asdict
+from typing import Union
 
-from django.core.serializers.json import DjangoJSONEncoder
+from pydantic import BaseModel
 
 from django_glue.access.access import Access
 from django_glue.glue.enums import GlueType
+from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
 
 
-@dataclass
-class SessionData(ABC):
+class BaseGlueSessionData(ABC, BaseModel):
     unique_name: str
     glue_type: GlueType
     access: Access
 
-    def to_dict(self) -> dict:
-        return asdict(self)
+class BaseModelGlueSessionData(BaseGlueSessionData):
+    app_label: str
+    model_class: str
 
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), cls=DjangoJSONEncoder)
+class BaseModelObjectGlueSessionData(BaseModelGlueSessionData):
+    data: dict
+
+class BaseModelMetaGlueSessionData(BaseModelGlueSessionData):
+    fields: ModelFieldsGlue
+    methods: Union[list, tuple]

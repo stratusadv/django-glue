@@ -1,11 +1,9 @@
-from dataclasses import dataclass
 from typing import Union
 
-from django_glue.session.data import SessionData
+from django_glue.session.data import BaseGlueSessionData
 
 
-@dataclass
-class QuerySetGlueSessionData(SessionData):
+class QuerySetGlueSessionData(BaseGlueSessionData):
     query_set_str: str
     fields: dict
     included_fields: Union[list, tuple]

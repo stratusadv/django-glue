@@ -9,9 +9,8 @@ from django_glue.response.data import JsonResponseData
 from django_glue.response.responses import generate_json_200_response_data
 
 
-class GetModelObjectGlueHandler(BaseRequestHandler):
+class GetModelObjectGlueHandler(BaseRequestHandler[ModelObjectGlueSessionData]):
     action = ModelObjectGlueAction.GET
-    _session_data_class = ModelObjectGlueSessionData
 
     @check_access
     def process_response_data(self) -> JsonResponseData:

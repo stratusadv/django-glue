@@ -1,6 +1,6 @@
 from django_glue.constants import GLUE_TYPE_KEY
 from django_glue.glue.enums import GlueType
-from django_glue.handler.body import RequestBody
+from django_glue.handler.data import RequestBody
 from django_glue.handler.maps import GLUE_TYPE_TO_HANDLER_MAP
 from django_glue.response.data import JsonResponseData
 from django_glue.session import Session

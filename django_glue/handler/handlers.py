@@ -1,45 +1,31 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+import json
+
+from django.http import HttpRequest, HttpResponse
 
 from django_glue.access.access import Access
-from django_glue.glue.post_data import BasePostData
-
-if TYPE_CHECKING:
-    from django_glue.session import Session
-    from django_glue.handler.body import RequestBody
-    from django_glue.response.data import JsonResponseData
-    from django_glue.access.actions import BaseAction
-    from django_glue.session.data import SessionData
+from django_glue.glue.enums import GlueType
+from django_glue.handler.data import GlueRequestData
+from django_glue.settings import DJANGO_GLUE_SESSION_NAME
 
 
-class BaseRequestHandler(ABC):
-    action: BaseAction | None = None
-    _session_data_class: SessionData | None = None
-    _post_data_class: BasePostData | None = None
-
-    def __init__(self, session: Session, request_body: RequestBody):
-        if self._session_data_class is None:
-            raise ValueError(f'Please initialize class variable _session_data_class on {self.__class__.__name__}')
-
-        if self.action is None:
-            raise ValueError(f'Please initialize class variable action on {self.__class__.__name__}')
-
-        self.unique_name = request_body.unique_name  # Unique name maps what the user is requesting
-
-        if self._post_data_class is None:
-            self.post_data = request_body.data
-        else:
-            self.post_data = self._post_data_class(**request_body.data['data'])  # The data we are expecting in post
-
-        self.session_data = self._session_data_class(**session[self.unique_name])  # data we stored in glue session.
+class GlueRequestProcessor:
+    def __init__(self, request: HttpRequest):
+        request_data = GlueRequestData(**json.loads(request.body.decode('utf-8')))
+        glue_type = GlueType(request_data.glue_type)
+        self.action = glue_type.action_type(request_data.action)
+        self.action_kwargs = self.action.action_kwargs_type(**request_data.action_kwargs)
+        self.glue_obj = glue_type.glue_class(
+            session_data=request.session[DJANGO_GLUE_SESSION_NAME][request_data.unique_name]
+        )
 
     def has_access(self) -> bool:
-        access = Access(self.session_data.access)
+        access = Access(self.glue_obj.access)
         return access.has_access(self.action.required_access())
 
-    @abstractmethod
-    def process_response_data(self) -> JsonResponseData:
-        # Todo: Do we want to handle an error message here or let the system crash?
-        pass
+    def process_response(self) -> HttpResponse:
+        return self.glue_obj.process_action_against_session(self.action, self.action_kwargs)
+
+
+

@@ -42,3 +42,6 @@ class ModelFieldsGlue:
 
     def to_dict(self) -> dict:
         return {field.name: field.to_dict() for field in self.fields}
+
+    def __getitem__(self, item):
+        return self.to_dict()[item]

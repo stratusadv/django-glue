@@ -18,7 +18,7 @@ ModelObjectGlue allows the user to access Django Model objects from the front en
 
 ## Shortcut Method
 
-::: django_glue.shortcuts.glue_model_object
+::: django_glue.shortcuts.****glue_mo****del_object
 
 
 ## How To Use

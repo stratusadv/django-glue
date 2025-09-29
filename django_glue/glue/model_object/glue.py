@@ -1,96 +1,118 @@
-from typing import Union, Any, Callable
+from enum import Enum
+from typing import Sequence
 
 from django.db.models import Model
+from pydantic import BaseModel, ValidationError
 
 from django_glue.access.access import Access
-from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
-from django_glue.glue.enums import GlueType
-from django_glue.glue.glue import BaseGlue
-from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
-from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
-from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
-from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
-from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
+from django_glue.constants import NONE_DUNDER_KEY, ALL_DUNDER_KEY
+from django_glue.glue.glue import BaseModelGlue, GlueActionResult
+from django_glue.glue.model_object.actions import ModelObjectGlueAction
+from django_glue.glue.post_data import BaseActionKwargs, UpdateActionKwargs, \
+    MethodActionKwargs
+from django_glue.session import Session
+from django_glue.settings import DJANGO_GLUE_SESSION_NAME
 
 
-class ModelObjectGlue(BaseGlue):
+class ModelGlueFieldFilterMode(str, Enum):
+    INCLUDE = 'include'
+    EXCLUDE = 'exclude'
+
+
+class ModelGlueFieldConfig(BaseModel):
+    field_names: Sequence[str] = (ALL_DUNDER_KEY,),
+    method_names: Sequence[str] = (NONE_DUNDER_KEY,),
+    field_filter_mode: ModelGlueFieldFilterMode = ModelGlueFieldFilterMode.INCLUDE
+
+
+class ModelObjectGlue(BaseModelGlue):
     def __init__(
             self,
             unique_name: str,
-            model_object: Model,
-            access: Union[Access, str] = Access.VIEW,
-            included_fields: tuple = (ALL_DUNDER_KEY,),
-            excluded_fields: tuple = (NONE_DUNDER_KEY,),
-            included_methods: tuple = (NONE_DUNDER_KEY,),
+            session: Session,
+            field_config: ModelGlueFieldConfig,
+            model_instance: Model,
+            access: Access | str = Access.VIEW,
     ):
-        super().__init__(unique_name, GlueType.MODEL_OBJECT, access)
-
-        self.model_object = model_object
-        self.model = model_object._meta.model
-
-        self.included_fields = included_fields
-        self.excluded_fields = excluded_fields
-        self.included_methods = included_methods
-
-        self.fields: ModelFieldsGlue = self.generate_field_data()
-
-    def call_method(self, method_name: str, method_kwargs: dict) -> Callable | None:
-        if method_name in self.included_methods and hasattr(self.model, method_name):
-            method = getattr(self.model_object, method_name)
-
-            if check_valid_method_kwargs(method, method_kwargs):
-                type_set_kwargs = type_set_method_kwargs(method, method_kwargs)
-
-                return method(**type_set_kwargs)
-
-        return None
-
-    def generate_field_data(self, include_values: bool = True) -> ModelFieldsGlue:
-
-        model_fields = model_object_fields_glue_from_model(
-            model=self.model,
-            included_fields=self.included_fields,
-            excluded_fields=self.excluded_fields
+        super().__init__(
+            unique_name=unique_name,
+            session=session,
+            field_config=field_config,
+            model_class=model_instance.__class__,
+            access=access
         )
 
-        if include_values:
-            for field in model_fields:
-                field.value = get_field_value_from_model_object(self.model_object, field)
+        self.model_instance = model_instance
 
-        return model_fields
+    def get(self) -> GlueActionResult:
+        self.session[DJANGO_GLUE_SESSION_NAME][self.unique_name].data = {
+            field_name: getattr(self.model_instance, field_name)
+            for field_name in self._included_field_names
+        }
+        self.session.set_modified()
 
-    def generate_method_data(self) -> list[str]:
-        methods_list = list()
+        return GlueActionResult(
+            success=True,
+            message='Successfully retrieved model glue data'
+        )
 
-        for method in self.included_methods:
-            if hasattr(self.model_object, method):
-                methods_list.append(method)
-            elif method == NONE_DUNDER_KEY:
-                pass
+    def update(self, kwargs: UpdateActionKwargs):
+        for key, value in kwargs.fields.items():
+            if key in self._included_field_names:
+                if hasattr(self.model_instance, key):
+                    setattr(self.model_instance, key, value)
             else:
-                raise KeyError(f'Method "{method}" is invalid for model type "{self.model.__class__.__name__}"')
+                raise
 
-        return methods_list
+        self.model_instance.save()
 
-    def to_session_data(self) -> ModelObjectGlueSessionData:
-        return ModelObjectGlueSessionData(
-            glue_type=self.glue_type,
-            access=self.access,
-            unique_name=self.unique_name,
-            fields=self.generate_field_data(include_values=False).to_dict(),
-            app_label=self.model_object._meta.app_label,
-            model_name=self.model_object._meta.model_name,
-            object_pk=self.model_object.pk,
-            included_fields=self.included_fields,
-            exclude_fields=self.excluded_fields,
-            methods=self.generate_method_data(),
+        self.get()
+
+        return GlueActionResult(
+            success=True,
+            message='Successfully updated model glue data'
         )
 
-    def update(self, updated_fields: dict[str, Any]):
-        for key, value in updated_fields.items():
-            if hasattr(self.model_object, key):
-                setattr(self.model_object, key, value)
+    def method(self, kwargs: MethodActionKwargs):
+        if kwargs.method in self.field_config.method_names and hasattr(self.model_class, kwargs.method):
+            _method = getattr(self.model_instance, kwargs.method)
 
-        self.model_object.save()
+            if self._check_valid_method_kwargs(_method, kwargs.method_kwargs):
+                type_set_kwargs = self._type_set_method_kwargs(_method, kwargs.method_kwargs)
 
-        self.fields = self.generate_field_data()
+                return _method(**type_set_kwargs)
+
+        return GlueActionResult(
+            success=False,
+            message=f'Method "{kwargs.method}" not available for model object'
+        )
+
+    def process_action(
+        self,
+        action: ModelObjectGlueAction,
+        action_kwargs: BaseActionKwargs | None = None,
+    ) -> GlueActionResult:
+        message = f'Successfully performed action {action.value} on model object'
+
+        if action_kwargs:
+            try:
+                action_kwargs = action.action_kwargs_type.model_validate(
+                    action_kwargs.model_dump()
+                )
+            except ValidationError as e:
+                return GlueActionResult(
+                    success=False,
+                    message=f'Invalid action kwargs for action "{action.value}"'
+                )
+
+        match action:
+            case ModelObjectGlueAction.GET:
+                self.get()
+            case ModelObjectGlueAction.UPDATE:
+                self.update(action_kwargs)
+            case ModelObjectGlueAction.DELETE:
+                self.model_instance.delete()
+            case ModelObjectGlueAction.METHOD:
+                self.method(action_kwargs)
+
+        return GlueActionResult(success=True, message=message)
