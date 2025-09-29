@@ -1,8 +1,8 @@
 from django_glue.access.access import Access
-from django_glue.access.actions import BaseAction
+from django_glue.access.actions import BaseGlueActionType
 
 
-class FunctionGlueAction(BaseAction):
+class FunctionGlueAction(BaseGlueActionType):
     CALL = 'call'
 
     def required_access(self) -> Access:

@@ -1,13 +1,13 @@
 from django_glue.glue.query_set import handlers
-from django_glue.glue.query_set.actions import QuerySetGlueAction
+from django_glue.glue.query_set.actions import QuerySetGlueActionType
 
 QUERY_SET_GLUE_HANDLER_MAP = {
-    QuerySetGlueAction.ALL: handlers.AllQuerySetGlueHandler,
-    QuerySetGlueAction.DELETE: handlers.DeleteGlueQuerySetHandler,
-    QuerySetGlueAction.FILTER: handlers.FilterGlueQuerySetHandler,
-    QuerySetGlueAction.GET: handlers.GetGlueQuerySetHandler,
-    QuerySetGlueAction.NULL_OBJECT: handlers.NullObjectGlueQuerySetHandler,
-    QuerySetGlueAction.METHOD: handlers.MethodGlueQuerySetHandler,
-    QuerySetGlueAction.UPDATE: handlers.UpdateGlueQuerySetHandler,
-    QuerySetGlueAction.TO_CHOICES: handlers.ToChoicesGlueQuerySetHandler,
+    QuerySetGlueActionType.ALL: handlers.AllQuerySetGlueHandler,
+    QuerySetGlueActionType.DELETE: handlers.DeleteGlueQuerySetHandler,
+    QuerySetGlueActionType.FILTER: handlers.FilterGlueQuerySetHandler,
+    QuerySetGlueActionType.GET: handlers.GetGlueQuerySetHandler,
+    QuerySetGlueActionType.NULL_OBJECT: handlers.NullObjectGlueQuerySetHandler,
+    QuerySetGlueActionType.METHOD: handlers.MethodGlueQuerySetHandler,
+    QuerySetGlueActionType.UPDATE: handlers.UpdateGlueQuerySetHandler,
+    QuerySetGlueActionType.TO_CHOICES: handlers.ToChoicesGlueQuerySetHandler,
 }

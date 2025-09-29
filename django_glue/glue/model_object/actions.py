@@ -1,8 +1,8 @@
 from django_glue.access.access import Access
-from django_glue.access.actions import BaseAction
+from django_glue.access.actions import BaseGlueActionType
 
 
-class ModelObjectGlueAction(BaseAction):
+class ModelObjectGlueAction(BaseGlueActionType):
     GET = 'get'
     UPDATE = 'update'
     DELETE = 'delete'

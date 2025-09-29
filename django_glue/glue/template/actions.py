@@ -1,8 +1,8 @@
 from django_glue.access.access import Access
-from django_glue.access.actions import BaseAction
+from django_glue.access.actions import BaseGlueActionType
 
 
-class TemplateGlueAction(BaseAction):
+class TemplateGlueAction(BaseGlueActionType):
     GET = 'get'
 
     def required_access(self) -> Access:

@@ -1,8 +1,8 @@
 from django_glue.access.access import Access
-from django_glue.access.actions import BaseAction
+from django_glue.access.actions import BaseGlueActionType
 
 
-class QuerySetGlueAction(BaseAction):
+class QuerySetGlueActionType(BaseGlueActionType):
     ALL = 'all'
     FILTER = 'filter'
     GET = 'get'
