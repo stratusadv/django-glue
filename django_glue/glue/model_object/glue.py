@@ -6,7 +6,9 @@ from pydantic import BaseModel, ValidationError
 
 from django_glue.access.access import Access
 from django_glue.constants import NONE_DUNDER_KEY, ALL_DUNDER_KEY
-from django_glue.glue.glue import BaseModelGlue, GlueActionResult
+from django_glue.glue.enums import GlueType
+from django_glue.glue.glue import BaseModelGlue, GlueActionResult, \
+    ModelGlueInstanceFieldConfig
 from django_glue.glue.model_object.actions import ModelObjectGlueAction
 from django_glue.glue.post_data import BaseActionKwargs, UpdateActionKwargs, \
     MethodActionKwargs
@@ -14,35 +16,33 @@ from django_glue.session import Session
 from django_glue.settings import DJANGO_GLUE_SESSION_NAME
 
 
-class ModelGlueFieldFilterMode(str, Enum):
-    INCLUDE = 'include'
-    EXCLUDE = 'exclude'
-
-
-class ModelGlueFieldConfig(BaseModel):
-    field_names: Sequence[str] = (ALL_DUNDER_KEY,),
-    method_names: Sequence[str] = (NONE_DUNDER_KEY,),
-    field_filter_mode: ModelGlueFieldFilterMode = ModelGlueFieldFilterMode.INCLUDE
-
-
 class ModelObjectGlue(BaseModelGlue):
+    """
+    A glue wrapper for a single instance of a django model. Exposes a list of actions that can be performed on the
+    underlying model object via the glue API.
+    """
     def __init__(
             self,
             unique_name: str,
             session: Session,
-            field_config: ModelGlueFieldConfig,
             model_instance: Model,
             access: Access | str = Access.VIEW,
+            field_config: ModelGlueInstanceFieldConfig | None = None,
+            data: dict | None = None,
     ):
         super().__init__(
             unique_name=unique_name,
             session=session,
+            access=access,
             field_config=field_config,
             model_class=model_instance.__class__,
-            access=access
+            data=data
         )
 
         self.model_instance = model_instance
+
+    def _glue_type(self) -> GlueType:
+        return GlueType.MODEL_OBJECT
 
     def get(self) -> GlueActionResult:
         self.session[DJANGO_GLUE_SESSION_NAME][self.unique_name].data = {

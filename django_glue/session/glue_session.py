@@ -15,16 +15,6 @@ class Session(BaseGlueSession):
     """
     _session_key: str = settings.DJANGO_GLUE_SESSION_NAME
 
-    def add_glue(self, glue: BaseGlue) -> None:
-        if glue.session_data.unique_name in self.session:
-            self.purge_unique_name(glue.session_data.unique_name)
-
-        self.session[glue.session_data.unique_name] = session_data.to_dict()
-        self.set_modified()
-
-    def add_session_data(self, session_data: BaseGlueSessionData) -> None:
-
-
     def clean(self, removable_unique_names: Sequence[str]) -> None:
         for unique_name in removable_unique_names:
             self.purge_unique_name(unique_name)

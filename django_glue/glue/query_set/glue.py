@@ -8,7 +8,7 @@ from django_glue.access.access import Access
 from django_glue.glue.glue import BaseModelGlue, GlueActionResult
 from django_glue.glue.model_object.fields.tools import \
     model_object_fields_glue_from_model
-from django_glue.glue.model_object.glue import ModelGlueFieldConfig
+from django_glue.glue.model_object.glue import ModelGlueInstanceFieldConfig
 from django_glue.glue.post_data import BaseActionKwargs
 from django_glue.glue.query_set.actions import QuerySetGlueAction
 from django_glue.glue.query_set.session_data import QuerySetGlueSessionData
@@ -20,7 +20,7 @@ class QuerySetGlue(BaseModelGlue):
             self,
             unique_name: str,
             session: Session,
-            field_config: ModelGlueFieldConfig,
+            field_config: ModelGlueInstanceFieldConfig,
             query_set: QuerySet,
             access: Union[Access, str] = Access.VIEW,
     ):

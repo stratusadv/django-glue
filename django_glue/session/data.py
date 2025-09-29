@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from django_glue.access.access import Access
 from django_glue.glue.enums import GlueType
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
+from django_glue.glue.model_object.glue import ModelGlueInstanceFieldConfig
 
 
 class BaseGlueSessionData(ABC, BaseModel):
@@ -15,10 +16,9 @@ class BaseGlueSessionData(ABC, BaseModel):
 
 class BaseModelGlueSessionData(BaseGlueSessionData):
     app_label: str
-    model_class: str
-
-class BaseModelObjectGlueSessionData(BaseModelGlueSessionData):
-    data: dict
+    model_name: str
+    data: dict = {}
+    field_config: ModelGlueInstanceFieldConfig = ModelGlueInstanceFieldConfig()
 
 class BaseModelMetaGlueSessionData(BaseModelGlueSessionData):
     fields: ModelFieldsGlue
