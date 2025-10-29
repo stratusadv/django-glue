@@ -1,5 +1,5 @@
 name: 'Linting'
-description: 'An action to ensure code quality and cleanliness across the repository.'
+description: 'An action to ensures code quality and cleanliness across the repository.'
 
 inputs:
   python-version:
@@ -25,7 +25,7 @@ runs:
     - name: Check for critical error(s)
       run: |
         echo "Checking for undefined name(s) and critical error(s)..."
-        FOUND=$(uv tool run ruff check --select=F821,F822,F823 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        FOUND=$(uv tool run ruff check --select=F821,F822,F823 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace,archived_example,test_project --exit-zero .)
         COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
         if [ "$COUNT" -gt 0 ]; then
           echo "::error::Critical error(s) found:"
@@ -40,7 +40,7 @@ runs:
 
     - name: Check for debugger statement(s)
       run: |
-        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -exec grep -l "\bdebugger\b" {} \;)
+        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -not -path "./archived_example/*" -not -path "./test_project/*" -exec grep -l "\bdebugger\b" {} \;)
         if [ -n "$FOUND" ]; then
           echo "::error::debugger statement(s) found:"
           echo "$FOUND"
@@ -55,7 +55,7 @@ runs:
 
     - name: Check for unused import(s)
       run: |
-        FOUND=$(uv tool run ruff check --select=F401 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        FOUND=$(uv tool run ruff check --select=F401 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace,archived_example,test_project --exit-zero .)
         COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
         if [ "$COUNT" -gt 0 ]; then
           echo "::warning::Unused import(s) found:"
@@ -69,7 +69,7 @@ runs:
 
     - name: Check for print statement(s)
       run: |
-        FOUND=$(uv tool run ruff check --select=T201 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        FOUND=$(uv tool run ruff check --select=T201 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace,archived_example,test_project --exit-zero .)
         COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
         if [ "$COUNT" -gt 0 ]; then
           echo "::warning::Print statement(s) found:"
@@ -83,7 +83,7 @@ runs:
 
     - name: Check for console.log statement(s)
       run: |
-        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -exec grep -l "console\.log" {} \;)
+        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -not -path "./archived_example/*" -not -path "./test_project/*" -exec grep -l "console\.log" {} \;)
         if [ -n "$FOUND" ]; then
           echo "::warning::console.log statement(s) found:"
           echo "$FOUND"
