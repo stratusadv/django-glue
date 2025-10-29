@@ -1,0 +1,112 @@
+name: 'Linting'
+description: 'An action to ensure code quality and cleanliness across the repository.'
+
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        version: "latest"
+
+    - name: Setup Python
+      run: uv python install ${{ inputs.python-version }}
+      shell: bash
+
+    - name: Install ruff
+      run: uv tool install ruff
+      shell: bash
+
+    - name: Check for critical error(s)
+      run: |
+        echo "Checking for undefined name(s) and critical error(s)..."
+        FOUND=$(uv tool run ruff check --select=F821,F822,F823 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
+        if [ "$COUNT" -gt 0 ]; then
+          echo "::error::Critical error(s) found:"
+          echo "$FOUND"
+          echo "IS_CRITICAL_ERROR=true" >> $GITHUB_ENV
+          echo "CRITICAL_ERROR_COUNT=$COUNT" >> $GITHUB_ENV
+        else
+          echo "No critical error(s) found."
+          echo "CRITICAL_ERROR_COUNT=0" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Check for debugger statement(s)
+      run: |
+        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -exec grep -l "\bdebugger\b" {} \;)
+        if [ -n "$FOUND" ]; then
+          echo "::error::debugger statement(s) found:"
+          echo "$FOUND"
+          COUNT=$(echo "$FOUND" | wc -l)
+          echo "IS_CRITICAL_ERROR=true" >> $GITHUB_ENV
+          echo "DEBUGGER_COUNT=$COUNT" >> $GITHUB_ENV
+        else
+          echo "No debugger statement(s) found."
+          echo "DEBUGGER_COUNT=0" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Check for unused import(s)
+      run: |
+        FOUND=$(uv tool run ruff check --select=F401 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
+        if [ "$COUNT" -gt 0 ]; then
+          echo "::warning::Unused import(s) found:"
+          echo "$FOUND"
+          echo "UNUSED_IMPORT_COUNT=$COUNT" >> $GITHUB_ENV
+        else
+          echo "No unused import(s) found."
+          echo "UNUSED_IMPORT_COUNT=0" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Check for print statement(s)
+      run: |
+        FOUND=$(uv tool run ruff check --select=T201 --exclude=.git,.venv,__pycache__,build,dist,node_modules,venv,workspace --exit-zero .)
+        COUNT=$(echo "$FOUND" | grep -oP "Found \K\d+(?= error)" || echo "0")
+        if [ "$COUNT" -gt 0 ]; then
+          echo "::warning::Print statement(s) found:"
+          echo "$FOUND"
+          echo "PRINT_STATEMENT_COUNT=$COUNT" >> $GITHUB_ENV
+        else
+          echo "No print statement(s) found."
+          echo "PRINT_STATEMENT_COUNT=0" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Check for console.log statement(s)
+      run: |
+        FOUND=$(find . -type f \( -name "*.html" -o -name "*.js" \) -exec grep -l "console\.log" {} \;)
+        if [ -n "$FOUND" ]; then
+          echo "::warning::console.log statement(s) found:"
+          echo "$FOUND"
+          COUNT=$(echo "$FOUND" | wc -l)
+          echo "CONSOLE_LOG_COUNT=$COUNT" >> $GITHUB_ENV
+        else
+          echo "No console.log statement(s) found."
+          echo "CONSOLE_LOG_COUNT=0" >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    - name: Linting report
+      if: always()
+      run: |
+        echo "[Linting Report]"
+        echo "Critical error(s): ${{ env.CRITICAL_ERROR_COUNT }}"
+        echo "Debugger statement(s): ${{ env.DEBUGGER_COUNT }}"
+        echo "Unused import(s): ${{ env.UNUSED_IMPORT_COUNT }}"
+        echo "print statement(s): ${{ env.PRINT_STATEMENT_COUNT }}"
+        echo "console.log statement(s): ${{ env.CONSOLE_LOG_COUNT }}"
+
+        if [ "${{ env.IS_CRITICAL_ERROR }}" == "true" ]; then
+          echo "::error::Pipeline failed due to critical error(s) found above"
+          exit 1
+        fi
+      shell: bash
