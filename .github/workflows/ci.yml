@@ -31,6 +31,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           settings-module: system.settings
           sync-extras: development documentation
+          manage-py-path: test_project/manage.py
 
   security:
     name: Security Scan
