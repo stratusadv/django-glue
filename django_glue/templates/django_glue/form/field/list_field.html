@@ -65,7 +65,7 @@
             <div x-ref="component">
                 {% block component_field %}
                     <div class="col-10">
-                        {% include "django_glue/form/glue_field/search_and_select_field.html" with glue_field=glue_field %}
+                        {% include "django_glue/form/field/search_and_select_field.html" with glue_field=glue_field %}
                     </div>
                 {% endblock %}
             </div>
@@ -75,7 +75,7 @@
                     <button
                         type="button"
                         @click.prevent="add_item()"
-                        class="btn btn-primary w-100 h-100"
+                        class="glue-btn glue-btn-primary w-100 h-100"
                     >
                         Add
                     </button>
@@ -84,13 +84,13 @@
         </div>
 
         <template x-if="selected.length === 0">
-            <div class="mt-4 text-muted">
+            <div class="mt-4">
                 No item(s) selected.
             </div>
         </template>
 
         <template x-for="(item, index) in selected" :key="item.id">
-            <div class="row align-items-center item-hover item-container border-bottom border-300 py-2">
+            <div class="row align-items-center glue-bg-layer-two-hover glue-list-item-container glue-border-bottom glue-border py-2">
                 {% if row %}
                     {% include row %}
                 {% else %}

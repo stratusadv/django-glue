@@ -1,5 +1,12 @@
 # Changelog for Django Glue
 
+## v0.8.11
+### Breaking
+- Removed hard-coded colours, double-check CSS.
+
+### Changes
+- Removed hard-coded colours to allow for theme support.
+
 ## v0.8.10
 ### Fixes
 - Updated x-model on number field to prevent issues with decimal places in chromium based browsers.

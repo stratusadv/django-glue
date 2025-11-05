@@ -1,0 +1,44 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: stratusadv/github-actions/linting@v1
+        with:
+          python-version: '3.11'
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: linting
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v5
+      - uses: stratusadv/github-actions/tests@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+          settings-module: system.settings
+          sync-extras: development documentation
+          manage-py-path: test_project/manage.py
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: stratusadv/github-actions/security@v1
+        with:
+          python-version: '3.11'
+          sync-extras: ''
