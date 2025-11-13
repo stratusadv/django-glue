@@ -1,0 +1,91 @@
+name: Update uv.lock File
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - '.python-version'
+      - '*requirements.txt'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [master, develop]
+    paths:
+      - '.python-version'
+      - '*requirements.txt'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-lockfile:
+    name: Update uv lock file
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+
+    - name: Setup Python
+      uses: actions/setup-python@v6
+      with:
+        python-version-file: '.python-version'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        version: "latest"
+
+    - name: Generate uv lock file
+      run: |
+        # Remove existing lock file to ensure clean generation
+        rm -f uv.lock
+
+        # Generate new lock file
+        uv lock
+
+        # Check for changes and set output
+        if git diff --quiet uv.lock; then
+          echo "lock_updated=false" >> $GITHUB_OUTPUT
+          echo "No changes detected in uv lock file"
+        else
+          echo "lock_updated=true" >> $GITHUB_OUTPUT
+          echo "uv lock file has been updated"
+        fi
+      id: uv_lock
+
+    - name: Commit uv lock changes
+      if: steps.uv_lock.outputs.lock_updated == 'true' && github.event_name == 'pull_request'
+      uses: stefanzweifel/git-auto-commit-action@v6
+      with:
+        commit_message: 'chore: update uv.lock'
+        file_pattern: 'uv.lock'
+        commit_user_name: 'github-actions[bot]'
+        commit_user_email: 'github-actions[bot]@users.noreply.github.com'
+        commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
+
+    - name: Add PR comment
+      if: steps.uv_lock.outputs.lock_updated == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v8
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: 'uv lock file has been automatically updated.'
+          });
+
+    - name: Job summary
+      run: |
+        if [ "${{ steps.uv_lock.outputs.lock_updated }}" == "true" ]; then
+          echo "uv lock file updated and committed successfully"
+          echo "::notice title=uv Lock File::Lock file has been updated and committed"
+        else
+          echo "uv lock file is up to date"
+          echo "::notice title=uv Lock File::No changes required"
+        fi

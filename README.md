@@ -1,3 +1,9 @@
+<p align="center">
+    <a href="https://django-glue.stratusadv.com">
+        <img alt="Django Glue Logo" src="https://django-glue.stratusadv.com/static/img/django_glue_logo_256.png"/>
+    </a>
+</p>
+
 # Django Glue
 
 ![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
@@ -5,27 +11,31 @@
 ![PyPI Version](https://img.shields.io/pypi/v/django-glue)
 ![Downloads](https://img.shields.io/pypi/dm/django-glue)
 
-We built Django Glue to help solve the problem of fluid interactions between the front and back ends of a Django application.
-Our end goal is to bring as much front end power to the Django framework as possible while remaining pythonic.
+### Seamlessly Connect Django to your Frontend.
 
-This project is in prototype phase please look at the tests directory of this code base for example and instructions.
+## Features
 
-## Why?
-We are active web platform developers that want to provide our clients with the best user experience without having to learn a bunch of different technology stacks.
-Django glue allows us to do fancy javascript like page interactions and updates while remaining in the comfort of our django/python world.
+- **Powerful, Declarative API** 
+  - Powerful API that makes it dead simple to interact with Django server state from
+    JavaScript in a way that feels like you never left your Django view.
+- **Unintrusive Integration** 
+  - Stays out of your way and works with your existing application with no need to rewrite
+    your Django views or frontend code.
+- **Frontend Framework Agnostic** 
+  - Designed to work with any style of frontend development with no additional JavaScript
+    dependencies or bloat.
+- **Naturally Pythonic** 
+  - Written by Python developers, for Python developers. It adheres to pythonic syntax and philosophies
+    everywhere, even in JavaScript.
+- **Granular Access Control** 
+  - Designed with security at top of mind, with the ability to precisely control backend data
+    access.
+- **Extensible & Easy** 
+  - Can be extended to support any custom object and action needed for your use case at any point in your
+    project.
 
-Education is also a big part of what we do and our focus is on teaching our people python, so they can focus on data science and automation and make solid interfaces! 
-
-## Inspiration
-We are inspired by how quickly django's model structure, ORM and forms (crispy forms) allow you to create functional web applications.
-Can we build on top of 25+ years of development to create a front end tool that uses the power of django.
 
 ## Documentation
 
-Our documentation is available on our [website](https://django-glue.stratusadv.com), including guides, example, api reference and more.
+Check out the [Django Glue Website](https://django-glue.stratusadv.com) for documentation including tutorials and more.
 
-<p align="center">
-    <a href="https://django-glue.stratusadv.com">
-        <img alt="Django Glue Logo" src="https://django-glue.stratusadv.com/static/img/django_glue_logo_256.png"/>
-    </a>
-</p>
