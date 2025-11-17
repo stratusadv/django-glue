@@ -59,17 +59,6 @@ def child_create_form_view(request):
     )
 ```
 
-```python
-# Adding sorting to choices can be done by sorting the list of tuples
-context={
-    'parent_choices': json.dumps(
-        sorted(
-            [(str(parent.id), parent.get_full_name()) for parent in Parent.objects.all()]
-        )
-    )
-}
-```
-
 4. On the front end using AlpineJS, initialize a new glue model object with the same unique name you specified in step 3. Add the glue char field parent in the init() method. Set the choices for the glue char field parent.
 ```html
 <form
@@ -151,7 +140,7 @@ def child_update_form_view(request, pk, parent_pk):
 
 <form
     method="POST"
-    action="&#123;&#37; url 'parent:child:form:update' parent_pk=person.pk &#37;&#125;"
+    action="{% url 'parent:child:form:update' parent_pk=person.pk %}"
     x-data="{
         async init() {
             await this.child.get()
@@ -162,9 +151,9 @@ def child_update_form_view(request, pk, parent_pk):
         parent: new GlueCharField('parent')
     }"
 >
-    &#123;&#37; csrf_token &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_char_field='parent' &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_model_field='child.full_name' &#37;&#125;
-    &#123;&#37; include 'core/form/button/form_submit_button.html' with button_text='Save' &#37;&#125;
+    {% csrf_token %}
+    {% include 'django_glue/form/field/char_field.html' with glue_char_field='parent' %}
+    {% include 'django_glue/form/field/char_field.html' with glue_model_field='child.full_name' %}
+    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```

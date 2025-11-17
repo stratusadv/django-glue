@@ -74,11 +74,11 @@ def person_update_form_view(request, pk):
 
 ### Full Example
 
-### Implementing Glue form to update data
+### Implementing a Django Glue form to update data.
 
 Goal: Display and edit person’s record on the form
 
-Approach: Initialize `person` using `ModelObjectGlue` and call `get()` inside `init()` to get all the data from backend.
+Approach: Initialize `person` using `ModelObjectGlue` and call `get()` inside `init()` to get all the data from the backend.
 
 ##### Back End:
 
@@ -112,7 +112,7 @@ def person_update_form_view(request, pk):
 
 <form
     method="POST"
-    action="&#123;&#37; url 'person:form:update_form' pk=person.pk &#37;&#125;"
+    action="{% url 'person:form:update_form' pk=person.pk %}"
     x-data="{
         async init() {
             await this.person.get()
@@ -120,9 +120,9 @@ def person_update_form_view(request, pk):
         person: new ModelObjectGlue('person')
     }"
 >
-    &#123;&#37; csrf_token &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' &#37;&#125;
-    &#123;&#37; include 'core/form/button/form_submit_button.html' with button_text='Save' &#37;&#125;
+    {% csrf_token %}
+    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
+    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 
@@ -139,7 +139,7 @@ rendering.
 
 <form
     method="POST"
-    action="&#123;&#37; url 'person:form:update' pk=person.pk|default:0 &#37;&#125;"
+    action="{% url 'person:form:update' pk=person.pk|default:0 %}"
     x-data="{
         async init() {
             this.person.glue_fields.first_name.label = 'Person's First Name'
@@ -147,9 +147,9 @@ rendering.
         person: new ModelObjectGlue('person')
     }"
 >
-    &#123;&#37; csrf_token &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' &#37;&#125;
-    &#123;&#37; include 'core/form/button/form_submit_button.html' with button_text='Save' &#37;&#125;
+    {% csrf_token %}
+    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
+    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 
@@ -165,7 +165,7 @@ Approach: Add glue field required = false
 
 <form
     method="POST"
-    action="&#123;&#37; url 'person:form:update' pk=person.pk|default:0 &#37;&#125;"
+    action="{% url 'person:form:update' pk=person.pk|default:0 %}"
     x-data="{
         async init() {
             this.person.glue_fields.middle_name.required = false
@@ -173,9 +173,9 @@ Approach: Add glue field required = false
         person: new ModelObjectGlue('person')
     }"
 >
-    &#123;&#37; csrf_token &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_model_field='person.middle_name' &#37;&#125;
-    &#123;&#37; include 'core/form/button/form_submit_button.html' with button_text='Save' &#37;&#125;
+    {% csrf_token %}
+    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.middle_name' %}
+    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 

@@ -120,7 +120,7 @@ def person_update_form_view(request, pk):
 
 ### Query Set Choices
 
-Glue query set also has a `choices` method that can be used to retrieve the data from the Django Model Objects in the
+Glue query set also has a `to_choices` method that can be used to retrieve the data from the Django Model Objects in the
 query set.
 
 #### Back End

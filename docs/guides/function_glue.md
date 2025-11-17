@@ -73,8 +73,8 @@ Goal: Get all courses based on the selected program.
 Approach: In `init()`, initialize `student` with `ModelObjectGlue` and call `get()` to load student data from the backend. Then initialize `programs` with `QuerySetGlue` and call `all()` to retrieve all program records. Finally, use `FunctionGlue` to call `get_course_by_program` and fetch related course data based on the selected program.
 
 ##### Back End:
-`app/school/student/urls.py`
-```python
+
+```python title="app/school/student/urls.py"
 from django.urls import path
 
 from app.school.student.view import form_views
@@ -86,8 +86,8 @@ urlpatterns = [
     path('<int:course_pk>/<int:pk>/update/', form_views.student_update_course_form_view, name='update'),
 ]
 ```
-`app/school/student/views.py`
-```python
+
+```python title="app/school/student/views.py"
 import django_glue as dg
 
 from django_spire.core.shortcuts import get_object_or_null_obj
@@ -122,20 +122,20 @@ def student_update_course_form_view(request, pk, course_pk):
         }
     )
 ```
-`app.school.program.helper.py`
-```python
+
+```python title="app.school.program.helper.py"
 from app.school.course.models import Course
 
 def get_course_by_program(program_id):
     return [[course.id, course.name] for course in Course.objects.filter(program_id=program_id)]
 ```
 ##### Front End:
-`school/student/form/update_form.html`
-```html
+
+```html title="school/student/form/update_form.html"
 
 <form
     method="POST"
-    action="&#123;&#37; url 'school:student:form:update' pk=student.pk course_pk=course.pk &#37;&#125;"
+    action="{% url 'school:student:form:update' pk=student.pk course_pk=course.pk %}"
     x-data="{
         async init() {
             await this.student.get()
@@ -171,10 +171,10 @@ def get_course_by_program(program_id):
         get_course_by_program: new FunctionGlue('get_course_by_program'),
     }"
 >
-    &#123;&#37; csrf_token &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/char_field.html' with glue_model_field='student.name' &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/search_and_select_field.html' with glue_field='program_field' &#37;&#125;
-    &#123;&#37; include 'django_glue/form/field/search_and_select_field.html' with glue_field='course_field' &#37;&#125;
-    &#123;&#37; include 'core/form/button/form_submit_button.html' with button_text='Save' &#37;&#125;
+    {% csrf_token %}
+    {% include 'django_glue/form/field/char_field.html' with glue_model_field='student.name' %}
+    {% include 'django_glue/form/field/search_and_select_field.html' with glue_field='program_field' %}
+    {% include 'django_glue/form/field/search_and_select_field.html' with glue_field='course_field' %}
+    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
