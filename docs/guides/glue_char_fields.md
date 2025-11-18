@@ -151,9 +151,9 @@ def child_update_form_view(request, pk, parent_pk):
         parent: new GlueCharField('parent')
     }"
 >
-    {% csrf_token %}
-    {% include 'django_glue/form/field/char_field.html' with glue_char_field='parent' %}
-    {% include 'django_glue/form/field/char_field.html' with glue_model_field='child.full_name' %}
-    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
+    { % csrf_token %}
+    { % include 'django_glue/form/field/char_field.html' with glue_char_field='parent' %}
+    { % include 'django_glue/form/field/char_field.html' with glue_model_field='child.full_name' %}
+    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```

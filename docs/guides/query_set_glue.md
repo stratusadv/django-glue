@@ -174,7 +174,7 @@ def update_form_view(request, pk):
         brand_query_set: new QuerySetGlue('brands')
     }"
 >
-    {% include 'django_glue/form/field/select_field.html' with glue_model_field='car.brand' %}
+    { % include 'django_glue/form/field/select_field.html' with glue_model_field='car.brand' %}
 </div>
 ```
 

@@ -120,9 +120,9 @@ def person_update_form_view(request, pk):
         person: new ModelObjectGlue('person')
     }"
 >
-    {% csrf_token %}
-    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
-    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
+    { % csrf_token %}
+    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
+    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 
@@ -147,9 +147,9 @@ rendering.
         person: new ModelObjectGlue('person')
     }"
 >
-    {% csrf_token %}
-    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
-    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
+    { % csrf_token %}
+    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
+    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 
@@ -173,9 +173,9 @@ Approach: Add glue field required = false
         person: new ModelObjectGlue('person')
     }"
 >
-    {% csrf_token %}
-    {% include 'django_glue/form/field/char_field.html' with glue_model_field='person.middle_name' %}
-    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
+    { % csrf_token %}
+    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.middle_name' %}
+    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
 

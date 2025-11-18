@@ -171,10 +171,10 @@ def get_course_by_program(program_id):
         get_course_by_program: new FunctionGlue('get_course_by_program'),
     }"
 >
-    {% csrf_token %}
-    {% include 'django_glue/form/field/char_field.html' with glue_model_field='student.name' %}
-    {% include 'django_glue/form/field/search_and_select_field.html' with glue_field='program_field' %}
-    {% include 'django_glue/form/field/search_and_select_field.html' with glue_field='course_field' %}
-    {% include 'core/form/button/form_submit_button.html' with button_text='Save' %}
+    { % csrf_token %}
+    { % include 'django_glue/form/field/char_field.html' with glue_model_field='student.name' %}
+    { % include 'django_glue/form/field/search_and_select_field.html' with glue_field='program_field' %}
+    { % include 'django_glue/form/field/search_and_select_field.html' with glue_field='course_field' %}
+    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
 </form>
 ```
