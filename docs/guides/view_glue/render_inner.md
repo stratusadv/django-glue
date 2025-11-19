@@ -1,11 +1,7 @@
 # ViewGlue Guide
 
-!!! warning
-
-    This guide is currently in progress, There may be future updates or changes to this guide after review. 
-
 ## Purpose
-ViewGlue allows the user to dynamically render a template given a endpoint.
+ViewGlue allows the user to dynamically render a template given an endpoint.
 
 ### When to use
 When we want to replace/change the information inside an element.
@@ -37,10 +33,10 @@ def person_dashboard_content_view(request):
 ```html
 <div 
     x-data="{
-    async reload_page() {
-        glue_view: new GlueView('url')
-        await glue_view.render_inner(this.$refs.person_dashboard_content)
-    }
+        async reload_page() {
+            glue_view: new GlueView('url')
+            await glue_view.render_inner(this.$refs.person_dashboard_content)
+        }
     }"
     x-ref="person_dashboard_content"
 >
