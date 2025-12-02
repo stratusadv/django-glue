@@ -114,10 +114,10 @@ def person_update_form_view(request, pk):
     method="POST"
     action="{% url 'person:form:update_form' pk=person.pk %}"
     x-data="{
+        person: new ModelObjectGlue('person'),
         async init() {
             await this.person.get()
         },
-        person: new ModelObjectGlue('person')
     }"
 >
     { % csrf_token %}
@@ -141,10 +141,10 @@ rendering.
     method="POST"
     action="{% url 'person:form:update' pk=person.pk|default:0 %}"
     x-data="{
+        person: new ModelObjectGlue('person'),
         async init() {
             this.person.glue_fields.first_name.label = 'Person's First Name'
         },
-        person: new ModelObjectGlue('person')
     }"
 >
     { % csrf_token %}
@@ -167,10 +167,10 @@ Approach: Add glue field required = false
     method="POST"
     action="{% url 'person:form:update' pk=person.pk|default:0 %}"
     x-data="{
+        person: new ModelObjectGlue('person'),
         async init() {
             this.person.glue_fields.middle_name.required = false
         },
-        person: new ModelObjectGlue('person')
     }"
 >
     { % csrf_token %}

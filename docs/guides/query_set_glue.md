@@ -162,6 +162,8 @@ def update_form_view(request, pk):
 ```html
 <div
     x-data="{
+        car: new ModelObjectGlue('car'),
+        brand_query_set: new QuerySetGlue('brands'),
         async init() {
             await this.car.get()
             let brand_choices = await this.brand_query_set.choices()
@@ -170,8 +172,6 @@ def update_form_view(request, pk):
             <!-- Get choices from choices class -->
             this.car.glue_fields.type.choices = {{ car_type_choices }}
         },
-        car: new ModelObjectGlue('car'),
-        brand_query_set: new QuerySetGlue('brands')
     }"
 >
     { % include 'django_glue/form/field/select_field.html' with glue_model_field='car.brand' %}

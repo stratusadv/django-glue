@@ -41,6 +41,7 @@ Approach: Initialize a new ViewGlue object with the endpoint to the person's inf
 <div
     x-ref="person_item"
     x-data="{
+        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
         async init() {
             try {
                 await this.view_person()
@@ -51,7 +52,6 @@ Approach: Initialize a new ViewGlue object with the endpoint to the person's inf
         async view_person() {
             this.person_info_detail_view.render_outer(this.$refs.person_item)
         },
-        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
     }"
 >
     <button @click="view_person()">View this person</button>

@@ -51,13 +51,13 @@ def student_update_course_form_view(request, pk):
 ```html
 <form
     x-data="{
+        student: new ModelObjectGlue('student'),
+        programs: new QuerySetGlue('programs'),
+        get_course_by_program: new FunctionGlue('get_course_by_program'),
         async init () {
             await this.student.get()
             this.student.glue_fields.course.choices = {{ course_choices }}
         },
-        student: new ModelObjectGlue('student')
-        programs: new QuerySetGlue('programs'),
-        get_course_by_program: new FunctionGlue('get_course_by_program'),
     }"
 >
 
@@ -137,6 +137,11 @@ def get_course_by_program(program_id):
     method="POST"
     action="{% url 'school:student:form:update' pk=student.pk course_pk=course.pk %}"
     x-data="{
+        student: new ModelObjectGlue('student'),
+        programs: new QuerySetGlue('programs'),
+        program_field: new GlueCharField('program'),
+        course_field: new GlueCharField('course'),
+        get_course_by_program: new FunctionGlue('get_course_by_program'),
         async init() {
             await this.student.get()
 
@@ -164,11 +169,6 @@ def get_course_by_program(program_id):
                 }
             })
         },
-        student: new ModelObjectGlue('student'),
-        programs: new QuerySetGlue('programs'),
-        program_field: new GlueCharField('program'),
-        course_field: new GlueCharField('course'),
-        get_course_by_program: new FunctionGlue('get_course_by_program'),
     }"
 >
     { % csrf_token %}

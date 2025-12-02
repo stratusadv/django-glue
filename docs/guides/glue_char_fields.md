@@ -142,13 +142,13 @@ def child_update_form_view(request, pk, parent_pk):
     method="POST"
     action="{% url 'parent:child:form:update' parent_pk=person.pk %}"
     x-data="{
+        child: new ModelObjectGlue('child'),
+        parent: new GlueCharField('parent'),
         async init() {
             await this.child.get()
             this.parent.choices = {{ parent_choices }}
             this.parent.value = {{ parent.pk }}
         },
-        child: new ModelObjectGlue('child'),
-        parent: new GlueCharField('parent')
     }"
 >
     { % csrf_token %}

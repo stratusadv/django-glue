@@ -33,10 +33,10 @@ def person_dashboard_content_view(request):
 ```html
 <div 
     x-data="{
+        glue_view: new GlueView('url'),
         async reload_page() {
-            glue_view: new GlueView('url')
             await glue_view.render_inner(this.$refs.person_dashboard_content)
-        }
+        },
     }"
     x-ref="person_dashboard_content"
 >
