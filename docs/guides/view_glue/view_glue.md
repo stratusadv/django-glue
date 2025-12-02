@@ -20,10 +20,10 @@ ViewGlue will be implemented inside Alpine JS's x-data.
 <div
     x-ref="person_item"
     x-data="{
+        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
         async init() {
             await this.person_info_detail_view()
         },
-        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
     }"
 >
 </div>
