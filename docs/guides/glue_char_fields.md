@@ -63,12 +63,12 @@ def child_create_form_view(request):
 ```html
 <form
     x-data="{
+        child: new ModelObjectGlue('child'),
+        parent: new GlueCharField('parent'),
         async init () {
             await this.child.get()
             this.child.glue_fields.parent.choices = {{ parent_choices }}
-        },
-        child: new ModelObjectGlue('child')
-        parent: new GlueCharField('parent')
+        }
     }"
 >
     
