@@ -38,6 +38,8 @@ nav:
       - How to Glue:
           - Model Object: guides/model_object_glue.md
           - Query Set: guides/query_set_glue.md
+          - Glue Char Fields: guides/glue_char_fields.md
+          - Function Glue: guides/function_glue.md
       - ViewGlue:
           - ViewGlue: guides/view_glue/view_glue.md
           - Render Inner: guides/view_glue/render_inner.md

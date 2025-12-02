@@ -1,11 +1,7 @@
 # ViewGlue Guide
 
-!!! warning
-
-    This guide is currently in progress, There may be future updates or changes to this guide after review.
-
 ## Purpose
-ViewGlue allows the user to dynamically render a template given a endpoint.
+ViewGlue allows the user to dynamically render a template given an endpoint.
 
 ### When to use
 - Reduce HTML loading
@@ -16,6 +12,51 @@ ViewGlue allows the user to dynamically render a template given a endpoint.
 - Only need to hide a small amount of data
 - Basic template implementation 
 
+
+## How To Use
+ViewGlue will be implemented inside Alpine JS's x-data.
+
+```html
+<div
+    x-ref="person_item"
+    x-data="{
+        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
+        async init() {
+            await this.person_info_detail_view()
+        },
+    }"
+>
+</div>
+```
+
+### Full Example
+
+### Using ViewGlue to render a person's information.
+
+Goal: To load dynamically a person's information.
+
+Approach: Initialize a new ViewGlue object with the endpoint to the person's information template.
+
+```html
+<div
+    x-ref="person_item"
+    x-data="{
+        person_info_detail_view: new ViewGlue('{% url "person:template:detail" pk=person.pk %}'),
+        async init() {
+            try {
+                await this.view_person()
+            } catch (e) {
+                console.error(e)
+            }
+        },
+        async view_person() {
+            this.person_info_detail_view.render_outer(this.$refs.person_item)
+        },
+    }"
+>
+    <button @click="view_person()">View this person</button>
+</div>
+```
 
 ### More Information
 see [ViewGlue](http://django-glue.stratusadv.com/api/javascript/view_glue/)
