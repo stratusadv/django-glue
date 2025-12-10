@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Union, Any, Callable
 
 from django.db.models import Model
@@ -7,8 +9,6 @@ from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
 from django_glue.glue.enums import GlueType
 from django_glue.glue.glue import BaseGlue
 from django_glue.glue.model_object.fields.glue import ModelFieldsGlue
-from django_glue.glue.model_object.fields.tools import model_object_fields_glue_from_model
-from django_glue.glue.model_object.fields.utils import get_field_value_from_model_object
 from django_glue.glue.model_object.session_data import ModelObjectGlueSessionData
 from django_glue.utils import check_valid_method_kwargs, type_set_method_kwargs
 
@@ -46,16 +46,14 @@ class ModelObjectGlue(BaseGlue):
         return None
 
     def generate_field_data(self, include_values: bool = True) -> ModelFieldsGlue:
-
-        model_fields = model_object_fields_glue_from_model(
+        model_fields = ModelFieldsGlue.from_model_object(
             model=self.model,
             included_fields=self.included_fields,
             excluded_fields=self.excluded_fields
         )
 
         if include_values:
-            for field in model_fields:
-                field.value = get_field_value_from_model_object(self.model_object, field)
+            model_fields.load_values_from_model_object(self.model_object)
 
         return model_fields
 
@@ -77,7 +75,7 @@ class ModelObjectGlue(BaseGlue):
             glue_type=self.glue_type,
             access=self.access,
             unique_name=self.unique_name,
-            fields=self.generate_field_data(include_values=False).to_dict(),
+            fields=self.generate_field_data(include_values=False).to_dict(), # Why is to_dict called here? Shouldn't this be .fields?
             app_label=self.model_object._meta.app_label,
             model_name=self.model_object._meta.model_name,
             object_pk=self.model_object.pk,

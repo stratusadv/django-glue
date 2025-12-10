@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 from django_glue.access.access import Access
 from django_glue.glue.post_data import BasePostData
@@ -16,8 +16,10 @@ if TYPE_CHECKING:
 
 class BaseRequestHandler(ABC):
     action: BaseAction | None = None
-    _session_data_class: SessionData | None = None
-    _post_data_class: BasePostData | None = None
+    # We may wish to consider making this class generic and use TypeVars for these,
+    # this is an odd way to do dynamic class composition
+    _session_data_class: Type[SessionData] | None = None
+    _post_data_class: Type[BasePostData] | None = None
 
     def __init__(self, session: Session, request_body: RequestBody):
         if self._session_data_class is None:
