@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.12
+### Changes
+- Update `type_set_method_kwargs` to be able to use string annotations when using `from __future__ import annotations`
+
 ## v0.8.11
 ### Breaking
 - Removed hard-coded colours, double-check CSS.
