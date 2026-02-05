@@ -1,9 +1,0 @@
-{% extends 'dropdown/dropdown.html' %}
-
-{% block dropdown_trigger %}
-    <div class="select form-select" x-bind="trigger" x-text="selected_value_text"></div>
-{% endblock %}
-
-{% block dropdown_content %}
-    {% include 'form/element/select_dropdown_content_element.html' with choices='choices' %}
-{% endblock %}

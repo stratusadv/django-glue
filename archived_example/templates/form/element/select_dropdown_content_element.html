@@ -1,8 +1,0 @@
-<template x-for="(choice, index) in {{ choices }}" :key="index">
-    {% block select_item %}
-        {% include 'form/item/select_dropdown_item.html' %}
-    {% endblock %}
-</template>
-<template x-if="{{ choices }}.length <= 0">
-    <div class="p-3">There are no items to select</div>
-</template>
