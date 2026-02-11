@@ -1,0 +1,24 @@
+{
+    "name": "django-glue",
+    "description": "Seamlessly Connect Django to your Frontend.",
+    "homepage": "https://django-glue.stratusadv.com/",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/stratusadv/django-glue.git",
+        "directory": "django_glue_client"
+    },
+    "author": "Stratus Advanced Technologies",
+    "license": "MIT",
+    "main": "dist/module.cjs.js",
+    "module": "dist/module.esm.js",
+    "unpkg": "dist/cdn.min.js",
+    "private": true,
+    "devDependencies": {
+        "esbuild": "~0.16.17",
+        "dotenv": "^17.2.4"
+    },
+    "scripts": {
+        "build": "node ./django_glue/client/scripts/build.js",
+        "watch": "node ./django_glue/client/scripts/build.js --watch"
+    }
+}

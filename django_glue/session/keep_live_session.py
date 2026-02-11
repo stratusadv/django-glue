@@ -1,7 +1,7 @@
 from time import time
 from typing import Sequence
 
-from django_glue.conf import settings
+from django_glue import settings
 from django_glue.session.session import BaseGlueSession
 
 

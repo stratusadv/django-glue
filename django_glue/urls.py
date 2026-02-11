@@ -1,12 +1,12 @@
 from django.urls import path
 
-from django_glue import views_ajax, constants
+from django_glue import views, constants
 
-app_name = constants.URL_APP_NAME
+app_name = constants.BASE_URL_NAME
 
 urlpatterns = [
     # These url path names are used in our middleware to avoid cleaning session data.
-    path("", views_ajax.handler_ajax_view, name=constants.HANDLER_URL_NAME),
-    path("keep_live/", views_ajax.keep_live_handler_ajax_view, name=constants.KEEP_LIVE_HANDLER_URL_NAME),
-    path("session/", views_ajax.session_data_ajax_view, name=constants.SESSION_DATA_URL_NAME),
+    path("", views.action_view, name=constants.ACTION_URL_NAME),
+    path(f"{constants.KEEP_LIVE_HANDLER_URL_NAME}/", views.keep_live_view, name=constants.KEEP_LIVE_HANDLER_URL_NAME),
+    path(f"{constants.SESSION_DATA_URL_NAME}/", views.session_data_view, name=constants.SESSION_DATA_URL_NAME),
 ]

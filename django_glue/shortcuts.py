@@ -1,94 +1,46 @@
-from typing import Union
+import json
+from typing import Any
 
-from django.db.models import Model
-from django.db.models.query import QuerySet
 from django.http import HttpRequest
+from django.urls import path, include
 
-from django_glue.constants import ALL_DUNDER_KEY, NONE_DUNDER_KEY
-from django_glue.glue.function.glue import FunctionGlue
-from django_glue.glue.glue import BaseGlue
-from django_glue.glue.model_object.glue import ModelObjectGlue
-from django_glue.glue.query_set.glue import QuerySetGlue
-from django_glue.glue.template.glue import TemplateGlue
-from django_glue.session import Session, KeepLiveSession
-from django_glue.utils import encode_unique_name
+from django_glue.access.access import GlueAccess
+from django_glue.session import GlueSession
+from django_glue import constants
+from django_glue.glue.base import BaseGlue
 
 
-def _glue_base_function(request: HttpRequest, glue: BaseGlue) -> None:
+def glue(
+    request: HttpRequest,
+    unique_name: str,
+    target: Any,
+    access: GlueAccess = GlueAccess.VIEW,
+    **kwargs
+):
+    glue_class = [
+        glue_subclass for glue_subclass in BaseGlue.__subclasses__()
+        if (
+                isinstance(target, glue_subclass.target_class) or
+                target.__class__ == glue_subclass.target_class
+        )
+    ][0]
 
-    glue_session = Session(request)
-    glue_session.add_glue(glue)
-
-    glue_keep_live_session = KeepLiveSession(request)
-    glue_keep_live_session.set_unique_name(glue.unique_name)
-
-    # Todo: Check to see if this has actually changed.
-    glue_session.set_modified()
-
-
-def glue_function(
-        request: HttpRequest,
-        unique_name: str,
-        target: str,
-) -> None:
-    glue_function_entity = FunctionGlue(
-        unique_name=encode_unique_name(request, unique_name),
-        function_path=target
-    )
-    _glue_base_function(request, glue_function_entity)
-
-
-def glue_model_object(
-        request: HttpRequest,
-        unique_name: str,
-        model_object: Model,
-        access: str = 'view',
-        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
-        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
-        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
-) -> None:
-    glue_model_object_entity = ModelObjectGlue(
-        unique_name=encode_unique_name(request, unique_name),
-        model_object=model_object,
+    glue_obj = glue_class(
+        target=target,
+        unique_name=unique_name,
         access=access,
-        included_fields=fields,
-        excluded_fields=exclude,
-        included_methods=methods
+        **kwargs
     )
 
-    _glue_base_function(request, glue_model_object_entity)
+    GlueSession(request).register_glue(glue_obj)
+
+    if not hasattr(request, '__glue_context_data__'):
+        request.__glue_context_data__ = {}
+
+    request.__glue_context_data__[glue_obj.unique_name] = glue_obj.to_context_data()
 
 
-def glue_query_set(
-        request: HttpRequest,
-        unique_name: str,
-        target: QuerySet,
-        access: str = 'view',
-        fields: Union[list, tuple] = (ALL_DUNDER_KEY,),
-        exclude: Union[list, tuple] = (NONE_DUNDER_KEY,),
-        methods: Union[list, tuple] = (NONE_DUNDER_KEY,),
-) -> None:
-    glue_query_set_entity = QuerySetGlue(
-        unique_name=encode_unique_name(request, unique_name),
-        query_set=target,
-        access=access,
-        included_fields=fields,
-        excluded_fields=exclude,
-        included_methods=methods
-    )
-
-    _glue_base_function(request, glue_query_set_entity)
-
-
-def glue_template(
-        request: HttpRequest,
-        unique_name: str,
-        target: str,
-) -> None:
-
-    glue_template_entity = TemplateGlue(
-        unique_name=encode_unique_name(request, unique_name),
-        template_name=target
-    )
-
-    _glue_base_function(request, glue_template_entity)
+def django_glue_urls():
+    return [
+        path(f'{constants.BASE_URL_NAME}/', include('django_glue.urls', namespace=constants.BASE_URL_NAME))
+    ]

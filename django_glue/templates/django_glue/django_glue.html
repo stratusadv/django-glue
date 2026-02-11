@@ -1,55 +1,17 @@
-{% load static %}
-
-{% load django_glue %}
-
 {% csrf_token %}
 
-{# Core CSS #}
-<link rel="stylesheet" href="{% static 'django_glue/css/glue.css' %}?v={{ DJANGO_GLUE_VERSION }}">
-
-{# Core Scripts #}
-<script type="application/javascript" src="{% static 'django_glue/js/session/csrf.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/core/utils.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/core/ajax.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/shortcuts/shortcuts.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/session/keep_live.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/session/session.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-
+<script src="{{ glue_js_url }}"></script>
 <script type="application/javascript">
-    const DJANGO_DEBUG = {% if debug %}true{% else %}false{% endif %}
-    const DJANGO_GLUE_AJAX_URL = '{% url 'django_glue:handler' %}'
-    const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:keep_live_handler' %}'
-    const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:session_data' %}'
-    const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
+    const constants = {
+        actionUrl: {{ DJANGO_GLUE_URLS.action }},
+    }
 
-    window.django_glue_keep_live = new DjangoGlueKeepLive()
-    window.django_glue_session_data = {{ DJANGO_GLUE_SESSION_DATA|safe }}
+    const glueServerData = {
+        session: JSON.parse('{{ DJANGO_GLUE_SESSION_DATA|safe }}'),
+        context: JSON.parse('{{ DJANGO_GLUE_CONTEXT_DATA|safe }}'),
+    }
 
-    setInterval(() => {
-        window.django_glue_keep_live.update(DJANGO_GLUE_KEEP_LIVE_URL)
-    }, DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
+    document.addEventListener('alpine:init', () => {
+        Glue.init()
+    })
 </script>
-
-{# Responses #}
-<script type="application/javascript" src="{% static 'django_glue/js/response/event.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/response/response.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-
-{# Forms #}
-<script type="application/javascript" src="{% static 'django_glue/js/form/field/attr/entities.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/form/field/attr/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/form/field/entities.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/form/field/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-
-{# Glue Model Objects #}
-<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/field/fields.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/field/tools.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/model_object.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/model_object/factories.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-
-{# Entities #}
-<script type="application/javascript" src="{% static 'django_glue/js/glue/query_set.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/function.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/template.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-<script type="application/javascript" src="{% static 'django_glue/js/glue/view.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
-
-

@@ -1,9 +1,10 @@
-from django_glue.shortcuts import glue_model_object, glue_function, glue_query_set, glue_template
+from django_glue.access.access import GlueAccess
+from django_glue.shortcuts import glue, django_glue_urls
+from django_glue.glue.base import BaseGlue
 
 
 __all__ = [
-    'glue_model_object',
-    'glue_function',
-    'glue_query_set',
-    'glue_template'
+    'glue',
+    'django_glue_urls',
+    'GlueAccess'
 ]
