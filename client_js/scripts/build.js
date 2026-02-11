@@ -3,80 +3,49 @@ const zlib = require('zlib');
 
 require('dotenv').config({ path: 'development.env' })
 
-const PACKAGE_ROOT = './django_glue/client'
-const OUT_DIR = process.env.DJANGO_GLUE_JS_DIST_PARENT_DIR
+const ENTRYPOINT_FILE_NAME = 'glue.js'
+
+const ENTRYPOINT = `./client_js/${ENTRYPOINT_FILE_NAME}`
+const OUT_DIR = './django_glue/static/django_glue/js'
+const OUT_FILE_PATH = `${OUT_DIR}/${ENTRYPOINT_FILE_NAME}`
+
+const VERSION = getPythonConstantAsJsonValue('__VERSION__')
 
 if (! fs.existsSync(OUT_DIR)) {
     fs.mkdirSync(OUT_DIR, 0744);
 }
 
-// Go through each file in the package's "build" directory
-// and use the appropriate bundling strategy based on its name.
-fs.readdirSync(`./${PACKAGE_ROOT}/builds`).forEach(file => {
-    bundleFile(file)
-});
+build({
+    entryPoints: [ENTRYPOINT],
+    outfile: OUT_FILE_PATH,
+    bundle: true,
+    platform: 'browser',
+    define: { CDN: 'true' },
+})
 
-function bundleFile(file, ) {
-    // Based on the filename, give esbuild a specific configuration to build.
-    ({
-        // This output file is meant to be loaded in a browser's <script> tag.
-        'cdn.js': () => {
-            build({
-                entryPoints: [`./${PACKAGE_ROOT}/builds/${file}`],
-                outfile: `${OUT_DIR}/${file}`,
-                bundle: true,
-                platform: 'browser',
-                define: { CDN: 'true' },
-            })
+build({
+    entryPoints: [ENTRYPOINT],
+    outfile: OUT_FILE_PATH.replace('.js', '.min.js'),
+    bundle: true,
+    minify: true,
+    platform: 'browser',
+    define: { CDN: 'true' },
+}).then(() => {
+    printVersion()
+    outputSize(`${OUT_FILE_PATH.replace('.js', '.min.js')}`)
+})
 
-            // Build a minified version.
-            build({
-                entryPoints: [`./${PACKAGE_ROOT}/builds/${file}`],
-                outfile: `${OUT_DIR}/${file.replace('.js', '.min.js')}`,
-                bundle: true,
-                minify: true,
-                platform: 'browser',
-                define: { CDN: 'true' },
-            }).then(() => {
-                printVersion()
-                outputSize(`${OUT_DIR}/${file.replace('.js', '.min.js')}`)
-            })
-
-        },
-        // This file outputs two files: an esm module and a cjs module.
-        // The ESM one is meant for "import" statements (bundlers and new browsers)
-        // and the cjs one is meant for "require" statements (node).
-        'module.js': () => {
-            build({
-                entryPoints: [`./${PACKAGE_ROOT}/builds/${file}`],
-                outfile: `${OUT_DIR}/${file.replace('.js', '.esm.js')}`,
-                bundle: true,
-                platform: 'neutral',
-                mainFields: ['module', 'main'],
-            })
-
-            build({
-                entryPoints: [`./${PACKAGE_ROOT}/builds/${file}`],
-                outfile: `${OUT_DIR}/${file.replace('.js', '.cjs.js')}`,
-                bundle: true,
-                target: ['node10.4'],
-                platform: 'node',
-            })
-        },
-    })[file]()
-}
 
 function build(options) {
     options.define || (options.define = {})
 
-    options.define['GLUE_VERSION'] = getPythonConstantAsJsonValue('__VERSION__')
+    options.define['GLUE_VERSION'] = VERSION
     options.define['process.env.NODE_ENV'] = process.argv.includes('--watch') ? `'production'` : `'development'`
     options.define['BASE_URL_NAME'] = getPythonConstantAsJsonValue('BASE_URL_NAME')
 
     return require('esbuild').build({
         logLevel: process.argv.includes('--watch') ? 'info' : 'warning',
         watch: process.argv.includes('--watch'),
-        // external: ['alpinejs'],
         ...options,
     }).catch(() => process.exit(1))
 }

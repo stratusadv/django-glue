@@ -1,5 +1,3 @@
-import builtins
-
 from django.utils.module_loading import import_string
 
 from django_glue.conf import settings

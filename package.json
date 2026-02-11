@@ -9,16 +9,13 @@
     },
     "author": "Stratus Advanced Technologies",
     "license": "MIT",
-    "main": "dist/module.cjs.js",
-    "module": "dist/module.esm.js",
-    "unpkg": "dist/cdn.min.js",
     "private": true,
     "devDependencies": {
         "esbuild": "~0.16.17",
         "dotenv": "^17.2.4"
     },
     "scripts": {
-        "build": "node client/scripts/build.js",
-        "watch": "node client/scripts/build.js --watch"
+        "build": "node client_js/scripts/build.js",
+        "watch": "node client_js/scripts/build.js --watch"
     }
 }

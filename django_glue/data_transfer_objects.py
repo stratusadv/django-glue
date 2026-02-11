@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class GlueRequestData(BaseModel):
     action: str
     unique_name: str
-    payload: dict | None
+    payload: dict | None = None
 
 
 class GlueResponseData(BaseModel):

@@ -20,7 +20,7 @@ def task_detail_view(request: HttpRequest):
         request=request,
         target=task,
         unique_name='task',
-        access=dg.GlueAccess.CHANGE,
+        access=dg.GlueAccess.DELETE,
     )
 
     return render(request, 'detail_page.html', {'task': task})
