@@ -1,4 +1,4 @@
-import Glue from './../src/index'
+import Glue from '../src'
 
 export default Glue
 
