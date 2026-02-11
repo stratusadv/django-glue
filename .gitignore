@@ -21,3 +21,5 @@ dev_tool*.exe
 .dev
 
 .qodo
+
+node_modules/
