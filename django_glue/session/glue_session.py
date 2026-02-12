@@ -7,11 +7,11 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpRequest
 
 from django_glue import settings
-from django_glue.glue.utils import get_glue_class_for_target_class
+from django_glue.adapters.utils import get_adapter_class_for_target_class
 from django_glue.session.session import BaseGlueSession
 
 if TYPE_CHECKING:
-    from django_glue.glue.base import BaseGlue
+    from django_glue.adapters.base import BaseGlueAdapter
 
 
 class GlueSession(BaseGlueSession):
@@ -24,23 +24,23 @@ class GlueSession(BaseGlueSession):
         super().__init__(request)
 
 
-    def get_glue_by_unique_name(self, unique_name: str) -> BaseGlue:
+    def get_adapter_instance_by_unique_name(self, unique_name: str) -> BaseGlueAdapter:
         glue_session_data = self.session.get(unique_name, None)
         if glue_session_data is None:
             # TODO: Raise GlueNotFoundError
             raise Exception()
 
-        glue = get_glue_class_for_target_class(
+        adapter = get_adapter_class_for_target_class(
             glue_session_data['target_class']
         ).from_session_kwargs(**glue_session_data)
 
-        return glue
+        return adapter
 
-    def register_glue(self, glue: BaseGlue) -> None:
-        if glue.unique_name in self.session:
-            self.session.pop(glue.unique_name)
+    def register_adapter_instance(self, adapter_instance: BaseGlueAdapter) -> None:
+        if adapter_instance.unique_name in self.session:
+            self.session.pop(adapter_instance.unique_name)
 
-        self.session[glue.unique_name] = glue.to_session_data()
+        self.session[adapter_instance.unique_name] = adapter_instance.to_session_data()
         self.set_modified()
 
     def clean(self, removable_unique_names: Sequence[str]) -> None:

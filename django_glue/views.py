@@ -27,9 +27,9 @@ def action_view(request: HttpRequest) -> JsonResponse | HttpResponse:
         )
 
     request_data = dto.GlueRequestData(**data)
-    glue = GlueSession(request).get_glue_by_unique_name(request_data.unique_name)
+    adapter = GlueSession(request).get_adapter_instance_by_unique_name(request_data.unique_name)
 
-    return JsonResponse(glue.process_request_data(request_data))
+    return JsonResponse(adapter.process_request_data(request_data))
 
 
 def keep_live_view(request: HttpRequest) -> JsonResponse:

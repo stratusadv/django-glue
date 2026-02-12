@@ -1,7 +1,7 @@
 import functools
 
 from django_glue.access.access import GlueAccess
-from django_glue.glue.base import BaseGlue
+from django_glue.adapters.base import BaseGlueAdapter
 
 
 def action(access: GlueAccess):
@@ -10,9 +10,9 @@ def action(access: GlueAccess):
         def wrapper(self, *args, **kwargs):
             glue_class = type(self)
 
-            if BaseGlue not in glue_class.__mro__:
+            if BaseGlueAdapter not in glue_class.__mro__:
                 raise TypeError(
-                    f"Instance of {glue_class.__name__} must inherit from BaseGlue for its methods to be declared as actions.")
+                    f"Instance of {glue_class.__name__} must inherit from BaseGlueAdapter for its methods to be declared as actions.")
 
             return func(self, *args, **kwargs)
 

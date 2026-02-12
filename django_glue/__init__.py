@@ -1,6 +1,6 @@
 from django_glue.access.access import GlueAccess
 from django_glue.shortcuts import glue, django_glue_urls
-from django_glue.glue.base import BaseGlue
+from django_glue.adapters.base import BaseGlueAdapter
 
 
 __all__ = [

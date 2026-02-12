@@ -1,6 +1,6 @@
 import {sendActionRequest} from "../http";
 
-export class BaseGlue {
+export class BaseGlueAdapter {
     constructor(uniqueName) {
         this.uniqueName = uniqueName;
         this.contextData = glueServerData.context[uniqueName];

@@ -56,8 +56,8 @@
     return await sendJsonPostRequest(actionUrl, payload);
   }
 
-  // client_js/src/glue-types/base.js
-  var BaseGlue = class {
+  // client_js/src/adapters/base.js
+  var BaseGlueAdapter = class {
     constructor(uniqueName) {
       this.uniqueName = uniqueName;
       this.contextData = glueServerData.context[uniqueName];
@@ -95,8 +95,63 @@
     }
   };
 
-  // client_js/src/glue-types/model.js
-  var ModelGlue = class extends BaseGlue {
+  // client_js/src/utils.js
+  function getClassByName(name) {
+    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(adapterTypeConfig).includes(name)) {
+      return eval?.(`"use strict";(${name})`);
+    } else {
+      throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
+    }
+  }
+
+  // client_js/src/manager.js
+  var GlueAdapterManager = class {
+    #adapterTypeRegistry = {};
+    #adapterInstances = {};
+    addAdapter(typeName, typeClass) {
+      if (!(typeClass.prototype instanceof BaseGlueAdapter)) {
+        throw Error(`The class registered ('${typeClass}') for the adapter type '${typeName}' does not extend BaseGlueAdapter.`);
+      }
+      this.#adapterTypeRegistry[typeName] = typeClass;
+    }
+    #registerAdapterTypes() {
+      this.#adapterTypeRegistry = {};
+      Object.entries(adapterTypeConfig).forEach(([typeName, typeClass]) => {
+        this.addAdapter(typeName, getClassByName(typeClass));
+      });
+    }
+    #createAdapterInstance(adapterUniqueName, adapterType) {
+      return new this.#adapterTypeRegistry[adapterType](adapterUniqueName);
+    }
+    #defineAdapterUniqueNameAsProperty(glueSessionData) {
+      Object.defineProperty(this, glueSessionData.unique_name, {
+        get: function() {
+          if (!(glueSessionData.unique_name in this.#adapterInstances)) {
+            this.#adapterInstances[glueSessionData.unique_name] = this.#createAdapterInstance(
+              glueSessionData.unique_name,
+              glueSessionData.target_class
+            );
+          }
+          return this.#adapterInstances[glueSessionData.unique_name];
+        }
+      });
+    }
+    #loadSession() {
+      for (const glueSessionData of Object.values(glueServerData.session)) {
+        this.#defineAdapterUniqueNameAsProperty(glueSessionData);
+      }
+    }
+    // TODO: pass data and type config from global scope as parameters to make this more
+    // explicitly defined
+    init() {
+      this.#registerAdapterTypes();
+      this.#loadSession();
+    }
+  };
+  var manager_default = GlueAdapterManager;
+
+  // client_js/src/adapters/model.js
+  var ModelGlueAdapter = class extends BaseGlueAdapter {
     // TODO: Clean this up
     postInit() {
       Object.keys(this.contextData.fields).forEach((fieldName) => {
@@ -127,65 +182,8 @@
     }
   };
 
-  // client_js/src/manager.js
-  var DEFAULT_GLUE_TARGETS = {
-    Model: ModelGlue
-  };
-  var GlueManager = class {
-    initialized = false;
-    #glueTypes = {};
-    #glues = {};
-    init(types = {}, options = {
-      includeDefaultTypes: true
-    }) {
-      this.initialized = false;
-      this.#registerGlueTypes(types, options.includeDefaultTypes);
-      this.#loadSession();
-      this.initialized = true;
-    }
-    type(typeName, typeClass) {
-      if (!(typeClass.prototype instanceof BaseGlue)) {
-        throw Error(`The class registered ('${typeClass}') for the glue type '${typeName}' does not extend BaseGlue.`);
-      }
-      this.#glueTypes[typeName] = typeClass;
-    }
-    #registerGlueTypes(types, includeDefaults) {
-      this.#glueTypes = {};
-      if (includeDefaults) {
-        Object.entries(DEFAULT_GLUE_TARGETS).forEach(([target, instanceClass]) => {
-          this.type(target, instanceClass);
-        });
-      }
-      Object.entries(types).forEach(([type, instanceClass]) => {
-        this.type(type, instanceClass);
-      });
-    }
-    #loadSession() {
-      for (const glue of Object.values(glueServerData.session)) {
-        this.#defineGlueUniqueNameAsProperty(glue);
-      }
-    }
-    #defineGlueUniqueNameAsProperty(glueSessionData) {
-      Object.defineProperty(this, glueSessionData.unique_name, {
-        get: function() {
-          if (!(glueSessionData.unique_name in this.#glues)) {
-            this.#glues[glueSessionData.unique_name] = this.#createGlue(
-              glueSessionData.unique_name,
-              glueSessionData.target_class
-            );
-          }
-          return this.#glues[glueSessionData.unique_name];
-        }
-      });
-    }
-    #createGlue(glueUniqueName, glueTargetClass) {
-      return new this.#glueTypes[glueTargetClass](glueUniqueName);
-    }
-  };
-  var manager_default = GlueManager;
-
   // client_js/glue.js
+  window.ModelGlueAdapter = ModelGlueAdapter;
   var Glue = new manager_default();
   window.Glue = Glue;
-  queueMicrotask(() => Glue.init());
 })();
