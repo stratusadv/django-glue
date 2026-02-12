@@ -8,9 +8,9 @@ from django_glue.templatetags.django_glue import register
 def django_glue_client_type_config():
     client_config = {}
     for type_name, type_config in settings.DJANGO_GLUE_TYPE_CONFIG.items():
-        client_config[type_name] = type_config.get(
+        client_config[type_name] = type_config['adapters'].get(
             'client',
-            type_config['server'].split('.')[-1]
+            type_config['adapters']['server'].split('.')[-1]
         )
 
     return json.dumps(client_config)

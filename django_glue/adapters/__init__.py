@@ -7,6 +7,6 @@ from django_glue.conf import settings
 __all__ = []
 
 for _, type_config in getattr(settings, 'DJANGO_GLUE_TYPE_CONFIG').items():
-    glue_class = import_string(type_config['server'])
+    glue_class = import_string(type_config['adapters']['server'])
     if glue_class:
         __all__.append(glue_class.__name__)
