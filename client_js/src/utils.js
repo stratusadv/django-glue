@@ -1,6 +1,6 @@
 // TODO: pass type config as parameter
 export function getClassByName(name){
-    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(adapterTypeConfig).includes(name)) {
+    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(proxyTypeConfig).includes(name)) {
       // proceed only if the name is a single word string and is in adapterTypeConfig
         return eval?.(`"use strict";(${name})`)
     } else {

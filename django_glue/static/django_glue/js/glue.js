@@ -56,8 +56,8 @@
     return await sendJsonPostRequest(actionUrl, payload);
   }
 
-  // client_js/src/adapters/base.js
-  var BaseGlueAdapter = class {
+  // client_js/src/proxies/base.js
+  var BaseGlueProxy = class {
     constructor(uniqueName) {
       this.uniqueName = uniqueName;
       this.contextData = glueServerData.context[uniqueName];
@@ -97,7 +97,7 @@
 
   // client_js/src/utils.js
   function getClassByName(name) {
-    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(adapterTypeConfig).includes(name)) {
+    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(proxyTypeConfig).includes(name)) {
       return eval?.(`"use strict";(${name})`);
     } else {
       throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
@@ -105,53 +105,53 @@
   }
 
   // client_js/src/manager.js
-  var GlueAdapterManager = class {
-    #adapterTypeRegistry = {};
-    #adapterInstances = {};
-    addAdapter(typeName, typeClass) {
-      if (!(typeClass.prototype instanceof BaseGlueAdapter)) {
-        throw Error(`The class registered ('${typeClass}') for the adapter type '${typeName}' does not extend BaseGlueAdapter.`);
+  var GlueProxyManager = class {
+    #proxyProviders = {};
+    #proxies = {};
+    addProxyProvider(typeName, typeClass) {
+      if (!(typeClass.prototype instanceof BaseGlueProxy)) {
+        throw Error(`The class registered ('${typeClass}') for the adapter type '${typeName}' does not extend BaseGlueProxy.`);
       }
-      this.#adapterTypeRegistry[typeName] = typeClass;
+      this.#proxyProviders[typeName] = typeClass;
     }
-    #registerAdapterTypes() {
-      this.#adapterTypeRegistry = {};
-      Object.entries(adapterTypeConfig).forEach(([typeName, typeClass]) => {
-        this.addAdapter(typeName, getClassByName(typeClass));
+    #registerProxyProviders() {
+      this.#proxyProviders = {};
+      Object.entries(proxyTypeConfig).forEach(([typeName, typeClass]) => {
+        this.addProxyProvider(typeName, getClassByName(typeClass));
       });
     }
-    #createAdapterInstance(adapterUniqueName, adapterType) {
-      return new this.#adapterTypeRegistry[adapterType](adapterUniqueName);
+    #createProxy(adapterUniqueName, adapterType) {
+      return new this.#proxyProviders[adapterType](adapterUniqueName);
     }
-    #defineAdapterUniqueNameAsProperty(glueSessionData) {
+    #defineProxyUniqueNameAsProperty(glueSessionData) {
       Object.defineProperty(this, glueSessionData.unique_name, {
         get: function() {
-          if (!(glueSessionData.unique_name in this.#adapterInstances)) {
-            this.#adapterInstances[glueSessionData.unique_name] = this.#createAdapterInstance(
+          if (!(glueSessionData.unique_name in this.#proxies)) {
+            this.#proxies[glueSessionData.unique_name] = this.#createProxy(
               glueSessionData.unique_name,
               glueSessionData.target_class
             );
           }
-          return this.#adapterInstances[glueSessionData.unique_name];
+          return this.#proxies[glueSessionData.unique_name];
         }
       });
     }
     #loadSession() {
       for (const glueSessionData of Object.values(glueServerData.session)) {
-        this.#defineAdapterUniqueNameAsProperty(glueSessionData);
+        this.#defineProxyUniqueNameAsProperty(glueSessionData);
       }
     }
     // TODO: pass data and type config from global scope as parameters to make this more
     // explicitly defined
     init() {
-      this.#registerAdapterTypes();
+      this.#registerProxyProviders();
       this.#loadSession();
     }
   };
-  var manager_default = GlueAdapterManager;
+  var manager_default = GlueProxyManager;
 
-  // client_js/src/adapters/model.js
-  var ModelGlueAdapter = class extends BaseGlueAdapter {
+  // client_js/src/proxies/model.js
+  var GlueModelProxy = class extends BaseGlueProxy {
     // TODO: Clean this up
     postInit() {
       Object.keys(this.contextData.fields).forEach((fieldName) => {
@@ -183,7 +183,7 @@
   };
 
   // client_js/glue.js
-  window.ModelGlueAdapter = ModelGlueAdapter;
+  window.GlueModelProxy = GlueModelProxy;
   var Glue = new manager_default();
   window.Glue = Glue;
 })();

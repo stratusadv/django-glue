@@ -1,6 +1,6 @@
-import { BaseGlueAdapter } from "./base";
+import { BaseGlueProxy } from "./base";
 
-export class ModelGlueAdapter extends BaseGlueAdapter {
+export class GlueModelProxy extends BaseGlueProxy {
     // TODO: Clean this up
     postInit() {
         Object.keys(this.contextData.fields).forEach(fieldName => {

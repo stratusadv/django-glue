@@ -10,11 +10,11 @@ from django.db.models import Model, ForeignObjectRel, Field
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
-from django_glue.adapters.base import BaseGlueAdapter
-from django_glue.adapters.decorators import action
+from django_glue.proxies.proxy import BaseGlueProxy
+from django_glue.proxies.decorators import action
 
 
-class ModelGlueAdapter(BaseGlueAdapter):
+class GlueModelProxy(BaseGlueProxy):
     target_class = Model
 
     def __init__(
@@ -41,7 +41,7 @@ class ModelGlueAdapter(BaseGlueAdapter):
         model_class: str,
         app_label: str,
         **kwargs
-    ) -> ModelGlueAdapter:
+    ) -> GlueModelProxy:
         model_class = apps.get_model(app_label=app_label, model_name=model_class)
 
         if target_pk:

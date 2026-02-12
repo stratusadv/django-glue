@@ -11,7 +11,7 @@
     }
 
     {% django_glue_client_type_config as client_config %}
-    const adapterTypeConfig = {{ client_config|safe }};
+    const proxyTypeConfig = {{ client_config|safe }};
 
     Glue.init()
 </script>

@@ -8,7 +8,7 @@ from django_glue.access.access import GlueAccess
 from django_glue import data_transfer_objects as dto
 
 
-class BaseGlueAdapter(ABC):
+class BaseGlueProxy(ABC):
     target_class: type
     actions = {}
 
@@ -33,7 +33,7 @@ class BaseGlueAdapter(ABC):
     @classmethod
     def __init_subclass__(cls, **kwargs):
         if not hasattr(cls, 'target_class'):
-            raise TypeError(f"BaseGlueAdapter subclass {cls.__name__} must define 'target_class' attribute that matches the expected type of the __init__ 'target' parameter.")
+            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define 'target_class' attribute that matches the expected type of the __init__ 'target' parameter.")
         
         for attr_name, attr_value in cls.__dict__.items():
             if hasattr(attr_value, '_required_glue_access'):
@@ -53,7 +53,7 @@ class BaseGlueAdapter(ABC):
                 )
 
     @classmethod
-    def from_session_kwargs(cls, access: GlueAccess, unique_name: str, **kwargs) -> BaseGlueAdapter:
+    def from_session_kwargs(cls, access: GlueAccess, unique_name: str, **kwargs) -> BaseGlueProxy:
         return cls(
             access=access,
             unique_name=unique_name,

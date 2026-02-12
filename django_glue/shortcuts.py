@@ -7,7 +7,7 @@ from django.urls import path, include
 from django_glue.access.access import GlueAccess
 from django_glue.session import GlueSession
 from django_glue import constants
-from django_glue.adapters.base import BaseGlueAdapter
+from django_glue.proxies.proxy import BaseGlueProxy
 
 
 def glue(
@@ -18,7 +18,7 @@ def glue(
     **kwargs
 ):
     glue_class = [
-        glue_subclass for glue_subclass in BaseGlueAdapter.__subclasses__()
+        glue_subclass for glue_subclass in BaseGlueProxy.__subclasses__()
         if (
                 isinstance(target, glue_subclass.target_class) or
                 target.__class__ == glue_subclass.target_class
@@ -32,7 +32,7 @@ def glue(
         **kwargs
     )
 
-    GlueSession(request).register_adapter_instance(glue_obj)
+    GlueSession(request).register_proxy(glue_obj)
 
     if not hasattr(request, '__glue_context_data__'):
         request.__glue_context_data__ = {}

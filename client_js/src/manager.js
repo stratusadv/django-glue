@@ -1,58 +1,58 @@
-import { BaseGlueAdapter } from "./adapters/base";
+import { BaseGlueProxy } from "./proxies/base";
 import {getClassByName} from "./utils";
 
 
-class GlueAdapterManager {
-    #adapterTypeRegistry = {}
-    #adapterInstances = {}
+class GlueProxyManager {
+    #proxyProviders = {}
+    #proxies = {}
 
-    addAdapter(typeName, typeClass) {
-        if (!(typeClass.prototype instanceof BaseGlueAdapter)) {
-            throw Error(`The class registered ('${typeClass}') for the adapter type '${typeName}' does not extend BaseGlueAdapter.`)
+    addProxyProvider(typeName, typeClass) {
+        if (!(typeClass.prototype instanceof BaseGlueProxy)) {
+            throw Error(`The class registered ('${typeClass}') for the adapter type '${typeName}' does not extend BaseGlueProxy.`)
         }
 
-        this.#adapterTypeRegistry[typeName] = typeClass
+        this.#proxyProviders[typeName] = typeClass
     }
 
-    #registerAdapterTypes() {
-        this.#adapterTypeRegistry = {}
+    #registerProxyProviders() {
+        this.#proxyProviders = {}
 
-        Object.entries(adapterTypeConfig).forEach(([typeName, typeClass]) => {
-            this.addAdapter(typeName, getClassByName(typeClass))
+        Object.entries(proxyTypeConfig).forEach(([typeName, typeClass]) => {
+            this.addProxyProvider(typeName, getClassByName(typeClass))
         })
     }
 
-    #createAdapterInstance(adapterUniqueName, adapterType) {
-        return new this.#adapterTypeRegistry[adapterType](adapterUniqueName)
+    #createProxy(adapterUniqueName, adapterType) {
+        return new this.#proxyProviders[adapterType](adapterUniqueName)
     }
 
-    #defineAdapterUniqueNameAsProperty(glueSessionData) {
+    #defineProxyUniqueNameAsProperty(glueSessionData) {
         Object.defineProperty(this, glueSessionData.unique_name, {
             get: function() {
-                if (!(glueSessionData.unique_name in this.#adapterInstances)) {
-                    this.#adapterInstances[glueSessionData.unique_name] = this.#createAdapterInstance(
+                if (!(glueSessionData.unique_name in this.#proxies)) {
+                    this.#proxies[glueSessionData.unique_name] = this.#createProxy(
                         glueSessionData.unique_name,
                         glueSessionData.target_class
                     )
                 }
 
-                return this.#adapterInstances[glueSessionData.unique_name]
+                return this.#proxies[glueSessionData.unique_name]
             },
         })
     }
 
     #loadSession() {
         for (const glueSessionData of Object.values(glueServerData.session)) {
-            this.#defineAdapterUniqueNameAsProperty(glueSessionData)
+            this.#defineProxyUniqueNameAsProperty(glueSessionData)
         }
     }
 
     // TODO: pass data and type config from global scope as parameters to make this more
     // explicitly defined
     init() {
-        this.#registerAdapterTypes()
+        this.#registerProxyProviders()
         this.#loadSession()
     }
 }
 
-export default GlueAdapterManager
+export default GlueProxyManager
