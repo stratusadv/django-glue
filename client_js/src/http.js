@@ -1,4 +1,4 @@
-import {actionUrl} from "./constants";
+import {actionUrl, keepLiveUrl} from "./constants";
 
 function getHttpCookie(name) {
     if (document?.cookie !== '') {
@@ -60,4 +60,8 @@ export async function sendJsonPostRequest(url, data, csrfProtected = true){
 
 export async function sendActionRequest(payload = {}) {
     return await sendJsonPostRequest(actionUrl, payload)
+}
+
+export async function sendKeepLiveRequest(uniqueNames) {
+    return await sendJsonPostRequest(keepLiveUrl, {'unique_names': uniqueNames})
 }

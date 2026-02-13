@@ -1,2 +1,0 @@
-from django_glue.session.glue_session import GlueSession
-from django_glue.session.keep_live_session import KeepLiveSession

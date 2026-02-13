@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-import builtins
+import json
 
 
-def get_type(type_name):
-    try:
-        return getattr(builtins, type_name)
-    except AttributeError:
-        try:
-            obj = globals()[type_name]
-        except KeyError:
-            return None
-
-        return repr(obj) if isinstance(obj, type) else None
+def get_request_body_data(request, key: str = None):
+    data = json.loads(request.body.decode('utf-8'))
+    return data if key is None else data.get(key, None)

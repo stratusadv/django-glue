@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from django.http import HttpRequest
@@ -17,27 +16,27 @@ def glue(
     access: GlueAccess = GlueAccess.VIEW,
     **kwargs
 ):
-    glue_class = [
-        glue_subclass for glue_subclass in BaseGlueProxy.__subclasses__()
+    proxy_class = [
+        proxy_subclass for proxy_subclass in BaseGlueProxy.__subclasses__()
         if (
-                isinstance(target, glue_subclass.target_class) or
-                target.__class__ == glue_subclass.target_class
+                isinstance(target, proxy_subclass.subject_type) or
+                target.__class__ == proxy_subclass.subject_type
         )
     ][0]
 
-    glue_obj = glue_class(
+    proxy = proxy_class(
         target=target,
         unique_name=unique_name,
         access=access,
         **kwargs
     )
 
-    GlueSession(request).register_proxy(glue_obj)
+    GlueSession(request).register_proxy(proxy)
 
     if not hasattr(request, '__glue_context_data__'):
         request.__glue_context_data__ = {}
 
-    request.__glue_context_data__[glue_obj.unique_name] = glue_obj.to_context_data()
+    request.__glue_context_data__[proxy.unique_name] = proxy.to_context_data()
 
 
 def django_glue_urls():

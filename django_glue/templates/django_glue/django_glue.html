@@ -2,16 +2,19 @@
 {% load glue_config %}
 {% csrf_token %}
 
-<script src="{% static 'django_glue/js/glue.min.js' %}"></script>
+{% if debug %}
+    <script src="{% static 'django_glue/js/glue.min.js' %}"></script>
+{% else %}
+    <script src="{% static 'django_glue/js/glue.js' %}"></script>
+{% endif %}
 <script defer type="application/javascript">
-    // TODO: define the names for all the consts and properties below in constants.py and render via template parameters. Or consider including this data via json_script
-    const glueServerData = {
-        session: {{ DJANGO_GLUE_SESSION_DATA|safe }},
-        context: {{ DJANGO_GLUE_CONTEXT_DATA|safe }},
+    {% django_glue_client_type_config as client_config %}
+    const glueInitParams = {
+        proxyRegistryFromSession: {{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|safe }},
+        contextDataForProxies: {{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|safe }},
+        configuredProxyClassNamesForSubjectTypes: {{ client_config|safe }},
+        keepLiveInterval: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }}
     }
 
-    {% django_glue_client_type_config as client_config %}
-    const proxyTypeConfig = {{ client_config|safe }};
-
-    Glue.init()
+    Glue.init(glueInitParams)
 </script>

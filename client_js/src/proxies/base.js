@@ -1,20 +1,12 @@
 import {sendActionRequest} from "../http";
 
 export class BaseGlueProxy {
-    constructor(uniqueName) {
-        this.uniqueName = uniqueName;
-        this.contextData = glueServerData.context[uniqueName];
-        this.sessionData = glueServerData.session[uniqueName];
-        this.actions = {};
+    constructor(proxyRegistryData, contextData) {
+        this.uniqueName = proxyRegistryData.unique_name;
+        this.contextData = contextData;
+        this.actions = contextData.actions;
 
-
-        Object.keys(this.contextData.actions).forEach(actionName => {
-            this.actions[actionName] = {payload: null, name: actionName}
-
-            Object.defineProperty(this, actionName, {
-                value: (payload) => this.actionFunctionTemplate(actionName, payload)
-            });
-        });
+        this.#defineActionsAsProperties()
 
         this.postInit()
     }
@@ -28,11 +20,11 @@ export class BaseGlueProxy {
         return this.actions[actionName].payload
     }
 
-    async actionFunctionTemplate(actionName, payload = null) {
+    async processAction(actionName, payload = null) {
         const requestData = {
             unique_name: this.uniqueName,
             action: actionName,
-            payload: this.getActionPayload(actionName)
+            payload: payload ?? this.getActionPayload(actionName)
         };
 
         const response = await sendActionRequest(requestData);
@@ -43,6 +35,16 @@ export class BaseGlueProxy {
             console.error(`An error occurred when performing ${actionName} on target ${this.uniqueName}: ${response}`);
             return null;
         }
+    }
+
+    #defineActionsAsProperties() {
+        Object.keys(this.actions).forEach(actionName => this.defineActionAsProperty(actionName));
+    }
+
+    defineActionAsProperty(actionName) {
+        Object.defineProperty(this, actionName, {
+            value: (payload) => this.processAction(actionName, payload)
+        });
     }
 
     postInit() {}

@@ -1,13 +1,13 @@
 from pydantic import BaseModel
 
 
-class GlueRequestData(BaseModel):
+class GlueActionRequestData(BaseModel):
     action: str
     unique_name: str
     payload: dict | None = None
 
 
-class GlueResponseData(BaseModel):
+class GlueActionResponseData(BaseModel):
     data: dict
     success: bool
     message: str

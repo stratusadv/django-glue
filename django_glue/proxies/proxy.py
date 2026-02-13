@@ -9,7 +9,7 @@ from django_glue import data_transfer_objects as dto
 
 
 class BaseGlueProxy(ABC):
-    target_class: type
+    subject_type: type
     actions = {}
 
     def __init__(
@@ -19,9 +19,9 @@ class BaseGlueProxy(ABC):
         access: GlueAccess | str = GlueAccess.VIEW,
         **kwargs
     ):
-        if not isinstance(target, self.target_class):
+        if not isinstance(target, self.subject_type):
             raise ValueError(
-                f"The value passed to 'target' for {self.__class__} must be an instance of {self.target_class.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class').")
+                f"The value passed to 'target' for {self.__class__} must be an instance of {self.subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class').")
 
         self.unique_name = unique_name
 
@@ -32,8 +32,8 @@ class BaseGlueProxy(ABC):
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
-        if not hasattr(cls, 'target_class'):
-            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define 'target_class' attribute that matches the expected type of the __init__ 'target' parameter.")
+        if not hasattr(cls, 'subject_type'):
+            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define 'subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
         
         for attr_name, attr_value in cls.__dict__.items():
             if hasattr(attr_value, '_required_glue_access'):
@@ -53,12 +53,26 @@ class BaseGlueProxy(ABC):
                 )
 
     @classmethod
-    def from_session_kwargs(cls, access: GlueAccess, unique_name: str, **kwargs) -> BaseGlueProxy:
+    def from_proxy_registry_data(
+        cls,
+        access: GlueAccess,
+        unique_name: str,
+        **kwargs
+    ) -> BaseGlueProxy:
+        """
+        Child proxy classes that require extra necessary logic to construct instances from raw data from the proxy registry can override this method.
+        """
         return cls(
             access=access,
             unique_name=unique_name,
             **kwargs
         )
+
+    def _build_session_data(self) -> dict:
+        return {}
+
+    def _build_context_data(self) -> dict:
+        return {}
 
     def to_context_data(self):
         actions_data = {
@@ -67,43 +81,38 @@ class BaseGlueProxy(ABC):
         }
 
         return dict(
-            actions=actions_data,
-            **self._get_context_data()
-        )
-
-    def _get_session_data(self) -> dict:
-        return {}
-
-    def _get_context_data(self) -> dict:
-        return {}
+            actions=actions_data
+        ) | self._build_context_data()
 
     def to_session_data(self) -> dict:
         return dict(
             unique_name=self.unique_name,
-            target_class=self.target_class.__name__,
+            subject_type=self.subject_type.__name__,
             access=self.access
-        ) | self._get_session_data()
+        ) | self._build_session_data()
 
-    def process_request_data(self,
-                             request_data: dto.GlueRequestData) -> dto.GlueResponseData:
-        if not hasattr(self, request_data.action):
+    def process_action(
+        self,
+        action_data: dto.GlueActionRequestData
+    ) -> dto.GlueActionResponseData:
+        if not hasattr(self, action_data.action):
             raise TypeError(
-                f"Instance of {type(self).__name__} must define '{request_data.action}' method to process this action.")
+                f"Instance of {type(self).__name__} must define '{action_data.action}' method to process this action.")
 
-        if request_data.action not in self.actions:
+        if action_data.action not in self.actions:
             raise TypeError(
-                f"Action method '{request_data.action}' must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)' to specify required access.")
+                f"Action method '{action_data.action}' must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)' to specify required access.")
 
-        action_func, action_parameters, required_access = self.actions[request_data.action]
+        action_func, action_parameters, required_access = self.actions[action_data.action]
 
         if not self.access.has_access(required_access):
             raise PermissionError(
-                f"Insufficient access to perform '{request_data.action}' action.")
+                f"Insufficient access to perform '{action_data.action}' action.")
 
         if 'payload' not in action_parameters:
-            if request_data.payload is not None:
+            if action_data.payload is not None:
                 raise ValueError('This action does not support a payload parameter.')
 
             return action_func(self)
         else:
-            return action_func(self, dict(**request_data.payload))
+            return action_func(self, dict(**action_data.payload))

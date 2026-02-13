@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+from time import time
+from typing import Sequence, TYPE_CHECKING
+
+from django.http import HttpRequest
+
+from django_glue import settings
+from django_glue.proxies.utils import get_proxy_class_for_subject_type
+
+if TYPE_CHECKING:
+    from django_glue.proxies.proxy import BaseGlueProxy
+
+
+class GlueSession:
+    """
+        A proxy class for the django session that exposes methods to register
+        glue proxies to the session, set and renew their expiration times, and
+        purge proxies that have expired from the session.
+    """
+    def __init__(self, request: HttpRequest):
+        self.request = request
+
+        self.proxy_registry = request.session.setdefault(
+            settings.DJANGO_GLUE_SESSION_PROXY_KEY,
+            dict()
+        )
+
+        self.keep_live_registry = request.session.setdefault(
+            settings.DJANGO_GLUE_SESSION_KEEP_LIVE_KEY,
+            dict()
+        )
+
+    @staticmethod
+    def _get_next_expire_time() -> float:
+        return time() + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
+
+    def _set_modified(self) -> None:
+        self.request.session.modified = True
+
+    def _proxy_is_expired(self, proxy_name):
+        return time() > self.keep_live_registry[proxy_name]
+
+    def get_proxy_by_unique_name(self, unique_name: str) -> BaseGlueProxy:
+        proxy_data = self.proxy_registry.get(unique_name, None)
+        if proxy_data is None:
+            # TODO: Raise GlueNotFoundError
+            raise Exception()
+
+        proxy = get_proxy_class_for_subject_type(
+            proxy_data['subject_type']
+        ).from_proxy_registry_data(**proxy_data)
+
+        return proxy
+
+    def register_proxy(self, proxy: BaseGlueProxy) -> None:
+        self.proxy_registry[proxy.unique_name] = proxy.to_session_data()
+
+        self.keep_live_registry.setdefault(
+            proxy.unique_name,
+            self._get_next_expire_time()
+        )
+
+        self._set_modified()
+
+    def purge_expired_proxies(self) -> None:
+        proxy_names_to_purge = [
+            proxy_name
+            for proxy_name
+            in self.keep_live_registry.keys()
+            if self._proxy_is_expired(proxy_name)
+        ]
+
+        for proxy_name in proxy_names_to_purge:
+            self.keep_live_registry.pop(proxy_name)
+            self.proxy_registry.pop(proxy_name)
+
+        self._set_modified()
+
+    def renew_proxies(self, proxy_names: Sequence[str]) -> None:
+        for proxy_name in proxy_names:
+            if proxy_name in self.keep_live_registry:
+                self.keep_live_registry[proxy_name] = self._get_next_expire_time()
+
+        self._set_modified()

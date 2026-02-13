@@ -15,7 +15,7 @@ from django_glue.proxies.decorators import action
 
 
 class GlueModelProxy(BaseGlueProxy):
-    target_class = Model
+    subject_type = Model
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class GlueModelProxy(BaseGlueProxy):
         self.exclude = exclude
 
     @classmethod
-    def from_session_kwargs(
+    def from_proxy_registry_data(
         cls,
         target_pk: int | str | None,
         model_class: str,
@@ -54,14 +54,14 @@ class GlueModelProxy(BaseGlueProxy):
             **kwargs
         )
 
-    def _get_session_data(self) -> dict:
+    def _build_session_data(self) -> dict:
         return {
             'model_class': self.model_class.__name__,
             'app_label': self.app_label,
             'target_pk': self.target_pk,
         }
 
-    def _get_context_data(self) -> dict:
+    def _build_context_data(self) -> dict:
         return {
             'fields': self._included_fields,
         }
