@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.http import require_http_methods
 
@@ -27,7 +28,12 @@ def action_view(request: HttpRequest) -> JsonResponse | HttpResponse:
     action_data = dto.GlueActionRequestData(**data)
     proxy = GlueSession(request).get_proxy_by_unique_name(action_data.unique_name)
 
-    return JsonResponse(proxy.process_action(action_data))
+    action_output = proxy.process_action(action_data)
+
+    if settings.DEBUG:
+        print(f'Glue Action Request:\n - Action request data: {action_data.model_dump()}\n - Action output: {action_output}')
+
+    return JsonResponse(action_output, safe=False)
 
 
 def keep_live_view(request: HttpRequest) -> JsonResponse:
@@ -45,6 +51,6 @@ def keep_live_view(request: HttpRequest) -> JsonResponse:
 @require_http_methods(['GET'])
 def session_data_view(request: HttpRequest) -> JsonResponse:
     return JsonResponse(
-        data=GlueSession(request).proxy_registry
+        data=GlueSession(request).proxy_registry,
     )
 

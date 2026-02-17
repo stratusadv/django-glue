@@ -8,5 +8,10 @@ DJANGO_GLUE_TYPE_CONFIG = {
         'proxy_classes': {
             'server': 'django_glue.proxies.model.proxy.GlueModelProxy',
         }
+    },
+    'QuerySet': {
+        'proxy_classes': {
+            'server': 'django_glue.proxies.queryset.proxy.GlueQuerySetProxy',
+        }
     }
 }

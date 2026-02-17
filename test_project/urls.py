@@ -21,7 +21,7 @@ import test_project.task.views
 from django_glue import django_glue_urls
 
 urlpatterns = [
-    path('', test_project.task.views.task_detail_view),
+    path('', test_project.task.views.page_view),
     path('admin/', admin.site.urls),
 ]
 

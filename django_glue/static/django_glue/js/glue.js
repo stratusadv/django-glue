@@ -1,4 +1,28 @@
 (() => {
+  var __defProp = Object.defineProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __publicField = (obj, key, value) => {
+    __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+    return value;
+  };
+  var __accessCheck = (obj, member, msg) => {
+    if (!member.has(obj))
+      throw TypeError("Cannot " + msg);
+  };
+  var __privateGet = (obj, member, getter) => {
+    __accessCheck(obj, member, "read from private field");
+    return getter ? getter.call(obj) : member.get(obj);
+  };
+  var __privateAdd = (obj, member, value) => {
+    if (member.has(obj))
+      throw TypeError("Cannot add the same private member more than once");
+    member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
+  };
+  var __privateMethod = (obj, member, method) => {
+    __accessCheck(obj, member, "access private method");
+    return method;
+  };
+
   // client_js/src/constants.js
   var baseUrlPath = "django_glue";
   var actionUrl = `/${baseUrlPath}/`;
@@ -62,11 +86,12 @@
 
   // client_js/src/proxies/base.js
   var BaseGlueProxy = class {
-    constructor(proxyRegistryData, contextData) {
-      this.uniqueName = proxyRegistryData.unique_name;
+    constructor({ proxyUniqueName, contextData, actions = null, autoFetch = false }) {
+      this.uniqueName = proxyUniqueName;
       this.contextData = contextData;
-      this.actions = contextData.actions;
-      this.#defineActionsAsProperties();
+      this.actions = !!actions ? actions : contextData.actions;
+      this.autoFetch = autoFetch;
+      this.defineActionsAsProperties();
       this.postInit();
     }
     setActionPayload(actionName, payload) {
@@ -89,12 +114,9 @@
         return null;
       }
     }
-    #defineActionsAsProperties() {
-      Object.keys(this.actions).forEach((actionName) => this.defineActionAsProperty(actionName));
-    }
-    defineActionAsProperty(actionName) {
-      Object.defineProperty(this, actionName, {
-        value: (payload) => this.processAction(actionName, payload)
+    defineActionsAsProperties() {
+      Object.keys(this.actions).forEach((actionName) => {
+        this[actionName] = (payload) => this.processAction(actionName, payload);
       });
     }
     postInit() {
@@ -103,20 +125,28 @@
 
   // client_js/src/proxies/model.js
   var GlueModelProxy = class extends BaseGlueProxy {
+    constructor({
+      proxyUniqueName,
+      contextData,
+      actions = null,
+      autoFetch = false,
+      values = null
+    }) {
+      super({ proxyUniqueName, contextData, actions, autoFetch });
+      this.values = values;
+    }
     // TODO: Clean this up
     postInit() {
+      if (this.autoFetch && !this.values) {
+        this.loadData();
+      }
       Object.keys(this.contextData.fields).forEach((fieldName) => {
         Object.defineProperty(this, fieldName, {
           get: function() {
-            if (!this.loaded) {
+            if (!this.loaded && !this.autoFetch && !this.values) {
               if (!this.loading) {
                 this.loading = true;
-                this.get().then((data) => {
-                  this.values = data;
-                }).finally(() => {
-                  this.loading = false;
-                  this.loaded = true;
-                });
+                this.loadData();
               }
             }
             return this.values?.[fieldName];
@@ -131,80 +161,33 @@
         });
       });
     }
+    loadData() {
+      this.get().then((data) => {
+        this.values = data;
+      }).finally(() => {
+        this.loading = false;
+        this.loaded = true;
+      });
+    }
   };
 
-  // client_js/src/proxies/index.js
-  window.GlueModelProxy = GlueModelProxy;
-
   // client_js/src/client.js
-  var GlueClient = class {
-    #proxyClassesForSubjectTypes = {};
-    #activeProxies = {};
-    #contextData = {};
+  var _activeProxies, _loadProxyClassFromConfigurationByName, loadProxyClassFromConfigurationByName_fn, _loadProxyClasses, loadProxyClasses_fn, _validateProxyClass, validateProxyClass_fn, _validateRegisteredProxyClasses, validateRegisteredProxyClasses_fn, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn, _initializeKeepLivePulse, initializeKeepLivePulse_fn;
+  var _GlueClient = class {
+    constructor() {
+      __privateAdd(this, _loadProxyClassFromConfigurationByName);
+      __privateAdd(this, _loadProxyClasses);
+      __privateAdd(this, _validateProxyClass);
+      __privateAdd(this, _validateRegisteredProxyClasses);
+      __privateAdd(this, _assembleProxyFromRegistryData);
+      __privateAdd(this, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy);
+      __privateAdd(this, _defineProxyUniqueNamesAsProperties);
+      __privateAdd(this, _initializeKeepLivePulse);
+      __privateAdd(this, _activeProxies, {});
+    }
     registerProxyClassForSubjectType(subjectTypeName, proxyClass) {
-      this.#validateProxyClass(proxyClass);
-      this.#proxyClassesForSubjectTypes[subjectTypeName] = proxyClass;
-    }
-    #loadProxyClassFromConfigurationByName(name, configuredProxyClassNamesForSubjectTypes) {
-      if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(configuredProxyClassNamesForSubjectTypes).includes(name)) {
-        return eval?.(`"use strict";(${name})`);
-      } else {
-        throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
-      }
-    }
-    #loadProxyClasses(configuredProxyClassNamesForSubjectTypes) {
-      for (const [subjectType, proxyClassName] of Object.entries(configuredProxyClassNamesForSubjectTypes)) {
-        this.#proxyClassesForSubjectTypes[subjectType] = this.#loadProxyClassFromConfigurationByName(
-          proxyClassName,
-          configuredProxyClassNamesForSubjectTypes
-        );
-      }
-      this.#validateRegisteredProxyClasses();
-    }
-    #validateProxyClass(proxyClass) {
-      if (!(proxyClass.prototype instanceof BaseGlueProxy)) {
-        throw Error(`The proxy class ('${proxyClass}') does not extend BaseGlueProxy.`);
-      }
-    }
-    #validateRegisteredProxyClasses() {
-      Object.values(this.#proxyClassesForSubjectTypes).forEach((proxyClass) => {
-        this.#validateProxyClass(proxyClass);
-      });
-    }
-    #assembleProxyFromRegistryData(proxyInstanceRegistryData) {
-      const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
-      const ProxyClass = this.#proxyClassesForSubjectTypes[subjectType];
-      this.#activeProxies[uniqueName] = new ProxyClass(
-        proxyInstanceRegistryData,
-        this.#contextData[uniqueName]
-      );
-      return this.#activeProxies[uniqueName];
-    }
-    #defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData) {
-      const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
-      Object.defineProperty(this, proxyUniqueName, {
-        get: function() {
-          return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromRegistryData(proxyInstanceRegistryData);
-        }
-      });
-    }
-    #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
-      for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-        this.#defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData);
-      }
-    }
-    #initializeKeepLivePulse(keepLiveInterval) {
-      setInterval(() => {
-        const keepLiveNames = Object.keys(this.#activeProxies);
-        sendKeepLiveRequest(keepLiveNames).then((response) => {
-          if (!response.ok) {
-            let confirmation = confirm("Session expired. Do you want to reload the page?");
-            if (confirmation) {
-              window.location.reload();
-            }
-          }
-        });
-      }, keepLiveInterval);
+      __privateMethod(this, _validateProxyClass, validateProxyClass_fn).call(this, proxyClass);
+      _GlueClient.proxyClassesForSubjectTypes[subjectTypeName] = proxyClass;
     }
     init({
       proxyRegistryFromSession,
@@ -212,13 +195,121 @@
       configuredProxyClassNamesForSubjectTypes,
       keepLiveInterval
     }) {
-      this.#loadProxyClasses(configuredProxyClassNamesForSubjectTypes);
-      this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession);
-      this.#contextData = contextDataForProxies;
-      this.#initializeKeepLivePulse(keepLiveInterval);
+      __privateMethod(this, _loadProxyClasses, loadProxyClasses_fn).call(this, configuredProxyClassNamesForSubjectTypes);
+      __privateMethod(this, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn).call(this, proxyRegistryFromSession);
+      _GlueClient.contextData = contextDataForProxies;
+      __privateMethod(this, _initializeKeepLivePulse, initializeKeepLivePulse_fn).call(this, keepLiveInterval);
     }
   };
+  var GlueClient = _GlueClient;
+  _activeProxies = new WeakMap();
+  _loadProxyClassFromConfigurationByName = new WeakSet();
+  loadProxyClassFromConfigurationByName_fn = function(name, configuredProxyClassNamesForSubjectTypes) {
+    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(configuredProxyClassNamesForSubjectTypes).includes(name)) {
+      return eval?.(`"use strict";(${name})`);
+    } else {
+      throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
+    }
+  };
+  _loadProxyClasses = new WeakSet();
+  loadProxyClasses_fn = function(configuredProxyClassNamesForSubjectTypes) {
+    for (const [subjectType, proxyClassName] of Object.entries(configuredProxyClassNamesForSubjectTypes)) {
+      _GlueClient.proxyClassesForSubjectTypes[subjectType] = __privateMethod(this, _loadProxyClassFromConfigurationByName, loadProxyClassFromConfigurationByName_fn).call(this, proxyClassName, configuredProxyClassNamesForSubjectTypes);
+    }
+    __privateMethod(this, _validateRegisteredProxyClasses, validateRegisteredProxyClasses_fn).call(this);
+  };
+  _validateProxyClass = new WeakSet();
+  validateProxyClass_fn = function(proxyClass) {
+    if (!(proxyClass.prototype instanceof BaseGlueProxy || proxyClass.name === BaseGlueProxy.name)) {
+      throw Error(`The proxy class ('${proxyClass}') does not extend BaseGlueProxy.`);
+    }
+  };
+  _validateRegisteredProxyClasses = new WeakSet();
+  validateRegisteredProxyClasses_fn = function() {
+    Object.values(_GlueClient.proxyClassesForSubjectTypes).forEach((proxyClass) => {
+      __privateMethod(this, _validateProxyClass, validateProxyClass_fn).call(this, proxyClass);
+    });
+  };
+  _assembleProxyFromRegistryData = new WeakSet();
+  assembleProxyFromRegistryData_fn = function(proxyInstanceRegistryData) {
+    const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
+    const ProxyClass = _GlueClient.proxyClassesForSubjectTypes[subjectType];
+    __privateGet(this, _activeProxies)[uniqueName] = new ProxyClass({
+      proxyUniqueName: proxyInstanceRegistryData.unique_name,
+      contextData: _GlueClient.contextData[uniqueName]
+    });
+    return __privateGet(this, _activeProxies)[uniqueName];
+  };
+  _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy = new WeakSet();
+  defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn = function(proxyInstanceRegistryData) {
+    const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
+    Object.defineProperty(this, proxyUniqueName, {
+      get: function() {
+        return __privateGet(this, _activeProxies)?.[proxyUniqueName] ?? __privateMethod(this, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn).call(this, proxyInstanceRegistryData);
+      }
+    });
+  };
+  _defineProxyUniqueNamesAsProperties = new WeakSet();
+  defineProxyUniqueNamesAsProperties_fn = function(proxyRegistryFromSession) {
+    for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
+      __privateMethod(this, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn).call(this, proxyInstanceRegistryData);
+    }
+  };
+  _initializeKeepLivePulse = new WeakSet();
+  initializeKeepLivePulse_fn = function(keepLiveInterval) {
+    setInterval(() => {
+      const keepLiveNames = Object.keys(__privateGet(this, _activeProxies));
+      sendKeepLiveRequest(keepLiveNames).then((response) => {
+        if (!response.ok) {
+          let confirmation = confirm("Session expired. Do you want to reload the page?");
+          if (confirmation) {
+            window.location.reload();
+          }
+        }
+      });
+    }, keepLiveInterval);
+  };
+  __publicField(GlueClient, "proxyClassesForSubjectTypes", {});
+  __publicField(GlueClient, "contextData", {});
   var client_default = GlueClient;
+
+  // client_js/src/proxies/queryset.js
+  var GlueQuerySetProxy = class extends BaseGlueProxy {
+    postInit() {
+      const baseAll = this.all.bind(this);
+      this.all = async () => {
+        const data = await baseAll();
+        this.items = data.map((item) => this.buildQuerySetItem(item));
+        return this.items;
+      };
+      const baseFilter = this.filter.bind(this);
+      this.filter = async (filterParams) => {
+        const data = await baseFilter(filterParams);
+        this.items = data.map((item) => this.buildQuerySetItem(item));
+        return this.items;
+      };
+    }
+    *[Symbol.iterator]() {
+      yield* this.items;
+    }
+    buildQuerySetItem(item) {
+      const ProxyClass = client_default.proxyClassesForSubjectTypes["Model"];
+      return new ProxyClass({
+        proxyUniqueName: this.uniqueName,
+        contextData: client_default.contextData[this.uniqueName],
+        actions: {
+          save: { payload: "dict" },
+          delete: { payload: "dict" }
+        },
+        values: { ...item }
+      });
+    }
+  };
+
+  // client_js/src/proxies/index.js
+  window.BaseGlueProxy = BaseGlueProxy;
+  window.GlueModelProxy = GlueModelProxy;
+  window.GlueQuerySetProxy = GlueQuerySetProxy;
 
   // client_js/glue.js
   var Glue = new client_default();

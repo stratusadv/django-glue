@@ -1,12 +1,14 @@
 import {sendActionRequest} from "../http";
 
 export class BaseGlueProxy {
-    constructor(proxyRegistryData, contextData) {
-        this.uniqueName = proxyRegistryData.unique_name;
+    constructor({proxyUniqueName, contextData, actions=null, autoFetch=false}) {
+        this.uniqueName = proxyUniqueName;
         this.contextData = contextData;
-        this.actions = contextData.actions;
+        // TODO: move action data to subject_type level key in session/context_data
+        this.actions = !!actions ? actions : contextData.actions;
+        this.autoFetch = autoFetch
 
-        this.#defineActionsAsProperties()
+        this.defineActionsAsProperties()
 
         this.postInit()
     }
@@ -37,13 +39,9 @@ export class BaseGlueProxy {
         }
     }
 
-    #defineActionsAsProperties() {
-        Object.keys(this.actions).forEach(actionName => this.defineActionAsProperty(actionName));
-    }
-
-    defineActionAsProperty(actionName) {
-        Object.defineProperty(this, actionName, {
-            value: (payload) => this.processAction(actionName, payload)
+    defineActionsAsProperties() {
+        Object.keys(this.actions).forEach(actionName => {
+            this[actionName] = (payload) => this.processAction(actionName, payload)
         });
     }
 

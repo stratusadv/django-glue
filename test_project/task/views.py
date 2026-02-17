@@ -5,7 +5,7 @@ import django_glue as dg
 from test_project.task.models import Task
 
 
-def task_detail_view(request: HttpRequest):
+def page_view(request: HttpRequest):
     task = Task.objects.first()
 
     if not task:
@@ -23,4 +23,11 @@ def task_detail_view(request: HttpRequest):
         access=dg.GlueAccess.DELETE,
     )
 
-    return render(request, 'detail_page.html', {'task': task})
+    dg.glue(
+        request=request,
+        target=Task.objects.all(),
+        unique_name='tasks',
+        access=dg.GlueAccess.DELETE,
+    )
+
+    return render(request, 'page.html')

@@ -30,9 +30,11 @@ class BaseGlueProxy(ABC):
         else:
             self.access = GlueAccess(access)
 
+        self.target = target
+
     @classmethod
     def __init_subclass__(cls, **kwargs):
-        if not hasattr(cls, 'subject_type'):
+        if not hasattr(cls, 'subject_type') and not inspect.isabstract(cls):
             raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define 'subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
         
         for attr_name, attr_value in cls.__dict__.items():

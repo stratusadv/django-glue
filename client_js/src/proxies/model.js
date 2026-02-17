@@ -1,20 +1,30 @@
 import { BaseGlueProxy } from "./base";
 
 export class GlueModelProxy extends BaseGlueProxy {
+    constructor({
+        proxyUniqueName,
+        contextData,
+        actions=null,
+        autoFetch=false,
+        values=null
+    }) {
+        super({proxyUniqueName, contextData, actions, autoFetch});
+        this.values = values
+    }
+
     // TODO: Clean this up
     postInit() {
+        if (this.autoFetch && !this.values) {
+            this.loadData()
+        }
+
         Object.keys(this.contextData.fields).forEach(fieldName => {
             Object.defineProperty(this, fieldName, {
                 get: function() {
-                    if (!this.loaded) {
+                    if (!this.loaded && !this.autoFetch && !this.values) {
                         if (!this.loading) {
                             this.loading = true;
-                            this.get().then(data => {
-                                this.values = data;
-                            }).finally(() => {
-                                this.loading = false;
-                                this.loaded = true;
-                            });
+                            this.loadData()
                         }
                     }
 
@@ -30,5 +40,14 @@ export class GlueModelProxy extends BaseGlueProxy {
                 }
             })
         })
+    }
+
+    loadData() {
+        this.get().then(data => {
+            this.values = data;
+        }).finally(() => {
+            this.loading = false;
+            this.loaded = true;
+        });
     }
 }
