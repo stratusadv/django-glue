@@ -16,7 +16,7 @@ from django_glue.proxies.decorators import action
 
 
 class GlueModelProxy(GlueProxyFieldsMixin):
-    subject_type = Model
+    _subject_type = Model
 
     def __init__(
         self,

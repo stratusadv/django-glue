@@ -1,5 +1,5 @@
-import { BaseGlueProxy } from "./proxies/base";
 import {sendKeepLiveRequest} from "./http";
+import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
 
 // TODO: This is becoming a god class and needs to be broken down
 class GlueClient {
@@ -7,47 +7,10 @@ class GlueClient {
     static contextData = {}
     #activeProxies = {}
 
-    registerProxyClassForSubjectType(subjectTypeName, proxyClass) {
-        this.#validateProxyClass(proxyClass)
-        GlueClient.proxyClassesForSubjectTypes[subjectTypeName] = proxyClass
-    }
-
-    #loadProxyClassFromConfigurationByName(name, configuredProxyClassNamesForSubjectTypes){
-        if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(configuredProxyClassNamesForSubjectTypes).includes(name)) {
-          // proceed only if the name is a single word string and is in adapterTypeConfig
-            return eval?.(`"use strict";(${name})`)
-        } else {
-          // arbitrary code is detected
-          throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
-        }
-    }
-
-    #loadProxyClasses(configuredProxyClassNamesForSubjectTypes) {
-        for (const [subjectType, proxyClassName] of Object.entries(configuredProxyClassNamesForSubjectTypes)) {
-            GlueClient.proxyClassesForSubjectTypes[subjectType] = this.#loadProxyClassFromConfigurationByName(
-                proxyClassName,
-                configuredProxyClassNamesForSubjectTypes
-            )
-        }
-        this.#validateRegisteredProxyClasses()
-    }
-
-    #validateProxyClass(proxyClass) {
-        if (!(proxyClass.prototype instanceof BaseGlueProxy || proxyClass.name === BaseGlueProxy.name)) {
-            throw Error(`The proxy class ('${proxyClass}') does not extend BaseGlueProxy.`)
-        }
-    }
-
-    #validateRegisteredProxyClasses() {
-        Object.values(GlueClient.proxyClassesForSubjectTypes).forEach(proxyClass => {
-            this.#validateProxyClass(proxyClass)
-        })
-    }
-
     #assembleProxyFromRegistryData(proxyInstanceRegistryData) {
         const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData
 
-        const ProxyClass = GlueClient.proxyClassesForSubjectTypes[subjectType]
+        const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
         this.#activeProxies[uniqueName] = new ProxyClass({
             proxyUniqueName: proxyInstanceRegistryData.unique_name,
             contextData: GlueClient.contextData[uniqueName],
@@ -90,10 +53,8 @@ class GlueClient {
     init({
         proxyRegistryFromSession,
         contextDataForProxies,
-        configuredProxyClassNamesForSubjectTypes,
         keepLiveInterval
     }) {
-        this.#loadProxyClasses(configuredProxyClassNamesForSubjectTypes)
         this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession)
         GlueClient.contextData = contextDataForProxies
 

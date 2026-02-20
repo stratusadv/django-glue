@@ -1,5 +1,4 @@
 {% load static %}
-{% load glue_config %}
 {% csrf_token %}
 
 {% if debug %}
@@ -8,11 +7,9 @@
     <script src="{% static 'django_glue/js/glue.js' %}"></script>
 {% endif %}
 <script defer type="application/javascript">
-    {% django_glue_client_type_config as client_config %}
     const glueInitParams = {
         proxyRegistryFromSession: {{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|safe }},
         contextDataForProxies: {{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|safe }},
-        configuredProxyClassNamesForSubjectTypes: {{ client_config|safe }},
         keepLiveInterval: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }}
     }
 

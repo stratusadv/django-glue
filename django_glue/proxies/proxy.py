@@ -9,8 +9,8 @@ from django_glue import data_transfer_objects as dto
 
 
 class BaseGlueProxy(ABC):
-    subject_type: type
-    actions = {}
+    _subject_type: type
+    _actions = {}
 
     def __init__(
         self,
@@ -19,9 +19,9 @@ class BaseGlueProxy(ABC):
         access: GlueAccess | str = GlueAccess.VIEW,
         **kwargs
     ):
-        if not isinstance(target, self.subject_type):
+        if not isinstance(target, self._subject_type):
             raise ValueError(
-                f"The value passed to 'target' for {self.__class__} must be an instance of {self.subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class').")
+                f"The value passed to 'target' for {self.__class__} must be an instance of {self._subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class').")
 
         self.unique_name = unique_name
 
@@ -34,8 +34,10 @@ class BaseGlueProxy(ABC):
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
-        if not hasattr(cls, 'subject_type') and not inspect.isabstract(cls):
-            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define 'subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
+        if not hasattr(cls, '_subject_type') and not inspect.isabstract(cls):
+            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
+
+        cls._actions[cls.__name__] = {}
         
         for attr_name, attr_value in cls.__dict__.items():
             if hasattr(attr_value, '_required_glue_access'):
@@ -48,11 +50,15 @@ class BaseGlueProxy(ABC):
                     else:
                         parameter_data[param_name] = param_value.annotation
 
-                cls.actions[attr_name] = (
+                cls._actions[cls.__name__][attr_name] = (
                     attr_value,
                     parameter_data,
                     attr_value._required_glue_access
                 )
+
+    @property
+    def actions(self):
+        return self._actions[self.__class__.__name__]
 
     @classmethod
     def from_proxy_registry_data(
@@ -89,7 +95,7 @@ class BaseGlueProxy(ABC):
     def to_session_data(self) -> dict:
         return dict(
             unique_name=self.unique_name,
-            subject_type=self.subject_type.__name__,
+            subject_type=self._subject_type.__name__,
             access=self.access
         ) | self._build_session_data()
 

@@ -1,4 +1,5 @@
 import { BaseGlueProxy } from "./base";
+import {GlueModelProxy} from "./model";
 import GlueClient from "../client";
 
 export class GlueQuerySetProxy extends BaseGlueProxy {
@@ -28,8 +29,7 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
 
     buildQuerySetItem(item) {
         // TODO: Ensure that if QuerySetProxy is configured, then a ModelProxy must be configured
-        const ProxyClass = GlueClient.proxyClassesForSubjectTypes['Model']
-        return new ProxyClass({
+        return new GlueModelProxy({
             proxyUniqueName: this.uniqueName,
             contextData: GlueClient.contextData[this.uniqueName],
             actions: {

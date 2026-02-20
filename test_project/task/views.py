@@ -1,7 +1,7 @@
 from django.http import HttpRequest
 from django.shortcuts import render
 
-import django_glue as dg
+from django_glue import Glue, GlueAccess
 from test_project.task.models import Task
 
 
@@ -16,18 +16,18 @@ def page_view(request: HttpRequest):
             order=1
         )
 
-    dg.glue(
+    Glue.model(
         request=request,
         target=task,
         unique_name='task',
-        access=dg.GlueAccess.DELETE,
+        access=GlueAccess.DELETE,
     )
 
-    dg.glue(
+    Glue.queryset(
         request=request,
         target=Task.objects.all(),
         unique_name='tasks',
-        access=dg.GlueAccess.DELETE,
+        access=GlueAccess.DELETE,
     )
 
     return render(request, 'page.html')

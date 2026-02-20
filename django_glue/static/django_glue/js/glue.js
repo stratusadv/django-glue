@@ -172,30 +172,20 @@
   };
 
   // client_js/src/client.js
-  var _activeProxies, _loadProxyClassFromConfigurationByName, loadProxyClassFromConfigurationByName_fn, _loadProxyClasses, loadProxyClasses_fn, _validateProxyClass, validateProxyClass_fn, _validateRegisteredProxyClasses, validateRegisteredProxyClasses_fn, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn, _initializeKeepLivePulse, initializeKeepLivePulse_fn;
+  var _activeProxies, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn, _initializeKeepLivePulse, initializeKeepLivePulse_fn;
   var _GlueClient = class {
     constructor() {
-      __privateAdd(this, _loadProxyClassFromConfigurationByName);
-      __privateAdd(this, _loadProxyClasses);
-      __privateAdd(this, _validateProxyClass);
-      __privateAdd(this, _validateRegisteredProxyClasses);
       __privateAdd(this, _assembleProxyFromRegistryData);
       __privateAdd(this, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy);
       __privateAdd(this, _defineProxyUniqueNamesAsProperties);
       __privateAdd(this, _initializeKeepLivePulse);
       __privateAdd(this, _activeProxies, {});
     }
-    registerProxyClassForSubjectType(subjectTypeName, proxyClass) {
-      __privateMethod(this, _validateProxyClass, validateProxyClass_fn).call(this, proxyClass);
-      _GlueClient.proxyClassesForSubjectTypes[subjectTypeName] = proxyClass;
-    }
     init({
       proxyRegistryFromSession,
       contextDataForProxies,
-      configuredProxyClassNamesForSubjectTypes,
       keepLiveInterval
     }) {
-      __privateMethod(this, _loadProxyClasses, loadProxyClasses_fn).call(this, configuredProxyClassNamesForSubjectTypes);
       __privateMethod(this, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn).call(this, proxyRegistryFromSession);
       _GlueClient.contextData = contextDataForProxies;
       __privateMethod(this, _initializeKeepLivePulse, initializeKeepLivePulse_fn).call(this, keepLiveInterval);
@@ -203,37 +193,10 @@
   };
   var GlueClient = _GlueClient;
   _activeProxies = new WeakMap();
-  _loadProxyClassFromConfigurationByName = new WeakSet();
-  loadProxyClassFromConfigurationByName_fn = function(name, configuredProxyClassNamesForSubjectTypes) {
-    if (name.match(/^[a-zA-Z0-9_]+$/) && Object.values(configuredProxyClassNamesForSubjectTypes).includes(name)) {
-      return eval?.(`"use strict";(${name})`);
-    } else {
-      throw new Error(`ALERT: DANGEROUS STRING PASSED INTO 'getClassByName': '${name}'`);
-    }
-  };
-  _loadProxyClasses = new WeakSet();
-  loadProxyClasses_fn = function(configuredProxyClassNamesForSubjectTypes) {
-    for (const [subjectType, proxyClassName] of Object.entries(configuredProxyClassNamesForSubjectTypes)) {
-      _GlueClient.proxyClassesForSubjectTypes[subjectType] = __privateMethod(this, _loadProxyClassFromConfigurationByName, loadProxyClassFromConfigurationByName_fn).call(this, proxyClassName, configuredProxyClassNamesForSubjectTypes);
-    }
-    __privateMethod(this, _validateRegisteredProxyClasses, validateRegisteredProxyClasses_fn).call(this);
-  };
-  _validateProxyClass = new WeakSet();
-  validateProxyClass_fn = function(proxyClass) {
-    if (!(proxyClass.prototype instanceof BaseGlueProxy || proxyClass.name === BaseGlueProxy.name)) {
-      throw Error(`The proxy class ('${proxyClass}') does not extend BaseGlueProxy.`);
-    }
-  };
-  _validateRegisteredProxyClasses = new WeakSet();
-  validateRegisteredProxyClasses_fn = function() {
-    Object.values(_GlueClient.proxyClassesForSubjectTypes).forEach((proxyClass) => {
-      __privateMethod(this, _validateProxyClass, validateProxyClass_fn).call(this, proxyClass);
-    });
-  };
   _assembleProxyFromRegistryData = new WeakSet();
   assembleProxyFromRegistryData_fn = function(proxyInstanceRegistryData) {
     const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
-    const ProxyClass = _GlueClient.proxyClassesForSubjectTypes[subjectType];
+    const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
     __privateGet(this, _activeProxies)[uniqueName] = new ProxyClass({
       proxyUniqueName: proxyInstanceRegistryData.unique_name,
       contextData: _GlueClient.contextData[uniqueName]
@@ -293,8 +256,7 @@
       yield* this.items;
     }
     buildQuerySetItem(item) {
-      const ProxyClass = client_default.proxyClassesForSubjectTypes["Model"];
-      return new ProxyClass({
+      return new GlueModelProxy({
         proxyUniqueName: this.uniqueName,
         contextData: client_default.contextData[this.uniqueName],
         actions: {
@@ -307,6 +269,10 @@
   };
 
   // client_js/src/proxies/index.js
+  var SUBJECT_TYPE_TO_PROXY_CLASS = {
+    "Model": GlueModelProxy,
+    "QuerySet": GlueQuerySetProxy
+  };
   window.BaseGlueProxy = BaseGlueProxy;
   window.GlueModelProxy = GlueModelProxy;
   window.GlueQuerySetProxy = GlueQuerySetProxy;

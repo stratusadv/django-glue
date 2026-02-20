@@ -3,17 +3,15 @@ from __future__ import annotations
 import base64
 import pickle
 from django.db.models import QuerySet, Model
-from django.utils.module_loading import import_string
 
 from django_glue.access.access import GlueAccess
-from django_glue.conf import settings
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.mixins import GlueProxyFieldsMixin
 from django_glue.proxies.decorators import action
 
 
 class GlueQuerySetProxy(GlueProxyFieldsMixin):
-    subject_type = QuerySet
+    _subject_type = QuerySet
 
     def __init__(
         self,
@@ -67,22 +65,8 @@ class GlueQuerySetProxy(GlueProxyFieldsMixin):
     def filter(self, payload: dict):
         return self._queryset_to_list(self.target.filter(**payload))
 
-    @action(access=GlueAccess.CHANGE)
-    def save_all(self, payload: dict):
-        self.target.update(**payload)
-        return {}
-
-    @action(access=GlueAccess.DELETE)
-    def delete_all(self):
-        self.target.delete()
-        return {}
-
     def _create_model_proxy_from_instance(self, instance: Model):
-        model_proxy_class = import_string(
-            settings.DJANGO_GLUE_TYPE_CONFIG['Model']['proxy_classes']['server']
-        )
-
-        return model_proxy_class(
+        return GlueModelProxy(
             target=instance,
             unique_name=self.unique_name,
             access=self.access,
