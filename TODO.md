@@ -1,6 +1,7 @@
 # Django Glue - TODO
 
 ## Medium (Quality)
+- [ ] Add proper seeding to test project
 - [ ] Update docs to reflect new overhauled glue (they currently document the old, pre v1 version which had an entirely different api)
 - [ ] Add payload validation to actions
 - [ ] Add comprehensive docstrings to public APIs
