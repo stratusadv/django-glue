@@ -6,6 +6,7 @@ from typing import Any
 
 from django_glue.access.access import GlueAccess
 from django_glue import data_transfer_objects as dto
+from django_glue.exceptions import GlueAccessError, GlueMissingActionError
 
 
 class BaseGlueProxy(ABC):
@@ -104,18 +105,27 @@ class BaseGlueProxy(ABC):
         action_data: dto.GlueActionRequestData
     ) -> dto.GlueActionResponseData:
         if not hasattr(self, action_data.action):
-            raise TypeError(
-                f"Instance of {type(self).__name__} must define '{action_data.action}' method to process this action.")
+            raise GlueMissingActionError(
+                action=action_data.action,
+                proxy_name=self.unique_name,
+                reason=f"Method '{action_data.action}' does not exist on {type(self).__name__}"
+            )
 
         if action_data.action not in self.actions:
-            raise TypeError(
-                f"Action method '{action_data.action}' must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)' to specify required access.")
+            raise GlueMissingActionError(
+                action=action_data.action,
+                proxy_name=self.unique_name,
+                reason="Method must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
+            )
 
         action_func, action_parameters, required_access = self.actions[action_data.action]
 
         if not self.access.has_access(required_access):
-            raise PermissionError(
-                f"Insufficient access to perform '{action_data.action}' action.")
+            raise GlueAccessError(
+                action=action_data.action,
+                required_access=required_access.name,
+                current_access=self.access.name
+            )
 
         if 'payload' not in action_parameters:
             if action_data.payload is not None:

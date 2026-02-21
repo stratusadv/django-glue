@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import sys
-from collections.abc import Sequence
-from functools import cached_property
-from typing import Any
-
 from django.apps import apps
-from django.db.models import Model, ForeignObjectRel, Field
+from django.db.models import Model
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
+from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.proxies.mixins import GlueProxyFieldsMixin
-from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
 
 
@@ -40,7 +35,13 @@ class GlueModelProxy(GlueProxyFieldsMixin):
         model_class = apps.get_model(app_label=app_label, model_name=model_class)
 
         if target_pk:
-            target = model_class.objects.get(pk=target_pk)
+            try:
+                target = model_class.objects.get(pk=target_pk)
+            except model_class.DoesNotExist:
+                raise GlueModelInstanceNotFoundError(
+                    model_name=model_class.__name__,
+                    pk=target_pk
+                )
         else:
             target = model_class()
 
@@ -69,7 +70,13 @@ class GlueModelProxy(GlueProxyFieldsMixin):
         model_class = self.get_model_class()
 
         if self.target_pk:
-            return model_class.objects.get(pk=self.target_pk)
+            try:
+                return model_class.objects.get(pk=self.target_pk)
+            except model_class.DoesNotExist:
+                raise GlueModelInstanceNotFoundError(
+                    model_name=model_class.__name__,
+                    pk=self.target_pk
+                )
         else:
             return model_class()
 

@@ -1,0 +1,9 @@
+<li class="nav-item">
+    <button
+        class="nav-link"
+        :class="{ 'active': activeTab === '{{ tab_id }}' }"
+        @click="activeTab = '{{ tab_id }}'"
+        type="button">
+        {{ tab_label }}
+    </button>
+</li>

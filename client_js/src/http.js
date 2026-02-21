@@ -1,4 +1,5 @@
 import {actionUrl, keepLiveUrl} from "./constants";
+import {getConfig} from "./config";
 
 function getHttpCookie(name) {
     if (document?.cookie !== '') {
@@ -19,12 +20,18 @@ export async function sendHttpRequest(url, requestOptions = {
     method: 'GET',
     contentType: 'application/json',
     csrfProtected: true,
+    timeout: null,
 }) {
+    const timeoutMs = requestOptions.timeout ?? getConfig().requestTimeoutMs;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     const options = {
         method: requestOptions.method,
         headers: {
             'Content-Type': requestOptions.contentType,
-        }
+        },
+        signal: controller.signal,
     }
 
     if (options.method === 'POST') {
@@ -35,17 +42,21 @@ export async function sendHttpRequest(url, requestOptions = {
         options.headers['X-CSRFToken'] = getHttpCookie('csrftoken')
     }
 
-    const actionResponse = await fetch(url, options)
+    try {
+        const actionResponse = await fetch(url, options)
 
-    if (!actionResponse.ok) {
-        throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`)
-    }
+        if (!actionResponse.ok) {
+            throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`)
+        }
 
-    return {
-        ok: actionResponse.ok,
-        body: await actionResponse.clone().text(),
-        httpResponse: actionResponse,
-        data: actionResponse.ok ? await actionResponse.json() : null
+        return {
+            ok: actionResponse.ok,
+            body: await actionResponse.clone().text(),
+            httpResponse: actionResponse,
+            data: actionResponse.ok ? await actionResponse.json() : null
+        }
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 

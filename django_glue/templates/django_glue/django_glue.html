@@ -6,10 +6,14 @@
 {% else %}
     <script src="{% static 'django_glue/js/glue.js' %}"></script>
 {% endif %}
+
+{{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"glue-proxy-registry" }}
+{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|json_script:"glue-context-data" }}
+
 <script defer type="application/javascript">
     const glueInitParams = {
-        proxyRegistryFromSession: {{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|safe }},
-        contextDataForProxies: {{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|safe }},
+        proxyRegistryFromSession: JSON.parse(document.getElementById('glue-proxy-registry').textContent),
+        contextDataForProxies: JSON.parse(document.getElementById('glue-context-data').textContent),
         keepLiveInterval: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }}
     }
 

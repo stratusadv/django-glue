@@ -16,6 +16,6 @@
     },
     "scripts": {
         "build": "node client_js/scripts/build.js",
-        "watch": "node client_js/scripts/build.js --watch"
+        "watch": "node --watch client_js/scripts/build.js"
     }
 }

@@ -1,5 +1,6 @@
 import {sendKeepLiveRequest} from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
+import {setConfig} from "./config";
 
 // TODO: This is becoming a god class and needs to be broken down
 class GlueClient {
@@ -53,8 +54,13 @@ class GlueClient {
     init({
         proxyRegistryFromSession,
         contextDataForProxies,
-        keepLiveInterval
+        keepLiveInterval,
+        config = {},
     }) {
+        if (config) {
+            setConfig(config);
+        }
+
         this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession)
         GlueClient.contextData = contextDataForProxies
 

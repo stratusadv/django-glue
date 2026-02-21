@@ -28,6 +28,18 @@
   var actionUrl = `/${baseUrlPath}/`;
   var keepLiveUrl = `/${baseUrlPath}/keep_live/`;
 
+  // client_js/src/config.js
+  var DEFAULT_CONFIG = {
+    requestTimeoutMs: 3e4
+  };
+  var config = { ...DEFAULT_CONFIG };
+  function getConfig() {
+    return config;
+  }
+  function setConfig(newConfig) {
+    config = { ...config, ...newConfig };
+  }
+
   // client_js/src/http.js
   function getHttpCookie(name) {
     if (document?.cookie !== "") {
@@ -44,13 +56,18 @@
     body: "",
     method: "GET",
     contentType: "application/json",
-    csrfProtected: true
+    csrfProtected: true,
+    timeout: null
   }) {
+    const timeoutMs = requestOptions.timeout ?? getConfig().requestTimeoutMs;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const options = {
       method: requestOptions.method,
       headers: {
         "Content-Type": requestOptions.contentType
-      }
+      },
+      signal: controller.signal
     };
     if (options.method === "POST") {
       options.body = requestOptions.body;
@@ -58,16 +75,20 @@
     if (requestOptions.csrfProtected) {
       options.headers["X-CSRFToken"] = getHttpCookie("csrftoken");
     }
-    const actionResponse = await fetch(url, options);
-    if (!actionResponse.ok) {
-      throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`);
+    try {
+      const actionResponse = await fetch(url, options);
+      if (!actionResponse.ok) {
+        throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`);
+      }
+      return {
+        ok: actionResponse.ok,
+        body: await actionResponse.clone().text(),
+        httpResponse: actionResponse,
+        data: actionResponse.ok ? await actionResponse.json() : null
+      };
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return {
-      ok: actionResponse.ok,
-      body: await actionResponse.clone().text(),
-      httpResponse: actionResponse,
-      data: actionResponse.ok ? await actionResponse.json() : null
-    };
   }
   async function sendJsonPostRequest(url, data, csrfProtected = true) {
     return await sendHttpRequest(url, {
@@ -107,12 +128,7 @@
         payload: payload ?? this.getActionPayload(actionName)
       };
       const response = await sendActionRequest(requestData);
-      if (response.ok) {
-        return response.data;
-      } else {
-        console.error(`An error occurred when performing ${actionName} on target ${this.uniqueName}: ${response}`);
-        return null;
-      }
+      return response.data;
     }
     defineActionsAsProperties() {
       Object.keys(this.actions).forEach((actionName) => {
@@ -184,8 +200,12 @@
     init({
       proxyRegistryFromSession,
       contextDataForProxies,
-      keepLiveInterval
+      keepLiveInterval,
+      config: config2 = {}
     }) {
+      if (config2) {
+        setConfig(config2);
+      }
       __privateMethod(this, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn).call(this, proxyRegistryFromSession);
       _GlueClient.contextData = contextDataForProxies;
       __privateMethod(this, _initializeKeepLivePulse, initializeKeepLivePulse_fn).call(this, keepLiveInterval);

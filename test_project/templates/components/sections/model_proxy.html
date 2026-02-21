@@ -1,0 +1,43 @@
+<div x-show="activeTab === 'model'" x-data="{ task: Glue.task }">
+    <h5 class="card-title mb-4">Glue Model Proxy</h5>
+    <p class="text-muted mb-4">Edit a single task instance directly bound to the backend model.</p>
+
+    <div/c/c>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">ID</label>
+                <input type="text" class="form-control bg-light" x-model="task.id" readonly>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Title</label>
+                <input type="text" class="form-control" x-model="task.title" placeholder="Enter task title">
+            </div>
+            <div class="col-12">
+                <label class="form-label fw-semibold">Description</label>
+                <textarea class="form-control" rows="3" x-model="task.description" placeholder="Enter task description"></textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Done</label>
+                <select class="form-select" x-model="task.done">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Order</label>
+                <input type="number" class="form-control" x-model="task.order">
+            </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="d-flex gap-2">
+            <button type="button" @click="task.save()" class="btn btn-primary">
+                Save Task
+            </button>
+            <button type="button" @click="task.delete();" class="btn btn-outline-danger">
+                Delete Task
+            </button>
+        </div>
+    </div>
+</div>

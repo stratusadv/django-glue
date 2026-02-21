@@ -30,13 +30,7 @@ export class BaseGlueProxy {
         };
 
         const response = await sendActionRequest(requestData);
-
-        if (response.ok) {
-            return response.data;
-        } else {
-            console.error(`An error occurred when performing ${actionName} on target ${this.uniqueName}: ${response}`);
-            return null;
-        }
+        return response.data;
     }
 
     defineActionsAsProperties() {

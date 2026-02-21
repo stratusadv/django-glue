@@ -6,6 +6,7 @@ from typing import Sequence, TYPE_CHECKING
 from django.http import HttpRequest
 
 from django_glue import settings
+from django_glue.exceptions import GlueProxyNotFoundError
 from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 
 if TYPE_CHECKING:
@@ -44,8 +45,7 @@ class GlueSession:
     def get_proxy_by_unique_name(self, unique_name: str) -> BaseGlueProxy:
         proxy_data = self.proxy_registry.get(unique_name, None)
         if proxy_data is None:
-            # TODO: Raise GlueNotFoundError
-            raise Exception()
+            raise GlueProxyNotFoundError(unique_name)
 
         proxy = SUBJECT_TYPE_TO_PROXY_TYPE[proxy_data['subject_type']].from_proxy_registry_data(**proxy_data)
 
