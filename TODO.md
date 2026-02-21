@@ -6,6 +6,7 @@
 - [ ] Add payload validation to actions
 - [ ] Add comprehensive docstrings to public APIs
 - [ ] Add a proxy for django forms
+- [ ] Add ability to glue views (partial page content updates like htmx)
 - [ ] Fix debug/production asset loading (currently reversed in `django_glue.html`)
 - [ ] Refactor `GlueClient` god class in JavaScript
 - [ ] Add JSDoc comments to JavaScript
