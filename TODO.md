@@ -1,18 +1,16 @@
-# Django Glue - TODO
+# Django Glue - TODO - Highest to lowest priority
 
-## Medium (Quality)
+- [ ] Fix proxy delete() actions
 - [ ] Add proper seeding to test project
-- [ ] Update docs to reflect new overhauled glue (they currently document the old, pre v1 version which had an entirely different api)
+- [ ] Add comprehensive unit tests
 - [ ] Add payload validation to actions
 - [ ] Add comprehensive docstrings to public APIs
-- [ ] Switch from `print()` to Django logging in `views.py`
-- [ ] Add comprehensive unit, integration, and e2e testing (using playwright for e2e)
-- [ ] Refactor `GlueClient` god class in JavaScript
-
-## Low (Polish)
-- [ ] Add JSDoc comments to JavaScript
+- [ ] Add a proxy for django forms
 - [ ] Fix debug/production asset loading (currently reversed in `django_glue.html`)
+- [ ] Refactor `GlueClient` god class in JavaScript
+- [ ] Add JSDoc comments to JavaScript
+- [ ] Update docs to reflect new overhauled glue (they currently document the old, pre v1 version which had an entirely different api)
+- [ ] Add comprehensive integration testing (cross-stack tests)
+- [ ] Add comprehensive e2e testing (using playwright)
 - [ ] Document magic numbers (2.2 divisor for keep-alive in `context_processors.py`)
-
-## Deferred
 - [ ] Replace pickle with JSON for QuerySet serialization (low risk with proper Django settings)
