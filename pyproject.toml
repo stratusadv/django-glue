@@ -40,7 +40,7 @@ development = [
     "setuptools",
     "wheel",
     "playwright",
-    "django-spire==0.14.0",
+    "django-spire==0.28.0",
 ]
 
 documentation = [

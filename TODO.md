@@ -1,8 +1,5 @@
 # Django Glue - TODO - Highest to lowest priority
 
-- [ ] Fix proxy delete() actions
-- [ ] Add proper seeding to test project
-- [ ] Add comprehensive unit tests
 - [ ] Add payload validation to actions
 - [ ] Add comprehensive docstrings to public APIs
 - [ ] Add a proxy for django forms

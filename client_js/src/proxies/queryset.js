@@ -33,8 +33,8 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
             proxyUniqueName: this.uniqueName,
             contextData: GlueClient.contextData[this.uniqueName],
             actions: {
-                save: {payload:'dict'},
-                delete: {payload:'dict'},
+                save: {payload: {id: item.id}},
+                delete: {payload: {id: item.id}},
             },
             values: {...item}
         })
