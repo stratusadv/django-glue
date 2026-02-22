@@ -11,11 +11,18 @@
     "license": "MIT",
     "private": true,
     "devDependencies": {
+        "@babel/core": "^7.29.0",
+        "@babel/preset-env": "^7.29.0",
+        "babel-jest": "^30.2.0",
+        "dotenv": "^17.2.4",
         "esbuild": "~0.16.17",
-        "dotenv": "^17.2.4"
+        "jest": "^30.2.0"
     },
     "scripts": {
         "build": "node client_js/scripts/build.js",
-        "watch": "node --watch client_js/scripts/build.js"
+        "watch": "node --watch client_js/scripts/build.js",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage"
     }
 }

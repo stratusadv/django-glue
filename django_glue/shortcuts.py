@@ -4,7 +4,7 @@ from django.http import HttpRequest
 from django.urls import path, include
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelProxy, GlueQuerySetProxy
+from django_glue.proxies import GlueModelProxy, GlueQuerySetProxy, GlueFormProxy
 from django_glue.session import GlueSession
 from django_glue import constants
 from django_glue.proxies.proxy import BaseGlueProxy
@@ -66,6 +66,23 @@ class Glue:
             unique_name=unique_name,
             target=target,
             proxy_class=GlueQuerySetProxy,
+            access=access,
+            **kwargs
+        )
+
+    @staticmethod
+    def form(
+        request: HttpRequest,
+        unique_name: str,
+        target: Any,
+        access: GlueAccess = GlueAccess.VIEW,
+        **kwargs
+    ):
+        Glue.glue(
+            request=request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueFormProxy,
             access=access,
             **kwargs
         )

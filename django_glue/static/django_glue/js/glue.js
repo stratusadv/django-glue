@@ -288,14 +288,48 @@
     }
   };
 
+  // client_js/src/proxies/form.js
+  var GlueFormProxy = class extends BaseGlueProxy {
+    constructor({ proxyUniqueName, contextData, actions = null }) {
+      super({ proxyUniqueName, contextData, actions });
+      this.fields = contextData.fields;
+      this.values = { ...contextData.initial };
+      this.errors = {};
+    }
+    postInit() {
+      Object.keys(this.fields).forEach((fieldName) => {
+        Object.defineProperty(this, fieldName, {
+          get: () => this.values[fieldName],
+          set: (value) => {
+            this.values[fieldName] = value;
+          }
+        });
+      });
+    }
+    getFieldDefinition(fieldName) {
+      return this.fields[fieldName] || null;
+    }
+    getFieldError(fieldName) {
+      return this.errors[fieldName] || [];
+    }
+    hasErrors() {
+      return Object.keys(this.errors).length > 0;
+    }
+    clearErrors() {
+      this.errors = {};
+    }
+  };
+
   // client_js/src/proxies/index.js
   var SUBJECT_TYPE_TO_PROXY_CLASS = {
     "Model": GlueModelProxy,
-    "QuerySet": GlueQuerySetProxy
+    "QuerySet": GlueQuerySetProxy,
+    "BaseForm": GlueFormProxy
   };
   window.BaseGlueProxy = BaseGlueProxy;
   window.GlueModelProxy = GlueModelProxy;
   window.GlueQuerySetProxy = GlueQuerySetProxy;
+  window.GlueFormProxy = GlueFormProxy;
 
   // client_js/glue.js
   var Glue = new client_default();

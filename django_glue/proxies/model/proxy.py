@@ -6,7 +6,7 @@ from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueModelInstanceNotFoundError
-from django_glue.proxies.mixins import GlueProxyFieldsMixin
+from django_glue.proxies.fields import GlueProxyFieldsMixin
 from django_glue.proxies.decorators import action
 
 
@@ -90,11 +90,11 @@ class GlueModelProxy(GlueProxyFieldsMixin):
 
     @action(access=GlueAccess.CHANGE)
     def save(self, payload: dict):
+        validated_payload = self._validate_payload(payload)
         instance = self.target_instance
 
-        for field_name, field_data in payload.items():
-            if field_name in self._included_fields:
-                setattr(instance, field_name, field_data)
+        for field_name, field_data in validated_payload.items():
+            setattr(instance, field_name, field_data)
 
         instance.save()
 

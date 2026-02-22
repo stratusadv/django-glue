@@ -1,3 +1,10 @@
+"""
+Base proxy class for Django Glue.
+
+This module provides the abstract base class that all proxy types inherit from,
+defining the core interface for action registration, access control, and
+session/context data serialization.
+"""
 from __future__ import annotations
 
 import inspect
@@ -10,6 +17,30 @@ from django_glue.exceptions import GlueAccessError, GlueMissingActionError
 
 
 class BaseGlueProxy(ABC):
+    """
+    Abstract base class for all Django Glue proxies.
+
+    Proxies act as intermediaries between Django backend objects (models, querysets,
+    forms) and the JavaScript frontend. They expose actions that can be called from
+    the client and enforce access control.
+
+    Subclasses must define:
+        _subject_type: The type of object this proxy wraps (e.g., Model, QuerySet).
+
+    Attributes:
+        unique_name: Identifier used to reference this proxy from JavaScript.
+        access: The access level granted to the client (VIEW, CHANGE, or DELETE).
+        target: The wrapped Django object.
+
+    Example:
+        class GlueModelProxy(BaseGlueProxy):
+            _subject_type = Model
+
+            @action(access=GlueAccess.VIEW)
+            def get(self):
+                return model_to_dict(self.target)
+    """
+
     _subject_type: type
     _actions = {}
 
@@ -59,6 +90,7 @@ class BaseGlueProxy(ABC):
 
     @property
     def actions(self):
+        """Return the registered actions for this proxy class."""
         return self._actions[self.__class__.__name__]
 
     @classmethod
@@ -69,7 +101,19 @@ class BaseGlueProxy(ABC):
         **kwargs
     ) -> BaseGlueProxy:
         """
-        Child proxy classes that require extra necessary logic to construct instances from raw data from the proxy registry can override this method.
+        Reconstruct a proxy instance from session registry data.
+
+        Called when processing an action request to recreate the proxy from
+        stored session data. Subclasses can override this to handle additional
+        reconstruction logic (e.g., fetching model instances from the database).
+
+        Args:
+            access: The access level for this proxy.
+            unique_name: The unique identifier for this proxy.
+            **kwargs: Additional data stored in the session registry.
+
+        Returns:
+            A new proxy instance configured with the provided data.
         """
         return cls(
             access=access,

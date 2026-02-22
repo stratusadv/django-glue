@@ -64,3 +64,20 @@ class GlueQuerySetFilterValidationError(GlueError):
             f"Cannot filter on field '{field}'. "
             f"Allowed fields: {allowed_fields}"
         )
+
+
+class GluePayloadValidationError(GlueError):
+    """Raised when payload field values fail type validation."""
+
+    def __init__(self, field: str, expected_type: str, received_value: any, reason: str = None):
+        self.field = field
+        self.expected_type = expected_type
+        self.received_value = received_value
+        self.reason = reason
+        message = (
+            f"Invalid value for field '{field}'. "
+            f"Expected {expected_type}, received {type(received_value).__name__}"
+        )
+        if reason:
+            message += f": {reason}"
+        super().__init__(message)

@@ -207,17 +207,24 @@ python manage.py runserver
 
 ### Testing
 
-- **Python**: Django TestCase
-- **JavaScript**: Jest
+- **Python**: pytest with pytest-django
+- **JavaScript**: Jest with Babel
 - **E2E**: Playwright
 
 ```bash
-# Run Django tests
-python manage.py test
+# Run Python tests
+python -m pytest tests/ -v
+
+# Run JavaScript tests
+npm test
 
 # Run Playwright tests
 playwright test
 ```
+
+#### Why Babel for Jest?
+
+The JavaScript source uses ES modules (`import`/`export`), but Jest runs in Node.js which defaults to CommonJS. Babel transpiles ES modules to CommonJS so Jest can execute the tests. We evaluated esbuild-based alternatives (`esbuild-jest`, `@jgoz/jest-esbuild`) but found them to be niche packages with modest adoption. Babel + Jest is the mainstream, battle-tested approach with broad community support.
 
 ## Session Management
 
