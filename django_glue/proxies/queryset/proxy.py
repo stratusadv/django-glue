@@ -117,7 +117,7 @@ class GlueQuerySetProxy(GlueProxyFieldsMixin):
     def delete(self, payload: dict):
         pk = payload['id']
 
-        target_instance = self._get_instance_by_pk(pk)
+        target_instance = self._get_model_instance_by_pk(pk)
         instance_proxy = self._create_model_proxy_from_instance(target_instance)
 
         return instance_proxy.delete()
