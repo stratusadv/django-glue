@@ -23,12 +23,14 @@
                         <ul class="nav nav-tabs card-header-tabs">
                             {% include "components/nav_tab.html" with tab_id="model" tab_label="Model Proxy" %}
                             {% include "components/nav_tab.html" with tab_id="queryset" tab_label="QuerySet Proxy" %}
+                            {% include "components/nav_tab.html" with tab_id="form" tab_label="Form Proxy" %}
                         </ul>
                     </div>
 
                     <div class="card-body">
                         {% include "components/sections/model_proxy.html" %}
                         {% include "components/sections/queryset_proxy.html" %}
+                        {% include "components/sections/form_proxy.html" %}
                     </div>
                 </div>
             </div>
