@@ -1,5 +1,5 @@
 """
-Field handling mixin for Django Glue proxies.
+Field handling mixin for Django Glue model proxies.
 
 Provides field inclusion/exclusion filtering and payload validation
 for proxies that work with Django model fields.
@@ -10,14 +10,14 @@ from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
 from django.db.models import ForeignObjectRel
+from django.forms import modelform_factory
 from django.utils.functional import cached_property
 
 from django_glue.exceptions import GluePayloadValidationError
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.fields.validators import FIELD_TYPE_VALIDATORS
 
 
-class GlueProxyFieldsMixin(BaseGlueProxy, ABC):
+class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
     """
     Mixin that provides field filtering and validation for model-based proxies.
 
@@ -71,70 +71,27 @@ class GlueProxyFieldsMixin(BaseGlueProxy, ABC):
             )
         ]
 
+        # Options to exclude from field metadata (not JSON serializable or not needed)
+        excluded_options = {'default', 'validators'}
+
         return {
             field_name: {
                 'type': field_type.rsplit('.', 1)[-1],  # Extract class name from full path
                 **{
                     opt_name: opt_value
                     for opt_name, opt_value in field_options.items()
-                    if opt_name not in ['default']
+                    if opt_name not in excluded_options
                 }
             }
             for field_name, field_type, _, field_options in deconstructed_fields
         }
 
-    def _validate_payload_field(
-        self,
-        field_name: str,
-        field_info: dict,
-        value: Any
-    ) -> Any:
-        """
-        Validate a single payload field value against its expected type.
-
-        Args:
-            field_name: The name of the field being validated.
-            field_info: Dictionary containing field metadata including 'type' and 'null'.
-            value: The value to validate.
-
-        Returns:
-            The validated value (unchanged if valid).
-
-        Raises:
-            GluePayloadValidationError: If the value fails type validation.
-        """
-        field_type = field_info.get('type', '')
-
-        # Allow None for nullable fields
-        if value is None:
-            if field_info.get('null', False) or field_info.get('blank', False):
-                return value
-            raise GluePayloadValidationError(
-                field=field_name,
-                expected_type=field_type,
-                received_value=value,
-                reason="Field does not allow null values"
-            )
-
-        # Get validator for field type
-        validator = FIELD_TYPE_VALIDATORS.get(field_type)
-
-        if validator is None:
-            # Unknown field type - skip validation (let Django handle it)
-            return value
-
-        if not validator(value):
-            raise GluePayloadValidationError(
-                field=field_name,
-                expected_type=field_type,
-                received_value=value
-            )
-
-        return value
-
     def _validate_payload(self, payload: dict) -> dict:
         """
-        Validate all fields in a payload against the included fields schema.
+        Validate all fields in a payload using Django's ModelForm validation.
+
+        Creates a dynamic ModelForm using modelform_factory to leverage Django's
+        full field validation including max_length, choices, custom validators, etc.
 
         Only validates fields that exist in both the payload and _included_fields.
         Fields in the payload that are not in _included_fields are filtered out.
@@ -143,19 +100,42 @@ class GlueProxyFieldsMixin(BaseGlueProxy, ABC):
             payload: Dictionary of field names to values from the client.
 
         Returns:
-            Dictionary containing only validated fields that exist in _included_fields.
+            Dictionary containing validated and cleaned field values.
 
         Raises:
-            GluePayloadValidationError: If any field value fails type validation.
+            GluePayloadValidationError: If any field value fails validation.
         """
-        validated = {}
+        # Filter payload to only include allowed fields
+        filtered_payload = {
+            field_name: value
+            for field_name, value in payload.items()
+            if field_name in self._included_fields
+        }
 
-        for field_name, value in payload.items():
-            if field_name in self._included_fields:
-                validated[field_name] = self._validate_payload_field(
-                    field_name,
-                    self._included_fields[field_name],
-                    value
+        if not filtered_payload:
+            return {}
+
+        # Get fields that are in the payload and included
+        fields_to_validate = list(filtered_payload.keys())
+
+        # Create a dynamic ModelForm for validation
+        DynamicForm = modelform_factory(
+            self.get_model_class(),
+            fields=fields_to_validate
+        )
+
+        # Validate using the form
+        form = DynamicForm(data=filtered_payload)
+
+        if not form.is_valid():
+            # Raise validation error with first field error
+            for field_name, errors in form.errors.items():
+                field_info = self._included_fields.get(field_name, {})
+                raise GluePayloadValidationError(
+                    field=field_name,
+                    expected_type=field_info.get('type', 'unknown'),
+                    received_value=filtered_payload.get(field_name),
+                    reason=errors[0]
                 )
 
-        return validated
+        return form.cleaned_data

@@ -2,9 +2,9 @@
 {% csrf_token %}
 
 {% if debug %}
-    <script src="{% static 'django_glue/js/glue.min.js' %}"></script>
-{% else %}
     <script src="{% static 'django_glue/js/glue.js' %}"></script>
+{% else %}
+    <script src="{% static 'django_glue/js/glue.min.js' %}"></script>
 {% endif %}
 
 {{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"glue-proxy-registry" }}

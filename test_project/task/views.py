@@ -3,6 +3,7 @@ from django.shortcuts import render
 
 from django_glue import Glue, GlueAccess
 from test_project.task.models import Task
+from test_project.task.forms import TaskForm, ContactForm
 
 
 def page_view(request: HttpRequest):
@@ -28,6 +29,20 @@ def page_view(request: HttpRequest):
         target=Task.objects.all(),
         unique_name='tasks',
         access=GlueAccess.DELETE,
+    )
+
+    Glue.form(
+        request=request,
+        unique_name='task_form',
+        target=TaskForm(instance=task),
+        access=GlueAccess.CHANGE,
+    )
+
+    Glue.form(
+        request=request,
+        unique_name='contact_form',
+        target=ContactForm(),
+        access=GlueAccess.CHANGE,
     )
 
     return render(request, 'page.html')

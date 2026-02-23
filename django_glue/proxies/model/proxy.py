@@ -6,11 +6,11 @@ from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueModelInstanceNotFoundError
-from django_glue.proxies.fields import GlueProxyFieldsMixin
+from django_glue.proxies.fields import GlueProxyModelFieldsMixin
 from django_glue.proxies.decorators import action
 
 
-class GlueModelProxy(GlueProxyFieldsMixin):
+class GlueModelProxy(GlueProxyModelFieldsMixin):
     _subject_type = Model
 
     def __init__(

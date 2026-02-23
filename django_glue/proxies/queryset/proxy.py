@@ -7,11 +7,11 @@ from django.db.models import QuerySet, Model
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelProxy
-from django_glue.proxies.fields import GlueProxyFieldsMixin
+from django_glue.proxies.fields import GlueProxyModelFieldsMixin
 from django_glue.proxies.decorators import action
 
 
-class GlueQuerySetProxy(GlueProxyFieldsMixin):
+class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
     _subject_type = QuerySet
 
     def __init__(

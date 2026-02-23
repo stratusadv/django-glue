@@ -20,9 +20,12 @@ django-glue/
 │   ├── proxies/              # Proxy pattern implementation
 │   │   ├── proxy.py          # BaseGlueProxy abstract base class
 │   │   ├── decorators.py     # @action decorator
-│   │   ├── mixins.py         # Field filtering mixin
+│   │   ├── fields/           # Field validation system
+│   │   │   ├── mixin.py      # GlueProxyModelFieldsMixin
+│   │   │   └── validators.py # Type validators
 │   │   ├── model/proxy.py    # GlueModelProxy
-│   │   └── queryset/proxy.py # GlueQuerySetProxy
+│   │   ├── queryset/proxy.py # GlueQuerySetProxy
+│   │   └── form/proxy.py     # GlueFormProxy
 │   ├── access/               # Permission system
 │   │   └── access.py         # GlueAccess enum (VIEW, CHANGE, DELETE)
 │   ├── exceptions.py         # Custom exceptions (GlueError, etc.)
@@ -41,9 +44,15 @@ django-glue/
 │       └── proxies/          # JS proxy implementations
 │           ├── base.js       # BaseGlueProxy
 │           ├── model.js      # GlueModelProxy
-│           └── queryset.js   # GlueQuerySetProxy
+│           ├── queryset.js   # GlueQuerySetProxy
+│           └── form.js       # GlueFormProxy
 ├── tests/                    # Test suite
-│   └── test_exceptions.py    # Exception tests
+│   ├── test_exceptions.py    # Exception tests
+│   ├── proxies/              # Proxy tests
+│   │   ├── fields/           # Field validation tests
+│   │   ├── model/            # Model proxy tests
+│   │   └── queryset/         # QuerySet proxy tests
+│   └── session/              # Session tests
 ├── eval/                     # Project evaluations
 ├── test_project/             # Django test application
 └── docs/                     # MkDocs documentation
@@ -53,10 +62,10 @@ django-glue/
 
 ### The Proxy Pattern
 
-Django Glue creates proxy objects that act as transparent interfaces between Django models/querysets and JavaScript. Each proxy:
+Django Glue creates proxy objects that act as transparent interfaces between Django models/querysets/forms and JavaScript. Each proxy:
 
 1. Has a **unique name** identifying it in the session
-2. Wraps a **target** (Model instance or QuerySet)
+2. Wraps a **target** (Model instance, QuerySet, or Form)
 3. Has an **access level** (VIEW, CHANGE, or DELETE)
 4. Exposes **actions** callable from JavaScript
 
@@ -79,6 +88,16 @@ Marks proxy methods as callable from JavaScript. The built-in proxies use this i
 
 - `GlueModelProxy`: `get()`, `save()`, `delete()`
 - `GlueQuerySetProxy`: `all()`, `filter()`, `save()`, `delete()`
+- `GlueFormProxy`: `get()`, `validate()`, `submit()`
+
+### Payload Validation
+
+Model and QuerySet proxies validate incoming data using Django's `modelform_factory`. This provides:
+
+- Full Django form validation (max_length, min_value, max_value, etc.)
+- Custom field validators
+- Type coercion (e.g., string "42" → integer 42)
+- Field filtering (only included fields are validated/saved)
 
 ## Usage
 
@@ -87,6 +106,7 @@ Marks proxy methods as callable from JavaScript. The built-in proxies use this i
 ```python
 from django_glue import Glue, GlueAccess
 from myapp.models import Task
+from myapp.forms import TaskForm, ContactForm
 
 def my_view(request):
     # Register a single model instance
@@ -104,6 +124,21 @@ def my_view(request):
         target=Task.objects.all(),
         access=GlueAccess.CHANGE,
         fields=['id', 'title', 'done'],  # Optional field filtering
+    )
+
+    # Register a form (ModelForm or regular Form)
+    Glue.form(
+        request=request,
+        unique_name='task_form',
+        target=TaskForm(instance=task),
+        access=GlueAccess.CHANGE,
+    )
+
+    Glue.form(
+        request=request,
+        unique_name='contact_form',
+        target=ContactForm(),
+        access=GlueAccess.CHANGE,
     )
 
     return render(request, 'page.html')
@@ -143,6 +178,22 @@ const filtered = await Glue.tasks.filter({
 // Each item is a full GlueModelProxy
 filtered[0].done = true
 await filtered[0].save()
+
+// Form proxy - validation and submission
+Glue.contact_form.name = 'John'
+Glue.contact_form.email = 'john@example.com'
+
+// Validate without saving
+const validation = await Glue.contact_form.validate(Glue.contact_form.values)
+if (validation.is_valid) {
+    // Submit (saves for ModelForm, returns cleaned_data for regular Form)
+    const result = await Glue.contact_form.submit(Glue.contact_form.values)
+    if (result.success) {
+        console.log('Submitted:', result.data)
+    } else {
+        console.log('Errors:', result.errors)
+    }
+}
 ```
 
 ## Key Files
@@ -152,13 +203,16 @@ await filtered[0].save()
 | `django_glue/proxies/proxy.py` | BaseGlueProxy - core abstraction |
 | `django_glue/proxies/model/proxy.py` | Model instance binding |
 | `django_glue/proxies/queryset/proxy.py` | QuerySet binding |
+| `django_glue/proxies/form/proxy.py` | Form binding with validation |
+| `django_glue/proxies/fields/mixin.py` | GlueProxyModelFieldsMixin for field filtering & validation |
 | `django_glue/session.py` | Session proxy management & expiration |
-| `django_glue/shortcuts.py` | `Glue.model()` and `Glue.queryset()` API |
+| `django_glue/shortcuts.py` | `Glue.model()`, `Glue.queryset()`, `Glue.form()` API |
 | `django_glue/views.py` | HTTP endpoints for actions |
 | `django_glue/exceptions.py` | Custom exceptions for error handling |
 | `client_js/src/client.js` | JavaScript GlueClient singleton |
 | `client_js/src/proxies/model.js` | JS model proxy with field getters/setters |
 | `client_js/src/proxies/queryset.js` | JS queryset proxy with filter/all |
+| `client_js/src/proxies/form.js` | JS form proxy with validation |
 | `client_js/src/config.js` | Global JS client configuration |
 
 ## Exceptions
@@ -173,6 +227,7 @@ Custom exceptions in `django_glue/exceptions.py`:
 | `GlueMissingActionError` | Action method doesn't exist |
 | `GlueModelInstanceNotFoundError` | Model instance not found (DoesNotExist) |
 | `GlueQuerySetFilterValidationError` | Filter references disallowed field |
+| `GluePayloadValidationError` | Field validation failed (type, max_length, etc.) |
 
 ## Development
 
@@ -201,8 +256,7 @@ Output goes to `django_glue/static/django_glue/js/glue.js` and `glue.min.js`.
 ### Running the Test Project
 
 ```bash
-cd test_project
-python manage.py runserver
+DJANGO_SETTINGS_MODULE=test_project.base_settings python manage.py runserver
 ```
 
 ### Testing
@@ -225,6 +279,10 @@ playwright test
 #### Why Babel for Jest?
 
 The JavaScript source uses ES modules (`import`/`export`), but Jest runs in Node.js which defaults to CommonJS. Babel transpiles ES modules to CommonJS so Jest can execute the tests. We evaluated esbuild-based alternatives (`esbuild-jest`, `@jgoz/jest-esbuild`) but found them to be niche packages with modest adoption. Babel + Jest is the mainstream, battle-tested approach with broad community support.
+
+#### Why jest-environment-jsdom?
+
+The JavaScript client uses browser APIs (`document.cookie` for CSRF tokens, `window.location.reload()` for session expiry, `fetch` for HTTP requests). Jest's default Node environment doesn't provide these globals. `jest-environment-jsdom` provides a simulated browser environment via JSDOM, allowing tests to access `document`, `window`, and other browser APIs without manual mocking. This is the standard approach used by Create React App, Vue CLI, and most browser-oriented JavaScript testing.
 
 ## Session Management
 
@@ -269,10 +327,6 @@ Glue.init({
     }
 })
 ```
-
-## Planned Features
-
-- **Form Integration**: Django Forms binding to frontend
 
 ## Coding Standards
 

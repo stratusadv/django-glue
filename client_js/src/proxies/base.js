@@ -35,6 +35,10 @@ export class BaseGlueProxy {
 
     defineActionsAsProperties() {
         Object.keys(this.actions).forEach(actionName => {
+            // Skip if subclass has already defined this method
+            if (typeof this[actionName] === 'function') {
+                return;
+            }
             this[actionName] = (payload) => this.processAction(actionName, payload)
         });
     }

@@ -40,7 +40,10 @@ development = [
     "setuptools",
     "wheel",
     "playwright",
-    "django-spire==0.28.0",
+    "faker>=18.0.0",
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "pytest-cov>=4.0.0",
 ]
 
 documentation = [
@@ -84,3 +87,31 @@ django_glue = [
 
 [tool.dev_tool.unittest.django]
 settings = "test_project.system.settings"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "test_project.base_settings"
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+addopts = [
+    "--strict-markers",
+    "-v",
+]
+
+[tool.coverage.run]
+source = ["django_glue"]
+omit = [
+    "*/migrations/*",
+    "*/__init__.py",
+    "*/constants.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+fail_under = 70
+show_missing = true

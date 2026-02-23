@@ -3,12 +3,13 @@ import { BaseGlueProxy } from "./base";
 export class GlueFormProxy extends BaseGlueProxy {
     constructor({proxyUniqueName, contextData, actions=null}) {
         super({proxyUniqueName, contextData, actions});
-        this.fields = contextData.fields;
-        this.values = {...contextData.initial};
-        this.errors = {};
     }
 
     postInit() {
+        this.fields = this.contextData.fields;
+        this.values = {...this.contextData.initial};
+        this.errors = {};
+
         Object.keys(this.fields).forEach(fieldName => {
             Object.defineProperty(this, fieldName, {
                 get: () => this.values[fieldName],
@@ -17,6 +18,18 @@ export class GlueFormProxy extends BaseGlueProxy {
                 }
             });
         });
+    }
+
+    async validate() {
+        const result = await this.processAction('validate', this.values);
+        this.errors = result.errors || {};
+        return result;
+    }
+
+    async submit() {
+        const result = await this.processAction('submit', this.values);
+        this.errors = result.errors || {};
+        return result;
     }
 
     getFieldDefinition(fieldName) {

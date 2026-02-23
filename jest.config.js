@@ -1,5 +1,5 @@
 module.exports = {
-    testEnvironment: 'node',
+    testEnvironment: 'jsdom',
     roots: ['<rootDir>/client_js'],
     testMatch: ['**/*.test.js'],
     transform: {
@@ -10,5 +10,14 @@ module.exports = {
         'client_js/src/**/*.js',
         '!client_js/src/index.js'
     ],
-    coverageDirectory: 'coverage/js'
+    coverageDirectory: 'coverage/js',
+    coverageThreshold: {
+        global: {
+            branches: 60,
+            functions: 70,
+            lines: 70,
+            statements: 70
+        }
+    },
+    setupFilesAfterEnv: ['<rootDir>/client_js/tests/setup.js']
 };

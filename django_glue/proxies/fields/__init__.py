@@ -1,3 +1,3 @@
-from django_glue.proxies.fields.mixin import GlueProxyFieldsMixin
+from django_glue.proxies.fields.mixin import GlueProxyModelFieldsMixin
 
-__all__ = ['GlueProxyFieldsMixin']
+__all__ = ['GlueProxyModelFieldsMixin']

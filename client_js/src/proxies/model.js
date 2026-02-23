@@ -12,7 +12,6 @@ export class GlueModelProxy extends BaseGlueProxy {
         this.values = values
     }
 
-    // TODO: Clean this up
     postInit() {
         if (this.autoFetch && !this.values) {
             this.loadData()
@@ -35,19 +34,27 @@ export class GlueModelProxy extends BaseGlueProxy {
                         this.values = {};
                     }
                     this.values[fieldName] = value;
-
-                    this.setActionPayload('save', this.values)
                 }
             })
         })
     }
 
     loadData() {
-        this.get().then(data => {
+        this.processAction('get').then(data => {
             this.values = data;
         }).finally(() => {
             this.loading = false;
             this.loaded = true;
         });
+    }
+
+    async save() {
+        const result = await this.processAction('save', this.values);
+        this.values = result;
+        return result;
+    }
+
+    async delete() {
+        return await this.processAction('delete');
     }
 }

@@ -132,6 +132,9 @@
     }
     defineActionsAsProperties() {
       Object.keys(this.actions).forEach((actionName) => {
+        if (typeof this[actionName] === "function") {
+          return;
+        }
         this[actionName] = (payload) => this.processAction(actionName, payload);
       });
     }
@@ -151,7 +154,6 @@
       super({ proxyUniqueName, contextData, actions, autoFetch });
       this.values = values;
     }
-    // TODO: Clean this up
     postInit() {
       if (this.autoFetch && !this.values) {
         this.loadData();
@@ -172,18 +174,25 @@
               this.values = {};
             }
             this.values[fieldName] = value;
-            this.setActionPayload("save", this.values);
           }
         });
       });
     }
     loadData() {
-      this.get().then((data) => {
+      this.processAction("get").then((data) => {
         this.values = data;
       }).finally(() => {
         this.loading = false;
         this.loaded = true;
       });
+    }
+    async save() {
+      const result = await this.processAction("save", this.values);
+      this.values = result;
+      return result;
+    }
+    async delete() {
+      return await this.processAction("delete");
     }
   };
 
@@ -292,11 +301,11 @@
   var GlueFormProxy = class extends BaseGlueProxy {
     constructor({ proxyUniqueName, contextData, actions = null }) {
       super({ proxyUniqueName, contextData, actions });
-      this.fields = contextData.fields;
-      this.values = { ...contextData.initial };
-      this.errors = {};
     }
     postInit() {
+      this.fields = this.contextData.fields;
+      this.values = { ...this.contextData.initial };
+      this.errors = {};
       Object.keys(this.fields).forEach((fieldName) => {
         Object.defineProperty(this, fieldName, {
           get: () => this.values[fieldName],
@@ -305,6 +314,16 @@
           }
         });
       });
+    }
+    async validate() {
+      const result = await this.processAction("validate", this.values);
+      this.errors = result.errors || {};
+      return result;
+    }
+    async submit() {
+      const result = await this.processAction("submit", this.values);
+      this.errors = result.errors || {};
+      return result;
     }
     getFieldDefinition(fieldName) {
       return this.fields[fieldName] || null;

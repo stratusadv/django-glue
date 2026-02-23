@@ -1,5 +1,8 @@
 """
-Tests for GlueProxyFieldsMixin payload validation methods.
+Tests for GlueProxyModelFieldsMixin payload validation methods.
+
+Validation is now handled by Django's modelform_factory, which provides
+full Django form validation including max_length, choices, custom validators, etc.
 """
 import os
 import django
@@ -15,110 +18,8 @@ from django_glue.exceptions import GluePayloadValidationError
 from test_project.task.models import Task
 
 
-class ValidatePayloadFieldTestCase(TestCase):
-    """Tests for _validate_payload_field method."""
-
-    def setUp(self):
-        self.task = Task.objects.create(
-            title='Test Task',
-            description='Test description',
-            done=False,
-            order=1
-        )
-        self.proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
-            access=GlueAccess.CHANGE,
-        )
-
-    def test_validates_string_field(self):
-        """CharField should accept string values."""
-        result = self.proxy._validate_payload_field(
-            'title',
-            {'type': 'CharField'},
-            'New Title'
-        )
-        self.assertEqual(result, 'New Title')
-
-    def test_validates_boolean_field(self):
-        """BooleanField should accept boolean values."""
-        result = self.proxy._validate_payload_field(
-            'done',
-            {'type': 'BooleanField'},
-            True
-        )
-        self.assertEqual(result, True)
-
-    def test_validates_integer_field(self):
-        """IntegerField should accept integer values."""
-        result = self.proxy._validate_payload_field(
-            'order',
-            {'type': 'IntegerField'},
-            42
-        )
-        self.assertEqual(result, 42)
-
-    def test_rejects_invalid_string_for_boolean(self):
-        """BooleanField should reject string values."""
-        with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload_field(
-                'done',
-                {'type': 'BooleanField'},
-                'true'
-            )
-        self.assertEqual(ctx.exception.field, 'done')
-        self.assertEqual(ctx.exception.expected_type, 'BooleanField')
-
-    def test_rejects_integer_for_string_field(self):
-        """CharField should reject integer values."""
-        with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload_field(
-                'title',
-                {'type': 'CharField'},
-                123
-            )
-        self.assertEqual(ctx.exception.field, 'title')
-
-    def test_allows_none_for_nullable_field(self):
-        """Nullable fields should accept None."""
-        result = self.proxy._validate_payload_field(
-            'description',
-            {'type': 'TextField', 'null': True},
-            None
-        )
-        self.assertIsNone(result)
-
-    def test_allows_none_for_blank_field(self):
-        """Fields with blank=True should accept None."""
-        result = self.proxy._validate_payload_field(
-            'description',
-            {'type': 'TextField', 'blank': True},
-            None
-        )
-        self.assertIsNone(result)
-
-    def test_rejects_none_for_non_nullable_field(self):
-        """Non-nullable fields should reject None."""
-        with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload_field(
-                'title',
-                {'type': 'CharField', 'null': False},
-                None
-            )
-        self.assertIn('null', ctx.exception.reason)
-
-    def test_allows_unknown_field_types(self):
-        """Unknown field types should pass through validation."""
-        result = self.proxy._validate_payload_field(
-            'custom',
-            {'type': 'CustomField'},
-            'any value'
-        )
-        self.assertEqual(result, 'any value')
-
-
 class ValidatePayloadTestCase(TestCase):
-    """Tests for _validate_payload method."""
+    """Tests for _validate_payload method using modelform_factory."""
 
     def setUp(self):
         self.task = Task.objects.create(
@@ -161,18 +62,64 @@ class ValidatePayloadTestCase(TestCase):
         self.assertNotIn('description', result)
         self.assertNotIn('order', result)
 
-    def test_raises_on_first_invalid_field(self):
-        """Should raise GluePayloadValidationError on first invalid field."""
-        with self.assertRaises(GluePayloadValidationError):
-            self.proxy._validate_payload({
-                'title': 'Valid',
-                'done': 'invalid',  # Should be boolean
-            })
-
     def test_returns_empty_dict_for_empty_payload(self):
         """Empty payload should return empty dict."""
         result = self.proxy._validate_payload({})
         self.assertEqual(result, {})
+
+    def test_raises_on_invalid_field_value(self):
+        """Should raise GluePayloadValidationError on invalid field value."""
+        # CharField can't accept None (required field)
+        with self.assertRaises(GluePayloadValidationError) as ctx:
+            self.proxy._validate_payload({
+                'title': None,  # CharField is required
+            })
+        self.assertEqual(ctx.exception.field, 'title')
+
+    def test_cleans_data_types(self):
+        """ModelForm validation should clean/coerce data types."""
+        result = self.proxy._validate_payload({
+            'order': '42',  # String should be coerced to int
+        })
+        self.assertEqual(result['order'], 42)
+        self.assertIsInstance(result['order'], int)
+
+    def test_validates_max_length(self):
+        """Should validate max_length constraints from model field."""
+        # Task.title has max_length=50, so 60 chars should fail
+        long_title = 'x' * 60
+        with self.assertRaises(GluePayloadValidationError) as ctx:
+            self.proxy._validate_payload({
+                'title': long_title,
+            })
+        self.assertEqual(ctx.exception.field, 'title')
+        self.assertIn('50', ctx.exception.reason)  # Should mention the limit
+
+    def test_validates_min_value(self):
+        """Should validate MinValueValidator on integer field."""
+        # Task.order has MinValueValidator(1), so 0 should fail
+        with self.assertRaises(GluePayloadValidationError) as ctx:
+            self.proxy._validate_payload({
+                'order': 0,
+            })
+        self.assertEqual(ctx.exception.field, 'order')
+
+    def test_validates_max_value(self):
+        """Should validate MaxValueValidator on integer field."""
+        # Task.order has MaxValueValidator(1000), so 1001 should fail
+        with self.assertRaises(GluePayloadValidationError) as ctx:
+            self.proxy._validate_payload({
+                'order': 1001,
+            })
+        self.assertEqual(ctx.exception.field, 'order')
+
+    def test_allows_blank_field(self):
+        """Should accept empty string for fields with blank=True."""
+        # Task.description has blank=True
+        result = self.proxy._validate_payload({
+            'description': '',
+        })
+        self.assertEqual(result['description'], '')
 
 
 class SaveActionValidationIntegrationTestCase(TestCase):
@@ -193,14 +140,15 @@ class SaveActionValidationIntegrationTestCase(TestCase):
             unique_name='task',
             access=GlueAccess.CHANGE,
         )
+        # CharField with None should fail validation
         with self.assertRaises(GluePayloadValidationError) as ctx:
-            proxy.save({'done': 'not a boolean'})
+            proxy.save({'title': None})
 
-        self.assertEqual(ctx.exception.field, 'done')
+        self.assertEqual(ctx.exception.field, 'title')
 
         # Verify no changes were made
         self.task.refresh_from_db()
-        self.assertEqual(self.task.done, False)
+        self.assertEqual(self.task.title, 'Test Task')
 
     def test_save_succeeds_with_valid_payload(self):
         """save() should succeed with valid payload."""
