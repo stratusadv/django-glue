@@ -7,6 +7,7 @@ dist/
 inspectionProfiles/
 site/
 venv*/
+build/
 
 .python-version
 
@@ -15,6 +16,7 @@ venv*/
 *.db
 *.env
 *.sql
+
 
 dev_tool.exe
 dev_tool*.exe
