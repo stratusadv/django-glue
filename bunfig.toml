@@ -1,0 +1,10 @@
+[test]
+preload = ["./client_js/tests/setup.js"]
+root = "./client_js"
+coverage = true
+
+[define]
+"BASE_URL_NAME" = "'django_glue'"
+"GLUE_VERSION" = "'1.0.0'"
+"CDN" = "true"
+"process.env.NODE_ENV" = "'development'"

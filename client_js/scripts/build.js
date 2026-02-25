@@ -1,7 +1,5 @@
-const fs = require('fs');
-const zlib = require('zlib');
-
-require('dotenv').config({ path: 'development.env' })
+import fs from 'fs';
+import zlib from 'zlib';
 
 const ENTRYPOINT_FILE_NAME = 'glue.js'
 
@@ -10,44 +8,45 @@ const OUT_DIR = './django_glue/static/django_glue/js'
 const OUT_FILE_PATH = `${OUT_DIR}/${ENTRYPOINT_FILE_NAME}`
 
 const VERSION = getPythonConstantAsJsonValue('__VERSION__')
+const BASE_URL = getPythonConstantAsJsonValue('BASE_URL_NAME')
+const IS_WATCH = process.argv.includes('--watch')
 
-if (! fs.existsSync(OUT_DIR)) {
-    fs.mkdirSync(OUT_DIR, 0744);
+if (!fs.existsSync(OUT_DIR)) {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
 }
 
-build({
-    entryPoints: [ENTRYPOINT],
-    outfile: OUT_FILE_PATH,
-    bundle: true,
-    platform: 'browser',
-    define: { CDN: 'true' },
-})
+// Build non-minified version
+await build({ minify: false, naming: '[name].js' })
 
-build({
-    entryPoints: [ENTRYPOINT],
-    outfile: OUT_FILE_PATH.replace('.js', '.min.js'),
-    bundle: true,
-    minify: true,
-    platform: 'browser',
-    define: { CDN: 'true' },
-}).then(() => {
-    printVersion()
-    outputSize(`${OUT_FILE_PATH.replace('.js', '.min.js')}`)
-})
+// Build minified version
+await build({ minify: true, naming: '[name].min.js' })
+
+printVersion()
+outputSize(`${OUT_FILE_PATH.replace('.js', '.min.js')}`)
 
 
-function build(options) {
-    options.define || (options.define = {})
+async function build(options) {
+    const result = await Bun.build({
+        entrypoints: [ENTRYPOINT],
+        outdir: OUT_DIR,
+        naming: options.naming,
+        minify: options.minify,
+        target: 'browser',
+        format: 'iife',
+        define: {
+            'CDN': 'true',
+            'GLUE_VERSION': VERSION,
+            'BASE_URL_NAME': BASE_URL,
+            'process.env.NODE_ENV': IS_WATCH ? "'development'" : "'production'",
+        },
+    })
 
-    options.define['GLUE_VERSION'] = VERSION
-    options.define['process.env.NODE_ENV'] = process.argv.includes('--watch') ? `'production'` : `'development'`
-    options.define['BASE_URL_NAME'] = getPythonConstantAsJsonValue('BASE_URL_NAME')
-
-    return require('esbuild').build({
-        logLevel: process.argv.includes('--watch') ? 'info' : 'warning',
-        watch: process.argv.includes('--watch'),
-        ...options,
-    }).catch(() => process.exit(1))
+    if (!result.success) {
+        for (const log of result.logs) {
+            console.error(log)
+        }
+        process.exit(1)
+    }
 }
 
 function printVersion() {
@@ -55,7 +54,7 @@ function printVersion() {
 }
 
 function outputSize(file) {
-    let size = bytesToSize(zlib.brotliCompressSync(fs.readFileSync(file)).length)
+    const size = bytesToSize(zlib.brotliCompressSync(fs.readFileSync(file)).length)
     console.log("\x1b[32m", `django-glue size: ${size}`)
 }
 
@@ -68,17 +67,12 @@ function bytesToSize(bytes) {
 }
 
 function getPythonConstantAsJsonValue(name) {
-    // Read the Python file
     const constantsDotPyContent = fs.readFileSync('./django_glue/constants.py', 'utf8');
 
-
-    // Parse the content to find variable assignments
-    // This is a simplified example - real parsing would be more complex
     const lines = constantsDotPyContent.split('\n');
     let value;
 
     for (const line of lines) {
-        // Look for lines matching your pattern
         if (line.includes(name)) {
             const match = line.match(new RegExp(`${name}\\s*=\\s*['"](.*?)['"]`));
             if (match) {
@@ -87,7 +81,6 @@ function getPythonConstantAsJsonValue(name) {
             }
         }
     }
-
 
     return `'${value}'`;
 }

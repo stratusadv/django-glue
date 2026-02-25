@@ -1,28 +1,4 @@
 (() => {
-  var __defProp = Object.defineProperty;
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-  var __publicField = (obj, key, value) => {
-    __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
-    return value;
-  };
-  var __accessCheck = (obj, member, msg) => {
-    if (!member.has(obj))
-      throw TypeError("Cannot " + msg);
-  };
-  var __privateGet = (obj, member, getter) => {
-    __accessCheck(obj, member, "read from private field");
-    return getter ? getter.call(obj) : member.get(obj);
-  };
-  var __privateAdd = (obj, member, value) => {
-    if (member.has(obj))
-      throw TypeError("Cannot add the same private member more than once");
-    member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
-  };
-  var __privateMethod = (obj, member, method) => {
-    __accessCheck(obj, member, "access private method");
-    return method;
-  };
-
   // client_js/src/constants.js
   var baseUrlPath = "django_glue";
   var actionUrl = `/${baseUrlPath}/`;
@@ -30,7 +6,7 @@
 
   // client_js/src/config.js
   var DEFAULT_CONFIG = {
-    requestTimeoutMs: 3e4
+    requestTimeoutMs: 30000
   };
   var config = { ...DEFAULT_CONFIG };
   function getConfig() {
@@ -60,7 +36,7 @@
     timeout: null
   }) {
     const timeoutMs = requestOptions.timeout ?? getConfig().requestTimeoutMs;
-    const controller = new AbortController();
+    const controller = new AbortController;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const options = {
       method: requestOptions.method,
@@ -92,7 +68,7 @@
   }
   async function sendJsonPostRequest(url, data, csrfProtected = true) {
     return await sendHttpRequest(url, {
-      body: JSON.stringify(!!data ? data : {}),
+      body: JSON.stringify(data ? data : {}),
       method: "POST",
       contentType: "application/json",
       csrfProtected
@@ -102,15 +78,15 @@
     return await sendJsonPostRequest(actionUrl, payload);
   }
   async function sendKeepLiveRequest(uniqueNames) {
-    return await sendJsonPostRequest(keepLiveUrl, { "unique_names": uniqueNames });
+    return await sendJsonPostRequest(keepLiveUrl, { unique_names: uniqueNames });
   }
 
   // client_js/src/proxies/base.js
-  var BaseGlueProxy = class {
+  class BaseGlueProxy {
     constructor({ proxyUniqueName, contextData, actions = null, autoFetch = false }) {
       this.uniqueName = proxyUniqueName;
       this.contextData = contextData;
-      this.actions = !!actions ? actions : contextData.actions;
+      this.actions = actions ? actions : contextData.actions;
       this.autoFetch = autoFetch;
       this.defineActionsAsProperties();
       this.postInit();
@@ -138,12 +114,11 @@
         this[actionName] = (payload) => this.processAction(actionName, payload);
       });
     }
-    postInit() {
-    }
-  };
+    postInit() {}
+  }
 
   // client_js/src/proxies/model.js
-  var GlueModelProxy = class extends BaseGlueProxy {
+  class GlueModelProxy extends BaseGlueProxy {
     constructor({
       proxyUniqueName,
       contextData,
@@ -194,17 +169,47 @@
     async delete() {
       return await this.processAction("delete");
     }
-  };
+  }
 
   // client_js/src/client.js
-  var _activeProxies, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn, _initializeKeepLivePulse, initializeKeepLivePulse_fn;
-  var _GlueClient = class {
-    constructor() {
-      __privateAdd(this, _assembleProxyFromRegistryData);
-      __privateAdd(this, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy);
-      __privateAdd(this, _defineProxyUniqueNamesAsProperties);
-      __privateAdd(this, _initializeKeepLivePulse);
-      __privateAdd(this, _activeProxies, {});
+  class GlueClient {
+    static proxyClassesForSubjectTypes = {};
+    static contextData = {};
+    #activeProxies = {};
+    #assembleProxyFromRegistryData(proxyInstanceRegistryData) {
+      const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
+      const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
+      this.#activeProxies[uniqueName] = new ProxyClass({
+        proxyUniqueName: proxyInstanceRegistryData.unique_name,
+        contextData: GlueClient.contextData[uniqueName]
+      });
+      return this.#activeProxies[uniqueName];
+    }
+    #defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData) {
+      const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
+      Object.defineProperty(this, proxyUniqueName, {
+        get: function() {
+          return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromRegistryData(proxyInstanceRegistryData);
+        }
+      });
+    }
+    #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
+      for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
+        this.#defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData);
+      }
+    }
+    #initializeKeepLivePulse(keepLiveInterval) {
+      setInterval(() => {
+        const keepLiveNames = Object.keys(this.#activeProxies);
+        sendKeepLiveRequest(keepLiveNames).then((response) => {
+          if (!response.ok) {
+            let confirmation = confirm("Session expired. Do you want to reload the page?");
+            if (confirmation) {
+              window.location.reload();
+            }
+          }
+        });
+      }, keepLiveInterval);
     }
     init({
       proxyRegistryFromSession,
@@ -215,58 +220,15 @@
       if (config2) {
         setConfig(config2);
       }
-      __privateMethod(this, _defineProxyUniqueNamesAsProperties, defineProxyUniqueNamesAsProperties_fn).call(this, proxyRegistryFromSession);
-      _GlueClient.contextData = contextDataForProxies;
-      __privateMethod(this, _initializeKeepLivePulse, initializeKeepLivePulse_fn).call(this, keepLiveInterval);
+      this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession);
+      GlueClient.contextData = contextDataForProxies;
+      this.#initializeKeepLivePulse(keepLiveInterval);
     }
-  };
-  var GlueClient = _GlueClient;
-  _activeProxies = new WeakMap();
-  _assembleProxyFromRegistryData = new WeakSet();
-  assembleProxyFromRegistryData_fn = function(proxyInstanceRegistryData) {
-    const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
-    const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
-    __privateGet(this, _activeProxies)[uniqueName] = new ProxyClass({
-      proxyUniqueName: proxyInstanceRegistryData.unique_name,
-      contextData: _GlueClient.contextData[uniqueName]
-    });
-    return __privateGet(this, _activeProxies)[uniqueName];
-  };
-  _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy = new WeakSet();
-  defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn = function(proxyInstanceRegistryData) {
-    const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
-    Object.defineProperty(this, proxyUniqueName, {
-      get: function() {
-        return __privateGet(this, _activeProxies)?.[proxyUniqueName] ?? __privateMethod(this, _assembleProxyFromRegistryData, assembleProxyFromRegistryData_fn).call(this, proxyInstanceRegistryData);
-      }
-    });
-  };
-  _defineProxyUniqueNamesAsProperties = new WeakSet();
-  defineProxyUniqueNamesAsProperties_fn = function(proxyRegistryFromSession) {
-    for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-      __privateMethod(this, _defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy, defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy_fn).call(this, proxyInstanceRegistryData);
-    }
-  };
-  _initializeKeepLivePulse = new WeakSet();
-  initializeKeepLivePulse_fn = function(keepLiveInterval) {
-    setInterval(() => {
-      const keepLiveNames = Object.keys(__privateGet(this, _activeProxies));
-      sendKeepLiveRequest(keepLiveNames).then((response) => {
-        if (!response.ok) {
-          let confirmation = confirm("Session expired. Do you want to reload the page?");
-          if (confirmation) {
-            window.location.reload();
-          }
-        }
-      });
-    }, keepLiveInterval);
-  };
-  __publicField(GlueClient, "proxyClassesForSubjectTypes", {});
-  __publicField(GlueClient, "contextData", {});
+  }
   var client_default = GlueClient;
 
   // client_js/src/proxies/queryset.js
-  var GlueQuerySetProxy = class extends BaseGlueProxy {
+  class GlueQuerySetProxy extends BaseGlueProxy {
     postInit() {
       const baseAll = this.all.bind(this);
       this.all = async () => {
@@ -295,10 +257,10 @@
         values: { ...item }
       });
     }
-  };
+  }
 
   // client_js/src/proxies/form.js
-  var GlueFormProxy = class extends BaseGlueProxy {
+  class GlueFormProxy extends BaseGlueProxy {
     constructor({ proxyUniqueName, contextData, actions = null }) {
       super({ proxyUniqueName, contextData, actions });
     }
@@ -337,13 +299,13 @@
     clearErrors() {
       this.errors = {};
     }
-  };
+  }
 
   // client_js/src/proxies/index.js
   var SUBJECT_TYPE_TO_PROXY_CLASS = {
-    "Model": GlueModelProxy,
-    "QuerySet": GlueQuerySetProxy,
-    "BaseForm": GlueFormProxy
+    Model: GlueModelProxy,
+    QuerySet: GlueQuerySetProxy,
+    BaseForm: GlueFormProxy
   };
   window.BaseGlueProxy = BaseGlueProxy;
   window.GlueModelProxy = GlueModelProxy;
@@ -351,6 +313,6 @@
   window.GlueFormProxy = GlueFormProxy;
 
   // client_js/glue.js
-  var Glue = new client_default();
+  var Glue = new client_default;
   window.Glue = Glue;
 })();

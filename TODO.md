@@ -1,5 +1,6 @@
 # Django Glue - TODO - Highest to lowest priority
  
+- [ ] Change GlueFormProxy so that the field property is at the top level and value, label, errors etc. are all children
 - [ ] Add comprehensive integration testing (cross-stack tests)
 - [ ] Add comprehensive e2e testing (using playwright)
 - [ ] In form proxy use field definition labels for the test project html labels

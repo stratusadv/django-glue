@@ -1,7 +1,8 @@
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { BaseGlueProxy } from '../../src/proxies/base';
 import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
 
-jest.mock('../../src/constants', () => ({
+mock.module('../../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -103,12 +104,12 @@ describe('BaseGlueProxy', () => {
         });
 
         it('action methods call processAction', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"result": "success"}'),
                 json: () => Promise.resolve({ result: 'success' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData({}, { myAction: {} });
             const proxy = new BaseGlueProxy({
@@ -125,12 +126,12 @@ describe('BaseGlueProxy', () => {
 
     describe('processAction', () => {
         it('sends action request with correct payload', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"result": "success"}'),
                 json: () => Promise.resolve({ result: 'success' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData({}, { save: { payload: {} } });
             const proxy = new BaseGlueProxy({
@@ -153,12 +154,12 @@ describe('BaseGlueProxy', () => {
         });
 
         it('uses stored payload when none provided', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData({}, { save: { payload: { stored: 'data' } } });
             const proxy = new BaseGlueProxy({
@@ -181,12 +182,12 @@ describe('BaseGlueProxy', () => {
         });
 
         it('returns response data', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"id": 1, "name": "test"}'),
                 json: () => Promise.resolve({ id: 1, name: 'test' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData({}, { get: {} });
             const proxy = new BaseGlueProxy({
@@ -228,7 +229,7 @@ describe('BaseGlueProxy', () => {
 
     describe('postInit', () => {
         it('is called during construction', () => {
-            const postInitSpy = jest.fn();
+            const postInitSpy = mock(() => {});
 
             class TestProxy extends BaseGlueProxy {
                 postInit() {

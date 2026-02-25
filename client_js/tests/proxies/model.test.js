@@ -1,7 +1,8 @@
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { GlueModelProxy } from '../../src/proxies/model';
 import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
 
-jest.mock('../../src/constants', () => ({
+mock.module('../../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -88,12 +89,12 @@ describe('GlueModelProxy', () => {
 
     describe('save', () => {
         it('sends save action with current values', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"id": 1, "title": "Saved"}'),
                 json: () => Promise.resolve({ id: 1, title: 'Saved' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { title: {} },
@@ -122,12 +123,12 @@ describe('GlueModelProxy', () => {
         });
 
         it('updates values with response data', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"id": 1, "title": "Server Title"}'),
                 json: () => Promise.resolve({ id: 1, title: 'Server Title' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { title: {} },
@@ -148,12 +149,12 @@ describe('GlueModelProxy', () => {
 
     describe('delete', () => {
         it('sends delete action', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { title: {} },
@@ -177,12 +178,12 @@ describe('GlueModelProxy', () => {
         });
 
         it('returns response data', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"deleted": true}'),
                 json: () => Promise.resolve({ deleted: true }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 {},
@@ -224,7 +225,7 @@ describe('GlueModelProxy', () => {
         });
 
         it('does not call loadData when values are provided', () => {
-            global.fetch = jest.fn();
+            global.fetch = mock(() => {});
 
             const contextData = createMockContextData(
                 { title: {} },
@@ -293,18 +294,18 @@ describe('GlueModelProxy', () => {
             const _2 = proxy.title;
 
             // Should only call fetch once
-            expect(global.fetch).toHaveBeenCalledTimes(1);
+            expect(global.fetch.mock.calls.length).toBe(1);
         });
     });
 
     describe('loadData', () => {
         it('updates values from response', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"id": 1, "title": "Loaded Title"}'),
                 json: () => Promise.resolve({ id: 1, title: 'Loaded Title' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
@@ -331,12 +332,12 @@ describe('GlueModelProxy', () => {
         });
 
         it('sets loaded flag after completion', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"title": "test"}'),
                 json: () => Promise.resolve({ title: 'test' }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { title: {} },

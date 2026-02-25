@@ -1,8 +1,9 @@
+import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
 import GlueClient from '../src/client';
 import { resetConfig, getConfig } from '../src/config';
 import { createMockFetch, setupCookieMock } from './testUtils';
 
-jest.mock('../src/constants', () => ({
+mock.module('../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -10,21 +11,26 @@ jest.mock('../src/constants', () => ({
 describe('GlueClient', () => {
     let client;
     let originalFetch;
+    let originalSetInterval;
+    let originalClearInterval;
 
     beforeEach(() => {
         originalFetch = global.fetch;
+        originalSetInterval = global.setInterval;
+        originalClearInterval = global.clearInterval;
         client = new GlueClient();
         resetConfig();
         setupCookieMock({ csrftoken: 'test-token' });
 
         // Mock setInterval for keep-alive
-        jest.useFakeTimers();
+        global.setInterval = mock(() => 123);
+        global.clearInterval = mock(() => {});
     });
 
     afterEach(() => {
         global.fetch = originalFetch;
-        jest.useRealTimers();
-        jest.clearAllMocks();
+        global.setInterval = originalSetInterval;
+        global.clearInterval = originalClearInterval;
         GlueClient.contextData = {};
     });
 

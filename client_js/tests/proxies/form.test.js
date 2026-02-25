@@ -1,7 +1,8 @@
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { GlueFormProxy } from '../../src/proxies/form';
 import { createMockFetch, setupCookieMock } from '../testUtils';
 
-jest.mock('../../src/constants', () => ({
+mock.module('../../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -98,12 +99,12 @@ describe('GlueFormProxy', () => {
 
     describe('validate', () => {
         it('sends validate action with current values', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"is_valid": true, "errors": {}}'),
                 json: () => Promise.resolve({ is_valid: true, errors: {} }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData(
                 { name: {} },
@@ -127,12 +128,12 @@ describe('GlueFormProxy', () => {
         });
 
         it('updates errors from validation response', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"is_valid": false, "errors": {"name": ["Required"]}}'),
                 json: () => Promise.resolve({ is_valid: false, errors: { name: ['Required'] } }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData({ name: {} }, {});
 
@@ -147,12 +148,12 @@ describe('GlueFormProxy', () => {
         });
 
         it('clears errors when validation passes', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"is_valid": true, "errors": {}}'),
                 json: () => Promise.resolve({ is_valid: true, errors: {} }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData({ name: {} }, { name: 'Valid' });
 
@@ -172,12 +173,12 @@ describe('GlueFormProxy', () => {
 
     describe('submit', () => {
         it('sends submit action', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"success": true, "data": {}}'),
                 json: () => Promise.resolve({ success: true, data: {} }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData({ name: {} }, { name: 'Submit Me' });
 
@@ -198,12 +199,12 @@ describe('GlueFormProxy', () => {
         });
 
         it('updates errors from submit response', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"success": false, "errors": {"email": ["Invalid email"]}}'),
                 json: () => Promise.resolve({ success: false, errors: { email: ['Invalid email'] } }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData({ email: {} }, { email: 'bad' });
 
@@ -218,12 +219,12 @@ describe('GlueFormProxy', () => {
         });
 
         it('clears errors on successful submit', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{"success": true}'),
                 json: () => Promise.resolve({ success: true }),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createFormContextData({ name: {} }, { name: 'Valid' });
 

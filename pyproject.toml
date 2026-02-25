@@ -30,6 +30,7 @@ dynamic = ["version"]
 
 dependencies = [
     "django>=5",
+    "pydantic",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,7 @@ development = [
     "wheel",
     "playwright",
     "faker>=18.0.0",
+    "python-dotenv==1.2.1",
     "pytest>=7.0.0",
     "pytest-django>=4.5.0",
     "pytest-cov>=4.0.0",
@@ -72,6 +74,11 @@ build-backend = "setuptools.build_meta"
 [tool.pyright]
 pythonVersion = "3.11"
 
+[tool.dev_tool]
+port = 5745
+containerized = true
+single-instance = true
+
 [tool.setuptools.dynamic]
 version = { attr = "django_glue.constants.__VERSION__" }
 
@@ -86,17 +93,21 @@ django_glue = [
 ]
 
 [tool.dev_tool.unittest.django]
-settings = "test_project.system.settings"
+apps = ["."]
+settings = "test_project.base_settings"
 
-[tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "test_project.base_settings"
-python_files = ["test_*.py", "*_test.py"]
-python_functions = ["test_*"]
-testpaths = ["tests"]
-addopts = [
-    "--strict-markers",
-    "-v",
-]
+[tool.dev_tool.unittest.python]
+apps = ["django_glue.tests"]
+
+#[tool.pytest.ini_options]
+#DJANGO_SETTINGS_MODULE = "test_project.base_settings"
+#python_files = ["test_*.py", "*_test.py"]
+#python_functions = ["test_*"]
+#testpaths = ["django_glue/tests"]
+#addopts = [
+#    "--strict-markers",
+#    "-v",
+#]
 
 [tool.coverage.run]
 source = ["django_glue"]

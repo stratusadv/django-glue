@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { getConfig, setConfig, resetConfig } from '../src/config';
 
 describe('config', () => {

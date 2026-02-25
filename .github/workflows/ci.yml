@@ -33,6 +33,18 @@ jobs:
           sync-extras: development documentation
           manage-py-path: test_project/manage.py
 
+  js-tests:
+    name: JavaScript Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bun run build
+      - run: bun test
+
   security:
     name: Security Scan
     runs-on: ubuntu-latest

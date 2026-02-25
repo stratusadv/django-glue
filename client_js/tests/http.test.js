@@ -1,9 +1,10 @@
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { sendHttpRequest, sendJsonPostRequest, sendActionRequest, sendKeepLiveRequest } from '../src/http';
 import { resetConfig, setConfig } from '../src/config';
 import { createMockFetch, setupCookieMock } from './testUtils';
 
 // Mock the constants module
-jest.mock('../src/constants', () => ({
+mock.module('../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -19,7 +20,6 @@ describe('http', () => {
 
     afterEach(() => {
         global.fetch = originalFetch;
-        jest.clearAllMocks();
     });
 
     describe('sendHttpRequest', () => {
@@ -35,12 +35,12 @@ describe('http', () => {
         });
 
         it('includes CSRF token for protected requests', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock((url, options) => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendHttpRequest('/test', { method: 'POST', csrfProtected: true });
 
@@ -55,23 +55,23 @@ describe('http', () => {
         });
 
         it('throws error on non-ok response', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: false,
                 text: () => Promise.resolve('Server error'),
                 clone: function() { return this; }
-            });
+            }));
 
             await expect(sendHttpRequest('/test', {}))
                 .rejects.toThrow('An error occurred when sending a glue http request');
         });
 
         it('includes body for POST requests', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendHttpRequest('/test', {
                 method: 'POST',
@@ -90,12 +90,12 @@ describe('http', () => {
 
         it('uses AbortController for timeout', async () => {
             // Verify AbortController is used - actual timeout testing is complex with fake timers
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendHttpRequest('/test', { method: 'GET' });
 
@@ -111,12 +111,12 @@ describe('http', () => {
 
     describe('sendJsonPostRequest', () => {
         it('sends POST with JSON body', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendJsonPostRequest('/test', { key: 'value' });
 
@@ -133,12 +133,12 @@ describe('http', () => {
         });
 
         it('sends empty object when data is null', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendJsonPostRequest('/test', null);
 
@@ -165,12 +165,12 @@ describe('http', () => {
 
     describe('sendKeepLiveRequest', () => {
         it('posts to keep_live URL with unique_names', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('{}'),
                 json: () => Promise.resolve({}),
                 clone: function() { return this; }
-            });
+            }));
 
             await sendKeepLiveRequest(['proxy1', 'proxy2']);
 

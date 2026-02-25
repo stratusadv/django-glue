@@ -1,8 +1,9 @@
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { GlueQuerySetProxy } from '../../src/proxies/queryset';
 import GlueClient from '../../src/client';
 import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
 
-jest.mock('../../src/constants', () => ({
+mock.module('../../src/constants', () => ({
     actionUrl: '/django_glue/',
     keepLiveUrl: '/django_glue/keep_live/'
 }));
@@ -30,12 +31,12 @@ describe('GlueQuerySetProxy', () => {
 
     describe('all', () => {
         it('returns array of GlueModelProxy instances', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1, "title": "Task 1"}, {"id": 2, "title": "Task 2"}]'),
                 json: () => Promise.resolve([{ id: 1, title: 'Task 1' }, { id: 2, title: 'Task 2' }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
@@ -55,12 +56,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('stores items in proxy.items', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}]'),
                 json: () => Promise.resolve([{ id: 1 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -78,12 +79,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('returns items with correct uniqueName', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}]'),
                 json: () => Promise.resolve([{ id: 1 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -101,12 +102,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('returns items with save and delete actions pre-configured', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 42}]'),
                 json: () => Promise.resolve([{ id: 42 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -127,12 +128,12 @@ describe('GlueQuerySetProxy', () => {
 
     describe('filter', () => {
         it('sends filter params to server', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1, "done": false}]'),
                 json: () => Promise.resolve([{ id: 1, done: false }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, done: {} },
@@ -155,12 +156,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('returns filtered items as GlueModelProxy instances', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1, "done": false}, {"id": 3, "done": false}]'),
                 json: () => Promise.resolve([{ id: 1, done: false }, { id: 3, done: false }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, done: {} },
@@ -180,12 +181,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('updates proxy.items with filtered results', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}]'),
                 json: () => Promise.resolve([{ id: 1 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -203,12 +204,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('supports Django ORM lookups', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[]'),
                 json: () => Promise.resolve([]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
@@ -233,12 +234,12 @@ describe('GlueQuerySetProxy', () => {
 
     describe('iterator', () => {
         it('supports for...of iteration', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}, {"id": 2}]'),
                 json: () => Promise.resolve([{ id: 1 }, { id: 2 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -261,12 +262,12 @@ describe('GlueQuerySetProxy', () => {
         });
 
         it('supports spread operator', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}, {"id": 2}, {"id": 3}]'),
                 json: () => Promise.resolve([{ id: 1 }, { id: 2 }, { id: 3 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },
@@ -288,12 +289,12 @@ describe('GlueQuerySetProxy', () => {
 
     describe('buildQuerySetItem', () => {
         it('creates GlueModelProxy with copied values', async () => {
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1, "title": "Original"}]'),
                 json: () => Promise.resolve([{ id: 1, title: 'Original' }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
@@ -321,12 +322,12 @@ describe('GlueQuerySetProxy', () => {
                 }
             };
 
-            global.fetch = jest.fn().mockResolvedValue({
+            global.fetch = mock(() => Promise.resolve({
                 ok: true,
                 text: () => Promise.resolve('[{"id": 1}]'),
                 json: () => Promise.resolve([{ id: 1 }]),
                 clone: function() { return this; }
-            });
+            }));
 
             const contextData = createMockContextData(
                 { id: {} },

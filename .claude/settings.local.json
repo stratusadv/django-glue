@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python:*)",
+      "Bash(DJANGO_SETTINGS_MODULE=test_project.base_settings python manage.py:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(wc -l \"C:\\\\Users\\\\ChaseMossing\\\\PycharmProjects\\\\django-glue\\\\tests\"/**/*.py)",
+      "Bash(find:*)",
+      "Bash(npm test:*)",
+      "Bash(pip install:*)",
+      "Bash(..venvScriptsactivate)",
+      "Bash(.venvScriptspython.exe -m pytest tests/ -v --tb=short)",
+      "Bash(\".venv/Scripts/python.exe\" -m pytest tests/ -v --tb=short)",
+      "Bash(npm ls:*)",
+      "Bash(bun run build)",
+      "Bash(bun test:*)",
+      "Bash(bun install)"
     ]
   }
 }

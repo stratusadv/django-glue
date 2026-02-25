@@ -2,13 +2,15 @@
  * Test utilities for mocking fetch, document.cookie, and other browser APIs.
  */
 
+import { mock } from 'bun:test';
+
 /**
  * Mock fetch implementation that returns configurable responses.
  * @param {Object} responses - Map of URL to response objects
- * @returns {jest.Mock} Mock fetch function
+ * @returns {Function} Mock fetch function
  */
 export function createMockFetch(responses = {}) {
-    return jest.fn((url, options) => {
+    return mock((url, options) => {
         const response = responses[url] || { ok: true, data: {} };
         return Promise.resolve({
             ok: response.ok ?? true,
