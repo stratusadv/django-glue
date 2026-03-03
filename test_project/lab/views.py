@@ -1,0 +1,17 @@
+from django.http import HttpRequest
+from django.shortcuts import render
+
+from django_glue import Glue, GlueAccess
+from test_project.gorilla.models import Gorilla
+
+
+def stress_view(request: HttpRequest):
+    """Stress test - load many glue objects."""
+    Glue.queryset(
+        request=request,
+        target=Gorilla.objects.all(),
+        unique_name='gorillas',
+        access=GlueAccess.DELETE,
+    )
+
+    return render(request, 'lab/page/stress_page.html')

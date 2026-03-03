@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django_glue',
     'test_project.gorilla',
     'test_project.fight',
+    'test_project.lab',
 ]
 
 MIDDLEWARE = [

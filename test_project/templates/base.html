@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Jersey+15&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.x/dist/cdn.min.js"></script>
 
@@ -96,12 +97,76 @@
             box-shadow: 0 0 0 0.2rem rgba(212, 178, 78, 0.25);
         }
 
+        /* Lab Toggle */
+        .lab-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1051;
+            background-color: var(--gorilla-gold);
+            border: 2px solid var(--gorilla-gold-dark);
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .lab-toggle:hover {
+            background-color: var(--gorilla-gold-dark);
+        }
+        .lab-toggle svg {
+            fill: var(--gorilla-green-dark);
+        }
+        .lab-toggle:hover svg {
+            fill: white;
+        }
+
+        /* Lab Panel */
+        .offcanvas-top.lab-panel {
+            height: fit-content;
+            background-color: var(--gorilla-green-dark);
+            color: white;
+        }
+        .lab-panel .offcanvas-header {
+            border-bottom: 1px solid var(--gorilla-green);
+        }
+        .lab-panel .btn-close {
+            filter: invert(1);
+        }
+
         {% block extra_css %}{% endblock %}
     </style>
 
     {% django_glue_init %}
 </head>
-<body>
+<body x-data="{ labOpen: false }">
+    <!-- Lab Toggle -->
+    <button class="lab-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#labPanel" aria-controls="labPanel" x-show="!labOpen" x-transition @click="labOpen = true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-flask-fill" viewBox="0 0 16 16">
+            <path d="M11.5 0a.5.5 0 0 1 0 1H11v5.358l4.497 7.36c.099.162.16.332.192.503l.013.063.008.083q.006.053.007.107l-.003.09q-.001.047-.005.095-.006.053-.017.106l-.016.079q-.012.049-.028.096l-.028.086a1.5 1.5 0 0 1-.17.322 1.5 1.5 0 0 1-.395.394q-.04.028-.082.054-.045.026-.095.049l-.073.035-.09.033q-.05.02-.103.034-.04.01-.08.017-.053.012-.108.021l-.006.002-.202.013H1.783l-.214-.015a1.503 1.503 0 0 1-1.066-2.268L5 6.359V1h-.5a.499.499 0 0 1-.354-.854A.5.5 0 0 1 4.5 0zm.5 12a.5.5 0 0 0 0 1h1.885l-.61-1zm-1-2a.5.5 0 0 0 0 1h1.664l-.612-1zm-1-2a.5.5 0 0 0 0 1h1.441l-.61-1zM9 6a.5.5 0 0 0 0 1h1.22l-.147-.24A.5.5 0 0 1 10 6.5V6zm0-2a.5.5 0 0 0 0 1h1V4zm0-2a.5.5 0 0 0 0 1h1V2z"/>
+        </svg>
+    </button>
+
+    <!-- Lab Panel -->
+    <div class="offcanvas offcanvas-top lab-panel" tabindex="-1" id="labPanel" aria-labelledby="labPanelLabel" data-bs-scroll="true">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title text-gorilla-gold" id="labPanelLabel">Test Lab</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close" @click="labOpen = false"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="container">
+                <div class="row">
+                    <a href="{% url 'lab:stress' %}" class="col-auto text-white text-decoration-none"><i class="bi bi-speedometer2 me-2"></i>Stress Test</a>
+                </div>
+            </div>
+            {% block lab_content %}
+            {% endblock %}
+        </div>
+    </div>
+
     <div class="container py-4">
         <!-- Page Header -->
         <div class="text-center mb-4">

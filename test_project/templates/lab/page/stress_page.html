@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Stress Test{% endblock %}
+
+{% block page_title %}Test Lab{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Stress Test</h2>{% endblock %}
+{% block page_subtitle %}Load and interact with many Glue objects{% endblock %}
+
+{% block content %}
+    <div x-data="{ gorillas: Glue.gorillas }">
+        <div class="row justify-content-center mb-4">
+            <div class="col-lg-8">
+                <div class="card card-gorilla">
+                    <div class="card-header bg-gorilla-green text-white">
+                        <h5 class="mb-0">Gorilla Stress Test</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>Loaded <strong x-text="gorillas.all().length"></strong> gorillas via Glue.queryset</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

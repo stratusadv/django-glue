@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Any
 
 from django.http import HttpRequest
@@ -42,6 +43,8 @@ class Glue:
         unique_name: str,
         target: Any,
         access: GlueAccess = GlueAccess.VIEW,
+        fields: Sequence = (),
+        exclude: Sequence = (),
         **kwargs
     ):
         Glue.glue(
@@ -50,6 +53,8 @@ class Glue:
             target=target,
             proxy_class=GlueModelProxy,
             access=access,
+            fields=fields,
+            exclude=exclude,
             **kwargs
         )
 
@@ -59,6 +64,8 @@ class Glue:
         unique_name: str,
         target: Any,
         access: GlueAccess = GlueAccess.VIEW,
+        fields: Sequence = (),
+        exclude: Sequence = (),
         **kwargs
     ):
         Glue.glue(
@@ -67,6 +74,8 @@ class Glue:
             target=target,
             proxy_class=GlueQuerySetProxy,
             access=access,
+            fields=fields,
+            exclude=exclude,
             **kwargs
         )
 

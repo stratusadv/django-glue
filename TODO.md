@@ -1,6 +1,6 @@
 # TODO
- 
-- [ ] Fix fight night page
+
+- [ ] Add dropdown menu/sidenav to test_project that contains specific testing - e.g. performance, large querysets, etc. 
 - [ ] Add better messaging around demonstration purpose of each test project page
 - [ ] Build / Update Glue.view in JS
 - [ ] Build / Update Glue.template in JS

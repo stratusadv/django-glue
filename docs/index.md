@@ -18,9 +18,6 @@
 - **Frontend Framework Agnostic** 
   - Designed to work with any style of frontend development with no additional JavaScript
     dependencies or bloat.
-- **Naturally Pythonic** 
-  - Written by Python developers, for Python developers. It adheres to pythonic syntax and philosophies
-    everywhere, even in JavaScript.
 - **Granular Access Control** 
   - Designed with security at top of mind, with the ability to precisely control backend data
     access.
