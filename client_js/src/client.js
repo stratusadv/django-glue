@@ -21,7 +21,7 @@ class GlueClient {
         return this.#activeProxies[uniqueName]
     }
 
-    #defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData) {
+    #defineLazyPropertyFromUniqueName(proxyInstanceRegistryData) {
         const {unique_name: proxyUniqueName} = proxyInstanceRegistryData
         Object.defineProperty(this, proxyUniqueName, {
             get: function() {
@@ -32,7 +32,7 @@ class GlueClient {
 
     #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
         for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-            this.#defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData)
+            this.#defineLazyPropertyFromUniqueName(proxyInstanceRegistryData)
         }
     }
 

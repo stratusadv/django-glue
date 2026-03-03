@@ -74,7 +74,11 @@ class GlueFormProxy(BaseGlueProxy):
                 'widget': field.widget.__class__.__name__,
             }
             if hasattr(field, 'choices') and field.choices:
-                field_def['choices'] = list(field.choices)
+                # Convert choices to simple (value, label) tuples for JSON serialization
+                # This handles ModelChoiceField which has ModelChoiceIteratorValue objects
+                field_def['choices'] = [
+                    (str(value), str(label)) for value, label in field.choices
+                ]
             if hasattr(field, 'max_length') and field.max_length:
                 field_def['max_length'] = field.max_length
             if hasattr(field, 'min_length') and field.min_length:

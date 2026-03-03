@@ -1,0 +1,117 @@
+{% load static %}
+{% load django_glue %}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gorilla Fight Simulator - {% block title %}{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jersey+15&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.x/dist/cdn.min.js"></script>
+
+    <style>
+        :root {
+            --gorilla-gold: #d4b24e;
+            --gorilla-gold-soft: #fff377;
+            --gorilla-gold-dark: #958446;
+            --gorilla-green: #749561;
+            --gorilla-green-soft: #c9ffb1;
+            --gorilla-green-dark: #395232;
+            --gorilla-brown: #875553;
+            --gorilla-brown-soft: #ffa09d;
+            --gorilla-cream: #f8ecc7;
+        }
+
+        body {
+            background-color: var(--gorilla-cream);
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: "Jersey 15", sans-serif;
+        }
+
+        .bg-gorilla-green { background-color: var(--gorilla-green) !important; }
+        .bg-gorilla-gold { background-color: var(--gorilla-gold) !important; }
+        .bg-gorilla-cream { background-color: var(--gorilla-cream) !important; }
+
+        .text-gorilla-gold { color: var(--gorilla-gold) !important; }
+        .text-gorilla-green-dark { color: var(--gorilla-green-dark) !important; }
+
+        .border-gorilla-gold { border-color: var(--gorilla-gold) !important; }
+
+        .btn-gorilla {
+            background-color: var(--gorilla-gold);
+            border-color: var(--gorilla-gold-dark);
+            color: var(--gorilla-green-dark);
+        }
+        .btn-gorilla:hover {
+            background-color: var(--gorilla-gold-dark);
+            color: white;
+        }
+
+        .btn-gorilla-danger {
+            background-color: var(--gorilla-brown);
+            border-color: var(--gorilla-brown);
+            color: white;
+        }
+        .btn-gorilla-danger:hover {
+            background-color: #6d3b3b;
+            color: white;
+        }
+
+        .btn-gorilla-secondary {
+            background-color: var(--gorilla-green);
+            border-color: var(--gorilla-green-dark);
+            color: white;
+        }
+        .btn-gorilla-secondary:hover {
+            background-color: var(--gorilla-green-dark);
+            color: white;
+        }
+
+        .card-gorilla {
+            border: 3px solid var(--gorilla-gold);
+            background-color: white;
+        }
+
+        .form-control-gorilla {
+            border-color: var(--gorilla-gold);
+        }
+        .form-control-gorilla:focus {
+            border-color: var(--gorilla-gold-dark);
+            box-shadow: 0 0 0 0.2rem rgba(212, 178, 78, 0.25);
+        }
+
+        .form-select-gorilla {
+            border-color: var(--gorilla-gold);
+        }
+        .form-select-gorilla:focus {
+            border-color: var(--gorilla-gold-dark);
+            box-shadow: 0 0 0 0.2rem rgba(212, 178, 78, 0.25);
+        }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+
+    {% django_glue_init %}
+</head>
+<body>
+    <div class="container py-4">
+        <!-- Page Header -->
+        <div class="text-center mb-4">
+            <h1 class="display-4 text-gorilla-green-dark">{% block page_title %}{% endblock %}</h1>
+            {% block page_heading %}{% endblock %}
+            <p class="text-muted">{% block page_subtitle %}{% endblock %}</p>
+            {% block page_nav %}{% endblock %}
+        </div>
+
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

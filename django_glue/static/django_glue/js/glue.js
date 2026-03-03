@@ -128,6 +128,7 @@
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
       this.values = values;
+      this.fields = contextData.fields;
     }
     postInit() {
       if (this.autoFetch && !this.values) {
@@ -185,7 +186,7 @@
       });
       return this.#activeProxies[uniqueName];
     }
-    #defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData) {
+    #defineLazyPropertyFromUniqueName(proxyInstanceRegistryData) {
       const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
       Object.defineProperty(this, proxyUniqueName, {
         get: function() {
@@ -195,7 +196,7 @@
     }
     #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
       for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-        this.#defineProxyUniqueNameAsPropertyThatLazilyAssemblesAndReturnsProxy(proxyInstanceRegistryData);
+        this.#defineLazyPropertyFromUniqueName(proxyInstanceRegistryData);
       }
     }
     #initializeKeepLivePulse(keepLiveInterval) {
@@ -222,6 +223,7 @@
       }
       this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession);
       GlueClient.contextData = contextDataForProxies;
+      console.log("hello");
       this.#initializeKeepLivePulse(keepLiveInterval);
     }
   }

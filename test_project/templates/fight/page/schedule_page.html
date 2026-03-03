@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule Fight{% endblock %}
+
+{% block page_title %}Gorilla Fight Simulator{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Form Proxy Demo</h2>{% endblock %}
+{% block page_subtitle %}Demonstrates Glue.form with ModelForm and regular Form{% endblock %}
+{% block page_nav %}
+    <div class="mt-2">
+        <a href="/" class="btn btn-outline-secondary btn-sm">Rankings</a>
+        <a href="{% url 'fight:list' %}" class="btn btn-outline-secondary btn-sm">Fight Night</a>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+.validation-result {
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+{% endblock %}
+
+{% block content %}
+    <div class="row g-4">
+        <!-- Fight Form (ModelForm) -->
+        <div class="col-lg-6" x-data="{
+            form: Glue.fight_form,
+            validationResult: null,
+            submitResult: null,
+            async validate() {
+                this.submitResult = null;
+                this.validationResult = await this.form.validate(this.form.values);
+            },
+            async submit() {
+                this.validationResult = null;
+                this.submitResult = await this.form.submit(this.form.values);
+            }
+        }">
+            <div class="card card-gorilla h-100">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h4 class="mb-0">Schedule New Fight</h4>
+                    <small class="opacity-75">ModelForm - Creates a new Fight instance</small>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Fight Name</label>
+                            <input
+                                type="text"
+                                class="form-control form-control-gorilla"
+                                x-model="form.name"
+                                placeholder="e.g., Battle of the Thunderdome">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Description</label>
+                            <textarea
+                                class="form-control form-control-gorilla"
+                                rows="2"
+                                x-model="form.description"
+                                placeholder="Describe this epic showdown..."></textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Red Corner</label>
+                            <select class="form-select form-select-gorilla" x-model="form.red_corner">
+                                <option value="">-- Select Fighter --</option>
+                                <template x-for="choice in form.fields?.red_corner?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Blue Corner</label>
+                            <select class="form-select form-select-gorilla" x-model="form.blue_corner">
+                                <option value="">-- Select Fighter --</option>
+                                <template x-for="choice in form.fields?.blue_corner?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Location</label>
+                            <select class="form-select form-select-gorilla" x-model="form.location">
+                                <template x-for="choice in form.fields?.location?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Weather</label>
+                            <select class="form-select form-select-gorilla" x-model="form.weather_conditions">
+                                <template x-for="choice in form.fields?.weather_conditions?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Terrain</label>
+                            <select class="form-select form-select-gorilla" x-model="form.terrain_type">
+                                <template x-for="choice in form.fields?.terrain_type?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Expected Spectators</label>
+                            <input
+                                type="number"
+                                class="form-control form-control-gorilla"
+                                x-model="form.spectator_count"
+                                min="0"
+                                placeholder="0">
+                        </div>
+                    </div>
+
+                    <!-- Validation/Submit Results -->
+                    <div class="mt-3" x-show="validationResult">
+                        <div class="validation-result"
+                             :class="validationResult?.is_valid ? 'text-success' : 'text-danger'">
+                            <template x-if="validationResult?.is_valid">
+                                <span>Form is valid!</span>
+                            </template>
+                            <template x-if="!validationResult?.is_valid">
+                                <div>
+                                    <strong>Validation errors:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        <template x-for="(errors, field) in validationResult?.errors || {}" :key="field">
+                                            <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="mt-3" x-show="submitResult">
+                        <div class="validation-result"
+                             :class="submitResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="submitResult?.success">
+                                <span>Fight scheduled successfully! ID: <span x-text="submitResult?.data?.id"></span></span>
+                            </template>
+                            <template x-if="!submitResult?.success">
+                                <div>
+                                    <strong>Submit failed:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        <template x-for="(errors, field) in submitResult?.errors || {}" :key="field">
+                                            <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-gorilla-cream">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-gorilla-secondary btn-sm" @click="validate()">
+                            Validate
+                        </button>
+                        <button class="btn btn-gorilla flex-grow-1" @click="submit()">
+                            Schedule Fight
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Form (Regular Form) -->
+        <div class="col-lg-6" x-data="{
+            form: Glue.contact_form,
+            validationResult: null,
+            submitResult: null,
+            async validate() {
+                this.submitResult = null;
+                this.validationResult = await this.form.validate(this.form.values);
+            },
+            async submit() {
+                this.validationResult = null;
+                this.submitResult = await this.form.submit(this.form.values);
+            }
+        }">
+            <div class="card card-gorilla h-100">
+                <div class="card-header bg-gorilla-gold">
+                    <h4 class="mb-0 text-gorilla-green-dark">Contact the Promoter</h4>
+                    <small class="text-gorilla-green-dark opacity-75">Regular Form - Returns cleaned data</small>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Your Name</label>
+                            <input
+                                type="text"
+                                class="form-control form-control-gorilla"
+                                x-model="form.name"
+                                placeholder="Enter your name">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Email</label>
+                            <input
+                                type="email"
+                                class="form-control form-control-gorilla"
+                                x-model="form.email"
+                                placeholder="your@email.com">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Subject</label>
+                            <select class="form-select form-select-gorilla" x-model="form.subject">
+                                <template x-for="choice in form.fields?.subject?.choices || []" :key="choice[0]">
+                                    <option :value="choice[0]" x-text="choice[1]"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Message</label>
+                            <textarea
+                                class="form-control form-control-gorilla"
+                                rows="4"
+                                x-model="form.message"
+                                placeholder="Your message (minimum 10 characters)..."></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Validation/Submit Results -->
+                    <div class="mt-3" x-show="validationResult">
+                        <div class="validation-result"
+                             :class="validationResult?.is_valid ? 'text-success' : 'text-danger'">
+                            <template x-if="validationResult?.is_valid">
+                                <span>Form is valid!</span>
+                            </template>
+                            <template x-if="!validationResult?.is_valid">
+                                <div>
+                                    <strong>Validation errors:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        <template x-for="(errors, field) in validationResult?.errors || {}" :key="field">
+                                            <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div class="mt-3" x-show="submitResult">
+                        <div class="validation-result"
+                             :class="submitResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="submitResult?.success">
+                                <div>
+                                    <span>Message received! Cleaned data:</span>
+                                    <pre class="bg-light p-2 rounded mt-1 small" x-text="JSON.stringify(submitResult?.data, null, 2)"></pre>
+                                </div>
+                            </template>
+                            <template x-if="!submitResult?.success">
+                                <div>
+                                    <strong>Submit failed:</strong>
+                                    <ul class="mb-0 ps-3">
+                                        <template x-for="(errors, field) in submitResult?.errors || {}" :key="field">
+                                            <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-gorilla-cream">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-gorilla-secondary btn-sm" @click="validate()">
+                            Validate
+                        </button>
+                        <button class="btn btn-gorilla flex-grow-1" @click="submit()">
+                            Send Message
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -30,9 +30,6 @@ def action_view(request: HttpRequest) -> JsonResponse | HttpResponse:
 
     action_output = proxy.process_action(action_data)
 
-    if settings.DEBUG:
-        print(f'Glue Action Request:\n - Action request data: {action_data.model_dump()}\n - Action output: {action_output}')
-
     return JsonResponse(action_output, safe=False)
 
 

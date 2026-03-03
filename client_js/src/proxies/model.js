@@ -10,6 +10,7 @@ export class GlueModelProxy extends BaseGlueProxy {
     }) {
         super({proxyUniqueName, contextData, actions, autoFetch});
         this.values = values
+        this.fields = contextData.fields
     }
 
     postInit() {

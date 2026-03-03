@@ -72,7 +72,7 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
         ]
 
         # Options to exclude from field metadata (not JSON serializable or not needed)
-        excluded_options = {'default', 'validators'}
+        excluded_options = {'default', 'validators', 'on_delete'}
 
         return {
             field_name: {
@@ -87,24 +87,6 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
         }
 
     def _validate_payload(self, payload: dict) -> dict:
-        """
-        Validate all fields in a payload using Django's ModelForm validation.
-
-        Creates a dynamic ModelForm using modelform_factory to leverage Django's
-        full field validation including max_length, choices, custom validators, etc.
-
-        Only validates fields that exist in both the payload and _included_fields.
-        Fields in the payload that are not in _included_fields are filtered out.
-
-        Args:
-            payload: Dictionary of field names to values from the client.
-
-        Returns:
-            Dictionary containing validated and cleaned field values.
-
-        Raises:
-            GluePayloadValidationError: If any field value fails validation.
-        """
         # Filter payload to only include allowed fields
         filtered_payload = {
             field_name: value

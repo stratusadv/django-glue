@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_glue',
-    'test_project.task',
+    'test_project.gorilla',
+    'test_project.fight',
 ]
 
 MIDDLEWARE = [

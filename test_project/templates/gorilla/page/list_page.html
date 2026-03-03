@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Rankings{% endblock %}
+
+{% block page_title %}Gorilla Fight Simulator{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Rankings</h2>{% endblock %}
+{% block page_subtitle %}Demonstrates Glue.queryset with instance editing and active filtering.{% endblock %}
+{% block page_nav %}
+    <div class="mt-2">
+        <a href="{% url 'fight:schedule' %}" class="btn btn-outline-secondary btn-sm">Schedule Fight</a>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+.badge-fight-style {
+    background-color: var(--gorilla-green);
+    color: white;
+}
+{% endblock %}
+
+{% block content %}
+    <div x-data="{
+        gorillas: Glue.gorillas,
+        search: '',
+        gorillaDetailUrl(id) {
+            return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
+        },
+        get filteredGorillas() {
+            if (this.search) {
+                return this.gorillas.filter({'name__icontains': this.search})
+            } else {
+                return this.gorillas.all()
+            }
+        }
+    }">
+        <!-- Search -->
+        <div class="row justify-content-center mb-4">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <span class="input-group-text bg-gorilla-gold border-gorilla-gold">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+                        </svg>
+                    </span>
+                    <input
+                        type="text"
+                        class="form-control"
+                        placeholder="Search fighters by name..."
+                        x-model.debounce="search">
+                </div>
+            </div>
+        </div>
+
+        <!-- Gorilla Cards Grid -->
+        <div class="row g-4">
+            <template x-for="gorilla in filteredGorillas" :key="gorilla.id">
+                <div class="col-md-6 col-lg-4">
+                    <div class="card card-gorilla h-100">
+                        <div class="card-header bg-gorilla-green text-white">
+                            <input
+                                type="text"
+                                class="form-control form-control-sm bg-transparent border-0 text-white fw-bold fs-5 p-0"
+                                style="font-family: 'Jersey 15', sans-serif;"
+                                x-model="gorilla.name"
+                                placeholder="Fighter Name">
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label small text-muted mb-1">Description</label>
+                                <textarea
+                                    class="form-control form-control-sm form-control-gorilla"
+                                    rows="2"
+                                    x-model="gorilla.description"
+                                    placeholder="Fighter backstory..."></textarea>
+                            </div>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label small text-muted mb-1">Age</label>
+                                    <input
+                                        type="number"
+                                        class="form-control form-control-sm form-control-gorilla"
+                                        x-model="gorilla.age"
+                                        min="1"
+                                        max="60">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small text-muted mb-1">Weight (kg)</label>
+                                    <input
+                                        type="number"
+                                        class="form-control form-control-sm form-control-gorilla"
+                                        x-model="gorilla.weight"
+                                        step="0.1"
+                                        min="50"
+                                        max="500">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label small text-muted mb-1">Height (m)</label>
+                                    <input
+                                        type="number"
+                                        class="form-control form-control-sm form-control-gorilla"
+                                        x-model="gorilla.height"
+                                        step="0.01"
+                                        min="1.0"
+                                        max="2.5">
+                                </div>
+                            </div>
+
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">Fight Style</label>
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="gorilla.fight_style">
+                                        <template x-for="choice in gorilla.fields.fight_style.choices" :key="choice[0]">
+                                            <option :value="choice[0]" x-text="choice[1]"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">Rank Points</label>
+                                    <input
+                                        type="number"
+                                        class="form-control form-control-sm form-control-gorilla"
+                                        x-model="gorilla.rank_points"
+                                        min="0"
+                                        max="10000">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-gorilla-cream">
+                            <div class="d-flex gap-2">
+                                <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm">
+                                    Profile
+                                </a>
+                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
+                                    Save
+                                </button>
+                                <button class="btn btn-gorilla-danger btn-sm" @click="gorilla.delete()">
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <div x-show="filteredGorillas.length === 0" class="col-12">
+                <div class="alert alert-warning text-center">
+                    <h5>No fighters found!</h5>
+                    <p class="mb-0">Try a different search or add some gorillas to the roster.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

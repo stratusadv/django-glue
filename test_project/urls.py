@@ -17,11 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
-import test_project.task.views
 from django_glue import django_glue_urls
 
 urlpatterns = [
-    path('', test_project.task.views.page_view),
+    path('', include('test_project.gorilla.urls')),
+    path('fight/', include('test_project.fight.urls')),
     path('admin/', admin.site.urls),
 ]
 

@@ -1,9 +1,7 @@
-# Django Glue - TODO - Highest to lowest priority
+# TODO
  
-- [ ] Copy over old Gorrilla Theme
-- [ ] Create a Gorrila app instead of Task (Gorilla, Fight, Schedule, and other models that would be good for testing)
-- [ ] Split test project sections into separate views / urls (eg: model_object_views.py performance_views.py, view_views.py)
-- [ ] Create Super Simple Side Nav for base page
+- [ ] Fix fight night page
+- [ ] Add better messaging around demonstration purpose of each test project page
 - [ ] Build / Update Glue.view in JS
 - [ ] Build / Update Glue.template in JS
 - [ ] Change GlueFormProxy so that the field property is at the top level and value, label, errors etc. are all children
@@ -12,6 +10,9 @@
 - [ ] Add comprehensive integration testing (cross-stack tests)
 - [ ] Add comprehensive e2e testing (using playwright)
 - [ ] Update docs to reflect new overhauled glue (they currently document the old, pre v1 version which had an entirely different api)
+
+# Bugs
+- [ ] Related fields not updating with save action (Model Proxy)
 
 # To be reviewed
 

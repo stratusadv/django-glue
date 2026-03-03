@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Fighter Profile{% endblock %}
+
+{% block page_title %}Fighter Profile{% endblock %}
+{% block page_subtitle %}Glue Model Proxy Demo - Edit a single gorilla instance{% endblock %}
+{% block page_nav %}
+    <a href="/" class="btn btn-outline-secondary btn-sm">Back to Rankings</a>
+{% endblock %}
+
+{% block extra_css %}
+.stat-card {
+    background: linear-gradient(135deg, var(--gorilla-green) 0%, var(--gorilla-green-dark) 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-family: "Jersey 15", sans-serif;
+    font-size: 2rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+{% endblock %}
+
+{% block content %}
+    <div x-data="{ gorilla: Glue.gorilla }">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card card-gorilla">
+                    <!-- Fighter Name Header -->
+                    <div class="card-header bg-gorilla-green text-white text-center py-3">
+                        <input
+                            type="text"
+                            class="form-control form-control-lg bg-transparent border-0 text-white fw-bold text-center"
+                            style="font-family: 'Jersey 15', sans-serif; font-size: 2rem;"
+                            x-model="gorilla.name"
+                            placeholder="Fighter Name">
+                    </div>
+
+                    <div class="card-body p-4">
+                        <!-- Stats Row -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-3 col-6">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="gorilla.rank_points"></div>
+                                    <div class="stat-label">Rank Points</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="gorilla.age"></div>
+                                    <div class="stat-label">Age</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="gorilla.weight"></div>
+                                    <div class="stat-label">Weight (kg)</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="gorilla.height"></div>
+                                    <div class="stat-label">Height (m)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Editable Form -->
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Fighter Description</label>
+                                <textarea
+                                    class="form-control form-control-gorilla"
+                                    rows="4"
+                                    x-model="gorilla.description"
+                                    placeholder="Enter the fighter's backstory, achievements, and fighting spirit..."></textarea>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Age</label>
+                                <input
+                                    type="number"
+                                    class="form-control form-control-gorilla"
+                                    x-model="gorilla.age"
+                                    min="1"
+                                    max="60">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Rank Points</label>
+                                <input
+                                    type="number"
+                                    class="form-control form-control-gorilla"
+                                    x-model="gorilla.rank_points"
+                                    min="0"
+                                    max="10000">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Weight (kg)</label>
+                                <input
+                                    type="number"
+                                    class="form-control form-control-gorilla"
+                                    x-model="gorilla.weight"
+                                    step="0.1"
+                                    min="50"
+                                    max="500">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Height (m)</label>
+                                <input
+                                    type="number"
+                                    class="form-control form-control-gorilla"
+                                    x-model="gorilla.height"
+                                    step="0.01"
+                                    min="1.0"
+                                    max="2.5">
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Fight Style</label>
+                                <select class="form-select form-select-gorilla" x-model="gorilla.fight_style">
+                                    <template x-for="choice in gorilla.fields.fight_style.choices" :key="choice[0]">
+                                        <option :value="choice[0]" x-text="choice[1]"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-gorilla-cream">
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button class="btn btn-gorilla px-4" @click="gorilla.save()">
+                                Save Changes
+                            </button>
+                            <button class="btn btn-gorilla-danger" @click="if(confirm('Delete this fighter?')) gorilla.delete()">
+                                Delete Fighter
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
