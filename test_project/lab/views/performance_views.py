@@ -21,4 +21,13 @@ def stress_view(request: HttpRequest):
         access=GlueAccess.DELETE,
     )
 
-    return render(request, 'lab/page/stress_page.html')
+    return render(
+        request,
+        'lab/performance/page/stress_page.html',
+        context={
+            'page_title': 'Test Lab',
+            'page_heading': 'Stress Test',
+            'page_subtitle': 'Load and interact with many Glue objects'
+
+        }
+    )

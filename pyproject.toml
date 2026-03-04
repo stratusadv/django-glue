@@ -42,7 +42,7 @@ development = [
     "wheel",
     "playwright",
     "faker>=18.0.0",
-    "python-dotenv==1.2.1",
+    "python-dotenv==1.2.2",
     "pytest>=7.0.0",
     "pytest-django>=4.5.0",
     "pytest-cov>=4.0.0",
@@ -99,16 +99,6 @@ settings = "test_project.base_settings"
 [tool.dev_tool.unittest.python]
 apps = ["django_glue.tests"]
 
-#[tool.pytest.ini_options]
-#DJANGO_SETTINGS_MODULE = "test_project.base_settings"
-#python_files = ["test_*.py", "*_test.py"]
-#python_functions = ["test_*"]
-#testpaths = ["django_glue/tests"]
-#addopts = [
-#    "--strict-markers",
-#    "-v",
-#]
-
 [tool.coverage.run]
 source = ["django_glue"]
 omit = [
@@ -126,3 +116,10 @@ exclude_lines = [
 ]
 fail_under = 70
 show_missing = true
+
+[tool.ruff]
+extend = "ruff.toml"
+
+[tool.ty]
+extend = "ty.toml"
+

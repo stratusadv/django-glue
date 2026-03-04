@@ -1,11 +1,5 @@
 {% extends "base.html" %}
 
-{% block title %}Stress Test{% endblock %}
-
-{% block page_title %}Test Lab{% endblock %}
-{% block page_heading %}<h2 class="text-gorilla-gold">Stress Test</h2>{% endblock %}
-{% block page_subtitle %}Load and interact with many Glue objects{% endblock %}
-
 {% block content %}
     <div x-data="{ gorillas: Glue.gorillas }">
         <div class="row justify-content-center mb-4">

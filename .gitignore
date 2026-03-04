@@ -2,12 +2,15 @@ __pycache__/
 .idea/
 .venv*/
 .vscode/
+.claude/
 dist/
+eval/
 *.egg-info/
 inspectionProfiles/
 site/
 venv*/
 build/
+django_glue.egg-info/
 
 .python-version
 

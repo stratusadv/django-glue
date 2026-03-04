@@ -1,0 +1,22 @@
+<div class="row">
+    <div class="col-auto">
+        <h4>Gorilla's</h4>
+        <ul>
+            {% url 'gorilla:list' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Combatants' %}
+
+            {% url 'fight:list' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Fights' %}
+        </ul>
+    </div>
+    <div class="col-auto">
+        <h4>Performance</h4>
+        <ul>
+            {% url 'lab:performance:stress' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Stress Test' %}
+
+            {% url 'lab:performance:flush_session' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Flush Session' %}
+        </ul>
+    </div>
+</div>

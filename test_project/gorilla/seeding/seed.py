@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from test_project.task.seeding.seeder import TaskSeeder
+from test_project.gorilla.seeding.seeder import GorillaSeeder
 
 
-TaskSeeder.seed_database(count=10)
+GorillaSeeder.seed_database(count=20)
