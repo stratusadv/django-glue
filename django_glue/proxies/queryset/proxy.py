@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import pickle
 from django.db.models import QuerySet, Model
 
 from django_glue.access.access import GlueAccess
@@ -9,6 +7,7 @@ from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelI
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.fields import GlueProxyModelFieldsMixin
 from django_glue.proxies.decorators import action
+from django_glue.utils import serialize_queryset, deserialize_queryset
 
 
 class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
@@ -21,7 +20,7 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
     ):
         super().__init__(target=target, **kwargs)
 
-        self.encoded_query = base64.b64encode(pickle.dumps(target.query)).decode()
+        self.encoded_query = serialize_queryset(target)
 
     @classmethod
     def from_proxy_registry_data(
@@ -29,11 +28,9 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
         encoded_query: str,
         **kwargs
     ) -> GlueQuerySetProxy:
-        query = pickle.loads(base64.b64decode(encoded_query))
-        decoded_queryset = query.model.objects.all()
-        decoded_queryset.query = query
+        decoded_queryset = deserialize_queryset(encoded_query)
 
-        return cls(
+        return super().from_proxy_registry_data(
             target=decoded_queryset,
             **kwargs
         )
@@ -90,6 +87,8 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
             access=self.access,
             fields=self.fields,
             exclude=self.exclude,
+            form_class=self.form_class,
+            field_overrides=self.field_overrides,
         )
 
     def _get_model_instance_by_pk(self, pk) -> Model:

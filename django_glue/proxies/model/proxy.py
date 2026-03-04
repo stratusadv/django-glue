@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.apps import apps
 from django.db.models import Model
 from django.forms import model_to_dict
+from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueModelInstanceNotFoundError
@@ -45,7 +46,7 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
         else:
             target = model_class()
 
-        return cls(
+        return super().from_proxy_registry_data(
             target=target,
             **kwargs
         )

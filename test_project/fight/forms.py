@@ -1,13 +1,21 @@
 from django import forms
+from django.core.exceptions import ValidationError
 
 from test_project.fight.models import Fight
 
 
 class FightForm(forms.ModelForm):
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data['red_corner'] == cleaned_data['blue_corner']:
+            raise ValidationError("Red and blue corners cannot be the same gorilla.")
+
+        return cleaned_data
+
     class Meta:
         model = Fight
         fields = [
-            'name', 'description', 'red_corner', 'blue_corner',
+            'name', 'description', 'red_corner', 'blue_corner', 'status',
             'location', 'weather_conditions', 'spectator_count', 'terrain_type'
         ]
 

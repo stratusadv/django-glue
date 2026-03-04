@@ -1,6 +1,10 @@
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
+from django.db.models import QuerySet, Model
+from django.forms.forms import BaseForm
+from django.forms.models import ModelForm
 from django.http import HttpRequest
 from django.urls import path, include
 
@@ -11,7 +15,21 @@ from django_glue import constants
 from django_glue.proxies.proxy import BaseGlueProxy
 
 
+@dataclass
+class ForeignKeyField:
+    """Helper for customizing ForeignKey field querysets in Glue proxies."""
+    name: str
+    queryset: QuerySet
+
+
 class Glue:
+    ForeignKeyField = ForeignKeyField
+    Access = GlueAccess
+
+    @staticmethod
+    def request(request):
+        return GluedRequest(request)
+
     @staticmethod
     def glue(
         request: HttpRequest,
@@ -41,10 +59,11 @@ class Glue:
     def model(
         request: HttpRequest,
         unique_name: str,
-        target: Any,
+        target: Model,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
-        exclude: Sequence = (),
+        exclude: Sequence[str] = (),
+        form_class: type[ModelForm] = None,
         **kwargs
     ):
         Glue.glue(
@@ -55,6 +74,7 @@ class Glue:
             access=access,
             fields=fields,
             exclude=exclude,
+            form_class=form_class,
             **kwargs
         )
 
@@ -62,10 +82,11 @@ class Glue:
     def queryset(
         request: HttpRequest,
         unique_name: str,
-        target: Any,
+        target: QuerySet,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
-        exclude: Sequence = (),
+        exclude: Sequence[str] = (),
+        form_class: type[ModelForm] = None,
         **kwargs
     ):
         Glue.glue(
@@ -76,6 +97,7 @@ class Glue:
             access=access,
             fields=fields,
             exclude=exclude,
+            form_class=form_class,
             **kwargs
         )
 
@@ -83,12 +105,77 @@ class Glue:
     def form(
         request: HttpRequest,
         unique_name: str,
-        target: Any,
+        target: BaseForm,
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs
     ):
         Glue.glue(
             request=request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueFormProxy,
+            access=access,
+            **kwargs
+        )
+
+
+class GluedRequest:
+    def __init__(self, request):
+        self.request = request
+
+    def model(
+        self,
+        unique_name: str,
+        target: Model,
+        access: GlueAccess = GlueAccess.VIEW,
+        fields: Sequence = (),
+        exclude: Sequence[str] = (),
+        form_class: type[ModelForm] = None,
+        **kwargs
+    ):
+        Glue.glue(
+            request=self.request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueModelProxy,
+            access=access,
+            fields=fields,
+            exclude=exclude,
+            form_class=form_class,
+            **kwargs
+        )
+
+    def queryset(
+        self,
+        unique_name: str,
+        target: QuerySet,
+        access: GlueAccess = GlueAccess.VIEW,
+        fields: Sequence = (),
+        exclude: Sequence[str] = (),
+        form_class: type[ModelForm] = None,
+        **kwargs
+    ):
+        Glue.glue(
+            request=self.request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueQuerySetProxy,
+            access=access,
+            fields=fields,
+            exclude=exclude,
+            form_class=form_class,
+            **kwargs
+        )
+
+    def form(
+        self,
+        unique_name: str,
+        target: BaseForm,
+        access: GlueAccess = GlueAccess.VIEW,
+        **kwargs
+    ):
+        Glue.glue(
+            request=self.request,
             unique_name=unique_name,
             target=target,
             proxy_class=GlueFormProxy,

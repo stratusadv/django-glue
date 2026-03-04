@@ -1,8 +1,15 @@
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponseRedirect
 from django.shortcuts import render
 
 from django_glue import Glue, GlueAccess
 from test_project.gorilla.models import Gorilla
+
+
+def flush_session_view(request: HttpRequest):
+    """Flush the session and redirect back to the referring page."""
+    request.session.flush()
+    referer = request.META.get('HTTP_REFERER', '/')
+    return HttpResponseRedirect(referer)
 
 
 def stress_view(request: HttpRequest):

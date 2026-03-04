@@ -64,8 +64,6 @@ class GlueClient {
         this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession)
         GlueClient.contextData = contextDataForProxies
 
-        console.log('hello')
-
         this.#initializeKeepLivePulse(keepLiveInterval)
     }
 }
