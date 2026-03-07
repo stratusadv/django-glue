@@ -3,40 +3,94 @@ import {GlueModelProxy} from "./model";
 import GlueClient from "../client";
 
 export class GlueQuerySetProxy extends BaseGlueProxy {
-    postInit() {
-        const baseAll = this.all.bind(this)
+    items = [];
+    lastQuery = {method: 'all', params: null};
+    loaded = false;
+    loading = false;
 
-        this.all = async () => {
-            const data = await baseAll()
-            this.items = data.map(item => this.buildQuerySetItem(item))
-
-            return this.items
-        }
-
-        const baseFilter = this.filter.bind(this)
-
-        this.filter = async (filterParams) => {
-            const data = await baseFilter(filterParams)
-            this.items = data.map(item => this.buildQuerySetItem(item))
-
-            return this.items
-        }
+    constructor(options) {
+        super(options);
     }
 
     *[Symbol.iterator]() {
         yield* this.items
     }
 
-    buildQuerySetItem(item) {
+    buildChildGlueModelProxy(item) {
         // TODO: Ensure that if QuerySetProxy is configured, then a ModelProxy must be configured
-        return new GlueModelProxy({
+        const proxy = new GlueModelProxy({
             proxyUniqueName: this.uniqueName,
             contextData: GlueClient.contextData[this.uniqueName],
-            actions: {
-                save: {payload: {id: item.id}},
-                delete: {payload: {id: item.id}},
-            },
             values: {...item}
         })
+
+        // Forward child proxy events to the queryset's listeners
+        const querysetProxy = this;
+        Object.keys(proxy.actions).forEach(actionName => {
+            ['before', 'after', 'error'].forEach(type => {
+                proxy.addListener(actionName, (event) => {
+                    querysetProxy.emitListeners(type, actionName, event);
+                }, type);
+            });
+        });
+
+        proxy.addListener('delete', () => querysetProxy.refresh())
+
+        return proxy
+    }
+
+    async all() {
+        this.loading = true;
+
+        debugger
+        if (this.items.length === 0 || this.lastQuery?.method !== 'all') {
+            const data = await this.processAction('all');
+            this.items = data.map(item => this.buildChildGlueModelProxy(item))
+            this.lastQuery = {method: 'all', params: null};
+        }
+
+        this.loaded = true;
+        this.loading = false;
+
+        return this.items
+    }
+
+    async filter(filterParams) {
+        this.loading = true;
+
+        if (this.items.length === 0 || !this.isEqual(filterParams, this.lastQuery?.params)) {
+            const data = await this.processAction('filter', filterParams);
+            this.items = data.map(item => this.buildChildGlueModelProxy(item));
+            this.lastQuery = {method: 'filter', params: filterParams};
+        }
+
+        this.loaded = true;
+        this.loading = false;
+
+
+        return this.items;
+    }
+
+    isEqual(a, b) {
+        if (a === b) return true;
+        if (a == null || b == null) return false;
+        if (Array.isArray(a) && Array.isArray(b)) {
+            if (a.length !== b.length) return false;
+            return a.every((val, i) => this.isEqual(val, b[i]));
+        }
+        if (typeof a === 'object' && typeof b === 'object') {
+            const keysA = Object.keys(a);
+            const keysB = Object.keys(b);
+            if (keysA.length !== keysB.length) return false;
+            return keysA.every(key => keysB.includes(key) && this.isEqual(a[key], b[key]));
+        }
+        return false;
+    }
+
+    async refresh() {
+        this.items = []
+
+        const {method, params} = this.lastQuery;
+        return this[method](params);
     }
 }

@@ -196,7 +196,7 @@ class GlueFormProxySessionDataTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        session_data = proxy.to_session_data()
+        session_data = proxy.to_proxy_registry_data()
 
         self.assertEqual(
             session_data['form_class_path'],
@@ -211,7 +211,7 @@ class GlueFormProxySessionDataTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        session_data = proxy.to_session_data()
+        session_data = proxy.to_proxy_registry_data()
 
         self.assertEqual(session_data['initial']['name'], 'John')
 
@@ -229,7 +229,7 @@ class GlueFormProxySessionDataTestCase(TestCase):
             unique_name='task_form',
             access=GlueAccess.VIEW,
         )
-        session_data = proxy.to_session_data()
+        session_data = proxy.to_proxy_registry_data()
 
         self.assertEqual(session_data['instance_pk'], task.pk)
 

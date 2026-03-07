@@ -2,8 +2,7 @@ from pydantic import BaseModel
 
 
 class GlueActionRequestData(BaseModel):
-    action: str
-    unique_name: str
+    context_data: dict
     payload: dict | None = None
 
 

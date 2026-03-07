@@ -1,7 +1,7 @@
 (() => {
   // client_js/src/constants.js
   var baseUrlPath = "django_glue";
-  var actionUrl = `/${baseUrlPath}/`;
+  var actionUrlPath = `/${baseUrlPath}`;
   var keepLiveUrl = `/${baseUrlPath}/keep_live/`;
 
   // client_js/src/config.js
@@ -74,8 +74,10 @@
       csrfProtected
     });
   }
-  async function sendActionRequest(payload = {}) {
-    return await sendJsonPostRequest(actionUrl, payload);
+  async function sendActionRequest({ uniqueName, action, payload, contextData }) {
+    const url = `${actionUrlPath}/${uniqueName}/${action}/`;
+    const data = { payload, context_data: contextData };
+    return await sendJsonPostRequest(url, data);
   }
   async function sendKeepLiveRequest(uniqueNames) {
     return await sendJsonPostRequest(keepLiveUrl, { unique_names: uniqueNames });
@@ -83,13 +85,15 @@
 
   // client_js/src/proxies/base.js
   class BaseGlueProxy {
-    constructor({ proxyUniqueName, contextData, actions = null, autoFetch = false }) {
+    constructor({ proxyUniqueName, contextData, actions = null }) {
       this.uniqueName = proxyUniqueName;
       this.contextData = contextData;
       this.actions = actions ? actions : contextData.actions;
-      this.autoFetch = autoFetch;
-      this.defineActionsAsProperties();
-      this.postInit();
+      this.listeners = {
+        before: {},
+        after: {},
+        error: {}
+      };
     }
     setActionPayload(actionName, payload) {
       this.actions[actionName].payload = payload;
@@ -97,24 +101,56 @@
     getActionPayload(actionName) {
       return this.actions[actionName].payload;
     }
-    async processAction(actionName, payload = null) {
-      const requestData = {
-        unique_name: this.uniqueName,
-        action: actionName,
-        payload: payload ?? this.getActionPayload(actionName)
-      };
-      const response = await sendActionRequest(requestData);
-      return response.data;
+    addListener(actionName, callback, type = "after") {
+      if (!this.listeners[type]) {
+        throw new Error(`Invalid listener type: ${type}. Use 'before', 'after', or 'error'.`);
+      }
+      if (!this.listeners[type][actionName]) {
+        this.listeners[type][actionName] = [];
+      }
+      this.listeners[type][actionName].push(callback);
+      return this;
     }
-    defineActionsAsProperties() {
-      Object.keys(this.actions).forEach((actionName) => {
-        if (typeof this[actionName] === "function") {
-          return;
+    removeListener(actionName, callback, type = "after") {
+      const listeners = this.listeners[type]?.[actionName];
+      if (listeners) {
+        const index = listeners.indexOf(callback);
+        if (index > -1) {
+          listeners.splice(index, 1);
         }
-        this[actionName] = (payload) => this.processAction(actionName, payload);
-      });
+      }
+      return this;
     }
-    postInit() {}
+    async emitListeners(type, actionName, event) {
+      const listeners = this.listeners[type]?.[actionName] || [];
+      for (const callback of listeners) {
+        await callback(event);
+      }
+    }
+    async processAction(actionName, payload = null) {
+      payload = payload ?? this.getActionPayload(actionName);
+      const event = {
+        action: actionName,
+        proxy: this,
+        payload
+      };
+      await this.emitListeners("before", actionName, event);
+      try {
+        const response = await sendActionRequest({
+          uniqueName: this.uniqueName,
+          action: actionName,
+          payload: payload ?? this.getActionPayload(actionName),
+          contextData: this.contextData
+        });
+        event.result = response.data;
+        await this.emitListeners("after", actionName, event);
+        return response.data;
+      } catch (err) {
+        event.error = err;
+        await this.emitListeners("error", actionName, event);
+        throw err;
+      }
+    }
   }
 
   // client_js/src/proxies/model.js
@@ -128,12 +164,53 @@
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
       this.values = values;
-      this.fields = contextData.fields;
-    }
-    postInit() {
+      this.#defineFieldsMeta();
       if (this.autoFetch && !this.values) {
         this.loadData();
       }
+      this.#defineFieldsAsProperties();
+    }
+    #defineFieldsMeta() {
+      this.fields = {};
+      Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
+        const field = { ...fieldData };
+        if (field.type === "ForeignKey") {
+          if (!fieldData.hasOwnProperty("_choicesCache")) {
+            fieldData._choicesCache = [];
+            fieldData._choicesLoaded = false;
+            fieldData._loadingChoices = false;
+            fieldData._choicesPromise = null;
+          }
+          const _choicesAction = async function() {
+            if (fieldData._choicesPromise) {
+              return fieldData._choicesPromise;
+            }
+            fieldData._loadingChoices = true;
+            fieldData._choicesPromise = this.processAction("foreign_key_choices", {
+              field_definition: [
+                fieldName,
+                fieldData
+              ]
+            }).then((data) => {
+              fieldData._choicesCache = data;
+              fieldData._choicesLoaded = true;
+              return data;
+            }).finally(() => {
+              fieldData._loadingChoices = false;
+            });
+            return fieldData._choicesPromise;
+          }.bind(this);
+          field.choices = async function() {
+            if (!fieldData._choicesLoaded) {
+              await _choicesAction();
+            }
+            return fieldData._choicesCache;
+          };
+        }
+        this.fields[fieldName] = field;
+      });
+    }
+    #defineFieldsAsProperties() {
       Object.keys(this.contextData.fields).forEach((fieldName) => {
         Object.defineProperty(this, fieldName, {
           get: function() {
@@ -168,7 +245,7 @@
       return result;
     }
     async delete() {
-      return await this.processAction("delete");
+      return await this.processAction("delete", { id: this.values.id });
     }
   }
 
@@ -176,27 +253,27 @@
   class GlueClient {
     static proxyClassesForSubjectTypes = {};
     static contextData = {};
+    static proxyRegistry = {};
     #activeProxies = {};
-    #assembleProxyFromRegistryData(proxyInstanceRegistryData) {
-      const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData;
+    #assembleProxyFromContextData(proxyUniqueName) {
+      const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName];
       const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
-      this.#activeProxies[uniqueName] = new ProxyClass({
-        proxyUniqueName: proxyInstanceRegistryData.unique_name,
-        contextData: GlueClient.contextData[uniqueName]
+      this.#activeProxies[proxyUniqueName] = new ProxyClass({
+        proxyUniqueName,
+        contextData: GlueClient.contextData[proxyUniqueName]
       });
-      return this.#activeProxies[uniqueName];
+      return this.#activeProxies[proxyUniqueName];
     }
-    #defineLazyPropertyFromUniqueName(proxyInstanceRegistryData) {
-      const { unique_name: proxyUniqueName } = proxyInstanceRegistryData;
+    #defineLazyPropertyFromUniqueName(proxyUniqueName) {
       Object.defineProperty(this, proxyUniqueName, {
         get: function() {
-          return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromRegistryData(proxyInstanceRegistryData);
+          return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromContextData(proxyUniqueName);
         }
       });
     }
-    #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
-      for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-        this.#defineLazyPropertyFromUniqueName(proxyInstanceRegistryData);
+    #defineProxyUniqueNamesAsProperties() {
+      for (const proxyUniqueName of Object.keys(GlueClient.proxyRegistry)) {
+        this.#defineLazyPropertyFromUniqueName(proxyUniqueName);
       }
     }
     #initializeKeepLivePulse(keepLiveInterval) {
@@ -221,9 +298,9 @@
       if (config2) {
         setConfig(config2);
       }
-      this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession);
+      GlueClient.proxyRegistry = proxyRegistryFromSession;
       GlueClient.contextData = contextDataForProxies;
-      console.log("hello");
+      this.#defineProxyUniqueNamesAsProperties();
       this.#initializeKeepLivePulse(keepLiveInterval);
     }
   }
@@ -231,33 +308,79 @@
 
   // client_js/src/proxies/queryset.js
   class GlueQuerySetProxy extends BaseGlueProxy {
-    postInit() {
-      const baseAll = this.all.bind(this);
-      this.all = async () => {
-        const data = await baseAll();
-        this.items = data.map((item) => this.buildQuerySetItem(item));
-        return this.items;
-      };
-      const baseFilter = this.filter.bind(this);
-      this.filter = async (filterParams) => {
-        const data = await baseFilter(filterParams);
-        this.items = data.map((item) => this.buildQuerySetItem(item));
-        return this.items;
-      };
+    items = [];
+    lastQuery = { method: "all", params: null };
+    loaded = false;
+    loading = false;
+    constructor(options) {
+      super(options);
     }
     *[Symbol.iterator]() {
       yield* this.items;
     }
-    buildQuerySetItem(item) {
-      return new GlueModelProxy({
+    buildChildGlueModelProxy(item) {
+      const proxy = new GlueModelProxy({
         proxyUniqueName: this.uniqueName,
         contextData: client_default.contextData[this.uniqueName],
-        actions: {
-          save: { payload: { id: item.id } },
-          delete: { payload: { id: item.id } }
-        },
         values: { ...item }
       });
+      const querysetProxy = this;
+      Object.keys(proxy.actions).forEach((actionName) => {
+        ["before", "after", "error"].forEach((type) => {
+          proxy.addListener(actionName, (event) => {
+            querysetProxy.emitListeners(type, actionName, event);
+          }, type);
+        });
+      });
+      proxy.addListener("delete", () => querysetProxy.refresh());
+      return proxy;
+    }
+    async all() {
+      this.loading = true;
+      debugger;
+      if (this.items.length === 0 || this.lastQuery?.method !== "all") {
+        const data = await this.processAction("all");
+        this.items = data.map((item) => this.buildChildGlueModelProxy(item));
+        this.lastQuery = { method: "all", params: null };
+      }
+      this.loaded = true;
+      this.loading = false;
+      return this.items;
+    }
+    async filter(filterParams) {
+      this.loading = true;
+      if (this.items.length === 0 || !this.isEqual(filterParams, this.lastQuery?.params)) {
+        const data = await this.processAction("filter", filterParams);
+        this.items = data.map((item) => this.buildChildGlueModelProxy(item));
+        this.lastQuery = { method: "filter", params: filterParams };
+      }
+      this.loaded = true;
+      this.loading = false;
+      return this.items;
+    }
+    isEqual(a, b) {
+      if (a === b)
+        return true;
+      if (a == null || b == null)
+        return false;
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length)
+          return false;
+        return a.every((val, i) => this.isEqual(val, b[i]));
+      }
+      if (typeof a === "object" && typeof b === "object") {
+        const keysA = Object.keys(a);
+        const keysB = Object.keys(b);
+        if (keysA.length !== keysB.length)
+          return false;
+        return keysA.every((key) => keysB.includes(key) && this.isEqual(a[key], b[key]));
+      }
+      return false;
+    }
+    async refresh() {
+      this.items = [];
+      const { method, params } = this.lastQuery;
+      return this[method](params);
     }
   }
 

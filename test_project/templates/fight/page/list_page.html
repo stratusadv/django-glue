@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Fight Night{% endblock %}
+{% block title %}Fights{% endblock %}
 
 {% block page_title %}Gorilla Fight Simulator{% endblock %}
-{% block page_heading %}<h2 class="text-gorilla-gold">Fight Night!</h2>{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Fights</h2>{% endblock %}
 {% block page_nav %}
     <div class="mt-2">
-        <a href="{% url 'gorilla:list' %}" class="btn btn-outline-secondary btn-sm">Rankings</a>
+        <a href="{% url 'gorilla:list' %}" class="btn btn-outline-secondary btn-sm">Combatants</a>
         <a href="{% url 'fight:schedule' %}" class="btn btn-outline-secondary btn-sm">Schedule Fight</a>
     </div>
 {% endblock %}
@@ -71,7 +71,7 @@
 
         <!-- Fight Cards -->
         <div class="row g-4">
-            <template x-for="(fight, i) in filteredFights" :key="i">
+            <template x-for="fight in filteredFights" :key="fight.id">
                 <div class="col-lg-6">
                     <div class="card card-fight h-100">
                         <div class="card-header bg-gorilla-green text-white">
@@ -89,7 +89,7 @@
                                     <span class="corner-label text-danger">Red Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.fields.red_corner.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.fields.red_corner.choices()" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.red_corner === choice[0]"></option>
                                         </template>
                                     </select>
@@ -101,7 +101,7 @@
                                     <span class="corner-label text-primary">Blue Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.fields.blue_corner.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.fields.blue_corner.choices()" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.blue_corner === choice[0]"></option>
                                         </template>
                                     </select>

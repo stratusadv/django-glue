@@ -18,29 +18,8 @@ def list_view(request: HttpRequest):
         fields=[
             'name',
             'description',
-            Glue.ForeignKeyField('red_corner', queryset=Gorilla.objects.filter(
-                fight_style=FightStyleChoices.JUDO)),
-            Glue.ForeignKeyField('blue_corner', queryset=Gorilla.objects.filter(
-                fight_style=FightStyleChoices.WRESTLING)),
-            'status',
-            'location',
-            'weather_conditions',
-            'spectator_count',
-            'terrain_type'
-        ]
-    )
-
-
-    Glue.queryset(
-        request=request,
-        target=Fight.objects.all(),
-        unique_name='fights',
-        access=Glue.Access.DELETE,
-        fields=[
-            'name',
-            'description',
-            Glue.ForeignKeyField('red_corner', queryset=Gorilla.objects.filter(fight_style=FightStyleChoices.JUDO)),
-            Glue.ForeignKeyField('blue_corner', queryset=Gorilla.objects.filter(fight_style=FightStyleChoices.WRESTLING)),
+            'red_corner',
+            'blue_corner',
             'status',
             'location',
             'weather_conditions',

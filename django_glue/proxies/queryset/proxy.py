@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from django.apps import apps
 from django.db.models import QuerySet, Model
+from django.forms import ModelChoiceField
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
@@ -23,14 +25,14 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
         self.encoded_query = serialize_queryset(target)
 
     @classmethod
-    def from_proxy_registry_data(
+    def from_action_request_data(
         cls,
         encoded_query: str,
         **kwargs
     ) -> GlueQuerySetProxy:
         decoded_queryset = deserialize_queryset(encoded_query)
 
-        return super().from_proxy_registry_data(
+        return super().from_action_request_data(
             target=decoded_queryset,
             **kwargs
         )
@@ -38,16 +40,10 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
     def get_model_class(self):
         return self.target.model
 
-    def _build_session_data(self) -> dict:
-        return {
-            'encoded_query': self.encoded_query,
-            **super()._build_session_data()
-        }
-
     def _build_context_data(self) -> dict:
         return {
-            'fields': self._included_fields,
-        }
+            'encoded_query': self.encoded_query,
+        } | super()._build_context_data()
 
     def _queryset_to_list(self, queryset: QuerySet):
         return list(queryset.values(*[
@@ -88,7 +84,6 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
             fields=self.fields,
             exclude=self.exclude,
             form_class=self.form_class,
-            field_overrides=self.field_overrides,
         )
 
     def _get_model_instance_by_pk(self, pk) -> Model:
@@ -105,18 +100,14 @@ class GlueQuerySetProxy(GlueProxyModelFieldsMixin):
                 pk=pk
             )
 
+    def _get_target_model_instance_proxy(self, pk: int):
+        target_instance = self._get_model_instance_by_pk(pk)
+        return self._create_model_proxy_from_instance(target_instance)
+
     @action(access=GlueAccess.CHANGE)
     def save(self, payload: dict):
-        target_instance = self._get_model_instance_by_pk(payload['id'])
-        instance_proxy = self._create_model_proxy_from_instance(target_instance)
-
-        return instance_proxy.save(payload)
+        return self._get_target_model_instance_proxy(payload['id']).save(payload)
 
     @action(access=GlueAccess.DELETE)
     def delete(self, payload: dict):
-        pk = payload['id']
-
-        target_instance = self._get_model_instance_by_pk(pk)
-        instance_proxy = self._create_model_proxy_from_instance(target_instance)
-
-        return instance_proxy.delete()
+        return self._get_target_model_instance_proxy(payload['id']).delete()

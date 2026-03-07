@@ -11,9 +11,15 @@ import inspect
 from abc import ABC
 from typing import Any
 
+from django.http import HttpRequest
+
 from django_glue.access.access import GlueAccess
 from django_glue import data_transfer_objects as dto
+from django_glue.data_transfer_objects import GlueActionRequestData
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
+
+from django_glue.session import GlueSession
+from django_glue.utils import get_request_body_data
 
 
 class BaseGlueProxy(ABC):
@@ -70,23 +76,29 @@ class BaseGlueProxy(ABC):
             raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
 
         cls._actions[cls.__name__] = {}
-        
-        for attr_name, attr_value in cls.__dict__.items():
-            if hasattr(attr_value, '_required_glue_access'):
-                parameters = inspect.signature(attr_value).parameters
-                parameter_data = {}
 
-                for param_name, param_value in parameters.items():
-                    if param_name in ['args', 'kwargs', 'self']:
-                        continue
-                    else:
-                        parameter_data[param_name] = param_value.annotation
+        # Walk the MRO in reverse order (excluding object) so that child class
+        # actions override parent class actions with the same name
+        for klass in reversed(cls.__mro__):
+            if klass is object:
+                continue
 
-                cls._actions[cls.__name__][attr_name] = (
-                    attr_value,
-                    parameter_data,
-                    attr_value._required_glue_access
-                )
+            for attr_name, attr_value in klass.__dict__.items():
+                if hasattr(attr_value, '_required_glue_access'):
+                    parameters = inspect.signature(attr_value).parameters
+                    parameter_data = {}
+
+                    for param_name, param_value in parameters.items():
+                        if param_name in ['args', 'kwargs', 'self']:
+                            continue
+                        else:
+                            parameter_data[param_name] = param_value.annotation
+
+                    cls._actions[cls.__name__][attr_name] = (
+                        attr_value,
+                        parameter_data,
+                        attr_value._required_glue_access
+                    )
 
     @property
     def actions(self):
@@ -94,17 +106,38 @@ class BaseGlueProxy(ABC):
         return self._actions[self.__class__.__name__]
 
     @classmethod
-    def from_proxy_registry_data(
+    def process_request(
+        cls,
+        request: HttpRequest,
+    ):
+        from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
+
+        data = get_request_body_data(request)
+        action_data = dto.GlueActionRequestData(**data)
+
+        proxy_access = GlueSession(request).get_proxy_access(action_data.unique_name)
+
+        proxy = SUBJECT_TYPE_TO_PROXY_TYPE[
+            action_data.context_data['subject_type']].from_action_request_data(
+            access=proxy_access,
+            unique_name=action_data.unique_name,
+            **action_data.context_data
+        )
+
+        return proxy.process_action(action_data)
+
+    @classmethod
+    def from_action_request_data(
         cls,
         access: GlueAccess,
         unique_name: str,
         **kwargs
     ) -> BaseGlueProxy:
         """
-        Reconstruct a proxy instance from session registry data.
+        Reconstruct a proxy instance from data sent to action_view.
 
         Called when processing an action request to recreate the proxy from
-        stored session data. Subclasses can override this to handle additional
+        data sent in a request the action_view. Subclasses can override this to handle additional
         reconstruction logic (e.g., fetching model instances from the database).
 
         Args:
@@ -121,9 +154,6 @@ class BaseGlueProxy(ABC):
             **kwargs
         )
 
-    def _build_session_data(self) -> dict:
-        return {}
-
     def _build_context_data(self) -> dict:
         return {}
 
@@ -134,47 +164,42 @@ class BaseGlueProxy(ABC):
         }
 
         return dict(
-            actions=actions_data
+            actions=actions_data,
+            subject_type = self._subject_type.__name__,
         ) | self._build_context_data()
-
-    def to_session_data(self) -> dict:
-        return dict(
-            unique_name=self.unique_name,
-            subject_type=self._subject_type.__name__,
-            access=self.access
-        ) | self._build_session_data()
 
     def process_action(
         self,
+        action: str,
         action_data: dto.GlueActionRequestData
     ) -> dto.GlueActionResponseData:
-        if not hasattr(self, action_data.action):
+        if not hasattr(self, action):
             raise GlueMissingActionError(
-                action=action_data.action,
+                action=action,
                 proxy_name=self.unique_name,
-                reason=f"Method '{action_data.action}' does not exist on {type(self).__name__}"
+                reason=f"Method '{action}' does not exist on {type(self).__name__}"
             )
 
-        if action_data.action not in self.actions:
+        if action not in self.actions:
             raise GlueMissingActionError(
-                action=action_data.action,
+                action=action,
                 proxy_name=self.unique_name,
                 reason="Method must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
             )
 
-        action_func, action_parameters, required_access = self.actions[action_data.action]
+        action_func, action_parameters, required_access = self.actions[action]
 
         if not self.access.has_access(required_access):
             raise GlueAccessError(
-                action=action_data.action,
+                action=action,
                 required_access=required_access.name,
                 current_access=self.access.name
             )
 
         if 'payload' not in action_parameters:
-            if action_data.payload is not None:
+            if action_data.payload:
                 raise ValueError('This action does not support a payload parameter.')
 
             return action_func(self)
         else:
-            return action_func(self, dict(**action_data.payload))
+            return action_func(self, action_data.payload)

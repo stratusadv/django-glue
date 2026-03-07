@@ -18,7 +18,7 @@ class GlueFormProxy(BaseGlueProxy):
         self.form_module = target.__class__.__module__
 
     @classmethod
-    def from_proxy_registry_data(
+    def from_action_request_data(
         cls,
         form_class_path: str,
         initial: dict,
@@ -46,21 +46,18 @@ class GlueFormProxy(BaseGlueProxy):
 
         return cls(target=target, **kwargs)
 
-    def _build_session_data(self) -> dict:
-        data = {
-            'form_class_path': f'{self.form_module}.{self.form_class_name}',
-            'initial': dict(self.target.initial),
-        }
-        # For ModelForm, store the instance pk
-        if hasattr(self.target, 'instance') and self.target.instance and self.target.instance.pk:
-            data['instance_pk'] = self.target.instance.pk
-        return data
-
     def _build_context_data(self) -> dict:
-        return {
+        context_data = {
+            'form_class_path': f'{self.form_module}.{self.form_class_name}',
             'fields': self._get_field_definitions(),
             'initial': self._get_initial_values(),
-        }
+        } | super()._build_context_data()
+
+        # For ModelForm, store the instance pk
+        if hasattr(self.target,'instance') and self.target.instance and self.target.instance.pk:
+            context_data['instance_pk'] = self.target.instance.pk
+
+        return context_data
 
     def _get_field_definitions(self) -> dict:
         """Extract field metadata for frontend rendering."""

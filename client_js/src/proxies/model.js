@@ -10,14 +10,67 @@ export class GlueModelProxy extends BaseGlueProxy {
     }) {
         super({proxyUniqueName, contextData, actions, autoFetch});
         this.values = values
-        this.fields = contextData.fields
-    }
+        this.#defineFieldsMeta()
 
-    postInit() {
         if (this.autoFetch && !this.values) {
             this.loadData()
         }
 
+        this.#defineFieldsAsProperties()
+    }
+
+    #defineFieldsMeta() {
+        this.fields = {}
+        Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
+            // Create a shallow copy for instance-specific properties
+            const field = {...fieldData};
+
+            if (field.type === "ForeignKey") {
+                // Initialize shared choice caching on the original fieldData (once)
+                // This ensures choices are loaded only once across all model proxy instances
+                if (!fieldData.hasOwnProperty('_choicesCache')) {
+                    fieldData._choicesCache = [];
+                    fieldData._choicesLoaded = false;
+                    fieldData._loadingChoices = false;
+                    fieldData._choicesPromise = null;
+                }
+
+                const _choicesAction = async function() {
+                    // If already loading, return the existing promise to avoid duplicate requests
+                    if (fieldData._choicesPromise) {
+                        return fieldData._choicesPromise;
+                    }
+
+                    fieldData._loadingChoices = true;
+                    fieldData._choicesPromise = this.processAction('foreign_key_choices', {
+                        'field_definition': [
+                            fieldName,
+                            fieldData
+                        ]
+                    }).then(data => {
+                        fieldData._choicesCache = data;
+                        fieldData._choicesLoaded = true;
+                        return data;
+                    }).finally(() => {
+                        fieldData._loadingChoices = false;
+                    });
+
+                    return fieldData._choicesPromise;
+                }.bind(this)
+
+                field.choices = async function() {
+                    if (!fieldData._choicesLoaded) {
+                        await _choicesAction();
+                    }
+                    return fieldData._choicesCache;
+                }
+            }
+
+            this.fields[fieldName] = field
+        })
+    }
+
+    #defineFieldsAsProperties() {
         Object.keys(this.contextData.fields).forEach(fieldName => {
             Object.defineProperty(this, fieldName, {
                 get: function() {
@@ -56,6 +109,6 @@ export class GlueModelProxy extends BaseGlueProxy {
     }
 
     async delete() {
-        return await this.processAction('delete');
+        return await this.processAction('delete', {id: this.values.id});
     }
 }

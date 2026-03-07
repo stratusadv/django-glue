@@ -11,10 +11,10 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
 
 application = get_wsgi_application()
 
-print('Seeding Gorilla\'s...')
+print('Seeding Gorillas...')
 from test_project.gorilla.seeding.seed import *
 
-print('Seeding Fight\'s...')
+print('Seeding Fights...')
 from test_project.fight.seeding.seed import *
 
 print('Done!')

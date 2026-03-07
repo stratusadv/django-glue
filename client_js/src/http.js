@@ -1,4 +1,4 @@
-import {actionUrl, keepLiveUrl} from "./constants";
+import {actionUrlPath, keepLiveUrl} from "./constants";
 import {getConfig} from "./config";
 
 function getHttpCookie(name) {
@@ -69,8 +69,11 @@ export async function sendJsonPostRequest(url, data, csrfProtected = true){
     })
 }
 
-export async function sendActionRequest(payload = {}) {
-    return await sendJsonPostRequest(actionUrl, payload)
+export async function sendActionRequest({uniqueName, action, payload, contextData}) {
+    const url = `${actionUrlPath}/${uniqueName}/${action}/`
+    const data = {payload, context_data: contextData}
+
+    return await sendJsonPostRequest(url, data)
 }
 
 export async function sendKeepLiveRequest(uniqueNames) {

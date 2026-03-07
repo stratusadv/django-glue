@@ -9,13 +9,16 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Sequence, TYPE_CHECKING
 
-from django.db.models import ForeignObjectRel, QuerySet
+from django.apps import apps
+from django.db.models import ForeignObjectRel, QuerySet, Model
 from django.forms import modelform_factory, ModelChoiceField
 from django.forms.forms import BaseForm
 from django.forms.models import ModelForm
 from django.utils.functional import cached_property
 
+from django_glue import GlueAccess
 from django_glue.exceptions import GluePayloadValidationError
+from django_glue.proxies.decorators import action
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.utils import get_class_from_path_string, serialize_queryset, deserialize_queryset
 
@@ -42,34 +45,19 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
         fields: Sequence = (),
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] = None,
-        field_overrides: dict[str, QuerySet] = None,
         **kwargs
     ):
-        # Parse fields to extract ForeignKeyField instances
-        parsed_field_names, parsed_overrides = self._parse_fields_param(fields)
-
         super().__init__(**kwargs)
-        self.fields = parsed_field_names
+        self.fields = fields
         self.exclude = exclude
         self.form_class = form_class
-        self.field_overrides = field_overrides or parsed_overrides or {}
-
-        if exclude:
-            if fields:
-                raise ValueError('Must only pass one of fields, exclude, or form_class')
-
-        if form_class:
-            if exclude:
-                raise ValueError('Cannot use both form_class and exclude')
-
-        # Validate that field_overrides are for actual ForeignKey fields
-        self._validate_field_overrides()
 
     @classmethod
-    def from_proxy_registry_data(
+    def from_action_request_data(
         cls,
         form_class_path: str | None = None,
-        field_overrides_serialized: dict[str, str] | None = None,
+        fields: Sequence[str] = (),
+        exclude: Sequence[str] = (),
         **kwargs
     ) -> GlueProxyModelFieldsMixin:
         if form_class_path:
@@ -77,17 +65,10 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
         else:
             form_class = None
 
-        # Deserialize field overrides
-        field_overrides = None
-        if field_overrides_serialized:
-            field_overrides = {
-                field_name: deserialize_queryset(encoded_query)
-                for field_name, encoded_query in field_overrides_serialized.items()
-            }
-
         return cls(
             form_class=form_class,
-            field_overrides=field_overrides,
+            fields=fields,
+            exclude=exclude,
             **kwargs
         )
 
@@ -111,64 +92,33 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
                 field_names.append(item)
         return field_names, field_overrides
 
-    def _validate_field_overrides(self):
-        """Validate that field_overrides are for actual ForeignKey fields."""
-        if not self.field_overrides:
-            return
+    def _build_context_data(self) -> dict:
+        context_data = super()._build_context_data()
+        context_data.update({
+            'fields': self._included_fields,
+            'exclude': list(self.exclude)
+        })
 
-        model_class = self.get_model_class()
-        for field_name in self.field_overrides.keys():
-            try:
-                field = model_class._meta.get_field(field_name)
-            except Exception:
-                raise ValueError(
-                    f"Field '{field_name}' does not exist on model '{model_class.__name__}'"
-                )
-
-            if field.__class__.__name__ not in ('ForeignKey', 'OneToOneField'):
-                raise ValueError(
-                    f"Field '{field_name}' is not a ForeignKey or OneToOneField. "
-                    f"Glue.ForeignKeyField can only be used with ForeignKey fields."
-                )
-
-    def to_session_data(self) -> dict:
-        session_data = super().to_session_data()
         if self.form_class:
-            session_data.update({
+            context_data.update({
                 'form_class_path': f'{self.form_class.__module__}.{self.form_class.__name__}',
             })
 
-        if self.fields:
-            session_data.update({
-                'fields': list(self.fields)
-            })
-
-        if self.exclude:
-            session_data.update({
-                'exclude': list(self.exclude)
-            })
-
-        if self.field_overrides:
-            session_data.update({
-                'field_overrides_serialized': {
-                    field_name: serialize_queryset(queryset)
-                    for field_name, queryset in self.field_overrides.items()
-                }
-            })
-
-        return session_data | self._build_session_data()
+        return context_data
 
     @cached_property
     def _included_fields(self) -> dict[str, Any]:
         # TODO: we should probably ensure id is in included fields due to how we are
         # queryset instance updates
 
+        model_fields = self.get_model_class()._meta.get_fields()
+
         deconstructed_fields = [
             field.deconstruct()
             for field in self.get_model_class()._meta.get_fields()
             if field.name == 'id' or (
-                not isinstance(field, ForeignObjectRel) and
                 not field.__class__.__name__ == 'GenericRelation' and
+                not field.__class__.__name__ == 'ManyToOneRel' and
                 not field.name in self.exclude and
                 (not self.fields or field.name in self.fields) and
                 (not self.form_class or field.name in self.form_class().fields.keys())
@@ -178,8 +128,9 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
         # Options to exclude from field metadata (not JSON serializable or not needed)
         excluded_options = {'default', 'validators', 'on_delete'}
 
-        fields = {
-            field_name: {
+        fields = {}
+        for field_name, field_type, _, field_options in deconstructed_fields:
+            field_definition = {
                 'type': field_type.rsplit('.', 1)[-1],  # Extract class name from full path
                 **{
                     opt_name: opt_value
@@ -187,43 +138,23 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
                     if opt_name not in excluded_options
                 }
             }
-            for field_name, field_type, _, field_options in deconstructed_fields
-        }
 
-        # Add choices from field overrides (custom querysets)
-        for field_name, queryset in self.field_overrides.items():
-            if field_name in fields:
-                fields[field_name]['choices'] = [
-                    (obj.pk, str(obj)) for obj in queryset
-                ]
+            fields[field_name] = field_definition
 
         return fields
 
     def _get_form_instance(self, payload: dict) -> BaseForm:
         if self.form_class:
-            base_class = self.form_class
+            form_class = self.form_class
         else:
-            base_class = modelform_factory(
+            form_class = modelform_factory(
                 self.get_model_class(),
                 fields=payload.keys()
             )
 
-        # Create ModelChoiceFields with custom querysets
-        overrides = {
-            name: ModelChoiceField(queryset=qs)
-            for name, qs in self.field_overrides.items()
-            if name in payload.keys()
-        }
-
-        if not overrides:
-            return base_class(data=payload)
-
-        # Dynamically create subclass with overridden fields
-        form_class = type('GlueProxyModelFieldsMixinForm', (base_class,), overrides)
-
         return form_class(data=payload)
 
-    def _validate_payload(self, payload: dict) -> dict:
+    def _validate_save_payload(self, payload: dict) -> dict:
         # Filter payload to only include allowed fields
         filtered_payload = {
             field_name: value
@@ -248,3 +179,27 @@ class GlueProxyModelFieldsMixin(BaseGlueProxy, ABC):
                 )
 
         return form.cleaned_data
+
+    @action(access=GlueAccess.VIEW)
+    def foreign_key_choices(self, payload: dict):
+        field_name, field_data = payload['field_definition']
+
+        if not field_data.get('type', None) == 'ForeignKey':
+            return []
+
+        if self.form_class:
+            field = self.form_class().fields[field_name]
+        else:
+            field = self.get_model_class()._meta.get_field(field_name)
+
+        if isinstance(field, ModelChoiceField):
+            return [
+                [instance.pk, f'{instance}']
+                for instance in field.queryset.values_list('pk', 'name')
+            ]
+        else:
+            field_related_model = apps.get_model(field_data['to'])
+            return [
+                [instance.pk, f'{instance}']
+                for instance in field_related_model.objects.all()
+            ]

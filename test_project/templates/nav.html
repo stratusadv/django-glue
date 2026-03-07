@@ -1,12 +1,15 @@
 <div class="row">
     <div class="col-auto">
-        <h4>Gorilla's</h4>
+        <h4>Gorilla Fight League</h4>
         <ul>
             {% url 'gorilla:list' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Combatants' %}
 
             {% url 'fight:list' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Fights' %}
+
+            {% url 'fight:schedule' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Schedule Fight' %}
         </ul>
     </div>
     <div class="col-auto">

@@ -18,6 +18,47 @@
             integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz"
             crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.x/dist/cdn.min.js"></script>
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('notifications', {
+                current: null,
+                timeout: null,
+
+                show(type, message, duration = 3000) {
+                    if (this.timeout) {
+                        clearTimeout(this.timeout);
+                    }
+                    this.current = { type, message };
+                    this.timeout = setTimeout(() => {
+                        this.current = null;
+                    }, duration);
+                },
+
+                success(message, duration = 3000) {
+                    this.show('success', message, duration);
+                },
+
+                error(message, duration = 3000) {
+                    this.show('danger', message, duration);
+                },
+
+                warning(message, duration = 3000) {
+                    this.show('warning', message, duration);
+                },
+
+                info(message, duration = 3000) {
+                    this.show('info', message, duration);
+                },
+
+                clear() {
+                    if (this.timeout) {
+                        clearTimeout(this.timeout);
+                    }
+                    this.current = null;
+                }
+            });
+        });
+    </script>
 
     <style>
         :root {
@@ -178,7 +219,7 @@
 <!-- Lab Toggle -->
 <button class="lab-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#labPanel" aria-controls="labPanel"
         x-show="!labOpen" x-transition @click="labOpen = true">
-    NAV
+    <i class="bi bi-list"></i>
 </button>
 
 <!-- Lab Panel -->
@@ -196,6 +237,15 @@
         {% block lab_content %}
         {% endblock %}
     </div>
+</div>
+
+<!-- Global Notifications -->
+<div x-show="$store.notifications.current" x-transition
+     class="alert position-fixed shadow"
+     :class="'alert-' + $store.notifications.current?.type"
+     style="bottom: 20px; right: 20px; z-index: 1050;"
+     role="alert">
+    <span x-text="$store.notifications.current?.message"></span>
 </div>
 
 <div class="container py-4">

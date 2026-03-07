@@ -36,7 +36,7 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_validates_all_fields(self):
         """Should validate all fields in payload."""
-        result = self.proxy._validate_payload({
+        result = self.proxy._validate_save_payload({
             'title': 'Updated Title',
             'done': True,
             'order': 5
@@ -53,7 +53,7 @@ class ValidatePayloadTestCase(TestCase):
             access=GlueAccess.CHANGE,
             fields=['title', 'done'],  # Only these fields
         )
-        result = proxy._validate_payload({
+        result = proxy._validate_save_payload({
             'title': 'Updated',
             'description': 'Should be ignored',  # Not in fields
             'order': 999,  # Not in fields
@@ -64,21 +64,21 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_returns_empty_dict_for_empty_payload(self):
         """Empty payload should return empty dict."""
-        result = self.proxy._validate_payload({})
+        result = self.proxy._validate_save_payload({})
         self.assertEqual(result, {})
 
     def test_raises_on_invalid_field_value(self):
         """Should raise GluePayloadValidationError on invalid field value."""
         # CharField can't accept None (required field)
         with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload({
+            self.proxy._validate_save_payload({
                 'title': None,  # CharField is required
             })
         self.assertEqual(ctx.exception.field, 'title')
 
     def test_cleans_data_types(self):
         """ModelForm validation should clean/coerce data types."""
-        result = self.proxy._validate_payload({
+        result = self.proxy._validate_save_payload({
             'order': '42',  # String should be coerced to int
         })
         self.assertEqual(result['order'], 42)
@@ -89,7 +89,7 @@ class ValidatePayloadTestCase(TestCase):
         # Task.title has max_length=50, so 60 chars should fail
         long_title = 'x' * 60
         with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload({
+            self.proxy._validate_save_payload({
                 'title': long_title,
             })
         self.assertEqual(ctx.exception.field, 'title')
@@ -99,7 +99,7 @@ class ValidatePayloadTestCase(TestCase):
         """Should validate MinValueValidator on integer field."""
         # Task.order has MinValueValidator(1), so 0 should fail
         with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload({
+            self.proxy._validate_save_payload({
                 'order': 0,
             })
         self.assertEqual(ctx.exception.field, 'order')
@@ -108,7 +108,7 @@ class ValidatePayloadTestCase(TestCase):
         """Should validate MaxValueValidator on integer field."""
         # Task.order has MaxValueValidator(1000), so 1001 should fail
         with self.assertRaises(GluePayloadValidationError) as ctx:
-            self.proxy._validate_payload({
+            self.proxy._validate_save_payload({
                 'order': 1001,
             })
         self.assertEqual(ctx.exception.field, 'order')
@@ -116,7 +116,7 @@ class ValidatePayloadTestCase(TestCase):
     def test_allows_blank_field(self):
         """Should accept empty string for fields with blank=True."""
         # Task.description has blank=True
-        result = self.proxy._validate_payload({
+        result = self.proxy._validate_save_payload({
             'description': '',
         })
         self.assertEqual(result['description'], '')

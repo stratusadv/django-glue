@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from django.apps import apps
 from django.db.models import Model
-from django.forms import model_to_dict
+from django.forms import model_to_dict, forms, ModelChoiceField
+from django.forms.fields import ChoiceField
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
@@ -25,7 +26,7 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
         self.app_label = target._meta.app_label
 
     @classmethod
-    def from_proxy_registry_data(
+    def from_action_request_data(
         cls,
         target_pk: int | str | None,
         model_class: str,
@@ -46,7 +47,7 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
         else:
             target = model_class()
 
-        return super().from_proxy_registry_data(
+        return super().from_action_request_data(
             target=target,
             **kwargs
         )
@@ -54,17 +55,12 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
     def get_model_class(self):
         return self.target.__class__
 
-    def _build_session_data(self) -> dict:
+    def _build_context_data(self) -> dict:
         return {
             'model_class': self.get_model_class().__name__,
             'app_label': self.app_label,
             'target_pk': self.target_pk,
-        }
-
-    def _build_context_data(self) -> dict:
-        return {
-            'fields': self._included_fields,
-        }
+        } | super()._build_context_data()
 
     @property
     def target_instance(self):
@@ -86,12 +82,11 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
         return model_to_dict(
             instance=self.target_instance,
             fields=self._included_fields,
-
         )
 
     @action(access=GlueAccess.CHANGE)
     def save(self, payload: dict):
-        validated_payload = self._validate_payload(payload)
+        validated_payload = self._validate_save_payload(payload)
         instance = self.target_instance
 
         for field_name, field_data in validated_payload.items():

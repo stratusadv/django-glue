@@ -5,9 +5,8 @@ from typing import Sequence, TYPE_CHECKING
 
 from django.http import HttpRequest
 
-from django_glue import settings
+from django_glue import settings, GlueAccess
 from django_glue.exceptions import GlueProxyNotFoundError
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 
 if TYPE_CHECKING:
     from django_glue.proxies.proxy import BaseGlueProxy
@@ -42,17 +41,15 @@ class GlueSession:
     def _proxy_is_expired(self, proxy_name):
         return time() > self.keep_live_registry[proxy_name]
 
-    def get_proxy_by_unique_name(self, unique_name: str) -> BaseGlueProxy:
-        proxy_data = self.proxy_registry.get(unique_name, None)
-        if proxy_data is None:
+    def get_proxy_access(self, unique_name: str) -> GlueAccess:
+        access = self.proxy_registry.get(unique_name, None)
+        if access is None:
             raise GlueProxyNotFoundError(unique_name)
 
-        proxy = SUBJECT_TYPE_TO_PROXY_TYPE[proxy_data['subject_type']].from_proxy_registry_data(**proxy_data)
-
-        return proxy
+        return access
 
     def register_proxy(self, proxy: BaseGlueProxy) -> None:
-        self.proxy_registry[proxy.unique_name] = proxy.to_session_data()
+        self.proxy_registry[proxy.unique_name] = proxy.access
 
         self.keep_live_registry.setdefault(
             proxy.unique_name,

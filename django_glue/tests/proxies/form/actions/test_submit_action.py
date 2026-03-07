@@ -167,7 +167,7 @@ class GlueFormProxyFromRegistryDataTestCase(TestCase):
 
     def test_reconstructs_form_from_class_path(self):
         """Should reconstruct form from stored class path."""
-        proxy = GlueFormProxy.from_proxy_registry_data(
+        proxy = GlueFormProxy.from_action_request_data(
             form_class_path='test_project.task.forms.ContactForm',
             initial={'name': 'John'},
             access=GlueAccess.VIEW,
@@ -186,7 +186,7 @@ class GlueFormProxyFromRegistryDataTestCase(TestCase):
             order=1
         )
 
-        proxy = GlueFormProxy.from_proxy_registry_data(
+        proxy = GlueFormProxy.from_action_request_data(
             form_class_path='test_project.task.forms.TaskForm',
             initial={},
             instance_pk=task.pk,
@@ -199,7 +199,7 @@ class GlueFormProxyFromRegistryDataTestCase(TestCase):
 
     def test_reconstructs_model_form_without_instance(self):
         """Should reconstruct ModelForm without instance when pk is None."""
-        proxy = GlueFormProxy.from_proxy_registry_data(
+        proxy = GlueFormProxy.from_action_request_data(
             form_class_path='test_project.task.forms.TaskForm',
             initial={},
             instance_pk=None,

@@ -1,12 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Rankings{% endblock %}
+{% block title %}Combatants{% endblock %}
 
 {% block page_title %}Gorilla Fight Simulator{% endblock %}
-{% block page_heading %}<h2 class="text-gorilla-gold">Rankings</h2>{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Combatants</h2>{% endblock %}
 {% block page_subtitle %}Demonstrates Glue.queryset with instance editing and active filtering.{% endblock %}
 {% block page_nav %}
     <div class="mt-2">
+        <a href="{% url 'fight:list' %}" class="btn btn-outline-secondary btn-sm">Fights</a>
         <a href="{% url 'fight:schedule' %}" class="btn btn-outline-secondary btn-sm">Schedule Fight</a>
     </div>
 {% endblock %}
@@ -25,12 +26,19 @@
         gorillaDetailUrl(id) {
             return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
         },
-        get filteredGorillas() {
-            if (this.search) {
-                return this.gorillas.filter({'name__icontains': this.search})
-            } else {
-                return this.gorillas.all()
-            }
+        init() {
+            this.gorillas.addListener('save', () => {
+                $store.notifications.success('Fighter saved successfully!');
+            });
+            this.gorillas.addListener('save', () => {
+                $store.notifications.error('Failed to save fighter.');
+            }, 'error');
+            this.gorillas.addListener('delete', () => {
+                $store.notifications.success('Fighter deleted.');
+            });
+            this.gorillas.addListener('delete', () => {
+                $store.notifications.error('Failed to delete fighter.');
+            }, 'error');
         }
     }">
         <!-- Search -->
@@ -53,7 +61,7 @@
 
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
-            <template x-for="gorilla in filteredGorillas" :key="gorilla.id">
+            <template x-for="gorilla in gorillas.filter({'name__icontains': search})" :key="gorilla.id">
                 <div class="col-md-6 col-lg-4">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">
@@ -143,7 +151,7 @@
                 </div>
             </template>
 
-            <div x-show="filteredGorillas.length === 0" class="col-12">
+            <div x-show="gorillas.length === 0" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

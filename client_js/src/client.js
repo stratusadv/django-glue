@@ -6,33 +6,32 @@ import {setConfig} from "./config";
 class GlueClient {
     static proxyClassesForSubjectTypes = {}
     static contextData = {}
+    static proxyRegistry = {}
     #activeProxies = {}
 
-    #assembleProxyFromRegistryData(proxyInstanceRegistryData) {
-        const { unique_name: uniqueName, subject_type: subjectType } = proxyInstanceRegistryData
+    #assembleProxyFromContextData(proxyUniqueName) {
+        const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName]
 
         const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
-        this.#activeProxies[uniqueName] = new ProxyClass({
-            proxyUniqueName: proxyInstanceRegistryData.unique_name,
-            contextData: GlueClient.contextData[uniqueName],
+        this.#activeProxies[proxyUniqueName] = new ProxyClass({
+            proxyUniqueName: proxyUniqueName,
+            contextData: GlueClient.contextData[proxyUniqueName],
         })
 
-
-        return this.#activeProxies[uniqueName]
+        return this.#activeProxies[proxyUniqueName]
     }
 
-    #defineLazyPropertyFromUniqueName(proxyInstanceRegistryData) {
-        const {unique_name: proxyUniqueName} = proxyInstanceRegistryData
+    #defineLazyPropertyFromUniqueName(proxyUniqueName) {
         Object.defineProperty(this, proxyUniqueName, {
             get: function() {
-                return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromRegistryData(proxyInstanceRegistryData)
+                return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromContextData(proxyUniqueName)
             },
         })
     }
 
-    #defineProxyUniqueNamesAsProperties(proxyRegistryFromSession) {
-        for (const proxyInstanceRegistryData of Object.values(proxyRegistryFromSession)) {
-            this.#defineLazyPropertyFromUniqueName(proxyInstanceRegistryData)
+    #defineProxyUniqueNamesAsProperties() {
+        for (const proxyUniqueName of Object.keys(GlueClient.proxyRegistry)) {
+            this.#defineLazyPropertyFromUniqueName(proxyUniqueName)
         }
     }
 
@@ -61,8 +60,10 @@ class GlueClient {
             setConfig(config);
         }
 
-        this.#defineProxyUniqueNamesAsProperties(proxyRegistryFromSession)
+        GlueClient.proxyRegistry = proxyRegistryFromSession
         GlueClient.contextData = contextDataForProxies
+
+        this.#defineProxyUniqueNamesAsProperties()
 
         this.#initializeKeepLivePulse(keepLiveInterval)
     }
