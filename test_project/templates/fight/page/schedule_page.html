@@ -25,14 +25,14 @@
         <div class="col-lg-6" x-data="{
             form: Glue.fight_form,
             validationResult: null,
-            submitResult: null,
+            saveResult: null,
             async validate() {
-                this.submitResult = null;
-                this.validationResult = await this.form.validate(this.form.values);
+                saveResult: null,
+                this.validationResult = await this.form.validate();
             },
             async submit() {
-                this.validationResult = null;
-                this.submitResult = await this.form.submit(this.form.values);
+                validationResult: null,
+                this.saveResult = await this.form.save();
             }
         }">
             <div class="card card-gorilla h-100">
@@ -47,64 +47,83 @@
                             <input
                                 type="text"
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.name.errors.length}"
                                 x-model="form.name"
                                 placeholder="e.g., Battle of the Thunderdome">
+                            <div class="invalid-feedback" x-show="form.fields.name.errors.length" x-text="form.fields.name.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Description</label>
                             <textarea
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.description.errors.length}"
                                 rows="2"
-                                x-model="form.description"
+                                x-model="form.fields.description.value"
                                 placeholder="Describe this epic showdown..."></textarea>
+                            <div class="invalid-feedback" x-show="form.fields.description.errors.length" x-text="form.fields.description.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Red Corner</label>
-                            <select class="form-select form-select-gorilla" x-model="form.red_corner">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.red_corner.errors.length}"
+                                    x-model="form.red_corner">
                                 <option value="">-- Select Fighter --</option>
-                                <template x-for="choice in form.fields?.red_corner?.choices || []" :key="choice[0]">
+                                <template x-for="choice in form.fields.red_corner.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.red_corner.errors.length" x-text="form.fields.red_corner.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Blue Corner</label>
-                            <select class="form-select form-select-gorilla" x-model="form.blue_corner">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.blue_corner.errors.length}"
+                                    x-model="form.blue_corner">
                                 <option value="">-- Select Fighter --</option>
-                                <template x-for="choice in form.fields?.blue_corner?.choices || []" :key="choice[0]">
+                                <template x-for="choice in form.fields.blue_corner.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.blue_corner.errors.length" x-text="form.fields.blue_corner.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Location</label>
-                            <select class="form-select form-select-gorilla" x-model="form.location">
-                                <template x-for="choice in form.fields?.location?.choices || []" :key="choice[0]">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.location.errors.length}"
+                                    x-model="form.location">
+                                <template x-for="choice in form.fields.location.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.location.errors.length" x-text="form.fields.location.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Weather</label>
-                            <select class="form-select form-select-gorilla" x-model="form.weather_conditions">
-                                <template x-for="choice in form.fields?.weather_conditions?.choices || []" :key="choice[0]">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.weather_conditions.errors.length}"
+                                    x-model="form.fields.weather_conditions">
+                                <template x-for="choice in form.fields.weather_conditions.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.weather_conditions.errors.length" x-text="form.fields.weather_conditions.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
                             <label class="form-label fw-bold">Terrain</label>
-                            <select class="form-select form-select-gorilla" x-model="form.terrain_type">
-                                <template x-for="choice in form.fields?.terrain_type?.choices || []" :key="choice[0]">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.terrain_type.errors.length}"
+                                    x-model="form.fields.terrain_type.value">
+                                <template x-for="choice in form.fields.terrain_type.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.terrain_type.errors.length" x-text="form.fields.terrain_type.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
@@ -112,24 +131,26 @@
                             <input
                                 type="number"
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.spectator_count.errors.length}"
                                 x-model="form.spectator_count"
                                 min="0"
                                 placeholder="0">
+                            <div class="invalid-feedback" x-show="form.fields.spectator_count.errors.length" x-text="form.fields.spectator_count.errors.join(', ')"></div>
                         </div>
                     </div>
 
                     <!-- Validation/Submit Results -->
                     <div class="mt-3" x-show="validationResult">
                         <div class="validation-result"
-                             :class="validationResult?.is_valid ? 'text-success' : 'text-danger'">
-                            <template x-if="validationResult?.is_valid">
+                             :class="validationResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="validationResult?.success">
                                 <span>Form is valid!</span>
                             </template>
-                            <template x-if="!validationResult?.is_valid">
+                            <template x-if="!validationResult?.success">
                                 <div>
                                     <strong>Validation errors:</strong>
                                     <ul class="mb-0 ps-3">
-                                        <template x-for="(errors, field) in validationResult?.errors || {}" :key="field">
+                                        <template x-for="(errors, field) in form?.errors || {}" :key="field">
                                             <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
                                         </template>
                                     </ul>
@@ -138,17 +159,17 @@
                         </div>
                     </div>
 
-                    <div class="mt-3" x-show="submitResult">
+                    <div class="mt-3" x-show="saveResult">
                         <div class="validation-result"
-                             :class="submitResult?.success ? 'text-success' : 'text-danger'">
-                            <template x-if="submitResult?.success">
-                                <span>Fight scheduled successfully! ID: <span x-text="submitResult?.data?.id"></span></span>
+                             :class="saveResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="saveResult?.success">
+                                <span>Fight scheduled successfully! ID: <span x-text="saveResult?.data?.id"></span></span>
                             </template>
-                            <template x-if="!submitResult?.success">
+                            <template x-if="!saveResult?.success">
                                 <div>
                                     <strong>Submit failed:</strong>
                                     <ul class="mb-0 ps-3">
-                                        <template x-for="(errors, field) in submitResult?.errors || {}" :key="field">
+                                        <template x-for="(errors, field) in saveResult?.errors || {}" :key="field">
                                             <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
                                         </template>
                                     </ul>
@@ -174,14 +195,14 @@
         <div class="col-lg-6" x-data="{
             form: Glue.contact_form,
             validationResult: null,
-            submitResult: null,
+            saveResult: null,
             async validate() {
-                this.submitResult = null;
-                this.validationResult = await this.form.validate(this.form.values);
+                this.saveResult = null
+                this.validationResult = await this.form.validate();
             },
             async submit() {
-                this.validationResult = null;
-                this.submitResult = await this.form.submit(this.form.values);
+                this.validationResult = null
+                this.saveResult = await this.form.save();
             }
         }">
             <div class="card card-gorilla h-100">
@@ -196,8 +217,10 @@
                             <input
                                 type="text"
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.name.errors.length}"
                                 x-model="form.name"
                                 placeholder="Enter your name">
+                            <div class="invalid-feedback" x-show="form.fields.name.errors.length" x-text="form.fields.name.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
@@ -205,37 +228,44 @@
                             <input
                                 type="email"
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.email.errors.length}"
                                 x-model="form.email"
                                 placeholder="your@email.com">
+                            <div class="invalid-feedback" x-show="form.fields.email.errors.length" x-text="form.fields.email.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Subject</label>
-                            <select class="form-select form-select-gorilla" x-model="form.subject">
-                                <template x-for="choice in form.fields?.subject?.choices || []" :key="choice[0]">
+                            <select class="form-select form-select-gorilla"
+                                    :class="{'is-invalid': form.fields.subject.errors.length}"
+                                    x-model="form.subject">
+                                <template x-for="choice in form.fields.subject.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
+                            <div class="invalid-feedback" x-show="form.fields.subject.errors.length" x-text="form.fields.subject.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Message</label>
                             <textarea
                                 class="form-control form-control-gorilla"
+                                :class="{'is-invalid': form.fields.message.errors.length}"
                                 rows="4"
                                 x-model="form.message"
                                 placeholder="Your message (minimum 10 characters)..."></textarea>
+                            <div class="invalid-feedback" x-show="form.fields.message.errors.length" x-text="form.fields.message.errors.join(', ')"></div>
                         </div>
                     </div>
 
                     <!-- Validation/Submit Results -->
                     <div class="mt-3" x-show="validationResult">
                         <div class="validation-result"
-                             :class="validationResult?.is_valid ? 'text-success' : 'text-danger'">
-                            <template x-if="validationResult?.is_valid">
+                             :class="validationResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="validationResult?.success">
                                 <span>Form is valid!</span>
                             </template>
-                            <template x-if="!validationResult?.is_valid">
+                            <template x-if="!validationResult?.success">
                                 <div>
                                     <strong>Validation errors:</strong>
                                     <ul class="mb-0 ps-3">
@@ -248,20 +278,20 @@
                         </div>
                     </div>
 
-                    <div class="mt-3" x-show="submitResult">
+                    <div class="mt-3" x-show="saveResult">
                         <div class="validation-result"
-                             :class="submitResult?.success ? 'text-success' : 'text-danger'">
-                            <template x-if="submitResult?.success">
+                             :class="saveResult?.success ? 'text-success' : 'text-danger'">
+                            <template x-if="saveResult?.success">
                                 <div>
                                     <span>Message received! Cleaned data:</span>
-                                    <pre class="bg-light p-2 rounded mt-1 small" x-text="JSON.stringify(submitResult?.data, null, 2)"></pre>
+                                    <pre class="bg-light p-2 rounded mt-1 small" x-text="JSON.stringify(saveResult?.data, null, 2)"></pre>
                                 </div>
                             </template>
-                            <template x-if="!submitResult?.success">
+                            <template x-if="!saveResult?.success">
                                 <div>
                                     <strong>Submit failed:</strong>
                                     <ul class="mb-0 ps-3">
-                                        <template x-for="(errors, field) in submitResult?.errors || {}" :key="field">
+                                        <template x-for="(errors, field) in saveResult?.errors || {}" :key="field">
                                             <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
                                         </template>
                                     </ul>

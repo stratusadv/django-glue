@@ -27,8 +27,13 @@
             return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
         },
         init() {
-            this.gorillas.addListener('save', () => {
-                $store.notifications.success('Fighter saved successfully!');
+            this.gorillas.addListener('save', event => {
+                if (event.result.errors) {
+                    $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
+                }
+                else {
+                    $store.notifications.success('Fighter saved successfully!');
+                }
             });
             this.gorillas.addListener('save', () => {
                 $store.notifications.error('Failed to save fighter.');
@@ -151,7 +156,7 @@
                 </div>
             </template>
 
-            <div x-show="gorillas.length === 0" class="col-12">
+            <div x-show="gorillas.empty" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

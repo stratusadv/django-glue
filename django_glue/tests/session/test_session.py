@@ -8,14 +8,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
 django.setup()
 
 from time import time
-from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, RequestFactory
 
 from django_glue.session import GlueSession
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.model.proxy import GlueModelProxy
-from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
+from django_glue.proxies.model import GlueModelProxy
+from django_glue.proxies.queryset import GlueQuerySetProxy
 from django_glue.exceptions import GlueProxyNotFoundError
 from django_glue import settings
 from test_project.task.models import Task

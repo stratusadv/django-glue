@@ -44,11 +44,21 @@
         fights: Glue.fights,
         search: '',
         get filteredFights() {
-            if (this.search) {
-                return this.fights.filter({'name__icontains': this.search})
-            } else {
-                return this.fights.all()
-            }
+            return this.fights.filter({'name__icontains': this.search})
+        },
+        init() {
+            this.fights.addListener('save', () => {
+                $store.notifications.success('Fight saved successfully!');
+            });
+            this.fights.addListener('save', () => {
+                $store.notifications.error('Failed to save fight.');
+            }, 'error');
+            this.fights.addListener('delete', () => {
+                $store.notifications.success('Fight deleted.');
+            });
+            this.fights.addListener('delete', () => {
+                $store.notifications.error('Failed to delete fight.');
+            }, 'error');
         }
     }">
         <!-- Search -->
@@ -185,12 +195,14 @@
                 </div>
             </template>
 
-            <div x-show="filteredFights.length === 0" class="col-12">
-                <div class="alert alert-warning text-center">
-                    <h5>No fights scheduled!</h5>
-                    <p class="mb-0">Time to set up some epic gorilla battles.</p>
+            <template x-if="fights.empty">
+                <div class="col-12">
+                    <div class="alert alert-warning text-center">
+                        <h5>No fights scheduled!</h5>
+                        <p class="mb-0">Time to set up some epic gorilla battles.</p>
+                    </div>
                 </div>
-            </div>
+            </template>
         </div>
     </div>
 {% endblock %}

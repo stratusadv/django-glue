@@ -17,9 +17,10 @@ def django_glue(request: WSGIRequest) -> dict:
         },
         constants.DJANGO_GLUE_VERSION: constants.__VERSION__,
         constants.DJANGO_GLUE_URL_APP_NAME: constants.BASE_URL_NAME,
-        constants.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS: (settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS / 2.2) * 1000,
+        constants.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS: settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS,
         constants.DJANGO_GLUE_SESSION_PROXY_REGISTRY: GlueSession(request).proxy_registry,
         constants.DJANGO_GLUE_PROXIES_CONTEXT_DATA: {},
+        constants.DJANGO_SESSION_EXPIRY_MESSAGE: settings.DJANGO_SESSION_EXPIRY_MESSAGE,
     }
 
     if hasattr(request, '__glue_context_data__'):

@@ -43,19 +43,22 @@ export async function sendHttpRequest(url, requestOptions = {
     }
 
     try {
-        const actionResponse = await fetch(url, options)
+        const response = await fetch(url, options)
 
-        if (!actionResponse.ok) {
-            throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`)
+        if (!response.ok) {
+            throw Error(`An error occurred when sending a glue http request: ${await response.text()}`)
         }
 
         return {
-            ok: actionResponse.ok,
-            body: await actionResponse.clone().text(),
-            httpResponse: actionResponse,
-            data: actionResponse.ok ? await actionResponse.json() : null
+            ok: response.ok,
+            body: await response.clone().text(),
+            httpResponse: response,
+            data: response.ok ? await response.json() : null
         }
-    } finally {
+    } catch (e) {
+        throw e
+    }
+    finally {
         clearTimeout(timeoutId);
     }
 }

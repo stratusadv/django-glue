@@ -7,7 +7,10 @@ class GlueClient {
     static proxyClassesForSubjectTypes = {}
     static contextData = {}
     static proxyRegistry = {}
+
+    #keepLiveIntervalHandle = null
     #activeProxies = {}
+    #config = {}
 
     #assembleProxyFromContextData(proxyUniqueName) {
         const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName]
@@ -35,37 +38,41 @@ class GlueClient {
         }
     }
 
-    #initializeKeepLivePulse(keepLiveInterval) {
-        setInterval(() => {
+    #initializeKeepLivePulse() {
+        const raiseDisconnectAlert = () => {
+            clearInterval(this.#keepLiveIntervalHandle)
+
+            let confirmation = confirm(this.#config.sessionExpiryMessage)
+            if (confirmation) {
+                window.location.reload()
+            }
+        }
+
+        this.#keepLiveIntervalHandle = setInterval(() => {
             const keepLiveNames = Object.keys(this.#activeProxies)
             sendKeepLiveRequest(keepLiveNames).then(response => {
                 if (!response.ok) {
-                    let confirmation = confirm('Session expired. Do you want to reload the page?')
-
-                    if (confirmation) {
-                        window.location.reload()
-                    }
+                    raiseDisconnectAlert()
                 }
+            }).catch(err => {
+                console.log(err)
+                raiseDisconnectAlert()
             })
-        }, keepLiveInterval)
+        }, this.#config.keepLiveIntervalSeconds * 1000)
     }
 
     init({
         proxyRegistryFromSession,
         contextDataForProxies,
-        keepLiveInterval,
         config = {},
     }) {
-        if (config) {
-            setConfig(config);
-        }
-
         GlueClient.proxyRegistry = proxyRegistryFromSession
         GlueClient.contextData = contextDataForProxies
 
-        this.#defineProxyUniqueNamesAsProperties()
+        this.#config = setConfig(config)
 
-        this.#initializeKeepLivePulse(keepLiveInterval)
+        this.#defineProxyUniqueNamesAsProperties()
+        this.#initializeKeepLivePulse()
     }
 }
 

@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from django.apps import apps
 from django.db.models import Model
-from django.forms import model_to_dict, forms, ModelChoiceField
-from django.forms.fields import ChoiceField
-from django.forms.forms import BaseForm
+from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueModelInstanceNotFoundError
-from django_glue.proxies.fields import GlueProxyModelFieldsMixin
+from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.proxies.decorators import action
 
 
-class GlueModelProxy(GlueProxyModelFieldsMixin):
+class GlueModelProxy(GlueModelProxyBase):
     _subject_type = Model
 
     def __init__(
@@ -55,6 +53,9 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
     def get_model_class(self):
         return self.target.__class__
 
+    def _get_model_instance(self) -> Model:
+        return self.target
+
     def _build_context_data(self) -> dict:
         return {
             'model_class': self.get_model_class().__name__,
@@ -62,43 +63,13 @@ class GlueModelProxy(GlueProxyModelFieldsMixin):
             'target_pk': self.target_pk,
         } | super()._build_context_data()
 
-    @property
-    def target_instance(self):
-        model_class = self.get_model_class()
-
-        if self.target_pk:
-            try:
-                return model_class.objects.get(pk=self.target_pk)
-            except model_class.DoesNotExist:
-                raise GlueModelInstanceNotFoundError(
-                    model_name=model_class.__name__,
-                    pk=self.target_pk
-                )
-        else:
-            return model_class()
-
     @action(access=GlueAccess.VIEW)
     def get(self):
         return model_to_dict(
-            instance=self.target_instance,
-            fields=self._included_fields,
-        )
-
-    @action(access=GlueAccess.CHANGE)
-    def save(self, payload: dict):
-        validated_payload = self._validate_save_payload(payload)
-        instance = self.target_instance
-
-        for field_name, field_data in validated_payload.items():
-            setattr(instance, field_name, field_data)
-
-        instance.save()
-
-        return model_to_dict(
-            instance=instance,
-            fields=self._included_fields
+            instance=self._get_model_instance(),
+            fields=self._form_field_definitions,
         )
 
     @action(access=GlueAccess.DELETE)
     def delete(self):
-        self.target_instance.delete()
+        self._get_model_instance().delete()

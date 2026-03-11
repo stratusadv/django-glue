@@ -10,7 +10,7 @@ django.setup()
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
+from django_glue.proxies.queryset import GlueQuerySetProxy
 from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue import data_transfer_objects as dto
 from test_project.task.models import Task

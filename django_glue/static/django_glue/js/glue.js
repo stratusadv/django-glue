@@ -6,14 +6,17 @@
 
   // client_js/src/config.js
   var DEFAULT_CONFIG = {
-    requestTimeoutMs: 30000
+    requestTimeoutMs: 30000,
+    sessionExpiryMessage: "Django Glue Session expired. Do you want to reload the page?",
+    keepLiveIntervalSeconds: 120
   };
   var config = { ...DEFAULT_CONFIG };
   function getConfig() {
     return config;
   }
-  function setConfig(newConfig) {
+  function setConfig(newConfig = {}) {
     config = { ...config, ...newConfig };
+    return config;
   }
 
   // client_js/src/http.js
@@ -52,16 +55,18 @@
       options.headers["X-CSRFToken"] = getHttpCookie("csrftoken");
     }
     try {
-      const actionResponse = await fetch(url, options);
-      if (!actionResponse.ok) {
-        throw Error(`An error occurred when sending a glue http request: ${await actionResponse.text()}`);
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw Error(`An error occurred when sending a glue http request: ${await response.text()}`);
       }
       return {
-        ok: actionResponse.ok,
-        body: await actionResponse.clone().text(),
-        httpResponse: actionResponse,
-        data: actionResponse.ok ? await actionResponse.json() : null
+        ok: response.ok,
+        body: await response.clone().text(),
+        httpResponse: response,
+        data: response.ok ? await response.json() : null
       };
+    } catch (e) {
+      throw e;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -153,8 +158,126 @@
     }
   }
 
+  // client_js/src/proxies/form.js
+  class GlueFormProxy extends BaseGlueProxy {
+    constructor({ proxyUniqueName, contextData, actions = null }) {
+      super({ proxyUniqueName, contextData, actions });
+      this._values = { ...this.contextData.initial || {} };
+      this._errors = {};
+      this.#defineFields();
+    }
+    defineModelChoiceField(fieldName, fieldData) {
+      if (!fieldData.hasOwnProperty("_choicesCache")) {
+        fieldData._choicesCache = [];
+        fieldData._choicesLoaded = false;
+        fieldData._loadingChoices = false;
+        fieldData._choicesPromise = null;
+      }
+      const _choicesAction = async function() {
+        if (fieldData._choicesPromise) {
+          return fieldData._choicesPromise;
+        }
+        fieldData._loadingChoices = true;
+        fieldData._choicesPromise = this.processAction("foreign_key_choices", {
+          field_definition: [
+            fieldName,
+            fieldData
+          ]
+        }).then((data) => {
+          fieldData._choicesCache = data;
+          fieldData._choicesLoaded = true;
+          return data;
+        }).finally(() => {
+          fieldData._loadingChoices = false;
+        });
+        return fieldData._choicesPromise;
+      }.bind(this);
+      fieldData.choices = async function() {
+        if (!fieldData._choicesLoaded) {
+          await _choicesAction();
+        }
+        return fieldData._choicesCache;
+      };
+      return fieldData;
+    }
+    #defineFields() {
+      const proxy = this;
+      this.fields = {};
+      Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
+        Object.defineProperty(this, fieldName, {
+          get: function() {
+            if (!this.loaded && !this.autoFetch && !this._values) {
+              if (!this.loading) {
+                this.loading = true;
+                this.loadData();
+              }
+            }
+            return this._values?.[fieldName];
+          },
+          set: function(value) {
+            if (!this._values) {
+              this._values = {};
+            }
+            this._values[fieldName] = value;
+          }
+        });
+        if (fieldData.type === "ModelChoiceField") {
+          fieldData = this.defineModelChoiceField(fieldName, fieldData);
+        }
+        this.fields[fieldName] = {
+          ...fieldData,
+          get value() {
+            return proxy._values[fieldName];
+          },
+          set value(val) {
+            proxy._values[fieldName] = val;
+          },
+          get errors() {
+            return proxy._errors[fieldName] || [];
+          }
+        };
+      });
+    }
+    loadData() {
+      this.processAction("get").then((data) => {
+        this._values = data;
+      }).finally(() => {
+        this.loading = false;
+        this.loaded = true;
+      });
+    }
+    get values() {
+      return { ...this._values };
+    }
+    get errors() {
+      return { ...this._errors };
+    }
+    _updateErrors(errors) {
+      this._errors = errors || {};
+    }
+    async validate() {
+      const result = await this.processAction("validate", this._values);
+      this._updateErrors(result.errors);
+      return result;
+    }
+    async save() {
+      const result = await this.processAction("save", this._values);
+      this._errors = result.errors || {};
+      if (result.success) {
+        this._values = result.cleaned_data;
+      }
+      return result;
+    }
+    hasErrors() {
+      return Object.keys(this._errors).length > 0;
+    }
+    clearErrors() {
+      this._errors = {};
+    }
+  }
+
   // client_js/src/proxies/model.js
-  class GlueModelProxy extends BaseGlueProxy {
+  class GlueModelProxy extends GlueFormProxy {
     constructor({
       proxyUniqueName,
       contextData,
@@ -163,86 +286,10 @@
       values = null
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
-      this.values = values;
-      this.#defineFieldsMeta();
+      this._values = values;
       if (this.autoFetch && !this.values) {
         this.loadData();
       }
-      this.#defineFieldsAsProperties();
-    }
-    #defineFieldsMeta() {
-      this.fields = {};
-      Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
-        const field = { ...fieldData };
-        if (field.type === "ForeignKey") {
-          if (!fieldData.hasOwnProperty("_choicesCache")) {
-            fieldData._choicesCache = [];
-            fieldData._choicesLoaded = false;
-            fieldData._loadingChoices = false;
-            fieldData._choicesPromise = null;
-          }
-          const _choicesAction = async function() {
-            if (fieldData._choicesPromise) {
-              return fieldData._choicesPromise;
-            }
-            fieldData._loadingChoices = true;
-            fieldData._choicesPromise = this.processAction("foreign_key_choices", {
-              field_definition: [
-                fieldName,
-                fieldData
-              ]
-            }).then((data) => {
-              fieldData._choicesCache = data;
-              fieldData._choicesLoaded = true;
-              return data;
-            }).finally(() => {
-              fieldData._loadingChoices = false;
-            });
-            return fieldData._choicesPromise;
-          }.bind(this);
-          field.choices = async function() {
-            if (!fieldData._choicesLoaded) {
-              await _choicesAction();
-            }
-            return fieldData._choicesCache;
-          };
-        }
-        this.fields[fieldName] = field;
-      });
-    }
-    #defineFieldsAsProperties() {
-      Object.keys(this.contextData.fields).forEach((fieldName) => {
-        Object.defineProperty(this, fieldName, {
-          get: function() {
-            if (!this.loaded && !this.autoFetch && !this.values) {
-              if (!this.loading) {
-                this.loading = true;
-                this.loadData();
-              }
-            }
-            return this.values?.[fieldName];
-          },
-          set: function(value) {
-            if (!this.values) {
-              this.values = {};
-            }
-            this.values[fieldName] = value;
-          }
-        });
-      });
-    }
-    loadData() {
-      this.processAction("get").then((data) => {
-        this.values = data;
-      }).finally(() => {
-        this.loading = false;
-        this.loaded = true;
-      });
-    }
-    async save() {
-      const result = await this.processAction("save", this.values);
-      this.values = result;
-      return result;
     }
     async delete() {
       return await this.processAction("delete", { id: this.values.id });
@@ -254,7 +301,9 @@
     static proxyClassesForSubjectTypes = {};
     static contextData = {};
     static proxyRegistry = {};
+    #keepLiveIntervalHandle = null;
     #activeProxies = {};
+    #config = {};
     #assembleProxyFromContextData(proxyUniqueName) {
       const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName];
       const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
@@ -276,32 +325,36 @@
         this.#defineLazyPropertyFromUniqueName(proxyUniqueName);
       }
     }
-    #initializeKeepLivePulse(keepLiveInterval) {
-      setInterval(() => {
+    #initializeKeepLivePulse() {
+      const raiseDisconnectAlert = () => {
+        clearInterval(this.#keepLiveIntervalHandle);
+        let confirmation = confirm(this.#config.sessionExpiryMessage);
+        if (confirmation) {
+          window.location.reload();
+        }
+      };
+      this.#keepLiveIntervalHandle = setInterval(() => {
         const keepLiveNames = Object.keys(this.#activeProxies);
         sendKeepLiveRequest(keepLiveNames).then((response) => {
           if (!response.ok) {
-            let confirmation = confirm("Session expired. Do you want to reload the page?");
-            if (confirmation) {
-              window.location.reload();
-            }
+            raiseDisconnectAlert();
           }
+        }).catch((err) => {
+          console.log(err);
+          raiseDisconnectAlert();
         });
-      }, keepLiveInterval);
+      }, this.#config.keepLiveIntervalSeconds * 1000);
     }
     init({
       proxyRegistryFromSession,
       contextDataForProxies,
-      keepLiveInterval,
       config: config2 = {}
     }) {
-      if (config2) {
-        setConfig(config2);
-      }
       GlueClient.proxyRegistry = proxyRegistryFromSession;
       GlueClient.contextData = contextDataForProxies;
+      this.#config = setConfig(config2);
       this.#defineProxyUniqueNamesAsProperties();
-      this.#initializeKeepLivePulse(keepLiveInterval);
+      this.#initializeKeepLivePulse();
     }
   }
   var client_default = GlueClient;
@@ -336,26 +389,25 @@
       return proxy;
     }
     async all() {
-      this.loading = true;
-      debugger;
-      if (this.items.length === 0 || this.lastQuery?.method !== "all") {
+      if (!this.loaded || this.lastQuery?.method !== "all") {
+        this.loading = true;
         const data = await this.processAction("all");
         this.items = data.map((item) => this.buildChildGlueModelProxy(item));
         this.lastQuery = { method: "all", params: null };
+        this.loaded = true;
+        this.loading = false;
       }
-      this.loaded = true;
-      this.loading = false;
       return this.items;
     }
     async filter(filterParams) {
-      this.loading = true;
-      if (this.items.length === 0 || !this.isEqual(filterParams, this.lastQuery?.params)) {
+      if (!this.loaded || !this.isEqual(filterParams, this.lastQuery?.params)) {
+        this.loading = true;
         const data = await this.processAction("filter", filterParams);
         this.items = data.map((item) => this.buildChildGlueModelProxy(item));
         this.lastQuery = { method: "filter", params: filterParams };
+        this.loaded = true;
+        this.loading = false;
       }
-      this.loaded = true;
-      this.loading = false;
       return this.items;
     }
     isEqual(a, b) {
@@ -379,50 +431,12 @@
     }
     async refresh() {
       this.items = [];
+      this.loaded = false;
       const { method, params } = this.lastQuery;
       return this[method](params);
     }
-  }
-
-  // client_js/src/proxies/form.js
-  class GlueFormProxy extends BaseGlueProxy {
-    constructor({ proxyUniqueName, contextData, actions = null }) {
-      super({ proxyUniqueName, contextData, actions });
-    }
-    postInit() {
-      this.fields = this.contextData.fields;
-      this.values = { ...this.contextData.initial };
-      this.errors = {};
-      Object.keys(this.fields).forEach((fieldName) => {
-        Object.defineProperty(this, fieldName, {
-          get: () => this.values[fieldName],
-          set: (value) => {
-            this.values[fieldName] = value;
-          }
-        });
-      });
-    }
-    async validate() {
-      const result = await this.processAction("validate", this.values);
-      this.errors = result.errors || {};
-      return result;
-    }
-    async submit() {
-      const result = await this.processAction("submit", this.values);
-      this.errors = result.errors || {};
-      return result;
-    }
-    getFieldDefinition(fieldName) {
-      return this.fields[fieldName] || null;
-    }
-    getFieldError(fieldName) {
-      return this.errors[fieldName] || [];
-    }
-    hasErrors() {
-      return Object.keys(this.errors).length > 0;
-    }
-    clearErrors() {
-      this.errors = {};
+    get empty() {
+      return this.loaded && this.items.length === 0;
     }
   }
 

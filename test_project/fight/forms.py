@@ -7,7 +7,10 @@ from test_project.fight.models import Fight
 class FightForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
-        if cleaned_data['red_corner'] == cleaned_data['blue_corner']:
+        red_corner = cleaned_data.get('red_corner')
+        blue_corner = cleaned_data.get('blue_corner')
+
+        if red_corner and blue_corner and red_corner == blue_corner:
             raise ValidationError("Red and blue corners cannot be the same gorilla.")
 
         return cleaned_data

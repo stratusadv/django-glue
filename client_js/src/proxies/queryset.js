@@ -17,7 +17,6 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     buildChildGlueModelProxy(item) {
-        // TODO: Ensure that if QuerySetProxy is configured, then a ModelProxy must be configured
         const proxy = new GlueModelProxy({
             proxyUniqueName: this.uniqueName,
             contextData: GlueClient.contextData[this.uniqueName],
@@ -40,33 +39,27 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     async all() {
-        this.loading = true;
-
-        debugger
-        if (this.items.length === 0 || this.lastQuery?.method !== 'all') {
+        if (!this.loaded || this.lastQuery?.method !== 'all') {
+            this.loading = true;
             const data = await this.processAction('all');
             this.items = data.map(item => this.buildChildGlueModelProxy(item))
             this.lastQuery = {method: 'all', params: null};
+            this.loaded = true;
+            this.loading = false;
         }
-
-        this.loaded = true;
-        this.loading = false;
 
         return this.items
     }
 
     async filter(filterParams) {
-        this.loading = true;
-
-        if (this.items.length === 0 || !this.isEqual(filterParams, this.lastQuery?.params)) {
+        if (!this.loaded || !this.isEqual(filterParams, this.lastQuery?.params)) {
+            this.loading = true;
             const data = await this.processAction('filter', filterParams);
             this.items = data.map(item => this.buildChildGlueModelProxy(item));
             this.lastQuery = {method: 'filter', params: filterParams};
+            this.loaded = true;
+            this.loading = false;
         }
-
-        this.loaded = true;
-        this.loading = false;
-
 
         return this.items;
     }
@@ -88,9 +81,14 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     async refresh() {
-        this.items = []
+        this.items = [];
+        this.loaded = false;
 
         const {method, params} = this.lastQuery;
         return this[method](params);
     }
+
+    get empty() {
+      return this.loaded && this.items.length === 0;
+  }
 }
