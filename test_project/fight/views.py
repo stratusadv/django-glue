@@ -4,8 +4,6 @@ from django.shortcuts import render
 from django_glue import Glue
 from test_project.fight.models import Fight
 from test_project.fight.forms import FightForm, ContactPromoterForm
-from test_project.gorilla.choices import FightStyleChoices
-from test_project.gorilla.models import Gorilla
 
 
 def list_view(request: HttpRequest):

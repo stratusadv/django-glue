@@ -121,10 +121,10 @@
 
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <label class="form-label small text-muted mb-1">Fight Style</label>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model="gorilla.fight_style">
-                                        <template x-for="choice in gorilla.fields.fight_style.choices" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="choice[0] === gorilla.fight_style"></option>
+                                    <label class="form-label small text-muted mb-1">Skills (M2M)</label>
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="gorilla.skills" multiple>
+                                        <template x-for="choice in gorilla.fields.skills.choices" :key="choice[0]">
+                                            <option :value="choice[0]" x-text="choice[1]"></option>
                                         </template>
                                     </select>
                                 </div>

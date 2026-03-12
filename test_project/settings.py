@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django_glue',
     'test_project.gorilla',
     'test_project.fight',
+    'test_project.comments',
     'test_project.lab',
 ]
 
@@ -134,6 +135,10 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [str(BASE_DIR / 'test_project/static')]
 STATIC_ROOT = str(BASE_DIR / 'static')
+
+# Media files (user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

@@ -74,7 +74,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='tasks',
             action='delete',
-            payload={'id': self.task1.pk}
+            post_data={'id': self.task1.pk}
         )
 
         with self.assertRaises(GlueAccessError):
@@ -91,7 +91,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='tasks',
             action='delete',
-            payload={'id': self.task1.pk}
+            post_data={'id': self.task1.pk}
         )
 
         with self.assertRaises(GlueAccessError):

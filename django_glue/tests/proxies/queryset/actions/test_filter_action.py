@@ -167,7 +167,7 @@ class GlueQuerySetProxyFilterTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='tasks',
             action='filter',
-            payload={'done': True}
+            post_data={'done': True}
         )
 
         # Should not raise

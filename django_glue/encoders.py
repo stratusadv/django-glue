@@ -1,26 +1,24 @@
-from django.core import serializers
+from django.core.files.uploadedfile import InMemoryUploadedFile, UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models import QuerySet, Model
-from django.forms import model_to_dict
+from django.db.models import QuerySet, Model, FileField
+from django.db.models.fields.files import FieldFile
 
 
-class ModelSerializingDjangoJSONEncoder(DjangoJSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, QuerySet):
-            return serializers.serialize("json", obj)
-
-        if isinstance(obj, Model):
-            return model_to_dict(obj)
-
-        # For other types not handled by the default encoder,
-        # delegate to the base class (which handles datetime, date, etc.)
-        return super().default(obj)
-
-
-class GlueActionJSONEncoder(DjangoJSONEncoder):
+class GlueActionDataJSONEncoder(DjangoJSONEncoder):
     def default(self, obj):
         if isinstance(obj, Model):
             return obj.pk
+
+        if isinstance(obj, FieldFile) or isinstance(obj, UploadedFile):
+            try:
+                return {
+                    "name": obj.name,
+                    "size": obj.size,
+                    "url": obj.url,
+                    "path": obj.path,
+                }
+            except ValueError:
+                return None
 
         # For other types not handled by the default encoder,
         # delegate to the base class (which handles datetime, date, etc.)

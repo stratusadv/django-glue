@@ -109,7 +109,7 @@ class GlueModelProxySaveTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='task',
             action='save',
-            payload={'title': 'Should Fail'}
+            post_data={'title': 'Should Fail'}
         )
 
         with self.assertRaises(GlueAccessError):

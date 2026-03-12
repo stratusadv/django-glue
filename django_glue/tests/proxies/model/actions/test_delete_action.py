@@ -55,7 +55,7 @@ class GlueModelProxyDeleteTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='task',
             action='delete',
-            payload=None
+            post_data=None
         )
 
         with self.assertRaises(GlueAccessError):
@@ -72,7 +72,7 @@ class GlueModelProxyDeleteTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='task',
             action='delete',
-            payload=None
+            post_data=None
         )
 
         with self.assertRaises(GlueAccessError):

@@ -1,0 +1,99 @@
+<div x-data="{
+    comments: Glue.comments,
+    newComment: {
+        fan_name: '',
+        comment: '',
+        rating: 5,
+        content_type: {{ content_type_id }},
+        object_id: {{ object_id }}
+    },
+    saving: false,
+    async addComment() {
+        this.saving = true;
+        try {
+            const result = await this.comments.save(this.newComment);
+            if (result.success) {
+                this.newComment.fan_name = '';
+                this.newComment.comment = '';
+                this.newComment.rating = 5;
+                await this.comments.all();
+            }
+        } finally {
+            this.saving = false;
+        }
+    },
+    async deleteComment(pk) {
+        if (confirm('Delete this comment?')) {
+            await this.comments.delete({pk: pk});
+        }
+    }
+}">
+    <div class="card card-gorilla mt-4">
+        <div class="card-header bg-gorilla-green text-white">
+            <h5 class="mb-0">Fan Comments</h5>
+        </div>
+        <div class="card-body">
+            <!-- Add Comment Form -->
+            <div class="mb-4 p-3 bg-light rounded">
+                <h6>Add a Comment</h6>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <input type="text"
+                               class="form-control form-control-gorilla"
+                               placeholder="Your name"
+                               x-model="newComment.fan_name">
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select form-select-gorilla" x-model="newComment.rating">
+                            <option value="5">5 Stars</option>
+                            <option value="4">4 Stars</option>
+                            <option value="3">3 Stars</option>
+                            <option value="2">2 Stars</option>
+                            <option value="1">1 Star</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <textarea class="form-control form-control-gorilla"
+                                  rows="2"
+                                  placeholder="Your comment..."
+                                  x-model="newComment.comment"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-gorilla"
+                                @click="addComment()"
+                                :disabled="saving">
+                            <span x-show="!saving">Post Comment</span>
+                            <span x-show="saving">Posting...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comments List -->
+            <div class="comments-list">
+                <template x-for="comment in comments" :key="comment.id">
+                    <div class="d-flex mb-3 p-3 border rounded">
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <strong x-text="comment.fan_name"></strong>
+                                <span class="text-warning">
+                                    <template x-for="i in comment.rating">
+                                        <span>*</span>
+                                    </template>
+                                </span>
+                            </div>
+                            <p class="mb-1" x-text="comment.comment"></p>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger ms-2"
+                                @click="deleteComment(comment.id)">
+                            X
+                        </button>
+                    </div>
+                </template>
+                <div x-show="!comments || comments.length === 0" class="text-muted">
+                    No comments yet. Be the first to comment!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

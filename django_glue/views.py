@@ -3,7 +3,7 @@ from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.http import require_http_methods
 
 from django_glue.encoders import ModelSerializingDjangoJSONEncoder, \
-    GlueActionJSONEncoder
+    GlueActionDataJSONEncoder
 from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 from django_glue.session import GlueSession
 from django_glue import data_transfer_objects as dto, BaseGlueProxy
@@ -12,15 +12,14 @@ from django_glue.utils import get_request_body_data
 
 @require_http_methods(['POST'])
 def action_view(request: HttpRequest, unique_name: str, action: str) -> JsonResponse | HttpResponse:
-    if request.content_type != 'application/json':
+    if request.content_type not in ['application/json', 'multipart/form-data']:
         return HttpResponse(
             f'Unsupported media type {request.content_type}',
             status=400,
             content_type='text/plain'
         )
 
-    data = get_request_body_data(request)
-    action_data = dto.GlueActionRequestData(**data)
+    action_data = dto.GlueActionRequestData.from_request(request)
 
     proxy_access = GlueSession(request).get_proxy_access(unique_name)
 
@@ -33,7 +32,7 @@ def action_view(request: HttpRequest, unique_name: str, action: str) -> JsonResp
 
     action_response_data = proxy.process_action(action, action_data)
 
-    return JsonResponse(action_response_data, safe=False, encoder=GlueActionJSONEncoder)
+    return JsonResponse(action_response_data, safe=False, encoder=GlueActionDataJSONEncoder)
 
 
 def keep_live_view(request: HttpRequest) -> JsonResponse:

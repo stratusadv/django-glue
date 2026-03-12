@@ -126,13 +126,29 @@
                                     max="2.5">
                             </div>
 
+                            <!-- File Fields Section -->
                             <div class="col-12">
-                                <label class="form-label fw-bold">Fight Style</label>
-                                <select class="form-select form-select-gorilla" x-model="gorilla.fight_style">
-                                    <template x-for="choice in gorilla.fields.fight_style.choices" :key="choice[0]">
-                                        <option :value="choice[0]" x-text="choice[1]"></option>
-                                    </template>
-                                </select>
+                                <hr class="my-3">
+                                <h5 class="text-gorilla-green">File Fields (Test)</h5>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Profile Photo</label>
+                                <input
+                                    type="file"
+                                    class="form-control form-control-gorilla"
+                                    accept="image/*"
+                                    @change="gorilla.profile_photo = $event.target.files[0]">
+                                <small class="text-muted">
+                                    Current: <span x-text="gorilla.profile_photo || 'None'"></span>
+                                </small>
+                            </div>
+
+                            <!-- ManyToMany Skills Section -->
+                            <div class="col-12">
+                                <hr class="my-3">
+                                <h5 class="text-gorilla-green">Skills (ManyToMany Test)</h5>
+                                <p class="text-muted small">Current skills: <span x-text="JSON.stringify(gorilla.skills)"></span></p>
                             </div>
                         </div>
                     </div>

@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
+from django_glue.data_transfer_objects import GlueActionRequestData
 from django_glue.proxies.decorators import action
 
 
@@ -25,7 +26,11 @@ class GlueFormProxyMixin(ABC):
         pass
 
     @abstractmethod
-    def _get_form_instance(self, data: dict | None = None) -> BaseForm:
+    def _get_form_instance(
+        self,
+        data: dict | None = None,
+        files: dict | None = None
+    ) -> BaseForm:
         """Create a form instance, optionally bound with data."""
         pass
 
@@ -63,12 +68,15 @@ class GlueFormProxyMixin(ABC):
         """
         Override in subclasses to customize the save behaviour and save response format.
         """
-        pass
+        return cleaned_data
 
     @action(access=GlueAccess.CHANGE)
-    def validate(self, payload: dict):
+    def validate(self, action_data: GlueActionRequestData) -> dict:
         """Validate form data without saving."""
-        form = self._get_form_instance(data=payload)
+        form = self._get_form_instance(
+            data=action_data.post_data,
+            files=action_data.file_data
+        )
 
         is_valid = form.is_valid()
 
@@ -79,19 +87,19 @@ class GlueFormProxyMixin(ABC):
         }
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, payload: dict):
+    def save(self, action_data: GlueActionRequestData):
         """Validate and save form data."""
-        validation_result = self.validate(payload)
+        validation_result = self.validate(action_data)
 
         if validation_result['success']:
-            self._save(validation_result['cleaned_data'])
+            return self._save(validation_result['cleaned_data'])
 
         return validation_result
 
     @action(access=GlueAccess.VIEW)
-    def foreign_key_choices(self, payload: dict):
+    def foreign_key_choices(self, action_data: GlueActionRequestData):
         """Get choices for a foreign key field."""
-        field_name, field_data = payload['field_definition']
+        field_name, field_data = action_data.post_data['field_definition']
 
         if not field_data.get('type', None) == 'ModelChoiceField':
             return []

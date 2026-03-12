@@ -103,6 +103,22 @@ export class GlueFormProxy extends BaseGlueProxy {
     get values() {
         return {...this._values};
     }
+    
+    get formData() {
+        const formData = new FormData();
+        Object.entries(this._values).forEach(([fieldName, value]) => {
+            if (Array.isArray(value)) {
+                value.forEach(item => formData.append(fieldName, item));
+            } else if (value instanceof File || value instanceof Blob) {
+                formData.append(fieldName, value);
+            } else if (value instanceof FileList) {
+                Array.from(value).forEach(file => formData.append(fieldName, file));
+            } else {
+                formData.append(fieldName, value === null || value === undefined ? '' : value);
+            }
+        });
+        return formData;
+    }
 
     // Getter for all current errors
     get errors() {
@@ -121,7 +137,7 @@ export class GlueFormProxy extends BaseGlueProxy {
     }
 
     async save() {
-        const result = await this.processAction('save', this._values);
+        const result = await this.processAction('save', this.formData);
 
         this._errors = result.errors || {};
 

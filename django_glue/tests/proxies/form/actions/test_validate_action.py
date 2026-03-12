@@ -104,7 +104,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='contact_form',
             action='validate',
-            payload={'name': 'Test'}
+            post_data={'name': 'Test'}
         )
 
         with self.assertRaises(GlueAccessError):

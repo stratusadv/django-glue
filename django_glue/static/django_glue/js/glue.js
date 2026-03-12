@@ -54,6 +54,9 @@
     if (requestOptions.csrfProtected) {
       options.headers["X-CSRFToken"] = getHttpCookie("csrftoken");
     }
+    if (requestOptions.contentType === "multipart/form-data") {
+      delete options.headers["Content-Type"];
+    }
     try {
       const response = await fetch(url, options);
       if (!response.ok) {
@@ -79,10 +82,21 @@
       csrfProtected
     });
   }
+  async function sendFormPostRequest(url, data, csrfProtected = true) {
+    return await sendHttpRequest(url, {
+      body: data,
+      method: "POST",
+      contentType: "multipart/form-data",
+      csrfProtected
+    });
+  }
   async function sendActionRequest({ uniqueName, action, payload, contextData }) {
     const url = `${actionUrlPath}/${uniqueName}/${action}/`;
-    const data = { payload, context_data: contextData };
-    return await sendJsonPostRequest(url, data);
+    if (payload instanceof FormData) {
+      payload.append("context_data", JSON.stringify(contextData));
+      return await sendFormPostRequest(url, payload);
+    }
+    return await sendJsonPostRequest(url, { payload, context_data: contextData });
   }
   async function sendKeepLiveRequest(uniqueNames) {
     return await sendJsonPostRequest(keepLiveUrl, { unique_names: uniqueNames });
@@ -132,19 +146,22 @@
         await callback(event);
       }
     }
-    async processAction(actionName, payload = null) {
-      payload = payload ?? this.getActionPayload(actionName);
+    async processAction(actionName, data = null) {
+      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key) => [
+        key,
+        data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
+      ])) : data;
       const event = {
         action: actionName,
         proxy: this,
-        payload
+        payload: eventData
       };
       await this.emitListeners("before", actionName, event);
       try {
         const response = await sendActionRequest({
           uniqueName: this.uniqueName,
           action: actionName,
-          payload: payload ?? this.getActionPayload(actionName),
+          payload: data,
           contextData: this.contextData
         });
         event.result = response.data;
@@ -249,6 +266,21 @@
     get values() {
       return { ...this._values };
     }
+    get formData() {
+      const formData = new FormData;
+      Object.entries(this._values).forEach(([fieldName, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach((item) => formData.append(fieldName, item));
+        } else if (value instanceof File || value instanceof Blob) {
+          formData.append(fieldName, value);
+        } else if (value instanceof FileList) {
+          Array.from(value).forEach((file) => formData.append(fieldName, file));
+        } else {
+          formData.append(fieldName, value === null || value === undefined ? "" : value);
+        }
+      });
+      return formData;
+    }
     get errors() {
       return { ...this._errors };
     }
@@ -261,7 +293,7 @@
       return result;
     }
     async save() {
-      const result = await this.processAction("save", this._values);
+      const result = await this.processAction("save", this.formData);
       this._errors = result.errors || {};
       if (result.success) {
         this._values = result.cleaned_data;
@@ -287,9 +319,6 @@
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
       this._values = values;
-      if (this.autoFetch && !this.values) {
-        this.loadData();
-      }
     }
     async delete() {
       return await this.processAction("delete", { id: this.values.id });

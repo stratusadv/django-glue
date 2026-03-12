@@ -15,7 +15,6 @@ from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
 from django_glue import data_transfer_objects as dto
-from django_glue.data_transfer_objects import GlueActionRequestData
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
 
 from django_glue.session import GlueSession
@@ -187,7 +186,8 @@ class BaseGlueProxy(ABC):
                 reason="Method must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
             )
 
-        action_func, action_parameters, required_access = self.actions[action]
+        # TODO: validate that all actions have a single action_data: GlueActionRequestData param
+        action_func, _, required_access = self.actions[action]
 
         if not self.access.has_access(required_access):
             raise GlueAccessError(
@@ -196,10 +196,5 @@ class BaseGlueProxy(ABC):
                 current_access=self.access.name
             )
 
-        if 'payload' not in action_parameters:
-            if action_data.payload:
-                raise ValueError('This action does not support a payload parameter.')
+        return action_func(self, action_data)
 
-            return action_func(self)
-        else:
-            return action_func(self, action_data.payload)

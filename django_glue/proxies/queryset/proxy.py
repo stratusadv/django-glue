@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.db.models import QuerySet, Model
 
 from django_glue.access.access import GlueAccess
+from django_glue.data_transfer_objects import GlueActionRequestData
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.decorators import action
@@ -57,7 +58,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         ]))
 
     @action(access=GlueAccess.VIEW)
-    def all(self):
+    def all(self, action_data: GlueActionRequestData):
         return self._queryset_to_list(self.target)
 
     def _validate_filter_keys(self, payload: dict) -> None:
@@ -77,9 +78,12 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                 )
 
     @action(access=GlueAccess.VIEW)
-    def filter(self, payload: dict):
-        self._validate_filter_keys(payload)
-        return self._queryset_to_list(self.target.filter(**payload))
+    def filter(self, action_data: GlueActionRequestData):
+        if action_data.post_data:
+            self._validate_filter_keys(**action_data.post_data)
+            return self._queryset_to_list(self.target.filter(**action_data.post_data))
+        else:
+            return self._queryset_to_list(self.target)
 
     def _get_model_instance_by_pk(self, pk) -> Model:
         """
@@ -110,9 +114,13 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return self._create_model_proxy_from_instance(target_instance)
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, payload: dict):
-        return self._get_target_model_instance_proxy(payload['id']).save(payload)
+    def save(self, action_data: GlueActionRequestData):
+        return self._get_target_model_instance_proxy(
+            action_data.post_data['id']
+        ).save(action_data)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, payload: dict):
-        return self._get_target_model_instance_proxy(payload['id']).delete()
+    def delete(self, action_data: GlueActionRequestData):
+        return self._get_target_model_instance_proxy(
+            action_data.post_data['id']
+        ).delete()

@@ -99,7 +99,7 @@ class GlueModelProxyGetTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='task',
             action='get',
-            payload=None
+            post_data=None
         )
 
         # Should not raise

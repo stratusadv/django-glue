@@ -128,7 +128,7 @@ class GlueQuerySetProxyAllTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='tasks',
             action='all',
-            payload=None
+            post_data=None
         )
 
         # Should not raise

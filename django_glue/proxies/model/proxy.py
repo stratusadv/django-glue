@@ -5,6 +5,7 @@ from django.db.models import Model
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
+from django_glue.data_transfer_objects import GlueActionRequestData
 from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.proxies.decorators import action
@@ -64,12 +65,12 @@ class GlueModelProxy(GlueModelProxyBase):
         } | super()._build_context_data()
 
     @action(access=GlueAccess.VIEW)
-    def get(self):
+    def get(self, action_data: GlueActionRequestData):
         return model_to_dict(
             instance=self._get_model_instance(),
             fields=self._form_field_definitions,
         )
 
     @action(access=GlueAccess.DELETE)
-    def delete(self):
+    def delete(self, action_data: GlueActionRequestData):
         self._get_model_instance().delete()

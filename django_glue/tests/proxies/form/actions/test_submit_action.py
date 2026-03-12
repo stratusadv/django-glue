@@ -138,7 +138,7 @@ class GlueFormProxySubmitTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='contact_form',
             action='submit',
-            payload={'name': 'Test'}
+            post_data={'name': 'Test'}
         )
 
         with self.assertRaises(GlueAccessError):

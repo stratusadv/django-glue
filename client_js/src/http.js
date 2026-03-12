@@ -42,6 +42,12 @@ export async function sendHttpRequest(url, requestOptions = {
         options.headers['X-CSRFToken'] = getHttpCookie('csrftoken')
     }
 
+    if (requestOptions.contentType === 'multipart/form-data') {
+        // Remove this header here because fetch adds it with the proper boundary if it detects FormData in the body.
+        // Including this header when sending FormData causes an error in the backend.
+        delete options.headers['Content-Type'];
+    }
+
     try {
         const response = await fetch(url, options)
 
@@ -65,18 +71,31 @@ export async function sendHttpRequest(url, requestOptions = {
 
 export async function sendJsonPostRequest(url, data, csrfProtected = true){
     return await sendHttpRequest(url, {
-        body: JSON.stringify(!!data ? data : {}),
+        body: JSON.stringify(data ?? {}),
         method: 'POST',
         contentType: 'application/json',
         csrfProtected
     })
 }
 
+export async function sendFormPostRequest(url, data, csrfProtected = true){
+    return await sendHttpRequest(url, {
+        body: data,
+        method: 'POST',
+        contentType: 'multipart/form-data',
+        csrfProtected
+    })
+}
+
 export async function sendActionRequest({uniqueName, action, payload, contextData}) {
     const url = `${actionUrlPath}/${uniqueName}/${action}/`
-    const data = {payload, context_data: contextData}
 
-    return await sendJsonPostRequest(url, data)
+    if (payload instanceof FormData){
+        payload.append('context_data', JSON.stringify(contextData))
+        return await sendFormPostRequest(url, payload)
+    }
+
+    return await sendJsonPostRequest(url, {payload, context_data: contextData})
 }
 
 export async function sendKeepLiveRequest(uniqueNames) {

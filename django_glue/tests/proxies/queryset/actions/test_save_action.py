@@ -91,7 +91,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             unique_name='tasks',
             action='save',
-            payload={'id': self.task1.pk, 'title': 'Should Fail'}
+            post_data={'id': self.task1.pk, 'title': 'Should Fail'}
         )
 
         with self.assertRaises(GlueAccessError):

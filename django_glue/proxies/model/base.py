@@ -7,16 +7,13 @@ for proxies that work with Django model fields.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Sequence
+from collections.abc import Sequence
 
-from django.apps import apps
 from django.db.models import Model
-from django.forms import modelform_factory, ModelChoiceField, model_to_dict
+from django.forms import modelform_factory, model_to_dict
 from django.forms.forms import BaseForm
 from django.forms.models import ModelForm
 
-from django_glue import GlueAccess
-from django_glue.proxies.decorators import action
 from django_glue.proxies.form.mixin import GlueFormProxyMixin
 from django_glue.proxies.proxy import BaseGlueProxy
 
@@ -88,12 +85,14 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
             exclude=list(self.exclude) if self.exclude else ()
         )
 
-    def _get_form_instance(self, data: dict | None = None) -> BaseForm:
+    def _get_form_instance(
+        self, data: dict | None = None, files: dict | None = None
+    ) -> BaseForm:
         """Create a form instance bound to the model instance."""
         form_class = self._get_form_class()
         instance = self._get_model_instance()
         if data is not None:
-            return form_class(data=data, instance=instance)
+            return form_class(data=data, instance=instance, files=files)
         return form_class(instance=instance)
 
     @property
@@ -131,11 +130,16 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
         return context_data
 
-    def _save(self, cleaned_data: dict) -> None:
+    def _save(self, cleaned_data: dict) -> dict:
         model_instance = self._get_model_instance()
-
         for field_name, field_data in cleaned_data.items():
-            setattr(model_instance, field_name, field_data)
+            if isinstance(field_data, Sequence):
+                # TODO: need to make this check more comprehensive
+                getattr(model_instance, field_name).set(field_data)
+            else:
+                setattr(model_instance, field_name, field_data)
 
         # TODO: possibly add ability for custom save logic here (e.g. service save model object pipelines)?
         model_instance.save()
+
+        return model_to_dict(model_instance)

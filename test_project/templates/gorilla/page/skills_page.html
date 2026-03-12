@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Skills{% endblock %}
+
+{% block page_title %}Fighting Skills{% endblock %}
+{% block page_subtitle %}Glue QuerySet Proxy Demo - ManyToMany field testing{% endblock %}
+{% block page_nav %}
+    <a href="/" class="btn btn-outline-secondary btn-sm">Back to Combatants</a>
+{% endblock %}
+
+{% block content %}
+    <div x-data="{
+        skills: Glue.skills,
+        newSkill: {
+            name: '',
+            description: '',
+            difficulty: 5,
+            level: 1
+        },
+        editingSkill: null,
+        saving: false,
+        async addSkill() {
+            this.saving = true;
+            try {
+                const result = await this.skills.save(this.newSkill);
+                if (result.success) {
+                    this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
+                    await this.skills.all();
+                }
+            } finally {
+                this.saving = false;
+            }
+        },
+        async updateSkill(skill) {
+            await this.skills.save(skill);
+            this.editingSkill = null;
+        },
+        async deleteSkill(pk) {
+            if (confirm('Delete this skill?')) {
+                await this.skills.delete({pk: pk});
+            }
+        }
+    }">
+        <div class="row">
+            <!-- Add New Skill -->
+            <div class="col-lg-4">
+                <div class="card card-gorilla">
+                    <div class="card-header bg-gorilla-green text-white">
+                        <h5 class="mb-0">Add New Skill</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Skill Name</label>
+                            <input type="text"
+                                   class="form-control form-control-gorilla"
+                                   x-model="newSkill.name"
+                                   placeholder="e.g., Chest Pound">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Description</label>
+                            <textarea class="form-control form-control-gorilla"
+                                      rows="2"
+                                      x-model="newSkill.description"
+                                      placeholder="Describe the skill..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Difficulty (1-10)</label>
+                            <input type="number"
+                                   class="form-control form-control-gorilla"
+                                   x-model="newSkill.difficulty"
+                                   min="1"
+                                   max="10">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Level (1-100)</label>
+                            <input type="number"
+                                   class="form-control form-control-gorilla"
+                                   x-model="newSkill.level"
+                                   min="1"
+                                   max="100">
+                        </div>
+                    </div>
+                    <div class="card-footer bg-gorilla-cream">
+                        <button class="btn btn-gorilla w-100"
+                                @click="addSkill()"
+                                :disabled="saving || !newSkill.name">
+                            <span x-show="!saving">Add Skill</span>
+                            <span x-show="saving">Adding...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skills List -->
+            <div class="col-lg-8">
+                <div class="card card-gorilla">
+                    <div class="card-header bg-gorilla-green text-white">
+                        <h5 class="mb-0">All Skills</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Description</th>
+                                        <th>Difficulty</th>
+                                        <th>Level</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="skill in skills" :key="skill.id">
+                                        <tr>
+                                            <td>
+                                                <template x-if="editingSkill === skill.id">
+                                                    <input type="text" class="form-control form-control-sm" x-model="skill.name">
+                                                </template>
+                                                <template x-if="editingSkill !== skill.id">
+                                                    <span x-text="skill.name"></span>
+                                                </template>
+                                            </td>
+                                            <td>
+                                                <template x-if="editingSkill === skill.id">
+                                                    <input type="text" class="form-control form-control-sm" x-model="skill.description">
+                                                </template>
+                                                <template x-if="editingSkill !== skill.id">
+                                                    <span x-text="skill.description" class="text-muted small"></span>
+                                                </template>
+                                            </td>
+                                            <td>
+                                                <template x-if="editingSkill === skill.id">
+                                                    <input type="number" class="form-control form-control-sm" style="width: 60px" x-model="skill.difficulty" min="1" max="10">
+                                                </template>
+                                                <template x-if="editingSkill !== skill.id">
+                                                    <span class="badge bg-secondary" x-text="skill.difficulty"></span>
+                                                </template>
+                                            </td>
+                                            <td>
+                                                <template x-if="editingSkill === skill.id">
+                                                    <input type="number" class="form-control form-control-sm" style="width: 70px" x-model="skill.level" min="1" max="100">
+                                                </template>
+                                                <template x-if="editingSkill !== skill.id">
+                                                    <span class="badge bg-info" x-text="skill.level"></span>
+                                                </template>
+                                            </td>
+                                            <td>
+                                                <template x-if="editingSkill === skill.id">
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-success" @click="updateSkill(skill)">Save</button>
+                                                        <button class="btn btn-secondary" @click="editingSkill = null">Cancel</button>
+                                                    </div>
+                                                </template>
+                                                <template x-if="editingSkill !== skill.id">
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-outline-primary" @click="editingSkill = skill.id">Edit</button>
+                                                        <button class="btn btn-outline-danger" @click="deleteSkill(skill.id)">Delete</button>
+                                                    </div>
+                                                </template>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div x-show="!skills || skills.length === 0" class="text-muted text-center py-4">
+                            No skills defined yet. Add some skills above!
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

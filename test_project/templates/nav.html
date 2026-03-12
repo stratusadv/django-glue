@@ -10,6 +10,9 @@
 
             {% url 'fight:schedule' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Schedule Fight' %}
+
+            {% url 'gorilla:skills' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Skills (M2M Test)' %}
         </ul>
     </div>
     <div class="col-auto">

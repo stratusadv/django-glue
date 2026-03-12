@@ -64,13 +64,17 @@ export class BaseGlueProxy {
         }
     }
 
-    async processAction(actionName, payload = null) {
-        payload = payload ?? this.getActionPayload(actionName)
-
+    async processAction(actionName, data = null) {
+        const eventData = data instanceof FormData ? Object.fromEntries(
+            Array.from(data.keys()).map(key => [
+                key, data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
+            ])
+        ) : data;
+        
         const event = {
             action: actionName,
             proxy: this,
-            payload,
+            payload: eventData,
         };
 
         // Emit 'before' listeners
@@ -80,7 +84,7 @@ export class BaseGlueProxy {
             const response = await sendActionRequest({
                 uniqueName: this.uniqueName,
                 action: actionName,
-                payload: payload ?? this.getActionPayload(actionName),
+                payload: data,
                 contextData: this.contextData
             });
             event.result = response.data;
