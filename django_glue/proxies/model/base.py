@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from itertools import chain
 
-from django.db.models import Model
-from django.forms import modelform_factory, model_to_dict
+from django.db import transaction
+from django.db.models import Model, AutoField
+from django.forms import modelform_factory, model_to_dict, FileField
 from django.forms.forms import BaseForm
 from django.forms.models import ModelForm
 
@@ -130,16 +132,56 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
         return context_data
 
-    def _save(self, cleaned_data: dict) -> dict:
+    def _set_non_m2m_fields(self, field_data: dict):
         model_instance = self._get_model_instance()
-        for field_name, field_data in cleaned_data.items():
-            if isinstance(field_data, Sequence):
-                # TODO: need to make this check more comprehensive
-                getattr(model_instance, field_name).set(field_data)
-            else:
-                setattr(model_instance, field_name, field_data)
+        model_fields = model_instance._meta.fields
 
-        # TODO: possibly add ability for custom save logic here (e.g. service save model object pipelines)?
+        file_field_list = []
+        updated_fields = []
+
+        for field in model_fields:
+            if isinstance(field, AutoField) or field.name not in field_data:
+                continue
+
+            # Defer saving file-type fields until after the other fields, so a
+            # callable upload_to can use the values from other fields (from django's construct_instance).
+            if isinstance(field, FileField):
+                file_field_list.append(field)
+                updated_fields.append(field.name)
+            else:
+                field.save_form_data(model_instance, field_data[field.name])
+                updated_fields.append(field.name)
+
+        # Update foreign key id aliases in field_data for
+        # related fields that weren't already updated above
+        foreign_key_id_aliases = [
+            f"{field.name}_id" for field in model_fields
+            if f"{field.name}_id" in field_data and field.many_to_one and field.name not in updated_fields
+        ]
+
+        for field_name in foreign_key_id_aliases:
+            setattr(model_instance, field_name, field_data[field_name])
+
+        # Update file fields deferred from earlier
+        for field in file_field_list:
+            field.save_form_data(model_instance, field_data[field.name])
+
+    def _set_m2m_fields(self, field_data: dict):
+        model_instance = self._get_model_instance()
+        model_meta = model_instance._meta
+
+        for field in chain(model_meta.many_to_many, model_meta.private_fields):
+            if not hasattr(field, "save_form_data"):
+                continue
+            if field.name in field_data:
+                field.save_form_data(model_instance, field_data[field.name])
+
+    @transaction.atomic
+    def _save(self, field_data: dict) -> dict:
+        model_instance = self._get_model_instance()
+
+        self._set_non_m2m_fields(field_data)
         model_instance.save()
+        self._set_m2m_fields(field_data)
 
         return model_to_dict(model_instance)

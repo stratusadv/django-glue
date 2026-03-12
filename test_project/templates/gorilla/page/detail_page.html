@@ -30,7 +30,28 @@
 {% endblock %}
 
 {% block content %}
-    <div x-data="{ gorilla: Glue.gorilla }">
+    <div x-data="{
+        gorilla: Glue.gorilla,
+        init() {
+            this.gorilla.addListener('save', event => {
+                if (event.result.errors) {
+                    $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
+                }
+                else {
+                    $store.notifications.success('Fighter saved successfully!');
+                }
+            });
+            this.gorilla.addListener('save', () => {
+                $store.notifications.error('Failed to save fighter.');
+            }, 'error');
+            this.gorilla.addListener('delete', () => {
+                window.location.href = '{% url "gorilla:list" %}';
+            });
+            this.gorilla.addListener('delete', () => {
+                $store.notifications.error('Failed to delete fighter.');
+            }, 'error');
+        }
+    }">
         <div class="row justify-content-center">
             <div class="col-lg-8">
                 <div class="card card-gorilla">
@@ -126,29 +147,63 @@
                                     max="2.5">
                             </div>
 
-                            <!-- File Fields Section -->
-                            <div class="col-12">
-                                <hr class="my-3">
-                                <h5 class="text-gorilla-green">File Fields (Test)</h5>
-                            </div>
-
-                            <div class="col-12">
-                                <label class="form-label fw-bold">Profile Photo</label>
+                            <div 
+                                class="col-12"
+                                x-data="{
+                                    photoUrl: null,
+                                    handlePhotoChange(file) {
+                                        if (!file) return;
+                                        gorilla.profile_photo = file;
+                                        const reader = new FileReader();
+                                        reader.onload = (e) => {
+                                            this.photoUrl = e.target.result;
+                                        };
+                                        reader.readAsDataURL(file);
+                                    }
+                                }"
+                            >
+                                <label class="form-label fw-bold">Profile Photo (File Test)</label>
+                                <div class="mb-2" x-show="!!photoUrl || !!gorilla.profile_photo?.url">
+                                    <img :src="photoUrl ?? gorilla.profile_photo?.url" alt="Profile Photo" class="img-fluid rounded"
+                                         style="max-height: 200px;">
+                                </div>
                                 <input
                                     type="file"
                                     class="form-control form-control-gorilla"
                                     accept="image/*"
-                                    @change="gorilla.profile_photo = $event.target.files[0]">
+                                    @change="handlePhotoChange($event.target.files[0])">
                                 <small class="text-muted">
-                                    Current: <span x-text="gorilla.profile_photo || 'None'"></span>
+                                    Current: <span x-text="gorilla.profile_photo?.name || 'None'"></span>
                                 </small>
                             </div>
 
-                            <!-- ManyToMany Skills Section -->
                             <div class="col-12">
-                                <hr class="my-3">
-                                <h5 class="text-gorilla-green">Skills (ManyToMany Test)</h5>
-                                <p class="text-muted small">Current skills: <span x-text="JSON.stringify(gorilla.skills)"></span></p>
+                                <label class="form-label fw-bold">Fighting Skills (ManyToMany Test)</label>
+                                <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                    <div class="row">
+                                        <template x-for="choice in gorilla.fields.skills.choices" :key="choice[0]">
+                                            <div class="col-md-6 col-lg-4">
+                                                <div class="form-check">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="form-check-input"
+                                                        :id="'skill-' + choice[0]"
+                                                        :value="choice[0]"
+                                                        :checked="gorilla.skills && gorilla.skills.includes(choice[0])"
+                                                        @change="
+                                                            if ($event.target.checked) {
+                                                                gorilla.skills = [...gorilla.skills, choice[0]];
+                                                            } else {
+                                                                gorilla.skills = gorilla.skills.filter(s => s !== choice[0]);
+                                                            }
+                                                        ">
+                                                    <label class="form-check-label" :for="'skill-' + choice[0]" x-text="choice[1]"></label>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <small class="text-muted">Select the skills this fighter has mastered.</small>
                             </div>
                         </div>
                     </div>

@@ -52,14 +52,34 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         } | super()._build_context_data()
 
     def _queryset_to_list(self, queryset: QuerySet):
-        return list(queryset.values(*[
-            field_name for field_name
-            in self._form_field_definitions.keys()
-        ]))
+        model = self.get_model_class()
+        m2m_fields = {
+            f.name for f in model._meta.many_to_many
+            if f.name in self._form_field_definitions
+        }
 
-    @action(access=GlueAccess.VIEW)
-    def all(self, action_data: GlueActionRequestData):
-        return self._queryset_to_list(self.target)
+        non_m2m_fields = [
+            name for name in self._form_field_definitions
+            if name not in m2m_fields
+        ]
+
+        # Get regular field values (no duplicates)
+        results = list(queryset.values(*non_m2m_fields))
+
+        # Fetch M2M values with prefetch to avoid N+1 queries
+        if m2m_fields:
+            pk_field = model._meta.pk.name
+
+            # Prefetch all instances with their M2M relations in one query per M2M field
+            instances = queryset.prefetch_related(*m2m_fields)
+            instance_map = {getattr(inst, pk_field): inst for inst in instances}
+
+            for item in results:
+                instance = instance_map[item[pk_field]]
+                for m2m_name in m2m_fields:
+                    item[m2m_name] = list(getattr(instance, m2m_name).values_list('pk', flat=True))
+
+        return results
 
     def _validate_filter_keys(self, payload: dict) -> None:
         """
@@ -80,8 +100,9 @@ class GlueQuerySetProxy(GlueModelProxyBase):
     @action(access=GlueAccess.VIEW)
     def filter(self, action_data: GlueActionRequestData):
         if action_data.post_data:
-            self._validate_filter_keys(**action_data.post_data)
-            return self._queryset_to_list(self.target.filter(**action_data.post_data))
+            self._validate_filter_keys(action_data.post_data)
+            data = self._queryset_to_list(self.target.filter(**action_data.post_data))
+            return data
         else:
             return self._queryset_to_list(self.target)
 

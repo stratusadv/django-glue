@@ -76,7 +76,7 @@
   }
   async function sendJsonPostRequest(url, data, csrfProtected = true) {
     return await sendHttpRequest(url, {
-      body: JSON.stringify(data ? data : {}),
+      body: JSON.stringify(data ?? {}),
       method: "POST",
       contentType: "application/json",
       csrfProtected
@@ -96,7 +96,7 @@
       payload.append("context_data", JSON.stringify(contextData));
       return await sendFormPostRequest(url, payload);
     }
-    return await sendJsonPostRequest(url, { payload, context_data: contextData });
+    return await sendJsonPostRequest(url, { post_data: payload, context_data: contextData });
   }
   async function sendKeepLiveRequest(uniqueNames) {
     return await sendJsonPostRequest(keepLiveUrl, { unique_names: uniqueNames });
@@ -238,7 +238,7 @@
             this._values[fieldName] = value;
           }
         });
-        if (fieldData.type === "ModelChoiceField") {
+        if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
           fieldData = this.defineModelChoiceField(fieldName, fieldData);
         }
         this.fields[fieldName] = {

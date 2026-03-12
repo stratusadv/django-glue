@@ -1,12 +1,10 @@
-from django.conf import settings
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.http import require_http_methods
 
-from django_glue.encoders import ModelSerializingDjangoJSONEncoder, \
-    GlueActionDataJSONEncoder
+from django_glue.encoders import GlueActionDataJSONEncoder
 from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 from django_glue.session import GlueSession
-from django_glue import data_transfer_objects as dto, BaseGlueProxy
+from django_glue import data_transfer_objects as dto
 from django_glue.utils import get_request_body_data
 
 

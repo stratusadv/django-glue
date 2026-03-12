@@ -95,7 +95,7 @@ export async function sendActionRequest({uniqueName, action, payload, contextDat
         return await sendFormPostRequest(url, payload)
     }
 
-    return await sendJsonPostRequest(url, {payload, context_data: contextData})
+    return await sendJsonPostRequest(url, {post_data: payload, context_data: contextData})
 }
 
 export async function sendKeepLiveRequest(uniqueNames) {

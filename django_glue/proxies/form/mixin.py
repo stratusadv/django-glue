@@ -101,7 +101,10 @@ class GlueFormProxyMixin(ABC):
         """Get choices for a foreign key field."""
         field_name, field_data = action_data.post_data['field_definition']
 
-        if not field_data.get('type', None) == 'ModelChoiceField':
+        if not field_data.get('type', None) in [
+            'ModelChoiceField',
+            'ModelMultipleChoiceField'
+        ]:
             return []
 
         field = self._get_form_class()().fields[field_name]

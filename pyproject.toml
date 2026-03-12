@@ -78,8 +78,6 @@ pythonVersion = "3.11"
 
 [tool.dev_tool]
 port = 5745
-containerized = true
-single-instance = true
 
 [tool.setuptools.dynamic]
 version = { attr = "django_glue.constants.__VERSION__" }

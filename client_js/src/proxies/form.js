@@ -77,7 +77,7 @@ export class GlueFormProxy extends BaseGlueProxy {
                 }
             })
 
-            if (fieldData.type === "ModelChoiceField") {
+            if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
                 fieldData = this.defineModelChoiceField(fieldName, fieldData)
             }
 
@@ -117,6 +117,7 @@ export class GlueFormProxy extends BaseGlueProxy {
                 formData.append(fieldName, value === null || value === undefined ? '' : value);
             }
         });
+
         return formData;
     }
 
