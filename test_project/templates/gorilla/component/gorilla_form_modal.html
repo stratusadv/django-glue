@@ -1,0 +1,83 @@
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" x-data="{
+    proxy: Glue.{{ glue_name }},
+    saving: false,
+    init() {
+        this.proxy.$addListener('save', () => {
+            $store.notifications.error('Failed to create fighter.');
+        }, 'error');
+    },
+    async submit() {
+        this.saving = true;
+        try {
+            const result = await this.proxy.$save();
+            if (result.success) {
+                $store.notifications.success('Fighter created successfully!');
+                bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();
+            }
+        } finally {
+            this.saving = false;
+        }
+    }
+}">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-gorilla-green text-white">
+                <h5 class="modal-title">{{ title|default:"Add Fighter" }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Name</label>
+                        <input type="text" class="form-control form-control-gorilla"
+                               :class="{'is-invalid': proxy?.$fields?.name?.errors?.length}"
+                               x-model="proxy.name">
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.name?.errors?.join(', ')"></div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Description</label>
+                        <textarea class="form-control form-control-gorilla" rows="2"
+                                  :class="{'is-invalid': proxy?.$fields?.description?.errors?.length}"
+                                  x-model="proxy.description"></textarea>
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.description?.errors?.join(', ')"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Age</label>
+                        <input type="number" class="form-control form-control-gorilla"
+                               :class="{'is-invalid': proxy?.$fields?.age?.errors?.length}"
+                               x-model="proxy.age" min="1" max="60">
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.age?.errors?.join(', ')"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Weight (kg)</label>
+                        <input type="number" class="form-control form-control-gorilla"
+                               :class="{'is-invalid': proxy?.$fields?.weight?.errors?.length}"
+                               x-model="proxy.weight" step="0.1" min="50" max="500">
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.weight?.errors?.join(', ')"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Height (m)</label>
+                        <input type="number" class="form-control form-control-gorilla"
+                               :class="{'is-invalid': proxy?.$fields?.height?.errors?.length}"
+                               x-model="proxy.height" step="0.01" min="1.0" max="2.5">
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.height?.errors?.join(', ')"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Rank Points</label>
+                        <input type="number" class="form-control form-control-gorilla"
+                               :class="{'is-invalid': proxy?.$fields?.rank_points?.errors?.length}"
+                               x-model="proxy.rank_points" min="0" max="10000">
+                        <div class="invalid-feedback" x-text="proxy?.$fields?.rank_points?.errors?.join(', ')"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer bg-gorilla-cream">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-gorilla" @click="submit()" :disabled="saving">
+                    <span x-show="!saving">Create Fighter</span>
+                    <span x-show="saving">Creating...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

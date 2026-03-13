@@ -22,22 +22,22 @@
         async addSkill() {
             this.saving = true;
             try {
-                const result = await this.skills.save(this.newSkill);
+                const result = await this.skills.$save(this.newSkill);
                 if (result.success) {
                     this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
-                    await this.skills.all();
+                    await this.skills.$all();
                 }
             } finally {
                 this.saving = false;
             }
         },
         async updateSkill(skill) {
-            await this.skills.save(skill);
+            await skill.$save();
             this.editingSkill = null;
         },
-        async deleteSkill(pk) {
+        async deleteSkill(skill) {
             if (confirm('Delete this skill?')) {
-                await this.skills.delete({pk: pk});
+                await skill.$delete();
             }
         }
     }">
@@ -110,51 +110,51 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="skill in skills" :key="skill.id">
+                                    <template x-for="skill in skills" :key="skill.$key">
                                         <tr>
                                             <td>
-                                                <template x-if="editingSkill === skill.id">
+                                                <template x-if="editingSkill === skill.$key">
                                                     <input type="text" class="form-control form-control-sm" x-model="skill.name">
                                                 </template>
-                                                <template x-if="editingSkill !== skill.id">
+                                                <template x-if="editingSkill !== skill.$key">
                                                     <span x-text="skill.name"></span>
                                                 </template>
                                             </td>
                                             <td>
-                                                <template x-if="editingSkill === skill.id">
+                                                <template x-if="editingSkill === skill.$key">
                                                     <input type="text" class="form-control form-control-sm" x-model="skill.description">
                                                 </template>
-                                                <template x-if="editingSkill !== skill.id">
+                                                <template x-if="editingSkill !== skill.$key">
                                                     <span x-text="skill.description" class="text-muted small"></span>
                                                 </template>
                                             </td>
                                             <td>
-                                                <template x-if="editingSkill === skill.id">
+                                                <template x-if="editingSkill === skill.$key">
                                                     <input type="number" class="form-control form-control-sm" style="width: 60px" x-model="skill.difficulty" min="1" max="10">
                                                 </template>
-                                                <template x-if="editingSkill !== skill.id">
+                                                <template x-if="editingSkill !== skill.$key">
                                                     <span class="badge bg-secondary" x-text="skill.difficulty"></span>
                                                 </template>
                                             </td>
                                             <td>
-                                                <template x-if="editingSkill === skill.id">
+                                                <template x-if="editingSkill === skill.$key">
                                                     <input type="number" class="form-control form-control-sm" style="width: 70px" x-model="skill.level" min="1" max="100">
                                                 </template>
-                                                <template x-if="editingSkill !== skill.id">
+                                                <template x-if="editingSkill !== skill.$key">
                                                     <span class="badge bg-info" x-text="skill.level"></span>
                                                 </template>
                                             </td>
                                             <td>
-                                                <template x-if="editingSkill === skill.id">
+                                                <template x-if="editingSkill === skill.$key">
                                                     <div class="btn-group btn-group-sm">
                                                         <button class="btn btn-success" @click="updateSkill(skill)">Save</button>
                                                         <button class="btn btn-secondary" @click="editingSkill = null">Cancel</button>
                                                     </div>
                                                 </template>
-                                                <template x-if="editingSkill !== skill.id">
+                                                <template x-if="editingSkill !== skill.$key">
                                                     <div class="btn-group btn-group-sm">
-                                                        <button class="btn btn-outline-primary" @click="editingSkill = skill.id">Edit</button>
-                                                        <button class="btn btn-outline-danger" @click="deleteSkill(skill.id)">Delete</button>
+                                                        <button class="btn btn-outline-primary" @click="editingSkill = skill.$key">Edit</button>
+                                                        <button class="btn btn-outline-danger" @click="deleteSkill(skill)">Delete</button>
                                                     </div>
                                                 </template>
                                             </td>
@@ -163,7 +163,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div x-show="!skills || skills.length === 0" class="text-muted text-center py-4">
+                        <div x-show="skills.$empty" class="text-muted text-center py-4">
                             No skills defined yet. Add some skills above!
                         </div>
                     </div>

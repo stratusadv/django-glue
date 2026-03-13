@@ -29,6 +29,7 @@ class GlueActionRequestData(BaseModel):
     def from_request(cls, request: HttpRequest) -> GlueActionRequestData:
         if request.content_type == "multipart/form-data":
             post_data = {}
+
             for key in request.POST.keys():
                 values = request.POST.getlist(key)
                 # If multiple values, keep as list; otherwise unwrap single value

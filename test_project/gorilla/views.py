@@ -3,14 +3,29 @@ from django.shortcuts import render, get_object_or_404
 
 from django_glue import Glue, GlueAccess
 from test_project.gorilla.models import Gorilla, Skill
+from test_project.gorilla.forms import GorillaForm
 
 
 def list_view(request: HttpRequest):
     Glue.queryset(
         request=request,
-        target=Gorilla.objects.all(),
+        target=Gorilla.objects.order_by('-updated_at').all(),
         unique_name='gorillas',
         access=GlueAccess.DELETE,
+    )
+
+    Glue.form(
+        request=request,
+        target=GorillaForm(),
+        unique_name='gorilla_form',
+        access=GlueAccess.CHANGE,
+    )
+
+    Glue.model(
+        request=request,
+        target=Gorilla(),
+        unique_name='new_gorilla',
+        access=GlueAccess.CHANGE,
     )
 
     return render(request, 'gorilla/page/list_page.html')

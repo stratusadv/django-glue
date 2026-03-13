@@ -105,33 +105,27 @@
   // client_js/src/proxies/base.js
   class BaseGlueProxy {
     constructor({ proxyUniqueName, contextData, actions = null }) {
-      this.uniqueName = proxyUniqueName;
-      this.contextData = contextData;
-      this.actions = actions ? actions : contextData.actions;
-      this.listeners = {
+      this.$uniqueName = proxyUniqueName;
+      this.$contextData = contextData;
+      this.$actions = actions ? actions : contextData.actions;
+      this.$listeners = {
         before: {},
         after: {},
         error: {}
       };
     }
-    setActionPayload(actionName, payload) {
-      this.actions[actionName].payload = payload;
-    }
-    getActionPayload(actionName) {
-      return this.actions[actionName].payload;
-    }
-    addListener(actionName, callback, type = "after") {
-      if (!this.listeners[type]) {
+    $addListener(actionName, callback, type = "after") {
+      if (!this.$listeners[type]) {
         throw new Error(`Invalid listener type: ${type}. Use 'before', 'after', or 'error'.`);
       }
-      if (!this.listeners[type][actionName]) {
-        this.listeners[type][actionName] = [];
+      if (!this.$listeners[type][actionName]) {
+        this.$listeners[type][actionName] = [];
       }
-      this.listeners[type][actionName].push(callback);
+      this.$listeners[type][actionName].push(callback);
       return this;
     }
-    removeListener(actionName, callback, type = "after") {
-      const listeners = this.listeners[type]?.[actionName];
+    $removeListener(actionName, callback, type = "after") {
+      const listeners = this.$listeners[type]?.[actionName];
       if (listeners) {
         const index = listeners.indexOf(callback);
         if (index > -1) {
@@ -140,13 +134,13 @@
       }
       return this;
     }
-    async emitListeners(type, actionName, event) {
-      const listeners = this.listeners[type]?.[actionName] || [];
+    async $emitListeners(type, actionName, event) {
+      const listeners = this.$listeners[type]?.[actionName] || [];
       for (const callback of listeners) {
         await callback(event);
       }
     }
-    async processAction(actionName, data = null) {
+    async $processAction(actionName, data = null) {
       const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key) => [
         key,
         data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
@@ -156,20 +150,20 @@
         proxy: this,
         payload: eventData
       };
-      await this.emitListeners("before", actionName, event);
+      await this.$emitListeners("before", actionName, event);
       try {
         const response = await sendActionRequest({
-          uniqueName: this.uniqueName,
+          uniqueName: this.$uniqueName,
           action: actionName,
           payload: data,
-          contextData: this.contextData
+          contextData: this.$contextData
         });
         event.result = response.data;
-        await this.emitListeners("after", actionName, event);
+        await this.$emitListeners("after", actionName, event);
         return response.data;
       } catch (err) {
         event.error = err;
-        await this.emitListeners("error", actionName, event);
+        await this.$emitListeners("error", actionName, event);
         throw err;
       }
     }
@@ -179,11 +173,11 @@
   class GlueFormProxy extends BaseGlueProxy {
     constructor({ proxyUniqueName, contextData, actions = null }) {
       super({ proxyUniqueName, contextData, actions });
-      this._values = { ...this.contextData.initial || {} };
-      this._errors = {};
-      this.#defineFields();
+      this.$values = { ...this.$contextData.initial || {} };
+      this.$errors = {};
+      this.$defineFields();
     }
-    defineModelChoiceField(fieldName, fieldData) {
+    $defineModelChoiceField(fieldName, fieldData) {
       if (!fieldData.hasOwnProperty("_choicesCache")) {
         fieldData._choicesCache = [];
         fieldData._choicesLoaded = false;
@@ -195,7 +189,7 @@
           return fieldData._choicesPromise;
         }
         fieldData._loadingChoices = true;
-        fieldData._choicesPromise = this.processAction("foreign_key_choices", {
+        fieldData._choicesPromise = this.$processAction("foreign_key_choices", {
           field_definition: [
             fieldName,
             fieldData
@@ -217,58 +211,48 @@
       };
       return fieldData;
     }
-    #defineFields() {
-      const proxy = this;
-      this.fields = {};
-      Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
+    $defineFields() {
+      this.$fields = {};
+      Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
         Object.defineProperty(this, fieldName, {
           get: function() {
-            if (!this.loaded && !this.autoFetch && !this._values) {
-              if (!this.loading) {
-                this.loading = true;
-                this.loadData();
+            if (!this.$loaded && !this.$autoFetch && !this.$values) {
+              if (!this.$loading) {
+                this.$loading = true;
+                this.$loadData();
               }
             }
-            return this._values?.[fieldName];
+            return this.$values?.[fieldName];
           },
           set: function(value) {
-            if (!this._values) {
-              this._values = {};
+            if (!this.$values) {
+              this.$values = {};
             }
-            this._values[fieldName] = value;
+            this.$values[fieldName] = value;
           }
         });
         if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-          fieldData = this.defineModelChoiceField(fieldName, fieldData);
+          fieldData = this.$defineModelChoiceField(fieldName, fieldData);
         }
-        this.fields[fieldName] = {
+        const proxy = this;
+        this.$fields[fieldName] = {
           ...fieldData,
-          get value() {
-            return proxy._values[fieldName];
-          },
-          set value(val) {
-            proxy._values[fieldName] = val;
-          },
-          get errors() {
-            return proxy._errors[fieldName] || [];
-          }
+          errors: proxy?.$errors?.[fieldName] || [],
+          value: proxy?.$values?.[fieldName]
         };
       });
     }
-    loadData() {
-      this.processAction("get").then((data) => {
-        this._values = data;
+    $loadData() {
+      this.$processAction("get").then((data) => {
+        this.$values = data;
       }).finally(() => {
-        this.loading = false;
-        this.loaded = true;
+        this.$loading = false;
+        this.$loaded = true;
       });
     }
-    get values() {
-      return { ...this._values };
-    }
-    get formData() {
+    get $formData() {
       const formData = new FormData;
-      Object.entries(this._values).forEach(([fieldName, value]) => {
+      Object.entries(this.$values).forEach(([fieldName, value]) => {
         if (Array.isArray(value)) {
           value.forEach((item) => formData.append(fieldName, item));
         } else if (value instanceof File || value instanceof Blob) {
@@ -281,47 +265,69 @@
       });
       return formData;
     }
-    get errors() {
-      return { ...this._errors };
+    $updateErrors(errors) {
+      this.$errors = errors || {};
+      Object.entries(this.$fields).forEach(([fieldName, field]) => {
+        field.errors = this.$errors[fieldName] || [];
+      });
     }
-    _updateErrors(errors) {
-      this._errors = errors || {};
+    $updateValues(values) {
+      this.$values = values || {};
+      Object.entries(this.$fields).forEach(([fieldName, field]) => {
+        field.value = this.$values[fieldName];
+      });
     }
-    async validate() {
-      const result = await this.processAction("validate", this._values);
-      this._updateErrors(result.errors);
+    async $validate() {
+      const result = await this.$processAction("validate", this.$values);
+      this.$updateErrors(result.errors);
       return result;
     }
-    async save() {
-      const result = await this.processAction("save", this.formData);
-      this._errors = result.errors || {};
+    async $save() {
+      const result = await this.$processAction("save", this.$formData);
+      this.$updateErrors(result.errors);
       if (result.success) {
-        this._values = result.cleaned_data;
+        this.$updateValues(result.cleaned_data);
       }
       return result;
     }
-    hasErrors() {
-      return Object.keys(this._errors).length > 0;
+    $hasErrors() {
+      return Object.keys(this.$errors).length > 0;
     }
-    clearErrors() {
-      this._errors = {};
+    $clearErrors() {
+      this.$errors = {};
     }
   }
 
   // client_js/src/proxies/model.js
+  var $keyCounter = 0;
+
   class GlueModelProxy extends GlueFormProxy {
     constructor({
       proxyUniqueName,
       contextData,
       actions = null,
       autoFetch = false,
-      values = null
+      values = null,
+      parentQuerySet = null
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
-      this._values = values;
+      this.$values = values;
+      this.$key = `glue_${++$keyCounter}`;
+      this.$parent = parentQuerySet;
     }
-    async delete() {
-      return await this.processAction("delete", { id: this.values.id });
+    get $isNew() {
+      return !this.$values?.id;
+    }
+    async $delete() {
+      if (this.$isNew && this.$parent) {
+        this.$parent.$items = this.$parent.$items.filter((item) => item.$key !== this.$key);
+        return { success: true };
+      }
+      const result = await this.$processAction("delete", { id: this.$values.id });
+      if (this.$parent) {
+        await this.$parent.$refresh();
+      }
+      return result;
     }
   }
 
@@ -390,56 +396,56 @@
 
   // client_js/src/proxies/queryset.js
   class GlueQuerySetProxy extends BaseGlueProxy {
-    items = [];
-    lastQuery = { method: "all", params: null };
-    loaded = false;
-    loading = false;
+    $items = [];
+    $lastQuery = { method: "$all", params: null };
+    $loaded = false;
+    $loading = false;
     constructor(options) {
       super(options);
     }
     *[Symbol.iterator]() {
-      yield* this.items;
+      yield* this.$items;
     }
-    buildChildGlueModelProxy(item) {
+    $buildChildModelProxy(item) {
       const proxy = new GlueModelProxy({
-        proxyUniqueName: this.uniqueName,
-        contextData: client_default.contextData[this.uniqueName],
-        values: { ...item }
+        proxyUniqueName: this.$uniqueName,
+        contextData: client_default.contextData[this.$uniqueName],
+        values: { ...item },
+        parentQuerySet: this
       });
       const querysetProxy = this;
-      Object.keys(proxy.actions).forEach((actionName) => {
+      Object.keys(proxy.$actions).forEach((actionName) => {
         ["before", "after", "error"].forEach((type) => {
-          proxy.addListener(actionName, (event) => {
-            querysetProxy.emitListeners(type, actionName, event);
+          proxy.$addListener(actionName, (event) => {
+            querysetProxy.$emitListeners(type, actionName, event);
           }, type);
         });
       });
-      proxy.addListener("delete", () => querysetProxy.refresh());
       return proxy;
     }
-    async all() {
-      if (!this.loaded || this.lastQuery?.method !== "all") {
-        this.loading = true;
-        const data = await this.processAction("all");
-        this.items = data.map((item) => this.buildChildGlueModelProxy(item));
-        this.lastQuery = { method: "all", params: null };
-        this.loaded = true;
-        this.loading = false;
+    async $all() {
+      if (!this.$loaded || this.$lastQuery?.method !== "$all") {
+        this.$loading = true;
+        const data = await this.$processAction("all");
+        this.$items = data.map((item) => this.$buildChildModelProxy(item));
+        this.$lastQuery = { method: "$all", params: null };
+        this.$loaded = true;
+        this.$loading = false;
       }
-      return this.items;
+      return this.$items;
     }
-    async filter(filterParams) {
-      if (!this.loaded || !this.isEqual(filterParams, this.lastQuery?.params)) {
-        this.loading = true;
-        const data = await this.processAction("filter", filterParams);
-        this.items = data.map((item) => this.buildChildGlueModelProxy(item));
-        this.lastQuery = { method: "filter", params: filterParams };
-        this.loaded = true;
-        this.loading = false;
+    async $filter(filterParams) {
+      if (!this.$loaded || !this.$isEqual(filterParams, this.$lastQuery?.params)) {
+        this.$loading = true;
+        const data = await this.$processAction("filter", filterParams);
+        this.$items = data.map((item) => this.$buildChildModelProxy(item));
+        this.$lastQuery = { method: "$filter", params: filterParams };
+        this.$loaded = true;
+        this.$loading = false;
       }
-      return this.items;
+      return this.$items;
     }
-    isEqual(a, b) {
+    $isEqual(a, b) {
       if (a === b)
         return true;
       if (a == null || b == null)
@@ -447,25 +453,31 @@
       if (Array.isArray(a) && Array.isArray(b)) {
         if (a.length !== b.length)
           return false;
-        return a.every((val, i) => this.isEqual(val, b[i]));
+        return a.every((val, i) => this.$isEqual(val, b[i]));
       }
       if (typeof a === "object" && typeof b === "object") {
         const keysA = Object.keys(a);
         const keysB = Object.keys(b);
         if (keysA.length !== keysB.length)
           return false;
-        return keysA.every((key) => keysB.includes(key) && this.isEqual(a[key], b[key]));
+        return keysA.every((key) => keysB.includes(key) && this.$isEqual(a[key], b[key]));
       }
       return false;
     }
-    async refresh() {
-      this.items = [];
-      this.loaded = false;
-      const { method, params } = this.lastQuery;
+    async $refresh() {
+      this.$items = [];
+      this.$loaded = false;
+      const { method, params } = this.$lastQuery;
       return this[method](params);
     }
-    get empty() {
-      return this.loaded && this.items.length === 0;
+    get $empty() {
+      return this.$loaded && this.$items.length === 0;
+    }
+    async $new() {
+      const defaults = await this.$processAction("new");
+      const proxy = this.$buildChildModelProxy(defaults);
+      this.$items = [proxy, ...this.$items];
+      return proxy;
     }
   }
 

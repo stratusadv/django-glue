@@ -33,7 +33,7 @@
     <div x-data="{
         gorilla: Glue.gorilla,
         init() {
-            this.gorilla.addListener('save', event => {
+            this.gorilla.$addListener('save', event => {
                 if (event.result.errors) {
                     $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
                 }
@@ -41,13 +41,13 @@
                     $store.notifications.success('Fighter saved successfully!');
                 }
             });
-            this.gorilla.addListener('save', () => {
+            this.gorilla.$addListener('save', () => {
                 $store.notifications.error('Failed to save fighter.');
             }, 'error');
-            this.gorilla.addListener('delete', () => {
+            this.gorilla.$addListener('delete', () => {
                 window.location.href = '{% url "gorilla:list" %}';
             });
-            this.gorilla.addListener('delete', () => {
+            this.gorilla.$addListener('delete', () => {
                 $store.notifications.error('Failed to delete fighter.');
             }, 'error');
         }
@@ -147,7 +147,7 @@
                                     max="2.5">
                             </div>
 
-                            <div 
+                            <div
                                 class="col-12"
                                 x-data="{
                                     photoUrl: null,
@@ -181,7 +181,7 @@
                                 <label class="form-label fw-bold">Fighting Skills (ManyToMany Test)</label>
                                 <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
                                     <div class="row">
-                                        <template x-for="choice in gorilla.fields.skills.choices" :key="choice[0]">
+                                        <template x-for="choice in gorilla.$fields.skills.choices" :key="choice[0]">
                                             <div class="col-md-6 col-lg-4">
                                                 <div class="form-check">
                                                     <input
@@ -210,10 +210,10 @@
 
                     <div class="card-footer bg-gorilla-cream">
                         <div class="d-flex gap-2 justify-content-end">
-                            <button class="btn btn-gorilla px-4" @click="gorilla.save()">
+                            <button class="btn btn-gorilla px-4" @click="gorilla.$save()">
                                 Save Changes
                             </button>
-                            <button class="btn btn-gorilla-danger" @click="if(confirm('Delete this fighter?')) gorilla.delete()">
+                            <button class="btn btn-gorilla-danger" @click="if(confirm('Delete this fighter?')) gorilla.$delete()">
                                 Delete Fighter
                             </button>
                         </div>

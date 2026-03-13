@@ -4,13 +4,13 @@ export class GlueFormProxy extends BaseGlueProxy {
     constructor({proxyUniqueName, contextData, actions=null}) {
         super({proxyUniqueName, contextData, actions});
 
-        this._values = {...(this.contextData.initial || {})};
-        this._errors = {};
+        this.$values = {...(this.$contextData.initial || {})};
+        this.$errors = {};
 
-        this.#defineFields()
+        this.$defineFields()
     }
 
-    defineModelChoiceField(fieldName, fieldData) {
+    $defineModelChoiceField(fieldName, fieldData) {
         // Initialize shared choice caching on the original fieldData (once)
         // This ensures choices are loaded only once across all model proxy instances
         if (!fieldData.hasOwnProperty('_choicesCache')) {
@@ -27,7 +27,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             }
 
             fieldData._loadingChoices = true;
-            fieldData._choicesPromise = this.processAction('foreign_key_choices', {
+            fieldData._choicesPromise = this.$processAction('foreign_key_choices', {
                 'field_definition': [
                     fieldName,
                     fieldData
@@ -53,60 +53,54 @@ export class GlueFormProxy extends BaseGlueProxy {
         return fieldData
     }
 
-    #defineFields() {
-        const proxy = this;
-
-        this.fields = {}
-        Object.entries(this.contextData.fields).forEach(([fieldName, fieldData]) => {
+    $defineFields() {
+        this.$fields = {}
+        Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
             Object.defineProperty(this, fieldName, {
                 get: function() {
-                    if (!this.loaded && !this.autoFetch && !this._values) {
-                        if (!this.loading) {
-                            this.loading = true;
-                            this.loadData()
+                    if (!this.$loaded && !this.$autoFetch && !this.$values) {
+                        if (!this.$loading) {
+                            this.$loading = true;
+                            this.$loadData()
                         }
                     }
 
-                    return this._values?.[fieldName];
+                    return this.$values?.[fieldName];
                 },
                 set: function(value) {
-                    if (!this._values) {
-                        this._values = {};
+                    if (!this.$values) {
+                        this.$values = {};
                     }
-                    this._values[fieldName] = value;
+                    this.$values[fieldName] = value;
                 }
             })
 
             if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-                fieldData = this.defineModelChoiceField(fieldName, fieldData)
+                fieldData = this.$defineModelChoiceField(fieldName, fieldData)
             }
 
-            this.fields[fieldName] = {
+            const proxy = this
+
+            this.$fields[fieldName] = {
                 ...fieldData,
-                get value() { return proxy._values[fieldName]; },
-                set value(val) { proxy._values[fieldName] = val; },
-                get errors() { return proxy._errors[fieldName] || []; }
+                errors: proxy?.$errors?.[fieldName] || [],
+                value: proxy?.$values?.[fieldName],
             };
         })
     }
 
-    loadData() {
-        this.processAction('get').then(data => {
-            this._values = data;
+    $loadData() {
+        this.$processAction('get').then(data => {
+            this.$values = data;
         }).finally(() => {
-            this.loading = false;
-            this.loaded = true;
+            this.$loading = false;
+            this.$loaded = true;
         });
     }
 
-    // Getter for all current values (for submitting)
-    get values() {
-        return {...this._values};
-    }
-    
-    get formData() {
+    get $formData() {
         const formData = new FormData();
-        Object.entries(this._values).forEach(([fieldName, value]) => {
+        Object.entries(this.$values).forEach(([fieldName, value]) => {
             if (Array.isArray(value)) {
                 value.forEach(item => formData.append(fieldName, item));
             } else if (value instanceof File || value instanceof Blob) {
@@ -121,39 +115,45 @@ export class GlueFormProxy extends BaseGlueProxy {
         return formData;
     }
 
-    // Getter for all current errors
-    get errors() {
-        return {...this._errors};
+    $updateErrors(errors) {
+        this.$errors = errors || {};
+        Object.entries(this.$fields).forEach(([fieldName, field]) => {
+            field.errors = this.$errors[fieldName] || [];
+        });
     }
 
-    _updateErrors(errors) {
-        this._errors = errors || {};
+    $updateValues(values) {
+        this.$values = values || {};
+        Object.entries(this.$fields).forEach(([fieldName, field]) => {
+            field.value = this.$values[fieldName];
+        });
     }
 
-    async validate() {
-        const result = await this.processAction('validate', this._values);
-        this._updateErrors(result.errors);
+    async $validate() {
+        const result = await this.$processAction('validate', this.$values);
+        this.$updateErrors(result.errors);
 
         return result;
     }
 
-    async save() {
-        const result = await this.processAction('save', this.formData);
+    async $save() {
+        const result = await this.$processAction('save', this.$formData);
 
-        this._errors = result.errors || {};
+        this.$updateErrors(result.errors);
 
         if (result.success) {
-            this._values = result.cleaned_data
+
+            this.$updateValues(result.cleaned_data)
         }
 
         return result;
     }
 
-    hasErrors() {
-        return Object.keys(this._errors).length > 0;
+    $hasErrors() {
+        return Object.keys(this.$errors).length > 0;
     }
 
-    clearErrors() {
-        this._errors = {};
+    $clearErrors() {
+        this.$errors = {};
     }
 }

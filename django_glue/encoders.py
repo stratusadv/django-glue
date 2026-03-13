@@ -9,6 +9,9 @@ class GlueActionDataJSONEncoder(DjangoJSONEncoder):
         if isinstance(obj, Model):
             return obj.pk
 
+        if isinstance(obj, QuerySet):
+            return [obj.pk for obj in obj]
+
         if isinstance(obj, FieldFile) or isinstance(obj, UploadedFile):
             try:
                 return {

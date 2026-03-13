@@ -22,12 +22,14 @@
 {% block content %}
     <div x-data="{
         gorillas: Glue.gorillas,
+        new_gorilla: Glue.new_gorilla,
+        gorilla_form: Glue.gorilla_form,
         search: '',
         gorillaDetailUrl(id) {
             return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
         },
         init() {
-            this.gorillas.addListener('save', event => {
+            this.gorillas.$addListener('save', event => {
                 if (event.result.errors) {
                     $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
                 }
@@ -35,21 +37,24 @@
                     $store.notifications.success('Fighter saved successfully!');
                 }
             });
-            this.gorillas.addListener('save', () => {
+            this.gorillas.$addListener('save', () => {
                 $store.notifications.error('Failed to save fighter.');
             }, 'error');
-            this.gorillas.addListener('delete', () => {
+            this.gorillas.$addListener('delete', () => {
                 $store.notifications.success('Fighter deleted.');
             });
-            this.gorillas.addListener('delete', () => {
+            this.gorillas.$addListener('delete', () => {
                 $store.notifications.error('Failed to delete fighter.');
             }, 'error');
         }
     }">
-        <!-- Search -->
+        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="gorilla_form" modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
+        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla" modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
+
+        <!-- Search and Add -->
         <div class="row justify-content-center mb-4">
-            <div class="col-md-6">
-                <div class="input-group">
+            <div class="col-md-8">
+                <div class="input-group mb-2">
                     <span class="input-group-text bg-gorilla-gold border-gorilla-gold">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                             <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
@@ -61,61 +66,87 @@
                         placeholder="Search fighters by name..."
                         x-model.debounce="search">
                 </div>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button class="btn btn-gorilla" type="button" @click="gorillas.$new()">
+                        + Add Inline
+                    </button>
+                    <button class="btn btn-gorilla-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addGorillaFormModal">
+                        + Add via Form
+                    </button>
+                    <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addGorillaModelModal">
+                        + Add via Model
+                    </button>
+                </div>
             </div>
         </div>
 
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
-            <template x-for="gorilla in gorillas.filter({'name__icontains': search})" :key="gorilla.id">
+            <template x-for="gorilla in gorillas.$filter({'name__icontains': search})" :key="gorilla.$key">
                 <div class="col-md-6 col-lg-4">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">
                             <input
                                 type="text"
+                                name="name"
                                 class="form-control form-control-sm bg-transparent border-0 text-white fw-bold fs-5 p-0"
+                                :class="{'is-invalid': gorilla?.$fields?.name?.errors?.length}"
                                 style="font-family: 'Jersey 15', sans-serif;"
                                 x-model="gorilla.name"
                                 placeholder="Fighter Name">
+                            <div class="invalid-feedback" x-text="gorilla?.$fields?.name?.errors?.join(', ')"></div>
                         </div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <label class="form-label small text-muted mb-1">Description</label>
                                 <textarea
+                                    name="description"
                                     class="form-control form-control-sm form-control-gorilla"
+                                    :class="{'is-invalid': gorilla?.$fields?.description?.errors?.length}"
                                     rows="2"
                                     x-model="gorilla.description"
                                     placeholder="Fighter backstory..."></textarea>
+                                <div class="invalid-feedback" x-text="gorilla?.$fields?.description?.errors?.join(', ')"></div>
                             </div>
 
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Age</label>
                                     <input
+                                        name="age"
                                         type="number"
                                         class="form-control form-control-sm form-control-gorilla"
+                                        :class="{'is-invalid': gorilla?.$fields?.age?.errors?.length}"
                                         x-model="gorilla.age"
                                         min="1"
                                         max="60">
+                                    <div class="invalid-feedback" x-text="gorilla?.$fields?.age?.errors?.join(', ')"></div>
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Weight (kg)</label>
                                     <input
+                                        name="weight"
                                         type="number"
                                         class="form-control form-control-sm form-control-gorilla"
+                                        :class="{'is-invalid': gorilla?.$fields?.weight?.errors?.length}"
                                         x-model="gorilla.weight"
                                         step="0.1"
                                         min="50"
                                         max="500">
+                                    <div class="invalid-feedback" x-text="gorilla?.$fields?.weight?.errors?.join(', ')"></div>
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Height (m)</label>
                                     <input
+                                        name="height"
                                         type="number"
                                         class="form-control form-control-sm form-control-gorilla"
+                                        :class="{'is-invalid': gorilla?.$fields?.height?.errors?.length}"
                                         x-model="gorilla.height"
                                         step="0.01"
                                         min="1.0"
                                         max="2.5">
+                                    <div class="invalid-feedback" x-text="gorilla?.$fields?.height?.errors?.join(', ')"></div>
                                 </div>
                             </div>
 
@@ -123,11 +154,14 @@
                                 <div class="col-6">
                                     <label class="form-label small text-muted mb-1">Rank Points</label>
                                     <input
+                                        name="rank_points"
                                         type="number"
                                         class="form-control form-control-sm form-control-gorilla"
+                                        :class="{'is-invalid': gorilla?.$fields?.rank_points?.errors?.length}"
                                         x-model="gorilla.rank_points"
                                         min="0"
                                         max="10000">
+                                    <div class="invalid-feedback" x-text="gorilla?.$fields?.rank_points?.errors?.join(', ')"></div>
                                 </div>
                             </div>
                         </div>
@@ -136,10 +170,10 @@
                                 <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm">
                                     Profile
                                 </a>
-                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
+                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.$save()">
                                     Save
                                 </button>
-                                <button class="btn btn-gorilla-danger btn-sm" @click="gorilla.delete()">
+                                <button class="btn btn-gorilla-danger btn-sm" @click="gorilla.$delete()">
                                     Delete
                                 </button>
                             </div>
@@ -148,7 +182,7 @@
                 </div>
             </template>
 
-            <div x-show="gorillas.empty" class="col-12">
+            <div x-show="gorillas.$empty" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

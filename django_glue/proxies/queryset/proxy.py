@@ -136,12 +136,39 @@ class GlueQuerySetProxy(GlueModelProxyBase):
 
     @action(access=GlueAccess.CHANGE)
     def save(self, action_data: GlueActionRequestData):
-        return self._get_target_model_instance_proxy(
-            action_data.post_data['id']
-        ).save(action_data)
+        pk = action_data.post_data.get('id')
+        if pk:
+            # Update existing instance
+            proxy = self._get_target_model_instance_proxy(pk)
+        else:
+            # Create new instance
+            instance = self.get_model_class()()
+            proxy = self._create_model_proxy_from_instance(instance)
+        return proxy.save(action_data)
 
     @action(access=GlueAccess.DELETE)
     def delete(self, action_data: GlueActionRequestData):
         return self._get_target_model_instance_proxy(
             action_data.post_data['id']
-        ).delete()
+        ).delete(action_data)
+
+    @action(access=GlueAccess.VIEW)
+    def new(self, action_data: GlueActionRequestData):
+        """Return default values for a new model instance."""
+        model_class = self.get_model_class()
+        instance = model_class()
+
+        # Get M2M field names to skip (can't access M2M on unsaved instance)
+        m2m_field_names = {f.name for f in model_class._meta.many_to_many}
+
+        defaults = {'id': None}
+        for field_name in self._form_field_definitions.keys():
+            if field_name == 'id':
+                continue
+            if field_name in m2m_field_names:
+                # M2M fields default to empty list
+                defaults[field_name] = []
+            elif hasattr(instance, field_name):
+                defaults[field_name] = getattr(instance, field_name)
+
+        return defaults

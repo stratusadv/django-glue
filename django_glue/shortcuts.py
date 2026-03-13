@@ -109,14 +109,27 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs
     ):
-        Glue.glue(
-            request=request,
-            unique_name=unique_name,
-            target=target,
-            proxy_class=GlueFormProxy,
-            access=access,
-            **kwargs
-        )
+        # If it's a ModelForm, create a model proxy with the form's instance
+        if isinstance(target, ModelForm):
+            instance = target.instance if target.instance.pk else target._meta.model()
+            Glue.glue(
+                request=request,
+                unique_name=unique_name,
+                target=instance,
+                proxy_class=GlueModelProxy,
+                access=access,
+                form_class=target.__class__,
+                **kwargs
+            )
+        else:
+            Glue.glue(
+                request=request,
+                unique_name=unique_name,
+                target=target,
+                proxy_class=GlueFormProxy,
+                access=access,
+                **kwargs
+            )
 
 
 class GluedRequest:
@@ -133,11 +146,10 @@ class GluedRequest:
         form_class: type[ModelForm] = None,
         **kwargs
     ):
-        Glue.glue(
+        Glue.model(
             request=self.request,
             unique_name=unique_name,
             target=target,
-            proxy_class=GlueModelProxy,
             access=access,
             fields=fields,
             exclude=exclude,
@@ -155,11 +167,10 @@ class GluedRequest:
         form_class: type[ModelForm] = None,
         **kwargs
     ):
-        Glue.glue(
+        Glue.queryset(
             request=self.request,
             unique_name=unique_name,
             target=target,
-            proxy_class=GlueQuerySetProxy,
             access=access,
             fields=fields,
             exclude=exclude,
@@ -174,11 +185,10 @@ class GluedRequest:
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs
     ):
-        Glue.glue(
+        Glue.form(
             request=self.request,
             unique_name=unique_name,
             target=target,
-            proxy_class=GlueFormProxy,
             access=access,
             **kwargs
         )

@@ -87,16 +87,6 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
             exclude=list(self.exclude) if self.exclude else ()
         )
 
-    def _get_form_instance(
-        self, data: dict | None = None, files: dict | None = None
-    ) -> BaseForm:
-        """Create a form instance bound to the model instance."""
-        form_class = self._get_form_class()
-        instance = self._get_model_instance()
-        if data is not None:
-            return form_class(data=data, instance=instance, files=files)
-        return form_class(instance=instance)
-
     @property
     def _form_field_definitions(self) -> dict:
         """
@@ -183,5 +173,3 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         self._set_non_m2m_fields(field_data)
         model_instance.save()
         self._set_m2m_fields(field_data)
-
-        return model_to_dict(model_instance)

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
+from django.forms import ModelMultipleChoiceField, ModelChoiceField, MultipleChoiceField
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
@@ -25,14 +27,26 @@ class GlueFormProxyMixin(ABC):
         """Return the form class to use for validation and field extraction."""
         pass
 
-    @abstractmethod
     def _get_form_instance(
-        self,
-        data: dict | None = None,
-        files: dict | None = None
+        self, data: dict | None = None, files: dict | None = None
     ) -> BaseForm:
-        """Create a form instance, optionally bound with data."""
-        pass
+        """Create a form instance."""
+        form_class = self._get_form_class()
+        if data is not None:
+            for field_name, field in self._form_field_definitions.items():
+                # Ensure that Multiple choice fields have list values. This is to prevent
+                # errors when the frontend sends single values for multiple choice fields.
+                if field['type'] in [
+                    'ModelMultipleChoiceField',
+                    'MultipleChoiceField',
+                ]:
+                    value = data.get(field_name)
+                    if value and not isinstance(value, list):
+                        data[field_name] = [value]
+
+            return form_class(data=data, files=files)
+
+        return form_class()
 
     @property
     def _form_field_definitions(self) -> dict:
@@ -68,11 +82,12 @@ class GlueFormProxyMixin(ABC):
         """
         Override in subclasses to customize the save behaviour and save response format.
         """
-        return cleaned_data
+        return
 
     @action(access=GlueAccess.CHANGE)
     def validate(self, action_data: GlueActionRequestData) -> dict:
         """Validate form data without saving."""
+
         form = self._get_form_instance(
             data=action_data.post_data,
             files=action_data.file_data
@@ -92,7 +107,7 @@ class GlueFormProxyMixin(ABC):
         validation_result = self.validate(action_data)
 
         if validation_result['success']:
-            return self._save(validation_result['cleaned_data'])
+            self._save(validation_result['cleaned_data'])
 
         return validation_result
 
