@@ -153,6 +153,12 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         ).delete(action_data)
 
     @action(access=GlueAccess.VIEW)
+    def get(self, action_data: GlueActionRequestData):
+        return self._get_target_model_instance_proxy(
+            action_data.post_data['id']
+        ).get(action_data)
+
+    @action(access=GlueAccess.VIEW)
     def new(self, action_data: GlueActionRequestData):
         """Return default values for a new model instance."""
         model_class = self.get_model_class()

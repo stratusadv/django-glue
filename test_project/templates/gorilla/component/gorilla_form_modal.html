@@ -12,6 +12,7 @@
             const result = await this.proxy.$save();
             if (result.success) {
                 $store.notifications.success('Fighter created successfully!');
+                Glue.gorillas.$refresh();
                 bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();
             }
         } finally {

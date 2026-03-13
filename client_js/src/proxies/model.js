@@ -21,6 +21,21 @@ export class GlueModelProxy extends GlueFormProxy {
         return !this.$values?.id;
     }
 
+    async $get(pk = null) {
+        let data;
+        if (this.$parent) {
+            data = await this.$parent.$processAction('get', {id: pk})
+        }
+        else {
+            data = await this.$processAction('get')
+        }
+
+        this.$updateValues(data)
+
+        this.$loading = false;
+        this.$loaded = true;
+    }
+
     async $delete() {
         if (this.$isNew && this.$parent) {
             // Unsaved item - just remove from parent's $items

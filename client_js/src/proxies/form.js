@@ -61,7 +61,7 @@ export class GlueFormProxy extends BaseGlueProxy {
                     if (!this.$loaded && !this.$autoFetch && !this.$values) {
                         if (!this.$loading) {
                             this.$loading = true;
-                            this.$loadData()
+                            this.$get()
                         }
                     }
 
@@ -89,9 +89,9 @@ export class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
-    $loadData() {
+    $get(pk = null) {
         this.$processAction('get').then(data => {
-            this.$values = data;
+            this.$updateValues(data)
         }).finally(() => {
             this.$loading = false;
             this.$loaded = true;
@@ -142,8 +142,7 @@ export class GlueFormProxy extends BaseGlueProxy {
         this.$updateErrors(result.errors);
 
         if (result.success) {
-
-            this.$updateValues(result.cleaned_data)
+            this.$get(this.$values.id)
         }
 
         return result;

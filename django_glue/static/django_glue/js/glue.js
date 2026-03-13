@@ -219,7 +219,7 @@
             if (!this.$loaded && !this.$autoFetch && !this.$values) {
               if (!this.$loading) {
                 this.$loading = true;
-                this.$loadData();
+                this.$get();
               }
             }
             return this.$values?.[fieldName];
@@ -242,9 +242,9 @@
         };
       });
     }
-    $loadData() {
+    $get(pk = null) {
       this.$processAction("get").then((data) => {
-        this.$values = data;
+        this.$updateValues(data);
       }).finally(() => {
         this.$loading = false;
         this.$loaded = true;
@@ -286,7 +286,7 @@
       const result = await this.$processAction("save", this.$formData);
       this.$updateErrors(result.errors);
       if (result.success) {
-        this.$updateValues(result.cleaned_data);
+        this.$get(this.$values.id);
       }
       return result;
     }
@@ -317,6 +317,17 @@
     }
     get $isNew() {
       return !this.$values?.id;
+    }
+    async $get(pk = null) {
+      let data;
+      if (this.$parent) {
+        data = await this.$parent.$processAction("get", { id: pk });
+      } else {
+        data = await this.$processAction("get");
+      }
+      this.$updateValues(data);
+      this.$loading = false;
+      this.$loaded = true;
     }
     async $delete() {
       if (this.$isNew && this.$parent) {
