@@ -58,6 +58,7 @@ class GlueFormProxyMixin(ABC):
             field_def = {
                 'type': field.__class__.__name__,
                 'required': field.required,
+                'disabled': field.disabled,
                 'label': str(field.label) if field.label else name,
                 'help_text': str(field.help_text) if field.help_text else '',
                 'widget': field.widget.__class__.__name__,

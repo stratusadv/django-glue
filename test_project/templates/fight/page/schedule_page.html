@@ -28,11 +28,11 @@
             saveResult: null,
             async validate() {
                 this.saveResult = null
-                this.validationResult = await this.form.$validate();
+                this.validationResult = await this.form.validate();
             },
             async submit() {
                 this.validationResult = null
-                this.saveResult = await this.form.$save();
+                this.saveResult = await this.form.save();
             }
         }">
             <div class="card card-gorilla h-100">

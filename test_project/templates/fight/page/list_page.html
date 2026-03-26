@@ -44,7 +44,7 @@
         fights: Glue.fights,
         search: '',
         get filteredFights() {
-            return this.fights.$filter({'name__icontains': this.search})
+            return this.fights.filter({'name__icontains': this.search})
         },
         init() {
             this.fights.$addListener('save', () => {
@@ -183,7 +183,7 @@
                         </div>
                         <div class="card-footer bg-gorilla-cream">
                             <div class="d-flex gap-2">
-                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="fight.$save()">
+                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="fight.save()">
                                     Save
                                 </button>
                                 <button class="btn btn-gorilla-danger btn-sm" @click="fight.$delete()">
@@ -195,7 +195,7 @@
                 </div>
             </template>
 
-            <template x-if="fights.$empty">
+            <template x-if="fights.isEmpty">
                 <div class="col-12">
                     <div class="alert alert-warning text-center">
                         <h5>No fights scheduled!</h5>

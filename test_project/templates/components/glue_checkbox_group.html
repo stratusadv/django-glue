@@ -1,0 +1,31 @@
+{% extends "components/glue_field_base.html" %}
+
+{% block field_content %}
+    {% include 'components/glue_label.html' %}
+    <div class="border rounded p-3{% if input_class %} {{ input_class }}{% endif %}" {% if max_height %}style="max-height: {{ max_height }}; overflow-y: auto;"{% endif %}>
+        <div class="row">
+            <template x-for="choice in {{ obj }}.$fields.{{ field }}?.choices || []" :key="choice[0]">
+                <div class="col-md-{{ columns|default:'4' }} col-lg-{{ columns|default:'4' }}">
+                    <div class="form-check">
+                        <input
+                            type="checkbox"
+                            class="form-check-input"
+                            :id="'{{ field }}-' + choice[0]"
+                            :value="choice[0]"
+                            :checked="{{ obj }}.{{ field }} && {{ obj }}.{{ field }}.includes(choice[0])"
+                            @change="
+                                if ($event.target.checked) {
+                                    {{ obj }}.{{ field }} = [...({{ obj }}.{{ field }} || []), choice[0]];
+                                } else {
+                                    {{ obj }}.{{ field }} = ({{ obj }}.{{ field }} || []).filter(v => v !== choice[0]);
+                                }
+                            "
+                            :disabled="{{ obj }}.$fields.{{ field }}?.disabled">
+                        <label class="form-check-label" :for="'{{ field }}-' + choice[0]" x-text="choice[1]"></label>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    {{ block.super }}
+{% endblock %}

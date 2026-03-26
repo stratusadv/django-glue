@@ -21,7 +21,7 @@ export class GlueModelProxy extends GlueFormProxy {
         return !this.$values?.id;
     }
 
-    async $get(pk = null) {
+    async get(pk = null) {
         let data;
         if (this.$parent) {
             data = await this.$parent.$processAction('get', {id: pk})
@@ -30,21 +30,21 @@ export class GlueModelProxy extends GlueFormProxy {
             data = await this.$processAction('get')
         }
 
-        this.$updateValues(data)
+        this.$values = data
+
 
         this.$loading = false;
         this.$loaded = true;
     }
 
-    async $delete() {
+    async delete() {
         if (this.$isNew && this.$parent) {
-            // Unsaved item - just remove from parent's $items
-            this.$parent.$items = this.$parent.$items.filter(item => item.$key !== this.$key);
+            await this.$parent.refresh();
             return { success: true };
         }
         const result = await this.$processAction('delete', {id: this.$values.id});
         if (this.$parent) {
-            await this.$parent.$refresh();
+            await this.$parent.refresh();
         }
         return result;
     }

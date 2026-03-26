@@ -1,0 +1,10 @@
+{% load glue_fields %}
+{% split_glue_binding glue_binding as binding %}
+{% with obj=binding.obj field=binding.field %}
+<div class="{% if wrapper_class %}{{ wrapper_class }}{% else %}mb-3{% endif %}">
+    {% block field_content %}
+        <div class="invalid-feedback" x-text="{{ obj }}.{{ field }}ErrorText"></div>
+    {% endblock %}
+    <small class="text-muted d-block" x-show="{{ obj }}.$fields.{{ field }}HelpText" x-text="{{ obj }}.$fields.{{ field }}HelpText"></small>
+</div>
+{% endwith %}

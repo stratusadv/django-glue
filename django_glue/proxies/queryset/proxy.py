@@ -97,14 +97,27 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                     allowed_fields=list(self._form_field_definitions.keys())
                 )
 
+    def _apply_query_params(self, params: dict):
+        if order_by := params.get('order_by'):
+            if isinstance(order_by, str):
+                order_by = [order_by]
+            self.target = self.target.order_by(*order_by)
+
+        if filter_params := params.get('filter'):
+            self.target = self.target.filter(**filter_params)
+
+        if slice_params := params.get('slice'):
+            self.target = self.target[slice(
+                slice_params.get('start'),
+                slice_params.get('stop'),
+            )]
+
     @action(access=GlueAccess.VIEW)
-    def filter(self, action_data: GlueActionRequestData):
+    def all(self, action_data: GlueActionRequestData):
         if action_data.post_data:
-            self._validate_filter_keys(action_data.post_data)
-            data = self._queryset_to_list(self.target.filter(**action_data.post_data))
-            return data
-        else:
-            return self._queryset_to_list(self.target)
+            self._apply_query_params(action_data.post_data)
+
+        return self._queryset_to_list(self.target)
 
     def _get_model_instance_by_pk(self, pk) -> Model:
         """

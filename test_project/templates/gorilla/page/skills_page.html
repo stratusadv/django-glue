@@ -22,17 +22,17 @@
         async addSkill() {
             this.saving = true;
             try {
-                const result = await this.skills.$save(this.newSkill);
+                const result = await this.skills.save(this.newSkill);
                 if (result.success) {
                     this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
-                    await this.skills.$all();
+                    await this.skills.all();
                 }
             } finally {
                 this.saving = false;
             }
         },
         async updateSkill(skill) {
-            await skill.$save();
+            await skill.save();
             this.editingSkill = null;
         },
         async deleteSkill(skill) {
@@ -163,7 +163,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div x-show="skills.$empty" class="text-muted text-center py-4">
+                        <div x-show="skills.isEmpty" class="text-muted text-center py-4">
                             No skills defined yet. Add some skills above!
                         </div>
                     </div>

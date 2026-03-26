@@ -1,0 +1,13 @@
+{% extends "components/glue_field_base.html" %}
+
+{% block field_content %}
+    <div class="form-check{% if input_class %} {{ input_class }}{% endif %}">
+        <input
+            type="checkbox"
+            class="form-check-input"
+            :id="'{{ field }}-' + ({{ obj }}.$key || 'single')"
+            {% include 'components/glue_base_input_attributes.html' with exclude_class=True %}>
+        {{ block.super }}
+    </div>
+    <small class="text-muted" x-show="{{ obj }}.$fields.{{ field }}?.help_text" x-text="{{ obj }}.$fields.{{ field }}?.help_text"></small>
+{% endblock %}

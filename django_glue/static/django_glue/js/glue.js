@@ -114,7 +114,7 @@
         error: {}
       };
     }
-    $addListener(actionName, callback, type = "after") {
+    addListener(actionName, callback, type = "after") {
       if (!this.$listeners[type]) {
         throw new Error(`Invalid listener type: ${type}. Use 'before', 'after', or 'error'.`);
       }
@@ -124,7 +124,7 @@
       this.$listeners[type][actionName].push(callback);
       return this;
     }
-    $removeListener(actionName, callback, type = "after") {
+    removeListener(actionName, callback, type = "after") {
       const listeners = this.$listeners[type]?.[actionName];
       if (listeners) {
         const index = listeners.indexOf(callback);
@@ -134,7 +134,11 @@
       }
       return this;
     }
-    async $emitListeners(type, actionName, event) {
+    clearListeners() {
+      this.$listeners = {};
+      return this;
+    }
+    async emitListeners(type, actionName, event) {
       const listeners = this.$listeners[type]?.[actionName] || [];
       for (const callback of listeners) {
         await callback(event);
@@ -150,7 +154,7 @@
         proxy: this,
         payload: eventData
       };
-      await this.$emitListeners("before", actionName, event);
+      await this.emitListeners("before", actionName, event);
       try {
         const response = await sendActionRequest({
           uniqueName: this.$uniqueName,
@@ -159,15 +163,20 @@
           contextData: this.$contextData
         });
         event.result = response.data;
-        await this.$emitListeners("after", actionName, event);
+        await this.emitListeners("after", actionName, event);
         return response.data;
       } catch (err) {
         event.error = err;
-        await this.$emitListeners("error", actionName, event);
+        await this.emitListeners("error", actionName, event);
         throw err;
       }
     }
   }
+
+  // client_js/src/utils.js
+  var snakeToPascal = (string) => {
+    return string.split("/").map((snake) => snake.split("_").map((substr) => substr.charAt(0).toUpperCase() + substr.slice(1)).join("")).join("/");
+  };
 
   // client_js/src/proxies/form.js
   class GlueFormProxy extends BaseGlueProxy {
@@ -177,37 +186,37 @@
       this.$errors = {};
       this.$defineFields();
     }
-    $defineModelChoiceField(fieldName, fieldData) {
-      if (!fieldData.hasOwnProperty("_choicesCache")) {
-        fieldData._choicesCache = [];
-        fieldData._choicesLoaded = false;
-        fieldData._loadingChoices = false;
-        fieldData._choicesPromise = null;
+    __defineModelChoiceField(fieldName, fieldData) {
+      if (!fieldData.hasOwnProperty("__choicesCache")) {
+        fieldData.__glue__choicesCache = [];
+        fieldData.__glue__choicesLoaded = false;
+        fieldData.__glue__loadingChoices = false;
+        fieldData.__glue__choicesPromise = null;
       }
-      const _choicesAction = async function() {
-        if (fieldData._choicesPromise) {
-          return fieldData._choicesPromise;
+      const choicesAction = async function() {
+        if (fieldData.__glue__choicesPromise) {
+          return fieldData.__glue__choicesPromise;
         }
-        fieldData._loadingChoices = true;
-        fieldData._choicesPromise = this.$processAction("foreign_key_choices", {
+        fieldData.__glue__loadingChoices = true;
+        fieldData.__glue__choicesPromise = this.$processAction("foreign_key_choices", {
           field_definition: [
             fieldName,
             fieldData
           ]
         }).then((data) => {
-          fieldData._choicesCache = data;
+          fieldData.__glue__choicesCache = data;
           fieldData._choicesLoaded = true;
           return data;
         }).finally(() => {
-          fieldData._loadingChoices = false;
+          fieldData.__glue__loadingChoices = false;
         });
-        return fieldData._choicesPromise;
+        return fieldData.__glue__choicesPromise;
       }.bind(this);
-      fieldData.choices = async function() {
+      this[`${fieldName}Choices`] = async function() {
         if (!fieldData._choicesLoaded) {
-          await _choicesAction();
+          await choicesAction();
         }
-        return fieldData._choicesCache;
+        return fieldData.__glue__choicesCache;
       };
       return fieldData;
     }
@@ -216,10 +225,10 @@
       Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
         Object.defineProperty(this, fieldName, {
           get: function() {
-            if (!this.$loaded && !this.$autoFetch && !this.$values) {
+            if (!this.$loaded && !this.$values) {
               if (!this.$loading) {
                 this.$loading = true;
-                this.$get();
+                this.get();
               }
             }
             return this.$values?.[fieldName];
@@ -232,25 +241,40 @@
           }
         });
         if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-          fieldData = this.$defineModelChoiceField(fieldName, fieldData);
+          fieldData = this.__defineModelChoiceField(fieldName, fieldData);
         }
-        const proxy = this;
-        this.$fields[fieldName] = {
-          ...fieldData,
-          errors: proxy?.$errors?.[fieldName] || [],
-          value: proxy?.$values?.[fieldName]
-        };
+        this.$fields[fieldName] = fieldData;
+        Object.keys(this.$fields[fieldName]).forEach((attributeName) => {
+          this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$fields?.[fieldName]?.[attributeName];
+          this.$updateErrorAttributesForField(fieldName);
+        });
       });
     }
-    $get(pk = null) {
+    get(pk = null) {
       this.$processAction("get").then((data) => {
-        this.$updateValues(data);
+        this.$values = data;
       }).finally(() => {
         this.$loading = false;
         this.$loaded = true;
       });
     }
-    get $formData() {
+    $updateErrorAttributesForField(fieldName) {
+      this[`${fieldName}HasErrors`] = this.$errors[fieldName]?.length > 0;
+      this[`${fieldName}ErrorText`] = this.$errors[fieldName]?.join(", ");
+    }
+    $updateErrors(errors) {
+      this.$errors = errors || {};
+      Object.keys(this.$fields).forEach((fieldName) => {
+        this.$updateErrorAttributesForField(fieldName);
+      });
+    }
+    $updateValues(values) {
+      this.$values = values || {};
+      Object.entries(this.$fields).forEach(([fieldName, field]) => {
+        field.value = this.$values[fieldName];
+      });
+    }
+    $getFormData() {
       const formData = new FormData;
       Object.entries(this.$values).forEach(([fieldName, value]) => {
         if (Array.isArray(value)) {
@@ -265,32 +289,24 @@
       });
       return formData;
     }
-    $updateErrors(errors) {
-      this.$errors = errors || {};
-      Object.entries(this.$fields).forEach(([fieldName, field]) => {
-        field.errors = this.$errors[fieldName] || [];
-      });
-    }
-    $updateValues(values) {
-      this.$values = values || {};
-      Object.entries(this.$fields).forEach(([fieldName, field]) => {
-        field.value = this.$values[fieldName];
-      });
-    }
-    async $validate() {
+    async validate() {
       const result = await this.$processAction("validate", this.$values);
-      this.$updateErrors(result.errors);
+      this.$errors = result.errors || {};
       return result;
     }
-    async $save() {
-      const result = await this.$processAction("save", this.$formData);
+    async save() {
+      const result = await this.$processAction("save", this.$getFormData());
       this.$updateErrors(result.errors);
       if (result.success) {
-        this.$get(this.$values.id);
+        this.$clearErrors();
+        this.get(this.$values.id);
       }
       return result;
     }
-    $hasErrors() {
+    hasErrors(fieldName) {
+      if (fieldName) {
+        return this.$errors[fieldName] && this.$errors[fieldName].length > 0;
+      }
       return Object.keys(this.$errors).length > 0;
     }
     $clearErrors() {
@@ -318,7 +334,7 @@
     get $isNew() {
       return !this.$values?.id;
     }
-    async $get(pk = null) {
+    async get(pk = null) {
       let data;
       if (this.$parent) {
         data = await this.$parent.$processAction("get", { id: pk });
@@ -329,14 +345,14 @@
       this.$loading = false;
       this.$loaded = true;
     }
-    async $delete() {
+    async delete() {
       if (this.$isNew && this.$parent) {
-        this.$parent.$items = this.$parent.$items.filter((item) => item.$key !== this.$key);
+        await this.$parent.refresh();
         return { success: true };
       }
       const result = await this.$processAction("delete", { id: this.$values.id });
       if (this.$parent) {
-        await this.$parent.$refresh();
+        await this.$parent.refresh();
       }
       return result;
     }
@@ -348,27 +364,18 @@
     static contextData = {};
     static proxyRegistry = {};
     #keepLiveIntervalHandle = null;
-    #activeProxies = {};
     #config = {};
-    #assembleProxyFromContextData(proxyUniqueName) {
-      const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName];
-      const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
-      this.#activeProxies[proxyUniqueName] = new ProxyClass({
-        proxyUniqueName,
-        contextData: GlueClient.contextData[proxyUniqueName]
-      });
-      return this.#activeProxies[proxyUniqueName];
-    }
-    #defineLazyPropertyFromUniqueName(proxyUniqueName) {
-      Object.defineProperty(this, proxyUniqueName, {
-        get: function() {
-          return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromContextData(proxyUniqueName);
-        }
-      });
-    }
+    $activeProxies = {};
     #defineProxyUniqueNamesAsProperties() {
-      for (const proxyUniqueName of Object.keys(GlueClient.proxyRegistry)) {
-        this.#defineLazyPropertyFromUniqueName(proxyUniqueName);
+      for (const [proxyUniqueName, contextData] of Object.entries(GlueClient.contextData)) {
+        const { subject_type: subjectType } = contextData;
+        this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+          proxyUniqueName,
+          contextData: GlueClient.contextData[proxyUniqueName]
+        });
+        Object.defineProperty(this, proxyUniqueName, {
+          get: () => this.$activeProxies[proxyUniqueName]
+        });
       }
     }
     #initializeKeepLivePulse() {
@@ -380,7 +387,7 @@
         }
       };
       this.#keepLiveIntervalHandle = setInterval(() => {
-        const keepLiveNames = Object.keys(this.#activeProxies);
+        const keepLiveNames = Object.keys(this.$activeProxies);
         sendKeepLiveRequest(keepLiveNames).then((response) => {
           if (!response.ok) {
             raiseDisconnectAlert();
@@ -408,16 +415,17 @@
   // client_js/src/proxies/queryset.js
   class GlueQuerySetProxy extends BaseGlueProxy {
     $items = [];
-    $lastQuery = { method: "$all", params: null };
     $loaded = false;
     $loading = false;
+    $queryParams = {};
+    $prevQueryParams = {};
     constructor(options) {
       super(options);
     }
     *[Symbol.iterator]() {
       yield* this.$items;
     }
-    $buildChildModelProxy(item) {
+    buildChildModelProxy(item) {
       const proxy = new GlueModelProxy({
         proxyUniqueName: this.$uniqueName,
         contextData: client_default.contextData[this.$uniqueName],
@@ -427,68 +435,77 @@
       const querysetProxy = this;
       Object.keys(proxy.$actions).forEach((actionName) => {
         ["before", "after", "error"].forEach((type) => {
-          proxy.$addListener(actionName, (event) => {
-            querysetProxy.$emitListeners(type, actionName, event);
+          proxy.addListener(actionName, (event) => {
+            querysetProxy.emitListeners(type, actionName, event);
           }, type);
         });
       });
       return proxy;
     }
-    async $all() {
-      if (!this.$loaded || this.$lastQuery?.method !== "$all") {
+    async all(queryParams = null) {
+      if (queryParams) {
+        this.$queryParams = queryParams;
+      }
+      if (!this.$loaded || !this.$isEqual(this.$prevQueryParams, this.$queryParams)) {
         this.$loading = true;
-        const data = await this.$processAction("all");
-        this.$items = data.map((item) => this.$buildChildModelProxy(item));
-        this.$lastQuery = { method: "$all", params: null };
+        const data = await this.$processAction("all", this.$queryParams);
+        this.$items = data.map((item) => this.buildChildModelProxy(item));
+        this.$prevQueryParams = this.$queryParams;
         this.$loaded = true;
         this.$loading = false;
       }
       return this.$items;
     }
-    async $filter(filterParams) {
-      if (!this.$loaded || !this.$isEqual(filterParams, this.$lastQuery?.params)) {
-        this.$loading = true;
-        const data = await this.$processAction("filter", filterParams);
-        this.$items = data.map((item) => this.$buildChildModelProxy(item));
-        this.$lastQuery = { method: "$filter", params: filterParams };
-        this.$loaded = true;
-        this.$loading = false;
-      }
-      return this.$items;
+    filter(filterParams) {
+      return this.addQueryParam("filter", filterParams);
+    }
+    orderBy(orderParams) {
+      return this.addQueryParam("order_by", orderParams);
+    }
+    sliceStart(idx) {
+      return this.addQueryParam("slice", { start: idx });
+    }
+    sliceEnd(idx) {
+      return this.addQueryParam("slice", { end: idx });
+    }
+    slice(start = 0, stop = null) {
+      return this.addQueryParam("slice", { start, stop });
+    }
+    addQueryParam(type, params) {
+      this.$queryParams[type] = params;
+      return this;
     }
     $isEqual(a, b) {
-      if (a === b)
-        return true;
-      if (a == null || b == null)
-        return false;
-      if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length)
-          return false;
-        return a.every((val, i) => this.$isEqual(val, b[i]));
-      }
-      if (typeof a === "object" && typeof b === "object") {
-        const keysA = Object.keys(a);
-        const keysB = Object.keys(b);
-        if (keysA.length !== keysB.length)
-          return false;
-        return keysA.every((key) => keysB.includes(key) && this.$isEqual(a[key], b[key]));
-      }
-      return false;
+      return JSON.stringify(a) === JSON.stringify(b);
     }
-    async $refresh() {
+    async refresh() {
       this.$items = [];
       this.$loaded = false;
-      const { method, params } = this.$lastQuery;
-      return this[method](params);
+      return this.all();
     }
-    get $empty() {
+    get isEmpty() {
       return this.$loaded && this.$items.length === 0;
     }
-    async $new() {
+    get isLoaded() {
+      return this.$loaded;
+    }
+    async prependNew() {
+      return this.pushNew("start");
+    }
+    async appendNew() {
+      return this.pushNew("end");
+    }
+    async pushNew(location = "start") {
       const defaults = await this.$processAction("new");
-      const proxy = this.$buildChildModelProxy(defaults);
-      this.$items = [proxy, ...this.$items];
-      return proxy;
+      const newObj = this.buildChildModelProxy(defaults);
+      if (location == "end") {
+        this.$items = [...this.$items, newObj];
+      } else if (location == "start") {
+        this.$items = [newObj, ...this.$items];
+      } else {
+        throw new Error('Invalid location. Use "start" or "end".');
+      }
+      return this.$items;
     }
   }
 

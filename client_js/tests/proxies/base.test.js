@@ -139,7 +139,7 @@ describe('BaseGlueProxy', () => {
                 contextData
             });
 
-            await proxy.processAction('save', { field: 'value' });
+            await proxy.$processAction('save', { field: 'value' });
 
             expect(global.fetch).toHaveBeenCalledWith(
                 '/django_glue/',
@@ -167,7 +167,7 @@ describe('BaseGlueProxy', () => {
                 contextData
             });
 
-            await proxy.processAction('save');
+            await proxy.$processAction('save');
 
             expect(global.fetch).toHaveBeenCalledWith(
                 '/django_glue/',
@@ -195,7 +195,7 @@ describe('BaseGlueProxy', () => {
                 contextData
             });
 
-            const result = await proxy.processAction('get');
+            const result = await proxy.$processAction('get');
 
             expect(result).toEqual({ id: 1, name: 'test' });
         });

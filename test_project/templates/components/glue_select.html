@@ -1,0 +1,14 @@
+{% extends "components/glue_field_base.html" %}
+
+{% block field_content %}
+    {% include 'components/glue_label.html' %}
+    <select
+        {% include 'components/glue_base_input_attributes.html' with form_class_type='select' %}
+    >
+        {% if include_empty %}<option value="">{{ empty_label|default:"Select..." }}</option>{% endif %}
+        <template x-for="choice in {{ obj }}.$fields.{{ field }}?.choices || []" :key="choice[0]">
+            <option :value="choice[0]" x-text="choice[1]"></option>
+        </template>
+    </select>
+    {{ block.super }}
+{% endblock %}

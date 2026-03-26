@@ -1,0 +1,12 @@
+{% extends "components/glue_field_base.html" %}
+
+{% block field_content %}
+    {% include 'components/glue_label.html' %}
+    <input
+        type="{% block input_type %}{{ type|default:'text' }}{% endblock %}"
+        {% include 'components/glue_base_input_attributes.html' %}
+        :maxlength="{{ obj }}.$fields.{{ field }}?.max_length"
+        :minlength="{{ obj }}.$fields.{{ field }}?.min_length"
+        placeholder="{% block placeholder %}{{ placeholder }}{% endblock %}">
+    {{ block.super }}
+{% endblock %}

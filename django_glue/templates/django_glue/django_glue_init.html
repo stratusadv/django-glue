@@ -1,0 +1,17 @@
+{% if not raw %}
+<script>
+{% endif %}
+const glueInitParams = {
+    proxyRegistryFromSession: JSON.parse(document.getElementById('glue-proxy-registry').textContent),
+    contextDataForProxies: JSON.parse(document.getElementById('glue-context-data').textContent),
+    config: {
+        keepLiveIntervalSeconds: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }},
+        sessionExpiryMessage: '{{ DJANGO_SESSION_EXPIRY_MESSAGE }}'
+    }
+}
+
+Glue.init(glueInitParams)
+
+{% if not raw %}
+</script>
+{% endif %}

@@ -1,0 +1,28 @@
+{% extends "components/glue_field_base.html" %}
+
+{% block field_content %}
+    <div x-data="{ _filePreview: null }">
+        {% include 'components/glue_label.html' %}
+        {% if not hide_preview %}
+        <div class="mb-2" x-show="!!_filePreview || !!{{ obj }}.{{ field }}?.url">
+            <img :src="_filePreview ?? {{ obj }}.{{ field }}?.url" alt="" class="img-fluid rounded" style="max-height: {{ max_preview_height|default:'200px' }};">
+        </div>
+        {% endif %}
+        <input
+            type="file"
+            {% include 'components/glue_base_input_attributes.html' with exclude_x_model=True %}
+            {% if accept %}accept="{{ accept }}"{% endif %}
+            @change="
+                const file = $event.target.files[0];
+                if (file) {
+                    {{ obj }}.{{ field }} = file;
+                    {% if not hide_preview %}
+                    const reader = new FileReader();
+                    reader.onload = (e) => { _filePreview = e.target.result; };
+                    reader.readAsDataURL(file);
+                    {% endif %}
+                }
+            "
+        >
+    </div>
+{% endblock %}

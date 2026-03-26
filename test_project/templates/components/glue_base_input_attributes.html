@@ -1,0 +1,10 @@
+name="{{ field }}"
+{% if not exclude_x_model %}
+x-model="{{ obj }}.{{ field }}"
+{% endif %}
+{% if not exclude_class %}
+class="form-{{ form_class_type|default:'control' }} form-select-{{ size|default:'sm' }}{% if input_class %} {{ input_class }}{% endif %}"
+{% endif %}
+:class="{'is-invalid': {{ obj }}.{{ field }}HasErrors}"
+:required="{{ obj }}.{{ field }}Required"
+:disabled="{{ obj }}.{{ field }}Disabled"

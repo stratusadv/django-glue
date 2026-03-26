@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_glue',
+    'test_project.core',
     'test_project.gorilla',
     'test_project.fight',
     'test_project.comments',

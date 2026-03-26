@@ -2,17 +2,17 @@
     proxy: Glue.{{ glue_name }},
     saving: false,
     init() {
-        this.proxy.$addListener('save', () => {
+        this.proxy.addListener('save', () => {
             $store.notifications.error('Failed to create fighter.');
         }, 'error');
     },
     async submit() {
         this.saving = true;
         try {
-            const result = await this.proxy.$save();
+            const result = await this.proxy.save();
             if (result.success) {
                 $store.notifications.success('Fighter created successfully!');
-                Glue.gorillas.$refresh();
+                Glue.gorillas.refresh();
                 bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();
             }
         } finally {

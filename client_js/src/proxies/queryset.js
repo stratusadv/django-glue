@@ -4,9 +4,11 @@ import GlueClient from "../client";
 
 export class GlueQuerySetProxy extends BaseGlueProxy {
     $items = [];
-    $lastQuery = {method: '$all', params: null};
     $loaded = false;
     $loading = false;
+
+    $queryParams = {}
+    $prevQueryParams = {}
 
     constructor(options) {
         super(options);
@@ -16,7 +18,7 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         yield* this.$items
     }
 
-    $buildChildModelProxy(item) {
+    buildChildModelProxy(item) {
         const proxy = new GlueModelProxy({
             proxyUniqueName: this.$uniqueName,
             contextData: GlueClient.contextData[this.$uniqueName],
@@ -28,8 +30,8 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         const querysetProxy = this;
         Object.keys(proxy.$actions).forEach(actionName => {
             ['before', 'after', 'error'].forEach(type => {
-                proxy.$addListener(actionName, (event) => {
-                    querysetProxy.$emitListeners(type, actionName, event);
+                proxy.addListener(actionName, (event) => {
+                    querysetProxy.emitListeners(type, actionName, event);
                 }, type);
             });
         });
@@ -37,12 +39,16 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         return proxy
     }
 
-    async $all() {
-        if (!this.$loaded || this.$lastQuery?.method !== '$all') {
+    async all(queryParams = null) {
+        if (queryParams) {
+            this.$queryParams = queryParams
+        }
+
+        if (!this.$loaded || !this.$isEqual(this.$prevQueryParams, this.$queryParams)) {
             this.$loading = true;
-            const data = await this.$processAction('all');
-            this.$items = data.map(item => this.$buildChildModelProxy(item))
-            this.$lastQuery = {method: '$all', params: null};
+            const data = await this.$processAction('all', this.$queryParams);
+            this.$items = data.map(item => this.buildChildModelProxy(item))
+            this.$prevQueryParams = this.$queryParams
             this.$loaded = true;
             this.$loading = false;
         }
@@ -50,51 +56,70 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         return this.$items
     }
 
-    async $filter(filterParams) {
-        if (!this.$loaded || !this.$isEqual(filterParams, this.$lastQuery?.params)) {
-            this.$loading = true;
-            const data = await this.$processAction('filter', filterParams);
-            this.$items = data.map(item => this.$buildChildModelProxy(item));
-            this.$lastQuery = {method: '$filter', params: filterParams};
-            this.$loaded = true;
-            this.$loading = false;
-        }
+    filter(filterParams) {
+        return this.addQueryParam('filter', filterParams)
+    }
 
-        return this.$items;
+    orderBy(orderParams) {
+        return this.addQueryParam('order_by', orderParams)
+    }
+
+    sliceStart(idx) {
+        return this.addQueryParam('slice', {start: idx})
+    }
+
+    sliceEnd(idx) {
+        return this.addQueryParam('slice', {end: idx})
+    }
+
+    slice(start = 0, stop = null) {
+        return this.addQueryParam('slice', {start, stop})
+    }
+
+    addQueryParam(type, params) {
+        this.$queryParams[type] = params
+        return this
     }
 
     $isEqual(a, b) {
-        if (a === b) return true;
-        if (a == null || b == null) return false;
-        if (Array.isArray(a) && Array.isArray(b)) {
-            if (a.length !== b.length) return false;
-            return a.every((val, i) => this.$isEqual(val, b[i]));
-        }
-        if (typeof a === 'object' && typeof b === 'object') {
-            const keysA = Object.keys(a);
-            const keysB = Object.keys(b);
-            if (keysA.length !== keysB.length) return false;
-            return keysA.every(key => keysB.includes(key) && this.$isEqual(a[key], b[key]));
-        }
-        return false;
+        return JSON.stringify(a) === JSON.stringify(b);
     }
 
-    async $refresh() {
+    async refresh() {
         this.$items = [];
         this.$loaded = false;
 
-        const {method, params} = this.$lastQuery;
-        return this[method](params);
+        return this.all()
     }
 
-    get $empty() {
+    get isEmpty() {
         return this.$loaded && this.$items.length === 0;
     }
 
-    async $new() {
+    get isLoaded() {
+        return this.$loaded;
+    }
+
+    async prependNew() {
+        return this.pushNew('start')
+    }
+
+    async appendNew() {
+        return this.pushNew('end')
+    }
+
+    async pushNew(location = 'start') {
         const defaults = await this.$processAction('new');
-        const proxy = this.$buildChildModelProxy(defaults);
-        this.$items = [proxy, ...this.$items];
-        return proxy;
+        const newObj = this.buildChildModelProxy(defaults)
+
+        if (location == 'end') {
+            this.$items = [...this.$items, newObj]
+        } else if (location == 'start') {
+            this.$items = [newObj, ...this.$items]
+        } else {
+            throw new Error('Invalid location. Use "start" or "end".')
+        }
+
+        return this.$items
     }
 }

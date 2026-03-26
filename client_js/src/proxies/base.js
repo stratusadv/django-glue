@@ -20,7 +20,7 @@ export class BaseGlueProxy {
      * @param {Function} callback - The callback function
      * @param {string} type - When to call: 'before', 'after' (default), or 'error'
      */
-    $addListener(actionName, callback, type = 'after') {
+    addListener(actionName, callback, type = 'after') {
         if (!this.$listeners[type]) {
             throw new Error(`Invalid listener type: ${type}. Use 'before', 'after', or 'error'.`);
         }
@@ -37,7 +37,7 @@ export class BaseGlueProxy {
      * @param {Function} callback - The callback to remove
      * @param {string} type - The listener type: 'before', 'after' (default), or 'error'
      */
-    $removeListener(actionName, callback, type = 'after') {
+    removeListener(actionName, callback, type = 'after') {
         const listeners = this.$listeners[type]?.[actionName];
         if (listeners) {
             const index = listeners.indexOf(callback);
@@ -48,7 +48,12 @@ export class BaseGlueProxy {
         return this;
     }
 
-    async $emitListeners(type, actionName, event) {
+    clearListeners() {
+        this.$listeners = {};
+        return this;
+    }
+
+    async emitListeners(type, actionName, event) {
         const listeners = this.$listeners[type]?.[actionName] || [];
         for (const callback of listeners) {
             await callback(event);
@@ -69,7 +74,7 @@ export class BaseGlueProxy {
         };
 
         // Emit 'before' listeners
-        await this.$emitListeners('before', actionName, event);
+        await this.emitListeners('before', actionName, event);
 
         try {
             const response = await sendActionRequest({
@@ -81,14 +86,14 @@ export class BaseGlueProxy {
             event.result = response.data;
 
             // Emit 'after' listeners
-            await this.$emitListeners('after', actionName, event);
+            await this.emitListeners('after', actionName, event);
 
             return response.data;
         } catch (err) {
             event.error = err;
 
             // Emit 'error' listeners
-            await this.$emitListeners('error', actionName, event);
+            await this.emitListeners('error', actionName, event);
 
             throw err;
         }

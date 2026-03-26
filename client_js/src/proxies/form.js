@@ -1,4 +1,5 @@
 import { BaseGlueProxy } from "./base";
+import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
     constructor({proxyUniqueName, contextData, actions=null}) {
@@ -10,44 +11,44 @@ export class GlueFormProxy extends BaseGlueProxy {
         this.$defineFields()
     }
 
-    $defineModelChoiceField(fieldName, fieldData) {
+    __defineModelChoiceField(fieldName, fieldData) {
         // Initialize shared choice caching on the original fieldData (once)
         // This ensures choices are loaded only once across all model proxy instances
-        if (!fieldData.hasOwnProperty('_choicesCache')) {
-            fieldData._choicesCache = [];
-            fieldData._choicesLoaded = false;
-            fieldData._loadingChoices = false;
-            fieldData._choicesPromise = null;
+        if (!fieldData.hasOwnProperty('__choicesCache')) {
+            fieldData.__glue__choicesCache = [];
+            fieldData.__glue__choicesLoaded = false;
+            fieldData.__glue__loadingChoices = false;
+            fieldData.__glue__choicesPromise = null;
         }
 
-        const _choicesAction = async function() {
+        const choicesAction = async function() {
             // If already loading, return the existing promise to avoid duplicate requests
-            if (fieldData._choicesPromise) {
-                return fieldData._choicesPromise;
+            if (fieldData.__glue__choicesPromise) {
+                return fieldData.__glue__choicesPromise;
             }
 
-            fieldData._loadingChoices = true;
-            fieldData._choicesPromise = this.$processAction('foreign_key_choices', {
+            fieldData.__glue__loadingChoices = true;
+            fieldData.__glue__choicesPromise = this.$processAction('foreign_key_choices', {
                 'field_definition': [
                     fieldName,
                     fieldData
                 ]
             }).then(data => {
-                fieldData._choicesCache = data;
+                fieldData.__glue__choicesCache = data;
                 fieldData._choicesLoaded = true;
                 return data;
             }).finally(() => {
-                fieldData._loadingChoices = false;
+                fieldData.__glue__loadingChoices = false;
             });
 
-            return fieldData._choicesPromise;
+            return fieldData.__glue__choicesPromise;
         }.bind(this)
 
-        fieldData.choices = async function() {
+        this[`${fieldName}Choices`] = async function() {
             if (!fieldData._choicesLoaded) {
-                await _choicesAction();
+                await choicesAction();
             }
-            return fieldData._choicesCache;
+            return fieldData.__glue__choicesCache;
         }
 
         return fieldData
@@ -58,10 +59,10 @@ export class GlueFormProxy extends BaseGlueProxy {
         Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
             Object.defineProperty(this, fieldName, {
                 get: function() {
-                    if (!this.$loaded && !this.$autoFetch && !this.$values) {
+                    if (!this.$loaded && !this.$values) {
                         if (!this.$loading) {
                             this.$loading = true;
-                            this.$get()
+                            this.get()
                         }
                     }
 
@@ -76,29 +77,39 @@ export class GlueFormProxy extends BaseGlueProxy {
             })
 
             if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-                fieldData = this.$defineModelChoiceField(fieldName, fieldData)
+                fieldData = this.__defineModelChoiceField(fieldName, fieldData)
             }
 
-            const proxy = this
-
-            this.$fields[fieldName] = {
-                ...fieldData,
-                errors: proxy?.$errors?.[fieldName] || [],
-                value: proxy?.$values?.[fieldName],
-            };
+            this.$fields[fieldName] = fieldData;
+            Object.keys(this.$fields[fieldName]).forEach(attributeName => {
+                this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$fields?.[fieldName]?.[attributeName]
+                this.$updateErrorAttributesForField(fieldName)
+            })
         })
     }
 
-    $get(pk = null) {
+    get(pk = null) {
         this.$processAction('get').then(data => {
-            this.$updateValues(data)
+            this.$values = data
         }).finally(() => {
             this.$loading = false;
             this.$loaded = true;
         });
     }
 
-    get $formData() {
+    $updateErrorAttributesForField(fieldName) {
+        this[`${fieldName}HasErrors`] = this.$errors[fieldName]?.length > 0;
+        this[`${fieldName}ErrorText`] = this.$errors[fieldName]?.join(', ');
+    }
+
+    $updateErrors(errors) {
+        this.$errors = errors || {};
+        Object.keys(this.$fields).forEach(fieldName => {
+            this.$updateErrorAttributesForField(fieldName);
+        });
+    }
+
+    $getFormData() {
         const formData = new FormData();
         Object.entries(this.$values).forEach(([fieldName, value]) => {
             if (Array.isArray(value)) {
@@ -115,40 +126,31 @@ export class GlueFormProxy extends BaseGlueProxy {
         return formData;
     }
 
-    $updateErrors(errors) {
-        this.$errors = errors || {};
-        Object.entries(this.$fields).forEach(([fieldName, field]) => {
-            field.errors = this.$errors[fieldName] || [];
-        });
-    }
-
-    $updateValues(values) {
-        this.$values = values || {};
-        Object.entries(this.$fields).forEach(([fieldName, field]) => {
-            field.value = this.$values[fieldName];
-        });
-    }
-
-    async $validate() {
+    async validate() {
         const result = await this.$processAction('validate', this.$values);
-        this.$updateErrors(result.errors);
+        this.$errors = result.errors || {};
 
         return result;
     }
 
-    async $save() {
-        const result = await this.$processAction('save', this.$formData);
+    async save() {
+        const result = await this.$processAction('save', this.$getFormData());
 
-        this.$updateErrors(result.errors);
+        this.$updateErrors(result.errors)
 
         if (result.success) {
-            this.$get(this.$values.id)
+            this.$clearErrors()
+            this.get(this.$values.id)
         }
 
         return result;
     }
 
-    $hasErrors() {
+    hasErrors(fieldName) {
+        if (fieldName) {
+            return this.$errors[fieldName] && this.$errors[fieldName].length > 0;
+        }
+
         return Object.keys(this.$errors).length > 0;
     }
 

@@ -9,32 +9,20 @@ class GlueClient {
     static proxyRegistry = {}
 
     #keepLiveIntervalHandle = null
-    #activeProxies = {}
     #config = {}
-
-    #assembleProxyFromContextData(proxyUniqueName) {
-        const { subject_type: subjectType } = GlueClient.contextData[proxyUniqueName]
-
-        const ProxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
-        this.#activeProxies[proxyUniqueName] = new ProxyClass({
-            proxyUniqueName: proxyUniqueName,
-            contextData: GlueClient.contextData[proxyUniqueName],
-        })
-
-        return this.#activeProxies[proxyUniqueName]
-    }
-
-    #defineLazyPropertyFromUniqueName(proxyUniqueName) {
-        Object.defineProperty(this, proxyUniqueName, {
-            get: function() {
-                return this.#activeProxies?.[proxyUniqueName] ?? this.#assembleProxyFromContextData(proxyUniqueName)
-            },
-        })
-    }
+    $activeProxies = {}
 
     #defineProxyUniqueNamesAsProperties() {
-        for (const proxyUniqueName of Object.keys(GlueClient.proxyRegistry)) {
-            this.#defineLazyPropertyFromUniqueName(proxyUniqueName)
+        for (const [proxyUniqueName, contextData] of Object.entries(GlueClient.contextData)) {
+            const { subject_type: subjectType } = contextData
+            this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+                proxyUniqueName: proxyUniqueName,
+                contextData: GlueClient.contextData[proxyUniqueName],
+            })
+
+            Object.defineProperty(this, proxyUniqueName, {
+                get: () => this.$activeProxies[proxyUniqueName]
+            })
         }
     }
 
@@ -49,7 +37,7 @@ class GlueClient {
         }
 
         this.#keepLiveIntervalHandle = setInterval(() => {
-            const keepLiveNames = Object.keys(this.#activeProxies)
+            const keepLiveNames = Object.keys(this.$activeProxies)
             sendKeepLiveRequest(keepLiveNames).then(response => {
                 if (!response.ok) {
                     raiseDisconnectAlert()

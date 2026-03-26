@@ -10,15 +10,6 @@
 {{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"glue-proxy-registry" }}
 {{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|json_script:"glue-context-data" }}
 
-<script defer type="application/javascript">
-    const glueInitParams = {
-        proxyRegistryFromSession: JSON.parse(document.getElementById('glue-proxy-registry').textContent),
-        contextDataForProxies: JSON.parse(document.getElementById('glue-context-data').textContent),
-        config: {
-            keepLiveIntervalSeconds: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }},
-            sessionExpiryMessage: '{{ DJANGO_SESSION_EXPIRY_MESSAGE }}'
-        }
-    }
-
-    Glue.init(glueInitParams)
-</script>
+{% if not skip_init %}
+{% include 'django_glue/django_glue_init.html' with raw=raw %}
+{% endif %}
