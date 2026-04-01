@@ -25,7 +25,7 @@
                 const result = await this.skills.save(this.newSkill);
                 if (result.success) {
                     this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
-                    await this.skills.all();
+                    await this.skills.queryWithParams();
                 }
             } finally {
                 this.saving = false;

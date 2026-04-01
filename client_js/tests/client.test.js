@@ -208,7 +208,7 @@ describe('GlueClient', () => {
             const proxy = client.tasks;
 
             // QuerySet proxy should have all and filter methods
-            expect(typeof proxy.all).toBe('function');
+            expect(typeof proxy.queryWithParams).toBe('function');
             expect(typeof proxy.filter).toBe('function');
         });
 

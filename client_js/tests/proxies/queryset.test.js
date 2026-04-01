@@ -48,7 +48,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            const items = await proxy.all();
+            const items = await proxy.queryWithParams();
 
             expect(items).toHaveLength(2);
             expect(items[0].title).toBe('Task 1');
@@ -73,7 +73,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            await proxy.all();
+            await proxy.queryWithParams();
 
             expect(proxy.items).toHaveLength(1);
         });
@@ -96,7 +96,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            const items = await proxy.all();
+            const items = await proxy.queryWithParams();
 
             expect(items[0].uniqueName).toBe('tasks');
         });
@@ -119,7 +119,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            const items = await proxy.all();
+            const items = await proxy.queryWithParams();
 
             expect(items[0].actions.save.payload).toEqual({ id: 42 });
             expect(items[0].actions.delete.payload).toEqual({ id: 42 });
@@ -251,7 +251,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            await proxy.all();
+            await proxy.queryWithParams();
 
             const ids = [];
             for (const item of proxy) {
@@ -279,7 +279,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            await proxy.all();
+            await proxy.queryWithParams();
 
             const items = [...proxy];
 
@@ -306,7 +306,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            const items = await proxy.all();
+            const items = await proxy.queryWithParams();
 
             // Modifying returned item should not affect internal data
             items[0].title = 'Modified';
@@ -339,7 +339,7 @@ describe('GlueQuerySetProxy', () => {
                 contextData
             });
 
-            const items = await proxy.all();
+            const items = await proxy.queryWithParams();
 
             // Should have access to custom field from GlueClient.contextData
             expect(items[0].contextData.fields.custom).toBeDefined();

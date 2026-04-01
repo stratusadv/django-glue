@@ -128,7 +128,7 @@
 
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
-            <template x-for="gorilla in gorillaQuerySet.all(queryParams)" :key="gorilla.$key">
+            <template x-for="gorilla in gorillaQuerySet.queryWithParams(queryParams)" :key="gorilla.$key">
                 <div class="col-md-6 col-lg-4">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">

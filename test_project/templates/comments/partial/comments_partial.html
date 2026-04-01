@@ -16,7 +16,7 @@
                 this.newComment.fan_name = '';
                 this.newComment.comment = '';
                 this.newComment.rating = 5;
-                await this.comments.all();
+                await this.comments.queryWithParams();
             }
         } finally {
             this.saving = false;

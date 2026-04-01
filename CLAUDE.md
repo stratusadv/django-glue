@@ -169,7 +169,7 @@ await Glue.task.save()              // Persists to Django
 await Glue.task.delete()            // Deletes instance
 
 // QuerySet proxy - work with collections
-const allTasks = await Glue.tasks.all()
+const allTasks = await Glue.tasks.queryWithParams()
 const filtered = await Glue.tasks.filter({
     'done': false,
     'title__icontains': 'urgent'

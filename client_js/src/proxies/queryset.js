@@ -39,14 +39,14 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         return proxy
     }
 
-    async all(queryParams = null) {
+    async queryWithParams(queryParams = null) {
         if (queryParams) {
             this.$queryParams = queryParams
         }
 
         if (!this.$loaded || !this.$isEqual(this.$prevQueryParams, this.$queryParams)) {
             this.$loading = true;
-            const data = await this.$processAction('all', this.$queryParams);
+            const data = await this.$processAction('query_with_params', this.$queryParams);
             this.$items = data.map(item => this.buildChildModelProxy(item))
             this.$prevQueryParams = this.$queryParams
             this.$loaded = true;
@@ -54,6 +54,10 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         }
 
         return this.$items
+    }
+
+    async all() {
+        return await this.queryWithParams()
     }
 
     filter(filterParams) {
@@ -89,7 +93,7 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         this.$items = [];
         this.$loaded = false;
 
-        return this.all()
+        return this.queryWithParams()
     }
 
     get isEmpty() {

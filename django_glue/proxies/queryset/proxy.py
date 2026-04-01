@@ -113,7 +113,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             )]
 
     @action(access=GlueAccess.VIEW)
-    def all(self, action_data: GlueActionRequestData):
+    def query_with_params(self, action_data: GlueActionRequestData):
         if action_data.post_data:
             self._apply_query_params(action_data.post_data)
 
