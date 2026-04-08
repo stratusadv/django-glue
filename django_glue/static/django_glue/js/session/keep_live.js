@@ -11,20 +11,24 @@ class DjangoGlueKeepLive {
         this.last_updated_datetime_milliseconds = Date.now()
     }
 
-    check_expired() {
+    clear_pulse_interval() {
+        if (this.keep_live_interval_handle) {
+            clearInterval(this.keep_live_interval_handle)
+            this.keep_live_interval_handle = null
+        }
+    }
 
+    check_expired() {
         const now_last_expired_delta = (Date.now() - this.last_updated_datetime_milliseconds)
         let is_expired = now_last_expired_delta > (this.keep_live_interval_milliseconds + 5000)
 
-
         if (is_expired) {
+            this.clear_pulse_interval()
             this.confirm_reload()
         }
     }
 
     confirm_reload() {
-        clearInterval(this.keep_live_interval_handle)
-
         let confirmation = confirm('Session expired. Do you want to reload the page?')
 
         if (confirmation) {
