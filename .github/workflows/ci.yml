@@ -16,6 +16,7 @@ jobs:
       - uses: stratusadv/github-actions/linting@v1
         with:
           python-version: '3.11'
+          template-lint-extras: ''
 
   tests:
     name: Tests
