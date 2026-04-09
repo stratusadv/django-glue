@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.13
+### Fixes
+- Update `DjangoGlueKeepLive` to expire and prompt the user to reload the page if the most recent pulse was longer than the configured keep live interval + 5 seconds.
+
 ## v0.8.12
 ### Changes
 - Update `type_set_method_kwargs` to be able to use string annotations when using `from __future__ import annotations`
