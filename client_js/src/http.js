@@ -21,6 +21,7 @@ export async function sendHttpRequest(url, requestOptions = {
     contentType: 'application/json',
     csrfProtected: true,
     timeout: null,
+    parseJson: true,
 }) {
     const timeoutMs = requestOptions.timeout ?? getConfig().requestTimeoutMs;
     const controller = new AbortController();
@@ -59,17 +60,24 @@ export async function sendHttpRequest(url, requestOptions = {
             ok: response.ok,
             body: await response.clone().text(),
             httpResponse: response,
-            data: response.ok ? await response.json() : null
+            data: response.ok && requestOptions.parseJson ? await response.json() : null
         }
     } catch (e) {
         throw e
-    }
-    finally {
+    } finally {
         clearTimeout(timeoutId);
     }
 }
 
-export async function sendJsonPostRequest(url, data, csrfProtected = true){
+export async function sendJsonGetRequest(url, data) {
+    return await sendHttpRequest(url, {
+        body: JSON.stringify(data ?? {}),
+        method: 'GET',
+        contentType: 'application/json',
+    })
+}
+
+export async function sendJsonPostRequest(url, data, csrfProtected = true) {
     return await sendHttpRequest(url, {
         body: JSON.stringify(data ?? {}),
         method: 'POST',
@@ -78,7 +86,7 @@ export async function sendJsonPostRequest(url, data, csrfProtected = true){
     })
 }
 
-export async function sendFormPostRequest(url, data, csrfProtected = true){
+export async function sendFormPostRequest(url, data, csrfProtected = true) {
     return await sendHttpRequest(url, {
         body: data,
         method: 'POST',
@@ -90,7 +98,7 @@ export async function sendFormPostRequest(url, data, csrfProtected = true){
 export async function sendActionRequest({uniqueName, action, payload, contextData}) {
     const url = `${actionUrlPath}/${uniqueName}/${action}/`
 
-    if (payload instanceof FormData){
+    if (payload instanceof FormData) {
         payload.append('context_data', JSON.stringify(contextData))
         return await sendFormPostRequest(url, payload)
     }
