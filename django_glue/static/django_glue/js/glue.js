@@ -147,9 +147,9 @@
       }
     }
     async $processAction(actionName, data = null) {
-      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key2) => [
-        key2,
-        data.getAll(key2).length > 1 ? data.getAll(key2) : data.get(key2)
+      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key) => [
+        key,
+        data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
       ])) : data;
       const event = {
         action: actionName,
@@ -367,6 +367,63 @@
     }
   }
 
+  // client_js/src/view.js
+  class GlueView {
+    constructor(url, shared_payload = {}, skipEncodePath = true) {
+      let config_url = new URL(window.location.origin + url);
+      if (!skipEncodePath) {
+        config_url.searchParams.append("glue_encode_path", window.location.pathname);
+      }
+      this.url = config_url.pathname + config_url.search;
+      this.shared_payload = shared_payload;
+    }
+    async get(payload = {}) {
+      return await this._fetchView(payload, "GET");
+    }
+    async post(payload = {}) {
+      return await this._fetchView(payload);
+    }
+    async#fetchView(payload = {}, method = "POST") {
+      let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
+        method: "POST",
+        body: JSON.stringify({
+          url_path: this.url,
+          method,
+          view_payload: {
+            ...this.shared_payload,
+            ...payload
+          }
+        }),
+        csrfProtected: true
+      });
+      debugger;
+      window.Glue.initializeProxies(viewResponse.data.proxy_registry_data, viewResponse.data.proxy_context_data);
+      return viewResponse.data.html;
+    }
+    async renderInnerHtml(target_element, payload = {}) {
+      target_element.innerHTML = await this.#fetchView(payload);
+    }
+    async#renderInsertAdjacentHtml(target_element, position, payload = {}) {
+      const html = await this.#fetchView(payload);
+      target_element.insertAdjacentHTML(position, html);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target_element, payload = {}) {
+      await this.#renderInsertAdjacentHtml(target_element, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target_element, payload = {}) {
+      await this.#renderInsertAdjacentHtml(target_element, "afterend", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target_element, payload = {}) {
+      await this.#renderInsertAdjacentHtml(target_element, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target_element, payload = {}) {
+      await this.#renderInsertAdjacentHtml(target_element, "afterbegin", payload);
+    }
+    async renderOuterHtml(target_element, payload = {}) {
+      target_element.outerHTML = await this.#fetchView(payload);
+    }
+  }
+
   // client_js/src/client.js
   class GlueClient {
     static proxyClassesForSubjectTypes = {};
@@ -423,6 +480,9 @@
       Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession);
       Object.assign(GlueClient.contextData, contextDataForProxies);
       this.#initializeKeepLivePulse();
+    }
+    view(url, shared_payload = {}) {
+      return new GlueView(url, shared_payload);
     }
   }
   var client_default = GlueClient;
@@ -538,64 +598,7 @@
   window.GlueQuerySetProxy = GlueQuerySetProxy;
   window.GlueFormProxy = GlueFormProxy;
 
-  // client_js/src/view.js
-  class ViewGlue {
-    constructor(url, shared_payload = {}, skipEncodePath = true) {
-      let config_url = new URL(window.location.origin + url);
-      if (!skipEncodePath) {
-        config_url.searchParams.append("glue_encode_path", window.location.pathname);
-      }
-      this.url = config_url.pathname + config_url.search;
-      this.shared_payload = shared_payload;
-    }
-    async get(payload = {}) {
-      return await this._fetch_view(payload, "GET");
-    }
-    async post(payload = {}) {
-      return await this._fetch_view(payload);
-    }
-    async _fetch_view(payload = {}, method = "POST") {
-      let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
-        method: "POST",
-        body: JSON.stringify({
-          url_path: this.url,
-          method,
-          view_payload: {
-            ...this.shared_payload,
-            ...payload
-          }
-        }),
-        csrfProtected: true
-      });
-      debugger;
-      await window.Glue.initializeProxies(viewResponse.data.proxy_registry_data, viewResponse.data.proxy_context_data);
-      return viewResponse.data.html;
-    }
-    async render_inner(target_element, payload = {}) {
-      await this._fetch_view(payload).then((response) => {
-        return response;
-      }).then((html) => {
-        target_element.innerHTML = html;
-      });
-    }
-    async render_insert_adjacent(target_element, payload = {}, position = "beforeend") {
-      await this._fetch_view(payload).then((response) => {
-        return response;
-      }).then((html) => {
-        target_element.insertAdjacentHTML(position, html);
-      });
-    }
-    async render_outer(target_element, payload = {}) {
-      await this._fetch_view(payload).then((response) => {
-        return response;
-      }).then((html) => {
-        target_element.outerHTML = html;
-      });
-    }
-  }
-
   // client_js/glue.js
   var Glue = new client_default;
   window.Glue = Glue;
-  window.ViewGlue = ViewGlue;
 })();

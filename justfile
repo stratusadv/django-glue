@@ -6,9 +6,8 @@ set dotenv-filename := "development.env"
 default:
 	just --list
 
-build-venv:
-	uv venv .venv/
-	uv pip install -e .[development,documentation]
+build-js:
+	npm run build
 
 migrate-and-seed:
 	python manage.py migrate
@@ -25,3 +24,9 @@ run-doc-tests:
 
 run-coverage:
 	python -m pytest django_glue/tests/ --cov=django_glue --cov-report=term-missing -v
+
+venv:
+	uv venv .venv/
+	uv pip install -e .[development,documentation]
+
+

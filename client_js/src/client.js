@@ -1,9 +1,8 @@
-import {sendJsonGetRequest, sendKeepLiveRequest} from "./http";
+import {sendKeepLiveRequest} from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
 import {setConfig} from "./config";
-import {SESSION_DATA_URL_PATH} from "./constants";
+import {GlueView} from "./view";
 
-// TODO: This is becoming a god class and needs to be broken down
 class GlueClient {
     static proxyClassesForSubjectTypes = {}
     static contextData = {}
@@ -71,6 +70,10 @@ class GlueClient {
         Object.assign(GlueClient.contextData, contextDataForProxies)
 
         this.#initializeKeepLivePulse()
+    }
+
+    view(url, shared_payload = {}) {
+        return new GlueView(url, shared_payload)
     }
 }
 
