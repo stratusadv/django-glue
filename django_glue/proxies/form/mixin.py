@@ -53,6 +53,7 @@ class GlueFormProxyMixin(ABC):
         """Extract field definitions from the form to aid in frontend rendering."""
         form = self._get_form_class()()
 
+        # Get editable form fields from form
         fields = {}
         for name, field in form.fields.items():
             field_def = {
@@ -62,6 +63,7 @@ class GlueFormProxyMixin(ABC):
                 'label': str(field.label) if field.label else name,
                 'help_text': str(field.help_text) if field.help_text else '',
                 'widget': field.widget.__class__.__name__,
+                'editable': True,
             }
 
             if hasattr(field, 'choices') and field.choices:
@@ -73,6 +75,7 @@ class GlueFormProxyMixin(ABC):
             if hasattr(field, 'min_length') and field.min_length:
                 field_def['min_length'] = field.min_length
             fields[name] = field_def
+
         return fields
 
     def _serialize_errors(self, errors) -> dict:

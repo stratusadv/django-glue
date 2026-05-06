@@ -36,7 +36,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
     def __init__(
         self,
-        fields: Sequence = (),
+        fields: Sequence | dict = (),
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] | None = None,
         **kwargs
@@ -81,11 +81,48 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
     def _get_form_class(self) -> type[BaseForm]:
         if self.form_class:
             return self.form_class
+
+        form_fields = self.fields
+
+        if isinstance(form_fields, dict):
+            form_fields = [
+                field_name
+                for field_name, field in form_fields.items()
+                if field.get('editable')
+            ]
+
         return modelform_factory(
             self.get_model_class(),
-            fields=list(self.fields) if self.fields else '__all__',
+            fields=list(form_fields) if form_fields else '__all__',
             exclude=list(self.exclude) if self.exclude else ()
         )
+
+    @property
+    def _model_field_definitions(self) -> dict:
+        model = self.get_model_class()
+
+        included_model_fields = model._meta.get_fields()
+        if self.fields and isinstance(self.fields, Sequence):
+            included_model_fields = [
+                field for field in included_model_fields
+                if (
+                    field.name in self.fields and
+                    field.name not in self.exclude
+                )
+            ]
+
+        return {
+            field.name: {
+                'type': field.__class__.__name__,
+                'required': False,
+                'label': field.name,
+                'help_text': getattr(field, 'help_text', None),
+                'editable': False,
+                'widget': '',
+            }
+            for field in included_model_fields
+        }
+
 
     @property
     def _form_field_definitions(self) -> dict:
@@ -95,18 +132,19 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         Overrides the base implementation to always include the 'id' field
         for model-based proxies, since modelform_factory excludes primary keys.
         """
-        fields = super()._form_field_definitions
 
-        if 'id' not in fields:
-            fields['id'] = {
-                'type': 'AutoField',
-                'required': False,
-                'label': 'ID',
-                'help_text': '',
-                'widget': 'HiddenInput',
-            }
+        form_fields = super()._form_field_definitions
+        non_form_fields = {
+            field_name: field
+            for field_name, field in
+            self._model_field_definitions.items()
+            if field_name not in form_fields
+        }
 
-        return fields
+        return {
+            **super()._form_field_definitions,
+            **non_form_fields
+        }
 
     def _build_context_data(self) -> dict:
         context_data = super()._build_context_data()

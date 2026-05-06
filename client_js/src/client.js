@@ -1,6 +1,7 @@
-import {sendKeepLiveRequest} from "./http";
+import {sendJsonGetRequest, sendKeepLiveRequest} from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
 import {setConfig} from "./config";
+import {SESSION_DATA_URL_PATH} from "./constants";
 
 // TODO: This is becoming a god class and needs to be broken down
 class GlueClient {
@@ -12,21 +13,23 @@ class GlueClient {
     #config = {}
     $activeProxies = {}
 
-    #defineProxyUniqueNamesAsProperties() {
-        for (const [proxyUniqueName, contextData] of Object.entries(GlueClient.contextData)) {
-            const { subject_type: subjectType } = contextData
-            this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
-                proxyUniqueName: proxyUniqueName,
-                contextData: GlueClient.contextData[proxyUniqueName],
-            })
+    #defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
+        const { subject_type: subjectType } = contextData
+        this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+            proxyUniqueName: proxyUniqueName,
+            contextData: contextData,
+        })
 
-            Object.defineProperty(this, proxyUniqueName, {
-                get: () => this.$activeProxies[proxyUniqueName]
-            })
-        }
+        Object.defineProperty(this, proxyUniqueName, {
+            get: () => this.$activeProxies[proxyUniqueName]
+        })
     }
 
     #initializeKeepLivePulse() {
+        if (this.#keepLiveIntervalHandle) {
+            clearInterval(this.#keepLiveIntervalHandle)
+        }
+
         const raiseDisconnectAlert = () => {
             clearInterval(this.#keepLiveIntervalHandle)
 
@@ -54,12 +57,19 @@ class GlueClient {
         contextDataForProxies,
         config = {},
     }) {
-        GlueClient.proxyRegistry = proxyRegistryFromSession
-        GlueClient.contextData = contextDataForProxies
-
         this.#config = setConfig(config)
 
-        this.#defineProxyUniqueNamesAsProperties()
+        this.initializeProxies(proxyRegistryFromSession, contextDataForProxies)
+    }
+
+    initializeProxies(proxyRegistryFromSession, contextDataForProxies) {
+        for (const [proxyUniqueName, contextData] of Object.entries(contextDataForProxies)) {
+            this.#defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData)
+        }
+
+        Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession)
+        Object.assign(GlueClient.contextData, contextDataForProxies)
+
         this.#initializeKeepLivePulse()
     }
 }

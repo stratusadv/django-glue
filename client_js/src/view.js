@@ -1,11 +1,15 @@
 import {sendHttpRequest} from "./http";
 import {updateDjangoGlueSessionData} from "./session";
+import {GLUE_VIEW_URL_PATH} from "./constants";
 
-class ViewGlue {
-    constructor(url, shared_payload = {}) {
+export class ViewGlue {
+    constructor(url, shared_payload = {}, skipEncodePath = true) {
         // Need to send the current view path to encode the glue data on the server.
         let config_url = new URL(window.location.origin + url)
-        config_url.searchParams.append('glue_encode_path', window.location.pathname)
+
+        if (!skipEncodePath) {
+            config_url.searchParams.append('glue_encode_path', window.location.pathname)
+        }
 
         this.url = config_url.pathname + config_url.search
         this.shared_payload = shared_payload
@@ -20,14 +24,27 @@ class ViewGlue {
     }
 
     async _fetch_view(payload = {}, method = 'POST') {
-        let view = await sendHttpRequest(
-            this.url, {
+        let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
+            method: 'POST',
+            body: JSON.stringify({
+                url_path: this.url,
                 method: method,
-                body: {...this.shared_payload, ...payload},
-                parseJson: false,
-            })
-        await updateDjangoGlueSessionData()
-        return view
+                view_payload: {
+                    ...this.shared_payload,
+                    ...payload
+                },
+            }),
+            csrfProtected: true
+        })
+
+        debugger
+
+        await window.Glue.initializeProxies(
+            viewResponse.data.proxy_registry_data,
+            viewResponse.data.proxy_context_data,
+        )
+
+        return viewResponse.data.html
     }
 
     async render_inner(target_element, payload = {}) {

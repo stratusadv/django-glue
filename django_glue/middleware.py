@@ -12,7 +12,7 @@ class DjangoGlueMiddleware(object):
     def _is_glue_view_request(request):
         return resolve(request.path_info).view_name in [
             f'{constants.BASE_URL_NAME}:{constants.ACTION_URL_NAME}',
-            f'{constants.BASE_URL_NAME}:{constants.KEEP_LIVE_URL_NAME}'
+            f'{constants.BASE_URL_NAME}:{constants.KEEP_LIVE_URL_NAME}',
         ]
 
     def __call__(self, request):

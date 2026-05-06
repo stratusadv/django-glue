@@ -14,6 +14,7 @@ def django_glue(request: WSGIRequest) -> dict:
     data = {
         'DJANGO_GLUE_URLS': {
             'action': f'/{constants.BASE_URL_NAME}/{constants.ACTION_URL_NAME}',
+            'glue_view': f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}',
         },
         constants.DJANGO_GLUE_VERSION: constants.__VERSION__,
         constants.DJANGO_GLUE_URL_APP_NAME: constants.BASE_URL_NAME,

@@ -27,6 +27,13 @@
             sliceStop: 100,
             orderBy: 'name',
             gorillaQuerySet: Glue.gorillas,
+            async openProfileModal(gorillaId) {
+                const viewGlue = new ViewGlue(`/${gorillaId}/template/`);
+                const targetEl = document.getElementById('profileModalBody');
+                await viewGlue.render_inner(targetEl);
+                const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+                modal.show();
+            },
             gorillaDetailUrl(id) {
                 return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
             },
@@ -59,6 +66,25 @@
     }">
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="gorilla_form" modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla" modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
+
+        <!-- Profile Modal -->
+        <div class="modal fade" id="profileModal" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Fighter Profile</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="profileModalBody">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-gorilla" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Search and Add -->
         <div class="row justify-content-center mb-4">
@@ -160,6 +186,9 @@
                                 <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm">
                                     Profile
                                 </a>
+                                <button class="btn btn-outline-secondary btn-sm" @click="openProfileModal(gorilla.id)">
+                                    Profile (Modal)
+                                </button>
                                 <button type="submit" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
                                     Save
                                 </button>

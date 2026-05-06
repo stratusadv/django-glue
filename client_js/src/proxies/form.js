@@ -6,6 +6,7 @@ export class GlueFormProxy extends BaseGlueProxy {
         super({proxyUniqueName, contextData, actions});
 
         this.$values = {...(this.$contextData.initial || {})};
+
         this.$errors = {};
 
         this.$defineFields()
@@ -54,27 +55,31 @@ export class GlueFormProxy extends BaseGlueProxy {
         return fieldData
     }
 
+    $defineFieldNameProperty(fieldName) {
+        Object.defineProperty(this, fieldName, {
+            get: function() {
+                if (!this.$loaded && !this.$values) {
+                    if (!this.$loading) {
+                        this.$loading = true;
+                        this.get()
+                    }
+                }
+
+                return this.$values?.[fieldName];
+            },
+            set: function(value) {
+                if (!this.$values) {
+                    this.$values = {};
+                }
+                this.$values[fieldName] = value;
+            }
+        })
+    }
+
     $defineFields() {
         this.$fields = {}
         Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
-            Object.defineProperty(this, fieldName, {
-                get: function() {
-                    if (!this.$loaded && !this.$values) {
-                        if (!this.$loading) {
-                            this.$loading = true;
-                            this.get()
-                        }
-                    }
-
-                    return this.$values?.[fieldName];
-                },
-                set: function(value) {
-                    if (!this.$values) {
-                        this.$values = {};
-                    }
-                    this.$values[fieldName] = value;
-                }
-            })
+            this.$defineFieldNameProperty(fieldName)
 
             if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
                 fieldData = this.__defineModelChoiceField(fieldName, fieldData)

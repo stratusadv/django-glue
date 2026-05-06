@@ -1,8 +1,10 @@
 (() => {
   // client_js/src/constants.js
   var baseUrlPath = "django_glue";
-  var actionUrlPath = `/${baseUrlPath}`;
-  var keepLiveUrl = `/${baseUrlPath}/keep_live/`;
+  var ACTION_URL_PATH = `/${baseUrlPath}`;
+  var KEEP_LIVE_URL_PATH = `/${baseUrlPath}/keep_live/`;
+  var SESSION_DATA_URL_PATH = `/${baseUrlPath}/session_data/`;
+  var GLUE_VIEW_URL_PATH = `/${baseUrlPath}/glue_view/`;
 
   // client_js/src/config.js
   var DEFAULT_CONFIG = {
@@ -91,7 +93,7 @@
     });
   }
   async function sendActionRequest({ uniqueName, action, payload, contextData }) {
-    const url = `${actionUrlPath}/${uniqueName}/${action}/`;
+    const url = `${ACTION_URL_PATH}/${uniqueName}/${action}/`;
     if (payload instanceof FormData) {
       payload.append("context_data", JSON.stringify(contextData));
       return await sendFormPostRequest(url, payload);
@@ -99,7 +101,7 @@
     return await sendJsonPostRequest(url, { post_data: payload, context_data: contextData });
   }
   async function sendKeepLiveRequest(uniqueNames) {
-    return await sendJsonPostRequest(keepLiveUrl, { unique_names: uniqueNames });
+    return await sendJsonPostRequest(KEEP_LIVE_URL_PATH, { unique_names: uniqueNames });
   }
 
   // client_js/src/proxies/base.js
@@ -145,9 +147,9 @@
       }
     }
     async $processAction(actionName, data = null) {
-      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key) => [
-        key,
-        data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
+      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key2) => [
+        key2,
+        data.getAll(key2).length > 1 ? data.getAll(key2) : data.get(key2)
       ])) : data;
       const event = {
         action: actionName,
@@ -220,26 +222,29 @@
       };
       return fieldData;
     }
+    $defineFieldNameProperty(fieldName) {
+      Object.defineProperty(this, fieldName, {
+        get: function() {
+          if (!this.$loaded && !this.$values) {
+            if (!this.$loading) {
+              this.$loading = true;
+              this.get();
+            }
+          }
+          return this.$values?.[fieldName];
+        },
+        set: function(value) {
+          if (!this.$values) {
+            this.$values = {};
+          }
+          this.$values[fieldName] = value;
+        }
+      });
+    }
     $defineFields() {
       this.$fields = {};
       Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
-        Object.defineProperty(this, fieldName, {
-          get: function() {
-            if (!this.$loaded && !this.$values) {
-              if (!this.$loading) {
-                this.$loading = true;
-                this.get();
-              }
-            }
-            return this.$values?.[fieldName];
-          },
-          set: function(value) {
-            if (!this.$values) {
-              this.$values = {};
-            }
-            this.$values[fieldName] = value;
-          }
-        });
+        this.$defineFieldNameProperty(fieldName);
         if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
           fieldData = this.__defineModelChoiceField(fieldName, fieldData);
         }
@@ -266,12 +271,6 @@
       this.$errors = errors || {};
       Object.keys(this.$fields).forEach((fieldName) => {
         this.$updateErrorAttributesForField(fieldName);
-      });
-    }
-    $updateValues(values) {
-      this.$values = values || {};
-      Object.entries(this.$fields).forEach(([fieldName, field]) => {
-        field.value = this.$values[fieldName];
       });
     }
     $getFormData() {
@@ -328,8 +327,18 @@
     }) {
       super({ proxyUniqueName, contextData, actions, autoFetch });
       this.$values = values;
+      if (values) {
+        this.$defineExtraFields();
+      }
       this.$key = `glue_${++$keyCounter}`;
       this.$parent = parentQuerySet;
+    }
+    $defineExtraFields() {
+      Object.keys(this.$values).forEach((fieldName) => {
+        if (!(fieldName in this)) {
+          this.$defineFieldNameProperty(fieldName);
+        }
+      });
     }
     get $isNew() {
       return !this.$values?.id;
@@ -341,7 +350,7 @@
       } else {
         data = await this.$processAction("get");
       }
-      this.$updateValues(data);
+      this.$values = data;
       this.$loading = false;
       this.$loaded = true;
     }
@@ -366,19 +375,20 @@
     #keepLiveIntervalHandle = null;
     #config = {};
     $activeProxies = {};
-    #defineProxyUniqueNamesAsProperties() {
-      for (const [proxyUniqueName, contextData] of Object.entries(GlueClient.contextData)) {
-        const { subject_type: subjectType } = contextData;
-        this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
-          proxyUniqueName,
-          contextData: GlueClient.contextData[proxyUniqueName]
-        });
-        Object.defineProperty(this, proxyUniqueName, {
-          get: () => this.$activeProxies[proxyUniqueName]
-        });
-      }
+    #defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
+      const { subject_type: subjectType } = contextData;
+      this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+        proxyUniqueName,
+        contextData
+      });
+      Object.defineProperty(this, proxyUniqueName, {
+        get: () => this.$activeProxies[proxyUniqueName]
+      });
     }
     #initializeKeepLivePulse() {
+      if (this.#keepLiveIntervalHandle) {
+        clearInterval(this.#keepLiveIntervalHandle);
+      }
       const raiseDisconnectAlert = () => {
         clearInterval(this.#keepLiveIntervalHandle);
         let confirmation = confirm(this.#config.sessionExpiryMessage);
@@ -403,10 +413,15 @@
       contextDataForProxies,
       config: config2 = {}
     }) {
-      GlueClient.proxyRegistry = proxyRegistryFromSession;
-      GlueClient.contextData = contextDataForProxies;
       this.#config = setConfig(config2);
-      this.#defineProxyUniqueNamesAsProperties();
+      this.initializeProxies(proxyRegistryFromSession, contextDataForProxies);
+    }
+    initializeProxies(proxyRegistryFromSession, contextDataForProxies) {
+      for (const [proxyUniqueName, contextData] of Object.entries(contextDataForProxies)) {
+        this.#defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData);
+      }
+      Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession);
+      Object.assign(GlueClient.contextData, contextDataForProxies);
       this.#initializeKeepLivePulse();
     }
   }
@@ -442,19 +457,22 @@
       });
       return proxy;
     }
-    async all(queryParams = null) {
+    async queryWithParams(queryParams = null) {
       if (queryParams) {
         this.$queryParams = queryParams;
       }
       if (!this.$loaded || !this.$isEqual(this.$prevQueryParams, this.$queryParams)) {
         this.$loading = true;
-        const data = await this.$processAction("all", this.$queryParams);
+        const data = await this.$processAction("query_with_params", this.$queryParams);
         this.$items = data.map((item) => this.buildChildModelProxy(item));
         this.$prevQueryParams = this.$queryParams;
         this.$loaded = true;
         this.$loading = false;
       }
       return this.$items;
+    }
+    async all() {
+      return await this.queryWithParams();
     }
     filter(filterParams) {
       return this.addQueryParam("filter", filterParams);
@@ -481,7 +499,7 @@
     async refresh() {
       this.$items = [];
       this.$loaded = false;
-      return this.all();
+      return this.queryWithParams();
     }
     get isEmpty() {
       return this.$loaded && this.$items.length === 0;
@@ -520,7 +538,64 @@
   window.GlueQuerySetProxy = GlueQuerySetProxy;
   window.GlueFormProxy = GlueFormProxy;
 
+  // client_js/src/view.js
+  class ViewGlue {
+    constructor(url, shared_payload = {}, skipEncodePath = true) {
+      let config_url = new URL(window.location.origin + url);
+      if (!skipEncodePath) {
+        config_url.searchParams.append("glue_encode_path", window.location.pathname);
+      }
+      this.url = config_url.pathname + config_url.search;
+      this.shared_payload = shared_payload;
+    }
+    async get(payload = {}) {
+      return await this._fetch_view(payload, "GET");
+    }
+    async post(payload = {}) {
+      return await this._fetch_view(payload);
+    }
+    async _fetch_view(payload = {}, method = "POST") {
+      let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
+        method: "POST",
+        body: JSON.stringify({
+          url_path: this.url,
+          method,
+          view_payload: {
+            ...this.shared_payload,
+            ...payload
+          }
+        }),
+        csrfProtected: true
+      });
+      debugger;
+      await window.Glue.initializeProxies(viewResponse.data.proxy_registry_data, viewResponse.data.proxy_context_data);
+      return viewResponse.data.html;
+    }
+    async render_inner(target_element, payload = {}) {
+      await this._fetch_view(payload).then((response) => {
+        return response;
+      }).then((html) => {
+        target_element.innerHTML = html;
+      });
+    }
+    async render_insert_adjacent(target_element, payload = {}, position = "beforeend") {
+      await this._fetch_view(payload).then((response) => {
+        return response;
+      }).then((html) => {
+        target_element.insertAdjacentHTML(position, html);
+      });
+    }
+    async render_outer(target_element, payload = {}) {
+      await this._fetch_view(payload).then((response) => {
+        return response;
+      }).then((html) => {
+        target_element.outerHTML = html;
+      });
+    }
+  }
+
   // client_js/glue.js
   var Glue = new client_default;
   window.Glue = Glue;
+  window.ViewGlue = ViewGlue;
 })();

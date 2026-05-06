@@ -1,8 +1,8 @@
 import {sendJsonGetRequest} from "./http";
-import {SESSION_DATA_URL} from "./constants";
+import {SESSION_DATA_URL_PATH} from "./constants";
 
 export async function updateDjangoGlueSessionData() {
-    let session_data = await sendJsonGetRequest(`${SESSION_DATA_URL}/`)
+    let session_data = await sendJsonGetRequest(`${SESSION_DATA_URL_PATH}/`)
     window.django_glue_session_data = session_data
 
     for (key in window.django_glue_session_data) {

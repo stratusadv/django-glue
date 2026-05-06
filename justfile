@@ -22,3 +22,6 @@ run-tests:
 
 run-doc-tests:
 	mkdocs build --strict
+
+run-coverage:
+	python -m pytest django_glue/tests/ --cov=django_glue --cov-report=term-missing -v

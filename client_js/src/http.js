@@ -1,4 +1,4 @@
-import {actionUrlPath, keepLiveUrl} from "./constants";
+import {ACTION_URL_PATH, KEEP_LIVE_URL_PATH} from "./constants";
 import {getConfig} from "./config";
 
 function getHttpCookie(name) {
@@ -21,7 +21,6 @@ export async function sendHttpRequest(url, requestOptions = {
     contentType: 'application/json',
     csrfProtected: true,
     timeout: null,
-    parseJson: true,
 }) {
     const timeoutMs = requestOptions.timeout ?? getConfig().requestTimeoutMs;
     const controller = new AbortController();
@@ -60,7 +59,7 @@ export async function sendHttpRequest(url, requestOptions = {
             ok: response.ok,
             body: await response.clone().text(),
             httpResponse: response,
-            data: response.ok && requestOptions.parseJson ? await response.json() : null
+            data: response.ok ? await response.json() : null
         }
     } catch (e) {
         throw e
@@ -96,7 +95,7 @@ export async function sendFormPostRequest(url, data, csrfProtected = true) {
 }
 
 export async function sendActionRequest({uniqueName, action, payload, contextData}) {
-    const url = `${actionUrlPath}/${uniqueName}/${action}/`
+    const url = `${ACTION_URL_PATH}/${uniqueName}/${action}/`
 
     if (payload instanceof FormData) {
         payload.append('context_data', JSON.stringify(contextData))
@@ -107,5 +106,5 @@ export async function sendActionRequest({uniqueName, action, payload, contextDat
 }
 
 export async function sendKeepLiveRequest(uniqueNames) {
-    return await sendJsonPostRequest(keepLiveUrl, {'unique_names': uniqueNames})
+    return await sendJsonPostRequest(KEEP_LIVE_URL_PATH, {'unique_names': uniqueNames})
 }

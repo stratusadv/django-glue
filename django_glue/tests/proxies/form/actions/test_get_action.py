@@ -4,14 +4,15 @@ Tests for GlueFormProxy get() action.
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.form.proxy import GlueFormProxy
-from test_project.task.forms import ContactForm
+from django_glue import data_transfer_objects as dto
+from test_project.test_forms import ContactForm
 
 
 class GlueFormProxyGetTestCase(TestCase):
@@ -25,7 +26,8 @@ class GlueFormProxyGetTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        result = proxy.get()
+        action_data = dto.GlueActionRequestData(context_data={})
+        result = proxy.get(action_data)
 
         self.assertIn('fields', result)
         self.assertIn('name', result['fields'])
@@ -39,7 +41,8 @@ class GlueFormProxyGetTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        result = proxy.get()
+        action_data = dto.GlueActionRequestData(context_data={})
+        result = proxy.get(action_data)
 
         self.assertIn('values', result)
         self.assertEqual(result['values']['name'], 'John')
@@ -52,7 +55,8 @@ class GlueFormProxyGetTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        result = proxy.get()
+        action_data = dto.GlueActionRequestData(context_data={})
+        result = proxy.get(action_data)
 
         self.assertIn('errors', result)
         self.assertEqual(result['errors'], {})
@@ -65,6 +69,7 @@ class GlueFormProxyGetTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        result = proxy.get()
+        action_data = dto.GlueActionRequestData(context_data={})
+        result = proxy.get(action_data)
 
         self.assertIsNotNone(result)

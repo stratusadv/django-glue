@@ -6,7 +6,7 @@ import { createMockFetch, setupCookieMock } from './testUtils';
 // Mock the constants module
 mock.module('../src/constants', () => ({
     actionUrl: '/django_glue/',
-    keepLiveUrl: '/django_glue/keep_live/'
+    KEEP_LIVE_URL_PATH: '/django_glue/keep_live/'
 }));
 
 describe('http', () => {

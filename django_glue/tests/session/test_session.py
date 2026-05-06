@@ -4,7 +4,7 @@ Tests for Django Glue GlueSession proxy management.
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from time import time
@@ -13,11 +13,11 @@ from django.test import TestCase, RequestFactory
 
 from django_glue.session import GlueSession
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.model import GlueModelProxy
-from django_glue.proxies.queryset import GlueQuerySetProxy
+from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 from django_glue.exceptions import GlueProxyNotFoundError
 from django_glue import settings
-from test_project.task.models import Task
+from test_project.gorilla.models import Gorilla
 
 
 class MockSession(dict):
@@ -65,37 +65,38 @@ class GlueSessionRegisterProxyTestCase(TestCase):
     """Tests for GlueSession.register_proxy()."""
 
     def setUp(self):
-        """Create a mock request with session and test task."""
+        """Create a mock request with session and test gorilla."""
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.request.session = MockSession()
 
-        self.task = Task.objects.create(
-            title='Test Task',
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
             description='Test description',
-            done=False,
-            order=1
+            age=25,
+            weight=350.0,
+            height=1.8
         )
 
     def test_register_proxy_adds_to_registry(self):
         """register_proxy should add proxy session data to registry."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
         session.register_proxy(proxy)
 
-        self.assertIn('task', session.proxy_registry)
+        self.assertIn('gorilla', session.proxy_registry)
 
     def test_register_proxy_sets_keep_live_time(self):
         """register_proxy should set expiration time in keep_live_registry."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
@@ -103,7 +104,7 @@ class GlueSessionRegisterProxyTestCase(TestCase):
         session.register_proxy(proxy)
         after_time = time()
 
-        expire_time = session.keep_live_registry['task']
+        expire_time = session.keep_live_registry['gorilla']
         expected_min = before_time + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
         expected_max = after_time + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
 
@@ -114,8 +115,8 @@ class GlueSessionRegisterProxyTestCase(TestCase):
         """register_proxy should set request.session.modified = True."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
@@ -124,58 +125,57 @@ class GlueSessionRegisterProxyTestCase(TestCase):
         self.assertTrue(self.request.session.modified)
 
 
-class GlueSessionGetProxyTestCase(TestCase):
-    """Tests for GlueSession.get_proxy_by_unique_name()."""
+class GlueSessionGetProxyAccessTestCase(TestCase):
+    """Tests for GlueSession.get_proxy_access()."""
 
     def setUp(self):
-        """Create a mock request with session and test task."""
+        """Create a mock request with session and test gorilla."""
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.request.session = MockSession()
 
-        self.task = Task.objects.create(
-            title='Test Task',
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
             description='Test description',
-            done=False,
-            order=1
+            age=25,
+            weight=350.0,
+            height=1.8
         )
 
-    def test_get_proxy_returns_model_proxy(self):
-        """get_proxy_by_unique_name should return GlueModelProxy for model."""
+    def test_get_proxy_access_returns_view_for_model(self):
+        """get_proxy_access should return GlueAccess.VIEW for a registered model proxy."""
         session = GlueSession(self.request)
-        original_proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+        proxy = GlueModelProxy(
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
-        session.register_proxy(original_proxy)
+        session.register_proxy(proxy)
 
-        retrieved_proxy = session.get_proxy_by_unique_name('task')
+        access = session.get_proxy_access('gorilla')
 
-        self.assertIsInstance(retrieved_proxy, GlueModelProxy)
-        self.assertEqual(retrieved_proxy.unique_name, 'task')
+        self.assertEqual(access, GlueAccess.VIEW)
 
-    def test_get_proxy_returns_queryset_proxy(self):
-        """get_proxy_by_unique_name should return GlueQuerySetProxy for queryset."""
+    def test_get_proxy_access_returns_view_for_queryset(self):
+        """get_proxy_access should return GlueAccess.VIEW for a registered queryset proxy."""
         session = GlueSession(self.request)
-        original_proxy = GlueQuerySetProxy(
-            target=Task.objects.all(),
-            unique_name='tasks',
+        proxy = GlueQuerySetProxy(
+            target=Gorilla.objects.all(),
+            unique_name='gorillas',
             access=GlueAccess.VIEW,
         )
-        session.register_proxy(original_proxy)
+        session.register_proxy(proxy)
 
-        retrieved_proxy = session.get_proxy_by_unique_name('tasks')
+        access = session.get_proxy_access('gorillas')
 
-        self.assertIsInstance(retrieved_proxy, GlueQuerySetProxy)
-        self.assertEqual(retrieved_proxy.unique_name, 'tasks')
+        self.assertEqual(access, GlueAccess.VIEW)
 
-    def test_get_proxy_raises_not_found(self):
-        """get_proxy_by_unique_name should raise GlueProxyNotFoundError for missing name."""
+    def test_get_proxy_access_raises_not_found(self):
+        """get_proxy_access should raise GlueProxyNotFoundError for missing name."""
         session = GlueSession(self.request)
 
         with self.assertRaises(GlueProxyNotFoundError) as context:
-            session.get_proxy_by_unique_name('nonexistent')
+            session.get_proxy_access('nonexistent')
 
         self.assertEqual(context.exception.unique_name, 'nonexistent')
 
@@ -184,70 +184,71 @@ class GlueSessionExpirationTestCase(TestCase):
     """Tests for GlueSession expiration handling."""
 
     def setUp(self):
-        """Create a mock request with session and test task."""
+        """Create a mock request with session and test gorilla."""
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.request.session = MockSession()
 
-        self.task = Task.objects.create(
-            title='Test Task',
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
             description='Test description',
-            done=False,
-            order=1
+            age=25,
+            weight=350.0,
+            height=1.8
         )
 
     def test_proxy_is_expired_returns_false_for_valid(self):
         """_proxy_is_expired should return False for non-expired proxy."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
         session.register_proxy(proxy)
 
-        self.assertFalse(session._proxy_is_expired('task'))
+        self.assertFalse(session._proxy_is_expired('gorilla'))
 
     def test_proxy_is_expired_returns_true_for_expired(self):
         """_proxy_is_expired should return True for expired proxy."""
         session = GlueSession(self.request)
         # Manually set an expired time
-        session.keep_live_registry['task'] = time() - 100  # 100 seconds ago
+        session.keep_live_registry['gorilla'] = time() - 100  # 100 seconds ago
 
-        self.assertTrue(session._proxy_is_expired('task'))
+        self.assertTrue(session._proxy_is_expired('gorilla'))
 
     def test_purge_expired_proxies_removes_expired(self):
         """purge_expired_proxies should remove expired proxies."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
         session.register_proxy(proxy)
 
         # Force expire the proxy
-        session.keep_live_registry['task'] = time() - 100
+        session.keep_live_registry['gorilla'] = time() - 100
 
         session.purge_expired_proxies()
 
-        self.assertNotIn('task', session.proxy_registry)
-        self.assertNotIn('task', session.keep_live_registry)
+        self.assertNotIn('gorilla', session.proxy_registry)
+        self.assertNotIn('gorilla', session.keep_live_registry)
 
     def test_purge_expired_proxies_keeps_valid(self):
         """purge_expired_proxies should keep non-expired proxies."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
         session.register_proxy(proxy)
 
         session.purge_expired_proxies()
 
-        self.assertIn('task', session.proxy_registry)
-        self.assertIn('task', session.keep_live_registry)
+        self.assertIn('gorilla', session.proxy_registry)
+        self.assertIn('gorilla', session.keep_live_registry)
 
     def test_purge_marks_session_modified(self):
         """purge_expired_proxies should set request.session.modified = True."""
@@ -263,35 +264,36 @@ class GlueSessionRenewalTestCase(TestCase):
     """Tests for GlueSession.renew_proxies()."""
 
     def setUp(self):
-        """Create a mock request with session and test task."""
+        """Create a mock request with session and test gorilla."""
         self.factory = RequestFactory()
         self.request = self.factory.get('/')
         self.request.session = MockSession()
 
-        self.task = Task.objects.create(
-            title='Test Task',
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
             description='Test description',
-            done=False,
-            order=1
+            age=25,
+            weight=350.0,
+            height=1.8
         )
 
     def test_renew_proxies_updates_expire_time(self):
         """renew_proxies should update expiration time for specified proxies."""
         session = GlueSession(self.request)
         proxy = GlueModelProxy(
-            target=self.task,
-            unique_name='task',
+            target=self.gorilla,
+            unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
         session.register_proxy(proxy)
 
         # Set a low expire time
         old_expire_time = time() + 10
-        session.keep_live_registry['task'] = old_expire_time
+        session.keep_live_registry['gorilla'] = old_expire_time
 
-        session.renew_proxies(['task'])
+        session.renew_proxies(['gorilla'])
 
-        new_expire_time = session.keep_live_registry['task']
+        new_expire_time = session.keep_live_registry['gorilla']
         self.assertGreater(new_expire_time, old_expire_time)
 
     def test_renew_proxies_ignores_unknown_names(self):

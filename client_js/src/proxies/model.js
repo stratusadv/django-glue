@@ -13,8 +13,23 @@ export class GlueModelProxy extends GlueFormProxy {
     }) {
         super({proxyUniqueName, contextData, actions, autoFetch});
         this.$values = values;
+
+        if (values) {
+            this.$defineExtraFields()
+        }
+
         this.$key = `glue_${++$keyCounter}`;
         this.$parent = parentQuerySet;
+    }
+
+    $defineExtraFields() {
+        // This will define properties for fields coming from outside the regular field definition pipeline in
+        // such as glue queryset annotations, etc.
+        Object.keys(this.$values).forEach(fieldName => {
+            if (!(fieldName in this)) {
+                this.$defineFieldNameProperty(fieldName)
+            }
+        })
     }
 
     get $isNew() {

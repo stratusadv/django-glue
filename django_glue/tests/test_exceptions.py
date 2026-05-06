@@ -4,7 +4,7 @@ Tests for Django Glue custom exceptions.
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from django.test import TestCase

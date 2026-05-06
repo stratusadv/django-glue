@@ -4,7 +4,7 @@ Tests for GlueFormProxy validate() action.
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from django.test import TestCase
@@ -13,7 +13,7 @@ from django_glue.access.access import GlueAccess
 from django_glue.proxies.form.proxy import GlueFormProxy
 from django_glue.exceptions import GlueAccessError
 from django_glue import data_transfer_objects as dto
-from test_project.task.forms import ContactForm
+from test_project.test_forms import ContactForm
 
 
 class GlueFormProxyValidateTestCase(TestCase):
@@ -27,15 +27,19 @@ class GlueFormProxyValidateTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.CHANGE,
         )
-        result = proxy.validate({
-            'name': 'John Doe',
-            'email': 'john@example.com',
-            'message': 'Hello world',
-            'priority': 'medium',
-        })
+        action_data = dto.GlueActionRequestData(
+            context_data={},
+            post_data={
+                'name': 'John Doe',
+                'email': 'john@example.com',
+                'message': 'Hello world',
+                'priority': 'medium',
+            }
+        )
+        result = proxy.validate(action_data)
 
-        self.assertTrue(result['is_valid'])
-        self.assertEqual(result['errors'], {})
+        self.assertTrue(result['success'])
+        self.assertIsNone(result['errors'])
 
     def test_validate_returns_is_valid_false_for_invalid_data(self):
         """validate() should return is_valid=False for invalid data."""
@@ -45,14 +49,18 @@ class GlueFormProxyValidateTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.CHANGE,
         )
-        result = proxy.validate({
-            'name': '',  # Required field empty
-            'email': 'not-an-email',  # Invalid email
-            'message': 'Hello',
-            'priority': 'medium',
-        })
+        action_data = dto.GlueActionRequestData(
+            context_data={},
+            post_data={
+                'name': '',  # Required field empty
+                'email': 'not-an-email',  # Invalid email
+                'message': 'Hello',
+                'priority': 'medium',
+            }
+        )
+        result = proxy.validate(action_data)
 
-        self.assertFalse(result['is_valid'])
+        self.assertFalse(result['success'])
         self.assertIn('name', result['errors'])
         self.assertIn('email', result['errors'])
 
@@ -64,12 +72,16 @@ class GlueFormProxyValidateTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.CHANGE,
         )
-        result = proxy.validate({
-            'name': 'John Doe',
-            'email': 'john@example.com',
-            'message': 'Hello world',
-            'priority': 'high',
-        })
+        action_data = dto.GlueActionRequestData(
+            context_data={},
+            post_data={
+                'name': 'John Doe',
+                'email': 'john@example.com',
+                'message': 'Hello world',
+                'priority': 'high',
+            }
+        )
+        result = proxy.validate(action_data)
 
         self.assertIn('cleaned_data', result)
         self.assertEqual(result['cleaned_data']['name'], 'John Doe')
@@ -83,12 +95,16 @@ class GlueFormProxyValidateTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.CHANGE,
         )
-        result = proxy.validate({
-            'name': '',
-            'email': 'invalid',
-            'message': '',
-            'priority': 'medium',
-        })
+        action_data = dto.GlueActionRequestData(
+            context_data={},
+            post_data={
+                'name': '',
+                'email': 'invalid',
+                'message': '',
+                'priority': 'medium',
+            }
+        )
+        result = proxy.validate(action_data)
 
         self.assertEqual(result['cleaned_data'], {})
 
@@ -102,13 +118,12 @@ class GlueFormProxyValidateTestCase(TestCase):
         )
 
         action_data = dto.GlueActionRequestData(
-            unique_name='contact_form',
-            action='validate',
+            context_data={},
             post_data={'name': 'Test'}
         )
 
         with self.assertRaises(GlueAccessError):
-            proxy.process_action(action_data)
+            proxy.process_action('validate', action_data)
 
     def test_validate_errors_are_lists(self):
         """validate() should return errors as lists of strings."""
@@ -118,12 +133,16 @@ class GlueFormProxyValidateTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.CHANGE,
         )
-        result = proxy.validate({
-            'name': '',
-            'email': 'john@example.com',
-            'message': 'Hello',
-            'priority': 'medium',
-        })
+        action_data = dto.GlueActionRequestData(
+            context_data={},
+            post_data={
+                'name': '',
+                'email': 'john@example.com',
+                'message': 'Hello',
+                'priority': 'medium',
+            }
+        )
+        result = proxy.validate(action_data)
 
         self.assertIsInstance(result['errors']['name'], list)
         self.assertTrue(len(result['errors']['name']) > 0)

@@ -4,15 +4,15 @@ Tests for GlueFormProxy basic functionality.
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.form.proxy import GlueFormProxy
-from test_project.task.forms import TaskForm, ContactForm
-from test_project.task.models import Task
+from test_project.test_forms import ContactForm, TestModelForm
+from test_project.gorilla.models import Gorilla
 
 
 class GlueFormProxyInitTestCase(TestCase):
@@ -31,7 +31,7 @@ class GlueFormProxyInitTestCase(TestCase):
 
     def test_accepts_model_form_instance(self):
         """Should accept a Django ModelForm instance."""
-        form = TaskForm()
+        form = TestModelForm()
         proxy = GlueFormProxy(
             target=form,
             unique_name='task_form',
@@ -48,11 +48,11 @@ class GlueFormProxyInitTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
         self.assertEqual(proxy.form_class_name, 'ContactForm')
-        self.assertEqual(proxy.form_module, 'test_project.task.forms')
+        self.assertEqual(proxy.form_module, 'test_project.test_forms')
 
 
 class GlueFormProxyFieldDefinitionsTestCase(TestCase):
-    """Tests for _get_field_definitions method."""
+    """Tests for _form_field_definitions property."""
 
     def test_extracts_field_types(self):
         """Should extract field type names."""
@@ -62,7 +62,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         self.assertEqual(fields['name']['type'], 'CharField')
         self.assertEqual(fields['email']['type'], 'EmailField')
@@ -77,7 +77,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         self.assertTrue(fields['name']['required'])
         self.assertTrue(fields['email']['required'])
@@ -90,7 +90,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         # Default labels are field names when not explicitly set
         self.assertEqual(fields['name']['label'], 'name')
@@ -104,7 +104,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         self.assertEqual(fields['message']['widget'], 'Textarea')
 
@@ -116,7 +116,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         self.assertIn('choices', fields['priority'])
         self.assertEqual(len(fields['priority']['choices']), 3)
@@ -129,7 +129,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        fields = proxy._get_field_definitions()
+        fields = proxy._form_field_definitions
 
         self.assertEqual(fields['name']['max_length'], 100)
 
@@ -165,13 +165,14 @@ class GlueFormProxyInitialValuesTestCase(TestCase):
 
     def test_returns_instance_values_for_model_form(self):
         """Should return instance values for ModelForm."""
-        task = Task.objects.create(
-            title='Test Task',
+        gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
             description='Test description',
-            done=False,
-            order=1
+            age=25,
+            weight=350.0,
+            height=1.8
         )
-        form = TaskForm(instance=task)
+        form = TestModelForm(instance=gorilla)
         proxy = GlueFormProxy(
             target=form,
             unique_name='task_form',
@@ -179,63 +180,29 @@ class GlueFormProxyInitialValuesTestCase(TestCase):
         )
         values = proxy._get_initial_values()
 
-        self.assertEqual(values['title'], 'Test Task')
+        self.assertEqual(values['name'], 'Test Gorilla')
         self.assertEqual(values['description'], 'Test description')
-        self.assertEqual(values['done'], False)
-        self.assertEqual(values['order'], 1)
+        self.assertEqual(values['age'], 25)
+        self.assertEqual(values['weight'], 350.0)
 
 
-class GlueFormProxySessionDataTestCase(TestCase):
-    """Tests for session data serialization."""
+class GlueFormProxyContextDataTestCase(TestCase):
+    """Tests for context data serialization."""
 
     def test_includes_form_class_path(self):
-        """Should include full form class path in session data."""
+        """Should include full form class path in context data."""
         form = ContactForm()
         proxy = GlueFormProxy(
             target=form,
             unique_name='contact_form',
             access=GlueAccess.VIEW,
         )
-        session_data = proxy.to_proxy_registry_data()
+        context_data = proxy.to_context_data()
 
         self.assertEqual(
-            session_data['form_class_path'],
-            'test_project.task.forms.ContactForm'
+            context_data['form_class_path'],
+            'test_project.test_forms.ContactForm'
         )
-
-    def test_includes_initial_values(self):
-        """Should include initial values in session data."""
-        form = ContactForm(initial={'name': 'John'})
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
-        session_data = proxy.to_proxy_registry_data()
-
-        self.assertEqual(session_data['initial']['name'], 'John')
-
-    def test_includes_instance_pk_for_model_form(self):
-        """Should include instance pk for ModelForm with instance."""
-        task = Task.objects.create(
-            title='Test',
-            description='Desc',
-            done=False,
-            order=1
-        )
-        form = TaskForm(instance=task)
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='task_form',
-            access=GlueAccess.VIEW,
-        )
-        session_data = proxy.to_proxy_registry_data()
-
-        self.assertEqual(session_data['instance_pk'], task.pk)
-
-
-class GlueFormProxyContextDataTestCase(TestCase):
-    """Tests for context data serialization."""
 
     def test_includes_fields(self):
         """Should include field definitions in context data."""
@@ -276,4 +243,4 @@ class GlueFormProxyContextDataTestCase(TestCase):
         self.assertIn('actions', context_data)
         self.assertIn('get', context_data['actions'])
         self.assertIn('validate', context_data['actions'])
-        self.assertIn('submit', context_data['actions'])
+        self.assertIn('save', context_data['actions'])

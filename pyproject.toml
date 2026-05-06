@@ -94,14 +94,19 @@ django_glue = [
 
 [tool.dev_tool.unittest.django]
 apps = ["."]
-settings = "test_project.base_settings"
+settings = "test_project.settings"
 
 [tool.dev_tool.unittest.python]
 apps = ["django_glue.tests"]
 
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "test_project.settings"
+pythonpath = ["."]
+
 [tool.coverage.run]
 source = ["django_glue"]
 omit = [
+    "*/.venv/*",
     "*/migrations/*",
     "*/__init__.py",
     "*/constants.py",

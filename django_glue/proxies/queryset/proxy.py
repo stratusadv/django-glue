@@ -63,8 +63,41 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             if name not in m2m_fields
         ]
 
-        # Get regular field values (no duplicates)
-        results = list(queryset.values(*non_m2m_fields))
+        # Detect FK fields set via select_related on the queryset
+        select_related_dict = getattr(queryset.query, 'select_related', False) or {}
+        select_related_field_names = set(select_related_dict.keys())
+
+        # Build values keys: expand FK fields with __ lookups
+        related_model_fields = []
+        for field_name in non_m2m_fields:
+            if field_name in select_related_field_names:
+                field_obj = model._meta.get_field(field_name)
+                related_model = field_obj.related_model
+                for related_model_field in related_model._meta.fields:
+                    related_model_fields.append(f'{field_name}__{related_model_field.name}')
+            else:
+                related_model_fields.append(field_name)
+
+        # Query with expanded keys
+        results = list(queryset.values(*[
+            *non_m2m_fields,
+            *related_model_fields,
+            *queryset.query.annotations
+        ]))
+
+        # Reshape flat __ keys back into nested dicts
+        for item in results:
+            for related_field_name in select_related_field_names:
+                if related_field_name not in self._form_field_definitions:
+                    continue
+                nested = {}
+                for field_name, value in list(item.items()):
+                    if field_name.startswith(f'{related_field_name}__'):
+                        related_model_field_name = field_name.split('__')[1]
+
+                        nested[related_model_field_name] = value
+                        del item[field_name]
+                item[related_field_name] = nested
 
         # Fetch M2M values with prefetch to avoid N+1 queries
         if m2m_fields:

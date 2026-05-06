@@ -13,7 +13,7 @@ from django.test import RequestFactory
 
 def pytest_configure():
     """Configure Django settings before tests run."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.base_settings')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
     django.setup()
 
 
@@ -41,26 +41,28 @@ def mock_request(request_factory):
 
 @pytest.fixture
 def sample_task(db):
-    """Create and return a sample Task for testing."""
-    from test_project.task.models import Task
-    return Task.objects.create(
-        title='Test Task',
-        description='A task for testing',
-        done=False,
-        order=42
+    """Create and return a sample Gorilla for testing."""
+    from test_project.gorilla.models import Gorilla
+    return Gorilla.objects.create(
+        name='Test Gorilla',
+        description='A gorilla for testing',
+        age=25,
+        weight=350.0,
+        height=1.8
     )
 
 
 @pytest.fixture
 def sample_tasks(db):
-    """Create and return multiple sample Tasks for testing."""
-    from test_project.task.models import Task
-    tasks = []
+    """Create and return multiple sample Gorillas for testing."""
+    from test_project.gorilla.models import Gorilla
+    gorillas = []
     for i in range(5):
-        tasks.append(Task.objects.create(
-            title=f'Task {i}',
+        gorillas.append(Gorilla.objects.create(
+            name=f'Gorilla {i}',
             description=f'Description {i}',
-            done=i % 2 == 0,
-            order=i + 1
+            age=18 + i,
+            weight=200.0 + i * 10,
+            height=1.8
         ))
-    return tasks
+    return gorillas
