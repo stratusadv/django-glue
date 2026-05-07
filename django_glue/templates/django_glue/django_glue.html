@@ -21,8 +21,14 @@
     const DJANGO_GLUE_KEEP_LIVE_URL = '{% url 'django_glue:keep_live_handler' %}'
     const DJANGO_SESSION_DATA_URL = '{% url 'django_glue:session_data' %}'
     const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS = parseInt({{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }})
+    const DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MINIMUM_MILLISECONDS = (120.0 / 2.2) * 1000
 
-    window.django_glue_keep_live = new DjangoGlueKeepLive(DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS)
+    const keep_live_interval = Math.max(
+        DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS,
+        DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MINIMUM_MILLISECONDS
+    )
+
+    window.django_glue_keep_live = new DjangoGlueKeepLive(keep_live_interval)
     window.django_glue_session_data = {{ DJANGO_GLUE_SESSION_DATA|safe }}
 
     window.django_glue_keep_live.init()
