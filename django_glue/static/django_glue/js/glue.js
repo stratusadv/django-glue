@@ -5,12 +5,13 @@
   var KEEP_LIVE_URL_PATH = `/${baseUrlPath}/keep_live/`;
   var SESSION_DATA_URL_PATH = `/${baseUrlPath}/session_data/`;
   var GLUE_VIEW_URL_PATH = `/${baseUrlPath}/glue_view/`;
+  var MINIMUM_KEEP_LIVE_INTERVAL_SECONDS = 120;
 
   // client_js/src/config.js
   var DEFAULT_CONFIG = {
     requestTimeoutMs: 30000,
     sessionExpiryMessage: "Django Glue Session expired. Do you want to reload the page?",
-    keepLiveIntervalSeconds: 120
+    keepLiveIntervalSeconds: 600
   };
   var config = { ...DEFAULT_CONFIG };
   function getConfig() {
@@ -453,6 +454,7 @@
           window.location.reload();
         }
       };
+      const correctedKeepLiveIntervalSeconds = Math.max(this.#config.keepLiveIntervalSeconds, MINIMUM_KEEP_LIVE_INTERVAL_SECONDS);
       this.#keepLiveIntervalHandle = setInterval(() => {
         const keepLiveNames = Object.keys(this.$activeProxies);
         sendKeepLiveRequest(keepLiveNames).then((response) => {
@@ -463,7 +465,7 @@
           console.log(err);
           raiseDisconnectAlert();
         });
-      }, this.#config.keepLiveIntervalSeconds * 1000);
+      }, correctedKeepLiveIntervalSeconds * 1000);
     }
     init({
       proxyRegistryFromSession,
