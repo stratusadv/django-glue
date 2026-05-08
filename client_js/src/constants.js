@@ -5,3 +5,5 @@ export const ACTION_URL_PATH = `/${baseUrlPath}`
 export const KEEP_LIVE_URL_PATH = `/${baseUrlPath}/keep_live/`
 export const SESSION_DATA_URL_PATH = `/${baseUrlPath}/session_data/`
 export const GLUE_VIEW_URL_PATH = `/${baseUrlPath}/glue_view/`
+
+export const MINIMUM_KEEP_LIVE_INTERVAL_SECONDS = 120

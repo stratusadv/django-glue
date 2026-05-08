@@ -2,6 +2,7 @@ import {sendKeepLiveRequest} from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
 import {setConfig} from "./config";
 import {GlueView} from "./view";
+import {MINIMUM_KEEP_LIVE_INTERVAL_SECONDS} from "./constants";
 
 class GlueClient {
     static proxyClassesForSubjectTypes = {}
@@ -38,6 +39,11 @@ class GlueClient {
             }
         }
 
+        const correctedKeepLiveIntervalSeconds = Math.max(
+            this.#config.keepLiveIntervalSeconds,
+            MINIMUM_KEEP_LIVE_INTERVAL_SECONDS
+        )
+
         this.#keepLiveIntervalHandle = setInterval(() => {
             const keepLiveNames = Object.keys(this.$activeProxies)
             sendKeepLiveRequest(keepLiveNames).then(response => {
@@ -48,7 +54,7 @@ class GlueClient {
                 console.log(err)
                 raiseDisconnectAlert()
             })
-        }, this.#config.keepLiveIntervalSeconds * 1000)
+        }, correctedKeepLiveIntervalSeconds * 1000)
     }
 
     init({

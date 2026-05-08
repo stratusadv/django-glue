@@ -5,7 +5,7 @@
 const DEFAULT_CONFIG = {
     requestTimeoutMs: 30000,
     sessionExpiryMessage: 'Django Glue Session expired. Do you want to reload the page?',
-    keepLiveIntervalSeconds: 120
+    keepLiveIntervalSeconds: 600
 };
 
 let config = { ...DEFAULT_CONFIG };
