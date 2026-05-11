@@ -443,6 +443,15 @@
         get: () => this.$activeProxies[proxyUniqueName]
       });
     }
+    async fetch(url, requestOptions = {
+      body: "",
+      method: "GET",
+      contentType: "application/json",
+      csrfProtected: true,
+      timeout: null
+    }) {
+      return await sendHttpRequest(url, requestOptions);
+    }
     #initializeKeepLivePulse() {
       if (this.#keepLiveIntervalHandle) {
         clearInterval(this.#keepLiveIntervalHandle);

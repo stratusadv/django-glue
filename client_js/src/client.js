@@ -1,4 +1,4 @@
-import {sendKeepLiveRequest} from "./http";
+import {sendHttpRequest, sendKeepLiveRequest} from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
 import {setConfig} from "./config";
 import {GlueView} from "./view";
@@ -14,7 +14,7 @@ class GlueClient {
     $activeProxies = {}
 
     #defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
-        const { subject_type: subjectType } = contextData
+        const {subject_type: subjectType} = contextData
         this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
             proxyUniqueName: proxyUniqueName,
             contextData: contextData,
@@ -23,6 +23,16 @@ class GlueClient {
         Object.defineProperty(this, proxyUniqueName, {
             get: () => this.$activeProxies[proxyUniqueName]
         })
+    }
+
+    async fetch(url, requestOptions = {
+        body: '',
+        method: 'GET',
+        contentType: 'application/json',
+        csrfProtected: true,
+        timeout: null,
+    }) {
+        return await sendHttpRequest(url, requestOptions)
     }
 
     #initializeKeepLivePulse() {
@@ -58,10 +68,10 @@ class GlueClient {
     }
 
     init({
-        proxyRegistryFromSession,
-        contextDataForProxies,
-        config = {},
-    }) {
+             proxyRegistryFromSession,
+             contextDataForProxies,
+             config = {},
+         }) {
         this.#config = setConfig(config)
 
         this.initializeProxies(proxyRegistryFromSession, contextDataForProxies)
