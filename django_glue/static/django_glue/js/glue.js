@@ -384,7 +384,7 @@
     async post(payload = {}) {
       return await this._fetchView(payload);
     }
-    async#fetchView(payload = {}, method = "POST") {
+    async _fetchView(payload = {}, method = "POST") {
       let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
         method: "POST",
         body: JSON.stringify({
@@ -401,26 +401,26 @@
       return viewResponse.data.html;
     }
     async renderInnerHtml(target_element, payload = {}) {
-      target_element.innerHTML = await this.#fetchView(payload);
+      target_element.innerHTML = await this._fetchView(payload);
     }
-    async#renderInsertAdjacentHtml(target_element, position, payload = {}) {
-      const html = await this.#fetchView(payload);
+    async _renderInsertAdjacentHtml(target_element, position, payload = {}) {
+      const html = await this._fetchView(payload);
       target_element.insertAdjacentHTML(position, html);
     }
     async renderInsertAdjacentHtmlBeforeEnd(target_element, payload = {}) {
-      await this.#renderInsertAdjacentHtml(target_element, "beforeend", payload);
+      await this._renderInsertAdjacentHtml(target_element, "beforeend", payload);
     }
     async renderInsertAdjacentHtmlAfterEnd(target_element, payload = {}) {
-      await this.#renderInsertAdjacentHtml(target_element, "afterend", payload);
+      await this._renderInsertAdjacentHtml(target_element, "afterend", payload);
     }
     async renderInsertAdjacentHtmlBeforeBegin(target_element, payload = {}) {
-      await this.#renderInsertAdjacentHtml(target_element, "beforebegin", payload);
+      await this._renderInsertAdjacentHtml(target_element, "beforebegin", payload);
     }
     async renderInsertAdjacentHtmlAfterBegin(target_element, payload = {}) {
-      await this.#renderInsertAdjacentHtml(target_element, "afterbegin", payload);
+      await this._renderInsertAdjacentHtml(target_element, "afterbegin", payload);
     }
     async renderOuterHtml(target_element, payload = {}) {
-      target_element.outerHTML = await this.#fetchView(payload);
+      target_element.outerHTML = await this._fetchView(payload);
     }
   }
 
