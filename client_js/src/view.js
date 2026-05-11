@@ -36,8 +36,6 @@ export class GlueView {
             csrfProtected: true
         })
 
-        debugger
-
         window.Glue.initializeProxies(
             viewResponse.data.proxy_registry_data,
             viewResponse.data.proxy_context_data,
