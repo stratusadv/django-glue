@@ -2,23 +2,25 @@
  * Global configuration for Django Glue client.
  */
 
-const DEFAULT_CONFIG = {
-    requestTimeoutMs: 30000,
-    sessionExpiryMessage: 'Django Glue Session expired. Do you want to reload the page?',
-    keepLiveIntervalSeconds: 600
-};
-
-let config = { ...DEFAULT_CONFIG };
-
-export function getConfig() {
-    return config;
+class GlueConfig {
+    constructor(
+        {
+            requestTimeoutMs = 30000,
+            sessionExpiryMessage = 'Session expired. Do you want to reload the page?',
+            keepLiveIntervalSeconds = 600,
+            actionUrlPath,
+            keepLiveUrlPath,
+            glueViewUrlPath,
+        }
+    ) {
+        this.requestTimeoutMs = requestTimeoutMs
+        this.sessionExpiryMessage = sessionExpiryMessage
+        this.keepLiveIntervalSeconds = keepLiveIntervalSeconds
+        this.actionUrlPath = actionUrlPath
+        this.keepLiveUrlPath = keepLiveUrlPath
+        this.glueViewUrlPath = glueViewUrlPath
+        this.minimumKeepLiveIntervalSeconds = 120
+    }
 }
 
-export function setConfig(newConfig = {}) {
-    config = { ...config, ...newConfig };
-    return config
-}
-
-export function resetConfig() {
-    config = { ...DEFAULT_CONFIG };
-}
+export default GlueConfig

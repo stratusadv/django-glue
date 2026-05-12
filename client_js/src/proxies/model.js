@@ -1,9 +1,10 @@
 import { GlueFormProxy } from "./form";
 
-let $keyCounter = 0;
+let _keyCounter = 0;
 
 export class GlueModelProxy extends GlueFormProxy {
     constructor({
+        http,
         proxyUniqueName,
         contextData,
         actions=null,
@@ -11,55 +12,55 @@ export class GlueModelProxy extends GlueFormProxy {
         values=null,
         parentQuerySet=null
     }) {
-        super({proxyUniqueName, contextData, actions, autoFetch});
-        this.$values = values;
+        super({http, proxyUniqueName, contextData, actions, autoFetch});
+        this._values = values;
 
         if (values) {
-            this.$defineExtraFields()
+            this._defineExtraFields()
         }
 
-        this.$key = `glue_${++$keyCounter}`;
-        this.$parent = parentQuerySet;
+        this.$key = `django-glue-${++_keyCounter}`;
+        this._parent = parentQuerySet;
     }
 
-    $defineExtraFields() {
+    _defineExtraFields() {
         // This will define properties for fields coming from outside the regular field definition pipeline in
         // such as glue queryset annotations, etc.
-        Object.keys(this.$values).forEach(fieldName => {
+        Object.keys(this._values).forEach(fieldName => {
             if (!(fieldName in this)) {
-                this.$defineFieldNameProperty(fieldName)
+                this._defineFieldNameProperty(fieldName)
             }
         })
     }
 
-    get $isNew() {
-        return !this.$values?.id;
+    get _isNew() {
+        return !this._values?.id;
     }
 
     async get(pk = null) {
         let data;
-        if (this.$parent) {
-            data = await this.$parent.$processAction('get', {id: pk})
+        if (this._parent) {
+            data = await this._parent._processAction('get', {id: pk})
         }
         else {
-            data = await this.$processAction('get')
+            data = await this._processAction('get')
         }
 
-        this.$values = data
+        this._values = data
 
 
-        this.$loading = false;
-        this.$loaded = true;
+        this._loading = false;
+        this._loaded = true;
     }
 
     async delete() {
-        if (this.$isNew && this.$parent) {
-            await this.$parent.refresh();
+        if (this._isNew && this._parent) {
+            await this._parent.refresh();
             return { success: true };
         }
-        const result = await this.$processAction('delete', {id: this.$values.id});
-        if (this.$parent) {
-            await this.$parent.refresh();
+        const result = await this._processAction('delete', {id: this._values.id});
+        if (this._parent) {
+            await this._parent.refresh();
         }
         return result;
     }

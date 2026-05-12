@@ -1,8 +1,5 @@
-import {sendHttpRequest} from "./http";
-import {GLUE_VIEW_URL_PATH} from "./constants";
-
-export class GlueView {
-    constructor(url, shared_payload = {}, skipEncodePath = true) {
+class GlueView {
+    constructor(http, url, shared_payload = {}, skipEncodePath = true) {
         // Need to send the current view path to encode the glue data on the server.
         let config_url = new URL(window.location.origin + url)
 
@@ -10,6 +7,7 @@ export class GlueView {
             config_url.searchParams.append('glue_encode_path', window.location.pathname)
         }
 
+        this.http = http
         this.url = config_url.pathname + config_url.search
         this.shared_payload = shared_payload
     }
@@ -23,7 +21,7 @@ export class GlueView {
     }
 
     async _fetchView(payload = {}, method = 'POST') {
-        let viewResponse = await sendHttpRequest(GLUE_VIEW_URL_PATH, {
+        let viewResponse = await this.http.sendHttpRequest(this.http._config.glueViewUrlPath, {
             method: 'POST',
             body: JSON.stringify({
                 url_path: this.url,
@@ -73,3 +71,5 @@ export class GlueView {
         target_element.outerHTML = await this._fetchView(payload)
     }
 }
+
+export default GlueView

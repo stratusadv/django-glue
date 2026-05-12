@@ -1,13 +1,12 @@
-import {sendActionRequest} from "../http";
-
 export class BaseGlueProxy {
-    constructor({proxyUniqueName, contextData, actions= null}) {
-        this.$uniqueName = proxyUniqueName;
-        this.$contextData = contextData;
+    constructor({http, proxyUniqueName, contextData, actions= null}) {
+        this.http = http
+        this._uniqueName = proxyUniqueName;
+        this._contextData = contextData;
         // TODO: move action data to subject_type level key in session/context_data
-        this.$actions = !!actions ? actions : contextData.actions;
+        this._actions = !!actions ? actions : contextData.actions;
 
-        this.$listeners = {
+        this._listeners = {
             before: {},
             after: {},
             error: {}
@@ -21,13 +20,13 @@ export class BaseGlueProxy {
      * @param {string} type - When to call: 'before', 'after' (default), or 'error'
      */
     addListener(actionName, callback, type = 'after') {
-        if (!this.$listeners[type]) {
-            throw new Error(`Invalid listener type: ${type}. Use 'before', 'after', or 'error'.`);
+        if (!this._listeners[type]) {
+            throw new Error(`Invalid listener type: _${type}. Use 'before', 'after', or 'error'.`);
         }
-        if (!this.$listeners[type][actionName]) {
-            this.$listeners[type][actionName] = [];
+        if (!this._listeners[type][actionName]) {
+            this._listeners[type][actionName] = [];
         }
-        this.$listeners[type][actionName].push(callback);
+        this._listeners[type][actionName].push(callback);
         return this;
     }
 
@@ -38,7 +37,7 @@ export class BaseGlueProxy {
      * @param {string} type - The listener type: 'before', 'after' (default), or 'error'
      */
     removeListener(actionName, callback, type = 'after') {
-        const listeners = this.$listeners[type]?.[actionName];
+        const listeners = this._listeners[type]?.[actionName];
         if (listeners) {
             const index = listeners.indexOf(callback);
             if (index > -1) {
@@ -49,18 +48,18 @@ export class BaseGlueProxy {
     }
 
     clearListeners() {
-        this.$listeners = {};
+        this._listeners = {};
         return this;
     }
 
     async emitListeners(type, actionName, event) {
-        const listeners = this.$listeners[type]?.[actionName] || [];
+        const listeners = this._listeners[type]?.[actionName] || [];
         for (const callback of listeners) {
             await callback(event);
         }
     }
 
-    async $processAction(actionName, data = null) {
+    async _processAction(actionName, data = null) {
         const eventData = data instanceof FormData ? Object.fromEntries(
             Array.from(data.keys()).map(key => [
                 key, data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
@@ -77,11 +76,11 @@ export class BaseGlueProxy {
         await this.emitListeners('before', actionName, event);
 
         try {
-            const response = await sendActionRequest({
-                uniqueName: this.$uniqueName,
+            const response = await this.http.sendActionRequest({
+                uniqueName: this._uniqueName,
                 action: actionName,
                 payload: data,
-                contextData: this.$contextData
+                contextData: this._contextData
             });
             event.result = response.data;
 

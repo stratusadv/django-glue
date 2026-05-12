@@ -1,27 +1,25 @@
-import {sendHttpRequest, sendKeepLiveRequest} from "./http";
+import GlueHttp from "./http";
 import {SUBJECT_TYPE_TO_PROXY_CLASS} from "./proxies";
-import {setConfig} from "./config";
-import {GlueView} from "./view";
-import {MINIMUM_KEEP_LIVE_INTERVAL_SECONDS} from "./constants";
+import GlueView from "./view";
 
 class GlueClient {
-    static proxyClassesForSubjectTypes = {}
     static contextData = {}
+    static proxyClassesForSubjectTypes = {}
     static proxyRegistry = {}
 
-    #keepLiveIntervalHandle = null
-    #config = {}
-    $activeProxies = {}
+    _keepLiveIntervalHandle = null
+    _activeProxies = {}
 
-    #defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
+    _defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
         const {subject_type: subjectType} = contextData
-        this.$activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+        this._activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+            http: this.http,
             proxyUniqueName: proxyUniqueName,
             contextData: contextData,
         })
 
         Object.defineProperty(this, proxyUniqueName, {
-            get: () => this.$activeProxies[proxyUniqueName]
+            get: () => this._activeProxies[proxyUniqueName]
         })
     }
 
@@ -32,31 +30,31 @@ class GlueClient {
         csrfProtected: true,
         timeout: null,
     }) {
-        return await sendHttpRequest(url, requestOptions)
+        return await this.http.sendRequest(url, requestOptions)
     }
 
-    #initializeKeepLivePulse() {
-        if (this.#keepLiveIntervalHandle) {
-            clearInterval(this.#keepLiveIntervalHandle)
+    _initializeKeepLivePulse() {
+        if (this._keepLiveIntervalHandle) {
+            clearInterval(this._keepLiveIntervalHandle)
         }
 
         const raiseDisconnectAlert = () => {
-            clearInterval(this.#keepLiveIntervalHandle)
+            clearInterval(this._keepLiveIntervalHandle)
 
-            let confirmation = confirm(this.#config.sessionExpiryMessage)
+            let confirmation = confirm(this._config.sessionExpiryMessage)
             if (confirmation) {
                 window.location.reload()
             }
         }
 
         const correctedKeepLiveIntervalSeconds = Math.max(
-            this.#config.keepLiveIntervalSeconds,
-            MINIMUM_KEEP_LIVE_INTERVAL_SECONDS
+            this._config.keepLiveIntervalSeconds,
+            this._config.minimumKeepLiveIntervalSeconds
         )
 
-        this.#keepLiveIntervalHandle = setInterval(() => {
-            const keepLiveNames = Object.keys(this.$activeProxies)
-            sendKeepLiveRequest(keepLiveNames).then(response => {
+        this._keepLiveIntervalHandle = setInterval(() => {
+            const keepLiveNames = Object.keys(this._activeProxies)
+            this.http.sendKeepLiveRequest(keepLiveNames).then(response => {
                 if (!response.ok) {
                     raiseDisconnectAlert()
                 }
@@ -72,24 +70,25 @@ class GlueClient {
              contextDataForProxies,
              config = {},
          }) {
-        this.#config = setConfig(config)
+        this._config = config
+        this.http = new GlueHttp(this._config)
 
         this.initializeProxies(proxyRegistryFromSession, contextDataForProxies)
     }
 
     initializeProxies(proxyRegistryFromSession, contextDataForProxies) {
         for (const [proxyUniqueName, contextData] of Object.entries(contextDataForProxies)) {
-            this.#defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData)
+            this._defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData)
         }
 
         Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession)
         Object.assign(GlueClient.contextData, contextDataForProxies)
 
-        this.#initializeKeepLivePulse()
+        this._initializeKeepLivePulse()
     }
 
     view(url, shared_payload = {}) {
-        return new GlueView(url, shared_payload)
+        return new GlueView(this.http, url, shared_payload)
     }
 }
 

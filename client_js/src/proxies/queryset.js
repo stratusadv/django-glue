@@ -3,32 +3,33 @@ import {GlueModelProxy} from "./model";
 import GlueClient from "../client";
 
 export class GlueQuerySetProxy extends BaseGlueProxy {
-    $items = [];
-    $loaded = false;
-    $loading = false;
+    _items = [];
+    _loaded = false;
+    _loading = false;
 
-    $queryParams = {}
-    $prevQueryParams = {}
+    _queryParams = {}
+    _prevQueryParams = {}
 
     constructor(options) {
         super(options);
     }
 
     *[Symbol.iterator]() {
-        yield* this.$items
+        yield* this._items
     }
 
     buildChildModelProxy(item) {
         const proxy = new GlueModelProxy({
-            proxyUniqueName: this.$uniqueName,
-            contextData: GlueClient.contextData[this.$uniqueName],
+            http: this.http,
+            proxyUniqueName: this._uniqueName,
+            contextData: GlueClient.contextData[this._uniqueName],
             values: {...item},
             parentQuerySet: this
         })
 
         // Forward child proxy events to the queryset's listeners
         const querysetProxy = this;
-        Object.keys(proxy.$actions).forEach(actionName => {
+        Object.keys(proxy._actions).forEach(actionName => {
             ['before', 'after', 'error'].forEach(type => {
                 proxy.addListener(actionName, (event) => {
                     querysetProxy.emitListeners(type, actionName, event);
@@ -41,19 +42,19 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
 
     async queryWithParams(queryParams = null) {
         if (queryParams) {
-            this.$queryParams = queryParams
+            this._queryParams = queryParams
         }
 
-        if (!this.$loaded || !this.$isEqual(this.$prevQueryParams, this.$queryParams)) {
-            this.$loading = true;
-            const data = await this.$processAction('query_with_params', this.$queryParams);
-            this.$items = data.map(item => this.buildChildModelProxy(item))
-            this.$prevQueryParams = this.$queryParams
-            this.$loaded = true;
-            this.$loading = false;
+        if (!this._loaded || !this._isEqual(this._prevQueryParams, this._queryParams)) {
+            this._loading = true;
+            const data = await this._processAction('query_with_params', this._queryParams);
+            this._items = data.map(item => this.buildChildModelProxy(item))
+            this._prevQueryParams = this._queryParams
+            this._loaded = true;
+            this._loading = false;
         }
 
-        return this.$items
+        return this._items
     }
 
     async all() {
@@ -81,27 +82,27 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     addQueryParam(type, params) {
-        this.$queryParams[type] = params
+        this._queryParams[type] = params
         return this
     }
 
-    $isEqual(a, b) {
+    _isEqual(a, b) {
         return JSON.stringify(a) === JSON.stringify(b);
     }
 
     async refresh() {
-        this.$items = [];
-        this.$loaded = false;
+        this._items = [];
+        this._loaded = false;
 
         return this.queryWithParams()
     }
 
     get isEmpty() {
-        return this.$loaded && this.$items.length === 0;
+        return this._loaded && this._items.length === 0;
     }
 
     get isLoaded() {
-        return this.$loaded;
+        return this._loaded;
     }
 
     async prependNew() {
@@ -113,17 +114,17 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     async pushNew(location = 'start') {
-        const defaults = await this.$processAction('new');
+        const defaults = await this._processAction('new');
         const newObj = this.buildChildModelProxy(defaults)
 
         if (location == 'end') {
-            this.$items = [...this.$items, newObj]
+            this._items = [...this._items, newObj]
         } else if (location == 'start') {
-            this.$items = [newObj, ...this.$items]
+            this._items = [newObj, ...this._items]
         } else {
             throw new Error('Invalid location. Use "start" or "end".')
         }
 
-        return this.$items
+        return this._items
     }
 }

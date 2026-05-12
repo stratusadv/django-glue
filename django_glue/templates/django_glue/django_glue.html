@@ -1,15 +1,24 @@
 {% load static %}
 {% csrf_token %}
 
-{#{% if debug %}#}
-    <script src="{% static 'django_glue/js/glue.js' %}"></script>
-{#{% else %}#}
-{#    <script src="{% static 'django_glue/js/glue.min.js' %}"></script>#}
-{#{% endif %}#}
+<script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
-{{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"glue-proxy-registry" }}
-{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|json_script:"glue-context-data" }}
+{{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"django-glue-proxy-registry" }}
+{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|json_script:"django-glue-context-data" }}
 
-{% if not skip_init %}
-{% include 'django_glue/django_glue_init.html' with raw=raw %}
-{% endif %}
+<script>
+    const glueConfig = new GlueConfig({
+        requestTimeoutMs: 30000,
+        keepLiveIntervalSeconds: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }},
+        sessionExpiryMessage: '{{ DJANGO_SESSION_EXPIRY_MESSAGE }}',
+        actionUrlPath: '{{ DJANGO_GLUE_URLS.action }}',
+        keepLiveUrlPath: '{{ DJANGO_GLUE_URLS.keep_live }}',
+        glueViewUrlPath: '{{ DJANGO_GLUE_URLS.glue_view }}',
+    })
+
+    Glue.init({
+        proxyRegistryFromSession: JSON.parse(document.getElementById('django-glue-proxy-registry').textContent),
+        contextDataForProxies: JSON.parse(document.getElementById('django-glue-context-data').textContent),
+        config: glueConfig
+    })
+</script>

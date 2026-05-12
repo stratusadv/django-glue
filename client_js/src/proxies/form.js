@@ -2,17 +2,17 @@ import { BaseGlueProxy } from "./base";
 import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
-    constructor({proxyUniqueName, contextData, actions=null}) {
-        super({proxyUniqueName, contextData, actions});
+    constructor({http, proxyUniqueName, contextData, actions=null}) {
+        super({http, proxyUniqueName, contextData, actions});
 
-        this.$values = {...(this.$contextData.initial || {})};
+        this._values = {...(this._contextData.initial || {})};
 
-        this.$errors = {};
+        this._errors = {};
 
-        this.$defineFields()
+        this._defineFields()
     }
 
-    __defineModelChoiceField(fieldName, fieldData) {
+    _defineModelChoiceField(fieldName, fieldData) {
         // Initialize shared choice caching on the original fieldData (once)
         // This ensures choices are loaded only once across all model proxy instances
         if (!fieldData.hasOwnProperty('__choicesCache')) {
@@ -29,7 +29,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             }
 
             fieldData.__glue__loadingChoices = true;
-            fieldData.__glue__choicesPromise = this.$processAction('foreign_key_choices', {
+            fieldData.__glue__choicesPromise = this._processAction('foreign_key_choices', {
                 'field_definition': [
                     fieldName,
                     fieldData
@@ -55,68 +55,68 @@ export class GlueFormProxy extends BaseGlueProxy {
         return fieldData
     }
 
-    $defineFieldNameProperty(fieldName) {
+    _defineFieldNameProperty(fieldName) {
         Object.defineProperty(this, fieldName, {
             get: function() {
-                if (!this.$loaded && !this.$values) {
-                    if (!this.$loading) {
-                        this.$loading = true;
+                if (!this._loaded && !this._values) {
+                    if (!this._loading) {
+                        this._loading = true;
                         this.get()
                     }
                 }
 
-                return this.$values?.[fieldName];
+                return this._values?.[fieldName];
             },
             set: function(value) {
-                if (!this.$values) {
-                    this.$values = {};
+                if (!this._values) {
+                    this._values = {};
                 }
-                this.$values[fieldName] = value;
+                this._values[fieldName] = value;
             }
         })
     }
 
-    $defineFields() {
+    _defineFields() {
         this.$fields = {}
-        Object.entries(this.$contextData.fields).forEach(([fieldName, fieldData]) => {
-            this.$defineFieldNameProperty(fieldName)
+        Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
+            this._defineFieldNameProperty(fieldName)
 
             if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-                fieldData = this.__defineModelChoiceField(fieldName, fieldData)
+                fieldData = this._defineModelChoiceField(fieldName, fieldData)
             }
 
             this.$fields[fieldName] = fieldData;
             Object.keys(this.$fields[fieldName]).forEach(attributeName => {
                 this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$fields?.[fieldName]?.[attributeName]
-                this.$updateErrorAttributesForField(fieldName)
+                this._updateErrorAttributesForField(fieldName)
             })
         })
     }
 
     get(pk = null) {
-        this.$processAction('get').then(data => {
-            this.$values = data
+        this._processAction('get').then(data => {
+            this._values = data
         }).finally(() => {
-            this.$loading = false;
-            this.$loaded = true;
+            this._loading = false;
+            this._loaded = true;
         });
     }
 
-    $updateErrorAttributesForField(fieldName) {
-        this[`${fieldName}HasErrors`] = this.$errors[fieldName]?.length > 0;
-        this[`${fieldName}ErrorText`] = this.$errors[fieldName]?.join(', ');
+    _updateErrorAttributesForField(fieldName) {
+        this[`${fieldName}HasErrors`] = this._errors[fieldName]?.length > 0;
+        this[`${fieldName}ErrorText`] = this._errors[fieldName]?.join(', ');
     }
 
-    $updateErrors(errors) {
-        this.$errors = errors || {};
+    _updateErrors(errors) {
+        this._errors = errors || {};
         Object.keys(this.$fields).forEach(fieldName => {
-            this.$updateErrorAttributesForField(fieldName);
+            this._updateErrorAttributesForField(fieldName);
         });
     }
 
-    $getFormData() {
+    _getFormData() {
         const formData = new FormData();
-        Object.entries(this.$values).forEach(([fieldName, value]) => {
+        Object.entries(this._values).forEach(([fieldName, value]) => {
             if (Array.isArray(value)) {
                 value.forEach(item => formData.append(fieldName, item));
             } else if (value instanceof File || value instanceof Blob) {
@@ -132,20 +132,20 @@ export class GlueFormProxy extends BaseGlueProxy {
     }
 
     async validate() {
-        const result = await this.$processAction('validate', this.$values);
-        this.$errors = result.errors || {};
+        const result = await this._processAction('validate', this._values);
+        this._errors = result.errors || {};
 
         return result;
     }
 
     async save() {
-        const result = await this.$processAction('save', this.$getFormData());
+        const result = await this._processAction('save', this._getFormData());
 
-        this.$updateErrors(result.errors)
+        this._updateErrors(result.errors)
 
         if (result.success) {
-            this.$clearErrors()
-            this.get(this.$values.id)
+            this._clearErrors()
+            this.get(this._values.id)
         }
 
         return result;
@@ -153,13 +153,13 @@ export class GlueFormProxy extends BaseGlueProxy {
 
     hasErrors(fieldName) {
         if (fieldName) {
-            return this.$errors[fieldName] && this.$errors[fieldName].length > 0;
+            return this._errors[fieldName] && this._errors[fieldName].length > 0;
         }
 
-        return Object.keys(this.$errors).length > 0;
+        return Object.keys(this._errors).length > 0;
     }
 
-    $clearErrors() {
-        this.$errors = {};
+    _clearErrors() {
+        this._errors = {};
     }
 }

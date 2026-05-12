@@ -1,14 +1,12 @@
 import fs from 'fs';
 import zlib from 'zlib';
 
-const ENTRYPOINT_FILE_NAME = 'glue.js'
+const ENTRYPOINT_FILE_NAME = 'django_glue.js'
 
 const ENTRYPOINT = `./client_js/${ENTRYPOINT_FILE_NAME}`
 const OUT_DIR = './django_glue/static/django_glue/js'
 const OUT_FILE_PATH = `${OUT_DIR}/${ENTRYPOINT_FILE_NAME}`
 
-const VERSION = getPythonConstantAsJsonValue('__VERSION__')
-const BASE_URL = getPythonConstantAsJsonValue('BASE_URL_NAME')
 const IS_WATCH = process.argv.includes('--watch')
 
 if (!fs.existsSync(OUT_DIR)) {
@@ -35,8 +33,6 @@ async function build(options) {
         format: 'iife',
         define: {
             'CDN': 'true',
-            'GLUE_VERSION': VERSION,
-            'BASE_URL_NAME': BASE_URL,
             'process.env.NODE_ENV': IS_WATCH ? "'development'" : "'production'",
         },
     })
