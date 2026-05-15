@@ -5,6 +5,6 @@
     {% block field_content %}
         <div class="invalid-feedback" x-text="{{ obj }}.{{ field }}ErrorText"></div>
     {% endblock %}
-    <small class="text-muted d-block" x-show="{{ obj }}.$fields.{{ field }}HelpText" x-text="{{ obj }}.$fields.{{ field }}HelpText"></small>
+    <small class="text-muted d-block" x-show="{{ obj }}.$form.{{ field }}HelpText" x-text="{{ obj }}.$form.{{ field }}HelpText"></small>
 </div>
 {% endwith %}

@@ -9,7 +9,7 @@ export class GlueFormProxy extends BaseGlueProxy {
 
         this._errors = {};
 
-        this._defineFields()
+        this._defineForm()
     }
 
     _defineModelChoiceField(fieldName, fieldData) {
@@ -76,8 +76,8 @@ export class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
-    _defineFields() {
-        this.$fields = {}
+    _defineForm() {
+        this.$form = {}
         Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
             this._defineFieldNameProperty(fieldName)
 
@@ -85,9 +85,9 @@ export class GlueFormProxy extends BaseGlueProxy {
                 fieldData = this._defineModelChoiceField(fieldName, fieldData)
             }
 
-            this.$fields[fieldName] = fieldData;
-            Object.keys(this.$fields[fieldName]).forEach(attributeName => {
-                this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$fields?.[fieldName]?.[attributeName]
+            this.$form[fieldName] = fieldData;
+            Object.keys(this.$form[fieldName]).forEach(attributeName => {
+                this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$form?.[fieldName]?.[attributeName]
                 this._updateErrorAttributesForField(fieldName)
             })
         })
@@ -109,7 +109,7 @@ export class GlueFormProxy extends BaseGlueProxy {
 
     _updateErrors(errors) {
         this._errors = errors || {};
-        Object.keys(this.$fields).forEach(fieldName => {
+        Object.keys(this.$form).forEach(fieldName => {
             this._updateErrorAttributesForField(fieldName);
         });
     }

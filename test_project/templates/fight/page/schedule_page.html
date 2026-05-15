@@ -47,10 +47,10 @@
                             <input
                                 type="text"
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$fields.name.errors.length}"
+                                :class="{'is-invalid': form.$form.name.errors.length}"
                                 x-model="form.name"
                                 placeholder="Enter your name">
-                            <div class="invalid-feedback" x-show="form.$fields.name.errors.length" x-text="form.$fields.name.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$form.name.errors.length" x-text="form.$form.name.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-md-6">
@@ -58,33 +58,33 @@
                             <input
                                 type="email"
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$fields.email.errors.length}"
+                                :class="{'is-invalid': form.$form.email.errors.length}"
                                 x-model="form.email"
                                 placeholder="your@email.com">
-                            <div class="invalid-feedback" x-show="form.$fields.email.errors.length" x-text="form.$fields.email.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$form.email.errors.length" x-text="form.$form.email.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Subject</label>
                             <select class="form-select form-select-gorilla"
-                                    :class="{'is-invalid': form.$fields.subject.errors.length}"
+                                    :class="{'is-invalid': form.$form.subject.errors.length}"
                                     x-model="form.subject">
-                                <template x-for="choice in form.$fields.subject.choices || []" :key="choice[0]">
+                                <template x-for="choice in form.$form.subject.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
-                            <div class="invalid-feedback" x-show="form.$fields.subject.errors.length" x-text="form.$fields.subject.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$form.subject.errors.length" x-text="form.$form.subject.errors.join(', ')"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Message</label>
                             <textarea
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$fields.message.errors.length}"
+                                :class="{'is-invalid': form.$form.message.errors.length}"
                                 rows="4"
                                 x-model="form.message"
                                 placeholder="Your message (minimum 10 characters)..."></textarea>
-                            <div class="invalid-feedback" x-show="form.$fields.message.errors.length" x-text="form.$fields.message.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$form.message.errors.length" x-text="form.$form.message.errors.join(', ')"></div>
                         </div>
                     </div>
 
