@@ -79,7 +79,7 @@
 
   // client_js/src/proxies/form.js
   class GlueFormProxy extends BaseGlueProxy {
-    static name = "form";
+    static name = "baseGlueProxy";
     constructor({ http, proxyUniqueName, contextData, actions = null }) {
       super({ http, proxyUniqueName, contextData, actions });
       this._values = { ...this._contextData.initial || {} };
@@ -367,7 +367,7 @@
       });
     }
     async sendActionRequest({ uniqueName, action, payload, contextData }) {
-      const url = `${this._config.actionUrlPath}/${uniqueName}/${action}/`;
+      const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`;
       if (payload instanceof FormData) {
         payload.append("context_data", JSON.stringify(contextData));
         return await this.sendFormPostRequest(url, payload);

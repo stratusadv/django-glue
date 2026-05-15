@@ -33,7 +33,7 @@ class GlueSession:
 
     @staticmethod
     def _get_next_expire_time() -> float:
-        return time() + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
+        return time() + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS + 60 # Buffer for Request Timeouts
 
     def _set_modified(self) -> None:
         self.request.session.modified = True

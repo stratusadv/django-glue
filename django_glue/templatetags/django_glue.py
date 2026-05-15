@@ -12,9 +12,9 @@ def django_glue_init(context):
     request = context['request']
 
     context[constants.DJANGO_GLUE_URLS_KEY] = {
-        constants.ACTION_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.ACTION_URL_NAME}',
-        constants.KEEP_LIVE_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.KEEP_LIVE_URL_NAME}',
-        constants.GLUE_VIEW_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}',
+        constants.ACTION_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.ACTION_URL_NAME}/',
+        constants.KEEP_LIVE_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.KEEP_LIVE_URL_NAME}/',
+        constants.GLUE_VIEW_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}/',
     }
     context[constants.DJANGO_GLUE_VERSION_KEY] = constants.__VERSION__
     context[

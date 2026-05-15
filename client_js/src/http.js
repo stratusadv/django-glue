@@ -96,7 +96,7 @@ class GlueHttp {
     }
 
     async sendActionRequest({uniqueName, action, payload, contextData}) {
-        const url = `${this._config.actionUrlPath}/${uniqueName}/${action}/`
+        const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
 
         if (payload instanceof FormData) {
             payload.append('context_data', JSON.stringify(contextData))
