@@ -21,7 +21,7 @@ class GlueView {
     }
 
     async _fetchView(payload = {}, method = 'POST') {
-        let viewResponse = await this.http.sendHttpRequest(this.http._config.glueViewUrlPath, {
+        let viewResponse = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
             method: 'POST',
             body: JSON.stringify({
                 url_path: this.url,
