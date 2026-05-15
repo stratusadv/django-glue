@@ -323,7 +323,7 @@ Glue.init({
     contextDataForProxies: ...,
     keepLiveInterval: ...,
     config: {
-        requestTimeoutMs: 30000  // Default: 30 seconds
+        requestTimeoutSeconds: 30000  // Default: 30 seconds
     }
 })
 ```

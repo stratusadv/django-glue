@@ -21,11 +21,11 @@ class GlueHttp {
         method: 'GET',
         contentType: 'application/json',
         csrfProtected: true,
-        timeout: null,
+        timeoutSeconds: null,
     }) {
-        const timeoutMs = requestOptions.timeout ?? this._config.requestTimeoutMs;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), (timeoutSeconds * 1000))
 
         const options = {
             method: requestOptions.method,

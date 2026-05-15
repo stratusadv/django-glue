@@ -2,6 +2,8 @@ import { BaseGlueProxy } from "./base";
 import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
+    static name = 'form'
+
     constructor({http, proxyUniqueName, contextData, actions=null}) {
         super({http, proxyUniqueName, contextData, actions});
 
@@ -9,7 +11,13 @@ export class GlueFormProxy extends BaseGlueProxy {
 
         this._errors = {};
 
-        this._defineForm()
+        this._defineFields()
+
+        Object.defineProperty(this,'$fields', {
+            get: () => { return this._fields },
+            set: value => { this._fields = value },
+        })
+
     }
 
     _defineModelChoiceField(fieldName, fieldData) {
@@ -76,8 +84,8 @@ export class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
-    _defineForm() {
-        this.$form = {}
+    _defineFields() {
+        this._fields = {}
         Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
             this._defineFieldNameProperty(fieldName)
 
@@ -85,9 +93,9 @@ export class GlueFormProxy extends BaseGlueProxy {
                 fieldData = this._defineModelChoiceField(fieldName, fieldData)
             }
 
-            this.$form[fieldName] = fieldData;
-            Object.keys(this.$form[fieldName]).forEach(attributeName => {
-                this[`${fieldName}${snakeToPascal(attributeName)}`] = this.$form?.[fieldName]?.[attributeName]
+            this._fields[fieldName] = fieldData;
+            Object.keys(this._fields[fieldName]).forEach(attributeName => {
+                this[`${fieldName}${snakeToPascal(attributeName)}`] = this._fields?.[fieldName]?.[attributeName]
                 this._updateErrorAttributesForField(fieldName)
             })
         })
@@ -109,7 +117,7 @@ export class GlueFormProxy extends BaseGlueProxy {
 
     _updateErrors(errors) {
         this._errors = errors || {};
-        Object.keys(this.$form).forEach(fieldName => {
+        Object.keys(this._fields).forEach(fieldName => {
             this._updateErrorAttributesForField(fieldName);
         });
     }

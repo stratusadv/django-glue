@@ -3,6 +3,8 @@ import {GlueModelProxy} from "./model";
 import GlueClient from "../client";
 
 export class GlueQuerySetProxy extends BaseGlueProxy {
+    static name = 'querySet'
+
     _items = [];
     _loaded = false;
     _loading = false;

@@ -5,7 +5,7 @@
 class GlueConfig {
     constructor(
         {
-            requestTimeoutMs = 30000,
+            requestTimeoutSeconds = 30,
             sessionExpiryMessage = 'Session expired. Do you want to reload the page?',
             keepLiveIntervalSeconds = 600,
             actionUrlPath,
@@ -13,7 +13,7 @@ class GlueConfig {
             glueViewUrlPath,
         }
     ) {
-        this.requestTimeoutMs = requestTimeoutMs
+        this.requestTimeoutSeconds = requestTimeoutSeconds
         this.sessionExpiryMessage = sessionExpiryMessage
         this.keepLiveIntervalSeconds = keepLiveIntervalSeconds
         this.actionUrlPath = actionUrlPath

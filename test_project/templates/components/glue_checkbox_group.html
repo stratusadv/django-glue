@@ -4,7 +4,7 @@
     {% include 'components/glue_label.html' %}
     <div class="border rounded p-3{% if input_class %} {{ input_class }}{% endif %}" {% if max_height %}style="max-height: {{ max_height }}; overflow-y: auto;"{% endif %}>
         <div class="row">
-            <template x-for="choice in {{ obj }}.$form.{{ field }}?.choices || []" :key="choice[0]">
+            <template x-for="choice in {{ obj }}.$form.$fields.{{ field }}?.choices || []" :key="choice[0]">
                 <div class="col-md-{{ columns|default:'4' }} col-lg-{{ columns|default:'4' }}">
                     <div class="form-check">
                         <input
@@ -20,7 +20,7 @@
                                     {{ obj }}.{{ field }} = ({{ obj }}.{{ field }} || []).filter(v => v !== choice[0]);
                                 }
                             "
-                            :disabled="{{ obj }}.$form.{{ field }}?.disabled">
+                            :disabled="{{ obj }}.$form.$fields.{{ field }}?.disabled">
                         <label class="form-check-label" :for="'{{ field }}-' + choice[0]" x-text="choice[1]"></label>
                     </div>
                 </div>

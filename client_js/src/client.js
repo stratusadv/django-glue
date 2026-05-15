@@ -7,19 +7,25 @@ class GlueClient {
     static proxyClassesForSubjectTypes = {}
     static proxyRegistry = {}
 
+    model = {}
+    querySet = {}
+    form = {}
+
     _keepLiveIntervalHandle = null
-    _activeProxies = {}
 
     _defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
         const {subject_type: subjectType} = contextData
-        this._activeProxies[proxyUniqueName] = new SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]({
+
+        let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
+
+        if(!(proxyClass.name in this)) {
+            this[proxyClass.name] = {}
+        }
+
+        this[proxyClass.name][proxyUniqueName] = new proxyClass({
             http: this.http,
             proxyUniqueName: proxyUniqueName,
             contextData: contextData,
-        })
-
-        Object.defineProperty(this, proxyUniqueName, {
-            get: () => this._activeProxies[proxyUniqueName]
         })
     }
 
@@ -53,7 +59,12 @@ class GlueClient {
         )
 
         this._keepLiveIntervalHandle = setInterval(() => {
-            const keepLiveNames = Object.keys(this._activeProxies)
+            const keepLiveNames = Object.keys({
+                ...this.model,
+                ...this.querySet,
+                ...this.form,
+            })
+
             this.http.sendKeepLiveRequest(keepLiveNames).then(response => {
                 if (!response.ok) {
                     raiseDisconnectAlert()

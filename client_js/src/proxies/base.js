@@ -1,4 +1,6 @@
 export class BaseGlueProxy {
+    static name = 'baseGlueProxy'
+
     constructor({http, proxyUniqueName, contextData, actions= null}) {
         this.http = http
         this._uniqueName = proxyUniqueName;
@@ -10,7 +12,8 @@ export class BaseGlueProxy {
             before: {},
             after: {},
             error: {}
-        };
+        }
+
     }
 
     /**

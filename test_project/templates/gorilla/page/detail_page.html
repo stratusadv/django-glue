@@ -31,7 +31,7 @@
 
 {% block content %}
     <div x-data="{
-        gorilla: Glue.gorilla,
+        gorilla: Glue.model.gorilla,
         init() {
             this.gorilla.addListener('save', event => {
                 if (event.result.errors) {

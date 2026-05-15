@@ -7,7 +7,7 @@ default:
 	just --list
 
 build-js:
-	npm run build
+	bun run build
 
 migrate-and-seed:
 	python manage.py migrate

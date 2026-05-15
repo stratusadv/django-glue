@@ -82,10 +82,10 @@ describe('GlueClient', () => {
                 proxyRegistryFromSession: {},
                 contextDataForProxies: {},
                 keepLiveInterval: 60000,
-                config: { requestTimeoutMs: 5000 }
+                config: { requestTimeoutSeconds: 5000 }
             });
 
-            expect(getConfig().requestTimeoutMs).toBe(5000);
+            expect(getConfig().requestTimeoutSeconds).toBe(5000);
         });
 
         it('works without config parameter', () => {
@@ -99,7 +99,7 @@ describe('GlueClient', () => {
             });
 
             // Default config should be intact
-            expect(getConfig().requestTimeoutMs).toBe(30000);
+            expect(getConfig().requestTimeoutSeconds).toBe(30000);
         });
 
         it('handles empty registry', () => {

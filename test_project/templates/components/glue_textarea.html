@@ -5,8 +5,8 @@
     <textarea
         rows="{% block rows %}{{ rows|default:'3' }}{% endblock %}"
         {% include 'components/glue_base_input_attributes.html' %}
-        :maxlength="{{ obj }}.$form.{{ field }}?.max_length"
-        :minlength="{{ obj }}.$form.{{ field }}?.min_length"
+        :maxlength="{{ obj }}.$form.$fields.{{ field }}?.max_length"
+        :minlength="{{ obj }}.$form.$fields.{{ field }}?.min_length"
         placeholder="{% block placeholder %}{{ placeholder }}{% endblock %}"></textarea>
     {{ block.super }}
 {% endblock %}

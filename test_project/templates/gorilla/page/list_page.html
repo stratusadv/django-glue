@@ -26,7 +26,7 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
-            gorillaQuerySet: Glue.gorillas,
+            gorillaQuerySet: Glue.querySet.gorillas,
             async openProfileModal(gorillaId) {
                 const viewGlue = new ViewGlue(`/${gorillaId}/template/`);
                 const targetEl = document.getElementById('profileModalBody');
