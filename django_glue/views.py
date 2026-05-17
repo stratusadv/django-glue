@@ -1,4 +1,5 @@
 import json
+import logging
 from urllib.parse import urlparse, parse_qs
 
 from django.http import JsonResponse, HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict
@@ -108,6 +109,7 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
         try:
             response = view_func(wrapped, **view_kwargs)
         except Exception as e:
+            logging.exception(e)
             return JsonResponse(
                 {'error': f'View raised an exception: {str(e)}'},
                 status=500
