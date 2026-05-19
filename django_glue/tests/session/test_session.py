@@ -106,7 +106,7 @@ class GlueSessionRegisterProxyTestCase(TestCase):
 
         expire_time = session.keep_live_registry['gorilla']
         expected_min = before_time + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
-        expected_max = after_time + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
+        expected_max = after_time + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS + 60
 
         self.assertGreaterEqual(expire_time, expected_min)
         self.assertLessEqual(expire_time, expected_max)

@@ -2,16 +2,12 @@ name: Update uv.lock File
 
 on:
   push:
-    branches: [master, develop]
+    branches: [master]
     paths:
-      - '.python-version'
-      - '*requirements.txt'
       - 'pyproject.toml'
   pull_request:
-    branches: [master, develop]
+    branches: [master]
     paths:
-      - '.python-version'
-      - '*requirements.txt'
       - 'pyproject.toml'
   workflow_dispatch:
 
@@ -26,14 +22,14 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Setup Python
       uses: actions/setup-python@v6
       with:
-        python-version-file: '.python-version'
+        python-version: '3.11'
 
     - name: Install uv
       uses: astral-sh/setup-uv@v6
@@ -50,10 +46,10 @@ jobs:
 
         # Check for changes and set output
         if git diff --quiet uv.lock; then
-          echo "lock_updated=false" >> $GITHUB_OUTPUT
+          echo "lock_updated=false" >> "$GITHUB_OUTPUT"
           echo "No changes detected in uv lock file"
         else
-          echo "lock_updated=true" >> $GITHUB_OUTPUT
+          echo "lock_updated=true" >> "$GITHUB_OUTPUT"
           echo "uv lock file has been updated"
         fi
       id: uv_lock

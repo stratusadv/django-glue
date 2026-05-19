@@ -13,7 +13,7 @@ js-tests-watch:
     bun test --watch
 migrate-and-seed:
     python manage.py migrate
-    python test_project/seed.py
+    python seed.py
 run-doc-tests:
     mkdocs build --strict
 run-coverage:
@@ -21,7 +21,10 @@ run-coverage:
 run-server:
     python manage.py runserver
 run-tests:
-    python -m unittest discover -v ./tests
+    python -m pytest django_glue/tests/ -v
+lock:
+    bun install
+    uv lock
 venv:
     uv venv .venv/
     uv pip install -e .[development,documentation]

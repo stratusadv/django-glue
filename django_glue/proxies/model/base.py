@@ -105,10 +105,12 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         if self.fields and isinstance(self.fields, Sequence):
             included_model_fields = [
                 field for field in included_model_fields
-                if (
-                    field.name in self.fields and
-                    field.name not in self.exclude
-                )
+                if field.name in self.fields
+            ]
+        if self.exclude:
+            included_model_fields = [
+                field for field in included_model_fields
+                if field.name not in self.exclude
             ]
 
         return {

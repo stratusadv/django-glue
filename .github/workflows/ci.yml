@@ -12,7 +12,7 @@ jobs:
     name: Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: stratusadv/github-actions/linting@v1
         with:
           python-version: '3.11'
@@ -25,19 +25,19 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: stratusadv/github-actions/tests@v1
         with:
           python-version: ${{ matrix.python-version }}
-          settings-module: system.settings
+          settings-module: test_project.settings
           sync-extras: development documentation
-          manage-py-path: test_project/manage.py
+          manage-py-path: manage.py
 
   js-tests:
     name: JavaScript Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -48,8 +48,9 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    needs: [tests, js-tests]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - uses: stratusadv/github-actions/security@v1
         with:
           python-version: '3.11'

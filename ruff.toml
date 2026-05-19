@@ -121,7 +121,7 @@ indent-style = "space"
 skip-magic-trailing-comma = true
 
 [lint.isort]
-known-first-party = ["system", "app"]
+known-first-party = ["django_glue", "test_project"]
 
 [lint.mccabe]
 max-complexity = 6

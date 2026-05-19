@@ -5,6 +5,6 @@ coverage = true
 
 [define]
 "BASE_URL_NAME" = "'django_glue'"
-"GLUE_VERSION" = "'1.0.0'"
+"GLUE_VERSION" = "'1.0.0a1'"
 "CDN" = "true"
 "process.env.NODE_ENV" = "'development'"

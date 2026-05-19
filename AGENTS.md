@@ -487,6 +487,32 @@ The JS client starts a `setInterval` on init, collecting all proxy names and sen
 
 ## Development
 
+### IMPORTANT: Always Use Justfile
+
+**ALWAYS use `just` commands instead of running commands directly.** The justfile loads environment variables from `development.env` which are required for the project to function correctly.
+
+| Task | Command |
+|------|---------|
+| Run Python tests | `just run-tests` |
+| Run Python tests with coverage | `just run-coverage` |
+| Run JS tests | `just js-tests` |
+| Run JS tests in watch mode | `just js-tests-watch` |
+| Build JS bundle | `just js-build` |
+| Run dev server | `just run-server` |
+| Migrate and seed DB | `just migrate-and-seed` |
+| Run doc tests | `just run-doc-tests` |
+| Lock dependencies (bun + uv) | `just lock` |
+| Create venv | `just venv` |
+
+### Testing After Changes
+
+**ALWAYS run tests after making any code changes, before finishing a request.**
+
+- After changing **Python code**: run `just run-tests`
+- After changing **JavaScript code**: run `just js-tests`
+- After changing **both**: run both commands
+- If tests fail, fix the issue and re-run until all tests pass
+
 ### Setup
 
 ```bash
@@ -560,7 +586,7 @@ GitHub Actions workflows in `.github/workflows/`:
 - **publish_pypi_package.yml**: Builds and publishes to PyPI on release
 - **uv_lock.yml**: Auto-updates uv.lock on dependency changes
 
-CI uses custom `stratusadv/github-actions` reusable actions and `system.settings` as the settings module (different from local dev's `test_project.settings`).
+CI uses custom `stratusadv/github-actions` reusable actions and `test_project.settings` as the settings module.
 
 ## Test Conventions
 

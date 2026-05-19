@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env_file = Path(__file__).parent / 'development.env'
+env_file = Path(__file__).parent.parent / 'development.env'
 load_dotenv(env_file)
 
 
