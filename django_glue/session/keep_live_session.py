@@ -28,7 +28,7 @@ class KeepLiveSession(BaseGlueSession):
 
     @staticmethod
     def get_next_expire_time() -> float:
-        return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS
+        return time() + settings.DJANGO_GLUE_KEEP_LIVE_EXPIRE_TIME_SECONDS + 60  # Buffer for Request Timeouts
 
     def set_unique_name(self, unique_name: str) -> None:
         self.session.setdefault(unique_name, self.get_next_expire_time())
