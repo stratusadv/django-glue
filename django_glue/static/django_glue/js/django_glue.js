@@ -72,14 +72,20 @@
     }
   }
 
-  // client_js/src/utils.js
-  var snakeToPascal = (string) => {
-    return string.split("/").map((snake) => snake.split("_").map((substr) => substr.charAt(0).toUpperCase() + substr.slice(1)).join("")).join("/");
-  };
+  // client_js/src/proxies/field.js
+  class GlueFieldProxy {
+    constructor() {
+      this.something = "Hello World";
+    }
+    valueOf() {
+      return this.something;
+    }
+  }
+  var field_default = GlueFieldProxy;
 
   // client_js/src/proxies/form.js
   class GlueFormProxy extends BaseGlueProxy {
-    static name = "baseGlueProxy";
+    static name = "form";
     constructor({ http, proxyUniqueName, contextData, actions = null }) {
       super({ http, proxyUniqueName, contextData, actions });
       this._values = { ...this._contextData.initial || {} };
@@ -155,6 +161,7 @@
           fieldData = this._defineModelChoiceField(fieldName, fieldData);
         }
         this._fields[fieldName] = fieldData;
+        this._fields[fieldName]["name"] = fieldName;
         if (!fieldData.hasOwnProperty("value")) {
           Object.defineProperty(fieldData, "value", {
             get: function() {
@@ -167,10 +174,17 @@
             }.bind(this)
           });
         }
+        if (!fieldData.hasOwnProperty("errors")) {
+          Object.defineProperty(fieldData, "errors", {
+            get: function() {
+              return this._errors?.[fieldName];
+            }.bind(this)
+          });
+        }
         Object.keys(this._fields[fieldName]).forEach((attributeName) => {
-          this[`${fieldName}${snakeToPascal(attributeName)}`] = this._fields?.[fieldName]?.[attributeName];
           this._updateErrorAttributesForField(fieldName);
         });
+        this._fields["something"] = new field_default;
       });
     }
     get(pk = null) {
@@ -182,8 +196,8 @@
       });
     }
     _updateErrorAttributesForField(fieldName) {
-      this[`${fieldName}HasErrors`] = this._errors[fieldName]?.length > 0;
-      this[`${fieldName}ErrorText`] = this._errors[fieldName]?.join(", ");
+      this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
+      this._fields[fieldName][`error_text`] = this._errors[fieldName]?.join(", ");
     }
     _updateErrors(errors) {
       this._errors = errors || {};
@@ -252,15 +266,6 @@
       }
       this.$key = `django-glue-${++_keyCounter}`;
       this._parent = parentQuerySet;
-      this.$form = {};
-      Object.defineProperty(this.$form, "$fields", {
-        get: () => {
-          return this._fields;
-        },
-        set: (value) => {
-          this._fields = value;
-        }
-      });
     }
     _defineExtraFields() {
       Object.keys(this._values).forEach((fieldName) => {

@@ -23,12 +23,6 @@ export class GlueModelProxy extends GlueFormProxy {
 
         this.$key = `django-glue-${++_keyCounter}`
         this._parent = parentQuerySet
-        this.$form = {}
-
-        Object.defineProperty(this.$form,'$fields', {
-            get: () => { return this._fields },
-            set: value => { this._fields = value },
-        })
     }
 
     _defineExtraFields() {

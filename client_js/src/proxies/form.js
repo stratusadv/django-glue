@@ -1,5 +1,4 @@
 import {BaseGlueProxy} from "./base";
-import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
     static name = 'form'
@@ -57,7 +56,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             return fieldData.__glue__choicesPromise;
         }.bind(this)
 
-        this[`${fieldName}Choices`] = async function () {
+        this._fields[fieldName].choices = async function () {
             if (!fieldData._choicesLoaded) {
                 await choicesAction();
             }
@@ -98,6 +97,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             }
 
             this._fields[fieldName] = fieldData;
+            this._fields[fieldName]['name'] = fieldName;
 
             if (!fieldData.hasOwnProperty('value')) {
                 Object.defineProperty(fieldData, 'value', {
@@ -111,10 +111,18 @@ export class GlueFormProxy extends BaseGlueProxy {
                 });
             }
 
+            if (!fieldData.hasOwnProperty('errors')) {
+                Object.defineProperty(fieldData, 'errors', {
+                    get: function () {
+                        return this._errors?.[fieldName];
+                    }.bind(this),
+                });
+            }
+
             Object.keys(this._fields[fieldName]).forEach(attributeName => {
-                this[`${fieldName}${snakeToPascal(attributeName)}`] = this._fields?.[fieldName]?.[attributeName]
                 this._updateErrorAttributesForField(fieldName)
             })
+
         })
     }
 
@@ -128,8 +136,8 @@ export class GlueFormProxy extends BaseGlueProxy {
     }
 
     _updateErrorAttributesForField(fieldName) {
-        this[`${fieldName}HasErrors`] = this._errors[fieldName]?.length > 0;
-        this[`${fieldName}ErrorText`] = this._errors[fieldName]?.join(', ');
+        this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
+        this._fields[fieldName][`error_text`] = this._errors[fieldName]?.join(', ');
     }
 
     _updateErrors(errors) {
