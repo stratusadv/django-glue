@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { GlueModelProxy } from '../../src/proxies/model';
-import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
-
-mock.module('../../src/constants', () => ({
-    actionUrl: '/django_glue/',
-    KEEP_LIVE_URL_PATH: '/django_glue/keep_live/'
-}));
+import { createMockContextData, setupCookieMock } from '../testUtils';
 
 describe('GlueModelProxy', () => {
     let originalFetch;
+
+    const createMockHttp = (response = { data: {} }) => ({
+        sendActionRequest: mock(() => Promise.resolve(response))
+    });
 
     beforeEach(() => {
         originalFetch = global.fetch;
@@ -21,12 +20,14 @@ describe('GlueModelProxy', () => {
 
     describe('constructor', () => {
         it('creates field accessors from contextData.fields', () => {
+            const http = createMockHttp();
             const contextData = createMockContextData(
                 { title: {}, done: {} },
                 { get: {}, save: {}, delete: {} }
             );
 
             const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
                 values: { title: 'Test', done: false }
@@ -37,12 +38,14 @@ describe('GlueModelProxy', () => {
         });
 
         it('allows setting field values', () => {
+            const http = createMockHttp();
             const contextData = createMockContextData(
                 { title: {} },
                 { get: {}, save: {} }
             );
 
             const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
                 values: { title: 'Original' }
@@ -51,16 +54,18 @@ describe('GlueModelProxy', () => {
             proxy.title = 'Updated';
 
             expect(proxy.title).toBe('Updated');
-            expect(proxy.values.title).toBe('Updated');
+            expect(proxy._values.title).toBe('Updated');
         });
 
-        it('initializes values object when setting if null', () => {
+        it('initializes _values object when setting if null', () => {
+            const http = createMockHttp();
             const contextData = createMockContextData(
                 { title: {} },
                 { get: {}, save: {} }
             );
 
             const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
                 values: null
@@ -68,129 +73,201 @@ describe('GlueModelProxy', () => {
 
             proxy.title = 'New Value';
 
-            expect(proxy.values).toEqual({ title: 'New Value' });
+            expect(proxy._values).toEqual({ title: 'New Value' });
         });
 
         it('stores passed values', () => {
+            const http = createMockHttp();
             const contextData = createMockContextData(
                 { id: {}, title: {} },
                 { get: {} }
             );
 
             const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
                 values: { id: 1, title: 'Test' }
             });
 
-            expect(proxy.values).toEqual({ id: 1, title: 'Test' });
-        });
-    });
-
-    describe('save', () => {
-        it('sends save action with current values', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"id": 1, "title": "Saved"}'),
-                json: () => Promise.resolve({ id: 1, title: 'Saved' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { title: {} },
-                { save: {} }
-            );
-
-            const proxy = new GlueModelProxy({
-                proxyUniqueName: 'task',
-                contextData,
-                values: { title: 'My Task' }
-            });
-
-            const result = await proxy.save();
-
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: JSON.stringify({
-                        unique_name: 'task',
-                        action: 'save',
-                        payload: { title: 'My Task' }
-                    })
-                })
-            );
-            expect(result).toEqual({ id: 1, title: 'Saved' });
+            expect(proxy._values).toEqual({ id: 1, title: 'Test' });
         });
 
-        it('updates values with response data', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"id": 1, "title": "Server Title"}'),
-                json: () => Promise.resolve({ id: 1, title: 'Server Title' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { title: {} },
-                { save: {} }
-            );
+        it('creates $key property', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({}, {});
 
             const proxy = new GlueModelProxy({
-                proxyUniqueName: 'task',
-                contextData,
-                values: { title: 'Client Title' }
-            });
-
-            await proxy.save();
-
-            expect(proxy.values.title).toBe('Server Title');
-        });
-    });
-
-    describe('delete', () => {
-        it('sends delete action', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{}'),
-                json: () => Promise.resolve({}),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { title: {} },
-                { delete: {} }
-            );
-
-            const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
                 values: { id: 1 }
             });
 
-            await proxy.delete();
-
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: expect.stringContaining('"action":"delete"')
-                })
-            );
+            expect(proxy.$key).toMatch(/^django-glue-\d+$/);
         });
 
-        it('returns response data', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"deleted": true}'),
-                json: () => Promise.resolve({ deleted: true }),
-                clone: function() { return this; }
-            }));
+        it('creates $form object', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({ name: {} }, {});
 
+            const proxy = new GlueModelProxy({
+                http,
+                proxyUniqueName: 'task',
+                contextData,
+                values: { name: 'test' }
+            });
+
+            expect(proxy.$form).toBeDefined();
+            expect(proxy.$form.$fields).toBe(proxy._fields);
+        });
+
+        it('defines extra fields not in contextData.fields', () => {
+            const http = createMockHttp();
             const contextData = createMockContextData(
-                {},
-                { delete: {} }
+                { id: {} },
+                {}
             );
 
             const proxy = new GlueModelProxy({
+                http,
+                proxyUniqueName: 'task',
+                contextData,
+                values: { id: 1, extra_field: 'extra' }
+            });
+
+            expect(proxy.extra_field).toBe('extra');
+        });
+    });
+
+    describe('_isNew', () => {
+        it('returns true when values.id is falsy', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({}, {});
+
+            const proxy = new GlueModelProxy({
+                http,
+                proxyUniqueName: 'task',
+                contextData,
+                values: { title: 'New' }
+            });
+
+            expect(proxy._isNew).toBe(true);
+        });
+
+        it('returns true when values is null', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({}, {});
+
+            const proxy = new GlueModelProxy({
+                http,
+                proxyUniqueName: 'task',
+                contextData,
+                values: null
+            });
+
+            expect(proxy._isNew).toBe(true);
+        });
+
+        it('returns false when values.id is set', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({}, {});
+
+            const proxy = new GlueModelProxy({
+                http,
+                proxyUniqueName: 'task',
+                contextData,
+                values: { id: 1, title: 'Existing' }
+            });
+
+            expect(proxy._isNew).toBe(false);
+        });
+    });
+
+    describe('get', () => {
+        it('calls _processAction with get action', async () => {
+            let capturedAction = null;
+            const mockHttp = {
+                sendActionRequest: mock((req) => {
+                    capturedAction = req.action;
+                    return Promise.resolve({ data: { id: 1, title: 'Fetched' } });
+                })
+            };
+
+            const contextData = createMockContextData({ title: {} }, {});
+            const proxy = new GlueModelProxy({
+                http: mockHttp,
+                proxyUniqueName: 'task',
+                contextData,
+                values: { id: 0 }
+            });
+
+            await proxy.get();
+
+            expect(capturedAction).toBe('get');
+            expect(proxy._values).toEqual({ id: 1, title: 'Fetched' });
+            expect(proxy._loaded).toBe(true);
+        });
+
+        it('delegates to parent queryset when _parent exists', async () => {
+            let capturedAction = null;
+            let capturedPayload = null;
+            const parentMockHttp = {
+                sendActionRequest: mock((req) => {
+                    capturedAction = req.action;
+                    capturedPayload = req.payload;
+                    return Promise.resolve({ data: { id: 5, title: 'From Parent' } });
+                })
+            };
+
+            const parentContextData = createMockContextData({}, { get: {} });
+            const parent = {
+                http: parentMockHttp,
+                _uniqueName: 'tasks',
+                _contextData: parentContextData,
+                _actions: { get: {} },
+                _listeners: { before: {}, after: {}, error: {} },
+                _processAction: async function(actionName, data) {
+                    const response = await this.http.sendActionRequest({
+                        uniqueName: this._uniqueName,
+                        action: actionName,
+                        payload: data,
+                        contextData: this._contextData
+                    });
+                    return response.data;
+                }
+            };
+
+            const contextData = createMockContextData({ title: {} }, {});
+            const proxy = new GlueModelProxy({
+                http: parentMockHttp,
+                proxyUniqueName: 'tasks',
+                contextData,
+                values: { id: 0 },
+                parentQuerySet: parent
+            });
+
+            await proxy.get(5);
+
+            expect(capturedAction).toBe('get');
+            expect(capturedPayload).toEqual({ id: 5 });
+            expect(proxy._values).toEqual({ id: 5, title: 'From Parent' });
+        });
+    });
+
+    describe('delete', () => {
+        it('sends delete action for existing instance', async () => {
+            let capturedPayload = null;
+            const mockHttp = {
+                sendActionRequest: mock((req) => {
+                    capturedPayload = req.payload;
+                    return Promise.resolve({ data: { deleted: true } });
+                })
+            };
+
+            const contextData = createMockContextData({ title: {} }, {});
+            const proxy = new GlueModelProxy({
+                http: mockHttp,
                 proxyUniqueName: 'task',
                 contextData,
                 values: { id: 1 }
@@ -198,169 +275,107 @@ describe('GlueModelProxy', () => {
 
             const result = await proxy.delete();
 
+            expect(capturedPayload).toEqual({ id: 1 });
             expect(result).toEqual({ deleted: true });
         });
-    });
 
-    describe('autoFetch', () => {
-        it('calls loadData when autoFetch is true and no values', () => {
-            global.fetch = createMockFetch({
-                '/django_glue/': { ok: true, data: { title: 'Fetched' } }
-            });
+        it('calls parent refresh for new instance with parent', async () => {
+            const refreshSpy = mock(() => Promise.resolve());
+            const parent = {
+                refresh: refreshSpy
+            };
 
-            const contextData = createMockContextData(
-                { title: {} },
-                { get: {} }
-            );
-
+            const contextData = createMockContextData({}, {});
             const proxy = new GlueModelProxy({
-                proxyUniqueName: 'task',
+                http: createMockHttp(),
+                proxyUniqueName: 'tasks',
                 contextData,
-                autoFetch: true,
-                values: null
+                values: { title: 'New' },
+                parentQuerySet: parent
             });
 
-            // autoFetch triggers loadData in postInit
-            expect(global.fetch).toHaveBeenCalled();
+            const result = await proxy.delete();
+
+            expect(refreshSpy).toHaveBeenCalled();
+            expect(result).toEqual({ success: true });
         });
 
-        it('does not call loadData when values are provided', () => {
-            global.fetch = mock(() => {});
+        it('calls parent refresh after deleting existing instance', async () => {
+            const refreshSpy = mock(() => Promise.resolve());
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: { deleted: true } })),
+            };
+            const parent = {
+                refresh: refreshSpy
+            };
 
-            const contextData = createMockContextData(
-                { title: {} },
-                { get: {}, save: {}, delete: {} }
-            );
-
-            // When values are provided, autoFetch should not trigger loadData
-            // because the condition is `if (this.autoFetch && !this.values)`
+            const contextData = createMockContextData({}, {});
             const proxy = new GlueModelProxy({
-                proxyUniqueName: 'task',
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
                 contextData,
-                autoFetch: false,  // autoFetch=false means no automatic loading
-                values: { title: 'Already have data' }
+                values: { id: 1 },
+                parentQuerySet: parent
             });
 
-            // Access the field - should not trigger fetch because values exist
-            const _ = proxy.title;
+            await proxy.delete();
 
-            expect(global.fetch).not.toHaveBeenCalled();
+            expect(refreshSpy).toHaveBeenCalled();
         });
     });
 
-    describe('lazy loading', () => {
-        it('triggers loadData when accessing field without values', () => {
-            global.fetch = createMockFetch({
-                '/django_glue/': { ok: true, data: { title: 'Loaded' } }
-            });
+    describe('inherits from GlueFormProxy', () => {
+        it('can call validate', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { success: true, errors: {} }
+                }))
+            };
 
-            const contextData = createMockContextData(
-                { title: {} },
-                { get: {} }
-            );
-
+            const contextData = createMockContextData({ name: {} }, {});
             const proxy = new GlueModelProxy({
+                http: mockHttp,
                 proxyUniqueName: 'task',
                 contextData,
-                autoFetch: false,
-                values: null
+                values: { name: 'test' }
             });
 
-            // Access field should trigger loading
-            const _ = proxy.title;
-
-            expect(global.fetch).toHaveBeenCalled();
+            const result = await proxy.validate();
+            expect(result).toEqual({ success: true, errors: {} });
         });
 
-        it('does not reload when already loading', () => {
-            global.fetch = createMockFetch({
-                '/django_glue/': { ok: true, data: { title: 'Loaded' } }
-            });
+        it('can call save', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { success: true, errors: {} }
+                }))
+            };
 
-            const contextData = createMockContextData(
-                { title: {} },
-                { get: {} }
-            );
-
+            const contextData = createMockContextData({ name: {} }, {});
             const proxy = new GlueModelProxy({
+                http: mockHttp,
                 proxyUniqueName: 'task',
                 contextData,
-                autoFetch: false,
-                values: null
+                values: { name: 'test' }
             });
 
-            // Access field multiple times
-            const _1 = proxy.title;
-            const _2 = proxy.title;
-
-            // Should only call fetch once
-            expect(global.fetch.mock.calls.length).toBe(1);
-        });
-    });
-
-    describe('loadData', () => {
-        it('updates values from response', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"id": 1, "title": "Loaded Title"}'),
-                json: () => Promise.resolve({ id: 1, title: 'Loaded Title' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { id: {}, title: {} },
-                { get: {}, save: {}, delete: {} }
-            );
-
-            const proxy = new GlueModelProxy({
-                proxyUniqueName: 'task',
-                contextData,
-                autoFetch: false,
-                values: { id: 0, title: 'placeholder' }  // Provide initial values to prevent auto-loading
-            });
-
-            // Clear any previous calls
-            global.fetch.mockClear();
-
-            // Now explicitly call loadData
-            proxy.loadData();
-
-            // Wait for promise to resolve
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            expect(proxy.values).toEqual({ id: 1, title: 'Loaded Title' });
+            const result = await proxy.save();
+            expect(result.success).toBe(true);
         });
 
-        it('sets loaded flag after completion', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"title": "test"}'),
-                json: () => Promise.resolve({ title: 'test' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { title: {} },
-                { get: {}, save: {}, delete: {} }
-            );
-
+        it('has hasErrors method', () => {
+            const http = createMockHttp();
+            const contextData = createMockContextData({ name: {} }, {});
             const proxy = new GlueModelProxy({
+                http,
                 proxyUniqueName: 'task',
                 contextData,
-                autoFetch: false,
-                values: { title: 'placeholder' }  // Provide initial values
+                values: { name: 'test' }
             });
 
-            // Clear any previous calls
-            global.fetch.mockClear();
-
-            proxy.loadData();
-
-            // Wait for promise to resolve
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            expect(proxy.loaded).toBe(true);
-            expect(proxy.loading).toBe(false);
+            expect(proxy.hasErrors()).toBe(false);
+            proxy._errors = { name: ['Error'] };
+            expect(proxy.hasErrors()).toBe(true);
         });
     });
 });

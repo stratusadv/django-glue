@@ -1,257 +1,303 @@
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import GlueClient from '../src/client';
-import { resetConfig, getConfig } from '../src/config';
-import { createMockFetch, setupCookieMock } from './testUtils';
-
-mock.module('../src/constants', () => ({
-    actionUrl: '/django_glue/',
-    KEEP_LIVE_URL_PATH: '/django_glue/keep_live/'
-}));
+import { setupCookieMock } from './testUtils';
 
 describe('GlueClient', () => {
     let client;
-    let originalFetch;
     let originalSetInterval;
     let originalClearInterval;
 
     beforeEach(() => {
-        originalFetch = global.fetch;
         originalSetInterval = global.setInterval;
         originalClearInterval = global.clearInterval;
         client = new GlueClient();
-        resetConfig();
-        setupCookieMock({ csrftoken: 'test-token' });
 
         // Mock setInterval for keep-alive
         global.setInterval = mock(() => 123);
         global.clearInterval = mock(() => {});
+        setupCookieMock({ csrftoken: 'test-token' });
     });
 
     afterEach(() => {
-        global.fetch = originalFetch;
         global.setInterval = originalSetInterval;
         global.clearInterval = originalClearInterval;
         GlueClient.contextData = {};
+        GlueClient.proxyRegistry = {};
     });
 
     describe('init', () => {
-        it('defines proxy properties from registry', () => {
-            global.fetch = createMockFetch({});
+        it('creates http instance with config', () => {
+            const config = {
+                requestTimeoutSeconds: 60,
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
-            const registry = {
-                'task': { unique_name: 'task', subject_type: 'Model' },
-                'tasks': { unique_name: 'tasks', subject_type: 'QuerySet' }
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config
+            });
+
+            expect(client.http).toBeDefined();
+            expect(client._config).toBe(config);
+        });
+
+        it('defines proxy properties from contextData', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
             };
 
             const contextData = {
-                'task': { fields: { id: {} }, actions: { get: {}, save: {}, delete: {} } },
-                'tasks': { fields: { id: {} }, actions: { all: {}, filter: {} } }
+                'task': {
+                    subject_type: 'Model',
+                    fields: { id: {}, title: {} },
+                    actions: { get: {}, save: {}, delete: {} },
+                    initial: {}
+                },
+                'tasks': {
+                    subject_type: 'QuerySet',
+                    fields: { id: {} },
+                    actions: { query_with_params: {} },
+                    initial: {}
+                }
             };
+
+            client.init({
+                proxyRegistryFromSession: { task: 'view', tasks: 'change' },
+                contextDataForProxies: contextData,
+                config
+            });
+
+            expect(client.model.task).toBeDefined();
+            expect(client.querySet.tasks).toBeDefined();
+        });
+
+        it('sets static contextData on GlueClient class', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
+
+            const contextData = {
+                'task': {
+                    subject_type: 'Model',
+                    fields: { id: {} },
+                    actions: { get: {} },
+                    initial: {}
+                }
+            };
+
+            client.init({
+                proxyRegistryFromSession: { task: 'view' },
+                contextDataForProxies: contextData,
+                config
+            });
+
+            expect(GlueClient.contextData.task).toBeDefined();
+        });
+
+        it('sets static proxyRegistry on GlueClient class', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
+
+            const registry = { task: 'delete', tasks: 'change' };
 
             client.init({
                 proxyRegistryFromSession: registry,
-                contextDataForProxies: contextData,
-                keepLiveInterval: 60000
-            });
-
-            // Properties should be defined (lazy - not instantiated yet)
-            expect(Object.getOwnPropertyDescriptor(client, 'task')).toBeDefined();
-            expect(Object.getOwnPropertyDescriptor(client, 'tasks')).toBeDefined();
-        });
-
-        it('sets contextData on GlueClient class', () => {
-            global.fetch = createMockFetch({});
-
-            const contextData = {
-                'task': { fields: { id: {} }, actions: { get: {}, save: {}, delete: {} } }
-            };
-
-            client.init({
-                proxyRegistryFromSession: { 'task': { unique_name: 'task', subject_type: 'Model' } },
-                contextDataForProxies: contextData,
-                keepLiveInterval: 60000
-            });
-
-            expect(GlueClient.contextData).toBe(contextData);
-        });
-
-        it('applies config when provided', () => {
-            global.fetch = createMockFetch({});
-
-            client.init({
-                proxyRegistryFromSession: {},
                 contextDataForProxies: {},
-                keepLiveInterval: 60000,
-                config: { requestTimeoutSeconds: 5000 }
+                config
             });
 
-            expect(getConfig().requestTimeoutSeconds).toBe(5000);
-        });
-
-        it('works without config parameter', () => {
-            global.fetch = createMockFetch({});
-
-            // Should not throw
-            client.init({
-                proxyRegistryFromSession: {},
-                contextDataForProxies: {},
-                keepLiveInterval: 60000
-            });
-
-            // Default config should be intact
-            expect(getConfig().requestTimeoutSeconds).toBe(30000);
+            expect(GlueClient.proxyRegistry).toEqual(registry);
         });
 
         it('handles empty registry', () => {
-            global.fetch = createMockFetch({});
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
             // Should not throw
             client.init({
                 proxyRegistryFromSession: {},
                 contextDataForProxies: {},
-                keepLiveInterval: 60000
+                config
+            });
+        });
+
+        it('works without config parameter', () => {
+            // Should not throw
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
             });
         });
     });
 
-    describe('lazy proxy instantiation', () => {
-        it('creates proxy on first access', () => {
-            global.fetch = createMockFetch({});
+    describe('proxy type creation', () => {
+        it('creates GlueModelProxy for Model subject type', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
             const contextData = {
                 'task': {
+                    subject_type: 'Model',
                     fields: { id: {}, title: {} },
-                    actions: { get: {}, save: {}, delete: {} }
+                    actions: { get: {}, save: {}, delete: {} },
+                    initial: {}
                 }
             };
 
             client.init({
-                proxyRegistryFromSession: {
-                    'task': { unique_name: 'task', subject_type: 'Model' }
-                },
+                proxyRegistryFromSession: { task: 'view' },
                 contextDataForProxies: contextData,
-                keepLiveInterval: 60000
+                config
             });
-
-            const proxy = client.task;
-
-            expect(proxy.uniqueName).toBe('task');
-        });
-
-        it('returns same proxy instance on subsequent access', () => {
-            global.fetch = createMockFetch({});
-
-            const contextData = {
-                'task': {
-                    fields: { id: {} },
-                    actions: { get: {}, save: {}, delete: {} }
-                }
-            };
-
-            client.init({
-                proxyRegistryFromSession: {
-                    'task': { unique_name: 'task', subject_type: 'Model' }
-                },
-                contextDataForProxies: contextData,
-                keepLiveInterval: 60000
-            });
-
-            const proxy1 = client.task;
-            const proxy2 = client.task;
-
-            expect(proxy1).toBe(proxy2);
-        });
-
-        it('creates correct proxy type for model', () => {
-            global.fetch = createMockFetch({});
-
-            const contextData = {
-                'task': {
-                    fields: { id: {}, title: {} },
-                    actions: { get: {}, save: {}, delete: {} }
-                }
-            };
-
-            client.init({
-                proxyRegistryFromSession: {
-                    'task': { unique_name: 'task', subject_type: 'Model' }
-                },
-                contextDataForProxies: contextData,
-                keepLiveInterval: 60000
-            });
-
-            const proxy = client.task;
 
             // Model proxy should have save and delete methods
-            expect(typeof proxy.save).toBe('function');
-            expect(typeof proxy.delete).toBe('function');
+            expect(typeof client.model.task.save).toBe('function');
+            expect(typeof client.model.task.delete).toBe('function');
         });
 
-        it('creates correct proxy type for queryset', () => {
-            global.fetch = createMockFetch({});
+        it('creates GlueQuerySetProxy for QuerySet subject type', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
             const contextData = {
                 'tasks': {
+                    subject_type: 'QuerySet',
                     fields: { id: {}, title: {} },
-                    actions: { all: {}, filter: {} }
+                    actions: { query_with_params: {} },
+                    initial: {}
                 }
             };
 
             client.init({
-                proxyRegistryFromSession: {
-                    'tasks': { unique_name: 'tasks', subject_type: 'QuerySet' }
-                },
+                proxyRegistryFromSession: { tasks: 'change' },
                 contextDataForProxies: contextData,
-                keepLiveInterval: 60000
+                config
             });
 
-            const proxy = client.tasks;
-
-            // QuerySet proxy should have all and filter methods
-            expect(typeof proxy.queryWithParams).toBe('function');
-            expect(typeof proxy.filter).toBe('function');
+            // QuerySet proxy should have queryWithParams and filter methods
+            expect(typeof client.querySet.tasks.queryWithParams).toBe('function');
+            expect(typeof client.querySet.tasks.filter).toBe('function');
         });
 
-        it('creates correct proxy type for form', () => {
-            global.fetch = createMockFetch({});
+        it('creates GlueFormProxy for BaseForm subject type', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
             const contextData = {
                 'contact_form': {
+                    subject_type: 'BaseForm',
                     fields: { name: {}, email: {} },
                     initial: {},
-                    actions: { get: {}, validate: {}, submit: {} }
+                    actions: { get: {}, validate: {}, save: {} }
                 }
             };
 
             client.init({
-                proxyRegistryFromSession: {
-                    'contact_form': { unique_name: 'contact_form', subject_type: 'BaseForm' }
-                },
+                proxyRegistryFromSession: { contact_form: 'change' },
                 contextDataForProxies: contextData,
-                keepLiveInterval: 60000
+                config
             });
 
-            const proxy = client.contact_form;
-
-            // Form proxy should have validate and submit methods
-            expect(typeof proxy.validate).toBe('function');
-            expect(typeof proxy.submit).toBe('function');
+            // Form proxy should have validate and save methods
+            expect(typeof client.form.contact_form.validate).toBe('function');
+            expect(typeof client.form.contact_form.save).toBe('function');
         });
     });
 
-    describe('static contextData', () => {
-        it('is shared across instances', () => {
-            global.fetch = createMockFetch({});
+    describe('initializeProxies', () => {
+        it('can be called independently to add more proxies', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
 
-            const contextData = { shared: 'data' };
+            client._config = config;
+            client.http = { sendKeepLiveRequest: () => Promise.resolve({ ok: true }) };
+
+            const contextData = {
+                'task': {
+                    subject_type: 'Model',
+                    fields: { id: {} },
+                    actions: { get: {} },
+                    initial: {}
+                }
+            };
+
+            client.initializeProxies({ task: 'view' }, contextData);
+
+            expect(client.model.task).toBeDefined();
+            expect(GlueClient.contextData.task).toBeDefined();
+        });
+    });
+
+    describe('view', () => {
+        it('returns a GlueView instance', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
+
+            // Mock window.location for GlueView constructor
+            Object.defineProperty(window, 'location', {
+                value: { origin: 'http://localhost:3000', pathname: '/' },
+                writable: true,
+                configurable: true
+            });
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: contextData,
-                keepLiveInterval: 60000
+                contextDataForProxies: {},
+                config
             });
 
-            expect(GlueClient.contextData).toBe(contextData);
+            const view = client.view('/some/url/', { shared: 'data' });
+
+            expect(view).toBeDefined();
+            expect(view.url).toBe('/some/url/');
+            expect(view.shared_payload).toEqual({ shared: 'data' });
+        });
+    });
+
+    describe('fetch', () => {
+        it('delegates to http.sendRequest', async () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+            };
+
+            client._config = config;
+            const sendRequestSpy = mock(() => Promise.resolve({ data: { result: 'ok' } }));
+            client.http = { sendRequest: sendRequestSpy };
+
+            const result = await client.fetch('/test', { method: 'GET' });
+
+            expect(sendRequestSpy).toHaveBeenCalledWith('/test', { method: 'GET' });
+            expect(result).toEqual({ data: { result: 'ok' } });
         });
     });
 });

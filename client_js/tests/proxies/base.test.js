@@ -1,11 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { BaseGlueProxy } from '../../src/proxies/base';
-import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
-
-mock.module('../../src/constants', () => ({
-    actionUrl: '/django_glue/',
-    KEEP_LIVE_URL_PATH: '/django_glue/keep_live/'
-}));
+import { createMockContextData, setupCookieMock } from '../testUtils';
 
 describe('BaseGlueProxy', () => {
     let originalFetch;
@@ -20,15 +15,36 @@ describe('BaseGlueProxy', () => {
     });
 
     describe('constructor', () => {
-        it('sets uniqueName from constructor params', () => {
+        it('stores http instance', () => {
+            const http = { sendActionRequest: () => Promise.resolve({ data: {} }) };
+            const contextData = createMockContextData({}, { get: {} });
+            const proxy = new BaseGlueProxy({
+                http,
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            expect(proxy.http).toBe(http);
+        });
+
+        it('stores uniqueName as private _uniqueName', () => {
             const contextData = createMockContextData({}, { get: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData,
-                actions: { get: {} }
+                contextData
             });
 
-            expect(proxy.uniqueName).toBe('test_proxy');
+            expect(proxy._uniqueName).toBe('test_proxy');
+        });
+
+        it('stores contextData as private _contextData', () => {
+            const contextData = createMockContextData({ id: {} }, { get: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            expect(proxy._contextData).toBe(contextData);
         });
 
         it('uses actions from contextData if not provided', () => {
@@ -38,7 +54,7 @@ describe('BaseGlueProxy', () => {
                 contextData
             });
 
-            expect(proxy.actions).toEqual({ save: {}, delete: {} });
+            expect(proxy._actions).toEqual({ save: {}, delete: {} });
         });
 
         it('prefers actions parameter over contextData.actions', () => {
@@ -49,198 +65,270 @@ describe('BaseGlueProxy', () => {
                 actions: { custom: {} }
             });
 
-            expect(proxy.actions).toEqual({ custom: {} });
+            expect(proxy._actions).toEqual({ custom: {} });
         });
 
-        it('stores contextData for subclass access', () => {
-            const contextData = createMockContextData({ id: {} }, { get: {} });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test_proxy',
-                contextData
-            });
-
-            expect(proxy.contextData).toBe(contextData);
-        });
-
-        it('sets autoFetch from constructor params', () => {
-            const contextData = createMockContextData({}, { get: {} });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test_proxy',
-                contextData,
-                autoFetch: true
-            });
-
-            expect(proxy.autoFetch).toBe(true);
-        });
-    });
-
-    describe('defineActionsAsProperties', () => {
-        it('creates callable methods for each action', () => {
-            global.fetch = createMockFetch({
-                '/django_glue/': { ok: true, data: { result: 'ok' } }
-            });
-
-            const contextData = createMockContextData({}, { customAction: {} });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test_proxy',
-                contextData
-            });
-
-            expect(typeof proxy.customAction).toBe('function');
-        });
-
-        it('does not override existing methods', () => {
-            class TestProxy extends BaseGlueProxy {
-                get() { return 'overridden'; }
-            }
-
-            const contextData = createMockContextData({}, { get: {} });
-            const proxy = new TestProxy({
-                proxyUniqueName: 'test_proxy',
-                contextData
-            });
-
-            expect(proxy.get()).toBe('overridden');
-        });
-
-        it('action methods call processAction', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"result": "success"}'),
-                json: () => Promise.resolve({ result: 'success' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData({}, { myAction: {} });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test_proxy',
-                contextData
-            });
-
-            const result = await proxy.myAction({ some: 'data' });
-
-            expect(result).toEqual({ result: 'success' });
-            expect(global.fetch).toHaveBeenCalled();
-        });
-    });
-
-    describe('processAction', () => {
-        it('sends action request with correct payload', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"result": "success"}'),
-                json: () => Promise.resolve({ result: 'success' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData({}, { save: { payload: {} } });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'my_proxy',
-                contextData
-            });
-
-            await proxy.$processAction('save', { field: 'value' });
-
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: JSON.stringify({
-                        unique_name: 'my_proxy',
-                        action: 'save',
-                        payload: { field: 'value' }
-                    })
-                })
-            );
-        });
-
-        it('uses stored payload when none provided', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{}'),
-                json: () => Promise.resolve({}),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData({}, { save: { payload: { stored: 'data' } } });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'my_proxy',
-                contextData
-            });
-
-            await proxy.$processAction('save');
-
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: JSON.stringify({
-                        unique_name: 'my_proxy',
-                        action: 'save',
-                        payload: { stored: 'data' }
-                    })
-                })
-            );
-        });
-
-        it('returns response data', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('{"id": 1, "name": "test"}'),
-                json: () => Promise.resolve({ id: 1, name: 'test' }),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData({}, { get: {} });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test',
-                contextData
-            });
-
-            const result = await proxy.$processAction('get');
-
-            expect(result).toEqual({ id: 1, name: 'test' });
-        });
-    });
-
-    describe('setActionPayload / getActionPayload', () => {
-        it('sets and gets payload for action', () => {
-            const contextData = createMockContextData({}, { save: { payload: null } });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test',
-                contextData
-            });
-
-            proxy.setActionPayload('save', { id: 1 });
-
-            expect(proxy.getActionPayload('save')).toEqual({ id: 1 });
-        });
-
-        it('overwrites existing payload', () => {
-            const contextData = createMockContextData({}, { save: { payload: { old: 'data' } } });
-            const proxy = new BaseGlueProxy({
-                proxyUniqueName: 'test',
-                contextData
-            });
-
-            proxy.setActionPayload('save', { new: 'data' });
-
-            expect(proxy.getActionPayload('save')).toEqual({ new: 'data' });
-        });
-    });
-
-    describe('postInit', () => {
-        it('is called during construction', () => {
-            const postInitSpy = mock(() => {});
-
-            class TestProxy extends BaseGlueProxy {
-                postInit() {
-                    postInitSpy();
-                }
-            }
-
+        it('initializes empty listeners', () => {
             const contextData = createMockContextData({}, {});
-            new TestProxy({ proxyUniqueName: 'test', contextData });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
 
-            expect(postInitSpy).toHaveBeenCalled();
+            expect(proxy._listeners).toEqual({ before: {}, after: {}, error: {} });
+        });
+    });
+
+    describe('addListener', () => {
+        it('registers a callback for an action', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const callback = () => {};
+            proxy.addListener('save', callback, 'after');
+
+            expect(proxy._listeners.after.save).toContain(callback);
+        });
+
+        it('defaults to after listener type', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const callback = () => {};
+            proxy.addListener('save', callback);
+
+            expect(proxy._listeners.after.save).toContain(callback);
+        });
+
+        it('supports before, after, and error types', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const cb = () => {};
+            proxy.addListener('save', cb, 'before');
+            proxy.addListener('save', cb, 'after');
+            proxy.addListener('save', cb, 'error');
+
+            expect(proxy._listeners.before.save).toContain(cb);
+            expect(proxy._listeners.after.save).toContain(cb);
+            expect(proxy._listeners.error.save).toContain(cb);
+        });
+
+        it('throws on invalid listener type', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            expect(() => proxy.addListener('save', () => {}, 'invalid'))
+                .toThrow('Invalid listener type');
+        });
+
+        it('returns proxy for chaining', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const result = proxy.addListener('save', () => {});
+            expect(result).toBe(proxy);
+        });
+    });
+
+    describe('removeListener', () => {
+        it('removes a callback for an action', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const callback = () => {};
+            proxy.addListener('save', callback, 'after');
+            proxy.removeListener('save', callback, 'after');
+
+            expect(proxy._listeners.after.save).not.toContain(callback);
+        });
+
+        it('returns proxy for chaining', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const result = proxy.removeListener('save', () => {});
+            expect(result).toBe(proxy);
+        });
+    });
+
+    describe('clearListeners', () => {
+        it('removes all listeners', () => {
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            proxy.addListener('save', () => {}, 'before');
+            proxy.addListener('save', () => {}, 'after');
+            proxy.clearListeners();
+
+            expect(proxy._listeners).toEqual({});
+        });
+
+        it('returns proxy for chaining', () => {
+            const contextData = createMockContextData({}, {});
+            const proxy = new BaseGlueProxy({
+                proxyUniqueName: 'test_proxy',
+                contextData
+            });
+
+            const result = proxy.clearListeners();
+            expect(result).toBe(proxy);
+        });
+    });
+
+    describe('_processAction', () => {
+        it('sends action request with correct params', async () => {
+            let capturedRequest = null;
+            const mockHttp = {
+                sendActionRequest: mock((req) => {
+                    capturedRequest = req;
+                    return Promise.resolve({ data: { result: 'success' } });
+                })
+            };
+
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'my_proxy',
+                contextData
+            });
+
+            const result = await proxy._processAction('save', { field: 'value' });
+
+            expect(capturedRequest).toEqual({
+                uniqueName: 'my_proxy',
+                action: 'save',
+                payload: { field: 'value' },
+                contextData
+            });
+            expect(result).toEqual({ result: 'success' });
+        });
+
+        it('fires before listeners before request', async () => {
+            let order = [];
+            const mockHttp = {
+                sendActionRequest: mock(() => {
+                    order.push('request');
+                    return Promise.resolve({ data: { result: 'ok' } });
+                })
+            };
+
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'test',
+                contextData
+            });
+
+            proxy.addListener('save', () => { order.push('before'); }, 'before');
+
+            await proxy._processAction('save', { data: 'test' });
+
+            expect(order).toEqual(['before', 'request']);
+        });
+
+        it('fires after listeners with result', async () => {
+            let capturedEvent = null;
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: { id: 1 } }))
+            };
+
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'test',
+                contextData
+            });
+
+            proxy.addListener('save', (event) => { capturedEvent = event; }, 'after');
+            await proxy._processAction('save', { data: 'test' });
+
+            expect(capturedEvent.result).toEqual({ id: 1 });
+            expect(capturedEvent.action).toBe('save');
+            expect(capturedEvent.proxy).toBe(proxy);
+        });
+
+        it('fires error listeners and re-throws on failure', async () => {
+            let capturedError = null;
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.reject(new Error('network error')))
+            };
+
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'test',
+                contextData
+            });
+
+            proxy.addListener('save', (event) => { capturedError = event.error; }, 'error');
+
+            await expect(proxy._processAction('save', {})).rejects.toThrow('network error');
+            expect(capturedError).toBeInstanceOf(Error);
+        });
+
+        it('converts FormData payload to object for event', async () => {
+            let capturedPayload = null;
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: {} }))
+            };
+
+            const contextData = createMockContextData({}, { save: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'test',
+                contextData
+            });
+
+            proxy.addListener('save', (event) => { capturedPayload = event.payload; }, 'before');
+
+            const formData = new FormData();
+            formData.append('name', 'value');
+            formData.append('name', 'value2');
+
+            await proxy._processAction('save', formData);
+
+            expect(capturedPayload.name).toEqual(['value', 'value2']);
+        });
+
+        it('returns response.data', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: { id: 1, name: 'test' } }))
+            };
+
+            const contextData = createMockContextData({}, { get: {} });
+            const proxy = new BaseGlueProxy({
+                http: mockHttp,
+                proxyUniqueName: 'test',
+                contextData
+            });
+
+            const result = await proxy._processAction('get');
+            expect(result).toEqual({ id: 1, name: 'test' });
         });
     });
 });

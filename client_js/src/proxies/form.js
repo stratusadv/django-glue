@@ -2,7 +2,7 @@ import {BaseGlueProxy} from "./base";
 import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
-    static name = 'baseGlueProxy'
+    static name = 'form'
 
     constructor({http, proxyUniqueName, contextData, actions = null}) {
         super({http, proxyUniqueName, contextData, actions});

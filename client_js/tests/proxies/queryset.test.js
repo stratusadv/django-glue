@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { GlueQuerySetProxy } from '../../src/proxies/queryset';
 import GlueClient from '../../src/client';
-import { createMockFetch, createMockContextData, setupCookieMock } from '../testUtils';
-
-mock.module('../../src/constants', () => ({
-    actionUrl: '/django_glue/',
-    KEEP_LIVE_URL_PATH: '/django_glue/keep_live/'
-}));
+import { createMockContextData, setupCookieMock } from '../testUtils';
 
 describe('GlueQuerySetProxy', () => {
     let originalFetch;
@@ -29,21 +24,21 @@ describe('GlueQuerySetProxy', () => {
         GlueClient.contextData = {};
     });
 
-    describe('all', () => {
+    describe('queryWithParams', () => {
         it('returns array of GlueModelProxy instances', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1, "title": "Task 1"}, {"id": 2, "title": "Task 2"}]'),
-                json: () => Promise.resolve([{ id: 1, title: 'Task 1' }, { id: 2, title: 'Task 2' }]),
-                clone: function() { return this; }
-            }));
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1, title: 'Task 1' }, { id: 2, title: 'Task 2' }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
-                { all: {}, filter: {}, save: {}, delete: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
@@ -55,198 +50,287 @@ describe('GlueQuerySetProxy', () => {
             expect(items[1].title).toBe('Task 2');
         });
 
-        it('stores items in proxy.items', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}]'),
-                json: () => Promise.resolve([{ id: 1 }]),
-                clone: function() { return this; }
-            }));
+        it('stores items in _items', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1 }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
             await proxy.queryWithParams();
 
-            expect(proxy.items).toHaveLength(1);
+            expect(proxy._items).toHaveLength(1);
         });
 
         it('returns items with correct uniqueName', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}]'),
-                json: () => Promise.resolve([{ id: 1 }]),
-                clone: function() { return this; }
-            }));
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1 }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
             const items = await proxy.queryWithParams();
 
-            expect(items[0].uniqueName).toBe('tasks');
+            expect(items[0]._uniqueName).toBe('tasks');
         });
 
-        it('returns items with save and delete actions pre-configured', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 42}]'),
-                json: () => Promise.resolve([{ id: 42 }]),
-                clone: function() { return this; }
-            }));
+        it('caches results and does not refetch with same params', async () => {
+            let callCount = 0;
+            const mockHttp = {
+                sendActionRequest: mock(() => {
+                    callCount++;
+                    return Promise.resolve({
+                        data: [{ id: 1 }]
+                    });
+                })
+            };
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
-            const items = await proxy.queryWithParams();
+            await proxy.queryWithParams({ filter: { done: false } });
+            await proxy.queryWithParams({ filter: { done: false } });
 
-            expect(items[0].actions.save.payload).toEqual({ id: 42 });
-            expect(items[0].actions.delete.payload).toEqual({ id: 42 });
+            expect(callCount).toBe(1);
+        });
+
+        it('refetches when params change', async () => {
+            let callCount = 0;
+            const mockHttp = {
+                sendActionRequest: mock(() => {
+                    callCount++;
+                    return Promise.resolve({
+                        data: [{ id: 1 }]
+                    });
+                })
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            await proxy.queryWithParams({ filter: { done: false } });
+            await proxy.queryWithParams({ filter: { done: true } });
+
+            expect(callCount).toBe(2);
+        });
+    });
+
+    describe('all', () => {
+        it('calls queryWithParams with no params', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1 }]
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const items = await proxy.all();
+
+            expect(items).toHaveLength(1);
         });
     });
 
     describe('filter', () => {
-        it('sends filter params to server', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1, "done": false}]'),
-                json: () => Promise.resolve([{ id: 1, done: false }]),
-                clone: function() { return this; }
-            }));
+        it('adds filter query param and returns proxy', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1, done: false }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {}, done: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
-            await proxy.filter({ done: false });
+            const result = proxy.filter({ done: false });
 
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: expect.stringContaining('"payload":{"done":false}')
-                })
-            );
-        });
-
-        it('returns filtered items as GlueModelProxy instances', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1, "done": false}, {"id": 3, "done": false}]'),
-                json: () => Promise.resolve([{ id: 1, done: false }, { id: 3, done: false }]),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { id: {}, done: {} },
-                { all: {}, filter: {} }
-            );
-
-            const proxy = new GlueQuerySetProxy({
-                proxyUniqueName: 'tasks',
-                contextData
-            });
-
-            const items = await proxy.filter({ done: false });
-
-            expect(items).toHaveLength(2);
-            expect(items[0].done).toBe(false);
-            expect(items[1].done).toBe(false);
-        });
-
-        it('updates proxy.items with filtered results', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}]'),
-                json: () => Promise.resolve([{ id: 1 }]),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { id: {} },
-                { all: {}, filter: {} }
-            );
-
-            const proxy = new GlueQuerySetProxy({
-                proxyUniqueName: 'tasks',
-                contextData
-            });
-
-            await proxy.filter({ done: true });
-
-            expect(proxy.items).toHaveLength(1);
+            expect(result).toBe(proxy);
+            expect(proxy._queryParams.filter).toEqual({ done: false });
         });
 
         it('supports Django ORM lookups', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[]'),
-                json: () => Promise.resolve([]),
-                clone: function() { return this; }
-            }));
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1, title: 'urgent task' }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {}, title: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
-            await proxy.filter({ title__icontains: 'urgent' });
+            proxy.filter({ title__icontains: 'urgent' });
 
-            expect(global.fetch).toHaveBeenCalledWith(
-                '/django_glue/',
-                expect.objectContaining({
-                    body: expect.stringContaining('"title__icontains":"urgent"')
-                })
+            expect(proxy._queryParams.filter).toEqual({ title__icontains: 'urgent' });
+        });
+    });
+
+    describe('orderBy', () => {
+        it('adds order_by query param and returns proxy', () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
             );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const result = proxy.orderBy({ title: 'asc' });
+
+            expect(result).toBe(proxy);
+            expect(proxy._queryParams.order_by).toEqual({ title: 'asc' });
+        });
+    });
+
+    describe('slice', () => {
+        it('adds slice query param', () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            proxy.slice(0, 10);
+
+            expect(proxy._queryParams.slice).toEqual({ start: 0, stop: 10 });
+        });
+
+        it('sliceStart adds start param', () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            proxy.sliceStart(5);
+
+            expect(proxy._queryParams.slice).toEqual({ start: 5 });
+        });
+
+        it('sliceEnd adds end param', () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            proxy.sliceEnd(10);
+
+            expect(proxy._queryParams.slice).toEqual({ end: 10 });
         });
     });
 
     describe('iterator', () => {
         it('supports for...of iteration', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}, {"id": 2}]'),
-                json: () => Promise.resolve([{ id: 1 }, { id: 2 }]),
-                clone: function() { return this; }
-            }));
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1 }, { id: 2 }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
@@ -255,26 +339,26 @@ describe('GlueQuerySetProxy', () => {
 
             const ids = [];
             for (const item of proxy) {
-                ids.push(item.values.id);
+                ids.push(item._values.id);
             }
 
             expect(ids).toEqual([1, 2]);
         });
 
         it('supports spread operator', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}, {"id": 2}, {"id": 3}]'),
-                json: () => Promise.resolve([{ id: 1 }, { id: 2 }, { id: 3 }]),
-                clone: function() { return this; }
-            }));
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: [{ id: 1 }, { id: 2 }, { id: 3 }]
+                }))
+            };
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
@@ -287,62 +371,196 @@ describe('GlueQuerySetProxy', () => {
         });
     });
 
-    describe('buildQuerySetItem', () => {
-        it('creates GlueModelProxy with copied values', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1, "title": "Original"}]'),
-                json: () => Promise.resolve([{ id: 1, title: 'Original' }]),
-                clone: function() { return this; }
-            }));
-
-            const contextData = createMockContextData(
-                { id: {}, title: {} },
-                { all: {}, filter: {} }
-            );
-
-            const proxy = new GlueQuerySetProxy({
-                proxyUniqueName: 'tasks',
-                contextData
-            });
-
-            const items = await proxy.queryWithParams();
-
-            // Modifying returned item should not affect internal data
-            items[0].title = 'Modified';
-
-            expect(items[0].title).toBe('Modified');
-        });
-
-        it('uses contextData from GlueClient', async () => {
-            GlueClient.contextData = {
-                'tasks': {
-                    fields: { id: {}, title: {}, custom: {} },
-                    actions: { save: {}, delete: {}, custom: {} }
-                }
+    describe('refresh', () => {
+        it('clears items and reloads', async () => {
+            let callCount = 0;
+            const mockHttp = {
+                sendActionRequest: mock(() => {
+                    callCount++;
+                    return Promise.resolve({
+                        data: [{ id: callCount }]
+                    });
+                })
             };
-
-            global.fetch = mock(() => Promise.resolve({
-                ok: true,
-                text: () => Promise.resolve('[{"id": 1}]'),
-                json: () => Promise.resolve([{ id: 1 }]),
-                clone: function() { return this; }
-            }));
 
             const contextData = createMockContextData(
                 { id: {} },
-                { all: {}, filter: {} }
+                { query_with_params: {} }
             );
 
             const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
                 proxyUniqueName: 'tasks',
                 contextData
             });
 
-            const items = await proxy.queryWithParams();
+            await proxy.queryWithParams();
+            expect(proxy._items).toHaveLength(1);
+            expect(proxy._items[0]._values.id).toBe(1);
 
-            // Should have access to custom field from GlueClient.contextData
-            expect(items[0].contextData.fields.custom).toBeDefined();
+            await proxy.refresh();
+            expect(proxy._items).toHaveLength(1);
+            expect(proxy._items[0]._values.id).toBe(2);
+        });
+    });
+
+    describe('isEmpty and isLoaded', () => {
+        it('isEmpty is false before loading', () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            expect(proxy.isEmpty).toBe(false);
+            expect(proxy.isLoaded).toBe(false);
+        });
+
+        it('isEmpty is true after loading empty results', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({ data: [] }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { query_with_params: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            await proxy.queryWithParams();
+
+            expect(proxy.isEmpty).toBe(true);
+            expect(proxy.isLoaded).toBe(true);
+        });
+    });
+
+    describe('pushNew', () => {
+        it('prepends new item by default', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { id: 0, title: 'New' }
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {}, title: {} },
+                { new: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const items = await proxy.pushNew();
+
+            expect(items).toHaveLength(1);
+            expect(items[0]._values.title).toBe('New');
+        });
+
+        it('appends new item when location is end', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { id: 0, title: 'New' }
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {}, title: {} },
+                { new: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const items = await proxy.pushNew('end');
+
+            expect(items).toHaveLength(1);
+        });
+
+        it('throws on invalid location', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { id: 0 }
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { new: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            await expect(proxy.pushNew('invalid')).rejects.toThrow('Invalid location');
+        });
+    });
+
+    describe('prependNew and appendNew', () => {
+        it('prependNew calls pushNew with start', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { id: 0 }
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { new: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const items = await proxy.prependNew();
+            expect(items).toHaveLength(1);
+        });
+
+        it('appendNew calls pushNew with end', async () => {
+            const mockHttp = {
+                sendActionRequest: mock(() => Promise.resolve({
+                    data: { id: 0 }
+                }))
+            };
+
+            const contextData = createMockContextData(
+                { id: {} },
+                { new: {} }
+            );
+
+            const proxy = new GlueQuerySetProxy({
+                http: mockHttp,
+                proxyUniqueName: 'tasks',
+                contextData
+            });
+
+            const items = await proxy.appendNew();
+            expect(items).toHaveLength(1);
         });
     });
 });
