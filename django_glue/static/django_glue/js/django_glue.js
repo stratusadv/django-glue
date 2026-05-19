@@ -155,6 +155,18 @@
           fieldData = this._defineModelChoiceField(fieldName, fieldData);
         }
         this._fields[fieldName] = fieldData;
+        if (!fieldData.hasOwnProperty("value")) {
+          Object.defineProperty(fieldData, "value", {
+            get: function() {
+              return this._values?.[fieldName];
+            }.bind(this),
+            set: function(val) {
+              if (!this._values)
+                this._values = {};
+              this._values[fieldName] = val;
+            }.bind(this)
+          });
+        }
         Object.keys(this._fields[fieldName]).forEach((attributeName) => {
           this[`${fieldName}${snakeToPascal(attributeName)}`] = this._fields?.[fieldName]?.[attributeName];
           this._updateErrorAttributesForField(fieldName);

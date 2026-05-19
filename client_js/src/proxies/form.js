@@ -1,10 +1,10 @@
-import { BaseGlueProxy } from "./base";
+import {BaseGlueProxy} from "./base";
 import {snakeToPascal} from "../utils";
 
 export class GlueFormProxy extends BaseGlueProxy {
     static name = 'baseGlueProxy'
 
-    constructor({http, proxyUniqueName, contextData, actions=null}) {
+    constructor({http, proxyUniqueName, contextData, actions = null}) {
         super({http, proxyUniqueName, contextData, actions});
 
         this._values = {...(this._contextData.initial || {})};
@@ -13,9 +13,13 @@ export class GlueFormProxy extends BaseGlueProxy {
 
         this._defineFields()
 
-        Object.defineProperty(this,'$fields', {
-            get: () => { return this._fields },
-            set: value => { this._fields = value },
+        Object.defineProperty(this, '$fields', {
+            get: () => {
+                return this._fields
+            },
+            set: value => {
+                this._fields = value
+            },
         })
 
     }
@@ -30,7 +34,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             fieldData.__glue__choicesPromise = null;
         }
 
-        const choicesAction = async function() {
+        const choicesAction = async function () {
             // If already loading, return the existing promise to avoid duplicate requests
             if (fieldData.__glue__choicesPromise) {
                 return fieldData.__glue__choicesPromise;
@@ -53,7 +57,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             return fieldData.__glue__choicesPromise;
         }.bind(this)
 
-        this[`${fieldName}Choices`] = async function() {
+        this[`${fieldName}Choices`] = async function () {
             if (!fieldData._choicesLoaded) {
                 await choicesAction();
             }
@@ -65,7 +69,7 @@ export class GlueFormProxy extends BaseGlueProxy {
 
     _defineFieldNameProperty(fieldName) {
         Object.defineProperty(this, fieldName, {
-            get: function() {
+            get: function () {
                 if (!this._loaded && !this._values) {
                     if (!this._loading) {
                         this._loading = true;
@@ -75,7 +79,7 @@ export class GlueFormProxy extends BaseGlueProxy {
 
                 return this._values?.[fieldName];
             },
-            set: function(value) {
+            set: function (value) {
                 if (!this._values) {
                     this._values = {};
                 }
@@ -94,6 +98,19 @@ export class GlueFormProxy extends BaseGlueProxy {
             }
 
             this._fields[fieldName] = fieldData;
+
+            if (!fieldData.hasOwnProperty('value')) {
+                Object.defineProperty(fieldData, 'value', {
+                    get: function () {
+                        return this._values?.[fieldName];
+                    }.bind(this),
+                    set: function (val) {
+                        if (!this._values) this._values = {};
+                        this._values[fieldName] = val;
+                    }.bind(this)
+                });
+            }
+
             Object.keys(this._fields[fieldName]).forEach(attributeName => {
                 this[`${fieldName}${snakeToPascal(attributeName)}`] = this._fields?.[fieldName]?.[attributeName]
                 this._updateErrorAttributesForField(fieldName)
