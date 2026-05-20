@@ -1,6 +1,7 @@
 """
 Tests for Django Glue save() action on QuerySetProxy.
 """
+
 import os
 import django
 
@@ -22,26 +23,16 @@ class GlueQuerySetProxySaveTestCase(TestCase):
     def setUp(self):
         """Create test gorillas for each test."""
         self.gorilla1 = Gorilla.objects.create(
-            name='Gorilla 1',
-            description='First gorilla',
-            age=18,
-            weight=200.0,
-            height=1.8
+            name='Gorilla 1', description='First gorilla', age=18, weight=200.0, height=1.8
         )
         self.gorilla2 = Gorilla.objects.create(
-            name='Gorilla 2',
-            description='Second gorilla',
-            age=25,
-            weight=250.0,
-            height=2.0
+            name='Gorilla 2', description='Second gorilla', age=25, weight=250.0, height=2.0
         )
 
     def test_save_updates_specific_instance_by_pk(self):
         """save() action should update the specific instance identified by id in payload."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.CHANGE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
         action_data = dto.GlueActionRequestData(
@@ -54,7 +45,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         proxy.save(action_data)
 
@@ -67,9 +58,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
     def test_save_returns_validation_result(self):
         """save() action should return a validation result dict with success status."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.CHANGE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
         action_data = dto.GlueActionRequestData(
@@ -82,7 +71,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = proxy.save(action_data)
 
@@ -95,9 +84,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
     def test_save_raises_not_found_for_invalid_pk(self):
         """save() action should raise GlueModelInstanceNotFoundError for non-existent id."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.CHANGE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
         action_data = dto.GlueActionRequestData(
@@ -110,7 +97,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
 
         with self.assertRaises(GlueModelInstanceNotFoundError):
@@ -134,7 +121,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
 
         with self.assertRaises(GlueAccessError):
@@ -143,9 +130,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
     def test_save_works_with_delete_access(self):
         """save() action should work with DELETE access level (cascading)."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.DELETE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
         action_data = dto.GlueActionRequestData(
@@ -158,7 +143,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = proxy.save(action_data)
 
@@ -170,9 +155,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
         initial_count = Gorilla.objects.count()
 
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.CHANGE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
         action_data = dto.GlueActionRequestData(
@@ -184,7 +167,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
                 'weight': 150.0,
                 'height': 1.5,
                 'rank_points': 0,
-            }
+            },
         )
         result = proxy.save(action_data)
 

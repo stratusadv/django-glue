@@ -42,9 +42,7 @@ class WrappedHttpRequest:
 def action_view(request: HttpRequest, unique_name: str, action: str) -> JsonResponse | HttpResponse:
     if request.content_type not in ['application/json', 'multipart/form-data']:
         return HttpResponse(
-            f'Unsupported media type {request.content_type}',
-            status=400,
-            content_type='text/plain'
+            f'Unsupported media type {request.content_type}', status=400, content_type='text/plain'
         )
 
     action_data = dto.GlueActionRequestData.from_request(request)
@@ -52,10 +50,9 @@ def action_view(request: HttpRequest, unique_name: str, action: str) -> JsonResp
     proxy_access = GlueSession(request).get_proxy_access(unique_name)
 
     proxy = SUBJECT_TYPE_TO_PROXY_TYPE[
-        action_data.context_data['subject_type']].from_action_request_data(
-        access=proxy_access,
-        unique_name=unique_name,
-        **action_data.context_data
+        action_data.context_data['subject_type']
+    ].from_action_request_data(
+        access=proxy_access, unique_name=unique_name, **action_data.context_data
     )
 
     action_response_data = proxy.process_action(action, action_data)
@@ -72,18 +69,12 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
         try:
             url_path = reverse(url_name)
         except Exception:
-            return JsonResponse(
-                {'error': f'Could not resolve URL name: {url_name}'},
-                status=404
-            )
+            return JsonResponse({'error': f'Could not resolve URL name: {url_name}'}, status=404)
     else:
         url_path = body_data.get('url_path', None)
 
     if not url_path:
-        return JsonResponse(
-            {'error': 'Missing url_name or url_path in request body'},
-            status=400
-        )
+        return JsonResponse({'error': 'Missing url_name or url_path in request body'}, status=400)
 
     method = body_data.get('method', 'POST')
     view_payload = body_data.get('view_payload', {})
@@ -97,10 +88,7 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
         try:
             resolved = resolve(resolve_path)
         except Exception:
-            return JsonResponse(
-                {'error': f'No view found for URL path: {url_path}'},
-                status=404
-            )
+            return JsonResponse({'error': f'No view found for URL path: {url_path}'}, status=404)
 
         view_func = resolved.func
         view_kwargs = resolved.kwargs
@@ -110,10 +98,7 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
             response = view_func(wrapped, **view_kwargs)
         except Exception as e:
             logging.exception(e)
-            return JsonResponse(
-                {'error': f'View raised an exception: {str(e)}'},
-                status=500
-            )
+            return JsonResponse({'error': f'View raised an exception: {e!s}'}, status=500)
 
         if isinstance(response, HttpResponseRedirect):
             redirect_url = response.url
@@ -124,46 +109,44 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
                     url_path = reverse(url_name)
                 except Exception:
                     return JsonResponse(
-                        {'error': f'Could not resolve redirect URL: {redirect_url}'},
-                        status=404
+                        {'error': f'Could not resolve redirect URL: {redirect_url}'}, status=404
                     )
             else:
                 return JsonResponse(
-                    {'error': f'External redirect not supported: {redirect_url}'},
-                    status=400
+                    {'error': f'External redirect not supported: {redirect_url}'}, status=400
                 )
             continue
 
         if isinstance(response, TemplateResponse):
             response.render()
 
-            return JsonResponse({
-                'html': response.content.decode('utf-8'),
-                'proxy_context_data': getattr(wrapped, '__glue_context_data__', {}),
-                'proxy_registry_data': GlueSession(request).proxy_registry
-            }, safe=False, encoder=GlueActionDataJSONEncoder)
+            return JsonResponse(
+                {
+                    'html': response.content.decode('utf-8'),
+                    'proxy_context_data': getattr(wrapped, '__glue_context_data__', {}),
+                    'proxy_registry_data': GlueSession(request).proxy_registry,
+                },
+                safe=False,
+                encoder=GlueActionDataJSONEncoder,
+            )
 
-        elif isinstance(response, HttpResponse):
-            return JsonResponse({
-                'html': response.content.decode('utf-8'),
-                'proxy_context_data': getattr(wrapped, '__glue_context_data__', {}),
-                'proxy_registry_data': GlueSession(request).proxy_registry
-            })
-
-
+        if isinstance(response, HttpResponse):
+            return JsonResponse(
+                {
+                    'html': response.content.decode('utf-8'),
+                    'proxy_context_data': getattr(wrapped, '__glue_context_data__', {}),
+                    'proxy_registry_data': GlueSession(request).proxy_registry,
+                }
+            )
 
         return JsonResponse(
-            {'error': f'Unsupported response type: {type(response).__name__}'},
-            status=500
+            {'error': f'Unsupported response type: {type(response).__name__}'}, status=500
         )
 
-    return JsonResponse(
-        {'error': f'Too many redirects (max {max_redirects})'},
-        status=500
-    )
+    return JsonResponse({'error': f'Too many redirects (max {max_redirects})'}, status=500)
 
 
-
+@require_http_methods(['POST'])
 def keep_live_view(request: HttpRequest) -> JsonResponse:
     glue_session = GlueSession(request)
     unique_names = get_request_body_data(request, 'unique_names')
@@ -171,13 +154,9 @@ def keep_live_view(request: HttpRequest) -> JsonResponse:
     if len(unique_names) > 0:
         glue_session.renew_proxies(unique_names)
 
-    return JsonResponse(
-        data=glue_session.proxy_registry
-    )
+    return JsonResponse(data=glue_session.proxy_registry)
 
 
 @require_http_methods(['GET'])
 def session_data_view(request: HttpRequest) -> JsonResponse:
-    return JsonResponse(
-        data=GlueSession(request).proxy_registry,
-    )
+    return JsonResponse(data=GlueSession(request).proxy_registry)

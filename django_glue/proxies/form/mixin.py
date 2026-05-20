@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 
-from django.forms import ModelMultipleChoiceField, ModelChoiceField, MultipleChoiceField
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
@@ -25,21 +23,15 @@ class GlueFormProxyMixin(ABC):
     @abstractmethod
     def _get_form_class(self) -> type[BaseForm]:
         """Return the form class to use for validation and field extraction."""
-        pass
 
-    def _get_form_instance(
-        self, data: dict | None = None, files: dict | None = None
-    ) -> BaseForm:
+    def _get_form_instance(self, data: dict | None = None, files: dict | None = None) -> BaseForm:
         """Create a form instance."""
         form_class = self._get_form_class()
         if data is not None:
             for field_name, field in self._form_field_definitions.items():
                 # Ensure that Multiple choice fields have list values. This is to prevent
                 # errors when the frontend sends single values for multiple choice fields.
-                if field['type'] in [
-                    'ModelMultipleChoiceField',
-                    'MultipleChoiceField',
-                ]:
+                if field['type'] in ['ModelMultipleChoiceField', 'MultipleChoiceField']:
                     value = data.get(field_name)
                     if value and not isinstance(value, list):
                         data[field_name] = [value]
@@ -67,9 +59,7 @@ class GlueFormProxyMixin(ABC):
             }
 
             if hasattr(field, 'choices') and field.choices:
-                field_def['choices'] = [
-                    (str(value), str(label)) for value, label in field.choices
-                ]
+                field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
             if hasattr(field, 'max_length') and field.max_length:
                 field_def['max_length'] = field.max_length
             if hasattr(field, 'min_length') and field.min_length:
@@ -92,10 +82,7 @@ class GlueFormProxyMixin(ABC):
     def validate(self, action_data: GlueActionRequestData) -> dict:
         """Validate form data without saving."""
 
-        form = self._get_form_instance(
-            data=action_data.post_data,
-            files=action_data.file_data
-        )
+        form = self._get_form_instance(data=action_data.post_data, files=action_data.file_data)
 
         is_valid = form.is_valid()
 
@@ -118,17 +105,18 @@ class GlueFormProxyMixin(ABC):
     @action(access=GlueAccess.VIEW)
     def foreign_key_choices(self, action_data: GlueActionRequestData):
         """Get choices for a foreign key field."""
-        field_name, field_data = action_data.post_data['field_definition']
+        field_definition = action_data.post_data.get('field_definition')
+        if (
+            not field_definition
+            or not isinstance(field_definition, (list, tuple))
+            or len(field_definition) < 2
+        ):
+            return []
+        field_name, field_data = field_definition
 
-        if not field_data.get('type', None) in [
-            'ModelChoiceField',
-            'ModelMultipleChoiceField'
-        ]:
+        if field_data.get('type', None) not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
             return []
 
         field = self._get_form_class()().fields[field_name]
 
-        return [
-            [obj.pk, f'{obj}']
-            for obj in field.queryset.all()
-        ]
+        return [[obj.pk, f'{obj}'] for obj in field.queryset.all()]

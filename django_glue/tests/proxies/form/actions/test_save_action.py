@@ -1,6 +1,7 @@
 """
 Tests for GlueFormProxy save() action.
 """
+
 import os
 import django
 
@@ -22,11 +23,7 @@ class GlueFormProxySaveTestCase(TestCase):
     def test_save_returns_success_true_for_valid_data(self):
         """save() should return success=True for valid data."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.GlueActionRequestData(
             context_data={},
             post_data={
@@ -34,7 +31,7 @@ class GlueFormProxySaveTestCase(TestCase):
                 'email': 'john@example.com',
                 'message': 'Hello world',
                 'priority': 'medium',
-            }
+            },
         )
         result = proxy.save(action_data)
 
@@ -44,19 +41,10 @@ class GlueFormProxySaveTestCase(TestCase):
     def test_save_returns_success_false_for_invalid_data(self):
         """save() should return success=False for invalid data."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.GlueActionRequestData(
             context_data={},
-            post_data={
-                'name': '',
-                'email': 'invalid',
-                'message': '',
-                'priority': 'medium',
-            }
+            post_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
         )
         result = proxy.save(action_data)
 
@@ -66,11 +54,7 @@ class GlueFormProxySaveTestCase(TestCase):
     def test_save_returns_cleaned_data_for_regular_form(self):
         """save() should return cleaned_data for regular Form."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.GlueActionRequestData(
             context_data={},
             post_data={
@@ -78,7 +62,7 @@ class GlueFormProxySaveTestCase(TestCase):
                 'email': 'john@example.com',
                 'message': 'Hello world',
                 'priority': 'high',
-            }
+            },
         )
         result = proxy.save(action_data)
 
@@ -89,16 +73,9 @@ class GlueFormProxySaveTestCase(TestCase):
     def test_save_requires_change_access(self):
         """save() should require CHANGE access."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'name': 'Test'}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'name': 'Test'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('save', action_data)
@@ -106,11 +83,7 @@ class GlueFormProxySaveTestCase(TestCase):
     def test_save_works_with_delete_access(self):
         """save() should work with DELETE access (cascading)."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.DELETE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.DELETE)
         action_data = dto.GlueActionRequestData(
             context_data={},
             post_data={
@@ -118,7 +91,7 @@ class GlueFormProxySaveTestCase(TestCase):
                 'email': 'john@example.com',
                 'message': 'Hello world',
                 'priority': 'medium',
-            }
+            },
         )
         result = proxy.save(action_data)
 

@@ -14,26 +14,27 @@ if TYPE_CHECKING:
 
 class GlueSession:
     """
-        A proxy class for the django session that exposes methods to register
-        glue proxies to the session, set and renew their expiration times, and
-        purge proxies that have expired from the session.
+    A proxy class for the django session that exposes methods to register
+    glue proxies to the session, set and renew their expiration times, and
+    purge proxies that have expired from the session.
     """
+
     def __init__(self, request: HttpRequest):
         self.request = request
 
         self.proxy_registry = request.session.setdefault(
-            settings.DJANGO_GLUE_SESSION_PROXY_KEY,
-            dict()
+            settings.DJANGO_GLUE_SESSION_PROXY_KEY, dict()
         )
 
         self.keep_live_registry = request.session.setdefault(
-            settings.DJANGO_GLUE_SESSION_KEEP_LIVE_KEY,
-            dict()
+            settings.DJANGO_GLUE_SESSION_KEEP_LIVE_KEY, dict()
         )
 
     @staticmethod
     def _get_next_expire_time() -> float:
-        return time() + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS + 60 # Buffer for Request Timeouts
+        return (
+            time() + settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS + 60
+        )  # Buffer for Request Timeouts
 
     def _set_modified(self) -> None:
         self.request.session.modified = True
@@ -51,18 +52,14 @@ class GlueSession:
     def register_proxy(self, proxy: BaseGlueProxy) -> None:
         self.proxy_registry[proxy.unique_name] = proxy.access
 
-        self.keep_live_registry.setdefault(
-            proxy.unique_name,
-            self._get_next_expire_time()
-        )
+        self.keep_live_registry.setdefault(proxy.unique_name, self._get_next_expire_time())
 
         self._set_modified()
 
     def purge_expired_proxies(self) -> None:
         proxy_names_to_purge = [
             proxy_name
-            for proxy_name
-            in self.keep_live_registry.keys()
+            for proxy_name in self.keep_live_registry.keys()
             if self._proxy_is_expired(proxy_name)
         ]
 

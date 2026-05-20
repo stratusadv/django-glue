@@ -4,6 +4,7 @@ Pytest configuration for Django Glue tests.
 This conftest.py handles Django setup automatically for all tests,
 eliminating the need for boilerplate in each test file.
 """
+
 import os
 
 import django
@@ -43,12 +44,9 @@ def mock_request(request_factory):
 def sample_task(db):
     """Create and return a sample Gorilla for testing."""
     from test_project.gorilla.models import Gorilla
+
     return Gorilla.objects.create(
-        name='Test Gorilla',
-        description='A gorilla for testing',
-        age=25,
-        weight=350.0,
-        height=1.8
+        name='Test Gorilla', description='A gorilla for testing', age=25, weight=350.0, height=1.8
     )
 
 
@@ -56,13 +54,16 @@ def sample_task(db):
 def sample_tasks(db):
     """Create and return multiple sample Gorillas for testing."""
     from test_project.gorilla.models import Gorilla
+
     gorillas = []
     for i in range(5):
-        gorillas.append(Gorilla.objects.create(
-            name=f'Gorilla {i}',
-            description=f'Description {i}',
-            age=18 + i,
-            weight=200.0 + i * 10,
-            height=1.8
-        ))
+        gorillas.append(
+            Gorilla.objects.create(
+                name=f'Gorilla {i}',
+                description=f'Description {i}',
+                age=18 + i,
+                weight=200.0 + i * 10,
+                height=1.8,
+            )
+        )
     return gorillas

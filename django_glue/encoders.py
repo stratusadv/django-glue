@@ -1,6 +1,6 @@
-from django.core.files.uploadedfile import InMemoryUploadedFile, UploadedFile
+from django.core.files.uploadedfile import UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models import QuerySet, Model, FileField
+from django.db.models import QuerySet, Model
 from django.db.models.fields.files import FieldFile
 
 
@@ -14,21 +14,13 @@ class GlueActionDataJSONEncoder(DjangoJSONEncoder):
 
         if isinstance(obj, FieldFile):
             try:
-                return {
-                    "name": obj.name,
-                    "size": obj.size,
-                    "url": obj.url,
-                    "path": obj.path,
-                }
+                return {'name': obj.name, 'size': obj.size, 'url': obj.url, 'path': obj.path}
             except ValueError:
                 return None
 
         if isinstance(obj, UploadedFile):
             try:
-                return {
-                    "name": obj.name,
-                    "size": obj.size,
-                }
+                return {'name': obj.name, 'size': obj.size}
             except ValueError:
                 return None
 

@@ -3,6 +3,7 @@ Tests for Django Glue query_with_params() action on QuerySetProxy.
 
 This tests both basic querying (previously all()) and filtering (previously filter()).
 """
+
 import os
 import django
 
@@ -13,7 +14,6 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueQuerySetProxy
-from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue import data_transfer_objects as dto
 from test_project.gorilla.models import Gorilla
 
@@ -24,33 +24,19 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
     def setUp(self):
         """Create test gorillas for each test."""
         self.gorilla1 = Gorilla.objects.create(
-            name='Gorilla 1',
-            description='First gorilla',
-            age=18,
-            weight=200.0,
-            height=1.8
+            name='Gorilla 1', description='First gorilla', age=18, weight=200.0, height=1.8
         )
         self.gorilla2 = Gorilla.objects.create(
-            name='Gorilla 2',
-            description='Second gorilla',
-            age=25,
-            weight=250.0,
-            height=2.0
+            name='Gorilla 2', description='Second gorilla', age=25, weight=250.0, height=2.0
         )
         self.gorilla3 = Gorilla.objects.create(
-            name='Gorilla 3',
-            description='Third gorilla',
-            age=30,
-            weight=300.0,
-            height=2.2
+            name='Gorilla 3', description='Third gorilla', age=30, weight=300.0, height=2.2
         )
 
     def test_query_with_params_returns_list_of_dicts(self):
         """query_with_params() action should return a list of model dictionaries."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(context_data={})
@@ -64,9 +50,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
     def test_query_with_params_includes_all_records(self):
         """query_with_params() action should return all records in the queryset."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(context_data={})
@@ -131,9 +115,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
     def test_query_with_params_works_with_view_access(self):
         """query_with_params() action should work with VIEW access level."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(context_data={})
@@ -146,9 +128,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
         """query_with_params() action should work with CHANGE and DELETE access levels."""
         for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
             proxy = GlueQuerySetProxy(
-                target=Gorilla.objects.all(),
-                unique_name='gorillas',
-                access=access,
+                target=Gorilla.objects.all(), unique_name='gorillas', access=access
             )
 
             action_data = dto.GlueActionRequestData(context_data={})
@@ -160,9 +140,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
         Gorilla.objects.all().delete()
 
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(context_data={})
@@ -181,35 +159,26 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             description='This is urgent work',
             age=30,
             weight=200.0,
-            height=1.8
+            height=1.8,
         )
         self.gorilla2 = Gorilla.objects.create(
-            name='Regular Gorilla',
-            description='Normal priority',
-            age=25,
-            weight=250.0,
-            height=2.0
+            name='Regular Gorilla', description='Normal priority', age=25, weight=250.0, height=2.0
         )
         self.gorilla3 = Gorilla.objects.create(
             name='Another Important Item',
             description='Also urgent',
             age=35,
             weight=300.0,
-            height=2.2
+            height=2.2,
         )
 
     def test_filter_applies_exact_match(self):
         """query_with_params() action should apply exact match filter."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'age': 25}}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'filter': {'age': 25}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 1)
@@ -218,14 +187,11 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
     def test_filter_applies_icontains_lookup(self):
         """query_with_params() action should support __icontains lookup."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'name__icontains': 'important'}}
+            context_data={}, post_data={'filter': {'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -237,17 +203,11 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
     def test_filter_applies_multiple_criteria(self):
         """query_with_params() action should support multiple filter criteria."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {
-                'age__gte': 25,
-                'name__icontains': 'important',
-            }}
+            context_data={}, post_data={'filter': {'age__gte': 25, 'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -256,14 +216,11 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
     def test_filter_returns_list_of_dicts(self):
         """query_with_params() action should return a list of model dictionaries."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'age__gte': 25}}
+            context_data={}, post_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -281,8 +238,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'age__gte': 25}}
+            context_data={}, post_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -295,15 +251,10 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
     def test_filter_works_with_view_access(self):
         """query_with_params() with filter should work with VIEW access level."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'age': 25}}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'filter': {'age': 25}})
 
         # Should not raise
         result = proxy.process_action('query_with_params', action_data)
@@ -312,14 +263,11 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
     def test_filter_returns_empty_list_for_no_matches(self):
         """query_with_params() with filter should return empty list when no records match."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'filter': {'name': 'Nonexistent Gorilla'}}
+            context_data={}, post_data={'filter': {'name': 'Nonexistent Gorilla'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -332,39 +280,22 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
     def setUp(self):
         """Create test gorillas for each test."""
         self.gorilla1 = Gorilla.objects.create(
-            name='Gorilla A',
-            description='First gorilla',
-            age=30,
-            weight=300.0,
-            height=2.2
+            name='Gorilla A', description='First gorilla', age=30, weight=300.0, height=2.2
         )
         self.gorilla2 = Gorilla.objects.create(
-            name='Gorilla B',
-            description='Second gorilla',
-            age=18,
-            weight=200.0,
-            height=1.8
+            name='Gorilla B', description='Second gorilla', age=18, weight=200.0, height=1.8
         )
         self.gorilla3 = Gorilla.objects.create(
-            name='Gorilla C',
-            description='Third gorilla',
-            age=25,
-            weight=250.0,
-            height=2.0
+            name='Gorilla C', description='Third gorilla', age=25, weight=250.0, height=2.0
         )
 
     def test_order_by_ascending(self):
         """query_with_params() should support ascending order_by."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'order_by': 'age'}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'order_by': 'age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 18)
@@ -374,15 +305,10 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
     def test_order_by_descending(self):
         """query_with_params() should support descending order_by."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'order_by': '-age'}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'order_by': '-age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 30)
@@ -392,14 +318,11 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
     def test_order_by_list(self):
         """query_with_params() should support order_by as a list."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'order_by': ['age', 'weight']}
+            context_data={}, post_data={'order_by': ['age', 'weight']}
         )
         result = proxy.query_with_params(action_data)
 
@@ -419,7 +342,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
                 description=f'Gorilla number {i}',
                 age=i,
                 weight=200.0 + (i * 10.0),
-                height=1.8 + (i * 0.1)
+                height=1.8 + (i * 0.1),
             )
 
     def test_slice_with_start_and_stop(self):
@@ -431,8 +354,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
         )
 
         action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'slice': {'start': 2, 'stop': 5}}
+            context_data={}, post_data={'slice': {'start': 2, 'stop': 5}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -448,10 +370,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'slice': {'stop': 3}}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'slice': {'stop': 3}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 3)

@@ -4,6 +4,7 @@ Tests for GlueProxyModelFieldsMixin payload validation methods.
 Validation is now handled by Django's modelform_factory, which provides
 full Django form validation including max_length, choices, custom validators, etc.
 """
+
 import os
 import django
 
@@ -23,16 +24,10 @@ class ValidatePayloadTestCase(TestCase):
 
     def setUp(self):
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=18,
-            weight=200.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=18, weight=200.0, height=1.8
         )
         self.proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.CHANGE,
+            target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE
         )
 
     def test_validates_all_fields(self):
@@ -46,7 +41,7 @@ class ValidatePayloadTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -69,7 +64,7 @@ class ValidatePayloadTestCase(TestCase):
                 'age': 10,
                 'description': 'Should be ignored',  # Not in fields
                 'weight': 999,  # Not in fields
-            }
+            },
         )
         result = proxy.validate(action_data)
 
@@ -84,8 +79,8 @@ class ValidatePayloadTestCase(TestCase):
         action_data = dto.GlueActionRequestData(
             context_data={},
             post_data={
-                'name': '',  # Required field is empty
-            }
+                'name': ''  # Required field is empty
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -99,7 +94,7 @@ class ValidatePayloadTestCase(TestCase):
             post_data={
                 'name': '',  # CharField is required
                 'age': 1,
-            }
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -117,7 +112,7 @@ class ValidatePayloadTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -137,7 +132,7 @@ class ValidatePayloadTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -149,13 +144,7 @@ class ValidatePayloadTestCase(TestCase):
         # Gorilla.age has MinValueValidator(1), so 0 should fail
         action_data = dto.GlueActionRequestData(
             context_data={},
-            post_data={
-                'name': 'Test',
-                'age': 0,
-                'weight': 200.0,
-                'height': 1.8,
-                'rank_points': 0,
-            }
+            post_data={'name': 'Test', 'age': 0, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
         result = self.proxy.validate(action_data)
 
@@ -167,13 +156,7 @@ class ValidatePayloadTestCase(TestCase):
         # Gorilla.age has MaxValueValidator(60), so 61 should fail
         action_data = dto.GlueActionRequestData(
             context_data={},
-            post_data={
-                'name': 'Test',
-                'age': 61,
-                'weight': 200.0,
-                'height': 1.8,
-                'rank_points': 0,
-            }
+            post_data={'name': 'Test', 'age': 61, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
         result = self.proxy.validate(action_data)
 
@@ -192,7 +175,7 @@ class ValidatePayloadTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = self.proxy.validate(action_data)
 
@@ -205,20 +188,12 @@ class SaveActionValidationIntegrationTestCase(TestCase):
 
     def setUp(self):
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=18,
-            weight=200.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=18, weight=200.0, height=1.8
         )
 
     def test_save_validates_payload(self):
         """save() should validate payload before applying changes."""
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
         # Empty name should fail validation
         action_data = dto.GlueActionRequestData(
             context_data={},
@@ -228,7 +203,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = proxy.save(action_data)
 
@@ -241,11 +216,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
 
     def test_save_succeeds_with_valid_payload(self):
         """save() should succeed with valid payload."""
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
         action_data = dto.GlueActionRequestData(
             context_data={},
             post_data={
@@ -255,7 +226,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
                 'weight': 200.0,
                 'height': 1.8,
                 'rank_points': 0,
-            }
+            },
         )
         result = proxy.save(action_data)
 

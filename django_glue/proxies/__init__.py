@@ -7,9 +7,9 @@ from django_glue.proxies.form.mixin import GlueFormProxyMixin
 
 __all__ = [
     'BaseGlueProxy',
-    'GlueModelProxy',
-    'GlueQuerySetProxy',
     'GlueFormProxy',
     'GlueFormProxyMixin',
+    'GlueModelProxy',
     'GlueModelProxyBase',
+    'GlueQuerySetProxy',
 ]

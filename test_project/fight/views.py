@@ -22,23 +22,17 @@ def list_view(request: HttpRequest):
             'location',
             'weather_conditions',
             'spectator_count',
-            'terrain_type'
-        ]
+            'terrain_type',
+        ],
     )
 
-    return render(
-        request,
-        template_name='fight/page/list_page.html'
-    )
+    return render(request, template_name='fight/page/list_page.html')
 
 
 def schedule_view(request: HttpRequest):
     """Form proxy demo - schedule a new fight and contact the promoter."""
     Glue.form(
-        request=request,
-        unique_name='fight_form',
-        target=FightForm(),
-        access=Glue.Access.CHANGE,
+        request=request, unique_name='fight_form', target=FightForm(), access=Glue.Access.CHANGE
     )
 
     Glue.form(

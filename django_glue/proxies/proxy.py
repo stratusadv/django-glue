@@ -5,20 +5,16 @@ This module provides the abstract base class that all proxy types inherit from,
 defining the core interface for action registration, access control, and
 session/context data serialization.
 """
+
 from __future__ import annotations
 
 import inspect
 from abc import ABC
 from typing import Any
 
-from django.http import HttpRequest
-
 from django_glue.access.access import GlueAccess
 from django_glue import data_transfer_objects as dto
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
-
-from django_glue.session import GlueSession
-from django_glue.utils import get_request_body_data
 
 
 class BaseGlueProxy(ABC):
@@ -44,21 +40,19 @@ class BaseGlueProxy(ABC):
             @action(access=GlueAccess.VIEW)
             def get(self):
                 return model_to_dict(self.target)
+
     """
 
     _subject_type: type
     _actions = {}
 
     def __init__(
-        self,
-        target: Any,
-        unique_name: str,
-        access: GlueAccess | str = GlueAccess.VIEW,
-        **kwargs
+        self, target: Any, unique_name: str, access: GlueAccess | str = GlueAccess.VIEW, **kwargs
     ):
         if not isinstance(target, self._subject_type):
             raise ValueError(
-                f"The value passed to 'target' for {self.__class__} must be an instance of {self._subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class').")
+                f"The value passed to 'target' for {self.__class__} must be an instance of {self._subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class')."
+            )
 
         self.unique_name = unique_name
 
@@ -72,7 +66,9 @@ class BaseGlueProxy(ABC):
     @classmethod
     def __init_subclass__(cls, **kwargs):
         if not hasattr(cls, '_subject_type') and not inspect.isabstract(cls):
-            raise TypeError(f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type' attribute that matches the expected type of the __init__ 'target' parameter.")
+            raise TypeError(
+                f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type' attribute that matches the expected type of the __init__ 'target' parameter."
+            )
 
         cls._actions[cls.__name__] = {}
 
@@ -90,13 +86,12 @@ class BaseGlueProxy(ABC):
                     for param_name, param_value in parameters.items():
                         if param_name in ['args', 'kwargs', 'self']:
                             continue
-                        else:
-                            parameter_data[param_name] = param_value.annotation
+                        parameter_data[param_name] = param_value.annotation
 
                     cls._actions[cls.__name__][attr_name] = (
                         attr_value,
                         parameter_data,
-                        attr_value._required_glue_access
+                        attr_value._required_glue_access,
                     )
 
     @property
@@ -105,32 +100,8 @@ class BaseGlueProxy(ABC):
         return self._actions[self.__class__.__name__]
 
     @classmethod
-    def process_request(
-        cls,
-        request: HttpRequest,
-    ):
-        from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
-
-        data = get_request_body_data(request)
-        action_data = dto.GlueActionRequestData(**data)
-
-        proxy_access = GlueSession(request).get_proxy_access(action_data.unique_name)
-
-        proxy = SUBJECT_TYPE_TO_PROXY_TYPE[
-            action_data.context_data['subject_type']].from_action_request_data(
-            access=proxy_access,
-            unique_name=action_data.unique_name,
-            **action_data.context_data
-        )
-
-        return proxy.process_action(action_data)
-
-    @classmethod
     def from_action_request_data(
-        cls,
-        access: GlueAccess,
-        unique_name: str,
-        **kwargs
+        cls, access: GlueAccess, unique_name: str, **kwargs
     ) -> BaseGlueProxy:
         """
         Reconstruct a proxy instance from data sent to action_view.
@@ -146,12 +117,9 @@ class BaseGlueProxy(ABC):
 
         Returns:
             A new proxy instance configured with the provided data.
+
         """
-        return cls(
-            access=access,
-            unique_name=unique_name,
-            **kwargs
-        )
+        return cls(access=access, unique_name=unique_name, **kwargs)
 
     def _build_context_data(self) -> dict:
         return {}
@@ -162,28 +130,24 @@ class BaseGlueProxy(ABC):
             for action_name, (_, action_parameters, _) in self.actions.items()
         }
 
-        return dict(
-            actions=actions_data,
-            subject_type = self._subject_type.__name__,
-        ) | self._build_context_data()
+        return (
+            dict(actions=actions_data, subject_type=self._subject_type.__name__)
+            | self._build_context_data()
+        )
 
-    def process_action(
-        self,
-        action: str,
-        action_data: dto.GlueActionRequestData
-    ) -> dto.GlueActionResponseData:
+    def process_action(self, action: str, action_data: dto.GlueActionRequestData) -> dict:
         if not hasattr(self, action):
             raise GlueMissingActionError(
                 action=action,
                 proxy_name=self.unique_name,
-                reason=f"Method '{action}' does not exist on {type(self).__name__}"
+                reason=f"Method '{action}' does not exist on {type(self).__name__}",
             )
 
         if action not in self.actions:
             raise GlueMissingActionError(
                 action=action,
                 proxy_name=self.unique_name,
-                reason="Method must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
+                reason="Method must be decorated with '@action(access=GlueAccess.<REQUIRED_ACCESS>)'",
             )
 
         # TODO: validate that all actions have a single action_data: GlueActionRequestData param
@@ -191,10 +155,7 @@ class BaseGlueProxy(ABC):
 
         if not self.access.has_access(required_access):
             raise GlueAccessError(
-                action=action,
-                required_access=required_access.name,
-                current_access=self.access.name
+                action=action, required_access=required_access.name, current_access=self.access.name
             )
 
         return action_func(self, action_data)
-

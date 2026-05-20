@@ -16,6 +16,4 @@ class GlueAccess(str, Enum):
         access_tuple = tuple(GlueAccess.__members__.values())
         if access_tuple.index(self) >= access_tuple.index(access_required):
             return True
-        else:
-            return False
-
+        return False

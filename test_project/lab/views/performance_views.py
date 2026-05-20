@@ -27,7 +27,6 @@ def stress_view(request: HttpRequest):
         context={
             'page_title': 'Test Lab',
             'page_heading': 'Stress Test',
-            'page_subtitle': 'Load and interact with many Glue objects'
-
-        }
+            'page_subtitle': 'Load and interact with many Glue objects',
+        },
     )

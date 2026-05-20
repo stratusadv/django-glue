@@ -1,6 +1,7 @@
 """
 Tests for Django Glue delete() action on ModelProxy.
 """
+
 import os
 import django
 
@@ -22,22 +23,14 @@ class GlueModelProxyDeleteTestCase(TestCase):
     def setUp(self):
         """Create a test gorilla for each test."""
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='A gorilla to delete',
-            age=25,
-            weight=350.0,
-            height=1.8,
+            name='Test Gorilla', description='A gorilla to delete', age=25, weight=350.0, height=1.8
         )
 
     def test_delete_removes_instance_from_database(self):
         """delete() action should remove the model instance from the database."""
         gorilla_pk = self.gorilla.pk
 
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.DELETE,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
 
         # Call delete action
         action_data = dto.GlueActionRequestData(context_data={})

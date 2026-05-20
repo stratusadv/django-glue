@@ -3,8 +3,4 @@ from django_glue.shortcuts import Glue, django_glue_urls
 from django_glue.proxies.proxy import BaseGlueProxy
 
 
-__all__ = [
-    'Glue',
-    'django_glue_urls',
-    'GlueAccess'
-]
+__all__ = ['Glue', 'GlueAccess', 'django_glue_urls']

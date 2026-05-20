@@ -8,15 +8,21 @@ class GorillaForm(forms.ModelForm):
         rank_points = self.cleaned_data['rank_points']
 
         if rank_points > 0:
-            raise forms.ValidationError("How can this gorilla have rank points, they are new!")
+            raise forms.ValidationError('How can this gorilla have rank points, they are new!')
 
         return rank_points
 
     class Meta:
         model = Gorilla
         fields = [
-            'name', 'description', 'age', 'weight', 'height', 'rank_points',
-            'profile_photo', 'skills'
+            'name',
+            'description',
+            'age',
+            'weight',
+            'height',
+            'rank_points',
+            'profile_photo',
+            'skills',
         ]
 
 

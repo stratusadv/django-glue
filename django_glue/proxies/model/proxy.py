@@ -14,11 +14,7 @@ from django_glue.proxies.decorators import action
 class GlueModelProxy(GlueModelProxyBase):
     _subject_type = Model
 
-    def __init__(
-        self,
-        target: Model,
-        **kwargs
-    ):
+    def __init__(self, target: Model, **kwargs):
         super().__init__(target=target, **kwargs)
 
         self.target_pk = target.pk
@@ -26,11 +22,7 @@ class GlueModelProxy(GlueModelProxyBase):
 
     @classmethod
     def from_action_request_data(
-        cls,
-        target_pk: int | str | None,
-        model_class: str,
-        app_label: str,
-        **kwargs
+        cls, target_pk: int | str | None, model_class: str, app_label: str, **kwargs
     ) -> GlueModelProxy:
 
         model_class = apps.get_model(app_label=app_label, model_name=model_class)
@@ -39,17 +31,11 @@ class GlueModelProxy(GlueModelProxyBase):
             try:
                 target = model_class.objects.get(pk=target_pk)
             except model_class.DoesNotExist:
-                raise GlueModelInstanceNotFoundError(
-                    model_name=model_class.__name__,
-                    pk=target_pk
-                )
+                raise GlueModelInstanceNotFoundError(model_name=model_class.__name__, pk=target_pk)
         else:
             target = model_class()
 
-        return super().from_action_request_data(
-            target=target,
-            **kwargs
-        )
+        return super().from_action_request_data(target=target, **kwargs)
 
     def get_model_class(self):
         return self.target.__class__
@@ -67,8 +53,7 @@ class GlueModelProxy(GlueModelProxyBase):
     @action(access=GlueAccess.VIEW)
     def get(self, action_data: GlueActionRequestData):
         return model_to_dict(
-            instance=self._get_model_instance(),
-            fields=self._form_field_definitions,
+            instance=self._get_model_instance(), fields=self._form_field_definitions
         )
 
     @action(access=GlueAccess.DELETE)

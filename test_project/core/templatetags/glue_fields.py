@@ -20,7 +20,4 @@ def split_glue_binding(binding):
     if len(parts) != 2:
         raise ValueError(f"binding must be 'proxy.field', got '{binding}'")
 
-    return {
-        'obj': parts[0],
-        'field': parts[1],
-    }
+    return {'obj': parts[0], 'field': parts[1]}

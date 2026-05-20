@@ -1,6 +1,7 @@
 """
 Tests for Django Glue get() action on ModelProxy.
 """
+
 import os
 import django
 
@@ -20,15 +21,17 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def setUp(self):
         """Create a test gorilla for each test."""
-        self.gorilla = Gorilla.objects.create(name='Test Gorilla', description='A gorilla for testing', age=25, weight=350.0, height=1.8)
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
+            description='A gorilla for testing',
+            age=25,
+            weight=350.0,
+            height=1.8,
+        )
 
     def test_get_returns_model_as_dict(self):
         """get() action should return the model instance as a dictionary."""
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
@@ -40,11 +43,7 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_includes_id_field(self):
         """get() action should include the id field."""
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
@@ -88,11 +87,7 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_works_with_view_access(self):
         """get() action should work with VIEW access level."""
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         action_data = dto.GlueActionRequestData(context_data={})
 
@@ -103,11 +98,7 @@ class GlueModelProxyGetTestCase(TestCase):
     def test_get_works_with_higher_access_levels(self):
         """get() action should work with CHANGE and DELETE access levels."""
         for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
-            proxy = GlueModelProxy(
-                target=self.gorilla,
-                unique_name='gorilla',
-                access=access,
-            )
+            proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=access)
 
             action_data = dto.GlueActionRequestData(context_data={})
             result = proxy.get(action_data)

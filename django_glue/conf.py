@@ -11,7 +11,7 @@ class Settings:
         if hasattr(django_glue_default_settings, name):
             return getattr(django_glue_default_settings, name)
 
-        raise f'No attribute {name} found in settings.'
+        raise AttributeError(f'No attribute {name} found in settings.')
 
 
 settings = Settings()

@@ -1,6 +1,7 @@
 """
 Tests for Django Glue GlueAccess permission system.
 """
+
 import os
 import django
 

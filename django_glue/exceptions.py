@@ -1,14 +1,15 @@
 """
-/Custom exceptions for Django Glue.
+Custom exceptions for Django Glue.
 
 These exceptions provide clear, specific error types for different failure modes,
 making it easier to handle errors appropriately in views and client code.
 """
 
+from typing import Any
+
 
 class GlueError(Exception):
     """Base exception for all Django Glue errors."""
-    pass
 
 
 class GlueProxyNotFoundError(GlueError):
@@ -28,7 +29,7 @@ class GlueAccessError(GlueError):
         self.current_access = current_access
         super().__init__(
             f"Insufficient access to perform '{action}'. "
-            f"Required: {required_access}, Current: {current_access}"
+            f'Required: {required_access}, Current: {current_access}'
         )
 
 
@@ -41,17 +42,17 @@ class GlueMissingActionError(GlueError):
         self.reason = reason
         message = f"Action '{action}' not found on proxy '{proxy_name}'"
         if reason:
-            message += f": {reason}"
+            message += f': {reason}'
         super().__init__(message)
 
 
 class GlueModelInstanceNotFoundError(GlueError):
     """Raised when a model instance is not found during proxy operations (get, save, delete)."""
 
-    def __init__(self, model_name: str, pk: any):
+    def __init__(self, model_name: str, pk: Any):
         self.model_name = model_name
         self.pk = pk
-        super().__init__(f"{model_name} with pk={pk} does not exist.")
+        super().__init__(f'{model_name} with pk={pk} does not exist.')
 
 
 class GlueQuerySetFilterValidationError(GlueError):
@@ -60,24 +61,4 @@ class GlueQuerySetFilterValidationError(GlueError):
     def __init__(self, field: str, allowed_fields: list):
         self.field = field
         self.allowed_fields = allowed_fields
-        super().__init__(
-            f"Cannot filter on field '{field}'. "
-            f"Allowed fields: {allowed_fields}"
-        )
-
-
-class GluePayloadValidationError(GlueError):
-    """Raised when payload field values fail type validation."""
-
-    def __init__(self, field: str, expected_type: str, received_value: any, reason: str = None):
-        self.field = field
-        self.expected_type = expected_type
-        self.received_value = received_value
-        self.reason = reason
-        message = (
-            f"Invalid value for field '{field}'. "
-            f"Expected {expected_type}, received {type(received_value).__name__}"
-        )
-        if reason:
-            message += f": {reason}"
-        super().__init__(message)
+        super().__init__(f"Cannot filter on field '{field}'. Allowed fields: {allowed_fields}")

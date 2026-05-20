@@ -6,10 +6,9 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 
 class FanComment(models.Model):
     """Comments from fans - can be on a Fight or a Gorilla."""
+
     content_type = models.ForeignKey(
-        ContentType,
-        on_delete=models.CASCADE,
-        limit_choices_to={'model__in': ['gorilla', 'fight']}
+        ContentType, on_delete=models.CASCADE, limit_choices_to={'model__in': ['gorilla', 'fight']}
     )
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
@@ -19,12 +18,12 @@ class FanComment(models.Model):
     rating = models.IntegerField(
         default=5,
         validators=[MinValueValidator(1), MaxValueValidator(5)],
-        help_text='1-5 star rating'
+        help_text='1-5 star rating',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Comment by {self.fan_name}"
+        return f'Comment by {self.fan_name}'
 
     class Meta:
         ordering = ['-created_at']

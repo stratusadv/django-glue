@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from django.db.models import Model
 from django.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
@@ -23,11 +22,7 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
 
     @classmethod
     def from_action_request_data(
-        cls,
-        form_class_path: str,
-        initial: dict,
-        instance_pk: int | str | None = None,
-        **kwargs
+        cls, form_class_path: str, initial: dict, instance_pk: int | str | None = None, **kwargs
     ) -> GlueFormProxy:
         form_class = get_class_from_path_string(form_class_path)
         target = form_class(initial=initial)

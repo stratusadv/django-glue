@@ -1,6 +1,7 @@
 """
 Tests for GlueFormProxy basic functionality.
 """
+
 import os
 import django
 
@@ -21,32 +22,20 @@ class GlueFormProxyInitTestCase(TestCase):
     def test_accepts_form_instance(self):
         """Should accept a Django Form instance."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         self.assertEqual(proxy.unique_name, 'contact_form')
         self.assertEqual(proxy.access, GlueAccess.CHANGE)
 
     def test_accepts_model_form_instance(self):
         """Should accept a Django ModelForm instance."""
         form = TestModelForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='task_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='task_form', access=GlueAccess.CHANGE)
         self.assertEqual(proxy.unique_name, 'task_form')
 
     def test_stores_form_class_info(self):
         """Should store form class name and module."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.CHANGE,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         self.assertEqual(proxy.form_class_name, 'ContactForm')
         self.assertEqual(proxy.form_module, 'test_project.test_forms')
 
@@ -57,11 +46,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_field_types(self):
         """Should extract field type names."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         self.assertEqual(fields['name']['type'], 'CharField')
@@ -72,11 +57,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_required_flag(self):
         """Should extract required flag for each field."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         self.assertTrue(fields['name']['required'])
@@ -85,11 +66,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_labels(self):
         """Should extract field labels, falling back to field name if None."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         # Default labels are field names when not explicitly set
@@ -99,11 +76,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_widget_type(self):
         """Should extract widget class name."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         self.assertEqual(fields['message']['widget'], 'Textarea')
@@ -111,11 +84,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_choices(self):
         """Should extract choices for choice fields."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         self.assertIn('choices', fields['priority'])
@@ -124,11 +93,7 @@ class GlueFormProxyFieldDefinitionsTestCase(TestCase):
     def test_extracts_max_length(self):
         """Should extract max_length if present."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         fields = proxy._form_field_definitions
 
         self.assertEqual(fields['name']['max_length'], 100)
@@ -140,11 +105,7 @@ class GlueFormProxyInitialValuesTestCase(TestCase):
     def test_returns_empty_values_for_new_form(self):
         """Should return None for fields without initial values."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         values = proxy._get_initial_values()
 
         self.assertIsNone(values['name'])
@@ -153,11 +114,7 @@ class GlueFormProxyInitialValuesTestCase(TestCase):
     def test_returns_initial_values_from_form(self):
         """Should return initial values passed to form."""
         form = ContactForm(initial={'name': 'John', 'email': 'john@example.com'})
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         values = proxy._get_initial_values()
 
         self.assertEqual(values['name'], 'John')
@@ -166,18 +123,10 @@ class GlueFormProxyInitialValuesTestCase(TestCase):
     def test_returns_instance_values_for_model_form(self):
         """Should return instance values for ModelForm."""
         gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=25,
-            weight=350.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=25, weight=350.0, height=1.8
         )
         form = TestModelForm(instance=gorilla)
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='task_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='task_form', access=GlueAccess.VIEW)
         values = proxy._get_initial_values()
 
         self.assertEqual(values['name'], 'Test Gorilla')
@@ -192,26 +141,15 @@ class GlueFormProxyContextDataTestCase(TestCase):
     def test_includes_form_class_path(self):
         """Should include full form class path in context data."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         context_data = proxy.to_context_data()
 
-        self.assertEqual(
-            context_data['form_class_path'],
-            'test_project.test_forms.ContactForm'
-        )
+        self.assertEqual(context_data['form_class_path'], 'test_project.test_forms.ContactForm')
 
     def test_includes_fields(self):
         """Should include field definitions in context data."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         context_data = proxy.to_context_data()
 
         self.assertIn('fields', context_data)
@@ -220,11 +158,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
     def test_includes_initial(self):
         """Should include initial values in context data."""
         form = ContactForm(initial={'name': 'John'})
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         context_data = proxy.to_context_data()
 
         self.assertIn('initial', context_data)
@@ -233,11 +167,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
     def test_includes_actions(self):
         """Should include available actions in context data."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         context_data = proxy.to_context_data()
 
         self.assertIn('actions', context_data)

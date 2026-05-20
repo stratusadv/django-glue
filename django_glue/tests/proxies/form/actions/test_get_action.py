@@ -1,6 +1,7 @@
 """
 Tests for GlueFormProxy get() action.
 """
+
 import os
 import django
 
@@ -21,11 +22,7 @@ class GlueFormProxyGetTestCase(TestCase):
     def test_get_returns_fields(self):
         """get() should return field definitions."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
 
@@ -36,11 +33,7 @@ class GlueFormProxyGetTestCase(TestCase):
     def test_get_returns_values(self):
         """get() should return current values."""
         form = ContactForm(initial={'name': 'John'})
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
 
@@ -50,11 +43,7 @@ class GlueFormProxyGetTestCase(TestCase):
     def test_get_returns_empty_errors(self):
         """get() should return empty errors dict."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
 
@@ -64,11 +53,7 @@ class GlueFormProxyGetTestCase(TestCase):
     def test_get_works_with_view_access(self):
         """get() should work with VIEW access."""
         form = ContactForm()
-        proxy = GlueFormProxy(
-            target=form,
-            unique_name='contact_form',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
         action_data = dto.GlueActionRequestData(context_data={})
         result = proxy.get(action_data)
 

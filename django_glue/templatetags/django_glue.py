@@ -17,12 +17,14 @@ def django_glue_init(context):
         constants.GLUE_VIEW_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}/',
     }
     context[constants.DJANGO_GLUE_VERSION_KEY] = constants.__VERSION__
-    context[
-        constants.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS_KEY] = settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
+    context[constants.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS_KEY] = (
+        settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
+    )
     context[constants.DJANGO_GLUE_SESSION_PROXY_REGISTRY_KEY] = GlueSession(request).proxy_registry
     context[constants.DJANGO_GLUE_PROXIES_CONTEXT_DATA_KEY] = {}
-    context[constants.DJANGO_SESSION_EXPIRY_MESSAGE_KEY] = settings.DJANGO_GLUE_SESSION_EXPIRY_MESSAGE
-
+    context[constants.DJANGO_SESSION_EXPIRY_MESSAGE_KEY] = (
+        settings.DJANGO_GLUE_SESSION_EXPIRY_MESSAGE
+    )
 
     if hasattr(request, '__glue_context_data__'):
         context[constants.DJANGO_GLUE_PROXIES_CONTEXT_DATA_KEY] = request.__glue_context_data__

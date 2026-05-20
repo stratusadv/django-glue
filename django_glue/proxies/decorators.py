@@ -12,7 +12,8 @@ def action(access: GlueAccess):
 
             if BaseGlueProxy not in glue_class.__mro__:
                 raise TypeError(
-                    f"Instance of {glue_class.__name__} must inherit from BaseGlueProxy for its methods to be declared as actions.")
+                    f'Instance of {glue_class.__name__} must inherit from BaseGlueProxy for its methods to be declared as actions.'
+                )
 
             return func(self, *args, **kwargs)
 

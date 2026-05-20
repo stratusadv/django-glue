@@ -4,6 +4,7 @@ Base class for Django Glue model proxies.
 Provides field inclusion/exclusion filtering and form-based validation
 for proxies that work with Django model fields.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -12,7 +13,7 @@ from itertools import chain
 
 from django.db import transaction
 from django.db.models import Model, AutoField
-from django.forms import modelform_factory, model_to_dict, FileField
+from django.forms import modelform_factory, FileField
 from django.forms.forms import BaseForm
 from django.forms.models import ModelForm
 
@@ -32,6 +33,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         fields: Sequence of field names to include. If empty, all fields are included.
         exclude: Sequence of field names to exclude from the proxy.
         form_class: Optional custom ModelForm class for validation.
+
     """
 
     def __init__(
@@ -39,7 +41,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         fields: Sequence | dict = (),
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.fields = fields
@@ -52,7 +54,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         form_class_path: str | None = None,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
-        **kwargs
+        **kwargs,
     ) -> GlueModelProxyBase:
         from django_glue.utils import get_class_from_path_string
 
@@ -61,22 +63,17 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         else:
             form_class = None
 
-        return cls(
-            form_class=form_class,
-            fields=fields,
-            exclude=exclude,
-            **kwargs
-        )
+        return cls(form_class=form_class, fields=fields, exclude=exclude, **kwargs)
 
     @abstractmethod
     def get_model_class(self) -> type[Model]:
         """Return the Django model class associated with this proxy."""
-        raise NotImplementedError("Subclasses must implement get_model_class()")
+        raise NotImplementedError('Subclasses must implement get_model_class()')
 
     @abstractmethod
     def _get_model_instance(self) -> Model:
         """Return the model instance for form binding."""
-        raise NotImplementedError("Subclasses must implement _get_model_instance()")
+        raise NotImplementedError('Subclasses must implement _get_model_instance()')
 
     def _get_form_class(self) -> type[BaseForm]:
         if self.form_class:
@@ -86,15 +83,13 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
         if isinstance(form_fields, dict):
             form_fields = [
-                field_name
-                for field_name, field in form_fields.items()
-                if field.get('editable')
+                field_name for field_name, field in form_fields.items() if field.get('editable')
             ]
 
         return modelform_factory(
             self.get_model_class(),
             fields=list(form_fields) if form_fields else '__all__',
-            exclude=list(self.exclude) if self.exclude else ()
+            exclude=list(self.exclude) if self.exclude else (),
         )
 
     @property
@@ -104,13 +99,11 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         included_model_fields = model._meta.get_fields()
         if self.fields and isinstance(self.fields, Sequence):
             included_model_fields = [
-                field for field in included_model_fields
-                if field.name in self.fields
+                field for field in included_model_fields if field.name in self.fields
             ]
         if self.exclude:
             included_model_fields = [
-                field for field in included_model_fields
-                if field.name not in self.exclude
+                field for field in included_model_fields if field.name not in self.exclude
             ]
 
         return {
@@ -125,7 +118,6 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
             for field in included_model_fields
         }
 
-
     @property
     def _form_field_definitions(self) -> dict:
         """
@@ -138,27 +130,20 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         form_fields = super()._form_field_definitions
         non_form_fields = {
             field_name: field
-            for field_name, field in
-            self._model_field_definitions.items()
+            for field_name, field in self._model_field_definitions.items()
             if field_name not in form_fields
         }
 
-        return {
-            **super()._form_field_definitions,
-            **non_form_fields
-        }
+        return {**super()._form_field_definitions, **non_form_fields}
 
     def _build_context_data(self) -> dict:
         context_data = super()._build_context_data()
-        context_data.update({
-            'fields': self._form_field_definitions,
-            'exclude': list(self.exclude)
-        })
+        context_data.update({'fields': self._form_field_definitions, 'exclude': list(self.exclude)})
 
         if self.form_class:
-            context_data.update({
-                'form_class_path': f'{self.form_class.__module__}.{self.form_class.__name__}',
-            })
+            context_data.update(
+                {'form_class_path': f'{self.form_class.__module__}.{self.form_class.__name__}'}
+            )
 
         return context_data
 
@@ -185,8 +170,11 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         # Update foreign key id aliases in field_data for
         # related fields that weren't already updated above
         foreign_key_id_aliases = [
-            f"{field.name}_id" for field in model_fields
-            if f"{field.name}_id" in field_data and field.many_to_one and field.name not in updated_fields
+            f'{field.name}_id'
+            for field in model_fields
+            if f'{field.name}_id' in field_data
+            and field.many_to_one
+            and field.name not in updated_fields
         ]
 
         for field_name in foreign_key_id_aliases:
@@ -201,7 +189,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         model_meta = model_instance._meta
 
         for field in chain(model_meta.many_to_many, model_meta.private_fields):
-            if not hasattr(field, "save_form_data"):
+            if not hasattr(field, 'save_form_data'):
                 continue
             if field.name in field_data:
                 field.save_form_data(model_instance, field_data[field.name])

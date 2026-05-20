@@ -13,14 +13,14 @@ from test_project.gorilla.models import Gorilla
 
 
 FIGHT_NAME_TEMPLATES = [
-    "Battle of the {location}",
-    "Clash in the {location}",
-    "{location} Showdown",
-    "Rumble at {location}",
-    "The {location} Brawl",
-    "Championship at {location}",
-    "Legends of {location}",
-    "Thunder in {location}",
+    'Battle of the {location}',
+    'Clash in the {location}',
+    '{location} Showdown',
+    'Rumble at {location}',
+    'The {location} Brawl',
+    'Championship at {location}',
+    'Legends of {location}',
+    'Thunder in {location}',
 ]
 
 LOCATION_NAMES = {
@@ -48,7 +48,7 @@ class FightSeeder:
     def create_fight(self, gorillas: list[Gorilla]) -> Fight:
         """Create a single Fight with fake data."""
         if len(gorillas) < 2:
-            raise ValueError("Need at least 2 gorillas to create a fight")
+            raise ValueError('Need at least 2 gorillas to create a fight')
 
         red_corner = self.fake.random_element(gorillas)
         blue_corner = self.fake.random_element([g for g in gorillas if g != red_corner])
@@ -87,7 +87,7 @@ class FightSeeder:
         """Seed the database with the specified number of Fights."""
         gorillas = list(Gorilla.objects.all())
         if len(gorillas) < 2:
-            raise ValueError("Need at least 2 gorillas in database to seed fights")
+            raise ValueError('Need at least 2 gorillas in database to seed fights')
 
         seeder = cls()
         return [seeder.create_fight(gorillas) for _ in range(count)]

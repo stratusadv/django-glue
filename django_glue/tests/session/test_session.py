@@ -1,6 +1,7 @@
 """
 Tests for Django Glue GlueSession proxy management.
 """
+
 import os
 import django
 
@@ -22,6 +23,7 @@ from test_project.gorilla.models import Gorilla
 
 class MockSession(dict):
     """A dict subclass that also has a modified attribute like Django sessions."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.modified = False
@@ -71,21 +73,13 @@ class GlueSessionRegisterProxyTestCase(TestCase):
         self.request.session = MockSession()
 
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=25,
-            weight=350.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=25, weight=350.0, height=1.8
         )
 
     def test_register_proxy_adds_to_registry(self):
         """register_proxy should add proxy session data to registry."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         session.register_proxy(proxy)
 
@@ -94,11 +88,7 @@ class GlueSessionRegisterProxyTestCase(TestCase):
     def test_register_proxy_sets_keep_live_time(self):
         """register_proxy should set expiration time in keep_live_registry."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         before_time = time()
         session.register_proxy(proxy)
@@ -114,11 +104,7 @@ class GlueSessionRegisterProxyTestCase(TestCase):
     def test_register_proxy_marks_session_modified(self):
         """register_proxy should set request.session.modified = True."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
         session.register_proxy(proxy)
 
@@ -135,21 +121,13 @@ class GlueSessionGetProxyAccessTestCase(TestCase):
         self.request.session = MockSession()
 
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=25,
-            weight=350.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=25, weight=350.0, height=1.8
         )
 
     def test_get_proxy_access_returns_view_for_model(self):
         """get_proxy_access should return GlueAccess.VIEW for a registered model proxy."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
         session.register_proxy(proxy)
 
         access = session.get_proxy_access('gorilla')
@@ -160,9 +138,7 @@ class GlueSessionGetProxyAccessTestCase(TestCase):
         """get_proxy_access should return GlueAccess.VIEW for a registered queryset proxy."""
         session = GlueSession(self.request)
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
         session.register_proxy(proxy)
 
@@ -190,21 +166,13 @@ class GlueSessionExpirationTestCase(TestCase):
         self.request.session = MockSession()
 
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=25,
-            weight=350.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=25, weight=350.0, height=1.8
         )
 
     def test_proxy_is_expired_returns_false_for_valid(self):
         """_proxy_is_expired should return False for non-expired proxy."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
         session.register_proxy(proxy)
 
         self.assertFalse(session._proxy_is_expired('gorilla'))
@@ -220,11 +188,7 @@ class GlueSessionExpirationTestCase(TestCase):
     def test_purge_expired_proxies_removes_expired(self):
         """purge_expired_proxies should remove expired proxies."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
         session.register_proxy(proxy)
 
         # Force expire the proxy
@@ -238,11 +202,7 @@ class GlueSessionExpirationTestCase(TestCase):
     def test_purge_expired_proxies_keeps_valid(self):
         """purge_expired_proxies should keep non-expired proxies."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
         session.register_proxy(proxy)
 
         session.purge_expired_proxies()
@@ -270,21 +230,13 @@ class GlueSessionRenewalTestCase(TestCase):
         self.request.session = MockSession()
 
         self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test description',
-            age=25,
-            weight=350.0,
-            height=1.8
+            name='Test Gorilla', description='Test description', age=25, weight=350.0, height=1.8
         )
 
     def test_renew_proxies_updates_expire_time(self):
         """renew_proxies should update expiration time for specified proxies."""
         session = GlueSession(self.request)
-        proxy = GlueModelProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
         session.register_proxy(proxy)
 
         # Set a low expire time

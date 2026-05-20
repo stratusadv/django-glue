@@ -65,7 +65,7 @@ class SkillSeeder:
                     'description': description,
                     'difficulty': seeder.fake.random_int(min=1, max=10),
                     'level': seeder.fake.random_int(min=1, max=100),
-                }
+                },
             )
             skills.append(skill)
         return skills
@@ -83,7 +83,7 @@ class GorillaSeeder:
         suffix = self.fake.random_int(min=1, max=99)
 
         gorilla = Gorilla.objects.create(
-            name=f"{name} #{suffix}",
+            name=f'{name} #{suffix}',
             description=self.fake.paragraph(nb_sentences=2),
             age=self.fake.random_int(min=10, max=45),
             weight=round(self.fake.pyfloat(min_value=150, max_value=400), 1),
@@ -94,9 +94,7 @@ class GorillaSeeder:
         # Assign random skills if available
         if skills:
             random_skills = self.fake.random_elements(
-                skills,
-                length=self.fake.random_int(min=1, max=min(4, len(skills))),
-                unique=True
+                skills, length=self.fake.random_int(min=1, max=min(4, len(skills))), unique=True
             )
             gorilla.skills.set(random_skills)
 

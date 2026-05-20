@@ -1,6 +1,7 @@
 """
 Tests for Django Glue delete() action on QuerySetProxy.
 """
+
 import os
 import django
 
@@ -22,18 +23,10 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
     def setUp(self):
         """Create test gorillas for each test."""
         self.gorilla1 = Gorilla.objects.create(
-            name='Gorilla 1',
-            description='First gorilla',
-            age=10,
-            weight=200,
-            height=6
+            name='Gorilla 1', description='First gorilla', age=10, weight=200, height=6
         )
         self.gorilla2 = Gorilla.objects.create(
-            name='Gorilla 2',
-            description='Second gorilla',
-            age=12,
-            weight=210,
-            height=6.5
+            name='Gorilla 2', description='Second gorilla', age=12, weight=210, height=6.5
         )
 
     def test_delete_removes_specific_instance_by_pk(self):
@@ -42,15 +35,10 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         gorilla2_pk = self.gorilla2.pk
 
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.DELETE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'id': gorilla1_pk}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'id': gorilla1_pk})
         # Delete gorilla1 via payload
         proxy.delete(action_data)
 
@@ -61,15 +49,10 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
     def test_delete_raises_not_found_for_invalid_pk(self):
         """delete() action should raise GlueModelInstanceNotFoundError for non-existent id."""
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.DELETE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'id': 99999}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'id': 99999})
 
         with self.assertRaises(GlueModelInstanceNotFoundError):
             proxy.delete(action_data)
@@ -82,10 +65,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'id': self.gorilla1.pk}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'id': self.gorilla1.pk})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
@@ -98,10 +78,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             access=GlueAccess.CHANGE,  # Not enough for delete
         )
 
-        action_data = dto.GlueActionRequestData(
-            context_data={},
-            post_data={'id': self.gorilla1.pk}
-        )
+        action_data = dto.GlueActionRequestData(context_data={}, post_data={'id': self.gorilla1.pk})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
@@ -110,9 +87,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         """Verify delete() uses _get_model_instance_by_pk (bug fix verification)."""
         # This test verifies the bug fix - the method should exist and be callable
         proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.DELETE,
+            target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
         # Verify the method exists

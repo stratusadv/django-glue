@@ -21,8 +21,5 @@ def comments_partial_view(request: HttpRequest, content_type_id: int, object_id:
     return render(
         request,
         'comments/partial/comments_partial.html',
-        {
-            'content_type_id': content_type_id,
-            'object_id': object_id,
-        }
+        {'content_type_id': content_type_id, 'object_id': object_id},
     )

@@ -27,6 +27,7 @@ def get_inheritors(cls):
 def get_class_from_path_string(class_path_string: str):
     module_path, class_name = class_path_string.rsplit('.', 1)
     import importlib
+
     module = importlib.import_module(module_path)
     return getattr(module, class_name)
 

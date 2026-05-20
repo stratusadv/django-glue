@@ -14,27 +14,16 @@ from django_glue.utils import serialize_queryset, deserialize_queryset
 class GlueQuerySetProxy(GlueModelProxyBase):
     _subject_type = QuerySet
 
-    def __init__(
-        self,
-        target: QuerySet,
-        **kwargs
-    ):
+    def __init__(self, target: QuerySet, **kwargs):
         super().__init__(target=target, **kwargs)
 
         self.encoded_query = serialize_queryset(target)
 
     @classmethod
-    def from_action_request_data(
-        cls,
-        encoded_query: str,
-        **kwargs
-    ) -> GlueQuerySetProxy:
+    def from_action_request_data(cls, encoded_query: str, **kwargs) -> GlueQuerySetProxy:
         decoded_queryset = deserialize_queryset(encoded_query)
 
-        return super().from_action_request_data(
-            target=decoded_queryset,
-            **kwargs
-        )
+        return super().from_action_request_data(target=decoded_queryset, **kwargs)
 
     def get_model_class(self):
         return self.target.model
@@ -47,21 +36,15 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return self.get_model_class()()
 
     def _build_context_data(self) -> dict:
-        return {
-            'encoded_query': self.encoded_query,
-        } | super()._build_context_data()
+        return {'encoded_query': self.encoded_query} | super()._build_context_data()
 
     def _queryset_to_list(self, queryset: QuerySet):
         model = self.get_model_class()
         m2m_fields = {
-            f.name for f in model._meta.many_to_many
-            if f.name in self._form_field_definitions
+            f.name for f in model._meta.many_to_many if f.name in self._form_field_definitions
         }
 
-        non_m2m_fields = [
-            name for name in self._form_field_definitions
-            if name not in m2m_fields
-        ]
+        non_m2m_fields = [name for name in self._form_field_definitions if name not in m2m_fields]
 
         # Detect FK fields set via select_related on the queryset
         select_related_dict = getattr(queryset.query, 'select_related', False) or {}
@@ -79,11 +62,9 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                 related_model_fields.append(field_name)
 
         # Query with expanded keys
-        results = list(queryset.values(*[
-            *non_m2m_fields,
-            *related_model_fields,
-            *queryset.query.annotations
-        ]))
+        results = list(
+            queryset.values(*[*non_m2m_fields, *related_model_fields, *queryset.query.annotations])
+        )
 
         # Reshape flat __ keys back into nested dicts
         for item in results:
@@ -120,14 +101,13 @@ class GlueQuerySetProxy(GlueModelProxyBase):
 
         Raises GlueQuerySetFilterValidationError if any filter key references a field not in _form_field_definitions.
         """
-        for key in payload.keys():
+        for key in payload:
             # Extract base field name from ORM lookup syntax (e.g., 'title__icontains' -> 'title')
             base_field = key.split('__')[0]
 
             if base_field not in self._form_field_definitions:
                 raise GlueQuerySetFilterValidationError(
-                    field=base_field,
-                    allowed_fields=list(self._form_field_definitions.keys())
+                    field=base_field, allowed_fields=list(self._form_field_definitions.keys())
                 )
 
     def _apply_query_params(self, params: dict):
@@ -140,10 +120,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             self.target = self.target.filter(**filter_params)
 
         if slice_params := params.get('slice'):
-            self.target = self.target[slice(
-                slice_params.get('start'),
-                slice_params.get('stop'),
-            )]
+            self.target = self.target[slice(slice_params.get('start'), slice_params.get('stop'))]
 
     @action(access=GlueAccess.VIEW)
     def query_with_params(self, action_data: GlueActionRequestData):
@@ -161,10 +138,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         try:
             return self.target.get(pk=pk)
         except self.target.model.DoesNotExist:
-            raise GlueModelInstanceNotFoundError(
-                model_name=self.target.model.__name__,
-                pk=pk
-            )
+            raise GlueModelInstanceNotFoundError(model_name=self.target.model.__name__, pk=pk)
 
     def _create_model_proxy_from_instance(self, instance: Model):
         return GlueModelProxy(
@@ -194,15 +168,17 @@ class GlueQuerySetProxy(GlueModelProxyBase):
 
     @action(access=GlueAccess.DELETE)
     def delete(self, action_data: GlueActionRequestData):
-        return self._get_target_model_instance_proxy(
-            action_data.post_data['id']
-        ).delete(action_data)
+        pk = action_data.post_data.get('id')
+        if pk is None:
+            return {'success': False, 'error': 'id is required for delete action'}
+        return self._get_target_model_instance_proxy(pk).delete(action_data)
 
     @action(access=GlueAccess.VIEW)
     def get(self, action_data: GlueActionRequestData):
-        return self._get_target_model_instance_proxy(
-            action_data.post_data['id']
-        ).get(action_data)
+        pk = action_data.post_data.get('id')
+        if pk is None:
+            return {'success': False, 'error': 'id is required for get action'}
+        return self._get_target_model_instance_proxy(pk).get(action_data)
 
     @action(access=GlueAccess.VIEW)
     def new(self, action_data: GlueActionRequestData):
