@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.urls import reverse, NoReverseMatch
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,25 +21,22 @@ class ViewBodySchema(BaseModel):
     method: str = 'POST'
     view_payload: dict = Field(default=dict)
 
-    @classmethod
-    def from_request(cls, request: HttpRequest) -> ViewBodySchema:
-        body_data = get_request_body_data(request)
-
-        return cls(**body_data)
-
-    def get_url_path(self) -> str | JsonResponse:
+    def model_post_init(self, context: Any, /) -> None:
         if self.url_name:
             try:
-                return reverse(self.url_name)
+                self.url_path = reverse(self.url_name)
             except NoReverseMatch:
                 raise GlueResolverError(
                     response_error=f'Could not resolve URL name: {self.url_name}', response_status=404
                 ) from NoReverseMatch
 
-        elif self.url_path:
-            return self.url_path
-
-        else:
+        elif self.url_path is None:
             raise GlueResolverError(
                 response_error='Missing url_name or url_path in request body', response_status=400
             )
+
+    @classmethod
+    def from_request(cls, request: HttpRequest) -> ViewBodySchema:
+        body_data = get_request_body_data(request)
+
+        return cls(**body_data)

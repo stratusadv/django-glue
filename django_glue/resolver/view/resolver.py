@@ -12,7 +12,6 @@ from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.view.request import GlueViewHttpRequest
 from django_glue.resolver.view.schemas import ViewBodySchema
 from django_glue.session import GlueSession
-from django_glue.utils import get_request_body_data
 
 
 class GlueViewResolver(BaseResolver):
@@ -20,50 +19,49 @@ class GlueViewResolver(BaseResolver):
         self.request = request
         self.view_body = ViewBodySchema.from_request(request)
 
+    @property
+    def glue_view_http_request(self) -> GlueViewHttpRequest:
+        return GlueViewHttpRequest(
+            base_request=self.request,
+            method=self.view_body.method,
+            url_path=self.view_body.url_path,
+            view_payload=self.view_body.view_payload,
+        )
+
+    def get_response(self) -> HttpResponse:
+        parsed = urlparse(self.view_body.url_path)
+        resolve_path = parsed.path
+
+        try:
+            resolved = resolve(resolve_path)
+        except NoReverseMatch:
+            raise GlueResolverError(
+                response_error=f'No view found for URL path: {self.view_body.url_path}', response_status=404
+            ) from NoReverseMatch
+
+        view_func = resolved.func
+        view_kwargs = resolved.kwargs
+
+        try:
+            return view_func(self.glue_view_http_request, **view_kwargs)
+        except Exception as e:
+            logging.exception(e)
+            raise GlueResolverError(
+                response_error=f'View raised an exception: {e!s}', response_status=500
+            ) from Exception
+
     def resolve(self) -> JsonResponse:
         try:
-            url_path = self.view_body.get_url_path()
-
-            if isinstance(url_path, JsonResponse):
-                return url_path
-
             for _ in range(settings.DJANGO_GLUE_VIEW_MAX_REDIRECTS):
-                parsed = urlparse(url_path)
-                resolve_path = parsed.path
-
-                try:
-                    resolved = resolve(resolve_path)
-                except NoReverseMatch:
-                    raise GlueResolverError(
-                        response_error=f'No view found for URL path: {url_path}',
-                        response_status=404,
-                    ) from NoReverseMatch
-
-                view_func = resolved.func
-                view_kwargs = resolved.kwargs
-
-                glue_view_http_request = GlueViewHttpRequest(
-                    base_request=self.request,
-                    method=self.view_body.method,
-                    url_path=url_path,
-                    view_payload=self.view_body.view_payload,
-                )
-
-                try:
-                    response = view_func(glue_view_http_request, **view_kwargs)
-                except Exception as e:
-                    logging.exception(e)
-                    raise GlueResolverError(
-                        response_error=f'View raised an exception: {e!s}', response_status=500
-                    ) from Exception
+                response = self.get_response()
 
                 if isinstance(response, HttpResponseRedirect):
                     redirect_url = response.url
                     if redirect_url.startswith('/'):
                         try:
                             resolved_redirect = resolve(redirect_url)
-                            url_name = resolved_redirect.view_name
-                            url_path = reverse(url_name)
+                            self.view_body.url_name = resolved_redirect.view_name
+                            self.view_body.url_path = reverse(self.view_body.url_name)
                         except NoReverseMatch:
                             raise GlueResolverError(
                                 response_error=f'Could not resolve redirect URL: {redirect_url}',
@@ -80,7 +78,7 @@ class GlueViewResolver(BaseResolver):
                         {
                             'html': response.content.decode('utf-8'),
                             'proxy_context_data': getattr(
-                                glue_view_http_request, '__glue_context_data__', {}
+                                self.glue_view_http_request, '__glue_context_data__', {}
                             ),
                             'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         },
@@ -93,7 +91,7 @@ class GlueViewResolver(BaseResolver):
                         {
                             'html': response.content.decode('utf-8'),
                             'proxy_context_data': getattr(
-                                glue_view_http_request, '__glue_context_data__', {}
+                                self.glue_view_http_request, '__glue_context_data__', {}
                             ),
                             'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         }
@@ -108,8 +106,7 @@ class GlueViewResolver(BaseResolver):
 
     def raise_external_redirects_not_supported(self, redirect_url: str) -> None:
         raise GlueResolverError(
-            response_error=f'External redirect not supported: {redirect_url}',
-            response_status=400,
+            response_error=f'External redirect not supported: {redirect_url}', response_status=400
         )
 
     def raise_to_many_redirects(self) -> None:
@@ -123,4 +120,3 @@ class GlueViewResolver(BaseResolver):
             response_error=f'Unsupported response type: {type(response).__name__}',
             response_status=500,
         )
-
