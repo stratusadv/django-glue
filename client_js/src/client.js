@@ -18,7 +18,7 @@ class GlueClient {
 
         let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
 
-        if(!(proxyClass.name in this)) {
+        if (!(proxyClass.name in this)) {
             this[proxyClass.name] = {}
         }
 

@@ -11,8 +11,7 @@
     "license": "MIT",
     "private": true,
     "devDependencies": {
-        "@happy-dom/global-registrator": "^20.7.0",
-        "dotenv": "^17.2.4"
+        "@happy-dom/global-registrator": "^20.7.0"
     },
     "scripts": {
         "build": "bun run client_js/scripts/build.js",

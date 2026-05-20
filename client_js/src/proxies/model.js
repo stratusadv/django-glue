@@ -1,19 +1,19 @@
-import { GlueFormProxy } from "./form";
+import GlueFormProxy from "./form";
 
 let _keyCounter = 0;
 
-export class GlueModelProxy extends GlueFormProxy {
+class GlueModelProxy extends GlueFormProxy {
     static name = 'model'
 
     constructor({
-        http,
-        proxyUniqueName,
-        contextData,
-        actions=null,
-        autoFetch=false,
-        values=null,
-        parentQuerySet=null
-    }) {
+                    http,
+                    proxyUniqueName,
+                    contextData,
+                    actions = null,
+                    autoFetch = false,
+                    values = null,
+                    parentQuerySet = null
+                }) {
         super({http, proxyUniqueName, contextData, actions, autoFetch});
         this._values = values;
 
@@ -43,8 +43,7 @@ export class GlueModelProxy extends GlueFormProxy {
         let data;
         if (this._parent) {
             data = await this._parent._processAction('get', {id: pk})
-        }
-        else {
+        } else {
             data = await this._processAction('get')
         }
 
@@ -58,7 +57,7 @@ export class GlueModelProxy extends GlueFormProxy {
     async delete() {
         if (this._isNew && this._parent) {
             await this._parent.refresh();
-            return { success: true };
+            return {success: true};
         }
         const result = await this._processAction('delete', {id: this._values.id});
         if (this._parent) {
@@ -67,3 +66,5 @@ export class GlueModelProxy extends GlueFormProxy {
         return result;
     }
 }
+
+export default GlueModelProxy;

@@ -414,12 +414,13 @@ Any `django_glue.settings` constant can be overridden by defining the same name 
 ## URLs
 
 Include in your Django urls.py:
+
 ```python
 from django_glue.shortcuts import django_glue_urls
 
 urlpatterns = [
-    path('', include(django_glue_urls())),
-    # ...
+   path('', include(django_glue_urls())),
+   # ...
 ]
 ```
 

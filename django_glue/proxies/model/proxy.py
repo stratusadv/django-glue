@@ -37,7 +37,7 @@ class GlueModelProxy(GlueModelProxyBase):
 
         return super().from_action_request_data(target=target, **kwargs)
 
-    def get_model_class(self):
+    def get_model_class(self) -> type[Model]:
         return self.target.__class__
 
     def _get_model_instance(self) -> Model:
@@ -51,11 +51,11 @@ class GlueModelProxy(GlueModelProxyBase):
         } | super()._build_context_data()
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: GlueActionRequestData):
+    def get(self, action_data: GlueActionRequestData) -> dict:
         return model_to_dict(
             instance=self._get_model_instance(), fields=self._form_field_definitions
         )
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, action_data: GlueActionRequestData):
+    def delete(self, action_data: GlueActionRequestData) -> None:
         self._get_model_instance().delete()

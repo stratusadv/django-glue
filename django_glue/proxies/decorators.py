@@ -1,19 +1,19 @@
 import functools
+from typing import Callable
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.proxy import BaseGlueProxy
 
 
-def action(access: GlueAccess):
-    def decorator(func):
+def action(access: GlueAccess) -> Callable:
+    def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
-        def wrapper(self, *args, **kwargs):
+        def wrapper(self, *args, **kwargs) -> Callable:
             glue_class = type(self)
 
             if BaseGlueProxy not in glue_class.__mro__:
-                raise TypeError(
-                    f'Instance of {glue_class.__name__} must inherit from BaseGlueProxy for its methods to be declared as actions.'
-                )
+                message = f'Instance of {glue_class.__name__} must inherit from BaseGlueProxy for its methods to be declared as actions.'
+                raise TypeError(message)
 
             return func(self, *args, **kwargs)
 

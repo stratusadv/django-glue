@@ -93,7 +93,7 @@ class GlueFormProxyMixin(ABC):
         }
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, action_data: GlueActionRequestData):
+    def save(self, action_data: GlueActionRequestData) -> dict:
         """Validate and save form data."""
         validation_result = self.validate(action_data)
 
@@ -103,7 +103,7 @@ class GlueFormProxyMixin(ABC):
         return validation_result
 
     @action(access=GlueAccess.VIEW)
-    def foreign_key_choices(self, action_data: GlueActionRequestData):
+    def foreign_key_choices(self, action_data: GlueActionRequestData) -> list:
         """Get choices for a foreign key field."""
         field_definition = action_data.post_data.get('field_definition')
         if (

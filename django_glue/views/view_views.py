@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 from urllib.parse import urlparse, parse_qs
 
 from django.http import JsonResponse, HttpRequest, HttpResponse, HttpResponseRedirect, QueryDict
@@ -8,16 +9,16 @@ from django.urls import reverse, resolve
 from django.views.decorators.http import require_http_methods
 
 from django_glue.encoders import GlueActionDataJSONEncoder
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 from django_glue.session import GlueSession
-from django_glue import data_transfer_objects as dto
 from django_glue.utils import get_request_body_data
 
 
 class WrappedHttpRequest:
     """Wraps an HttpRequest, overriding select attributes for a target view call."""
 
-    def __init__(self, base_request: HttpRequest, method: str, url_path: str, view_payload: dict):
+    def __init__(
+        self, base_request: HttpRequest, method: str, url_path: str, view_payload: dict
+    ) -> None:
         self._base = base_request
         self.method = method
         self.body = json.dumps(view_payload).encode('utf-8')
@@ -28,36 +29,16 @@ class WrappedHttpRequest:
 
         query_params = parse_qs(parsed.query, keep_blank_values=True)
         query_dict = {}
+
         for key, values in query_params.items():
             query_dict[key] = values[0] if len(values) == 1 else values
         self.GET = QueryDict(mutable=True)
+
         for key, value in query_dict.items():
             self.GET[key] = value
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._base, name)
-
-
-@require_http_methods(['POST'])
-def action_view(request: HttpRequest, unique_name: str, action: str) -> JsonResponse | HttpResponse:
-    if request.content_type not in ['application/json', 'multipart/form-data']:
-        return HttpResponse(
-            f'Unsupported media type {request.content_type}', status=400, content_type='text/plain'
-        )
-
-    action_data = dto.GlueActionRequestData.from_request(request)
-
-    proxy_access = GlueSession(request).get_proxy_access(unique_name)
-
-    proxy = SUBJECT_TYPE_TO_PROXY_TYPE[
-        action_data.context_data['subject_type']
-    ].from_action_request_data(
-        access=proxy_access, unique_name=unique_name, **action_data.context_data
-    )
-
-    action_response_data = proxy.process_action(action, action_data)
-
-    return JsonResponse(action_response_data, safe=False, encoder=GlueActionDataJSONEncoder)
 
 
 @require_http_methods(['POST'])
@@ -144,19 +125,3 @@ def glue_view_view(request: HttpRequest) -> JsonResponse:
         )
 
     return JsonResponse({'error': f'Too many redirects (max {max_redirects})'}, status=500)
-
-
-@require_http_methods(['POST'])
-def keep_live_view(request: HttpRequest) -> JsonResponse:
-    glue_session = GlueSession(request)
-    unique_names = get_request_body_data(request, 'unique_names')
-
-    if len(unique_names) > 0:
-        glue_session.renew_proxies(unique_names)
-
-    return JsonResponse(data=glue_session.proxy_registry)
-
-
-@require_http_methods(['GET'])
-def session_data_view(request: HttpRequest) -> JsonResponse:
-    return JsonResponse(data=GlueSession(request).proxy_registry)

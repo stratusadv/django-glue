@@ -1,3 +1,6 @@
+from django.http import HttpResponse
+
+
 def connection_view(request):
     return HttpResponse('Connection view')
 

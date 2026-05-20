@@ -1,6 +1,7 @@
 <div class="row">
-    <div class="col-auto">
+    <div class="col-auto me-5">
         <h4>Gorilla Fight League</h4>
+                <h5>Organize</h5>
         <ul>
             {% url 'gorilla:list' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Combatants' %}
@@ -15,14 +16,34 @@
             {% include 'element/nav_link_list_element.html' with url=the_url label='Skills (M2M Test)' %}
         </ul>
     </div>
-    <div class="col-auto">
-        <h4>Performance</h4>
-        <ul>
-            {% url 'lab:performance:stress' as the_url %}
-            {% include 'element/nav_link_list_element.html' with url=the_url label='Stress Test' %}
+    <div class="col">
+        <h4>Laboratory Testing</h4>
+        <div class="row ps-4">
+            <div class="col">
+                <h5>Performance</h5>
+                <ul>
+                    {% url 'lab:performance:speed' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Speed Test' %}
 
-            {% url 'lab:performance:flush_session' as the_url %}
-            {% include 'element/nav_link_list_element.html' with url=the_url label='Flush Session' %}
-        </ul>
+                    {% url 'lab:performance:stress' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Stress Test' %}
+
+                    {% url 'lab:performance:flush_session' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Flush Session' %}
+                </ul>
+            </div>
+            <div class="col">
+                <h5>Connections</h5>
+                <ul>
+                    {% include 'element/nav_link_list_element.html' with url='#' label='Coming Son' %}
+                </ul>
+            </div>
+            <div class="col">
+                <h5>Recovery</h5>
+                <ul>
+                    {% include 'element/nav_link_list_element.html' with url='#' label='Coming Son' %}
+                </ul>
+            </div>
+        </div>
     </div>
 </div>

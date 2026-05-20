@@ -28,7 +28,7 @@
                     if (this.timeout) {
                         clearTimeout(this.timeout);
                     }
-                    this.current = { type, message };
+                    this.current = {type, message};
                     this.timeout = setTimeout(() => {
                         this.current = null;
                     }, duration);
@@ -217,8 +217,8 @@
 </head>
 <body x-data="{ labOpen: false }">
 <!-- Lab Toggle -->
-<button class="lab-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#labPanel" aria-controls="labPanel"
-        x-show="!labOpen" x-transition @click="labOpen = true">
+<button class="lab-toggle z-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#labPanel" aria-controls="labPanel"
+        x-transition @click="labOpen = true">
     <i class="bi bi-list"></i>
 </button>
 

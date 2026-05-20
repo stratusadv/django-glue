@@ -1,6 +1,6 @@
-import {BaseGlueProxy} from "./base";
+import BaseGlueProxy from "./base";
 
-export class GlueFormProxy extends BaseGlueProxy {
+class GlueFormProxy extends BaseGlueProxy {
     static name = 'form'
 
     constructor({http, proxyUniqueName, contextData, actions = null}) {
@@ -200,3 +200,5 @@ export class GlueFormProxy extends BaseGlueProxy {
         this._errors = {};
     }
 }
+
+export default GlueFormProxy;

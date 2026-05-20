@@ -1,8 +1,8 @@
-import { BaseGlueProxy } from "./base";
-import {GlueModelProxy} from "./model";
+import BaseGlueProxy from "./base";
+import GlueModelProxy from "./model";
 import GlueClient from "../client";
 
-export class GlueQuerySetProxy extends BaseGlueProxy {
+class GlueQuerySetProxy extends BaseGlueProxy {
     static name = 'querySet'
 
     _items = [];
@@ -16,7 +16,7 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         super(options);
     }
 
-    *[Symbol.iterator]() {
+    * [Symbol.iterator]() {
         yield* this._items
     }
 
@@ -142,3 +142,5 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
         return result;
     }
 }
+
+export default GlueQuerySetProxy;

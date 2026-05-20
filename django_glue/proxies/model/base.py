@@ -42,7 +42,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)
         self.fields = fields
         self.exclude = exclude
@@ -68,12 +68,14 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
     @abstractmethod
     def get_model_class(self) -> type[Model]:
         """Return the Django model class associated with this proxy."""
-        raise NotImplementedError('Subclasses must implement get_model_class()')
+        message = 'Subclasses must implement get_model_class()'
+        raise NotImplementedError(message)
 
     @abstractmethod
     def _get_model_instance(self) -> Model:
         """Return the model instance for form binding."""
-        raise NotImplementedError('Subclasses must implement _get_model_instance()')
+        message = 'Subclasses must implement _get_model_instance()'
+        raise NotImplementedError(message)
 
     def _get_form_class(self) -> type[BaseForm]:
         if self.form_class:
@@ -147,7 +149,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
         return context_data
 
-    def _set_non_m2m_fields(self, field_data: dict):
+    def _set_non_m2m_fields(self, field_data: dict) -> None:
         model_instance = self._get_model_instance()
         model_fields = model_instance._meta.fields
 
@@ -184,7 +186,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         for field in file_field_list:
             field.save_form_data(model_instance, field_data[field.name])
 
-    def _set_m2m_fields(self, field_data: dict):
+    def _set_m2m_fields(self, field_data: dict) -> None:
         model_instance = self._get_model_instance()
         model_meta = model_instance._meta
 
@@ -195,7 +197,7 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
                 field.save_form_data(model_instance, field_data[field.name])
 
     @transaction.atomic
-    def _save(self, field_data: dict) -> dict:
+    def _save(self, field_data: dict) -> None:
         model_instance = self._get_model_instance()
 
         self._set_non_m2m_fields(field_data)

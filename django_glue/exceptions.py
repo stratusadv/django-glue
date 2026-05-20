@@ -15,7 +15,7 @@ class GlueError(Exception):
 class GlueProxyNotFoundError(GlueError):
     """Raised when a proxy with the given unique_name is not found in the session."""
 
-    def __init__(self, unique_name: str):
+    def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
         super().__init__(f"Proxy '{unique_name}' not found in session.")
 
@@ -23,7 +23,7 @@ class GlueProxyNotFoundError(GlueError):
 class GlueAccessError(GlueError):
     """Raised when a user lacks permission to perform an action on a proxy."""
 
-    def __init__(self, action: str, required_access: str, current_access: str):
+    def __init__(self, action: str, required_access: str, current_access: str) -> None:
         self.action = action
         self.required_access = required_access
         self.current_access = current_access
@@ -36,7 +36,7 @@ class GlueAccessError(GlueError):
 class GlueMissingActionError(GlueError):
     """Raised when a called action method does not exist or is not properly decorated."""
 
-    def __init__(self, action: str, proxy_name: str, reason: str = None):
+    def __init__(self, action: str, proxy_name: str, reason: str | None = None) -> None:
         self.action = action
         self.proxy_name = proxy_name
         self.reason = reason
@@ -49,7 +49,7 @@ class GlueMissingActionError(GlueError):
 class GlueModelInstanceNotFoundError(GlueError):
     """Raised when a model instance is not found during proxy operations (get, save, delete)."""
 
-    def __init__(self, model_name: str, pk: Any):
+    def __init__(self, model_name: str, pk: Any) -> None:
         self.model_name = model_name
         self.pk = pk
         super().__init__(f'{model_name} with pk={pk} does not exist.')
@@ -58,7 +58,7 @@ class GlueModelInstanceNotFoundError(GlueError):
 class GlueQuerySetFilterValidationError(GlueError):
     """Raised when filter parameters reference disallowed fields."""
 
-    def __init__(self, field: str, allowed_fields: list):
+    def __init__(self, field: str, allowed_fields: list) -> None:
         self.field = field
         self.allowed_fields = allowed_fields
         super().__init__(f"Cannot filter on field '{field}'. Allowed fields: {allowed_fields}")

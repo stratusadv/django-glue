@@ -1,4 +1,4 @@
-export class BaseGlueProxy {
+class BaseGlueProxy {
     static name = 'baseGlueProxy'
 
     constructor({http, proxyUniqueName, contextData, actions= null}) {
@@ -101,3 +101,5 @@ export class BaseGlueProxy {
         }
     }
 }
+
+export default BaseGlueProxy;

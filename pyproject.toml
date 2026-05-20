@@ -120,9 +120,3 @@ exclude_lines = [
 fail_under = 70
 show_missing = true
 
-[tool.ruff]
-extend = "ruff.toml"
-
-[tool.ty]
-extend = "ty.toml"
-

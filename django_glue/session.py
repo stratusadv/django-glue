@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from time import time
-from typing import Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
-from django.http import HttpRequest
 
-from django_glue import settings, GlueAccess
+from django_glue import settings
 from django_glue.exceptions import GlueProxyNotFoundError
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
+    from django_glue.access.access import GlueAccess
     from django_glue.proxies.proxy import BaseGlueProxy
 
 
@@ -19,15 +20,13 @@ class GlueSession:
     purge proxies that have expired from the session.
     """
 
-    def __init__(self, request: HttpRequest):
+    def __init__(self, request: HttpRequest) -> None:
         self.request = request
 
-        self.proxy_registry = request.session.setdefault(
-            settings.DJANGO_GLUE_SESSION_PROXY_KEY, dict()
-        )
+        self.proxy_registry = request.session.setdefault(settings.DJANGO_GLUE_SESSION_PROXY_KEY, {})
 
         self.keep_live_registry = request.session.setdefault(
-            settings.DJANGO_GLUE_SESSION_KEEP_LIVE_KEY, dict()
+            settings.DJANGO_GLUE_SESSION_KEEP_LIVE_KEY, {}
         )
 
     @staticmethod
@@ -39,7 +38,7 @@ class GlueSession:
     def _set_modified(self) -> None:
         self.request.session.modified = True
 
-    def _proxy_is_expired(self, proxy_name):
+    def _proxy_is_expired(self, proxy_name: str) -> bool:
         return time() > self.keep_live_registry[proxy_name]
 
     def get_proxy_access(self, unique_name: str) -> GlueAccess:
@@ -59,7 +58,7 @@ class GlueSession:
     def purge_expired_proxies(self) -> None:
         proxy_names_to_purge = [
             proxy_name
-            for proxy_name in self.keep_live_registry.keys()
+            for proxy_name in self.keep_live_registry
             if self._proxy_is_expired(proxy_name)
         ]
 

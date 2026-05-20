@@ -3,16 +3,19 @@ from __future__ import annotations
 import base64
 import json
 import pickle
+from typing import Callable, TYPE_CHECKING
 
-from django.db.models import QuerySet
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+    from django.db.models import QuerySet
 
 
-def get_request_body_data(request, key: str = None):
+def get_request_body_data(request: HttpRequest, key: str | None = None) -> dict:
     data = json.loads(request.body.decode('utf-8'))
     return data if key is None else data.get(key, None)
 
 
-def get_inheritors(cls):
+def get_inheritors(cls) -> set:
     subclasses = set()
     work = [cls]
     while work:
@@ -24,9 +27,9 @@ def get_inheritors(cls):
     return subclasses
 
 
-def get_class_from_path_string(class_path_string: str):
+def get_class_from_path_string(class_path_string: str) -> Callable:
     module_path, class_name = class_path_string.rsplit('.', 1)
-    import importlib
+    import importlib  # noqa: PLC0415
 
     module = importlib.import_module(module_path)
     return getattr(module, class_name)

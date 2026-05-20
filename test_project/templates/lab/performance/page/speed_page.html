@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+    {% for glue_type, result in glue_types_results.items %}
+        <div x-data="{
+            glue_objects: {},
+            counts_times: {},
+            unique_names: [{% for unique_name in unique_names %}'{{ unique_name }}',{% endfor %}],
+            counts: [{% for count in counts %}{{ count }},{% endfor %}],
+            init() {
+                this.counts.forEach((count) => {
+                    const start = performance.now()
+                    this.unique_names.slice(0, count).forEach((unique_name) => {
+                        this.glue_objects[unique_name] = Glue['{{ glue_type }}'][unique_name]
+                    })
+                    this.counts_times[count] = ((performance.now() - start) / 1000).toFixed(4)
+                })
+            }
+        }" class="row justify-content-center mb-4">
+            <div class="col-lg-8">
+                <div class="card card-gorilla">
+                    <div class="card-header bg-gorilla-green text-white">
+                        <h5 class="mb-0">Glue {{ glue_type }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-hover">
+                            <thead>
+                            <tr>
+                                <td> Count</td>
+                                <td class="text-end">Django View</td>
+                                <td class="text-end">Client JS</td>
+                                <td class="text-end">Total Overhead</td>
+                            </tr>
+
+                            </thead>
+                            <tbody>
+                            {% for count, time_seconds in result.items %}
+                                <tr>
+                                    <td>{{ count }}</td>
+                                    <td class="text-end"> {{ time_seconds }}</td>
+                                    <td class="text-end" x-text="counts_times[{{ count }}]"></td>
+                                    <td class="text-end" x-text="(Number(counts_times[{{ count }}]) + Number({{ time_seconds }})).toFixed(4)"></td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+{% endblock %}

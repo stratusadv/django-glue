@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class GlueAccess(str, Enum):
+class GlueAccess(StrEnum):
     # The order of these variables controls how the permission cascade each other in the has_access method
     VIEW = 'view'
     CHANGE = 'change'
@@ -14,6 +14,4 @@ class GlueAccess(str, Enum):
 
     def has_access(self, access_required: GlueAccess) -> bool:
         access_tuple = tuple(GlueAccess.__members__.values())
-        if access_tuple.index(self) >= access_tuple.index(access_required):
-            return True
-        return False
+        return access_tuple.index(self) >= access_tuple.index(access_required)

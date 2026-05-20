@@ -1,4 +1,4 @@
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from django_glue import Glue
@@ -6,10 +6,9 @@ from test_project.fight.models import Fight
 from test_project.fight.forms import FightForm, ContactPromoterForm
 
 
-def list_view(request: HttpRequest):
-    glue = Glue.request(request)
-
-    glue.queryset(
+def list_view(request: HttpRequest) -> HttpResponse:
+    Glue.queryset(
+        request=request,
         target=Fight.objects.all(),
         unique_name='fights',
         access=Glue.Access.DELETE,
@@ -29,7 +28,7 @@ def list_view(request: HttpRequest):
     return render(request, template_name='fight/page/list_page.html')
 
 
-def schedule_view(request: HttpRequest):
+def schedule_view(request: HttpRequest) -> HttpResponse:
     """Form proxy demo - schedule a new fight and contact the promoter."""
     Glue.form(
         request=request, unique_name='fight_form', target=FightForm(), access=Glue.Access.CHANGE

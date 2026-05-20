@@ -33,13 +33,12 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
         return self.target.__class__
 
     def _build_context_data(self) -> dict:
-        context_data = {
+        return {
             'form_class_path': f'{self.form_module}.{self.form_class_name}',
             'fields': self._form_field_definitions,
             'initial': self._get_initial_values(),
         } | super()._build_context_data()
 
-        return context_data
 
     def _get_initial_values(self) -> dict:
         """Get initial form values."""
@@ -56,7 +55,7 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
         return values
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: GlueActionRequestData):
+    def get(self, action_data: GlueActionRequestData) -> dict:
         """Return form field definitions and current values."""
         return {
             'fields': self._form_field_definitions,

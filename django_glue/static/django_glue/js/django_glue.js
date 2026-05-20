@@ -71,9 +71,10 @@
       }
     }
   }
+  var base_default = BaseGlueProxy;
 
   // client_js/src/proxies/form.js
-  class GlueFormProxy extends BaseGlueProxy {
+  class GlueFormProxy extends base_default {
     static name = "form";
     constructor({ http, proxyUniqueName, contextData, actions = null }) {
       super({ http, proxyUniqueName, contextData, actions });
@@ -233,11 +234,12 @@
       this._errors = {};
     }
   }
+  var form_default = GlueFormProxy;
 
   // client_js/src/proxies/model.js
   var _keyCounter = 0;
 
-  class GlueModelProxy extends GlueFormProxy {
+  class GlueModelProxy extends form_default {
     static name = "model";
     constructor({
       http,
@@ -289,6 +291,7 @@
       return result;
     }
   }
+  var model_default = GlueModelProxy;
 
   // client_js/src/http.js
   class GlueHttp {
@@ -526,7 +529,7 @@
   var client_default = GlueClient;
 
   // client_js/src/proxies/queryset.js
-  class GlueQuerySetProxy extends BaseGlueProxy {
+  class GlueQuerySetProxy extends base_default {
     static name = "querySet";
     _items = [];
     _loaded = false;
@@ -540,7 +543,7 @@
       yield* this._items;
     }
     buildChildModelProxy(item) {
-      const proxy = new GlueModelProxy({
+      const proxy = new model_default({
         http: this.http,
         proxyUniqueName: this._uniqueName,
         contextData: client_default.contextData[this._uniqueName],
@@ -636,17 +639,18 @@
       return result;
     }
   }
+  var queryset_default = GlueQuerySetProxy;
 
   // client_js/src/proxies/index.js
   var SUBJECT_TYPE_TO_PROXY_CLASS = {
-    Model: GlueModelProxy,
-    QuerySet: GlueQuerySetProxy,
-    BaseForm: GlueFormProxy
+    Model: model_default,
+    QuerySet: queryset_default,
+    BaseForm: form_default
   };
-  window.BaseGlueProxy = BaseGlueProxy;
-  window.GlueModelProxy = GlueModelProxy;
-  window.GlueQuerySetProxy = GlueQuerySetProxy;
-  window.GlueFormProxy = GlueFormProxy;
+  window.BaseGlueProxy = base_default;
+  window.GlueModelProxy = model_default;
+  window.GlueQuerySetProxy = queryset_default;
+  window.GlueFormProxy = form_default;
 
   // client_js/src/config.js
   class GlueConfig {
