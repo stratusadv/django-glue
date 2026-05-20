@@ -1,5 +1,5 @@
 ## Source
 
-```javascript title="django_glue/static/django_glue/js/glue/view.js"
---8<-- "django_glue/static/django_glue/js/glue/view.js"
+```javascript title="client_js/src/view.js"
+--8<-- "client_js/src/view.js"
 ```

@@ -1,5 +1,5 @@
 ## Source
 
-```javascript title="django_glue/static/django_glue/js/glue/model_object/model_object.js"
---8<-- "django_glue/static/django_glue/js/glue/model_object/model_object.js"
+```javascript title="client_js/src/proxies/model.js"
+--8<-- "client_js/src/proxies/model.js"
 ```

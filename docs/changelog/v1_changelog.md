@@ -171,6 +171,6 @@
 
 ### Other Notes
 
-- The JavaScript client is now built using esbuild and distributed as both `glue.js` and `glue.min.js`.
+- The JavaScript client is now built using Bun's native bundler (`Bun.build()`) and distributed as both `django_glue.js` and `django_glue.min.js`.
 - Tests have been reorganized: Python tests use pytest with pytest-django, JavaScript tests use Jest with Babel, and E2E tests use Playwright.
 - Documentation is now built with MkDocs and hosted at https://django-glue.stratusadv.com.

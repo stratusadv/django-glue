@@ -14,7 +14,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueQuerySetProxy
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.gorilla.models import Gorilla
 
 
@@ -39,7 +39,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         self.assertIsInstance(result, list)
@@ -53,7 +53,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         names = [r['name'] for r in result]
@@ -69,7 +69,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 2)
@@ -85,7 +85,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             fields=['name', 'age'],
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         for item in result:
@@ -103,7 +103,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             exclude=['description', 'weight'],
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         for item in result:
@@ -118,7 +118,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
 
         # Should not raise
         result = proxy.process_action('query_with_params', action_data)
@@ -131,7 +131,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
                 target=Gorilla.objects.all(), unique_name='gorillas', access=access
             )
 
-            action_data = dto.GlueActionRequestData(context_data={})
+            action_data = dto.ActionPayloadSchema(context_data={})
             result = proxy.query_with_params(action_data)
             self.assertEqual(len(result), 3)
 
@@ -143,7 +143,7 @@ class GlueQuerySetProxyQueryWithParamsBasicTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result, [])
@@ -178,7 +178,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'filter': {'age': 25}})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'filter': {'age': 25}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 1)
@@ -190,7 +190,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'filter': {'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
@@ -206,7 +206,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'filter': {'age__gte': 25, 'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
@@ -219,7 +219,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
@@ -237,7 +237,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             fields=['name', 'age'],
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
@@ -254,7 +254,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'filter': {'age': 25}})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'filter': {'age': 25}})
 
         # Should not raise
         result = proxy.process_action('query_with_params', action_data)
@@ -266,7 +266,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'filter': {'name': 'Nonexistent Gorilla'}}
         )
         result = proxy.query_with_params(action_data)
@@ -295,7 +295,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'order_by': 'age'})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'order_by': 'age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 18)
@@ -308,7 +308,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'order_by': '-age'})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'order_by': '-age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 30)
@@ -321,7 +321,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'order_by': ['age', 'weight']}
         )
         result = proxy.query_with_params(action_data)
@@ -353,7 +353,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={}, post_data={'slice': {'start': 2, 'stop': 5}}
         )
         result = proxy.query_with_params(action_data)
@@ -370,7 +370,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'slice': {'stop': 3}})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'slice': {'stop': 3}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 3)

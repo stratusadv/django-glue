@@ -13,7 +13,7 @@ from django.test import TestCase
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueQuerySetProxy
 from django_glue.exceptions import GlueAccessError, GlueModelInstanceNotFoundError
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.gorilla.models import Gorilla
 
 
@@ -35,7 +35,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'id': self.gorilla1.pk,
@@ -61,7 +61,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'id': self.gorilla1.pk,
@@ -87,7 +87,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'id': 99999,
@@ -111,7 +111,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'id': self.gorilla1.pk,
@@ -133,7 +133,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'id': self.gorilla1.pk,
@@ -158,7 +158,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'New Gorilla',

@@ -3,30 +3,14 @@ from typing import Any, Sequence
 from django.db.models import Model, QuerySet
 from django.forms import ModelForm, BaseForm
 from django.http import HttpRequest
-from django.urls import include, path
 
-from django_glue import constants
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import BaseGlueProxy, GlueModelProxy, GlueQuerySetProxy, GlueFormProxy
-# from django_glue.request import GlueRequest
 from django_glue.session import GlueSession
-
-
-def django_glue_urls() -> list:
-    return [
-        path(
-            f'{constants.BASE_URL_NAME}/',
-            include('django_glue.urls', namespace=constants.BASE_URL_NAME),
-        )
-    ]
 
 
 class Glue:
     Access = GlueAccess
-
-    # @staticmethod
-    # def request(request: HttpRequest) -> GlueRequest:
-    #     return GlueRequest(request)
 
     @staticmethod
     def glue(
@@ -37,7 +21,9 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs,
     ) -> None:
-        proxy_instance = proxy_class(target=target, unique_name=unique_name, access=access, **kwargs)
+        proxy_instance = proxy_class(
+            target=target, unique_name=unique_name, access=access, **kwargs
+        )
 
         GlueSession(request).register_proxy(proxy_instance)
 

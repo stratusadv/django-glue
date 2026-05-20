@@ -12,7 +12,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueModelProxy
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.gorilla.models import Gorilla
 
 
@@ -33,7 +33,7 @@ class GlueModelProxyGetTestCase(TestCase):
         """get() action should return the model instance as a dictionary."""
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.get(action_data)
 
         self.assertIsInstance(result, dict)
@@ -45,7 +45,7 @@ class GlueModelProxyGetTestCase(TestCase):
         """get() action should include the id field."""
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.get(action_data)
 
         self.assertIn('id', result)
@@ -60,7 +60,7 @@ class GlueModelProxyGetTestCase(TestCase):
             fields=['name', 'age'],
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.get(action_data)
 
         self.assertIn('name', result)
@@ -77,7 +77,7 @@ class GlueModelProxyGetTestCase(TestCase):
             exclude=['description', 'age'],
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         result = proxy.get(action_data)
 
         self.assertIn('name', result)
@@ -89,7 +89,7 @@ class GlueModelProxyGetTestCase(TestCase):
         """get() action should work with VIEW access level."""
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
 
         # Should not raise
         result = proxy.process_action('get', action_data)
@@ -100,6 +100,6 @@ class GlueModelProxyGetTestCase(TestCase):
         for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
             proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=access)
 
-            action_data = dto.GlueActionRequestData(context_data={})
+            action_data = dto.ActionPayloadSchema(context_data={})
             result = proxy.get(action_data)
             self.assertEqual(result['name'], 'Test Gorilla')

@@ -1,4 +1,4 @@
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render, get_object_or_404
 from django.template.response import TemplateResponse
 
@@ -7,7 +7,7 @@ from test_project.gorilla.models import Gorilla, Skill
 from test_project.gorilla.forms import GorillaForm
 
 
-def list_view(request: HttpRequest):
+def list_view(request: HttpRequest) -> HttpResponse:
     Glue.queryset(
         request=request,
         target=Gorilla.objects.order_by('-updated_at').all(),
@@ -26,7 +26,7 @@ def list_view(request: HttpRequest):
     return render(request, 'gorilla/page/list_page.html')
 
 
-def detail_view(request: HttpRequest, pk: int):
+def detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
     Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)
@@ -34,7 +34,7 @@ def detail_view(request: HttpRequest, pk: int):
     return render(request, 'gorilla/page/detail_page.html')
 
 
-def skills_view(request: HttpRequest):
+def skills_view(request: HttpRequest) -> HttpResponse:
     """Test page for ManyToMany fields - managing skills."""
     Glue.queryset(
         request=request, target=Skill.objects.all(), unique_name='skills', access=Glue.Access.DELETE
@@ -43,7 +43,7 @@ def skills_view(request: HttpRequest):
     return render(request, 'gorilla/page/skills_page.html')
 
 
-def detail_template_view(request: HttpRequest, pk: int):
+def detail_template_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
     Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)

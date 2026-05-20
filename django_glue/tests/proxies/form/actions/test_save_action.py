@@ -13,7 +13,7 @@ from django.test import TestCase
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.form.proxy import GlueFormProxy
 from django_glue.exceptions import GlueAccessError
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.test_forms import ContactForm
 
 
@@ -24,7 +24,7 @@ class GlueFormProxySaveTestCase(TestCase):
         """save() should return success=True for valid data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'John Doe',
@@ -42,7 +42,7 @@ class GlueFormProxySaveTestCase(TestCase):
         """save() should return success=False for invalid data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
         )
@@ -55,7 +55,7 @@ class GlueFormProxySaveTestCase(TestCase):
         """save() should return cleaned_data for regular Form."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'John Doe',
@@ -75,7 +75,7 @@ class GlueFormProxySaveTestCase(TestCase):
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
 
-        action_data = dto.GlueActionRequestData(context_data={}, post_data={'name': 'Test'})
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'name': 'Test'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('save', action_data)
@@ -84,7 +84,7 @@ class GlueFormProxySaveTestCase(TestCase):
         """save() should work with DELETE access (cascading)."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.DELETE)
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'John Doe',

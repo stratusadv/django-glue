@@ -1,2 +1,3 @@
 ## Source
-::: django_glue.glue.query_set.glue.QuerySetGlue
+
+::: django_glue.proxies.queryset.proxy.GlueQuerySetProxy

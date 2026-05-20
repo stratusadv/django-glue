@@ -9,28 +9,32 @@
 
 ## March
 
-- [ ] Alpha v1
-  - Model Object
-  - Queryset
-  - Form
+- [X] Alpha v1
+  - [X] Model Object proxy
+  - [X] QuerySet proxy
+  - [X] Form proxy
 
 ## April
 
-- [ ] Beta v1
-  - View
-  - Template
-  - Function
+- [X] Alpha v1 continued
+  - [X] View (GlueView)
+  - [ ] Template proxy (deferred)
+  - [ ] Function proxy (removed from scope)
 
 ## May
 
-- [ ] Release v1
-- [ ] Documentation
+- [ ] Beta v1
+  - [ ] Additional proxy features
+  - [ ] Performance improvements
+  - [ ] Documentation updates
 
 ## June
 
-- [ ] Stable v1
+- [ ] Release candidate v1
 
 ## July
+
+- [ ] Stable v1.0.0
 
 ## August
 

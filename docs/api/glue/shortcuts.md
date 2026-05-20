@@ -1,1 +1,3 @@
-::: django_glue.shortcuts
+## Source
+
+::: django_glue.shortcuts.Glue

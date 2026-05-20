@@ -1,185 +1,252 @@
-# ModelObjectGlue Guide
+# Model Proxy Guide
 
 ## Purpose
 
-ModelObjectGlue allows the user to access Django Model objects from the front end.
+Model proxies allow you to access and modify a single Django model instance from JavaScript. You can read fields, update values, save changes, and delete the instance — all through a transparent proxy object.
 
-### When to use
+### When to Use
 
-- When you need to access to a Django Model object for front end functionality.
-    - Ex: Glueing a Django Model object in order to access the fields using django glue form.
+- When you need to read or edit a specific model instance from the frontend.
+- When you want to perform CRUD operations on a model without writing custom API endpoints.
 
-### When not to use
+### When Not to Use
 
-- When you need view access to a Django Models fields.
-    - This should simply be passed down in the context data.
+- When you only need read-only access to a model's fields. In that case, pass the data directly in your view context.
+- When you need to work with multiple instances. Use a [QuerySet proxy](query_set_glue.md) instead.
 
-## Shortcut Method
+## Backend: Registering a Model Proxy
 
-::: django_glue.shortcuts.glue_model_object
+Use `Glue.model()` in your Django view to register a model instance:
 
-## How To Use
-
-1. Import `django_glue`.
 ```python
-import django_glue as dg
-```
+from django_glue import Glue, GlueAccess
+from myapp.models import Task
 
-2. Get the Django Model Object you need access to on the front end.
-```python
-import django_glue as dg
+def task_view(request, pk):
+    task = Task.objects.get(pk=pk)
 
-from app.people.models import Person
-
-
-def person_update_form_view(request, pk):
-    person = Person.objects.get(pk=pk)
-```
-
-3. Use the shortcut method `glue_model_object(request, <str:unique_name>)` to glue the model object to the glue session data.
-```python
-import django_glue as dg
-
-from app.people.models import Person
-
-
-def person_update_form_view(request, pk):
-    person = Person.objects.get(pk=pk)
-    
-    dg.glue_model_object(request=request, unique_name='person')
-    
-    ... update form logic ...
-```
-
-4. On the front end using AlpineJS, initialize a new glue model object with the same unique name you specified in step 3.
-```html
-<div
-    x-data="{
-        person: new ModelObjectGlue('person')
-    }"
-></div>
-```
-
-5. Call the `get` method on the glue model object to retrieve the Django Model Object's data from the session data.
-```html
-<div
-    x-data="{
-        person: new ModelObjectGlue('person'),
-        async init() {
-            await this.person.get()
-        }
-    }"
-></div>
-```
-
-### Full Example
-
-### Implementing a Django Glue form to update data.
-
-Goal: Display and edit person’s record on the form
-
-Approach: Initialize `person` using `ModelObjectGlue` and call `get()` inside `init()` to get all the data from the backend.
-
-##### Back End:
-
-```python  title="app/person/views.py"
-import django_glue as dg
-
-from app.people.models import Person
-
-
-def person_update_form_view(request, pk):
-    person = Person.objects.get(pk=pk)
-
-    dg.glue_model_object(request=request, unique_name='person')
-
-    if request.method == 'POST':
-        # ... update form logic ...
-        pass
-
-    return TemplateResponse(
+    Glue.model(
         request=request,
-        template='person/form/update_form.html',
-        context={
-            'person': person  # Used by the form url.
-        }
+        unique_name='task',
+        target=task,
+        access=GlueAccess.CHANGE,
     )
+
+    return render(request, 'task_view.html')
 ```
 
-##### Front End:
+### Parameters
 
-```html title="templates/person/person_form.html"
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `request` | `HttpRequest` | Yes | The current request |
+| `unique_name` | `str` | Yes | Unique identifier for the proxy |
+| `target` | `Model` | Yes | The model instance to proxy |
+| `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
+| `fields` | `Sequence` | No | Fields to include. Empty means all fields |
+| `exclude` | `Sequence[str]` | No | Fields to exclude |
+| `form_class` | `type[ModelForm]` | No | Custom ModelForm for validation |
 
-<form
-    method="POST"
-    action="{% url 'person:form:update_form' pk=person.pk %}"
-    x-data="{
-        person: new ModelObjectGlue('person'),
-        async init() {
-            await this.person.get()
-        },
-    }"
->
-    { % csrf_token %}
-    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
-    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
-</form>
+### Field Filtering
+
+Control which fields are exposed to the frontend:
+
+```python
+# Only expose specific fields
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=['id', 'title', 'done'],
+)
+
+# Exclude sensitive fields
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    exclude=['password', 'internal_notes'],
+)
 ```
 
-### Change Glue model field label
+### Custom Form Class
 
-Goal: Display the label for person.first_name as Person’s First Name on the form.
+Provide a custom ModelForm for field-level validation:
 
-Approach: Initialize person instance using ModelObjectGlue and set the field label inside init() so it’s applied before
-rendering.
+```python
+from myapp.forms import TaskForm
 
-##### Front End:
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    form_class=TaskForm,
+)
+```
+
+## Frontend: Using the Model Proxy
+
+Access the proxy as a property of the global `Glue` object using the unique name:
+
+```javascript
+// Glue.task is the model proxy
+```
+
+### Reading Fields
+
+Access fields as properties. The proxy automatically fetches data on first access if not already loaded:
+
+```javascript
+// Lazy loading - fetches from server on first access
+const title = Glue.task.title
+const done = Glue.task.done
+```
+
+Explicitly fetch all field values:
+
+```javascript
+await Glue.task.get()
+console.log(Glue.task.title)
+```
+
+### Updating Fields
+
+Set field values directly:
+
+```javascript
+Glue.task.title = 'New Title'
+Glue.task.done = true
+```
+
+### Saving Changes
+
+After modifying fields, call `save()` to persist changes:
+
+```javascript
+Glue.task.title = 'Updated Title'
+const result = await Glue.task.save()
+```
+
+### Deleting the Instance
+
+```javascript
+await Glue.task.delete()
+```
+
+### Checking if New
+
+The `_isNew` property indicates whether the instance has been saved to the database:
+
+```javascript
+if (Glue.task._isNew) {
+    console.log('This is a new, unsaved instance')
+}
+```
+
+## Full Example: Editable Task Form
+
+### Backend
+
+```python
+from django.shortcuts import render
+from django_glue import Glue, GlueAccess
+from myapp.models import Task
+
+def task_edit_view(request, pk):
+    task = Task.objects.get(pk=pk)
+
+    Glue.model(
+        request=request,
+        unique_name='task',
+        target=task,
+        access=GlueAccess.CHANGE,
+    )
+
+    return render(request, 'tasks/edit.html')
+```
+
+### Frontend
 
 ```html
-
-<form
-    method="POST"
-    action="{% url 'person:form:update' pk=person.pk|default:0 %}"
-    x-data="{
-        person: new ModelObjectGlue('person'),
+{% load django_glue %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Task</title>
+</head>
+<body>
+    <div x-data="{
+        loaded: false,
+        saving: false,
         async init() {
-            this.person.glue_fields.first_name.label = 'Person's First Name'
+            await Glue.task.get()
+            this.loaded = true
         },
-    }"
->
-    { % csrf_token %}
-    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.first_name' %}
-    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
-</form>
+        async saveTask() {
+            this.saving = true
+            const result = await Glue.task.save()
+            this.saving = false
+            if (result.success) {
+                alert('Task saved!')
+            }
+        }
+    }">
+        <input x-model="Glue.task.title" placeholder="Task title">
+        <label>
+            <input type="checkbox" x-model="Glue.task.done">
+            Done
+        </label>
+        <button @click="saveTask()" :disabled="saving">
+            Save
+        </button>
+    </div>
+
+    {% django_glue_init %}
+</body>
+</html>
 ```
 
-### Glue model field required and not required
+## Event Listeners
 
-Goal: Changing glue field to required or not required.
+Attach listeners to proxy actions for reactive UI patterns:
 
-Approach: Add glue field required = false
+```javascript
+// Before save
+Glue.task.addListener('save', (event) => {
+    console.log('About to save:', event.payload)
+}, 'before')
 
-##### Front End:
+// After save
+Glue.task.addListener('save', (event) => {
+    console.log('Saved successfully:', event.result)
+}, 'after')
 
-```html
-
-<form
-    method="POST"
-    action="{% url 'person:form:update' pk=person.pk|default:0 %}"
-    x-data="{
-        person: new ModelObjectGlue('person'),
-        async init() {
-            this.person.glue_fields.middle_name.required = false
-        },
-    }"
->
-    { % csrf_token %}
-    { % include 'django_glue/form/field/char_field.html' with glue_model_field='person.middle_name' %}
-    { % include 'core/form/button/form_submit_button.html' with button_text='Save' %}
-</form>
+// On error
+Glue.task.addListener('save', (event) => {
+    console.error('Save failed:', event.error)
+}, 'error')
 ```
 
-### More Information
+## Field Metadata
 
-See [ModelObjectGlue](http://django-glue.stratusadv.com/api/javascript/model_object_glue/)
-for the different methods available for ModelObjectGlue objects on the front end.
+Each field exposes metadata through the `$fields` property:
+
+```javascript
+// Access field definitions
+const titleField = Glue.task.$fields.title
+console.log(titleField.label)      // Field label
+console.log(titleField.required)   // Is field required
+console.log(titleField.type)       // Django form field type
+console.log(titleField.max_length) // Max length (if applicable)
+```
+
+## Access Levels
+
+| Access Level | Available Actions |
+|-------------|-------------------|
+| `VIEW` | `get()`, `foreign_key_choices()` |
+| `CHANGE` | All VIEW actions + `validate()`, `save()` |
+| `DELETE` | All CHANGE actions + `delete()` |

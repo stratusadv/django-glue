@@ -15,7 +15,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueModelProxy
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.gorilla.models import Gorilla
 
 
@@ -32,7 +32,7 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_validates_all_fields(self):
         """Should validate all fields in payload."""
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'Updated Name',
@@ -57,7 +57,7 @@ class ValidatePayloadTestCase(TestCase):
             access=GlueAccess.CHANGE,
             fields=['name', 'age'],  # Only these fields
         )
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'Updated',
@@ -76,7 +76,7 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_returns_empty_cleaned_data_for_invalid_payload(self):
         """Invalid payload should return empty cleaned_data."""
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': ''  # Required field is empty
@@ -89,7 +89,7 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_returns_errors_on_invalid_field_value(self):
         """Should return errors on invalid field value."""
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': '',  # CharField is required
@@ -103,7 +103,7 @@ class ValidatePayloadTestCase(TestCase):
 
     def test_cleans_data_types(self):
         """Form validation should clean/coerce data types."""
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'Test Gorilla',
@@ -124,7 +124,7 @@ class ValidatePayloadTestCase(TestCase):
         """Should validate max_length constraints from model field."""
         # Gorilla.name has max_length=255, so 260 chars should fail
         long_name = 'x' * 260
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': long_name,
@@ -142,7 +142,7 @@ class ValidatePayloadTestCase(TestCase):
     def test_validates_min_value(self):
         """Should validate MinValueValidator on integer field."""
         # Gorilla.age has MinValueValidator(1), so 0 should fail
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={'name': 'Test', 'age': 0, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
@@ -154,7 +154,7 @@ class ValidatePayloadTestCase(TestCase):
     def test_validates_max_value(self):
         """Should validate MaxValueValidator on integer field."""
         # Gorilla.age has MaxValueValidator(60), so 61 should fail
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={'name': 'Test', 'age': 61, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
@@ -166,7 +166,7 @@ class ValidatePayloadTestCase(TestCase):
     def test_allows_blank_field(self):
         """Should accept empty string for fields with blank=True."""
         # Gorilla.description has blank=True
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'Test',
@@ -195,7 +195,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
         """save() should validate payload before applying changes."""
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
         # Empty name should fail validation
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': '',  # Required field empty
@@ -217,7 +217,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
     def test_save_succeeds_with_valid_payload(self):
         """save() should succeed with valid payload."""
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
-        action_data = dto.GlueActionRequestData(
+        action_data = dto.ActionPayloadSchema(
             context_data={},
             post_data={
                 'name': 'Updated Name',

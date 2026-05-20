@@ -11,13 +11,13 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-class GlueActionRequestData(BaseModel):
+class ActionPayloadSchema(BaseModel):
     context_data: dict
     post_data: dict | None = None
     file_data: dict | None = None
 
     @classmethod
-    def from_request(cls, request: HttpRequest) -> GlueActionRequestData:
+    def from_request(cls, request: HttpRequest) -> ActionPayloadSchema:
         if request.content_type == 'multipart/form-data':
             post_data = {}
 

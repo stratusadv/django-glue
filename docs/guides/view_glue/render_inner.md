@@ -1,101 +1,85 @@
-# ViewGlue Guide
+# renderInnerHtml Guide
 
 ## Purpose
-ViewGlue allows the user to dynamically render a template given an endpoint.
 
-### When to use
-When we want to replace/change the information inside an element.
+`renderInnerHtml` is the most common GlueView method — it replaces the contents of a DOM element with HTML rendered by a Django view, while preserving the container element itself.
 
-### When not to use
-We want to replace the element itself with new information
+### When to Use
 
-## render_inner
-This example will show you how to reload a page with sent information.
+- When you want to update a section of a page without replacing the container element.
+- When the container element has event handlers or Alpine.js bindings you want to preserve.
 
-### How To Use
+### When Not to Use
 
-1. Set up or decide on an endpoint for your ViewGlue object.
-``` python
-import django_glue as dg
+- When you need to replace the container element itself. Use `renderOuterHtml` instead.
+- When you need to insert content without removing existing content. Use `renderInsertAdjacentHtml*` methods.
 
-from app.people.models import Person
+## How It Works
 
-
-def person_dashboard_content_view(request):
-    body = process_request_body(request, key=None)
-    selected_person = body.get('person')
-    
-    ... edit person data however you like ...
-    ... once done send the data back to the template ...
+```javascript
+await view.renderInnerHtml(targetElement, payload)
 ```
 
-2. On the front end using AlpineJS, initialize a new ViewGlue object with the endpoint you would like to send the information to.
+The target element's `innerHTML` is replaced with the rendered HTML from the Django view. Any proxies registered by that view are automatically initialized.
+
+## Example: Dynamic Dashboard Content
+
+### Backend
+
+```python
+from django.template.response import TemplateResponse
+from django_glue import Glue, GlueAccess
+from myapp.models import Task
+
+def dashboard_content_view(request):
+    """Renders dashboard content based on selected task."""
+    body = json.loads(request.body) if request.body else {}
+    task_id = body.get('view_payload', {}).get('taskId')
+
+    if task_id:
+        task = Task.objects.get(pk=task_id)
+        Glue.model(
+            request=request,
+            unique_name='dashboard_task',
+            target=task,
+            access=GlueAccess.CHANGE,
+        )
+
+    return TemplateResponse(request, 'tasks/_dashboard_content.html', {'taskId': task_id})
+```
+
+### Frontend
+
 ```html
-<div 
-    x-data="{
-        glue_view: new GlueView('url'),
-        async reload_page() {
-            await glue_view.render_inner(this.$refs.person_dashboard_content)
-        },
-    }"
-    x-ref="person_dashboard_content"
->
-    Dashboard content!
+<div x-data="{
+    selectedTaskId: 1,
+    async reloadContent() {
+        const view = Glue.view('/dashboard/content/')
+        await view.renderInnerHtml(
+            document.getElementById('dashboard-content'),
+            { taskId: this.selectedTaskId }
+        )
+    }
+}" x-init="reloadContent()">
+    <select x-model.number="selectedTaskId" @change="reloadContent()">
+        <option value="1">Task 1</option>
+        <option value="2">Task 2</option>
+        <option value="3">Task 3</option>
+    </select>
+
+    <div id="dashboard-content">
+        <!-- Content will be loaded here -->
+    </div>
 </div>
 ```
 
-3. Call the `render_inner` method on the ViewGlue object to render the information inside the current element. (In the below example the information in the div will be replaced)
-```html
-<div 
-    x-data="{
-        async reload_page() {
-            glue_view: new GlueView('url')
-        await glue_view.render_inner(this.$refs.person_dashboard_content)
-        }
-    }"
-    x-ref="person_dashboard_content"
->
-    Dashboard content!
-</div>
-```
+## renderInnerHtml vs renderOuterHtml
 
-### Full Example
-In this example we are reloading the page based on a different person being selected.
+| Method | Behavior | Use When |
+|--------|----------|----------|
+| `renderInnerHtml` | Replaces element's **contents** | Container element has bindings you need to keep |
+| `renderOuterHtml` | Replaces the **element entirely** | You want the response HTML to define the container |
 
-#### Back End
+## See Also
 
-``` python title="app/person/views.py"
-def person_dashboard_content_view(request):
-    body = process_request_body(request, key=None)
-    selected_person = body.get('person')
-    
-    ... edit person data however you like ...
-    
-    return TemplateResponse(
-        request=request,
-        template='person/page/person_dashboard_page.html',
-        context={
-            'selected_person': selected_person  # Used by the front end to pass newly updated information
-        }
-    )
-```
-
-#### Front End
-
-```html
-<div 
-    x-data="{
-        async reload_page() {
-            glue_view: new GlueView('url') // The url is the end point you want to send information to
-        await glue_view.render_inner(this.$refs.person_dashboard_content)
-        }
-    }"
-    x-ref="person_dashboard_content"
->
-    Dashboard content!
-</div>
-```
-
-### More Information
-see [ViewGlue](http://django-glue.stratusadv.com/api/javascript/view_glue/)
-for the different methods available for ViewGlue objects on the front end.
+For a complete overview of all GlueView methods, see the [GlueView Guide](view_glue.md).

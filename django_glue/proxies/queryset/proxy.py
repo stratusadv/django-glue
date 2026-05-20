@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.db.models import QuerySet, Model
 
 from django_glue.access.access import GlueAccess
-from django_glue.data_transfer_objects import GlueActionRequestData
+from django_glue.schemas.action_payload_schema import ActionPayloadSchema
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.decorators import action
@@ -123,7 +123,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             self.target = self.target[slice(slice_params.get('start'), slice_params.get('stop'))]
 
     @action(access=GlueAccess.VIEW)
-    def query_with_params(self, action_data: GlueActionRequestData) -> list:
+    def query_with_params(self, action_data: ActionPayloadSchema) -> list:
         if action_data.post_data:
             self._apply_query_params(action_data.post_data)
 
@@ -155,7 +155,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return self._create_model_proxy_from_instance(target_instance)
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, action_data: GlueActionRequestData) -> dict:
+    def save(self, action_data: ActionPayloadSchema) -> dict:
         pk = action_data.post_data.get('id')
         if pk:
             # Update existing instance
@@ -167,21 +167,21 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return proxy.save(action_data)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, action_data: GlueActionRequestData) -> dict:
+    def delete(self, action_data: ActionPayloadSchema) -> dict:
         pk = action_data.post_data.get('id')
         if pk is None:
             return {'success': False, 'error': 'id is required for delete action'}
         return self._get_target_model_instance_proxy(pk).delete(action_data)
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: GlueActionRequestData) -> dict:
+    def get(self, action_data: ActionPayloadSchema) -> dict:
         pk = action_data.post_data.get('id')
         if pk is None:
             return {'success': False, 'error': 'id is required for get action'}
         return self._get_target_model_instance_proxy(pk).get(action_data)
 
     @action(access=GlueAccess.VIEW)
-    def new(self, action_data: GlueActionRequestData) -> dict:
+    def new(self, action_data: ActionPayloadSchema) -> dict:
         """Return default values for a new model instance."""
         model_class = self.get_model_class()
         instance = model_class()

@@ -35,29 +35,26 @@ nav:
       - Installation: getting_started/installation.md
   - Guides:
       - Introduction: guides/introduction.md
-      - How to Glue:
-          - Model Object: guides/model_object_glue.md
-          - Query Set: guides/query_set_glue.md
-          - Glue Char Fields: guides/glue_char_fields.md
-          - Function Glue: guides/function_glue.md
-      - ViewGlue:
-          - ViewGlue: guides/view_glue/view_glue.md
-          - Render Inner: guides/view_glue/render_inner.md
+      - Proxies:
+          - Model Proxy: guides/model_object_glue.md
+          - QuerySet Proxy: guides/query_set_glue.md
+          - Form Proxy: guides/form_glue.md
+      - GlueView:
+          - Overview: guides/view_glue/view_glue.md
+          - renderInnerHtml: guides/view_glue/render_inner.md
   - API Reference:
-      - Glue:
-          - shortcuts: api/glue/shortcuts.md
-          - FunctionGlue: api/glue/function_glue.md
-          - ModelObjectGlue: api/glue/model_object_glue.md
-          - QuerySetGlue: api/glue/query_set_glue.md
-          - TemplateGlue: api/glue/template_glue.md
-      - Javascript:
-          - FunctionGlue: api/javascript/function_glue.md
-          - ModelObjectGlue: api/javascript/model_object_glue.md
-          - QuerySetGlue: api/javascript/query_set_glue.md
-          - TemplateGlue: api/javascript/template_glue.md
-          - ViewGlue: api/javascript/view_glue.md
+      - Python:
+          - Glue (Shortcuts): api/glue/shortcuts.md
+          - GlueModelProxy: api/glue/model_object_glue.md
+          - GlueQuerySetProxy: api/glue/query_set_glue.md
+          - GlueFormProxy: api/glue/form_glue.md
+      - JavaScript:
+          - GlueModelProxy: api/javascript/model_object_glue.md
+          - GlueQuerySetProxy: api/javascript/query_set_glue.md
+          - GlueFormProxy: api/javascript/form_glue.md
+          - GlueView: api/javascript/view_glue.md
   - Changelog:
-      - Current: changelog/changelog.md
+      - v1.0.0: changelog/v1_changelog.md
       - Archived: changelog/archived_changelog.md
   - Roadmap:
       - Current: roadmap/roadmap_2026.md

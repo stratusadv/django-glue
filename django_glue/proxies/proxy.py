@@ -13,8 +13,8 @@ from abc import ABC
 from typing import Any
 
 from django_glue.access.access import GlueAccess
-from django_glue import data_transfer_objects as dto
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
+from django_glue.schemas.action_payload_schema import ActionPayloadSchema
 
 
 class BaseGlueProxy(ABC):
@@ -135,7 +135,7 @@ class BaseGlueProxy(ABC):
             | self._build_context_data()
         )
 
-    def process_action(self, action: str, action_data: dto.GlueActionRequestData) -> dict:
+    def process_action(self, action: str, action_data: ActionPayloadSchema) -> dict:
         if not hasattr(self, action):
             raise GlueMissingActionError(
                 action=action,

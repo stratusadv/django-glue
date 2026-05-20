@@ -13,7 +13,7 @@ from django.test import TestCase
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueModelProxy
 from django_glue.exceptions import GlueAccessError
-from django_glue import data_transfer_objects as dto
+from django_glue.schemas import action_payload_schema as dto
 from test_project.gorilla.models import Gorilla
 
 
@@ -33,7 +33,7 @@ class GlueModelProxyDeleteTestCase(TestCase):
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
 
         # Call delete action
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
         proxy.delete(action_data)
 
         # Verify instance is deleted
@@ -47,7 +47,7 @@ class GlueModelProxyDeleteTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
@@ -60,7 +60,7 @@ class GlueModelProxyDeleteTestCase(TestCase):
             access=GlueAccess.CHANGE,  # Not enough for delete
         )
 
-        action_data = dto.GlueActionRequestData(context_data={})
+        action_data = dto.ActionPayloadSchema(context_data={})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
