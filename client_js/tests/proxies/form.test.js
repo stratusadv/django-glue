@@ -86,7 +86,10 @@ describe('GlueFormProxy', () => {
                 contextData
             });
 
-            expect(proxy.$fields).toEqual({ name: { type: 'text', required: true } });
+            expect(proxy.$fields.name.type).toBe('text');
+            expect(proxy.$fields.name.required).toBe(true);
+            expect(proxy.$fields.name.name).toBe('name');
+            expect(proxy.$fields.name.has_errors).toBe(false);
         });
 
         it('allows setting field values via property', () => {
@@ -105,7 +108,7 @@ describe('GlueFormProxy', () => {
             expect(proxy._values.name).toBe('Updated');
         });
 
-        it('creates PascalCase attributes for field properties', () => {
+        it('creates field properties on $fields', () => {
             const http = createMockHttp();
             const contextData = createFormContextData(
                 { name: { type: 'text', required: true } },
@@ -118,8 +121,8 @@ describe('GlueFormProxy', () => {
                 contextData
             });
 
-            expect(proxy.nameType).toBe('text');
-            expect(proxy.nameRequired).toBe(true);
+            expect(proxy.$fields.name.type).toBe('text');
+            expect(proxy.$fields.name.required).toBe(true);
         });
 
         it('creates error attributes for fields', () => {
@@ -132,9 +135,8 @@ describe('GlueFormProxy', () => {
                 contextData
             });
 
-            expect(proxy.nameHasErrors).toBe(false);
-            // _updateErrorAttributesForField uses ?.join() which returns undefined for missing errors
-            expect(proxy.nameErrorText).toBeUndefined();
+            expect(proxy.$fields.name.has_errors).toBe(false);
+            expect(proxy.$fields.name.error_text).toBeUndefined();
         });
     });
 

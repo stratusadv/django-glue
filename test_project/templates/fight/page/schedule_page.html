@@ -23,7 +23,7 @@
     <div class="row g-4">
         <!-- Contact Form (Regular Form) -->
         <div class="col" x-data="{
-            form: Glue.contact_form,
+            form: Glue.form.contact_form,
             validationResult: null,
             saveResult: null,
             async validate() {
@@ -47,10 +47,10 @@
                             <input
                                 type="text"
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$form.name.errors.length}"
+                                :class="{'is-invalid': form.$fields.name.has_errors}"
                                 x-model="form.name"
                                 placeholder="Enter your name">
-                            <div class="invalid-feedback" x-show="form.$form.name.errors.length" x-text="form.$form.name.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$fields.name.has_errors" x-text="form.$fields.name.error_text"></div>
                         </div>
 
                         <div class="col-md-6">
@@ -58,33 +58,33 @@
                             <input
                                 type="email"
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$form.email.errors.length}"
+                                :class="{'is-invalid': form.$fields.email.has_errors}"
                                 x-model="form.email"
                                 placeholder="your@email.com">
-                            <div class="invalid-feedback" x-show="form.$form.email.errors.length" x-text="form.$form.email.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$fields.email.has_errors" x-text="form.$fields.email.error_text"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Subject</label>
                             <select class="form-select form-select-gorilla"
-                                    :class="{'is-invalid': form.$form.subject.errors.length}"
+                                    :class="{'is-invalid': form.$fields.subject.has_errors}"
                                     x-model="form.subject">
-                                <template x-for="choice in form.$form.subject.choices || []" :key="choice[0]">
+                                <template x-for="choice in form.$fields.subject.choices || []" :key="choice[0]">
                                     <option :value="choice[0]" x-text="choice[1]"></option>
                                 </template>
                             </select>
-                            <div class="invalid-feedback" x-show="form.$form.subject.errors.length" x-text="form.$form.subject.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$fields.subject.has_errors" x-text="form.$fields.subject.error_text"></div>
                         </div>
 
                         <div class="col-12">
                             <label class="form-label fw-bold">Message</label>
                             <textarea
                                 class="form-control form-control-gorilla"
-                                :class="{'is-invalid': form.$form.message.errors.length}"
+                                :class="{'is-invalid': form.$fields.message.has_errors}"
                                 rows="4"
                                 x-model="form.message"
                                 placeholder="Your message (minimum 10 characters)..."></textarea>
-                            <div class="invalid-feedback" x-show="form.$form.message.errors.length" x-text="form.$form.message.errors.join(', ')"></div>
+                            <div class="invalid-feedback" x-show="form.$fields.message.has_errors" x-text="form.$fields.message.error_text"></div>
                         </div>
                     </div>
 

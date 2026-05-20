@@ -129,4 +129,16 @@ export class GlueQuerySetProxy extends BaseGlueProxy {
 
         return this._items
     }
+
+    async save(data) {
+        const result = await this._processAction('save', data);
+        await this.refresh();
+        return result;
+    }
+
+    async delete(params) {
+        const result = await this._processAction('delete', params);
+        await this.refresh();
+        return result;
+    }
 }

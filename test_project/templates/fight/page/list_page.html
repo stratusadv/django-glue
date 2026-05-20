@@ -41,24 +41,34 @@
 
 {% block content %}
     <div x-data="{
-        fights: Glue.fights,
+        fights: Glue.querySet.fights,
         search: '',
-        get filteredFights() {
-            return this.fights.filter({'name__icontains': this.search})
-        },
-        init() {
-            this.fights.$addListener('save', () => {
+        redCornerChoices: [],
+        blueCornerChoices: [],
+        fightItems: [],
+        async init() {
+            this.fights.addListener('save', () => {
                 $store.notifications.success('Fight saved successfully!');
             });
-            this.fights.$addListener('save', () => {
+            this.fights.addListener('save', () => {
                 $store.notifications.error('Failed to save fight.');
             }, 'error');
-            this.fights.$addListener('delete', () => {
+            this.fights.addListener('delete', () => {
                 $store.notifications.success('Fight deleted.');
             });
-            this.fights.$addListener('delete', () => {
+            this.fights.addListener('delete', () => {
                 $store.notifications.error('Failed to delete fight.');
             }, 'error');
+            await this.refreshFights();
+        },
+        async refreshFights() {
+            this.fightItems = await this.fights.queryWithParams({
+                filter: {name__icontains: this.search}
+            });
+            if (this.fightItems.length > 0 && this.redCornerChoices.length === 0) {
+                this.redCornerChoices = await this.fightItems[0].$fields.red_corner.choices();
+                this.blueCornerChoices = await this.fightItems[0].$fields.blue_corner.choices();
+            }
         }
     }">
         <!-- Search -->
@@ -74,14 +84,15 @@
                         type="text"
                         class="form-control"
                         placeholder="Search fights by name..."
-                        x-model.debounce="search">
+                        x-model.debounce="search"
+                        @input.debounce.500ms="refreshFights()">
                 </div>
             </div>
         </div>
 
         <!-- Fight Cards -->
         <div class="row g-4">
-            <template x-for="fight in filteredFights" :key="fight.$key">
+            <template x-for="fight in fightItems" :key="fight.$key">
                 <div class="col-lg-6">
                     <div class="card card-fight h-100">
                         <div class="card-header bg-gorilla-green text-white">
@@ -99,7 +110,7 @@
                                     <span class="corner-label text-danger">Red Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.red_corner.choices()" :key="choice[0]">
+                                        <template x-for="choice in redCornerChoices" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.red_corner === choice[0]"></option>
                                         </template>
                                     </select>
@@ -111,7 +122,7 @@
                                     <span class="corner-label text-primary">Blue Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.blue_corner.choices()" :key="choice[0]">
+                                        <template x-for="choice in blueCornerChoices" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.blue_corner === choice[0]"></option>
                                         </template>
                                     </select>
@@ -134,7 +145,7 @@
                                     <label class="form-label small text-muted mb-1">Location</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.location">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.location.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.$fields.location.choices || []" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.location === choice[0]"></option>
                                         </template>
                                     </select>
@@ -143,7 +154,7 @@
                                     <label class="form-label small text-muted mb-1">Weather</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.weather_conditions">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.weather_conditions.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.$fields.weather_conditions.choices || []" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.weather_conditions === choice[0]"></option>
                                         </template>
                                     </select>
@@ -152,7 +163,7 @@
                                     <label class="form-label small text-muted mb-1">Terrain</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.terrain_type">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.terrain_type.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.$fields.terrain_type.choices || []" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.terrain_type === choice[0]"></option>
                                         </template>
                                     </select>
@@ -165,7 +176,7 @@
                                     <label class="form-label small text-muted mb-1">Status</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.status">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$form.status.choices" :key="choice[0]">
+                                        <template x-for="choice in fight.$fields.status.choices || []" :key="choice[0]">
                                             <option :value="choice[0]" x-text="choice[1]" :selected="fight.status === choice[0]"></option>
                                         </template>
                                     </select>
@@ -186,7 +197,7 @@
                                 <button class="btn btn-gorilla btn-sm flex-grow-1" @click="fight.save()">
                                     Save
                                 </button>
-                                <button class="btn btn-gorilla-danger btn-sm" @click="fight.$delete()">
+                                <button class="btn btn-gorilla-danger btn-sm" @click="fight.delete()">
                                     Delete
                                 </button>
                             </div>
@@ -195,7 +206,7 @@
                 </div>
             </template>
 
-            <template x-if="fights.isEmpty">
+            <template x-if="fightItems.length === 0">
                 <div class="col-12">
                     <div class="alert alert-warning text-center">
                         <h5>No fights scheduled!</h5>

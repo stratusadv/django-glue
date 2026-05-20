@@ -10,7 +10,8 @@
 
 {% block content %}
     <div x-data="{
-        skills: Glue.skills,
+        skills: Glue.querySet.skills,
+        skillItems: [],
         newSkill: {
             name: '',
             description: '',
@@ -19,13 +20,16 @@
         },
         editingSkill: null,
         saving: false,
+        async init() {
+            this.skillItems = await this.skills.queryWithParams();
+        },
         async addSkill() {
             this.saving = true;
             try {
                 const result = await this.skills.save(this.newSkill);
                 if (result.success) {
                     this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
-                    await this.skills.queryWithParams();
+                    this.skillItems = await this.skills.queryWithParams();
                 }
             } finally {
                 this.saving = false;
@@ -34,10 +38,12 @@
         async updateSkill(skill) {
             await skill.save();
             this.editingSkill = null;
+            this.skillItems = await this.skills.queryWithParams();
         },
         async deleteSkill(skill) {
             if (confirm('Delete this skill?')) {
-                await skill.$delete();
+                await skill.delete();
+                this.skillItems = await this.skills.queryWithParams();
             }
         }
     }">
@@ -110,7 +116,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template x-for="skill in skills" :key="skill.$key">
+                                    <template x-for="skill in skillItems" :key="skill.$key">
                                         <tr>
                                             <td>
                                                 <template x-if="editingSkill === skill.$key">
@@ -163,7 +169,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div x-show="skills.isEmpty" class="text-muted text-center py-4">
+                        <div x-show="skillItems.length === 0" class="text-muted text-center py-4">
                             No skills defined yet. Add some skills above!
                         </div>
                     </div>

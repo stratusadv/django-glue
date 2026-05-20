@@ -107,7 +107,7 @@ describe('GlueModelProxy', () => {
             expect(proxy.$key).toMatch(/^django-glue-\d+$/);
         });
 
-        it('creates $form object', () => {
+        it('creates $fields object', () => {
             const http = createMockHttp();
             const contextData = createMockContextData({ name: {} }, {});
 
@@ -118,8 +118,8 @@ describe('GlueModelProxy', () => {
                 values: { name: 'test' }
             });
 
-            expect(proxy.$form).toBeDefined();
-            expect(proxy.$form.$fields).toBe(proxy._fields);
+            expect(proxy.$fields).toBeDefined();
+            expect(proxy.$fields.name).toBeDefined();
         });
 
         it('defines extra fields not in contextData.fields', () => {
