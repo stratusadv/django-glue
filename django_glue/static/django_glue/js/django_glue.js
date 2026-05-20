@@ -72,17 +72,6 @@
     }
   }
 
-  // client_js/src/proxies/field.js
-  class GlueFieldProxy {
-    constructor() {
-      this.something = "Hello World";
-    }
-    valueOf() {
-      return this.something;
-    }
-  }
-  var field_default = GlueFieldProxy;
-
   // client_js/src/proxies/form.js
   class GlueFormProxy extends BaseGlueProxy {
     static name = "form";
@@ -126,7 +115,7 @@
         });
         return fieldData.__glue__choicesPromise;
       }.bind(this);
-      this[`${fieldName}Choices`] = async function() {
+      fieldData.choices = async function() {
         if (!fieldData._choicesLoaded) {
           await choicesAction();
         }
@@ -184,7 +173,6 @@
         Object.keys(this._fields[fieldName]).forEach((attributeName) => {
           this._updateErrorAttributesForField(fieldName);
         });
-        this._fields["something"] = new field_default;
       });
     }
     get(pk = null) {

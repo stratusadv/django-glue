@@ -28,9 +28,9 @@
             orderBy: 'name',
             gorillaQuerySet: Glue.querySet.gorillas,
             async openProfileModal(gorillaId) {
-                const viewGlue = new ViewGlue(`/${gorillaId}/template/`);
+                const viewGlue = Glue.view(`/${gorillaId}/template/`);
                 const targetEl = document.getElementById('profileModalBody');
-                await viewGlue.render_inner(targetEl);
+                await viewGlue.renderInnerHtml(targetEl);
                 const modal = new bootstrap.Modal(document.getElementById('profileModal'));
                 modal.show();
             },
@@ -158,26 +158,26 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">
-                            {% include "components/glue_text_input.html" with glue_binding="gorilla.name" size="sm" input_class="bg-transparent border-0 text-white fw-bold fs-5 p-0" placeholder="Fighter Name" hide_label=True %}
+                            {% include "components/glue_text_input.html" with glue_field="gorilla.$fields.name" size="sm" input_class="bg-transparent border-0 text-white fw-bold fs-5 p-0" placeholder="Fighter Name" hide_label=True %}
                         </div>
                         <div class="card-body">
-                            {% include "components/glue_textarea.html" with glue_binding="gorilla.description" size="sm" rows="2" input_class="form-control-gorilla" placeholder="Fighter backstory..." %}
+                            {% include "components/glue_textarea.html" with glue_field="gorilla.$fields.description" size="sm" rows="2" input_class="form-control-gorilla" placeholder="Fighter backstory..." %}
 
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_binding="gorilla.age" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.age" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_binding="gorilla.weight" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.weight" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_binding="gorilla.height" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.height" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                             </div>
 
                             <div class="row g-2">
                                 <div class="col-6">
-                                    {% include "components/glue_number_input.html" with glue_binding="gorilla.rank_points" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.rank_points" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                             </div>
                         </div>

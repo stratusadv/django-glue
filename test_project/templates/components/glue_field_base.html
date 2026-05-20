@@ -1,10 +1,6 @@
-{% load glue_fields %}
-{% split_glue_binding glue_binding as binding %}
-{% with obj=binding.obj field=binding.field %}
 <div class="{% if wrapper_class %}{{ wrapper_class }}{% else %}mb-3{% endif %}">
     {% block field_content %}
-        <div class="invalid-feedback" x-text="{{ obj }}.{{ field }}ErrorText"></div>
+        <div class="invalid-feedback" x-text="{{ glue_field }}.error_text"></div>
     {% endblock %}
-    <small class="text-muted d-block" x-show="{{ obj }}.$form.$fields.{{ field }}HelpText" x-text="{{ obj }}.$form.$fields.{{ field }}HelpText"></small>
+    <small class="text-muted d-block" x-show="{{ glue_field }}.help_text" x-text="{{ glue_field }}.help_text"></small>
 </div>
-{% endwith %}

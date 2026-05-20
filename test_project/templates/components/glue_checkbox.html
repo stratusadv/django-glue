@@ -9,7 +9,7 @@
             {% include 'components/glue_base_input_attributes.html' with exclude_class=True %}>
         {{ block.super }}
     </div>
-    <small class="text-muted" x-show="{{ obj }}.$form.$fields.{{ field }}?.help_text" x-text="{{ obj }}.$form.$fields.{{ field }}?.help_text"></small>
+    <small class="text-muted" x-show="{{ glue_field }}?.help_text" x-text="{{ glue_field }}?.help_text"></small>
 {% endblock %}
 
 person.$form.first_name.help_text

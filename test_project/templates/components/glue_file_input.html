@@ -4,8 +4,8 @@
     <div x-data="{ _filePreview: null }">
         {% include 'components/glue_label.html' %}
         {% if not hide_preview %}
-        <div class="mb-2" x-show="!!_filePreview || !!{{ obj }}.{{ field }}?.url">
-            <img :src="_filePreview ?? {{ obj }}.{{ field }}?.url" alt="" class="img-fluid rounded" style="max-height: {{ max_preview_height|default:'200px' }};">
+        <div class="mb-2" x-show="!!_filePreview || !!{{ glue_field }}?.url">
+            <img :src="_filePreview ?? {{ glue_field }}?.url" alt="" class="img-fluid rounded" style="max-height: {{ max_preview_height|default:'200px' }};">
         </div>
         {% endif %}
         <input
@@ -15,7 +15,7 @@
             @change="
                 const file = $event.target.files[0];
                 if (file) {
-                    {{ obj }}.{{ field }} = file;
+                    {{ glue_field }} = file;
                     {% if not hide_preview %}
                     const reader = new FileReader();
                     reader.onload = (e) => { _filePreview = e.target.result; };

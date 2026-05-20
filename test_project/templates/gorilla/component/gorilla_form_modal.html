@@ -1,15 +1,15 @@
 <div class="modal fade" id="{{ modal_id }}" tabindex="-1" x-data="{
-    proxy: Glue.model.{{ glue_name }},
+    glueModel: Glue.model.{{ glue_name }},
     saving: false,
     init() {
-        this.proxy.addListener('save', () => {
+        this.glueModel.addListener('save', () => {
             $store.notifications.error('Failed to create fighter.');
         }, 'error');
     },
     async submit() {
         this.saving = true;
         try {
-            const result = await this.proxy.save();
+            const result = await this.glueModel.save();
             if (result.success) {
                 $store.notifications.success('Fighter created successfully!');
                 Glue.querySet.gorillas.refresh();
@@ -31,45 +31,44 @@
                     <div class="col-12">
                         <label class="form-label fw-bold">Name</label>
                         <input type="text" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': proxy?.$form?.$fields?.name?.errors?.length}"
-                               x-model="proxy.name">
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.name?.errors?.join(', ')"></div>
+                               :class="{'is-invalid': glueModel?.$fields?.name?.has_errors}"
+                               x-model="glueModel.name">
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.name?.errors?.join(', ')"></div>
                     </div>
                     <div class="col-12">
-                        {% include 'text_field.html' glue_field='gorrila.$form.$fields.age' %}
                         <label class="form-label fw-bold">Description</label>
                         <textarea class="form-control form-control-gorilla" rows="2"
-                                  :class="{'is-invalid': proxy?.$form?.$fields?.description?.errors?.length}"
-                                  x-model="proxy.description"></textarea>
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.description?.errors?.join(', ')"></div>
+                                  :class="{'is-invalid': glueModel?.$fields?.description?.has_errors}"
+                                  x-model="glueModel.description"></textarea>
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.description?.errors?.join(', ')"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Age</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': proxy?.$form?.$fields?.age?.errors?.length}"
-                               x-model="proxy.age" min="1" max="60">
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.age?.errors?.join(', ')"></div>
+                               :class="{'is-invalid': glueModel?.$fields?.age?.has_errors}"
+                               x-model="glueModel.age" min="1" max="60">
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.age?.errors?.join(', ')"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Weight (kg)</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': proxy?.$form?.$fields?.weight?.errors?.length}"
-                               x-model="proxy.weight" step="0.1" min="50" max="500">
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.weight?.errors?.join(', ')"></div>
+                               :class="{'is-invalid': glueModel?.$fields?.weight?.has_errors}"
+                               x-model="glueModel.weight" step="0.1" min="50" max="500">
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.weight?.errors?.join(', ')"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Height (m)</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': proxy?.$form?.$fields?.height?.errors?.length}"
-                               x-model="proxy.height" step="0.01" min="1.0" max="2.5">
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.height?.errors?.join(', ')"></div>
+                               :class="{'is-invalid': glueModel?.$fields?.height?.has_errors}"
+                               x-model="glueModel.height" step="0.01" min="1.0" max="2.5">
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.height?.errors?.join(', ')"></div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Rank Points</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': proxy?.$form?.$fields?.rank_points?.errors?.length}"
-                               x-model="proxy.rank_points" min="0" max="10000">
-                        <div class="invalid-feedback" x-text="proxy?.$form?.$fields?.rank_points?.errors?.join(', ')"></div>
+                               :class="{'is-invalid': glueModel?.$fields?.rank_points?.has_errors}"
+                               x-model="glueModel.rank_points" min="0" max="10000">
+                        <div class="invalid-feedback" x-text="glueModel?.$fields?.rank_points?.errors?.join(', ')"></div>
                     </div>
                 </div>
             </div>

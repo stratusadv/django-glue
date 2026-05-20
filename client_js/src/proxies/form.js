@@ -56,7 +56,7 @@ export class GlueFormProxy extends BaseGlueProxy {
             return fieldData.__glue__choicesPromise;
         }.bind(this)
 
-        this._fields[fieldName].choices = async function () {
+        fieldData.choices = async function () {
             if (!fieldData._choicesLoaded) {
                 await choicesAction();
             }
