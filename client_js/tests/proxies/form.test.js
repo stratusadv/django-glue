@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { GlueFormProxy } from '../../src/proxies/form';
+import GlueFormProxy from '../../src/proxies/form';
 import { setupCookieMock } from '../testUtils';
 
 describe('GlueFormProxy', () => {

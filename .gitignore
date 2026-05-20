@@ -18,6 +18,8 @@ django_glue.egg-info/
 *.bat
 *.db
 *.env
+!development.env.example
+!development.env
 *.sql
 
 
@@ -28,3 +30,5 @@ dev_tool*.exe
 .qodo
 
 node_modules/
+media/
+django_glue_test_project.db

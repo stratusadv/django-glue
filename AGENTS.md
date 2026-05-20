@@ -274,14 +274,14 @@ The `{% django_glue_init %}` tag renders `templates/django_glue/django_glue.html
 
 ```javascript
 // Model proxy - access fields directly
-const title = Glue.task.title       // Auto-fetches if needed
-Glue.task.title = 'New Title'       // Updates internal state
-await Glue.task.save()              // Persists to Django
-await Glue.task.delete()            // Deletes instance
+const title = Glue.model.task.title       // Auto-fetches if needed
+Glue.model.task.title = 'New Title'       // Updates internal state
+await Glue.model.task.save()              // Persists to Django
+await Glue.model.task.delete()            // Deletes instance
 
 // QuerySet proxy - work with collections
-const allTasks = await Glue.tasks.queryWithParams()
-const filtered = await Glue.tasks.filter({
+const allTasks = await Glue.querySet.tasks.queryWithParams()
+const filtered = await Glue.querySet.tasks.filter({
     'done': false,
     'title__icontains': 'urgent'
 })
@@ -291,12 +291,12 @@ filtered[0].done = true
 await filtered[0].save()
 
 // Form proxy - validation and submission
-Glue.contact_form.name = 'John'
-Glue.contact_form.email = 'john@example.com'
+Glue.form.contact_form.name = 'John'
+Glue.form.contact_form.email = 'john@example.com'
 
-const validation = await Glue.contact_form.validate()
+const validation = await Glue.form.contact_form.validate()
 if (validation.success) {
-    const result = await Glue.contact_form.save()
+    const result = await Glue.form.contact_form.save()
 }
 ```
 
@@ -384,7 +384,7 @@ Any `django_glue.settings` constant can be overridden by defining the same name 
 
 ### Action Flow (JS -> Django)
 
-1. JS calls `Glue.task.save()`
+1. JS calls `Glue.model.task.save()`
 2. JS POSTs to `/__dg__/action/task/save/` with body:
    ```json
    {
@@ -469,11 +469,11 @@ The JS client is a singleton `GlueClient` exposed as `window.Glue`. It mirrors t
 Each JS proxy supports a listener pattern with three event types: `'before'`, `'after'`, `'error'`.
 
 ```javascript
-Glue.task.addListener('save', (event) => {
+Glue.model.task.addListener('save', (event) => {
     console.log('Before save:', event.payload)
 }, 'before')
 
-Glue.task.addListener('save', (event) => {
+Glue.model.task.addListener('save', (event) => {
     console.log('After save:', event.result)
 }, 'after')
 ```
@@ -609,14 +609,7 @@ CI uses custom `stratusadv/github-actions` reusable actions and `test_project.se
 
 | File | Issue |
 |------|-------|
-| `access/decorators.py` | Imports from non-existent `django_glue.response.responses`; not used anywhere |
-| `access/actions.py` | `BaseAction` class references `Access` (not `GlueAccess`); not used anywhere |
-| `conf.py` | Uses `raise f'...'` instead of `raise AttributeError(f'...')` |
-| `proxies/session_data.py` | `GlueSessionData` dataclass defined but not used |
-| `data_transfer_objects.py` | `GlueActionRequestFormData`, `GlueActionResponseData` defined but not used |
-| `shortcuts.py` | `ForeignKeyField` dataclass defined but not used |
-| `exceptions.py` | `GluePayloadValidationError` defined but never raised |
-| JS tests | Reference non-existent APIs (public properties, methods, module exports) that don't match current source |
+| JS tests | Some tests reference APIs (public properties, methods, module exports) that may not match current source |
 
 ## Test Coverage Gaps
 

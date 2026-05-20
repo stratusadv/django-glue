@@ -166,25 +166,6 @@ describe('GlueHttp', () => {
         });
     });
 
-    describe('sendJsonGetRequest', () => {
-        it('sends GET request', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            await http.sendJsonGetRequest('/test', { key: 'value' });
-
-            expect(capturedOptions.method).toBe('GET');
-        });
-    });
-
     describe('sendJsonPostRequest', () => {
         it('sends POST with JSON body', async () => {
             let capturedOptions = null;

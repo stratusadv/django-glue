@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { GlueQuerySetProxy } from '../../src/proxies/queryset';
+import GlueQuerySetProxy from '../../src/proxies/queryset';
 import GlueClient from '../../src/client';
 import { createMockContextData, setupCookieMock } from '../testUtils';
 
@@ -294,7 +294,7 @@ describe('GlueQuerySetProxy', () => {
             expect(proxy._queryParams.slice).toEqual({ start: 5 });
         });
 
-        it('sliceEnd adds end param', () => {
+        it('sliceEnd adds stop param', () => {
             const mockHttp = {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
@@ -312,7 +312,7 @@ describe('GlueQuerySetProxy', () => {
 
             proxy.sliceEnd(10);
 
-            expect(proxy._queryParams.slice).toEqual({ end: 10 });
+            expect(proxy._queryParams.slice).toEqual({ stop: 10 });
         });
     });
 

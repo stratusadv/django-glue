@@ -8,7 +8,7 @@
 
 <script>
     const glueConfig = new GlueConfig({
-        requestTimeoutMs: 30000,
+        requestTimeoutSeconds: 30,
         keepLiveIntervalSeconds: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }},
         sessionExpiryMessage: '{{ DJANGO_SESSION_EXPIRY_MESSAGE }}',
         actionUrlPath: '{{ DJANGO_GLUE_URLS.action }}',

@@ -22,7 +22,21 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra development
 
-      - name: Run tests
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS dependencies
+        run: bun install
+
+      - name: Build JS bundle
+        run: bun run build
+
+      - name: Run JS tests
+        run: bun test
+
+      - name: Run Python tests
         run: uv run pytest django_glue/tests/ -v
 
       - name: Build package

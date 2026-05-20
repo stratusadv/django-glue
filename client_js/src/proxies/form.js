@@ -47,7 +47,7 @@ class GlueFormProxy extends BaseGlueProxy {
                 ]
             }).then(data => {
                 fieldData.__glue__choicesCache = data;
-                fieldData._choicesLoaded = true;
+                fieldData.__glue__choicesLoaded = true;
                 return data;
             }).finally(() => {
                 fieldData.__glue__loadingChoices = false;
@@ -57,7 +57,7 @@ class GlueFormProxy extends BaseGlueProxy {
         }.bind(this)
 
         fieldData.choices = async function () {
-            if (!fieldData._choicesLoaded) {
+            if (!fieldData.__glue__choicesLoaded) {
                 await choicesAction();
             }
             return fieldData.__glue__choicesCache;
@@ -130,13 +130,12 @@ class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
-    get(pk = null) {
-        this._processAction('get').then(data => {
-            this._values = data
-        }).finally(() => {
-            this._loading = false;
-            this._loaded = true;
-        });
+    async get(pk = null) {
+        const data = await this._processAction('get');
+        this._values = data;
+        this._loading = false;
+        this._loaded = true;
+        return data;
     }
 
     _updateErrorAttributesForField(fieldName) {
@@ -190,7 +189,7 @@ class GlueFormProxy extends BaseGlueProxy {
 
     hasErrors(fieldName) {
         if (fieldName) {
-            return this._errors[fieldName] && this._errors[fieldName].length > 0;
+            return Boolean(this._errors[fieldName] && this._errors[fieldName].length > 0);
         }
 
         return Object.keys(this._errors).length > 0;

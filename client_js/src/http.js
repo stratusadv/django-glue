@@ -69,14 +69,6 @@ class GlueHttp {
         }
     }
 
-    async sendJsonGetRequest(url, data) {
-        return await this.sendRequest(url, {
-            body: JSON.stringify(data ?? {}),
-            method: 'GET',
-            contentType: 'application/json',
-        })
-    }
-
     async sendJsonPostRequest(url, data, csrfProtected = true) {
         return await this.sendRequest(url, {
             body: JSON.stringify(data ?? {}),

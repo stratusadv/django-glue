@@ -57,13 +57,13 @@ Proxies are accessed as properties of the global `Glue` object:
 
 ```javascript
 // Model proxy
-Glue.task.title = 'New Title'
-await Glue.task.save()
+Glue.model.task.title = 'New Title'
+await Glue.model.task.save()
 
 // QuerySet proxy
-const tasks = await Glue.tasks.all()
+const tasks = await Glue.querySet.tasks.all()
 
 // Form proxy
-Glue.contact_form.name = 'John'
-const result = await Glue.contact_form.validate()
+Glue.form.contact_form.name = 'John'
+const result = await Glue.form.contact_form.validate()
 ```

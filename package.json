@@ -1,6 +1,6 @@
 {
     "name": "django-glue",
-    "description": "Seamlessly Connect Django to your Frontend.",
+    "description": "Industrial Strength Glue for Django Backends and Frontends!",
     "homepage": "https://django-glue.stratusadv.com/",
     "repository": {
         "type": "git",

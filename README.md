@@ -6,7 +6,7 @@
 
 # Django Glue
 
-![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
+![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/ci.yml)
 ![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
 ![PyPI Version](https://img.shields.io/pypi/v/django-glue)
 ![Downloads](https://img.shields.io/pypi/dm/django-glue)

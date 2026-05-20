@@ -76,7 +76,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     sliceEnd(idx) {
-        return this.addQueryParam('slice', {end: idx})
+        return this.addQueryParam('slice', {stop: idx})
     }
 
     slice(start = 0, stop = null) {

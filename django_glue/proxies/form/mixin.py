@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.schemas.action_payload_schema import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.proxies.decorators import action
 
 

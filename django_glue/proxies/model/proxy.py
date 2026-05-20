@@ -5,7 +5,7 @@ from django.db.models import Model
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
-from django_glue.schemas.action_payload_schema import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.proxies.decorators import action

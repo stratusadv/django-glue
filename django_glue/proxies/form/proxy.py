@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.schemas.action_payload_schema import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
 from django_glue.proxies.form.mixin import GlueFormProxyMixin

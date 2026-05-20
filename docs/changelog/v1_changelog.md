@@ -9,28 +9,28 @@
 ### Features
 
 - **Improved JavaScript API**: The JavaScript client has been completely rewritten with a more ergonomic, intuitive API:
-  - **Direct property access**: Access proxy objects directly as properties of the global `Glue` object by their registered unique_names (e.g., `Glue.obj`, `Glue.objs`) instead of instantiating classes.
-  - **Native field getters/setters**: Read and write model fields as regular properties (`Glue.obj.title = 'New Title'`) with automatic change tracking.
-  - **Auto-generated field metadata properties**: Field metadata is exposed as camelCase properties directly on the proxy (e.g., `Glue.obj.titleLabel`, `Glue.obj.titleRequired`, `Glue.obj.titleMaxLength`).
+  - **Direct property access**: Access proxy objects directly as properties of the global `Glue` object under type-specific namespaces (e.g., `Glue.model.obj`, `Glue.querySet.objs`, `Glue.form.my_form`) instead of instantiating classes.
+  - **Native field getters/setters**: Read and write model fields as regular properties (`Glue.model.obj.title = 'New Title'`) with automatic change tracking.
+  - **Field metadata via `$fields`**: Field metadata is exposed through the `$fields` property on each proxy (e.g., `Glue.model.obj.$fields.title.label`, `Glue.model.obj.$fields.title.required`).
   - **Iterable querysets**: QuerySet proxies implement `Symbol.iterator`, allowing `for...of` loops directly over items (doesn't work in Alpine.js, must iterate over `.all()` or `.queryWithParams()`) 
   - **Automatic lazy loading**: Model proxies on the frontend automatically fetch data on first field access if not already loaded.
-  - **Built-in loading state**: Track async operations via `$loading` and `$loaded` properties on all proxies.
-  - **Automatic error tracking**: Per-field error state with `fieldNameHasErrors` and `fieldNameErrorText` properties generated for each field.
-  - **Lazy FK/M2M choices loading**: Foreign key choices are loaded on-demand via async `fieldNameChoices()` methods with built-in caching to prevent duplicate requests.
+  - **Built-in loading state**: Track async operations via `_loading` and `_loaded` properties on all proxies.
+  - **Automatic error tracking**: Per-field error state with `has_errors` and `error_text` properties on each field's data object.
+  - **Lazy FK/M2M choices loading**: Foreign key choices are loaded on-demand via async `choices()` method on field data with built-in caching to prevent duplicate requests.
 
 - **QuerySet Child Proxy System**: Items returned from querysets are full `GlueModelProxy` instances:
   - Each item has its own `save()` and `delete()` methods for individual CRUD operations.
-  - Child proxies maintain a reference to their parent queryset via `$parent`.
+  - Child proxies maintain a reference to their parent queryset via `_parent`.
   - Deleting or saving a child automatically refreshes the parent queryset.
   - Child proxy events bubble up to the parent queryset's listeners.
 
 - **QuerySet Query Building**: Chainable methods for building queries on the frontend:
   ```javascript
   // Chain filter, order, and slice operations
-  const obj = await Glue.objs.filter({done: false}).orderBy('title').slice(0, 10).all()
+  const items = await Glue.querySet.objs.filter({done: false}).orderBy('title').slice(0, 10).all()
 
   // Or pass all params at once (recommended approach in Alpine.js `x-for` loops to preserve reactivity)
-  const obj = await Glue.objs.queryWithParams({
+  const items = await Glue.querySet.objs.queryWithParams({
       filter: {done: false, title__icontains: 'urgent'},
       order_by: ['title', '-created_at'],
       slice: {start: 0, stop: 10}
@@ -52,31 +52,31 @@
 - **Event Listener System**: JavaScript proxies now support `before`, `after`, and `error` event listeners for reactive UI patterns:
   ```javascript
   // Add listeners for any action
-  Glue.obj.addListener('save', (event) => {
+  Glue.model.obj.addListener('save', (event) => {
       console.log('About to save:', event.payload)
   }, 'before')
 
-  Glue.obj.addListener('save', (event) => {
+  Glue.model.obj.addListener('save', (event) => {
       console.log('Saved successfully:', event.result)
   }, 'after')
 
-  Glue.obj.addListener('save', (event) => {
+  Glue.model.obj.addListener('save', (event) => {
       console.error('Save failed:', event.error)
   }, 'error')
 
   // Chainable listener management
-  Glue.obj
+  Glue.model.obj
       .addListener('delete', onDelete, 'after')
       .addListener('delete', onDeleteError, 'error')
 
   // Remove specific listeners
-  Glue.obj.removeListener('save', myCallback, 'after')
+  Glue.model.obj.removeListener('save', myCallback, 'after')
 
   // Clear all listeners
-  Glue.obj.clearListeners()
+  Glue.model.obj.clearListeners()
   ```
 
-- **Request Timeout Configuration**: HTTP requests now support configurable timeouts (default 30 seconds) via `config.requestTimeoutMs`.
+- **Request Timeout Configuration**: HTTP requests now support configurable timeouts (default 30 seconds) via `config.requestTimeoutSeconds`.
 
 - **Explicit Exception Hierarchy**: New custom exceptions provide clearer error handling:
   - `GlueError` (base)
@@ -85,13 +85,13 @@
   - `GlueMissingActionError`
   - `GlueModelInstanceNotFoundError`
   - `GlueQuerySetFilterValidationError`
-  - `GluePayloadValidationError`
+   - `GluePayloadValidationError` (removed — was never raised) (removed — was never raised)
 
 - **QuerySet Filter Validation**: Filters are now validated against allowed fields, preventing access to restricted model fields.
 
 - **Pydantic Request Validation**: All incoming requests are validated using Pydantic models for improved type safety.
 
-- **ES Modules JavaScript Client**: The JavaScript client has been rewritten using modern ES modules, built with esbuild.
+- **ES Modules JavaScript Client**: The JavaScript client has been rewritten using modern ES modules, built with Bun's native bundler (`Bun.build()`).
 
 ### Changes + Migration
 
@@ -118,13 +118,13 @@
   - The `{% glue_init %}` template tag has been renamed to `{% django_glue_init %}` to be slightly more descriptive.
 
 - The method of accessing and configuring glued objects has completely changed.
-  - Instead of getting the glued object by creating a new instance (e.g. `new ModelObjectGlue(<unique_name>)`, `new QuerySetGlue(<unique_name>)`), you now access them directly using their unique name as a property of the global `Glue` instance (e.g. `Glue.<unique_name_1>`, `Glue.<unique_name_2>`)
+  - Instead of getting the glued object by creating a new instance (e.g. `new ModelObjectGlue(<unique_name>)`, `new QuerySetGlue(<unique_name>)`), you now access them directly using their unique name under the type-specific namespace of the global `Glue` instance (e.g. `Glue.model.<unique_name>`, `Glue.querySet.<unique_name>`, `Glue.form.<unique_name>`)
 
 - Glued objects can no longer have their form/field properties configured on the frontend. They inherit their field properties from the way they are glued in the backend (either from the model or from a custom form class passed into the Glue shortcut). The original purpose of this was largely to tweak the field template behaviour and to compensate for functional gaps in the Glue object data binding process, but now this sort of customization should be done by overriding the field templates instead.
 
 - The method of accessing glued object field meta information has been changed.
   - Old: `obj.glue_fields.field.label` or `obj._meta.field.label`
-  - New: properties are generated for each meta field name: `obj.fieldLabel`, `obj.fieldRequired`, etc.
+  - New: `obj.$fields.field.label`, `obj.$fields.field.required`, etc.
 
 - **Action method names changed**:
   - Model objects:
@@ -139,7 +139,7 @@
     - `objs.delete(pk)` -> `objs[index].delete()` (delete individual items)
     - `objs.null_object()` -> `objs.new()` (renamed)
 
-- **QuerySet items are now full proxies**: Each item returned from `Glue.objs.all()` or `Glue.objs.queryWithParams()` is a `GlueModelProxy` instance with full `save()` and `delete()` capabilities, rather than plain data objects.
+- **QuerySet items are now full proxies**: Each item returned from `Glue.querySet.objs.all()` or `Glue.querySet.objs.queryWithParams()` is a `GlueModelProxy` instance with full `save()` and `delete()` capabilities, rather than plain data objects.
 
 - **Event system replaced**:
   - Old: `django_glue_dispatch_response_event()`, `django_glue_dispatch_object_get_error_event()`, etc.
@@ -172,5 +172,5 @@
 ### Other Notes
 
 - The JavaScript client is now built using Bun's native bundler (`Bun.build()`) and distributed as both `django_glue.js` and `django_glue.min.js`.
-- Tests have been reorganized: Python tests use pytest with pytest-django, JavaScript tests use Jest with Babel, and E2E tests use Playwright.
+- Tests have been reorganized: Python tests use pytest with pytest-django, JavaScript tests use Bun test with Happy-DOM, and E2E tests use Playwright.
 - Documentation is now built with MkDocs and hosted at https://django-glue.stratusadv.com.

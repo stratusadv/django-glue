@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.db.models import QuerySet, Model
 
 from django_glue.access.access import GlueAccess
-from django_glue.schemas.action_payload_schema import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.decorators import action
@@ -125,6 +125,8 @@ class GlueQuerySetProxy(GlueModelProxyBase):
     @action(access=GlueAccess.VIEW)
     def query_with_params(self, action_data: ActionPayloadSchema) -> list:
         if action_data.post_data:
+            if filter_params := action_data.post_data.get('filter'):
+                self._validate_filter_keys(filter_params)
             self._apply_query_params(action_data.post_data)
 
         return self._queryset_to_list(self.target)

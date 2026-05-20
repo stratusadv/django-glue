@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { GlueModelProxy } from '../../src/proxies/model';
+import GlueModelProxy from '../../src/proxies/model';
 import { createMockContextData, setupCookieMock } from '../testUtils';
 
 describe('GlueModelProxy', () => {

@@ -51,13 +51,13 @@ def task_list_view(request):
 ### Fetching All Items
 
 ```javascript
-const tasks = await Glue.tasks.all()
+const tasks = await Glue.querySet.tasks.all()
 ```
 
 Each item is a full `GlueModelProxy` instance:
 
 ```javascript
-const tasks = await Glue.tasks.all()
+const tasks = await Glue.querySet.tasks.all()
 console.log(tasks[0].title)        // Access field
 tasks[0].title = 'Updated'         // Modify field
 await tasks[0].save()              // Save individual item
@@ -70,17 +70,17 @@ Use `queryWithParams()` to filter the queryset:
 
 ```javascript
 // Filter by a single condition
-const activeTasks = await Glue.tasks.queryWithParams({
+const activeTasks = await Glue.querySet.tasks.queryWithParams({
     filter: { done: false }
 })
 
 // Filter by multiple conditions
-const urgentTasks = await Glue.tasks.queryWithParams({
+const urgentTasks = await Glue.querySet.tasks.queryWithParams({
     filter: { done: false, priority: 'high' }
 })
 
 // Use Django ORM lookups
-const searchResults = await Glue.tasks.queryWithParams({
+const searchResults = await Glue.querySet.tasks.queryWithParams({
     filter: { title__icontains: 'search term' }
 })
 ```
@@ -88,12 +88,12 @@ const searchResults = await Glue.tasks.queryWithParams({
 ### Ordering
 
 ```javascript
-const sortedTasks = await Glue.tasks.queryWithParams({
+const sortedTasks = await Glue.querySet.tasks.queryWithParams({
     order_by: ['title']
 })
 
 // Multiple fields, descending
-const sortedTasks = await Glue.tasks.queryWithParams({
+const sortedTasks = await Glue.querySet.tasks.queryWithParams({
     order_by: ['-created_at', 'title']
 })
 ```
@@ -101,11 +101,11 @@ const sortedTasks = await Glue.tasks.queryWithParams({
 ### Slicing (Pagination)
 
 ```javascript
-const page1 = await Glue.tasks.queryWithParams({
+const page1 = await Glue.querySet.tasks.queryWithParams({
     slice: { start: 0, stop: 10 }
 })
 
-const page2 = await Glue.tasks.queryWithParams({
+const page2 = await Glue.querySet.tasks.queryWithParams({
     slice: { start: 10, stop: 20 }
 })
 ```
@@ -113,7 +113,7 @@ const page2 = await Glue.tasks.queryWithParams({
 ### Combining Query Parameters
 
 ```javascript
-const results = await Glue.tasks.queryWithParams({
+const results = await Glue.querySet.tasks.queryWithParams({
     filter: { done: false, title__icontains: 'urgent' },
     order_by: ['-created_at'],
     slice: { start: 0, stop: 10 }
@@ -125,12 +125,12 @@ const results = await Glue.tasks.queryWithParams({
 Build queries step by step (note: chain methods before calling `all()` or `queryWithParams()`):
 
 ```javascript
-Glue.tasks
+Glue.querySet.tasks
     .filter({ done: false })
     .orderBy(['-created_at'])
     .slice(0, 10)
 
-const results = await Glue.tasks.all()
+const results = await Glue.querySet.tasks.all()
 ```
 
 ## Modifying Items
@@ -140,7 +140,7 @@ const results = await Glue.tasks.all()
 Each item from the queryset is a full model proxy:
 
 ```javascript
-const tasks = await Glue.tasks.all()
+const tasks = await Glue.querySet.tasks.all()
 tasks[0].title = 'New Title'
 await tasks[0].save()
 ```
@@ -153,17 +153,17 @@ Add a new unsaved item to the queryset:
 
 ```javascript
 // Add to the beginning
-await Glue.tasks.prependNew()
+await Glue.querySet.tasks.prependNew()
 
 // Add to the end
-await Glue.tasks.appendNew()
+await Glue.querySet.tasks.appendNew()
 ```
 
 The new item is a full model proxy with default values:
 
 ```javascript
-await Glue.tasks.prependNew()
-const newItem = Glue.tasks._items[0]
+await Glue.querySet.tasks.prependNew()
+const newItem = Glue.querySet.tasks._items[0]
 newItem.title = 'New Task'
 await newItem.save()
 ```
@@ -171,7 +171,7 @@ await newItem.save()
 ### Deleting an Individual Item
 
 ```javascript
-const tasks = await Glue.tasks.all()
+const tasks = await Glue.querySet.tasks.all()
 await tasks[0].delete()
 ```
 
@@ -185,13 +185,13 @@ await tasks[0].delete()
 | `isLoaded` | Returns `true` if items have been fetched |
 
 ```javascript
-await Glue.tasks.all()
+await Glue.querySet.tasks.all()
 
-if (Glue.tasks.isEmpty) {
+if (Glue.querySet.tasks.isEmpty) {
     console.log('No tasks found')
 }
 
-if (Glue.tasks.isLoaded) {
+if (Glue.querySet.tasks.isLoaded) {
     console.log('Tasks have been loaded')
 }
 ```
@@ -231,16 +231,16 @@ def task_list_view(request):
         loading: false,
         async init() {
             this.loading = true
-            this.tasks = await Glue.tasks.all()
+            this.tasks = await Glue.querySet.tasks.all()
             this.loading = false
         },
         async addTask() {
-            await Glue.tasks.prependNew()
-            this.tasks = Glue.tasks._items
+            await Glue.querySet.tasks.prependNew()
+            this.tasks = Glue.querySet.tasks._items
         },
         async deleteTask(task) {
             await task.delete()
-            this.tasks = await Glue.tasks.all()
+            this.tasks = await Glue.querySet.tasks.all()
         }
     }">
         <button @click="addTask()">Add Task</button>
@@ -268,12 +268,12 @@ Attach listeners to actions on the queryset or individual items:
 
 ```javascript
 // Listen for saves on any item in the queryset
-Glue.tasks.addListener('save', (event) => {
+Glue.querySet.tasks.addListener('save', (event) => {
     console.log('Item saved:', event.result)
 }, 'after')
 
 // Listen for deletes
-Glue.tasks.addListener('delete', (event) => {
+Glue.querySet.tasks.addListener('delete', (event) => {
     console.log('Item deleted')
 }, 'after')
 ```

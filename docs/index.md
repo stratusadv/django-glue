@@ -6,7 +6,7 @@
 
 # Django Glue
 
-![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/run_tests.yml)
+![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/ci.yml)
 ![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
 ![PyPI Version](https://img.shields.io/pypi/v/django-glue)
 ![Downloads](https://img.shields.io/pypi/dm/django-glue)
@@ -22,7 +22,7 @@
 
 - **Simple, Declarative API**
   - Register proxies in your Django views with `Glue.model()`, `Glue.queryset()`, and `Glue.form()`.
-  - Access proxies on the frontend as properties of the global `Glue` object (e.g., `Glue.task`, `Glue.tasks`).
+  - Access proxies on the frontend as properties of the global `Glue` object (e.g., `Glue.model.task`, `Glue.querySet.tasks`).
 
 - **Unintrusive Integration**
   - Works with your existing Django views and templates with minimal setup.

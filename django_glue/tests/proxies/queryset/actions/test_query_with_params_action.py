@@ -14,7 +14,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueQuerySetProxy
-from django_glue.schemas import action_payload_schema as dto
+from django_glue.resolver.action import schemas as dto
 from test_project.gorilla.models import Gorilla
 
 

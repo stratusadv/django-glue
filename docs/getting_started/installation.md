@@ -135,10 +135,10 @@ def my_view(request):
 </head>
 <body>
     <script>
-        Glue.task.get().then(() => {
-            console.log('Task title:', Glue.task.title)
-            Glue.task.title = 'Updated Title'
-            Glue.task.save()
+        Glue.model.task.get().then(() => {
+            console.log('Task title:', Glue.model.task.title)
+            Glue.model.task.title = 'Updated Title'
+            Glue.model.task.save()
         })
     </script>
 
