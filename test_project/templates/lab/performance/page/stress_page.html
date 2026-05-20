@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div x-data="{ gorillas: Glue.gorillas }">
+    <div x-data="{ gorillas: Glue.querySet.gorillas }">
         <div class="row justify-content-center mb-4">
             <div class="col-lg-8">
                 <div class="card card-gorilla">

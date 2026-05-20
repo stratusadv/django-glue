@@ -92,6 +92,10 @@ export class GlueFormProxy extends BaseGlueProxy {
         Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
             this._defineFieldNameProperty(fieldName)
 
+            // Clone fieldData so each proxy instance owns its own copy,
+            // avoiding shared references that cause bound getters to overwrite each other
+            fieldData = {...fieldData}
+
             if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
                 fieldData = this._defineModelChoiceField(fieldName, fieldData)
             }

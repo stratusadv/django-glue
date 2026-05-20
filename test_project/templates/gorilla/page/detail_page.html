@@ -181,7 +181,7 @@
                                 <label class="form-label fw-bold">Fighting Skills (ManyToMany Test)</label>
                                 <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
                                     <div class="row">
-                                        <template x-for="choice in gorilla.skillsChoices" :key="choice[0]">
+                                        <template x-for="choice in gorilla.$fields.skills.choices" :key="choice[0]">
                                             <div class="col-md-6 col-lg-4">
                                                 <div class="form-check">
                                                     <input

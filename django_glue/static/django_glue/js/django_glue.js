@@ -146,6 +146,7 @@
       this._fields = {};
       Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
         this._defineFieldNameProperty(fieldName);
+        fieldData = { ...fieldData };
         if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
           fieldData = this._defineModelChoiceField(fieldName, fieldData);
         }
