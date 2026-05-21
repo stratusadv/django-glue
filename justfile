@@ -9,6 +9,8 @@ js-build:
     bun run build
 js-tests:
     bun test
+js-coverage:
+    bun test --coverage
 js-tests-watch:
     bun test --watch
 migrate-and-seed:

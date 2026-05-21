@@ -1,6 +1,6 @@
 from django.http import HttpRequest, JsonResponse, HttpResponse
 
-from django_glue.encoders import GlueActionDataJSONEncoder
+from django_glue.resolver.action.encoders import ActionDataJSONEncoder
 from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.action.schemas import ActionPayloadSchema
@@ -34,5 +34,5 @@ class ActionResolver(BaseResolver):
         action_response_data = proxy_instance.process_action(self.action, action_payload)
 
         return JsonResponse(
-            data=action_response_data, safe=False, encoder=GlueActionDataJSONEncoder
+            data=action_response_data, safe=False, encoder=ActionDataJSONEncoder
         )

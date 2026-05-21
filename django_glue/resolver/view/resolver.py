@@ -6,22 +6,22 @@ from django.template.response import TemplateResponse
 from django.urls import reverse, resolve, NoReverseMatch
 
 from django_glue.conf import settings
-from django_glue.encoders import GlueActionDataJSONEncoder
+from django_glue.resolver.action.encoders import ActionDataJSONEncoder
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.resolver.resolver import BaseResolver
-from django_glue.resolver.view.request import GlueViewHttpRequest
+from django_glue.resolver.view.request import ViewHttpRequest
 from django_glue.resolver.view.schemas import ViewBodySchema
 from django_glue.session import GlueSession
 
 
-class GlueViewResolver(BaseResolver):
+class ViewResolver(BaseResolver):
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
         self.view_body = ViewBodySchema.from_request(request)
 
     @property
-    def glue_view_http_request(self) -> GlueViewHttpRequest:
-        return GlueViewHttpRequest(
+    def glue_view_http_request(self) -> ViewHttpRequest:
+        return ViewHttpRequest(
             base_request=self.request,
             method=self.view_body.method,
             url_path=self.view_body.url_path,
@@ -83,7 +83,7 @@ class GlueViewResolver(BaseResolver):
                             'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         },
                         safe=False,
-                        encoder=GlueActionDataJSONEncoder,
+                        encoder=ActionDataJSONEncoder,
                     )
 
                 if isinstance(response, HttpResponse):

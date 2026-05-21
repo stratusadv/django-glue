@@ -91,6 +91,8 @@ django-glue/
 │       ├── client.test.js            # GlueClient tests
 │       ├── config.test.js            # Config tests
 │       ├── http.test.js              # HTTP tests
+│       ├── testUtils.test.js         # Test utility function tests
+│       ├── view.test.js              # GlueView tests
 │       └── proxies/                  # Proxy tests (base, form, model, queryset)
 │
 ├── test_project/                     # Django test application
@@ -104,17 +106,36 @@ django-glue/
 │   └── core/                         # Custom template tags
 │
 ├── django_glue/tests/                # Python test suite
-│   ├── conftest.py                   # Pytest config, fixtures
+│   ├── conftest.py                   # Pytest config, fixtures, MockSession
 │   ├── test_exceptions.py            # Exception class tests
+│   ├── test_maps.py                  # Python/JS subject type sync tests
 │   ├── access/test_access.py         # GlueAccess hierarchy tests
+│   ├── conf/test_conf.py             # Settings loader tests
 │   ├── session/test_session.py       # Session management tests
-│   ├── proxies/
-│   │   ├── fields/test_mixin_validation.py  # Payload validation tests
-│   │   ├── model/actions/            # Model proxy action tests
-│   │   ├── queryset/actions/         # QuerySet proxy action tests
-│   │   └── form/                     # Form proxy tests
-│   │       ├── test_form_proxy.py
-│   │       └── actions/              # Form action tests
+│   ├── resolver/                         # Resolver test suite
+│   │   ├── action/
+│   │   │   ├── test_schemas.py           # ActionPayloadSchema tests
+│   │   │   └── test_exceptions.py        # GlueResolverError tests
+│   │   └── view/
+│   │       ├── test_request.py           # GlueViewHttpRequest tests
+│   │       ├── test_resolver.py          # GlueViewResolver tests
+│   │       └── test_schemas.py           # ViewBodySchema tests
+│   ├── encoders/test_encoders.py     # GlueActionDataJSONEncoder tests
+│   ├── middleware/test_middleware.py # DjangoGlueMiddleware tests
+│   ├── shortcuts/test_shortcuts.py   # Glue API entry point tests
+│   ├── templatetags/test_templatetags.py  # Template tag tests
+│   ├── utils/test_utils.py           # Utility function tests
+│   ├── views/test_views.py           # HTTP endpoint tests
+│   └── proxies/
+│       ├── test_base_proxy.py        # BaseGlueProxy process_action tests
+│       ├── test_decorators.py        # @action decorator tests
+│       ├── test_foreign_key_choices.py  # foreign_key_choices action tests
+│       ├── fields/test_mixin_validation.py  # Payload validation tests
+│       ├── model/actions/            # Model proxy action tests
+│       ├── queryset/actions/         # QuerySet proxy action tests
+│       └── form/                     # Form proxy tests
+│           ├── test_form_proxy.py
+│           └── actions/              # Form action tests
 │
 └── docs/                             # MkDocs documentation
     ├── api/                          # API reference docs
@@ -635,15 +656,7 @@ CI uses custom `stratusadv/github-actions` reusable actions and `test_project.se
 ## Test Coverage Gaps
 
 The following areas currently have no tests:
-- **Views**: `action_view`, `keep_live_view`, `glue_view_view`, `session_data_view`
-- **Middleware**: `DjangoGlueMiddleware`
-- **Shortcuts**: `Glue.model()`, `Glue.queryset()`, `Glue.form()`
-- **Template tags**: `{% django_glue_init %}`
-- **DTOs**: `ActionPayloadSchema` validation
-- **Encoders**: `GlueActionDataJSONEncoder`
-- **Utils**: `serialize_queryset`, `deserialize_queryset`, `get_class_from_path_string`
-- **Decorators**: `@action` decorator behavior
-- **Base proxy**: `BaseGlueProxy.process_action`
+- **Views**: `glue_view_view` (view_views.py)
 - **E2E**: No Playwright tests exist despite `playwright` being a dev dependency
 
 ## Security Notes

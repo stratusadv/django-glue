@@ -153,3 +153,18 @@ class GlueModelProxySaveTestCase(TestCase):
         result = proxy.save(action_data)
 
         self.assertTrue(result['success'])
+
+    def test_from_action_request_data_with_form_class_path(self):
+        """from_action_request_data should load form_class from path string."""
+        from test_project.test_forms import TestModelForm
+
+        proxy = GlueModelProxy.from_action_request_data(
+            target_pk=self.gorilla.pk,
+            model_class='Gorilla',
+            app_label='gorilla',
+            access=GlueAccess.CHANGE,
+            unique_name='gorilla',
+            form_class_path=f'{TestModelForm.__module__}.{TestModelForm.__name__}',
+        )
+
+        self.assertEqual(proxy.form_class, TestModelForm)

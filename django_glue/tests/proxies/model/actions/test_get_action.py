@@ -103,3 +103,32 @@ class GlueModelProxyGetTestCase(TestCase):
             action_data = dto.ActionPayloadSchema(context_data={})
             result = proxy.get(action_data)
             self.assertEqual(result['name'], 'Test Gorilla')
+
+    def test_from_action_request_data_raises_for_missing_instance(self):
+        """from_action_request_data should raise GlueModelInstanceNotFoundError for non-existent pk."""
+        from django_glue.exceptions import GlueModelInstanceNotFoundError
+
+        with self.assertRaises(GlueModelInstanceNotFoundError) as context:
+            GlueModelProxy.from_action_request_data(
+                target_pk=99999,
+                model_class='Gorilla',
+                app_label='gorilla',
+                access=GlueAccess.VIEW,
+                unique_name='gorilla',
+            )
+
+        self.assertEqual(context.exception.model_name, 'Gorilla')
+        self.assertEqual(context.exception.pk, 99999)
+
+    def test_from_action_request_data_creates_new_instance(self):
+        """from_action_request_data should create a new unsaved instance when target_pk is None."""
+        proxy = GlueModelProxy.from_action_request_data(
+            target_pk=None,
+            model_class='Gorilla',
+            app_label='gorilla',
+            access=GlueAccess.VIEW,
+            unique_name='gorilla',
+        )
+
+        self.assertIsInstance(proxy.target, Gorilla)
+        self.assertIsNone(proxy.target.pk)

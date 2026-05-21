@@ -1,7 +1,20 @@
+/**
+ * HTTP client for Django Glue. Handles fetch requests, CSRF tokens, timeouts,
+ * and serialization for action and keep-alive requests.
+ */
 class GlueHttp {
+    /**
+     * @param {GlueConfig} config - The Glue configuration instance.
+     */
     constructor(config) {
         this._config = config
     }
+
+    /**
+     * Retrieve a cookie value by name from `document.cookie`.
+     * @param {string} name - The cookie name.
+     * @returns {string|null} The decoded cookie value, or `null` if not found.
+     */
     getCookie(name) {
         if (document?.cookie !== '') {
             const cookies = document.cookie.split(';').map(cookie => cookie.trim())
@@ -16,6 +29,17 @@ class GlueHttp {
         return null
     }
 
+    /**
+     * Send an HTTP request with timeout, CSRF protection, and content-type handling.
+     * @param {string} url - The request URL.
+     * @param {Object} [requestOptions] - Request configuration.
+     * @param {string} [requestOptions.body=''] - Request body.
+     * @param {string} [requestOptions.method='GET'] - HTTP method.
+     * @param {string} [requestOptions.contentType='application/json'] - Content-Type header.
+     * @param {boolean} [requestOptions.csrfProtected=true] - Whether to attach CSRF token.
+     * @param {number|null} [requestOptions.timeoutSeconds=null] - Timeout override; falls back to config default.
+     * @returns {Promise<Object>} Response object with `{ok, body, httpResponse, data}`.
+     */
     async sendRequest(url, requestOptions = {
         body: '',
         method: 'GET',
@@ -69,6 +93,13 @@ class GlueHttp {
         }
     }
 
+    /**
+     * Send a JSON-encoded POST request.
+     * @param {string} url - The request URL.
+     * @param {Object} data - The payload to stringify and send.
+     * @param {boolean} [csrfProtected=true] - Whether to attach CSRF token.
+     * @returns {Promise<Object>} Response object.
+     */
     async sendJsonPostRequest(url, data, csrfProtected = true) {
         return await this.sendRequest(url, {
             body: JSON.stringify(data ?? {}),
@@ -78,6 +109,13 @@ class GlueHttp {
         })
     }
 
+    /**
+     * Send a `multipart/form-data` POST request.
+     * @param {string} url - The request URL.
+     * @param {FormData} data - The FormData payload.
+     * @param {boolean} [csrfProtected=true] - Whether to attach CSRF token.
+     * @returns {Promise<Object>} Response object.
+     */
     async sendFormPostRequest(url, data, csrfProtected = true) {
         return await this.sendRequest(url, {
             body: data,
@@ -87,6 +125,15 @@ class GlueHttp {
         })
     }
 
+    /**
+     * Send an action request to the Django Glue action endpoint.
+     * @param {Object} options - Action request parameters.
+     * @param {string} options.uniqueName - The proxy unique name.
+     * @param {string} options.action - The action method name.
+     * @param {Object|FormData} [options.payload] - The action payload data.
+     * @param {Object} options.contextData - The proxy context data for server-side reconstruction.
+     * @returns {Promise<Object>} Response object.
+     */
     async sendActionRequest({uniqueName, action, payload, contextData}) {
         const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
 
@@ -98,6 +145,11 @@ class GlueHttp {
         return await this.sendJsonPostRequest(url, {post_data: payload, context_data: contextData})
     }
 
+    /**
+     * Send a keep-alive request to renew proxy expiration timestamps.
+     * @param {string[]} uniqueNames - Array of proxy unique names to renew.
+     * @returns {Promise<Object>} Response object.
+     */
     async sendKeepLiveRequest(uniqueNames) {
         return await this.sendJsonPostRequest(this._config.keepLiveUrlPath, {'unique_names': uniqueNames})
     }

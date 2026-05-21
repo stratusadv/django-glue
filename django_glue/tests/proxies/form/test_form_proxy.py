@@ -174,3 +174,12 @@ class GlueFormProxyContextDataTestCase(TestCase):
         self.assertIn('get', context_data['actions'])
         self.assertIn('validate', context_data['actions'])
         self.assertIn('save', context_data['actions'])
+
+    def test_foreign_key_choices_returns_empty_for_missing_field_definition(self):
+        """foreign_key_choices should return empty list when field_definition is missing."""
+        from django_glue.resolver.action.schemas import ActionPayloadSchema
+        form = ContactForm()
+        proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
+        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        result = proxy.foreign_key_choices(action_data)
+        self.assertEqual(result, [])

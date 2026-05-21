@@ -109,7 +109,7 @@
           ]
         }).then((data) => {
           fieldData.__glue__choicesCache = data;
-          fieldData._choicesLoaded = true;
+          fieldData.__glue__choicesLoaded = true;
           return data;
         }).finally(() => {
           fieldData.__glue__loadingChoices = false;
@@ -117,7 +117,7 @@
         return fieldData.__glue__choicesPromise;
       }.bind(this);
       fieldData.choices = async function() {
-        if (!fieldData._choicesLoaded) {
+        if (!fieldData.__glue__choicesLoaded) {
           await choicesAction();
         }
         return fieldData.__glue__choicesCache;
@@ -177,13 +177,12 @@
         });
       });
     }
-    get(pk = null) {
-      this._processAction("get").then((data) => {
-        this._values = data;
-      }).finally(() => {
-        this._loading = false;
-        this._loaded = true;
-      });
+    async get(pk = null) {
+      const data = await this._processAction("get");
+      this._values = data;
+      this._loading = false;
+      this._loaded = true;
+      return data;
     }
     _updateErrorAttributesForField(fieldName) {
       this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
@@ -226,7 +225,7 @@
     }
     hasErrors(fieldName) {
       if (fieldName) {
-        return this._errors[fieldName] && this._errors[fieldName].length > 0;
+        return Boolean(this._errors[fieldName] && this._errors[fieldName].length > 0);
       }
       return Object.keys(this._errors).length > 0;
     }
@@ -351,13 +350,6 @@
       } finally {
         clearTimeout(timeoutId);
       }
-    }
-    async sendJsonGetRequest(url, data) {
-      return await this.sendRequest(url, {
-        body: JSON.stringify(data ?? {}),
-        method: "GET",
-        contentType: "application/json"
-      });
     }
     async sendJsonPostRequest(url, data, csrfProtected = true) {
       return await this.sendRequest(url, {
@@ -587,7 +579,7 @@
       return this.addQueryParam("slice", { start: idx });
     }
     sliceEnd(idx) {
-      return this.addQueryParam("slice", { end: idx });
+      return this.addQueryParam("slice", { stop: idx });
     }
     slice(start = 0, stop = null) {
       return this.addQueryParam("slice", { start, stop });

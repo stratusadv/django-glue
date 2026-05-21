@@ -97,3 +97,17 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         instance = proxy._get_model_instance_by_pk(self.gorilla1.pk)
         self.assertEqual(instance.pk, self.gorilla1.pk)
         self.assertEqual(instance.name, 'Gorilla 1')
+
+    def test_delete_returns_error_for_missing_pk(self):
+        """delete() should return error dict when id is missing from post_data."""
+        proxy = GlueQuerySetProxy(
+            target=Gorilla.objects.all(),
+            unique_name='gorillas',
+            access=GlueAccess.DELETE,
+        )
+
+        action_data = dto.ActionPayloadSchema(context_data={}, post_data={})
+        result = proxy.delete(action_data)
+
+        self.assertFalse(result['success'])
+        self.assertIn('id is required', result['error'])

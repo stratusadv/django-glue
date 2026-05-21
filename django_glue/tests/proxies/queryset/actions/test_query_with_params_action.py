@@ -376,3 +376,23 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0]['age'], 0)
         self.assertEqual(result[2]['age'], 2)
+
+    def test_filter_raises_validation_error_for_disallowed_field(self):
+        """Should raise GlueQuerySetFilterValidationError when filter references disallowed field."""
+        proxy = GlueQuerySetProxy(
+            target=Gorilla.objects.all(),
+            unique_name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['name', 'age'],  # Only name and age allowed
+        )
+
+        action_data = dto.ActionPayloadSchema(
+            context_data={},
+            post_data={'filter': {'weight__gte': 200}},  # weight not in fields
+        )
+
+        from django_glue.exceptions import GlueQuerySetFilterValidationError
+        with self.assertRaises(GlueQuerySetFilterValidationError) as context:
+            proxy.query_with_params(action_data)
+
+        self.assertEqual(context.exception.field, 'weight')

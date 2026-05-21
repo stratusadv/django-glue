@@ -1,13 +1,27 @@
 import BaseGlueProxy from "./base";
 
+/**
+ * Proxy for Django forms. Provides field-level property access, validation,
+ * save, and foreign-key choice loading. Supports both regular Forms and ModelForms.
+ */
 class GlueFormProxy extends BaseGlueProxy {
+    /** @type {string} */
     static name = 'form'
 
+    /**
+     * @param {Object} options - Constructor options.
+     * @param {GlueHttp} options.http - The HTTP client instance.
+     * @param {string} options.proxyUniqueName - The unique name of this proxy.
+     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {Object|null} [options.actions] - Optional actions map.
+     */
     constructor({http, proxyUniqueName, contextData, actions = null}) {
         super({http, proxyUniqueName, contextData, actions});
 
+        /** @type {Object} */
         this._values = {...(this._contextData.initial || {})};
 
+        /** @type {Object} */
         this._errors = {};
 
         this._defineFields()
@@ -23,6 +37,13 @@ class GlueFormProxy extends BaseGlueProxy {
 
     }
 
+    /**
+     * Attach lazy-loading choices to a ModelChoiceField or ModelMultipleChoiceField.
+     * @param {string} fieldName - The field name.
+     * @param {Object} fieldData - The field definition object.
+     * @returns {Object} The updated fieldData with a `choices` async accessor.
+     * @private
+     */
     _defineModelChoiceField(fieldName, fieldData) {
         // Initialize shared choice caching on the original fieldData (once)
         // This ensures choices are loaded only once across all model proxy instances
@@ -66,6 +87,12 @@ class GlueFormProxy extends BaseGlueProxy {
         return fieldData
     }
 
+    /**
+     * Define a property getter/setter on the proxy instance for a given field name,
+     * so that `proxy.fieldName` reads/writes `proxy._values[fieldName]`.
+     * @param {string} fieldName - The field name.
+     * @private
+     */
     _defineFieldNameProperty(fieldName) {
         Object.defineProperty(this, fieldName, {
             get: function () {
@@ -87,6 +114,10 @@ class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
+    /**
+     * Define all field properties and field metadata on the proxy instance.
+     * @private
+     */
     _defineFields() {
         this._fields = {}
         Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
@@ -130,6 +161,11 @@ class GlueFormProxy extends BaseGlueProxy {
         })
     }
 
+    /**
+     * Fetch current field values from the server.
+     * @param {string|null} [pk] - Optional primary key to fetch.
+     * @returns {Promise<Object>} The fetched field values.
+     */
     async get(pk = null) {
         const data = await this._processAction('get');
         this._values = data;
@@ -138,11 +174,21 @@ class GlueFormProxy extends BaseGlueProxy {
         return data;
     }
 
+    /**
+     * Update has_errors and error_text attributes for a field.
+     * @param {string} fieldName - The field name.
+     * @private
+     */
     _updateErrorAttributesForField(fieldName) {
         this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
         this._fields[fieldName][`error_text`] = this._errors[fieldName]?.join(', ');
     }
 
+    /**
+     * Update error state for all fields.
+     * @param {Object} errors - Error mapping from the server.
+     * @private
+     */
     _updateErrors(errors) {
         this._errors = errors || {};
         Object.keys(this._fields).forEach(fieldName => {
@@ -150,6 +196,12 @@ class GlueFormProxy extends BaseGlueProxy {
         });
     }
 
+    /**
+     * Build a FormData object from the current field values, handling arrays,
+     * files, blobs, and null values.
+     * @returns {FormData} The constructed FormData.
+     * @private
+     */
     _getFormData() {
         const formData = new FormData();
         Object.entries(this._values).forEach(([fieldName, value]) => {
@@ -167,6 +219,10 @@ class GlueFormProxy extends BaseGlueProxy {
         return formData;
     }
 
+    /**
+     * Validate the current field values against the server.
+     * @returns {Promise<Object>} Validation result with `{success, errors, ...}`.
+     */
     async validate() {
         const result = await this._processAction('validate', this._values);
         this._errors = result.errors || {};
@@ -174,6 +230,11 @@ class GlueFormProxy extends BaseGlueProxy {
         return result;
     }
 
+    /**
+     * Save the current field values to the server. On success, clears errors
+     * and refreshes field data.
+     * @returns {Promise<Object>} Save result with `{success, errors, ...}`.
+     */
     async save() {
         const result = await this._processAction('save', this._getFormData());
 
@@ -187,6 +248,11 @@ class GlueFormProxy extends BaseGlueProxy {
         return result;
     }
 
+    /**
+     * Check whether the form (or a specific field) has validation errors.
+     * @param {string|null} [fieldName] - Optional field name to check.
+     * @returns {boolean} True if errors exist.
+     */
     hasErrors(fieldName) {
         if (fieldName) {
             return Boolean(this._errors[fieldName] && this._errors[fieldName].length > 0);
@@ -195,6 +261,10 @@ class GlueFormProxy extends BaseGlueProxy {
         return Object.keys(this._errors).length > 0;
     }
 
+    /**
+     * Clear all validation errors.
+     * @private
+     */
     _clearErrors() {
         this._errors = {};
     }

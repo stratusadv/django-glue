@@ -5,7 +5,7 @@ from urllib.parse import urlparse, parse_qs
 from django.http import HttpRequest, QueryDict
 
 
-class GlueViewHttpRequest:
+class ViewHttpRequest:
     """Wraps an HttpRequest, overriding select attributes for a target view call."""
 
     def __init__(

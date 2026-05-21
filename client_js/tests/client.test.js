@@ -6,6 +6,8 @@ describe('GlueClient', () => {
     let client;
     let originalSetInterval;
     let originalClearInterval;
+    let tickSpy;
+    let realSetTimeout;
 
     beforeEach(() => {
         originalSetInterval = global.setInterval;
@@ -298,6 +300,214 @@ describe('GlueClient', () => {
 
             expect(sendRequestSpy).toHaveBeenCalledWith('/test', { method: 'GET' });
             expect(result).toEqual({ data: { result: 'ok' } });
+        });
+    });
+
+    describe('_initializeKeepLivePulse', () => {
+        let intervalCallback;
+        let intervalDelay;
+
+        beforeEach(() => {
+            global.setInterval = mock((cb, delay) => {
+                intervalCallback = cb;
+                intervalDelay = delay;
+                return 999;
+            });
+        });
+
+        afterEach(() => {
+            global.setInterval = originalSetInterval;
+            if (client._keepLiveIntervalHandle) {
+                clearInterval(client._keepLiveIntervalHandle);
+            }
+        });
+
+        it('sets interval at configured keepLiveIntervalSeconds', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 60,
+                minimumKeepLiveIntervalSeconds: 10,
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            expect(intervalDelay).toBe(60000);
+        });
+
+        it('uses minimumKeepLiveIntervalSeconds when configured is lower', () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 5,
+                minimumKeepLiveIntervalSeconds: 10,
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            expect(intervalDelay).toBe(10000);
+        });
+
+        it('clears previous interval on re-init', () => {
+            let clearCallCount = 0;
+            global.clearInterval = mock(() => {
+                clearCallCount++;
+            });
+
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 60,
+                minimumKeepLiveIntervalSeconds: 10,
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            expect(clearCallCount).toBe(1);
+        });
+    });
+
+    describe('keep-alive error handling', () => {
+        let intervalCallback;
+        let confirmSpy;
+        let reloadSpy;
+        let originalLocation;
+
+        beforeEach(() => {
+            intervalCallback = null;
+            global.setInterval = mock((cb, delay) => {
+                intervalCallback = cb;
+                return 999;
+            });
+
+            confirmSpy = mock(() => false);
+            global.confirm = confirmSpy;
+
+            originalLocation = window.location;
+            reloadSpy = mock(() => {});
+            Object.defineProperty(window, 'location', {
+                value: { reload: reloadSpy, origin: 'http://localhost:3000', pathname: '/' },
+                writable: true,
+                configurable: true,
+            });
+        });
+
+        afterEach(() => {
+            global.setInterval = originalSetInterval;
+            Object.defineProperty(window, 'location', {
+                value: originalLocation,
+                writable: true,
+                configurable: true,
+            });
+            if (client._keepLiveIntervalHandle) {
+                clearInterval(client._keepLiveIntervalHandle);
+            }
+        });
+
+        it('calls confirm on keep-alive failure', async () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 1,
+                minimumKeepLiveIntervalSeconds: 1,
+                sessionExpiryMessage: 'Session expired?',
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            client.http.sendKeepLiveRequest = mock(() => Promise.resolve({ ok: false }));
+
+            if (intervalCallback) {
+                intervalCallback();
+                await Promise.resolve();
+                await Promise.resolve();
+            }
+
+            expect(confirmSpy).toHaveBeenCalledWith('Session expired?');
+        });
+
+        it('reloads page when user confirms', async () => {
+            confirmSpy.mockRestore();
+            confirmSpy = mock(() => true);
+            global.confirm = confirmSpy;
+
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 1,
+                minimumKeepLiveIntervalSeconds: 1,
+                sessionExpiryMessage: 'Session expired?',
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            client.http.sendKeepLiveRequest = mock(() => Promise.resolve({ ok: false }));
+
+            if (intervalCallback) {
+                intervalCallback();
+                await Promise.resolve();
+                await Promise.resolve();
+            }
+
+            expect(reloadSpy).toHaveBeenCalled();
+        });
+
+        it('handles keep-alive request exception', async () => {
+            const config = {
+                actionUrlPath: '/__dg__/action/',
+                keepLiveUrlPath: '/__dg__/keep_live/',
+                glueViewUrlPath: '/__dg__/glue_view/',
+                keepLiveIntervalSeconds: 1,
+                minimumKeepLiveIntervalSeconds: 1,
+                sessionExpiryMessage: 'Session expired?',
+            };
+
+            client.init({
+                proxyRegistryFromSession: {},
+                contextDataForProxies: {},
+                config,
+            });
+
+            client.http.sendKeepLiveRequest = () => new Promise((_, reject) => reject(new Error('network error')));
+
+            if (intervalCallback) {
+                intervalCallback();
+                await Promise.resolve();
+                await Promise.resolve();
+            }
+
+            expect(confirmSpy).toHaveBeenCalled();
         });
     });
 });

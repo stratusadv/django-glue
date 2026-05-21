@@ -4,7 +4,7 @@ from django.db.models import QuerySet, Model
 from django.db.models.fields.files import FieldFile
 
 
-class GlueActionDataJSONEncoder(DjangoJSONEncoder):
+class ActionDataJSONEncoder(DjangoJSONEncoder):
     def default(self, obj):
         if isinstance(obj, Model):
             return obj.pk
