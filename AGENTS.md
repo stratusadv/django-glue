@@ -26,12 +26,11 @@ django-glue/
 │   ├── maps.py                       # SUBJECT_TYPE_TO_PROXY_TYPE map
 │   ├── encoders.py                   # GlueActionDataJSONEncoder
 │   ├── utils.py                      # Helpers: queryset serialization, class import
-│   ├── data_transfer_objects.py      # GlueActionRequestData (Pydantic)
 │   │
 │   ├── proxies/                      # Proxy pattern implementation
+│   │   ├── __init__.py               # Exports: BaseGlueProxy, GlueModelProxy, etc.
 │   │   ├── proxy.py                  # BaseGlueProxy abstract base class
 │   │   ├── decorators.py             # @action decorator
-│   │   ├── session_data.py           # GlueSessionData dataclass
 │   │   ├── model/
 │   │   │   ├── base.py               # GlueModelProxyBase (abstract, combines mixins)
 │   │   │   └── proxy.py              # GlueModelProxy (single model instance)
@@ -42,14 +41,29 @@ django-glue/
 │   │       └── proxy.py              # GlueFormProxy (Django Form binding)
 │   │
 │   ├── access/                       # Permission system
-│   │   ├── access.py                 # GlueAccess enum (VIEW, CHANGE, DELETE)
-│   │   ├── actions.py                # BaseAction (dead code)
-│   │   └── decorators.py             # check_access (dead code, broken import)
+│   │   └── access.py                 # GlueAccess StrEnum (VIEW, CHANGE, DELETE)
+│   │
+│   ├── resolver/                     # Request resolution
+│   │   ├── resolver.py               # BaseResolver abstract base class
+│   │   ├── exceptions.py             # GlueResolverError
+│   │   ├── action/
+│   │   │   ├── resolver.py           # ActionResolver - reconstructs proxy, calls action
+│   │   │   └── schemas.py            # ActionPayloadSchema (Pydantic)
+│   │   └── view/
+│   │       ├── resolver.py           # GlueViewResolver - renders target view
+│   │       ├── request.py            # GlueViewHttpRequest - wraps HttpRequest
+│   │       └── schemas.py            # ViewBodySchema (Pydantic)
 │   │
 │   ├── exceptions.py                 # Custom exceptions (GlueError, etc.)
 │   ├── session.py                    # GlueSession - proxy registration & expiration
-│   ├── views.py                      # HTTP endpoints (action, keep_live, glue_view)
-│   ├── shortcuts.py                  # Glue class - main API entry point
+│   ├── views/                        # HTTP endpoints
+│   │   ├── action_views.py           # action_view
+│   │   ├── keep_live_views.py        # keep_live_view
+│   │   ├── session_data_views.py     # session_data_view
+│   │   └── view_views.py             # glue_view_view
+│   ├── shortcuts/                    # Main API entry point
+│   │   ├── glue.py                   # Glue class
+│   │   └── urls.py                   # django_glue_urls()
 │   ├── middleware.py                 # DjangoGlueMiddleware - expired proxy cleanup
 │   ├── urls.py                       # URL patterns (namespace: __dg__)
 │   └── templatetags/
@@ -64,7 +78,6 @@ django-glue/
 │   │   ├── client.js                 # GlueClient class - init, keep-alive, proxy creation
 │   │   ├── config.js                 # GlueConfig class - configuration defaults
 │   │   ├── http.js                   # GlueHttp - fetch wrapper, CSRF, timeout
-│   │   ├── utils.js                  # snakeToPascal utility
 │   │   ├── view.js                   # GlueView - server-side HTML rendering
 │   │   └── proxies/
 │   │       ├── index.js              # SUBJECT_TYPE_TO_PROXY_CLASS, window globals
@@ -156,7 +169,7 @@ GlueAccess.CHANGE  # Read + write (includes VIEW)
 GlueAccess.DELETE  # Read + write + delete (includes CHANGE)
 ```
 
-`GlueAccess` inherits from both `str` and `Enum`, serializing cleanly to JSON as `'view'`, `'change'`, `'delete'`. The `has_access()` method compares enum member indices to enforce the cascade.
+`GlueAccess` inherits from `StrEnum`, serializing cleanly to JSON as `'view'`, `'change'`, `'delete'`. The `has_access()` method compares enum member indices to enforce the cascade.
 
 ### The @action Decorator
 
@@ -170,7 +183,7 @@ def get(self, action_data):
 
 The `@action` decorator sets `_required_glue_access` on the wrapped function. `BaseGlueProxy.__init_subclass__` auto-discovers methods with this attribute and registers them in the class-level `_actions` dict, extracting method parameters and type annotations.
 
-**Convention**: All action methods accept exactly one parameter: `action_data: GlueActionRequestData`.
+**Convention**: All action methods accept exactly one parameter: `action_data: ActionPayloadSchema`.
 
 ### Built-in Actions by Proxy Type
 
@@ -241,12 +254,18 @@ def my_view(request):
     return render(request, 'page.html')
 ```
 
-### Method-Chain Syntax
+### Alternative: Direct `Glue.glue()` Call
 
 ```python
-Glue.request(request) \
-    .model(unique_name='task', target=task, access=GlueAccess.DELETE) \
-    .queryset(unique_name='tasks', target=Task.objects.all(), access=GlueAccess.CHANGE)
+from django_glue.proxies import GlueModelProxy
+
+Glue.glue(
+    request=request,
+    unique_name='task',
+    target=task,
+    proxy_class=GlueModelProxy,
+    access=GlueAccess.DELETE,
+)
 ```
 
 ### Template
@@ -280,10 +299,9 @@ await Glue.model.task.save()              // Persists to Django
 await Glue.model.task.delete()            // Deletes instance
 
 // QuerySet proxy - work with collections
-const allTasks = await Glue.querySet.tasks.queryWithParams()
-const filtered = await Glue.querySet.tasks.filter({
-    'done': false,
-    'title__icontains': 'urgent'
+const allTasks = await Glue.querySet.tasks.all()
+const filtered = await Glue.querySet.tasks.queryWithParams({
+    filter: { done: false, title__icontains: 'urgent' }
 })
 
 // Each item is a full GlueModelProxy
@@ -321,9 +339,14 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `django_glue/proxies/form/proxy.py` | GlueFormProxy - Django Form binding |
 | `django_glue/proxies/decorators.py` | @action decorator |
 | `django_glue/session.py` | GlueSession - proxy registration, expiration, renewal |
-| `django_glue/shortcuts.py` | Glue class - main API entry point |
-| `django_glue/views.py` | HTTP endpoints: action_view, keep_live_view, glue_view_view, session_data_view |
-| `django_glue/data_transfer_objects.py` | GlueActionRequestData - Pydantic model for request parsing |
+| `django_glue/shortcuts/glue.py` | Glue class - main API entry point |
+| `django_glue/views/action_views.py` | action_view - execute proxy action |
+| `django_glue/views/keep_live_views.py` | keep_live_view - renew proxy expiration |
+| `django_glue/views/session_data_views.py` | session_data_view - get proxy registry |
+| `django_glue/views/view_views.py` | glue_view_view - execute Django view |
+| `django_glue/resolver/action/schemas.py` | ActionPayloadSchema - Pydantic model for request parsing |
+| `django_glue/resolver/action/resolver.py` | ActionResolver - reconstructs proxy and calls action |
+| `django_glue/resolver/view/resolver.py` | GlueViewResolver - renders target view |
 | `django_glue/encoders.py` | GlueActionDataJSONEncoder - handles Model, QuerySet, FieldFile serialization |
 | `django_glue/exceptions.py` | Custom exceptions for error handling |
 | `django_glue/urls.py` | URL configuration (namespace: `__dg__`) |
@@ -393,7 +416,7 @@ Any `django_glue.settings` constant can be overridden by defining the same name 
      "file_data": {}
    }
    ```
-3. `action_view` parses request into `GlueActionRequestData`
+3. `action_view` delegates to `ActionResolver` which parses request into `ActionPayloadSchema`
 4. `GlueSession.get_proxy_access('task')` retrieves access level from session
 5. `SUBJECT_TYPE_TO_PROXY_TYPE['Model'].from_action_request_data(...)` reconstructs `GlueModelProxy`
 6. `proxy.process_action('save', action_data)` validates access and calls the `save` method
@@ -416,7 +439,7 @@ Any `django_glue.settings` constant can be overridden by defining the same name 
 Include in your Django urls.py:
 
 ```python
-from django_glue.shortcuts import django_glue_urls
+from django_glue import django_glue_urls
 
 urlpatterns = [
    path('', include(django_glue_urls())),
@@ -444,8 +467,6 @@ Custom exceptions in `django_glue/exceptions.py`:
 | `GlueMissingActionError` | Action method doesn't exist |
 | `GlueModelInstanceNotFoundError` | Model instance not found (DoesNotExist) |
 | `GlueQuerySetFilterValidationError` | Filter references disallowed field |
-| `GluePayloadValidationError` | Field validation failed (defined but not raised) |
-
 Each exception stores its parameters as instance attributes for programmatic access and generates a descriptive error message.
 
 ## JavaScript Client
@@ -618,11 +639,11 @@ The following areas currently have no tests:
 - **Middleware**: `DjangoGlueMiddleware`
 - **Shortcuts**: `Glue.model()`, `Glue.queryset()`, `Glue.form()`
 - **Template tags**: `{% django_glue_init %}`
-- **DTOs**: `GlueActionRequestData` validation
+- **DTOs**: `ActionPayloadSchema` validation
 - **Encoders**: `GlueActionDataJSONEncoder`
 - **Utils**: `serialize_queryset`, `deserialize_queryset`, `get_class_from_path_string`
 - **Decorators**: `@action` decorator behavior
-- **Base proxy**: `BaseGlueProxy.process_request`, `process_action`
+- **Base proxy**: `BaseGlueProxy.process_action`
 - **E2E**: No Playwright tests exist despite `playwright` being a dev dependency
 
 ## Security Notes

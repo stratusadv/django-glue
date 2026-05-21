@@ -18,8 +18,8 @@ django_glue.egg-info/
 *.bat
 *.db
 *.env
-!development.env.example
-!development.env
+development.env.example
+development.env
 *.sql
 
 
