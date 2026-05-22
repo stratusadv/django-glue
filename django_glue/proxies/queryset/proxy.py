@@ -188,14 +188,17 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         model_class = self.get_model_class()
         instance = model_class()
 
-        # Get M2M field names to skip (can't access M2M on unsaved instance)
-        m2m_field_names = {f.name for f in model_class._meta.many_to_many}
+        # Get FK and M2M field names to skip (can't access M2M on unsaved instance)
+        related_field_names = {
+            f.name for f in model_class._meta.get_fields()
+            if f.is_relation
+        }
 
         defaults = {'id': None}
-        for field_name in self._form_field_definitions.keys():
+        for field_name, field_definition in self._form_field_definitions.items():
             if field_name == 'id':
                 continue
-            if field_name in m2m_field_names:
+            if field_name in related_field_names:
                 # M2M fields default to empty list
                 defaults[field_name] = []
             elif hasattr(instance, field_name):

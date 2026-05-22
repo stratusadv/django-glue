@@ -100,7 +100,6 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
         included_model_fields = [
             f for f in model._meta.get_fields()
-            if not (f.is_relation and f.auto_created)
         ]
         if self.fields and isinstance(self.fields, Sequence):
             included_model_fields = [
