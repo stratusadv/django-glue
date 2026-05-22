@@ -188,7 +188,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         model_class = self.get_model_class()
         instance = model_class()
 
-        # Get FK and M2M field names to skip (can't access M2M on unsaved instance)
+        # Get related field names to skip (can't access related fields on unsaved instance)
         related_field_names = {
             f.name for f in model_class._meta.get_fields()
             if f.is_relation
