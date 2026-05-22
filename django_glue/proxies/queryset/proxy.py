@@ -199,7 +199,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             if field_name == 'id':
                 continue
             if field_name in related_field_names:
-                # M2M fields default to empty list
+                # Related fields default to empty lists
                 defaults[field_name] = []
             elif hasattr(instance, field_name):
                 defaults[field_name] = getattr(instance, field_name)
