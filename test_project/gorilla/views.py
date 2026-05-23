@@ -16,11 +16,17 @@ def list_view(request: HttpRequest) -> HttpResponse:
     )
 
     Glue.form(
-        request=request, target=GorillaForm(), unique_name='gorilla_form', access=Glue.Access.CHANGE
+        request=request,
+        target=GorillaForm(),
+        unique_name='gorilla_form',
+        access=Glue.Access.CHANGE
     )
 
     Glue.model(
-        request=request, target=Gorilla(), unique_name='new_gorilla', access=Glue.Access.CHANGE
+        request=request,
+        target=Gorilla(),
+        unique_name='new_gorilla',
+        access=Glue.Access.CHANGE
     )
 
     return render(request, 'gorilla/page/list_page.html')

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db.models import QuerySet, Model
+from django.utils.functional import cached_property
 
 from django_glue.access.access import GlueAccess
 from django_glue.resolver.action.schemas import ActionPayloadSchema
@@ -38,62 +39,86 @@ class GlueQuerySetProxy(GlueModelProxyBase):
     def _build_context_data(self) -> dict:
         return {'encoded_query': self.encoded_query} | super()._build_context_data()
 
-    def _queryset_to_list(self, queryset: QuerySet) -> list:
-        model = self.get_model_class()
-        m2m_fields = {
-            f.name for f in model._meta.many_to_many if f.name in self._form_field_definitions
+    @cached_property
+    def _select_related_field_names(self) -> set[str]:
+        select_related_dict = getattr(self.target.query, 'select_related')
+
+        if select_related_dict:
+            return set(
+                name for name in self._form_field_definitions
+                if name in select_related_dict
+            )
+
+        return set()
+
+    @cached_property
+    def _m2m_field_names(self) -> set[str]:
+        model_class = self.get_model_class()
+        return {
+            f.name for f in model_class._meta.many_to_many if
+            f.name in self._form_field_definitions
         }
 
-        non_m2m_fields = [name for name in self._form_field_definitions if name not in m2m_fields]
+    @cached_property
+    def _non_m2m_field_names(self) -> set[str]:
+        return set([
+            name for name in self._form_field_definitions if
+            name not in self._m2m_field_names
+        ])
 
-        # Detect FK fields set via select_related on the queryset
-        select_related_dict = getattr(queryset.query, 'select_related', False) or {}
-        select_related_field_names = set(select_related_dict.keys())
-
-        # Build values keys: expand FK fields with __ lookups
-        related_model_fields = []
-        for field_name in non_m2m_fields:
-            if field_name in select_related_field_names:
+    @cached_property
+    def _field_args_for_values_query(self) -> set[str]:
+        model = self.get_model_class()
+        fields = []
+        for field_name in self._non_m2m_field_names:
+            if field_name in self._select_related_field_names:
+                # Expand each field in the related model using dunder notation
                 field_obj = model._meta.get_field(field_name)
                 related_model = field_obj.related_model
                 for related_model_field in related_model._meta.fields:
-                    related_model_fields.append(f'{field_name}__{related_model_field.name}')
+                    fields.append(f'{field_name}__{related_model_field.name}')
             else:
-                related_model_fields.append(field_name)
+                fields.append(field_name)
 
-        # Query with expanded keys
-        results = list(
-            queryset.values(*[*non_m2m_fields, *related_model_fields, *queryset.query.annotations])
-        )
+        return {*fields, *self.target.query.annotations}
 
-        # Reshape flat __ keys back into nested dicts
-        for item in results:
-            for related_field_name in select_related_field_names:
-                if related_field_name not in self._form_field_definitions:
-                    continue
-                nested = {}
-                for field_name, value in list(item.items()):
-                    if field_name.startswith(f'{related_field_name}__'):
-                        related_model_field_name = field_name.split('__')[1]
+    def _roll_up_related_fields_in_obj_dict(self, obj_dict: dict):
+        for related_field_name in self._select_related_field_names:
+            nested = {}
+            for name, value in list(obj_dict.items()):
+                if name.startswith(f'{related_field_name}__'):
+                    related_model_field_name = name.split('__')[1]
 
-                        nested[related_model_field_name] = value
-                        del item[field_name]
-                item[related_field_name] = nested
+                    nested[related_model_field_name] = value
+                    del obj_dict[name]
+            obj_dict[related_field_name] = nested
 
-        # Fetch M2M values with prefetch to avoid N+1 queries
-        if m2m_fields:
-            pk_field = model._meta.pk.name
+    def _add_m2m_field_to_output_data(self, output_data: list[dict]):
+        if self._m2m_field_names:
+            pk_field = self.get_model_class()._meta.pk.name
 
             # Prefetch all instances with their M2M relations in one query per M2M field
-            instances = queryset.prefetch_related(*m2m_fields)
+            instances = self.target.prefetch_related(*self._m2m_field_names)
             instance_map = {getattr(inst, pk_field): inst for inst in instances}
 
-            for item in results:
+            for item in output_data:
                 instance = instance_map[item[pk_field]]
-                for m2m_name in m2m_fields:
-                    item[m2m_name] = list(getattr(instance, m2m_name).values_list('pk', flat=True))
+                for m2m_name in self._m2m_field_names:
+                    item[m2m_name] = list(
+                        getattr(instance, m2m_name).values_list('pk', flat=True))
 
-        return results
+    @property
+    def _output_data(self) -> list[dict]:
+        output_data = list(
+            self.target.values(*self._field_args_for_values_query)
+        )
+
+        for obj_dict in output_data:
+            self._roll_up_related_fields_in_obj_dict(obj_dict)
+
+        self._add_m2m_field_to_output_data(output_data)
+
+        return output_data
 
     def _validate_filter_keys(self, payload: dict) -> None:
         """
@@ -120,7 +145,10 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             self.target = self.target.filter(**filter_params)
 
         if slice_params := params.get('slice'):
-            self.target = self.target[slice(slice_params.get('start'), slice_params.get('stop'))]
+            self.target = self.target[
+                slice(slice_params.get('start'),
+                      slice_params.get('stop'))
+            ]
 
     @action(access=GlueAccess.VIEW)
     def query_with_params(self, action_data: ActionPayloadSchema) -> list:
@@ -129,7 +157,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                 self._validate_filter_keys(filter_params)
             self._apply_query_params(action_data.post_data)
 
-        return self._queryset_to_list(self.target)
+        return self._output_data
 
     def _get_model_instance_by_pk(self, pk: int | str) -> Model:
         """
@@ -188,15 +216,18 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         model_class = self.get_model_class()
         instance = model_class()
 
-        # Get M2M field names to skip (can't access M2M on unsaved instance)
-        m2m_field_names = {f.name for f in model_class._meta.many_to_many}
+        # Get related field names to skip (can't access related fields on unsaved instance)
+        related_field_names = {
+            f.name for f in model_class._meta.get_fields()
+            if f.is_relation
+        }
 
         defaults = {'id': None}
-        for field_name in self._form_field_definitions.keys():
+        for field_name, field_definition in self._form_field_definitions.items():
             if field_name == 'id':
                 continue
-            if field_name in m2m_field_names:
-                # M2M fields default to empty list
+            if field_name in related_field_names:
+                # Related fields default to empty lists
                 defaults[field_name] = []
             elif hasattr(instance, field_name):
                 defaults[field_name] = getattr(instance, field_name)

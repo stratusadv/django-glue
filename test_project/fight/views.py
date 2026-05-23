@@ -9,7 +9,10 @@ from test_project.fight.forms import FightForm, ContactPromoterForm
 def list_view(request: HttpRequest) -> HttpResponse:
     Glue.queryset(
         request=request,
-        target=Fight.objects.all(),
+        target=Fight.objects.select_related(
+            'red_corner',
+            'blue_corner'
+        ).all(),
         unique_name='fights',
         access=Glue.Access.DELETE,
         fields=[

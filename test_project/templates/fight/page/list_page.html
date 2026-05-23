@@ -111,9 +111,10 @@
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
                                         <option value="0">------------</option>
                                         <template x-for="choice in redCornerChoices" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.red_corner === choice[0]"></option>
+                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.red_corner.id === choice[0]"></option>
                                         </template>
                                     </select>
+                                    <span x-text="`Rank: ${fight.red_corner.rank_points}`"></span>
                                 </div>
                                 <div class="col-2 text-center">
                                     <span class="vs-badge">VS</span>
@@ -123,9 +124,10 @@
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
                                         <option value="0">------------</option>
                                         <template x-for="choice in blueCornerChoices" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.blue_corner === choice[0]"></option>
+                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.blue_corner.id === choice[0]"></option>
                                         </template>
                                     </select>
+                                    <span x-text="`Rank: ${fight.blue_corner.rank_points}`"></span>
                                 </div>
                             </div>
 

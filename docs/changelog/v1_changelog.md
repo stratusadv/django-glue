@@ -23,6 +23,8 @@
   - Child proxies maintain a reference to their parent queryset via `_parent`.
   - Deleting or saving a child automatically refreshes the parent queryset.
   - Child proxy events bubble up to the parent queryset's listeners.
+  - Annotated fields on querysets are now accessible from the frontend glue objects.
+  - Related models can be expanded their fields can accessed accessed from the parent object in the frontend glue object.
 
 - **QuerySet Query Building**: Chainable methods for building queries on the frontend:
   ```javascript
@@ -173,4 +175,3 @@
 
 - The JavaScript client is now built using Bun's native bundler (`Bun.build()`) and distributed as both `django_glue.js` and `django_glue.min.js`.
 - Tests have been reorganized: Python tests use pytest with pytest-django, JavaScript tests use Bun test with Happy-DOM, and E2E tests use Playwright.
-- Documentation is now built with MkDocs and hosted at https://django-glue.stratusadv.com.
