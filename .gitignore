@@ -13,6 +13,7 @@ build/
 django_glue.egg-info/
 
 .python-version
+.coverage
 
 ~*.*
 *.bat
