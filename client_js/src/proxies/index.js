@@ -2,6 +2,7 @@ import BaseGlueProxy from "./base"
 import GlueModelProxy from "./model"
 import GlueQuerySetProxy from "./queryset"
 import GlueFormProxy from "./form"
+import GlueTemplateProxy from "./template"
 
 /**
  * Mapping from Python subject type names to their corresponding JavaScript proxy classes.
@@ -12,6 +13,7 @@ export const SUBJECT_TYPE_TO_PROXY_CLASS = {
     'Model': GlueModelProxy,
     'QuerySet': GlueQuerySetProxy,
     'BaseForm': GlueFormProxy,
+    'Template': GlueTemplateProxy,
 }
 
 /** @type {Function} */
@@ -25,3 +27,6 @@ window.GlueQuerySetProxy = GlueQuerySetProxy
 
 /** @type {Function} */
 window.GlueFormProxy = GlueFormProxy
+
+/** @type {Function} */
+window.GlueTemplateProxy = GlueTemplateProxy

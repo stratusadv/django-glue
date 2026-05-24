@@ -20,6 +20,8 @@ class GlueClient {
     querySet = {}
     /** @type {Object} */
     form = {}
+    /** @type {Object} */
+    template = {}
 
     /** @type {number|null} */
     _keepLiveIntervalHandle = null
@@ -92,6 +94,7 @@ class GlueClient {
                 ...this.model,
                 ...this.querySet,
                 ...this.form,
+                ...this.template,
             })
 
             this.http.sendKeepLiveRequest(keepLiveNames).then(response => {

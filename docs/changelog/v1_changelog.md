@@ -51,6 +51,14 @@
   - Automatic FormData handling for file uploads
   - Per-field error tracking with `hasErrors(fieldName)` helper
 
+- **Template Proxy Support**: New `Glue.template()` shortcut enables rendering Django templates from JavaScript with dynamic context data:
+  - Register a template on the backend with `Glue.template(request, unique_name='card', target='components/card.html', context_data={...})`
+  - Access on the frontend via `Glue.template.card`
+  - Same DOM rendering methods as `Glue.view`: `renderInnerHtml()`, `renderOuterHtml()`, `renderInsertAdjacentHtmlBeforeEnd()`, `renderInsertAdjacentHtmlAfterEnd()`, `renderInsertAdjacentHtmlBeforeBegin()`, `renderInsertAdjacentHtmlAfterBegin()`
+  - Context data merges: backend `context_data` defaults are overridden by per-call payload from JavaScript
+  - Supports event listeners (`before`, `after`, `error`) on `render_html` action
+  - Registered in session with keep-alive, consistent with model/queryset/form proxies
+
 - **Event Listener System**: JavaScript proxies now support `before`, `after`, and `error` event listeners for reactive UI patterns:
   ```javascript
   // Add listeners for any action

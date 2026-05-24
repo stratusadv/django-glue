@@ -23,6 +23,8 @@
 ## May
 
 - [X] Alpha v1 continued
+- [X] Template proxy
+- [ ] Function proxy
 - [ ] Additional proxy features
 - [ ] Performance improvements
 - [ ] Staging Level Testing in External Projects
@@ -31,8 +33,6 @@
 
 - [ ] Beta v1
 - [ ] Release candidate v1
-- [ ] Template proxy
-- [ ] Function proxy
 
 ## July
 

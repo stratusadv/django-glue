@@ -5,7 +5,13 @@ from django.forms import ModelForm, BaseForm
 from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import BaseGlueProxy, GlueModelProxy, GlueQuerySetProxy, GlueFormProxy
+from django_glue.proxies import (
+    BaseGlueProxy,
+    GlueFormProxy,
+    GlueModelProxy,
+    GlueQuerySetProxy,
+    GlueTemplateProxy,
+)
 from django_glue.session import GlueSession
 
 
@@ -107,3 +113,22 @@ class Glue:
                 access=access,
                 **kwargs,
             )
+
+    @staticmethod
+    def template(
+        request: HttpRequest,
+        unique_name: str,
+        target: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        context_data: dict | None = None,
+        **kwargs,
+    ) -> None:
+        Glue.glue(
+            request=request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueTemplateProxy,
+            access=access,
+            context_data=context_data or {},
+            **kwargs,
+        )

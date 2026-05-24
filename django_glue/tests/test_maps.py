@@ -37,5 +37,5 @@ class GlueMapsSyncTestCase(TestCase):
 
     def test_python_subject_type_keys_expected(self):
         """Verify the expected set of keys is present."""
-        expected = {"Model", "QuerySet", "BaseForm"}
+        expected = {"Model", "QuerySet", "BaseForm", "Template"}
         self.assertEqual(set(SUBJECT_TYPE_TO_PROXY_TYPE.keys()), expected)

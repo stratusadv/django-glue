@@ -36,10 +36,12 @@ django-glue/
 │   │   │   └── proxy.py              # GlueModelProxy (single model instance)
 │   │   ├── queryset/
 │   │   │   └── proxy.py              # GlueQuerySetProxy (queryset collection)
-│   │   └── form/
-│   │       ├── mixin.py              # GlueFormProxyMixin (validation, save actions)
-│   │       └── proxy.py              # GlueFormProxy (Django Form binding)
-│   │
+    │   │   └── form/
+    │   │       ├── mixin.py              # GlueFormProxyMixin (validation, save actions)
+    │   │       └── proxy.py              # GlueFormProxy (Django Form binding)
+    │   │   └── template/
+    │   │       └── proxy.py              # GlueTemplateProxy (Django template rendering)
+    │   │
 │   ├── access/                       # Permission system
 │   │   └── access.py                 # GlueAccess StrEnum (VIEW, CHANGE, DELETE)
 │   │
@@ -79,12 +81,13 @@ django-glue/
 │   │   ├── config.js                 # GlueConfig class - configuration defaults
 │   │   ├── http.js                   # GlueHttp - fetch wrapper, CSRF, timeout
 │   │   ├── view.js                   # GlueView - server-side HTML rendering
-│   │   └── proxies/
-│   │       ├── index.js              # SUBJECT_TYPE_TO_PROXY_CLASS, window globals
-│   │       ├── base.js               # BaseGlueProxy - listeners, _processAction
-│   │       ├── form.js               # GlueFormProxy - field accessors, validation
-│   │       ├── model.js              # GlueModelProxy - get, delete, _isNew
-│   │       └── queryset.js           # GlueQuerySetProxy - filter, child proxies
+    │   │   └── proxies/
+    │   │       ├── index.js              # SUBJECT_TYPE_TO_PROXY_CLASS, window globals
+    │   │       ├── base.js               # BaseGlueProxy - listeners, _processAction
+    │   │       ├── form.js               # GlueFormProxy - field accessors, validation
+    │   │       ├── model.js              # GlueModelProxy - get, delete, _isNew
+    │   │       ├── queryset.js           # GlueQuerySetProxy - filter, child proxies
+    │   │       └── template.js           # GlueTemplateProxy - render methods, sharedPayload
 │   └── tests/
 │       ├── setup.js                  # Happy-dom global registration
 │       ├── testUtils.js              # Mock fetch, cookie, context data helpers
@@ -136,6 +139,8 @@ django-glue/
 │       └── form/                     # Form proxy tests
 │           ├── test_form_proxy.py
 │           └── actions/              # Form action tests
+│       └── template/                 # Template proxy tests
+│           └── test_template_proxy.py
 │
 └── docs/                             # MkDocs documentation
     ├── api/                          # API reference docs
@@ -160,12 +165,13 @@ Django Glue creates proxy objects that act as transparent interfaces between Dja
 
 ```
 ABC
-  └── BaseGlueProxy (proxies/proxy.py)
-        └── GlueFormProxyMixin (proxies/form/mixin.py)
-              ├── GlueModelProxyBase (proxies/model/base.py)
-              │     ├── GlueModelProxy (proxies/model/proxy.py)
-              │     └── GlueQuerySetProxy (proxies/queryset/proxy.py)
-              └── GlueFormProxy (proxies/form/proxy.py)
+  ├── BaseGlueProxy (proxies/proxy.py)
+  │     ├── GlueFormProxyMixin (proxies/form/mixin.py)
+  │     │     ├── GlueModelProxyBase (proxies/model/base.py)
+  │     │     │     ├── GlueModelProxy (proxies/model/proxy.py)
+  │     │     │     └── GlueQuerySetProxy (proxies/queryset/proxy.py)
+  │     │     └── GlueFormProxy (proxies/form/proxy.py)
+  │     └── GlueTemplateProxy (proxies/template/proxy.py)
 ```
 
 ### Proxy Class Hierarchy (JavaScript)
@@ -174,7 +180,8 @@ ABC
 BaseGlueProxy
     ├── GlueFormProxy
     │     └── GlueModelProxy
-    └── GlueQuerySetProxy
+    ├── GlueQuerySetProxy
+    └── GlueTemplateProxy
 ```
 
 ### Access Control
@@ -213,6 +220,7 @@ The `@action` decorator sets `_required_glue_access` on the wrapped function. `B
 | `GlueModelProxy` | `get()`, `save()`, `delete()`, `validate()`, `foreign_key_choices()` | VIEW, CHANGE, DELETE |
 | `GlueQuerySetProxy` | `query_with_params()`, `save()`, `delete()`, `get()`, `new()` | VIEW, CHANGE, DELETE |
 | `GlueFormProxy` | `get()`, `validate()`, `save()`, `foreign_key_choices()` | VIEW, CHANGE |
+| `GlueTemplateProxy` | `render_html()` | VIEW |
 
 ### Payload Validation
 
@@ -337,6 +345,10 @@ const validation = await Glue.form.contact_form.validate()
 if (validation.success) {
     const result = await Glue.form.contact_form.save()
 }
+
+// Template proxy - render templates with dynamic context
+await Glue.template.card.renderInnerHtml('#card-container', { name: 'John' })
+await Glue.template.card.renderOuterHtml('#card-container', { name: 'Jane' })
 ```
 
 ### GlueView - Server-Side HTML Rendering
@@ -358,6 +370,7 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `django_glue/proxies/queryset/proxy.py` | GlueQuerySetProxy - queryset binding with serialization |
 | `django_glue/proxies/form/mixin.py` | GlueFormProxyMixin - validation, save, foreign_key_choices actions |
 | `django_glue/proxies/form/proxy.py` | GlueFormProxy - Django Form binding |
+| `django_glue/proxies/template/proxy.py` | GlueTemplateProxy - Django template rendering |
 | `django_glue/proxies/decorators.py` | @action decorator |
 | `django_glue/session.py` | GlueSession - proxy registration, expiration, renewal |
 | `django_glue/shortcuts/glue.py` | Glue class - main API entry point |
@@ -377,6 +390,7 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `client_js/src/proxies/model.js` | GlueModelProxy - field accessors, get, delete |
 | `client_js/src/proxies/queryset.js` | GlueQuerySetProxy - filter, child proxy creation |
 | `client_js/src/proxies/form.js` | GlueFormProxy - field definitions, validation, FormData |
+| `client_js/src/proxies/template.js` | GlueTemplateProxy - render methods, sharedPayload |
 | `client_js/src/view.js` | GlueView - server-side HTML rendering |
 | `client_js/src/config.js` | GlueConfig - configuration defaults |
 
@@ -502,6 +516,7 @@ The JS client is a singleton `GlueClient` exposed as `window.Glue`. It mirrors t
 | `GlueModelProxy` extends `GlueModelProxyBase` | `GlueModelProxy` extends `GlueFormProxy` |
 | `GlueQuerySetProxy` extends `GlueModelProxyBase` | `GlueQuerySetProxy` extends `BaseGlueProxy` |
 | `GlueFormProxy` extends mixin + `BaseGlueProxy` | `GlueFormProxy` extends `BaseGlueProxy` |
+| `GlueTemplateProxy` extends `BaseGlueProxy` | `GlueTemplateProxy` extends `BaseGlueProxy` |
 | `@action` decorator auto-registers methods | Actions come from `contextData.actions` sent from Python |
 | `to_context_data()` serializes proxy state | `contextData` received and used to build proxy |
 | `subject_type.__name__` in context data | `SUBJECT_TYPE_TO_PROXY_CLASS` map by string name |

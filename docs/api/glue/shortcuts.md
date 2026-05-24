@@ -13,6 +13,7 @@ from django_glue import Glue, GlueAccess
 | `Glue.model()` | `GlueModelProxy` | Single Django model instance |
 | `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
+| `Glue.template()` | `GlueTemplateProxy` | Django template by name |
 
 ## Source
 
