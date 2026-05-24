@@ -21,7 +21,14 @@
         editingSkill: null,
         saving: false,
         async init() {
-            this.skillItems = await this.skills.queryWithParams();
+            this.skillItems = await this.skills.all();
+        },
+        async appendNewSkill() {
+            try {
+                this.skillItems = await this.skills.appendNew();
+            } catch (error) {
+                console.error('Failed to append new skill:', error);
+            }
         },
         async addSkill() {
             this.saving = true;
@@ -29,21 +36,31 @@
                 const result = await this.skills.save(this.newSkill);
                 if (result.success) {
                     this.newSkill = { name: '', description: '', difficulty: 5, level: 1 };
-                    this.skillItems = await this.skills.queryWithParams();
+                    this.skillItems = await this.skills.all();
                 }
+            } catch (error) {
+                console.error('Failed to add skill:', error);
             } finally {
                 this.saving = false;
             }
         },
         async updateSkill(skill) {
-            await skill.save();
-            this.editingSkill = null;
-            this.skillItems = await this.skills.queryWithParams();
+            try {
+                await skill.save();
+                this.editingSkill = null;
+                this.skillItems = await this.skills.all();
+            } catch (error) {
+                console.error('Failed to update skill:', error);
+            }
         },
         async deleteSkill(skill) {
             if (confirm('Delete this skill?')) {
-                await skill.delete();
-                this.skillItems = await this.skills.queryWithParams();
+                try {
+                    await skill.delete();
+                    this.skillItems = await this.skills.all();
+                } catch (error) {
+                    console.error('Failed to delete skill:', error);
+                }
             }
         }
     }">
@@ -87,11 +104,15 @@
                         </div>
                     </div>
                     <div class="card-footer bg-gorilla-cream">
-                        <button class="btn btn-gorilla w-100"
+                        <button class="btn btn-gorilla w-100 mb-2"
                                 @click="addSkill()"
                                 :disabled="saving || !newSkill.name">
-                            <span x-show="!saving">Add Skill</span>
+                            <span x-show="!saving">Add Skill (save)</span>
                             <span x-show="saving">Adding...</span>
+                        </button>
+                        <button class="btn btn-gorilla-secondary w-100"
+                                @click="appendNewSkill()">
+                            Append New (appendNew)
                         </button>
                     </div>
                 </div>

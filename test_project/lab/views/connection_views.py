@@ -1,21 +1,72 @@
-from django.http import HttpResponse
+from __future__ import annotations
+
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import render
+from django.contrib.auth import logout
+
+from django_glue.session import GlueSession
 
 
-def connection_view(request):
-    return HttpResponse('Connection view')
+def connection_view(request: HttpRequest) -> HttpResponse:
+    session = GlueSession(request)
+
+    proxy_names = list(session.proxy_registry.keys())
+    keep_live_entries = dict(session.keep_live_registry)
+
+    context = {
+        'page_title': 'Test Lab',
+        'page_heading': 'Connection Management',
+        'page_subtitle': 'Inspect and manage your Glue session proxies',
+        'proxy_count': len(proxy_names),
+        'proxy_names': proxy_names,
+        'keep_live_entries': keep_live_entries,
+    }
+
+    return render(request, 'lab/connection/connection_page.html', context=context)
 
 
-def logout_user_view(request):
-    return HttpResponse('Logout user')
+def logout_user_view(request: HttpRequest) -> HttpResponse:
+    logout(request)
+
+    return HttpResponseRedirect('/')
 
 
-def delete_session(request):
-    return HttpResponse('Delete session')
+def delete_session(request: HttpRequest) -> HttpResponse:
+    request.session.flush()
+
+    return HttpResponseRedirect('/')
 
 
-def remove_unique_name(request):
-    return HttpResponse('Remove unique name')
+def remove_unique_name(request: HttpRequest) -> HttpResponse:
+    session = GlueSession(request)
+
+    if request.method == 'POST':
+        proxy_name = request.POST.get('proxy_name', '')
+
+        if proxy_name:
+            session.proxy_registry.pop(proxy_name, None)
+            session.keep_live_registry.pop(proxy_name, None)
+            session._set_modified()
+
+        return HttpResponseRedirect('/')
+
+    proxy_names = list(session.proxy_registry.keys())
+
+    context = {
+        'page_title': 'Test Lab',
+        'page_heading': 'Remove Proxy',
+        'page_subtitle': 'Select a proxy to remove from the current session',
+        'proxy_names': proxy_names,
+    }
+
+    return render(request, 'lab/connection/remove_proxy_page.html', context=context)
 
 
-def expire_session(request):
-    return HttpResponse('Expire session')
+def expire_session(request: HttpRequest) -> HttpResponse:
+    session = GlueSession(request)
+
+    session.keep_live_registry.clear()
+    session.proxy_registry.clear()
+    session._set_modified()
+
+    return HttpResponseRedirect('/')

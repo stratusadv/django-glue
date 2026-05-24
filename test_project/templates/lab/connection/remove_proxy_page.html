@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">{{ page_heading }}</h2>{% endblock %}
+{% block page_subtitle %}{{ page_subtitle }}{% endblock %}
+{% block page_nav %}
+    <div class="mt-2">
+        <a href="{% url 'lab:connection:connection' %}" class="btn btn-outline-secondary btn-sm">Back to Connection</a>
+        <a href="/" class="btn btn-outline-secondary btn-sm">Combatants</a>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card card-gorilla">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-x-circle me-2"></i>
+                        Remove Proxy from Session
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if proxy_names %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Select Proxy to Remove</label>
+                                <select name="proxy_name" class="form-select form-select-gorilla" required>
+                                    <option value="" disabled selected>-- Choose a proxy --</option>
+                                    {% for name in proxy_names %}
+                                        <option value="{{ name }}">{{ name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="alert alert-warning mb-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                This will remove the selected proxy from your session registry and keep-alive tracking.
+                                The proxy will no longer be accessible via JavaScript.
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-gorilla-danger flex-grow-1"
+                                        onclick="return confirm('Remove this proxy from your session?');">
+                                    <i class="bi bi-trash me-1"></i>
+                                    Remove Proxy
+                                </button>
+                                <a href="{% url 'lab:connection:connection' %}" class="btn btn-outline-secondary">
+                                    Cancel
+                                </a>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-info mb-0">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No proxies registered in your session. Navigate to the Combatants or Fights pages first.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

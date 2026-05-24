@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+
+{% block title %}Fighter Arena{% endblock %}
+
+{% block page_title %}Gorilla Fight Simulator{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">Fighter Arena</h2>{% endblock %}
+{% block page_subtitle %}Demonstrates Glue.template for dynamic rendering and Glue.function for server-side computation.{% endblock %}
+{% block page_nav %}
+    <div class="mt-2">
+        <a href="/" class="btn btn-outline-secondary btn-sm">Combatants</a>
+        <a :href="gorillaDetailUrl" class="btn btn-outline-secondary btn-sm">Fighter Profile</a>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+.arena-section {
+    background: white;
+    border: 3px solid var(--gorilla-gold);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+.arena-section-header {
+    background: linear-gradient(135deg, var(--gorilla-green) 0%, var(--gorilla-green-dark) 100%);
+    color: white;
+    padding: 1rem 1.5rem;
+}
+
+.arena-section-body {
+    padding: 1.5rem;
+}
+
+.function-result {
+    background: var(--gorilla-cream);
+    border: 2px solid var(--gorilla-gold);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    white-space: pre-wrap;
+}
+
+.prediction-bar {
+    height: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #e9ecef;
+    margin: 0.5rem 0;
+}
+
+.prediction-bar-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+}
+
+.introduction-text {
+    font-size: 1.1rem;
+    font-weight: bold;
+    font-family: 'Jersey 15', sans-serif;
+    color: var(--gorilla-green-dark);
+    text-align: center;
+    padding: 1rem;
+}
+
+.tier-badge {
+    display: inline-block;
+    width: 48px;
+    height: 48px;
+    line-height: 48px;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: white;
+}
+{% endblock %}
+
+{% block content %}
+    <div x-data="{
+        gorilla: Glue.model.gorilla,
+        rankCardTemplate: Glue.template.rankCard,
+        calcRankFn: Glue.function.calculateFighterRank,
+        genIntroFn: Glue.function.generateIntroduction,
+        predictFn: Glue.function.predictFightOutcome,
+
+        rankResult: null,
+        introResult: null,
+        predictResult: null,
+        validateResult: null,
+
+        bluePower: 50,
+
+        gorillaDetailUrl: '{% url \"gorilla:detail\" pk=0 %}'.replace('0', '{{ pk }}'),
+
+        loading: {
+            rank: false,
+            intro: false,
+            predict: false,
+            validate: false,
+        },
+
+        async validate() {
+            this.loading.validate = true;
+            try {
+                this.validateResult = await this.gorilla.validate();
+            } catch (error) {
+                console.error('Validation failed:', error);
+            } finally {
+                this.loading.validate = false;
+            }
+        },
+
+        async loadRank() {
+            this.loading.rank = true;
+            try {
+                this.rankResult = await this.calcRankFn(
+                    this.gorilla.rank_points,
+                    this.gorilla.age,
+                    this.gorilla.weight,
+                    this.gorilla.height
+                );
+            } catch (error) {
+                console.error('Failed to calculate rank:', error);
+            } finally {
+                this.loading.rank = false;
+            }
+        },
+
+        async renderRankCard() {
+            if (!this.rankResult) {
+                await this.loadRank();
+            }
+            const targetEl = document.getElementById('rankCardAssessment');
+            await this.rankCardTemplate.renderInnerHtml(targetEl, {
+                name: this.gorilla.name,
+                rank: this.rankResult.rank,
+                tier: this.rankResult.tier,
+                color: this.rankResult.color,
+                description: this.rankResult.description,
+                rank_points: this.gorilla.rank_points,
+                age: this.gorilla.age,
+                score_pct: Math.min((this.rankResult.score / 15000) * 100, 100).toFixed(1),
+            });
+        },
+
+        async renderRankCardOuter() {
+            if (!this.rankResult) {
+                await this.loadRank();
+            }
+            const targetEl = document.getElementById('rankCardModes');
+            await this.rankCardTemplate.renderOuterHtml(targetEl, {
+                name: this.gorilla.name,
+                rank: this.rankResult.rank,
+                tier: this.rankResult.tier,
+                color: this.rankResult.color,
+                description: this.rankResult.description,
+                rank_points: this.gorilla.rank_points,
+                age: this.gorilla.age,
+                score_pct: Math.min((this.rankResult.score / 15000) * 100, 100).toFixed(1),
+            });
+        },
+
+        async loadIntroduction() {
+            this.loading.intro = true;
+            try {
+                this.introResult = await this.genIntroFn(
+                    this.gorilla.name,
+                    'mix'
+                );
+            } catch (error) {
+                console.error('Failed to load introduction:', error);
+            } finally {
+                this.loading.intro = false;
+            }
+        },
+
+        async loadPrediction() {
+            this.loading.predict = true;
+            try {
+                this.predictResult = await this.predictFn(
+                    this.gorilla.rank_points + this.gorilla.weight * 5,
+                    this.bluePower * 10
+                );
+            } catch (error) {
+                console.error('Failed to load prediction:', error);
+            } finally {
+                this.loading.predict = false;
+            }
+        },
+
+        async init() {
+            try {
+                await this.loadRank();
+                await this.renderRankCard();
+                await this.loadIntroduction();
+                await this.loadPrediction();
+            } catch (error) {
+                console.error('Failed to initialize arena:', error);
+            }
+        },
+    }">
+        <!-- Fighter Info Header -->
+        <div class="arena-section">
+            <div class="arena-section-header">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-badge me-2"></i>
+                    <span x-text="gorilla.name"></span>
+                </h4>
+            </div>
+            <div class="arena-section-body">
+                <div class="row g-3">
+                    <div class="col-md-3 col-6">
+                        <div class="text-center">
+                            <div class="fs-2 fw-bold" style="color: var(--gorilla-green);">
+                                <span x-text="gorilla.age"></span>
+                            </div>
+                            <small class="text-muted">Age</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-center">
+                            <div class="fs-2 fw-bold" style="color: var(--gorilla-gold);">
+                                <span x-text="gorilla.weight"></span>
+                            </div>
+                            <small class="text-muted">Weight (kg)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-center">
+                            <div class="fs-2 fw-bold" style="color: var(--gorilla-brown);">
+                                <span x-text="gorilla.height"></span>
+                            </div>
+                            <small class="text-muted">Height (m)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <div class="text-center">
+                            <div class="fs-2 fw-bold" style="color: var(--gorilla-green-dark);">
+                                <span x-text="gorilla.rank_points"></span>
+                            </div>
+                            <small class="text-muted">Rank Points</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Rank Card Section (Template + Function) -->
+            <div class="col-lg-6">
+                <div class="arena-section h-100">
+                    <div class="arena-section-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-trophy me-2"></i>
+                            Rank Assessment
+                            <span class="badge bg-light text-dark ms-2">Glue.template + Glue.function</span>
+                        </h5>
+                        <small class="opacity-75">Calculates rank via Python, renders via Django template</small>
+                    </div>
+                    <div class="arena-section-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-gorilla btn-sm" @click="loadRank()" :disabled="loading.rank">
+                                <template x-if="!loading.rank">
+                                    <i class="bi bi-calculator me-1"></i> Calculate Rank
+                                </template>
+                                <template x-if="loading.rank">
+                                    <span class="spinner-border spinner-border-sm me-1"></span> Calculating...
+                                </template>
+                            </button>
+                            <button class="btn btn-gorilla-secondary btn-sm" @click="renderRankCard()" :disabled="loading.rank">
+                                <i class="bi bi-eye me-1"></i> Render Card
+                            </button>
+                        </div>
+
+                        <div x-show="rankResult" class="mb-3" aria-live="polite">
+                            <div class="d-flex align-items-center gap-3 mb-2">
+                                <div class="tier-badge" :style="{ backgroundColor: rankResult.color }" x-text="rankResult.tier"></div>
+                                <div>
+                                    <strong x-text="rankResult.rank"></strong>
+                                    <div class="text-muted small" x-text="rankResult.description"></div>
+                                </div>
+                            </div>
+                            <div class="text-muted small">Computed Score: <span x-text="rankResult.score"></span></div>
+                        </div>
+
+                        <div id="rankCardAssessment" class="mt-3">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-arrow-up-circle fs-1"></i>
+                                <p class="mt-2 mb-0">Rank card will render here via Glue.template</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Introduction Section (Function) -->
+            <div class="col-lg-6">
+                <div class="arena-section h-100">
+                    <div class="arena-section-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-megaphone me-2"></i>
+                            Ring Introduction
+                            <span class="badge bg-light text-dark ms-2">Glue.function</span>
+                        </h5>
+                        <small class="opacity-75">Generates a themed fighter introduction via Python</small>
+                    </div>
+                    <div class="arena-section-body">
+                        <div class="mb-3">
+                            <button class="btn btn-gorilla btn-sm" @click="loadIntroduction()" :disabled="loading.intro">
+                                <template x-if="!loading.intro">
+                                    <i class="bi bi-mic me-1"></i> Announce Fighter
+                                </template>
+                                <template x-if="loading.intro">
+                                    <span class="spinner-border spinner-border-sm me-1"></span> Announcing...
+                                </template>
+                            </button>
+                        </div>
+
+                        <div x-show="introResult" aria-live="polite">
+                            <div class="introduction-text">
+                                <i class="bi bi-volume-up me-2" style="color: var(--gorilla-gold);"></i>
+                                <span x-text="introResult.introduction"></span>
+                            </div>
+                            <div class="text-center mt-2">
+                                <span class="badge bg-gorilla-green" x-text="introResult.style.toUpperCase()"></span>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3" style="background: var(--gorilla-cream); border-radius: 8px;">
+                            <h6 class="mb-2" style="color: var(--gorilla-green-dark);">
+                                <i class="bi bi-lightbulb me-1"></i> How It Works
+                            </h6>
+                            <p class="mb-0 small text-muted">
+                                <code>Glue.function.generateIntroduction(name, fightStyle)</code> calls a Python function
+                                on the server that returns a themed introduction string based on the fighter's name and fighting style.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validation Section (Model Proxy) -->
+            <div class="col-lg-6">
+                <div class="arena-section h-100">
+                    <div class="arena-section-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-shield-check me-2"></i>
+                            Model Validation
+                            <span class="badge bg-light text-dark ms-2">Glue.model.validate()</span>
+                        </h5>
+                        <small class="opacity-75">Validates current fighter data against Django model constraints</small>
+                    </div>
+                    <div class="arena-section-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-gorilla btn-sm" @click="validate()" :disabled="loading.validate">
+                                <template x-if="!loading.validate">
+                                    <i class="bi bi-shield-check me-1"></i> Validate Fighter
+                                </template>
+                                <template x-if="loading.validate">
+                                    <span class="spinner-border spinner-border-sm me-1"></span> Validating...
+                                </template>
+                            </button>
+                        </div>
+
+                        <div x-show="validateResult" aria-live="polite">
+                            <div class="p-3 rounded" :class="validateResult.success ? 'bg-success text-white' : 'bg-danger text-white'">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <i x-show="validateResult.success" class="bi bi-check-circle-fill fs-5"></i>
+                                    <i x-show="!validateResult.success" class="bi bi-exclamation-circle-fill fs-5"></i>
+                                    <strong x-text="validateResult.success ? 'Validation Passed!' : 'Validation Failed'"></strong>
+                                </div>
+
+                                <template x-if="!validateResult.success && validateResult.errors">
+                                    <div>
+                                        <strong class="d-block mb-1">Errors:</strong>
+                                        <ul class="mb-0 ps-3 small">
+                                            <template x-for="(errors, field) in validateResult.errors" :key="field">
+                                                <li><strong x-text="field"></strong>: <span x-text="errors.join(', ')"></span></li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 p-3" style="background: var(--gorilla-cream); border-radius: 8px;">
+                            <h6 class="mb-2" style="color: var(--gorilla-green-dark);">
+                                <i class="bi bi-lightbulb me-1"></i> Try It
+                            </h6>
+                            <p class="mb-0 small text-muted">
+                                Change the fighter's stats above (e.g., set age to 100 or weight to 9999), then click Validate to see Django model validators in action.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Template RenderOuterHtml Section -->
+            <div class="col-lg-6">
+                <div class="arena-section h-100">
+                    <div class="arena-section-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-puzzle me-2"></i>
+                            Template Render Modes
+                            <span class="badge bg-light text-dark ms-2">Glue.template</span>
+                        </h5>
+                        <small class="opacity-75">Demonstrates renderInnerHtml vs renderOuterHtml</small>
+                    </div>
+                    <div class="arena-section-body">
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-gorilla-secondary btn-sm" @click="renderRankCard()" :disabled="loading.rank">
+                                <i class="bi bi-eye me-1"></i> Inner HTML
+                            </button>
+                            <button class="btn btn-gorilla btn-sm" @click="renderRankCardOuter()" :disabled="loading.rank">
+                                <i class="bi bi-arrows-fullscreen me-1"></i> Outer HTML
+                            </button>
+                        </div>
+
+                        <div class="mb-3 p-2 rounded" style="border: 2px dashed var(--gorilla-gold);">
+                            <small class="text-muted d-block mb-1">Target element (border shows element bounds):</small>
+                            <div id="rankCardModes" class="p-2" style="background: #f8f9fa; border-radius: 4px;">
+                                <div class="text-center text-muted py-4">
+                                    <i class="bi bi-arrow-up-circle fs-1"></i>
+                                    <p class="mt-2 mb-0">Rank card will render here via Glue.template</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 p-3" style="background: var(--gorilla-cream); border-radius: 8px;">
+                            <h6 class="mb-2" style="color: var(--gorilla-green-dark);">
+                                <i class="bi bi-lightbulb me-1"></i> Difference
+                            </h6>
+                            <p class="mb-1 small text-muted"><strong>Inner HTML:</strong> Replaces only the content inside the target element. The dashed border container remains.</p>
+                            <p class="mb-0 small text-muted"><strong>Outer HTML:</strong> Replaces the entire target element. The dashed border container is replaced entirely by the rank card.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fight Prediction Section (Function) -->
+            <div class="col-12">
+                <div class="arena-section">
+                    <div class="arena-section-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-lightning me-2"></i>
+                            Fight Outcome Predictor
+                            <span class="badge bg-light text-dark ms-2">Glue.function</span>
+                        </h5>
+                        <small class="opacity-75">Predicts fight outcomes by comparing power levels</small>
+                    </div>
+                    <div class="arena-section-body">
+                        <div class="row g-4 align-items-center">
+                            <div class="col-md-4 text-center">
+                                <div class="p-3 rounded" style="background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%); color: white;">
+                                    <div class="fs-4 fw-bold" style="font-family: 'Jersey 15', sans-serif;">RED CORNER</div>
+                                    <div class="fs-2 fw-bold" x-text="gorilla.rank_points + gorilla.weight * 5"></div>
+                                    <small>Power Level</small>
+                                    <div class="mt-2">
+                                        <i class="bi bi-person-fill fs-1"></i>
+                                    </div>
+                                    <div class="fw-bold mt-1" x-text="gorilla.name"></div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="text-center mb-3">
+                                    <h6 style="font-family: 'Jersey 15', sans-serif;">VS</h6>
+                                    <div class="text-muted small">Adjust opponent power and predict</div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Opponent Power</label>
+                                    <input
+                                        type="range"
+                                        class="form-range"
+                                        min="0"
+                                        max="100"
+                                        x-model.number="bluePower"
+                                         @input.debounce="loadPrediction()">
+                                    <div class="text-center fw-bold fs-4" style="color: var(--gorilla-green);">
+                                        <span x-text="bluePower * 10"></span>
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-gorilla w-100" @click="loadPrediction()" :disabled="loading.predict">
+                                    <template x-if="!loading.predict">
+                                        <i class="bi bi-lightning-fill me-1"></i> Predict Outcome
+                                    </template>
+                                    <template x-if="loading.predict">
+                                        <span class="spinner-border spinner-border-sm me-1"></span> Predicting...
+                                    </template>
+                                </button>
+                            </div>
+
+                            <div class="col-md-4 text-center">
+                                <div class="p-3 rounded" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%); color: white;">
+                                    <div class="fs-4 fw-bold" style="font-family: 'Jersey 15', sans-serif;">BLUE CORNER</div>
+                                    <div class="fs-2 fw-bold" x-text="bluePower * 10"></div>
+                                    <small>Power Level</small>
+                                    <div class="mt-2">
+                                        <i class="bi bi-person-fill fs-1"></i>
+                                    </div>
+                                    <div class="fw-bold mt-1">Mystery Opponent</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div x-show="predictResult" class="mt-4" aria-live="polite">
+                            <div class="text-center mb-3">
+                                <span class="badge fs-6"
+                                      :class="predictResult.winner.includes('Red') ? 'bg-danger' : predictResult.winner.includes('Blue') ? 'bg-primary' : 'bg-secondary'"
+                                      x-text="predictResult.winner"></span>
+                            </div>
+
+                            <div class="prediction-bar">
+                                <div class="prediction-bar-fill"
+                                     :style="'width: ' + (predictResult.winner.includes(\"Red\") ? predictResult.margin + 50 : predictResult.winner.includes(\"Blue\") ? 100 - (predictResult.margin / 2) : 50) + '%; background: ' + (predictResult.winner.includes(\"Red\") ? '#dc3545' : predictResult.winner.includes(\"Blue\") ? '#0d6efd' : '#6c757d');"
+                                     :title="predictResult.winner"></div>
+                            </div>
+
+                            <div class="row g-2 text-center">
+                                <div class="col-4">
+                                    <div class="text-muted small">Confidence</div>
+                                    <strong x-text="predictResult.confidence + '%'"></strong>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-muted small">Margin</div>
+                                    <strong x-text="predictResult.margin + '%'"></strong>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-muted small">Winner</div>
+                                    <strong x-text="predictResult.winner"></strong>
+                                </div>
+                            </div>
+
+                            <div class="function-result mt-3 text-center">
+                                <i class="bi bi-chat-quote me-1"></i>
+                                <span x-text="predictResult.prediction"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Reference -->
+        <div class="arena-section mt-4">
+            <div class="arena-section-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-code-slash me-2"></i>
+                    API Reference
+                </h5>
+            </div>
+            <div class="arena-section-body">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <h6 class="fw-bold" style="color: var(--gorilla-green);">Glue.template</h6>
+                        <div class="function-result">
+<span x-text="`Glue.template.rankCard\n  .renderInnerHtml(\n    element,\n    { name, rank, tier, ... }\n  )`"></span>
+                        </div>
+                        <small class="text-muted">Renders a Django template server-side and injects HTML into the DOM.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="fw-bold" style="color: var(--gorilla-gold);">Glue.function (Rank)</h6>
+                        <div class="function-result">
+<span x-text="`Glue.function.calculateFighterRank(\n  rankPoints, age, weight, height\n)`"></span>
+                        </div>
+                        <small class="text-muted">Calls a Python function and returns the result as JSON.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="fw-bold" style="color: var(--gorilla-brown);">Glue.function (Intro)</h6>
+                        <div class="function-result">
+<span x-text="`Glue.function.generateIntroduction(\n  name, fightStyle\n)`"></span>
+                        </div>
+                        <small class="text-muted">Generates a themed fighter introduction string.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

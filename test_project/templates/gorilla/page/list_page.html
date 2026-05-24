@@ -28,14 +28,32 @@
             orderBy: 'name',
             gorillaQuerySet: Glue.querySet.gorillas,
             async openProfileModal(gorillaId) {
-                const viewGlue = Glue.view(`/${gorillaId}/template/`);
-                const targetEl = document.getElementById('profileModalBody');
-                await viewGlue.renderInnerHtml(targetEl);
-                const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-                modal.show();
+                try {
+                    const viewGlue = Glue.view(`/${gorillaId}/template/`);
+                    const targetEl = document.getElementById('profileModalBody');
+                    await viewGlue.renderInnerHtml(targetEl);
+                    const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+                    modal.show();
+                } catch (error) {
+                    console.error('Failed to load profile modal:', error);
+                }
+            },
+            async openProfileModalOuter(gorillaId) {
+                try {
+                    const viewGlue = Glue.view(`/${gorillaId}/template/`);
+                    const targetEl = document.getElementById('profileModalOuterBody');
+                    await viewGlue.renderOuterHtml(targetEl);
+                    const modal = new bootstrap.Modal(document.getElementById('profileModalOuter'));
+                    modal.show();
+                } catch (error) {
+                    console.error('Failed to load profile modal:', error);
+                }
             },
             gorillaDetailUrl(id) {
                 return '{% url "gorilla:detail" pk=0 %}'.replace('0', id)
+            },
+            gorillaArenaUrl(id) {
+                return '{% url "gorilla:arena" pk=0 %}'.replace('0', id)
             },
             get queryParams() {
                 return {
@@ -67,15 +85,34 @@
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="gorilla_form" modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla" modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
 
-        <!-- Profile Modal -->
+        <!-- Profile Modal (Inner HTML) -->
         <div class="modal fade" id="profileModal" tabindex="-1">
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">Fighter Profile</h5>
+                        <h5 class="modal-title">Fighter Profile (Inner HTML)</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body" id="profileModalBody">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-gorilla" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Modal (Outer HTML) -->
+        <div class="modal fade" id="profileModalOuter" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Fighter Profile (Outer HTML)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="profileModalOuterBody">
                         <div class="text-center py-4">
                             <div class="spinner-border text-gorilla" role="status">
                                 <span class="visually-hidden">Loading...</span>
@@ -187,12 +224,18 @@
                                     Profile
                                 </a>
                                 <button class="btn btn-outline-secondary btn-sm" @click="openProfileModal(gorilla.id)">
-                                    Profile (Modal)
+                                    Profile (Inner)
                                 </button>
-                                <button type="submit" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
+                                <button class="btn btn-outline-secondary btn-sm" @click="openProfileModalOuter(gorilla.id)">
+                                    Profile (Outer)
+                                </button>
+                                <a :href="gorillaArenaUrl(gorilla.id)" class="btn btn-gorilla-secondary btn-sm">
+                                    Arena
+                                </a>
+                                <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
                                     Save
                                 </button>
-                                <button class="btn btn-gorilla-danger btn-sm" @click="gorilla.delete()">
+                                <button type="button" class="btn btn-gorilla-danger btn-sm" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
                                     Delete
                                 </button>
                             </div>
