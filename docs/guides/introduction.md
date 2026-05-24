@@ -28,7 +28,7 @@ Each guide demonstrates:
 Django Glue creates proxy objects that act as transparent interfaces between Django objects and JavaScript. Each proxy:
 
 1. Has a **unique name** identifying it in the session
-2. Wraps a **target** (Model instance, QuerySet, Form, or Template)
+2. Wraps a **target** (Model instance, QuerySet, Form, Template, or Function)
 3. Has an **access level** (VIEW, CHANGE, or DELETE)
 4. Exposes **actions** callable from JavaScript
 
@@ -46,6 +46,7 @@ from django_glue import Glue, GlueAccess
 | `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
+| `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
 
 On the frontend, proxies are accessed through the global `Glue` object:
 
@@ -55,6 +56,7 @@ On the frontend, proxies are accessed through the global `Glue` object:
 | `Glue.querySet` | QuerySet proxies | `Glue.querySet.tasks` |
 | `Glue.form` | Form proxies | `Glue.form.contact_form` |
 | `Glue.template` | Template proxies | `Glue.template.card` |
+| `Glue.function` | Function proxies | `await Glue.function.calculate(10, 20)` |
 
 ### Access Control
 
@@ -87,6 +89,9 @@ const result = await Glue.form.contact_form.validate()
 
 // Template proxy
 await Glue.template.card.renderInnerHtml(document.getElementById('card'), { name: 'John' })
+
+// Function proxy
+const total = await Glue.function.calculateTotal(100, 0.08, true)
 ```
 
 ### GlueView
@@ -117,5 +122,6 @@ Understanding the request lifecycle helps with debugging:
   - [QuerySet Proxy](query_set_glue.md)
   - [Form Proxy](form_glue.md)
   - [Template Proxy](template_glue.md)
+  - [Function Proxy](function_glue.md)
   - [GlueView](view_glue/view_glue.md)
 - Explore the [Advanced Topics](advanced/access_control.md) section for access control, events, field filtering, and configuration

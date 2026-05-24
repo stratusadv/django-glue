@@ -16,13 +16,13 @@
 ## Features
 
 - **Proxy Pattern Architecture**
-  - Transparently bind Django models, querysets, and forms to JavaScript objects.
+  - Transparently bind Django models, querysets, forms, templates, and functions to JavaScript objects.
   - Access model fields as native properties with automatic change tracking.
   - Built-in lazy loading fetches data on first access.
 
 - **Simple, Declarative API**
-  - Register proxies in your Django views with `Glue.model()`, `Glue.queryset()`, and `Glue.form()`.
-  - Access proxies on the frontend as properties of the global `Glue` object (e.g., `Glue.model.task`, `Glue.querySet.tasks`).
+  - Register proxies in your Django views with `Glue.model()`, `Glue.queryset()`, `Glue.form()`, `Glue.template()`, and `Glue.function()`.
+  - Access proxies on the frontend as properties of the global `Glue` object (e.g., `Glue.model.task`, `Glue.querySet.tasks`, `Glue.function.calculate`).
 
 - **Unintrusive Integration**
   - Works with your existing Django views and templates with minimal setup.
@@ -50,6 +50,11 @@
 - **Event Listener System**
   - Attach `before`, `after`, and `error` listeners to any proxy action.
   - Chainable listener management for reactive UI patterns.
+
+- **Function Proxy Support**
+  - Call Python functions from JavaScript with `Glue.function()`.
+  - Functions are identified by dotted import path and called with positional arguments.
+  - Function signatures are automatically extracted and sent to the client.
 
 - **Server-Side HTML Rendering**
   - Use `GlueView` to dynamically render HTML fragments from Django views.

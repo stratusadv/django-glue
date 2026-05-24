@@ -14,6 +14,7 @@ from django_glue import Glue, GlueAccess
 | `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
+| `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
 
 ## Source
 

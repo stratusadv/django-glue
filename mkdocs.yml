@@ -40,6 +40,8 @@ nav:
           - Model Proxy: guides/model_object_glue.md
           - QuerySet Proxy: guides/query_set_glue.md
           - Form Proxy: guides/form_glue.md
+          - Template Proxy: guides/template_glue.md
+          - Function Proxy: guides/function_glue.md
       - GlueView:
           - Overview: guides/view_glue/view_glue.md
           - renderInnerHtml: guides/view_glue/render_inner.md
@@ -54,11 +56,13 @@ nav:
           - GlueModelProxy: api/glue/model_object_glue.md
           - GlueQuerySetProxy: api/glue/query_set_glue.md
           - GlueFormProxy: api/glue/form_glue.md
+          - GlueFunctionProxy: api/glue/function_glue.md
       - JavaScript:
           - GlueModelProxy: api/javascript/model_object_glue.md
           - GlueQuerySetProxy: api/javascript/query_set_glue.md
           - GlueFormProxy: api/javascript/form_glue.md
           - GlueView: api/javascript/view_glue.md
+          - GlueFunctionProxy: api/javascript/function_glue.md
   - Changelog:
       - v1.0.0: changelog/v1_changelog.md
       - Archived: changelog/archived_changelog.md

@@ -8,6 +8,7 @@ from django_glue.access.access import GlueAccess
 from django_glue.proxies import (
     BaseGlueProxy,
     GlueFormProxy,
+    GlueFunctionProxy,
     GlueModelProxy,
     GlueQuerySetProxy,
     GlueTemplateProxy,
@@ -130,5 +131,22 @@ class Glue:
             proxy_class=GlueTemplateProxy,
             access=access,
             context_data=context_data or {},
+            **kwargs,
+        )
+
+    @staticmethod
+    def function(
+        request: HttpRequest,
+        unique_name: str,
+        target: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        **kwargs,
+    ) -> None:
+        Glue.glue(
+            request=request,
+            unique_name=unique_name,
+            target=target,
+            proxy_class=GlueFunctionProxy,
+            access=access,
             **kwargs,
         )

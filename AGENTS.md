@@ -41,6 +41,8 @@ django-glue/
     │   │       └── proxy.py              # GlueFormProxy (Django Form binding)
     │   │   └── template/
     │   │       └── proxy.py              # GlueTemplateProxy (Django template rendering)
+    │   │   └── function/
+    │   │       └── proxy.py              # GlueFunctionProxy (Python callable binding)
     │   │
 │   ├── access/                       # Permission system
 │   │   └── access.py                 # GlueAccess StrEnum (VIEW, CHANGE, DELETE)
@@ -88,6 +90,7 @@ django-glue/
     │   │       ├── model.js              # GlueModelProxy - get, delete, _isNew
     │   │       ├── queryset.js           # GlueQuerySetProxy - filter, child proxies
     │   │       └── template.js           # GlueTemplateProxy - render methods, sharedPayload
+    │   │       └── function.js           # GlueFunctionProxy - factory callable, param mapping
 │   └── tests/
 │       ├── setup.js                  # Happy-dom global registration
 │       ├── testUtils.js              # Mock fetch, cookie, context data helpers
@@ -141,6 +144,8 @@ django-glue/
 │           └── actions/              # Form action tests
 │       └── template/                 # Template proxy tests
 │           └── test_template_proxy.py
+│       └── function/                 # Function proxy tests
+│           └── test_function_proxy.py
 │
 └── docs/                             # MkDocs documentation
     ├── api/                          # API reference docs
@@ -157,7 +162,7 @@ django-glue/
 Django Glue creates proxy objects that act as transparent interfaces between Django models/querysets/forms and JavaScript. Each proxy:
 
 1. Has a **unique name** identifying it in the session
-2. Wraps a **target** (Model instance, QuerySet, or Form)
+2. Wraps a **target** (Model instance, QuerySet, Form, Template, or Function)
 3. Has an **access level** (VIEW, CHANGE, or DELETE)
 4. Exposes **actions** callable from JavaScript
 
@@ -171,7 +176,8 @@ ABC
   │     │     │     ├── GlueModelProxy (proxies/model/proxy.py)
   │     │     │     └── GlueQuerySetProxy (proxies/queryset/proxy.py)
   │     │     └── GlueFormProxy (proxies/form/proxy.py)
-  │     └── GlueTemplateProxy (proxies/template/proxy.py)
+   │     └── GlueTemplateProxy (proxies/template/proxy.py)
+   │     └── GlueFunctionProxy (proxies/function/proxy.py)
 ```
 
 ### Proxy Class Hierarchy (JavaScript)
@@ -181,7 +187,8 @@ BaseGlueProxy
     ├── GlueFormProxy
     │     └── GlueModelProxy
     ├── GlueQuerySetProxy
-    └── GlueTemplateProxy
+    ├── GlueTemplateProxy
+    └── GlueFunctionProxy
 ```
 
 ### Access Control
@@ -221,6 +228,7 @@ The `@action` decorator sets `_required_glue_access` on the wrapped function. `B
 | `GlueQuerySetProxy` | `query_with_params()`, `save()`, `delete()`, `get()`, `new()` | VIEW, CHANGE, DELETE |
 | `GlueFormProxy` | `get()`, `validate()`, `save()`, `foreign_key_choices()` | VIEW, CHANGE |
 | `GlueTemplateProxy` | `render_html()` | VIEW |
+| `GlueFunctionProxy` | `execute()` | VIEW |
 
 ### Payload Validation
 
@@ -278,6 +286,14 @@ def my_view(request):
         unique_name='contact_form',
         target=ContactForm(),
         access=GlueAccess.CHANGE,
+    )
+
+    # Register a function
+    Glue.function(
+        request=request,
+        unique_name='calculateTotal',
+        target='myapp.utils.calculate_total',
+        access=GlueAccess.VIEW,
     )
 
     return render(request, 'page.html')
@@ -349,6 +365,9 @@ if (validation.success) {
 // Template proxy - render templates with dynamic context
 await Glue.template.card.renderInnerHtml('#card-container', { name: 'John' })
 await Glue.template.card.renderOuterHtml('#card-container', { name: 'Jane' })
+
+// Function proxy - call Python functions with positional args
+const total = await Glue.function.calculateTotal(100, 0.08, true)
 ```
 
 ### GlueView - Server-Side HTML Rendering
@@ -371,6 +390,7 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `django_glue/proxies/form/mixin.py` | GlueFormProxyMixin - validation, save, foreign_key_choices actions |
 | `django_glue/proxies/form/proxy.py` | GlueFormProxy - Django Form binding |
 | `django_glue/proxies/template/proxy.py` | GlueTemplateProxy - Django template rendering |
+| `django_glue/proxies/function/proxy.py` | GlueFunctionProxy - Python callable binding |
 | `django_glue/proxies/decorators.py` | @action decorator |
 | `django_glue/session.py` | GlueSession - proxy registration, expiration, renewal |
 | `django_glue/shortcuts/glue.py` | Glue class - main API entry point |
@@ -391,6 +411,7 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `client_js/src/proxies/queryset.js` | GlueQuerySetProxy - filter, child proxy creation |
 | `client_js/src/proxies/form.js` | GlueFormProxy - field definitions, validation, FormData |
 | `client_js/src/proxies/template.js` | GlueTemplateProxy - render methods, sharedPayload |
+| `client_js/src/proxies/function.js` | GlueFunctionProxy - factory callable, param mapping |
 | `client_js/src/view.js` | GlueView - server-side HTML rendering |
 | `client_js/src/config.js` | GlueConfig - configuration defaults |
 
