@@ -11,7 +11,7 @@ Model proxies allow you to access and modify a single Django model instance from
 
 ### When Not to Use
 
-- When you only need read-only access to a model's fields. In that case, pass the data directly in your view context.
+- When you only need read-only access to a model's fields. Pass the data directly in your view context.
 - When you need to work with multiple instances. Use a [QuerySet proxy](query_set_glue.md) instead.
 
 ## Backend: Registering a Model Proxy
@@ -40,16 +40,95 @@ def task_view(request, pk):
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `request` | `HttpRequest` | Yes | The current request |
-| `unique_name` | `str` | Yes | Unique identifier for the proxy |
+| `unique_name` | `str` | Yes | Unique identifier for the proxy in the session |
 | `target` | `Model` | Yes | The model instance to proxy |
 | `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
-| `fields` | `Sequence` | No | Fields to include. Empty means all fields |
-| `exclude` | `Sequence[str]` | No | Fields to exclude |
+| `fields` | `Sequence` | No | Field names to include. Empty means all fields |
+| `exclude` | `Sequence[str]` | No | Field names to exclude |
 | `form_class` | `type[ModelForm]` | No | Custom ModelForm for validation |
 
-### Field Filtering
+## Frontend: Using the Model Proxy
 
-Control which fields are exposed to the frontend:
+Access the proxy as a property of the global `Glue.model` object using the unique name you provided:
+
+```javascript
+// If you registered with unique_name='task':
+Glue.model.task
+```
+
+### Reading Fields
+
+Access fields as properties. The proxy automatically fetches data on first access if not already loaded:
+
+```javascript
+// Lazy loading — fetches from server on first field access
+const title = Glue.model.task.title
+const done = Glue.model.task.done
+```
+
+You can also explicitly fetch all field values:
+
+```javascript
+await Glue.model.task.get()
+console.log(Glue.model.task.title)
+```
+
+### Updating Fields
+
+Set field values directly:
+
+```javascript
+Glue.model.task.title = 'New Title'
+Glue.model.task.done = true
+Glue.model.task.priority = 2
+```
+
+### Saving Changes
+
+After modifying fields, call `save()` to persist changes to the database:
+
+```javascript
+Glue.model.task.title = 'Updated Title'
+const result = await Glue.model.task.save()
+
+if (result.success) {
+    console.log('Saved successfully')
+} else {
+    console.log('Validation errors:', result.errors)
+}
+```
+
+The save response follows this shape:
+
+```javascript
+{
+    success: true,
+    errors: null,
+    cleaned_data: { title: 'Updated Title', done: false, priority: 2 }
+}
+```
+
+### Deleting the Instance
+
+```javascript
+const result = await Glue.model.task.delete()
+```
+
+For existing instances, `delete()` returns the server response. For unsaved instances (`_isNew` is `true`) that belong to a parent queryset, it returns `{success: true}` without making a server request.
+
+### Checking if the Instance is New
+
+The `_isNew` property returns `true` if the instance hasn't been saved to the database yet (no primary key):
+
+```javascript
+if (Glue.model.task._isNew) {
+    console.log('This is a new, unsaved instance')
+}
+```
+
+## Field Filtering
+
+Control which fields are exposed to the frontend by using the `fields` or `exclude` parameters:
 
 ```python
 # Only expose specific fields
@@ -71,9 +150,11 @@ Glue.model(
 )
 ```
 
-### Custom Form Class
+Fields that are not exposed cannot be read or written from the frontend.
 
-Provide a custom ModelForm for field-level validation:
+## Custom Form Class
+
+Provide a custom ModelForm to add field-level validation, custom widgets, or additional fields:
 
 ```python
 from myapp.forms import TaskForm
@@ -87,63 +168,79 @@ Glue.model(
 )
 ```
 
-## Frontend: Using the Model Proxy
+The proxy uses your custom ModelForm for all validation during `save()` and `validate()` actions.
 
-Access the proxy as a property of the global `Glue.model` object using the unique name:
+## Field Metadata
+
+Each field exposes metadata through the `$fields` property. This is useful for building dynamic forms:
 
 ```javascript
-// Glue.model.task is the model proxy
+// Access field definitions
+const titleField = Glue.model.task.$fields.title
+console.log(titleField.label)       // 'Title'
+console.log(titleField.required)    // true
+console.log(titleField.type)        // 'CharField'
+console.log(titleField.max_length)  // 200
+console.log(titleField.help_text)   // null or help text string
+
+// Field value and errors
+console.log(titleField.value)       // current field value
+console.log(titleField.has_errors)  // true if field has validation errors
+console.log(titleField.error_text)  // error messages as string
 ```
 
-### Reading Fields
+### Foreign Key Choices
 
-Access fields as properties. The proxy automatically fetches data on first access if not already loaded:
+For fields that reference other models (ForeignKey, ManyToManyField), choices are loaded lazily:
 
 ```javascript
-// Lazy loading - fetches from server on first access
-const title = Glue.model.task.title
-const done = Glue.model.task.done
+const brandField = Glue.model.task.$fields.brand
+const choices = await brandField.choices()
+// Returns: [[pk, "display name"], [pk, "display name"], ...]
 ```
 
-Explicitly fetch all field values:
+Choices are cached across all proxy instances to avoid duplicate requests.
+
+## Event Listeners
+
+Attach listeners to proxy actions for reactive UI patterns. Each action supports three event types: `'before'`, `'after'`, and `'error'`.
 
 ```javascript
-await Glue.model.task.get()
-console.log(Glue.model.task.title)
+// Before save — runs before the request is sent
+Glue.model.task.addListener('save', (event) => {
+    console.log('About to save:', event.payload)
+}, 'before')
+
+// After save — runs after a successful response
+Glue.model.task.addListener('save', (event) => {
+    console.log('Saved successfully:', event.result)
+}, 'after')
+
+// On error — runs when the request fails
+Glue.model.task.addListener('save', (event) => {
+    console.error('Save failed:', event.error)
+}, 'error')
 ```
 
-### Updating Fields
-
-Set field values directly:
+Listeners are chainable:
 
 ```javascript
-Glue.model.task.title = 'New Title'
-Glue.model.task.done = true
+Glue.model.task
+    .addListener('save', onSaveSuccess, 'after')
+    .addListener('save', onSaveError, 'error')
+    .addListener('delete', onDelete, 'after')
 ```
 
-### Saving Changes
-
-After modifying fields, call `save()` to persist changes:
+Remove specific listeners:
 
 ```javascript
-Glue.model.task.title = 'Updated Title'
-const result = await Glue.model.task.save()
+Glue.model.task.removeListener('save', onSaveSuccess, 'after')
 ```
 
-### Deleting the Instance
+Clear all listeners:
 
 ```javascript
-await Glue.model.task.delete()
-```
-
-### Checking if New
-
-The `_isNew` property indicates whether the instance has been saved to the database:
-
-```javascript
-if (Glue.model.task._isNew) {
-    console.log('This is a new, unsaved instance')
-}
+Glue.model.task.clearListeners()
 ```
 
 ## Full Example: Editable Task Form
@@ -176,71 +273,49 @@ def task_edit_view(request, pk):
 <html>
 <head>
     <title>Edit Task</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body>
     <div x-data="{
         loaded: false,
         saving: false,
+
         async init() {
             await Glue.model.task.get()
             this.loaded = true
         },
+
         async saveTask() {
             this.saving = true
             const result = await Glue.model.task.save()
             this.saving = false
             if (result.success) {
                 alert('Task saved!')
+            } else {
+                alert('Validation errors: ' + JSON.stringify(result.errors))
             }
         }
     }">
-        <input x-model="Glue.model.task.title" placeholder="Task title">
-        <label>
-            <input type="checkbox" x-model="Glue.model.task.done">
-            Done
-        </label>
-        <button @click="saveTask()" :disabled="saving">
-            Save
-        </button>
+        <template x-if="loaded">
+            <div>
+                <label>Title</label>
+                <input x-model="Glue.model.task.title" placeholder="Task title">
+
+                <label>
+                    <input type="checkbox" x-model="Glue.model.task.done">
+                    Done
+                </label>
+
+                <button @click="saveTask()" :disabled="saving">
+                    Save
+                </button>
+            </div>
+        </template>
     </div>
 
     {% django_glue_init %}
 </body>
 </html>
-```
-
-## Event Listeners
-
-Attach listeners to proxy actions for reactive UI patterns:
-
-```javascript
-// Before save
-Glue.model.task.addListener('save', (event) => {
-    console.log('About to save:', event.payload)
-}, 'before')
-
-// After save
-Glue.model.task.addListener('save', (event) => {
-    console.log('Saved successfully:', event.result)
-}, 'after')
-
-// On error
-Glue.model.task.addListener('save', (event) => {
-    console.error('Save failed:', event.error)
-}, 'error')
-```
-
-## Field Metadata
-
-Each field exposes metadata through the `$fields` property:
-
-```javascript
-// Access field definitions
-const titleField = Glue.model.task.$fields.title
-console.log(titleField.label)      // Field label
-console.log(titleField.required)   // Is field required
-console.log(titleField.type)       // Django form field type
-console.log(titleField.max_length) // Max length (if applicable)
 ```
 
 ## Access Levels

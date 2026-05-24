@@ -35,6 +35,7 @@ nav:
       - Installation: getting_started/installation.md
   - Guides:
       - Introduction: guides/introduction.md
+      - Quick Start Tutorial: guides/quick_start.md
       - Proxies:
           - Model Proxy: guides/model_object_glue.md
           - QuerySet Proxy: guides/query_set_glue.md
@@ -42,6 +43,11 @@ nav:
       - GlueView:
           - Overview: guides/view_glue/view_glue.md
           - renderInnerHtml: guides/view_glue/render_inner.md
+      - Advanced:
+          - Access Control: guides/advanced/access_control.md
+          - Event Listeners: guides/advanced/event_listeners.md
+          - Field Filtering: guides/advanced/field_filtering.md
+          - Configuration: guides/advanced/configuration.md
   - API Reference:
       - Python:
           - Glue (Shortcuts): api/glue/shortcuts.md
