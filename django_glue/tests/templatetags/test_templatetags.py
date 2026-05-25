@@ -33,7 +33,7 @@ class DjangoGlueInitTagTestCase(TestCase):
 
         # The tag populates context variables
         rendered = template.render(context)
-        self.assertIn('1.0.0a1', rendered)
+        self.assertIn(constants.__VERSION__, rendered)
 
     def test_tag_includes_urls(self):
         """Tag should include URL mappings."""
