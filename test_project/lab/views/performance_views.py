@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from django.http import HttpRequest, HttpResponseRedirect, HttpResponse
 from django.shortcuts import render
+from django.contrib import messages
 
 from django_glue import Glue
 from django_glue.proxies import GlueModelProxy, GlueQuerySetProxy, GlueFormProxy
@@ -14,6 +15,7 @@ from test_project.gorilla.models import Gorilla
 def flush_session_view(request: HttpRequest) -> HttpResponse:
     """Flush the session and redirect back to the referring page."""
     request.session.flush()
+    messages.error(request, 'Session has been flushed.')
     referer = request.META.get('HTTP_REFERER', '/')
 
     return HttpResponseRedirect(referer)

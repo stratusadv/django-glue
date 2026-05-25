@@ -447,6 +447,8 @@
     model = {};
     querySet = {};
     form = {};
+    template = {};
+    function = {};
     _keepLiveIntervalHandle = null;
     _defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
       const { subject_type: subjectType } = contextData;
@@ -454,11 +456,21 @@
       if (!(proxyClass.name in this)) {
         this[proxyClass.name] = {};
       }
-      this[proxyClass.name][proxyUniqueName] = new proxyClass({
-        http: this.http,
-        proxyUniqueName,
-        contextData
-      });
+      let proxy;
+      if (subjectType === "Function") {
+        proxy = proxyClass.create({
+          http: this.http,
+          proxyUniqueName,
+          contextData
+        });
+      } else {
+        proxy = new proxyClass({
+          http: this.http,
+          proxyUniqueName,
+          contextData
+        });
+      }
+      this[proxyClass.name][proxyUniqueName] = proxy;
     }
     async fetch(url, requestOptions = {
       body: "",
@@ -485,7 +497,9 @@
         const keepLiveNames = Object.keys({
           ...this.model,
           ...this.querySet,
-          ...this.form
+          ...this.form,
+          ...this.template,
+          ...this.function
         });
         this.http.sendKeepLiveRequest(keepLiveNames).then((response) => {
           if (!response.ok) {
@@ -633,16 +647,94 @@
   }
   var queryset_default = GlueQuerySetProxy;
 
+  // client_js/src/proxies/template.js
+  class GlueTemplateProxy extends base_default {
+    static name = "template";
+    constructor({ http, proxyUniqueName, contextData, sharedPayload = {} }) {
+      super({ http, proxyUniqueName, contextData });
+      this._sharedPayload = sharedPayload;
+    }
+    async _renderHtml(payload = {}) {
+      const mergedPayload = {
+        ...this._sharedPayload,
+        ...payload
+      };
+      const response = await this._processAction("render_html", mergedPayload);
+      return response.html;
+    }
+    async renderInnerHtml(targetElement, payload = {}) {
+      targetElement.innerHTML = await this._renderHtml(payload);
+    }
+    async _renderInsertAdjacentHtml(targetElement, position, payload = {}) {
+      const html = await this._renderHtml(payload);
+      targetElement.insertAdjacentHTML(position, html);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(targetElement, payload = {}) {
+      await this._renderInsertAdjacentHtml(targetElement, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(targetElement, payload = {}) {
+      await this._renderInsertAdjacentHtml(targetElement, "afterend", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(targetElement, payload = {}) {
+      await this._renderInsertAdjacentHtml(targetElement, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(targetElement, payload = {}) {
+      await this._renderInsertAdjacentHtml(targetElement, "afterbegin", payload);
+    }
+    async renderOuterHtml(targetElement, payload = {}) {
+      targetElement.outerHTML = await this._renderHtml(payload);
+    }
+  }
+  var template_default = GlueTemplateProxy;
+
+  // client_js/src/proxies/function.js
+  class GlueFunctionProxy extends base_default {
+    static name = "function";
+    constructor({ http, proxyUniqueName, contextData }) {
+      super({ http, proxyUniqueName, contextData });
+      this._params = contextData.params || [];
+    }
+    static create({ http, proxyUniqueName, contextData }) {
+      const instance = new GlueFunctionProxy({
+        http,
+        proxyUniqueName,
+        contextData
+      });
+      const fn = async function(...args) {
+        const payload = {};
+        instance._params.forEach((param, i) => {
+          if (i < args.length) {
+            payload[param.name] = args[i];
+          }
+        });
+        const response = await instance._processAction("execute", payload);
+        return response.result;
+      };
+      fn._uniqueName = proxyUniqueName;
+      fn._contextData = contextData;
+      fn._params = instance._params;
+      fn.addListener = instance.addListener.bind(instance);
+      fn.removeListener = instance.removeListener.bind(instance);
+      fn.clearListeners = instance.clearListeners.bind(instance);
+      return fn;
+    }
+  }
+  var function_default = GlueFunctionProxy;
+
   // client_js/src/proxies/index.js
   var SUBJECT_TYPE_TO_PROXY_CLASS = {
     Model: model_default,
     QuerySet: queryset_default,
-    BaseForm: form_default
+    BaseForm: form_default,
+    Template: template_default,
+    Function: function_default
   };
   window.BaseGlueProxy = base_default;
   window.GlueModelProxy = model_default;
   window.GlueQuerySetProxy = queryset_default;
   window.GlueFormProxy = form_default;
+  window.GlueTemplateProxy = template_default;
+  window.GlueFunctionProxy = function_default;
 
   // client_js/src/config.js
   class GlueConfig {

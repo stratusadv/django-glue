@@ -26,7 +26,7 @@ from django_glue import Glue, GlueAccess
 def my_view(request):
     Glue.function(
         request=request,
-        unique_name='calculateTotal',
+         unique_name='calculate_total',
         target='myapp.utils.calculate_total',
         access=GlueAccess.VIEW,
     )
@@ -61,8 +61,8 @@ def calculate_total(amount: float, tax_rate: float, include_discount: bool) -> f
 Access the proxy as a callable property of the global `Glue.function` object using the unique name you provided:
 
 ```javascript
-// If you registered with unique_name='calculateTotal':
-const result = await Glue.function.calculateTotal(100, 0.08, true)
+// If you registered with unique_name='calculate_total':
+const result = await Glue.function.calculate_total(100, 0.08, true)
 // Returns: 97.2
 ```
 
@@ -86,7 +86,7 @@ The function's parameters are available on the callable for inspection:
 
 ```javascript
 // Access parameter definitions
-const params = Glue.function.calculateTotal._params
+const params = Glue.function.calculate_total._params
 // [
 //   { name: 'amount', type: 'float' },
 //   { name: 'tax_rate', type: 'float' },
@@ -100,17 +100,17 @@ Function proxies support the same listener system as other proxies. Attach liste
 
 ```javascript
 // Before call
-Glue.function.calculateTotal.addListener('execute', (event) => {
+Glue.function.calculate_total.addListener('execute', (event) => {
     console.log('Calling with:', event.payload)
 }, 'before')
 
 // After call
-Glue.function.calculateTotal.addListener('execute', (event) => {
+Glue.function.calculate_total.addListener('execute', (event) => {
     console.log('Result:', event.result)
 }, 'after')
 
 // On error
-Glue.function.calculateTotal.addListener('execute', (event) => {
+Glue.function.calculate_total.addListener('execute', (event) => {
     console.error('Call failed:', event.error)
 }, 'error')
 ```
@@ -140,7 +140,7 @@ from django_glue import Glue, GlueAccess
 def cart_view(request):
     Glue.function(
         request=request,
-        unique_name='calculatePrice',
+         unique_name='calculate_price',
         target='myapp.utils.calculate_price',
         access=GlueAccess.VIEW,
     )
@@ -166,7 +166,7 @@ def cart_view(request):
         result: null,
 
         async calculate() {
-            this.result = await Glue.function.calculatePrice(
+            this.result = await Glue.function.calculate_price(
                 this.basePrice,
                 this.quantity,
                 this.discount

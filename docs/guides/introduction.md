@@ -91,7 +91,7 @@ const result = await Glue.form.contact_form.validate()
 await Glue.template.card.renderInnerHtml(document.getElementById('card'), { name: 'John' })
 
 // Function proxy
-const total = await Glue.function.calculateTotal(100, 0.08, true)
+const total = await Glue.function.calculate_total(100, 0.08, true)
 ```
 
 ### GlueView

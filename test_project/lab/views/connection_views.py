@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
+from django.contrib import messages
 from django.contrib.auth import logout
 
 from django_glue.session import GlueSession
@@ -27,12 +28,14 @@ def connection_view(request: HttpRequest) -> HttpResponse:
 
 def logout_user_view(request: HttpRequest) -> HttpResponse:
     logout(request)
+    messages.error(request, 'You have been logged out.')
 
     return HttpResponseRedirect('/')
 
 
 def delete_session(request: HttpRequest) -> HttpResponse:
     request.session.flush()
+    messages.error(request, 'Session has been deleted.')
 
     return HttpResponseRedirect('/')
 
@@ -47,6 +50,7 @@ def remove_unique_name(request: HttpRequest) -> HttpResponse:
             session.proxy_registry.pop(proxy_name, None)
             session.keep_live_registry.pop(proxy_name, None)
             session._set_modified()
+            messages.error(request, f"Proxy '{proxy_name}' has been removed.")
 
         return HttpResponseRedirect('/')
 
@@ -68,5 +72,6 @@ def expire_session(request: HttpRequest) -> HttpResponse:
     session.keep_live_registry.clear()
     session.proxy_registry.clear()
     session._set_modified()
+    messages.error(request, 'All proxies have been expired.')
 
     return HttpResponseRedirect('/')

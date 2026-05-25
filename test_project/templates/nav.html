@@ -15,11 +15,8 @@
             {% url 'gorilla:skills' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Skills (M2M Test)' %}
 
-            <li>
-                <a href="#" class="link-warning link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover" data-bs-toggle="tooltip" data-bs-placement="right" title="Arena requires a fighter. Click the Arena button on any fighter card on the Combatants page." aria-label="Arena - requires selecting a fighter first" tabindex="0">
-                    Arena (Template + Function)
-                </a>
-            </li>
+            {% url 'gorilla:random_arena' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Arena (Template + Function)' %}
         </ul>
     </div>
     <div class="col">

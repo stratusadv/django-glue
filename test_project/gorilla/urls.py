@@ -10,4 +10,5 @@ urlpatterns = [
     path('<int:pk>/template/', views.detail_template_view, name='detail_template'),
     path('<int:pk>/arena/', views.arena_view, name='arena'),
     path('skills/', views.skills_view, name='skills'),
+    path('arena/', views.random_arena_view, name='random_arena'),
 ]

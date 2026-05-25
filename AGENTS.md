@@ -291,7 +291,7 @@ def my_view(request):
     # Register a function
     Glue.function(
         request=request,
-        unique_name='calculateTotal',
+         unique_name='calculate_total',
         target='myapp.utils.calculate_total',
         access=GlueAccess.VIEW,
     )
@@ -367,7 +367,7 @@ await Glue.template.card.renderInnerHtml('#card-container', { name: 'John' })
 await Glue.template.card.renderOuterHtml('#card-container', { name: 'Jane' })
 
 // Function proxy - call Python functions with positional args
-const total = await Glue.function.calculateTotal(100, 0.08, true)
+const total = await Glue.function.calculate_total(100, 0.08, true)
 ```
 
 ### GlueView - Server-Side HTML Rendering
@@ -588,8 +588,8 @@ The JS client starts a `setInterval` on init, collecting all proxy names and sen
 **ALWAYS run tests after making any code changes, before finishing a request.**
 
 - After changing **Python code**: run `just run-tests`
-- After changing **JavaScript code**: run `just js-tests`
-- After changing **both**: run both commands
+- After changing **JavaScript code**: run `just js-build` then `just js-tests`
+- After changing **both**: run `just js-build`, `just js-tests`, and `just run-tests`
 - If tests fail, fix the issue and re-run until all tests pass
 
 ### Setup

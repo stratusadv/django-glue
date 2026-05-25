@@ -219,23 +219,25 @@
                             </div>
                         </div>
                         <div class="card-footer bg-gorilla-cream">
-                            <div class="d-flex gap-2">
-                                <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm">
+                            <div class="d-flex gap-2 mb-2">
+                                <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm flex-grow-1">
                                     Profile
                                 </a>
-                                <button class="btn btn-outline-secondary btn-sm" @click="openProfileModal(gorilla.id)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModal(gorilla.id)">
                                     Profile (Inner)
                                 </button>
-                                <button class="btn btn-outline-secondary btn-sm" @click="openProfileModalOuter(gorilla.id)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModalOuter(gorilla.id)">
                                     Profile (Outer)
                                 </button>
-                                <a :href="gorillaArenaUrl(gorilla.id)" class="btn btn-gorilla-secondary btn-sm">
+                            </div>
+                            <div class="d-flex gap-2">
+                                <a :href="gorillaArenaUrl(gorilla.id)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
                                     Arena
                                 </a>
                                 <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
                                     Save
                                 </button>
-                                <button type="button" class="btn btn-gorilla-danger btn-sm" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
+                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
                                     Delete
                                 </button>
                             </div>
