@@ -53,7 +53,7 @@
 
 - **Function Proxy Support**
   - Call Python functions from JavaScript with `Glue.function()`.
-  - Functions are identified by dotted import path and called with positional arguments.
+  - Functions are identified by dotted import path and called with keyword arguments via fields in a single object arguments.
   - Function signatures are automatically extracted and sent to the client.
 
 - **Server-Side HTML Rendering**

@@ -63,13 +63,13 @@ describe('GlueFunctionProxy', () => {
     });
 
     describe('callable invocation', () => {
-        it('maps positional args to named params and calls execute', async () => {
-            const result = await fn(3, 4);
+        it('maps object field args to named params and calls execute', async () => {
+            const result = await fn({a: 3, b: 4});
             expect(result).toBe(7);
         });
 
         it('sends correct action request', async () => {
-            await fn(10, 20);
+            await fn({a: 10, b: 20});
 
             expect(mockHttp.sendActionRequest).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -89,7 +89,7 @@ describe('GlueFunctionProxy', () => {
                 };
             });
 
-            const result = await fn(5);
+            const result = await fn({a: 5});
             expect(result).toBe(5);
         });
 
@@ -102,8 +102,12 @@ describe('GlueFunctionProxy', () => {
                 };
             });
 
-            const result = await fn(1, 2, 999);
+            const result = await fn({a: 1, b: 2, extra: 999});
             expect(result).toBe(3);
+        });
+
+        it('throws when args are not passed as an object', async () => {
+            await expect(fn(1, 2)).rejects.toThrow('Must pass glue function arguments as fields in an object.');
         });
 
         it('handles various argument types', async () => {
@@ -129,7 +133,7 @@ describe('GlueFunctionProxy', () => {
                 },
             });
 
-            const result = await greetFn('Hello', 'World');
+            const result = await greetFn({greeting: 'Hello', name: 'World'});
             expect(result).toBe('Hello, World!');
         });
     });
@@ -147,7 +151,7 @@ describe('GlueFunctionProxy', () => {
                 events.push('before');
             }, 'before');
 
-            await fn(1, 2);
+            await fn({a: 1, b: 2});
 
             expect(events).toEqual(['before', 'request']);
         });
@@ -159,7 +163,7 @@ describe('GlueFunctionProxy', () => {
                 capturedEvent = event;
             }, 'after');
 
-            await fn(3, 4);
+            await fn({a: 3, b: 4});
 
             expect(capturedEvent.result).toEqual({result: 7});
             expect(capturedEvent.action).toBe('execute');
@@ -176,7 +180,7 @@ describe('GlueFunctionProxy', () => {
                 capturedError = event.error;
             }, 'error');
 
-            await expect(fn(1, 2)).rejects.toThrow('server error');
+            await expect(fn({a: 1, b: 2})).rejects.toThrow('server error');
             expect(capturedError).toBeInstanceOf(Error);
         });
     });
@@ -189,7 +193,7 @@ describe('GlueFunctionProxy', () => {
             fn.addListener('execute', callback, 'after');
             fn.removeListener('execute', callback, 'after');
 
-            await fn(1, 2);
+            await fn({a: 1, b: 2});
             expect(callCount).toBe(0);
         });
 
@@ -198,7 +202,7 @@ describe('GlueFunctionProxy', () => {
             fn.addListener('execute', () => { callCount++; }, 'after');
             fn.clearListeners();
 
-            await fn(1, 2);
+            await fn({a: 1, b: 2});
             expect(callCount).toBe(0);
         });
     });

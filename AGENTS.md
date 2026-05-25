@@ -366,8 +366,8 @@ if (validation.success) {
 await Glue.template.card.renderInnerHtml('#card-container', { name: 'John' })
 await Glue.template.card.renderOuterHtml('#card-container', { name: 'Jane' })
 
-// Function proxy - call Python functions with positional args
-const total = await Glue.function.calculate_total(100, 0.08, true)
+// Function proxy - call Python functions with an object matching original function's keyword args
+const total = await Glue.function.calculate_total({kwarg_1: 100, kwarg_2: 0.08, kwarg_3: true})
 ```
 
 ### GlueView - Server-Side HTML Rendering

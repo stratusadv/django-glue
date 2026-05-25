@@ -687,6 +687,11 @@
   }
   var template_default = GlueTemplateProxy;
 
+  // client_js/src/utils.js
+  function isObject(val) {
+    return Object.prototype.toString.call(val) === "[object Object]";
+  }
+
   // client_js/src/proxies/function.js
   class GlueFunctionProxy extends base_default {
     static name = "function";
@@ -700,11 +705,14 @@
         proxyUniqueName,
         contextData
       });
-      const fn = async function(...args) {
+      const fn = async function(kwargs = {}) {
+        if (!isObject(kwargs)) {
+          throw Error("Must pass glue function arguments as fields in an object.");
+        }
         const payload = {};
-        instance._params.forEach((param, i) => {
-          if (i < args.length) {
-            payload[param.name] = args[i];
+        instance._params.forEach((param) => {
+          if (param.name in kwargs) {
+            payload[param.name] = kwargs[param.name];
           }
         });
         const response = await instance._processAction("execute", payload);

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Function proxies allow you to call Python functions from JavaScript with positional arguments. You register a function by its dotted import path, and the proxy automatically extracts its signature so the client knows what parameters to pass.
+Function proxies allow you to call Python functions from JavaScript with keyword arguments arguments. You register a function by its dotted import path, and the proxy automatically extracts its signature so the client knows what parameters to pass.
 
 ### When to Use
 
@@ -68,15 +68,15 @@ const result = await Glue.function.calculate_total(100, 0.08, true)
 
 ### Signature-Matching Calls
 
-Positional arguments are mapped to the function's parameter names in order:
+Keyword arguments are mapped to the function's parameter names via object fields:
 
 ```javascript
 // Python: greet(name, greeting='Hello')
-const msg = await Glue.function.greet('World')
+const msg = await Glue.function.greet({subject: 'World'})
 // Returns: 'Hello, World!'
 
 // Override the default greeting
-const msg = await Glue.function.greet('World', 'Hi')
+const msg = await Glue.function.greet({subject: 'World', message: 'Hi'})
 // Returns: 'Hi, World!'
 ```
 
@@ -207,12 +207,12 @@ Function proxies default to `VIEW` access, as calling a function is considered a
 
 ## Function Proxy vs Model Proxy Actions
 
-| Feature | `Glue.function` | `Glue.model` actions |
-|---------|----------------|---------------------|
-| Target | Any callable function | Django model instance |
-| Parameters | Positional args mapped by signature | Field data via `post_data` |
-| Validation | No built-in validation | Django ModelForm validation |
-| Return value | Function's return value | Action-specific result dict |
+| Feature | `Glue.function`                  | `Glue.model` actions |
+|---------|----------------------------------|---------------------|
+| Target | Any callable function            | Django model instance |
+| Parameters | Keyword args mapped by signature | Field data via `post_data` |
+| Validation | No built-in validation           | Django ModelForm validation |
+| Return value | Function's return value          | Action-specific result dict |
 | Use case | Arbitrary server-side computation | CRUD operations on models |
 
 Use `Glue.function` for general-purpose server-side calls. Use model proxy actions (`save()`, `delete()`, etc.) when working with Django models.

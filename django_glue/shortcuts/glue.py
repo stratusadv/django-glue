@@ -120,7 +120,6 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-        access: GlueAccess = GlueAccess.VIEW,
         context_data: dict | None = None,
         **kwargs,
     ) -> None:
@@ -129,7 +128,7 @@ class Glue:
             unique_name=unique_name,
             target=target,
             proxy_class=GlueTemplateProxy,
-            access=access,
+            access=GlueAccess.VIEW,
             context_data=context_data or {},
             **kwargs,
         )
@@ -139,7 +138,6 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-        access: GlueAccess = GlueAccess.VIEW,
         **kwargs,
     ) -> None:
         Glue.glue(
@@ -147,6 +145,6 @@ class Glue:
             unique_name=unique_name,
             target=target,
             proxy_class=GlueFunctionProxy,
-            access=access,
+            access=GlueAccess.VIEW,
             **kwargs,
         )

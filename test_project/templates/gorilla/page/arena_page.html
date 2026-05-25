@@ -115,12 +115,12 @@
         async loadRank() {
             this.loading.rank = true;
             try {
-                this.rankResult = await this.calcRankFn(
-                    this.gorilla.rank_points,
-                    this.gorilla.age,
-                    this.gorilla.weight,
-                    this.gorilla.height
-                );
+                this.rankResult = await this.calcRankFn({
+                    rank_points: this.gorilla.rank_points,
+                    age: this.gorilla.age,
+                    weight: this.gorilla.weight,
+                    height: this.gorilla.height
+                });
             } catch (error) {
                 console.error('Failed to calculate rank:', error);
             } finally {
@@ -182,10 +182,10 @@
         async loadIntroduction() {
             this.loading.intro = true;
             try {
-                this.introResult = await this.genIntroFn(
-                    this.gorilla.name,
-                    'mix'
-                );
+                this.introResult = await this.genIntroFn({
+                    name: this.gorilla.name,
+                    fight_style: 'mix'
+                });
             } catch (error) {
                 console.error('Failed to load introduction:', error);
             } finally {
@@ -196,10 +196,10 @@
         async loadPrediction() {
             this.loading.predict = true;
             try {
-                this.predictResult = await this.predictFn(
-                    this.gorilla.rank_points + this.gorilla.weight * 5,
-                    this.bluePower
-                );
+                this.predictResult = await this.predictFn({
+                    red_power: this.gorilla.rank_points + this.gorilla.weight * 5,
+                    blue_power: this.bluePower
+                });
             } catch (error) {
                 console.error('Failed to load prediction:', error);
             } finally {

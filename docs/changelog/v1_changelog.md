@@ -59,13 +59,12 @@
   - Supports event listeners (`before`, `after`, `error`) on `render_html` action
   - Registered in session with keep-alive, consistent with model/queryset/form proxies
 
-- **Function Proxy Support**: New `Glue.function()` shortcut enables calling Python functions from JavaScript with positional arguments:
+- **Function Proxy Support**: New `Glue.function()` shortcut enables calling Python functions from JavaScript with keyword arguments:
   - Register a function on the backend with `Glue.function(request, unique_name='calculate', target='myapp.utils.calculate_total')`
-  - Access on the frontend as a callable: `await Glue.function.calculate(100, 0.08, true)`
+  - Access on the frontend as a callable: `await Glue.function.calculate({kwarg_1: 100, kwarg_2: 0.08, kwarg_3: true})`
   - Function signatures are automatically extracted via `inspect.signature()` and sent to the client
-  - Positional arguments are mapped to the function's parameter names in order
   - Supports event listeners (`before`, `after`, `error`) on `execute` action
-  - Default access level is `VIEW`; functions are resolved by dotted import path on each request
+  - Functions are resolved by dotted import path on each request
   - Registered in session with keep-alive, consistent with model/queryset/form proxies
 
 - **Event Listener System**: JavaScript proxies now support `before`, `after`, and `error` event listeners for reactive UI patterns:

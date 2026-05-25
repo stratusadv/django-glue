@@ -86,28 +86,24 @@ def arena_view(request: HttpRequest, pk: int) -> HttpResponse:
         request=request,
         target='gorilla/component/fighter_rank_card.html',
         unique_name='rank_card',
-        access=Glue.Access.VIEW,
     )
 
     Glue.function(
         request=request,
         target='test_project.gorilla.utils.calculate_fighter_rank',
         unique_name='calculate_fighter_rank',
-        access=Glue.Access.VIEW,
     )
 
     Glue.function(
         request=request,
         target='test_project.gorilla.utils.generate_introduction',
         unique_name='generate_introduction',
-        access=Glue.Access.VIEW,
     )
 
     Glue.function(
         request=request,
         target='test_project.gorilla.utils.predict_fight_outcome',
         unique_name='predict_fight_outcome',
-        access=Glue.Access.VIEW,
     )
 
     return render(request, 'gorilla/page/arena_page.html', context={'pk': pk})

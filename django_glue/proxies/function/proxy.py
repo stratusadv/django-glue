@@ -55,18 +55,8 @@ class GlueFunctionProxy(BaseGlueProxy):
         return {
             'function_path': self.function_path,
             'params': self._params,
+            'subject_type': self._subject_type_name
         }
-
-    def to_context_data(self) -> dict:
-        actions_data = {
-            action_name: dict(action_parameters)
-            for action_name, (_, action_parameters, _) in self.actions.items()
-        }
-
-        return (
-            {'actions': actions_data, 'subject_type': self._subject_type_name}
-            | self._build_context_data()
-        )
 
     @action(access=GlueAccess.VIEW)
     def execute(self, action_data: ActionPayloadSchema) -> dict:

@@ -1,8 +1,9 @@
 import BaseGlueProxy from './base';
+import {isObject} from "../utils";
 
 /**
  * Proxy for Python callables. Returns a callable function that invokes the
- * server-side function with positional arguments mapped to the function's
+ * server-side function with keyword arguments (passed in as object fields) mapped to the function's
  * parameter names.
  */
 class GlueFunctionProxy extends BaseGlueProxy {
@@ -23,7 +24,7 @@ class GlueFunctionProxy extends BaseGlueProxy {
 
     /**
      * Factory that returns a callable function wrapping the execute action.
-     * Positional arguments are mapped to the function's parameter names.
+     * Fields inside the single object parameter for the function arguments are mapped to the function's parameter names.
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.proxyUniqueName - The unique name of this proxy.
@@ -37,11 +38,15 @@ class GlueFunctionProxy extends BaseGlueProxy {
             contextData,
         });
 
-        const fn = async function (...args) {
+        const fn = async function (kwargs = {}) {
+            if (!isObject(kwargs)) {
+                throw Error('Must pass glue function arguments as fields in an object.')
+            }
+
             const payload = {};
-            instance._params.forEach((param, i) => {
-                if (i < args.length) {
-                    payload[param.name] = args[i];
+            instance._params.forEach(param => {
+                if (param.name in kwargs) {
+                    payload[param.name] = kwargs[param.name]
                 }
             });
 

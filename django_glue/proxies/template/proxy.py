@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.template import TemplateDoesNotExist, TemplateSyntaxError, engines
+from django.template import TemplateDoesNotExist, TemplateSyntaxError
+from django.template.loader import render_to_string
 
 from django_glue.access.access import GlueAccess
 from django_glue.resolver.exceptions import GlueResolverError
@@ -45,18 +46,8 @@ class GlueTemplateProxy(BaseGlueProxy):
         return {
             'template_name': self.template_name,
             'context_data': self._context_data,
+            'subject_type': self._subject_type_name
         }
-
-    def to_context_data(self) -> dict:
-        actions_data = {
-            action_name: dict(action_parameters)
-            for action_name, (_, action_parameters, _) in self.actions.items()
-        }
-
-        return (
-            {'actions': actions_data, 'subject_type': self._subject_type_name}
-            | self._build_context_data()
-        )
 
     @action(access=GlueAccess.VIEW)
     def render_html(self, action_data: ActionPayloadSchema) -> dict:
@@ -64,9 +55,10 @@ class GlueTemplateProxy(BaseGlueProxy):
         merged_context = {**self._context_data, **post_data}
 
         try:
-            django_engine = engines['django']
-            template = django_engine.get_template(self.template_name)
-            html = template.render(merged_context)
+            html = render_to_string(
+                template_name=self.template_name,
+                context=merged_context
+            )
         except TemplateDoesNotExist as e:
             raise GlueResolverError(
                 response_error=f'Template not found: {self.template_name}',
