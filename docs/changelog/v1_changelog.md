@@ -51,6 +51,22 @@
   - Automatic FormData handling for file uploads
   - Per-field error tracking with `hasErrors(fieldName)` helper
 
+- **Template Proxy Support**: New `Glue.template()` shortcut enables rendering Django templates from JavaScript with dynamic context data:
+  - Register a template on the backend with `Glue.template(request, unique_name='card', target='components/card.html', context_data={...})`
+  - Access on the frontend via `Glue.template.card`
+  - Same DOM rendering methods as `Glue.view`: `renderInnerHtml()`, `renderOuterHtml()`, `renderInsertAdjacentHtmlBeforeEnd()`, `renderInsertAdjacentHtmlAfterEnd()`, `renderInsertAdjacentHtmlBeforeBegin()`, `renderInsertAdjacentHtmlAfterBegin()`
+  - Context data merges: backend `context_data` defaults are overridden by per-call payload from JavaScript
+  - Supports event listeners (`before`, `after`, `error`) on `render_html` action
+  - Registered in session with keep-alive, consistent with model/queryset/form proxies
+
+- **Function Proxy Support**: New `Glue.function()` shortcut enables calling Python functions from JavaScript with keyword arguments:
+  - Register a function on the backend with `Glue.function(request, unique_name='calculate', target='myapp.utils.calculate_total')`
+  - Access on the frontend as a callable: `await Glue.function.calculate({kwarg_1: 100, kwarg_2: 0.08, kwarg_3: true})`
+  - Function signatures are automatically extracted via `inspect.signature()` and sent to the client
+  - Supports event listeners (`before`, `after`, `error`) on `execute` action
+  - Functions are resolved by dotted import path on each request
+  - Registered in session with keep-alive, consistent with model/queryset/form proxies
+
 - **Event Listener System**: JavaScript proxies now support `before`, `after`, and `error` event listeners for reactive UI patterns:
   ```javascript
   // Add listeners for any action

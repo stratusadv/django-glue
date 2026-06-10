@@ -1,6 +1,9 @@
-from django.http import HttpRequest, HttpResponse
+from __future__ import annotations
+
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404
 from django.template.response import TemplateResponse
+from django.urls import reverse
 
 from django_glue import Glue
 from test_project.gorilla.models import Gorilla, Skill
@@ -35,15 +38,22 @@ def list_view(request: HttpRequest) -> HttpResponse:
 def detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
-    Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.DELETE,
+    )
 
     return render(request, 'gorilla/page/detail_page.html')
 
 
 def skills_view(request: HttpRequest) -> HttpResponse:
-    """Test page for ManyToMany fields - managing skills."""
     Glue.queryset(
-        request=request, target=Skill.objects.all(), unique_name='skills', access=Glue.Access.DELETE
+        request=request,
+        target=Skill.objects.all(),
+        unique_name='skills',
+        access=Glue.Access.DELETE,
     )
 
     return render(request, 'gorilla/page/skills_page.html')
@@ -52,6 +62,55 @@ def skills_view(request: HttpRequest) -> HttpResponse:
 def detail_template_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
-    Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.DELETE,
+    )
 
     return TemplateResponse(request, 'gorilla/page/detail_page_partial.html')
+
+
+def arena_view(request: HttpRequest, pk: int) -> HttpResponse:
+    gorilla = get_object_or_404(Gorilla, pk=pk)
+
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.CHANGE,
+    )
+
+    Glue.template(
+        request=request,
+        target='gorilla/component/fighter_rank_card.html',
+        unique_name='rank_card',
+    )
+
+    Glue.function(
+        request=request,
+        target='test_project.gorilla.utils.calculate_fighter_rank',
+        unique_name='calculate_fighter_rank',
+    )
+
+    Glue.function(
+        request=request,
+        target='test_project.gorilla.utils.generate_introduction',
+        unique_name='generate_introduction',
+    )
+
+    Glue.function(
+        request=request,
+        target='test_project.gorilla.utils.predict_fight_outcome',
+        unique_name='predict_fight_outcome',
+    )
+
+    return render(request, 'gorilla/page/arena_page.html', context={'pk': pk})
+
+
+def random_arena_view(request: HttpRequest) -> HttpResponseRedirect:
+    gorilla = Gorilla.objects.order_by('?').first()
+    if gorilla is None:
+        return HttpResponseRedirect(reverse('gorilla:list'))
+    return HttpResponseRedirect(reverse('gorilla:arena', args=[gorilla.pk]))

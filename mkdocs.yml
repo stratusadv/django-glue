@@ -35,24 +35,34 @@ nav:
       - Installation: getting_started/installation.md
   - Guides:
       - Introduction: guides/introduction.md
+      - Quick Start Tutorial: guides/quick_start.md
       - Proxies:
           - Model Proxy: guides/model_object_glue.md
           - QuerySet Proxy: guides/query_set_glue.md
           - Form Proxy: guides/form_glue.md
+          - Template Proxy: guides/template_glue.md
+          - Function Proxy: guides/function_glue.md
       - GlueView:
           - Overview: guides/view_glue/view_glue.md
           - renderInnerHtml: guides/view_glue/render_inner.md
+      - Advanced:
+          - Access Control: guides/advanced/access_control.md
+          - Event Listeners: guides/advanced/event_listeners.md
+          - Field Filtering: guides/advanced/field_filtering.md
+          - Configuration: guides/advanced/configuration.md
   - API Reference:
       - Python:
           - Glue (Shortcuts): api/glue/shortcuts.md
           - GlueModelProxy: api/glue/model_object_glue.md
           - GlueQuerySetProxy: api/glue/query_set_glue.md
           - GlueFormProxy: api/glue/form_glue.md
+          - GlueFunctionProxy: api/glue/function_glue.md
       - JavaScript:
           - GlueModelProxy: api/javascript/model_object_glue.md
           - GlueQuerySetProxy: api/javascript/query_set_glue.md
           - GlueFormProxy: api/javascript/form_glue.md
           - GlueView: api/javascript/view_glue.md
+          - GlueFunctionProxy: api/javascript/function_glue.md
   - Changelog:
       - v1.0.0: changelog/v1_changelog.md
       - Archived: changelog/archived_changelog.md

@@ -249,6 +249,23 @@
 </div>
 
 <div class="container py-4">
+    <!-- Django Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            {% if message.tags == 'error' %}
+            <div class="alert alert-danger alert-dismissible show mb-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% else %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible show mb-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+
     <!-- Page Header -->
     <div class="text-center mb-4">
         <h1 class="display-4 text-gorilla-green-dark">{% block page_title %}{{ page_title }}{% endblock %}</h1>

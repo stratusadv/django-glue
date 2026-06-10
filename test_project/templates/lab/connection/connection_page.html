@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load utils %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_heading %}<h2 class="text-gorilla-gold">{{ page_heading }}</h2>{% endblock %}
+{% block page_subtitle %}{{ page_subtitle }}{% endblock %}
+{% block page_nav %}
+    <div class="mt-2">
+        <a href="/" class="btn btn-outline-secondary btn-sm">Combatants</a>
+        <a href="{% url 'lab:performance:speed' %}" class="btn btn-outline-secondary btn-sm">Speed Test</a>
+        <a href="{% url 'lab:performance:stress' %}" class="btn btn-outline-secondary btn-sm">Stress Test</a>
+    </div>
+{% endblock %}
+
+{% block extra_css %}
+.proxy-table th {
+    background-color: var(--gorilla-green-dark);
+    color: white;
+}
+
+.proxy-table tr:nth-child(even) {
+    background-color: var(--gorilla-cream);
+}
+{% endblock %}
+
+{% block content %}
+    <div class="row g-4">
+        <!-- Session Overview -->
+        <div class="col-lg-8">
+            <div class="card card-gorilla">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Session Overview
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: var(--gorilla-cream);">
+                                <div class="fs-2 fw-bold" style="color: var(--gorilla-green);">{{ proxy_count }}</div>
+                                <small class="text-muted">Active Proxies</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: var(--gorilla-cream);">
+                                <div class="fs-2 fw-bold" style="color: var(--gorilla-gold);">{{ keep_live_entries|length }}</div>
+                                <small class="text-muted">Keep-Alive Entries</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if proxy_names %}
+                        <h6 class="fw-bold mb-3" style="color: var(--gorilla-green-dark);">Registered Proxies</h6>
+                        <div class="table-responsive">
+                            <table class="table proxy-table table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Proxy Name</th>
+                                        <th>Expires (Unix)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for name in proxy_names %}
+                                        <tr>
+                                            <td>
+                                                <code>{{ name }}</code>
+                                            </td>
+                                            <td>
+                                                {% if keep_live_entries|get_item:name %}
+                                                    <span class="text-success">{{ keep_live_entries|get_item:name }}</span>
+                                                {% else %}
+                                                    <span class="text-danger">No expiry set</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            No active proxies in this session. Visit the Combatants or Fights pages to register proxies.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="col-lg-4">
+            <div class="card card-gorilla">
+                <div class="card-header bg-gorilla-gold">
+                    <h5 class="mb-0 text-gorilla-green-dark">
+                        <i class="bi bi-gear me-2"></i>
+                        Actions
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column gap-2">
+                    <a href="{% url 'lab:connection:remove_proxy' %}" class="btn btn-outline-secondary text-start">
+                        <i class="bi bi-x-circle me-2"></i>
+                        Remove Proxy
+                        <div class="small text-muted">Select and remove a single proxy</div>
+                    </a>
+
+                    <a href="{% url 'lab:connection:expire' %}" class="btn btn-outline-warning text-start"
+                       onclick="return confirm('This will expire all proxies. Continue?');">
+                        <i class="bi bi-hourglass-split me-2"></i>
+                        Expire All Proxies
+                        <div class="small text-muted">Force all proxies to expire</div>
+                    </a>
+
+                    <a href="{% url 'lab:connection:delete_session' %}" class="btn btn-outline-danger text-start"
+                       onclick="return confirm('This will delete your entire session. Continue?');">
+                        <i class="bi bi-trash me-2"></i>
+                        Delete Session
+                        <div class="small text-muted">Flush the entire session</div>
+                    </a>
+
+                    <a href="{% url 'lab:connection:logout' %}" class="btn btn-outline-secondary text-start"
+                       onclick="return confirm('Log out and return to the homepage?');">
+                        <i class="bi bi-box-arrow-right me-2"></i>
+                        Logout
+                        <div class="small text-muted">End your session and redirect</div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

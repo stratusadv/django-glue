@@ -1,0 +1,29 @@
+<div class="rank-card" style="border: 3px solid {{ color }}; border-radius: 12px; overflow: hidden;">
+    <div class="rank-card-header" style="background: linear-gradient(135deg, {{ color }} 0%, {{ color }}88 100%); padding: 1.5rem; text-align: center; color: white;">
+        <div style="font-size: 3rem; font-weight: bold; font-family: 'Jersey 15', sans-serif;">{{ tier }}</div>
+        <div style="font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; opacity: 0.9;">{{ rank }}</div>
+    </div>
+    <div class="rank-card-body" style="padding: 1.5rem; background: white;">
+        <div class="text-center mb-3">
+            <h4 style="font-family: 'Jersey 15', sans-serif; color: var(--gorilla-green-dark); margin: 0;">{{ name }}</h4>
+        </div>
+        <div class="row g-2 mb-3">
+            <div class="col-6">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Rank Points</span>
+                    <strong>{{ rank_points }}</strong>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Age</span>
+                    <strong>{{ age }}</strong>
+                </div>
+            </div>
+        </div>
+        <div class="progress" style="height: 8px; background-color: #e9ecef;">
+            <div class="progress-bar" role="progressbar" style="width: {{ score_pct }}%; background-color: {{ color }};" aria-valuenow="{{ score_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+        <p class="mt-3 mb-0 text-center" style="font-style: italic; color: var(--gorilla-green-dark); font-size: 0.9rem;">{{ description }}</p>
+    </div>
+</div>

@@ -14,6 +14,9 @@
 
             {% url 'gorilla:skills' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Skills (M2M Test)' %}
+
+            {% url 'gorilla:random_arena' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Arena (Template + Function)' %}
         </ul>
     </div>
     <div class="col">
@@ -35,13 +38,24 @@
             <div class="col">
                 <h5>Connections</h5>
                 <ul>
-                    {% include 'element/nav_link_list_element.html' with url='#' label='Coming Son' %}
+                    {% url 'lab:connection:connection' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Session Info' %}
+
+                    {% url 'lab:connection:remove_proxy' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Remove Proxy' %}
                 </ul>
             </div>
             <div class="col">
                 <h5>Recovery</h5>
                 <ul>
-                    {% include 'element/nav_link_list_element.html' with url='#' label='Coming Son' %}
+                    {% url 'lab:connection:expire' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Expire Proxies' %}
+
+                    {% url 'lab:connection:delete_session' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Delete Session' %}
+
+                    {% url 'lab:connection:logout' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Logout' %}
                 </ul>
             </div>
         </div>

@@ -46,6 +46,28 @@ def task_list_view(request):
 | `exclude` | `Sequence[str]` | No | Fields to exclude |
 | `form_class` | `type[ModelForm]` | No | Custom ModelForm for validation |
 
+### Using select_related and prefetch_related
+
+For related model fields, use `select_related` (for ForeignKey) or `prefetch_related` (for ManyToMany) on your queryset. The proxy will automatically serialize the related fields:
+
+```python
+Glue.queryset(
+    request=request,
+    unique_name='tasks',
+    target=Task.objects.select_related('assigned_to').prefetch_related('tags'),
+    access=GlueAccess.CHANGE,
+    fields=['id', 'title', 'assigned_to', 'tags'],
+)
+```
+
+On the frontend, related objects are nested:
+
+```javascript
+const tasks = await Glue.querySet.tasks.all()
+console.log(tasks[0].assigned_to.name)  // Nested FK object
+console.log(tasks[0].tags)              // M2M as array of PKs
+```
+
 ## Frontend: Using the QuerySet Proxy
 
 ### Fetching All Items
@@ -54,32 +76,38 @@ def task_list_view(request):
 const tasks = await Glue.querySet.tasks.all()
 ```
 
-Each item is a full `GlueModelProxy` instance:
+Each item is a full `GlueModelProxy` instance with its own methods:
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
-console.log(tasks[0].title)        // Access field
-tasks[0].title = 'Updated'         // Modify field
-await tasks[0].save()              // Save individual item
-await tasks[0].delete()            // Delete individual item
+
+// Access fields
+console.log(tasks[0].title)
+
+// Modify and save individual items
+tasks[0].title = 'Updated Title'
+await tasks[0].save()
+
+// Delete individual items
+await tasks[0].delete()
 ```
 
 ### Filtering
 
-Use `queryWithParams()` to filter the queryset:
+Use `queryWithParams()` to filter the queryset server-side:
 
 ```javascript
-// Filter by a single condition
+// Single condition
 const activeTasks = await Glue.querySet.tasks.queryWithParams({
     filter: { done: false }
 })
 
-// Filter by multiple conditions
+// Multiple conditions
 const urgentTasks = await Glue.querySet.tasks.queryWithParams({
-    filter: { done: false, priority: 'high' }
+    filter: { done: false, priority: 2 }
 })
 
-// Use Django ORM lookups
+// Django ORM lookups
 const searchResults = await Glue.querySet.tasks.queryWithParams({
     filter: { title__icontains: 'search term' }
 })
@@ -92,13 +120,13 @@ const sortedTasks = await Glue.querySet.tasks.queryWithParams({
     order_by: ['title']
 })
 
-// Multiple fields, descending
+// Descending order
 const sortedTasks = await Glue.querySet.tasks.queryWithParams({
     order_by: ['-created_at', 'title']
 })
 ```
 
-### Slicing (Pagination)
+### Pagination with Slice
 
 ```javascript
 const page1 = await Glue.querySet.tasks.queryWithParams({
@@ -122,7 +150,7 @@ const results = await Glue.querySet.tasks.queryWithParams({
 
 ### Chainable Query Building
 
-Build queries step by step (note: chain methods before calling `all()` or `queryWithParams()`):
+Build queries step by step using chainable methods. Set up the query parameters first, then call `all()` to execute:
 
 ```javascript
 Glue.querySet.tasks
@@ -133,19 +161,9 @@ Glue.querySet.tasks
 const results = await Glue.querySet.tasks.all()
 ```
 
-## Modifying Items
+The chainable methods modify the internal query parameters. When you call `all()`, those parameters are sent to the server.
 
-### Saving an Individual Item
-
-Each item from the queryset is a full model proxy:
-
-```javascript
-const tasks = await Glue.querySet.tasks.all()
-tasks[0].title = 'New Title'
-await tasks[0].save()
-```
-
-When you delete a child item, the parent queryset automatically refreshes.
+## Creating and Managing Items
 
 ### Creating a New Item
 
@@ -159,7 +177,7 @@ await Glue.querySet.tasks.prependNew()
 await Glue.querySet.tasks.appendNew()
 ```
 
-The new item is a full model proxy with default values:
+The new item is a full model proxy with default values from the server:
 
 ```javascript
 await Glue.querySet.tasks.prependNew()
@@ -175,12 +193,22 @@ const tasks = await Glue.querySet.tasks.all()
 await tasks[0].delete()
 ```
 
+When a child item is deleted, the parent queryset is automatically refreshed. No manual `refresh()` call is needed.
+
 ## Convenience Methods and Properties
 
 | Method/Property | Description |
 |-----------------|-------------|
 | `all()` | Fetch all items using current query params |
-| `refresh()` | Clear cache and re-fetch current query |
+| `queryWithParams(params)` | Fetch items with filter/order/slice params |
+| `refresh()` | Clear cache and re-fetch with current params |
+| `filter(params)` | Chainable: set filter params |
+| `orderBy(params)` | Chainable: set order params |
+| `slice(start, stop)` | Chainable: set slice params |
+| `prependNew()` | Create new item at the start; returns updated `_items` |
+| `appendNew()` | Create new item at the end; returns updated `_items` |
+| `save(data)` | Save data via queryset action; auto-refreshes after |
+| `delete(params)` | Delete items via queryset action; auto-refreshes after |
 | `isEmpty` | Returns `true` if loaded and no items |
 | `isLoaded` | Returns `true` if items have been fetched |
 
@@ -195,6 +223,39 @@ if (Glue.querySet.tasks.isLoaded) {
     console.log('Tasks have been loaded')
 }
 ```
+
+## Iteration
+
+QuerySet proxies implement `Symbol.iterator`, so you can use `for...of`:
+
+```javascript
+const tasks = await Glue.querySet.tasks.all()
+for (const task of tasks) {
+    console.log(task.title)
+}
+```
+
+!!! note
+
+    `for...of` iteration doesn't work reliably in Alpine.js templates. Use the returned array directly in `x-for` loops.
+
+## Event Listeners
+
+Attach listeners to actions on the queryset or individual items:
+
+```javascript
+// Listen for saves on any item in the queryset
+Glue.querySet.tasks.addListener('save', (event) => {
+    console.log('Item saved:', event.result)
+}, 'after')
+
+// Listen for deletes
+Glue.querySet.tasks.addListener('delete', (event) => {
+    console.log('Item deleted')
+}, 'after')
+```
+
+Child proxy events bubble up to the parent queryset's listeners automatically.
 
 ## Full Example: Task List with CRUD
 
@@ -224,23 +285,28 @@ def task_list_view(request):
 <html>
 <head>
     <title>Task List</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body>
     <div x-data="{
         tasks: [],
         loading: false,
+
         async init() {
             this.loading = true
             this.tasks = await Glue.querySet.tasks.all()
             this.loading = false
         },
+
         async addTask() {
             await Glue.querySet.tasks.prependNew()
             this.tasks = Glue.querySet.tasks._items
         },
+
         async deleteTask(task) {
             await task.delete()
-            this.tasks = await Glue.querySet.tasks.all()
+            // Parent queryset auto-refreshes after child delete
+            this.tasks = Glue.querySet.tasks._items
         }
     }">
         <button @click="addTask()">Add Task</button>
@@ -261,24 +327,6 @@ def task_list_view(request):
 </body>
 </html>
 ```
-
-## Event Listeners
-
-Attach listeners to actions on the queryset or individual items:
-
-```javascript
-// Listen for saves on any item in the queryset
-Glue.querySet.tasks.addListener('save', (event) => {
-    console.log('Item saved:', event.result)
-}, 'after')
-
-// Listen for deletes
-Glue.querySet.tasks.addListener('delete', (event) => {
-    console.log('Item deleted')
-}, 'after')
-```
-
-Child proxy events bubble up to the parent queryset's listeners automatically.
 
 ## Access Levels
 

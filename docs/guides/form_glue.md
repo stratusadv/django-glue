@@ -19,10 +19,12 @@ Form proxies allow you to bind Django Forms (both regular Forms and ModelForms) 
 
 The `Glue.form()` shortcut behaves differently depending on the form type:
 
-| Form Type | Creates Proxy | Behavior |
-|-----------|--------------|----------|
-| **ModelForm** | `GlueModelProxy` | Acts as a model proxy with the ModelForm's validation rules |
-| **Regular Form** | `GlueFormProxy` | Provides validation and cleaned data access |
+| Form Type | Creates Proxy | Frontend Namespace | Behavior |
+|-----------|--------------|-------------------|----------|
+| **ModelForm** | `GlueModelProxy` | `Glue.model` | Acts as a model proxy with the ModelForm's validation rules |
+| **Regular Form** | `GlueFormProxy` | `Glue.form` | Provides validation and cleaned data access |
+
+This means when you pass a ModelForm to `Glue.form()`, it creates a model proxy (accessible via `Glue.model`), not a form proxy. This gives you full model proxy behavior (lazy loading, field accessors, `delete()`) with your custom ModelForm's validation.
 
 ### ModelForm Example
 
@@ -40,7 +42,22 @@ Glue.form(
 )
 ```
 
-This creates a `GlueModelProxy` — you can use `get()`, `save()`, and `delete()` just like a regular model proxy, but validation uses your custom ModelForm.
+This creates a `GlueModelProxy` accessible as `Glue.model.task_form`:
+
+```javascript
+// Fetch current values
+await Glue.model.task_form.get()
+
+// Modify fields
+Glue.model.task_form.title = 'Updated Task'
+Glue.model.task_form.done = true
+
+// Save (uses the ModelForm for validation)
+const result = await Glue.model.task_form.save()
+
+// Delete
+await Glue.model.task_form.delete()
+```
 
 ### Regular Form Example
 
@@ -57,7 +74,13 @@ Glue.form(
 )
 ```
 
-This creates a `GlueFormProxy` — you can use `get()`, `validate()`, and `save()`.
+This creates a `GlueFormProxy` accessible as `Glue.form.contact_form`:
+
+```javascript
+// Field values are available from form.initial
+Glue.form.contact_form.name = 'John Doe'
+const result = await Glue.form.contact_form.validate()
+```
 
 ## Backend: Registering a Form Proxy
 
@@ -101,23 +124,26 @@ def task_edit_view(request, pk):
     return render(request, 'task_edit.html')
 ```
 
-## Frontend: Using a Form Proxy
+## Frontend: Using a Regular Form Proxy
 
-### Regular Form (GlueFormProxy)
+### Fetching Field Values
 
-#### Reading Field Values
-
-The `get()` method fetches field values and populates the proxy's internal state. Field values are then accessible as properties:
+Field values are initialized from the form's `initial` data when the proxy is created, so you can access them directly:
 
 ```javascript
-await Glue.form.contact_form.get()
-
-// After get(), access values as properties
+// Values from form.initial are available immediately
 console.log(Glue.form.contact_form.name)
 console.log(Glue.form.contact_form.email)
 ```
 
-#### Setting Field Values
+The `get()` action is available and returns field definitions and initial values:
+
+```javascript
+const result = await Glue.form.contact_form.get()
+// Returns: { fields: {...}, values: {...}, errors: {} }
+```
+
+### Setting Field Values
 
 ```javascript
 Glue.form.contact_form.name = 'John Doe'
@@ -126,7 +152,7 @@ Glue.form.contact_form.message = 'Hello!'
 Glue.form.contact_form.priority = 'high'
 ```
 
-#### Validating Without Saving
+### Validating Without Saving
 
 ```javascript
 const result = await Glue.form.contact_form.validate()
@@ -138,7 +164,27 @@ if (result.success) {
 }
 ```
 
-#### Saving
+The validation response follows this shape:
+
+```javascript
+{
+    success: true,
+    errors: null,
+    cleaned_data: { name: 'John Doe', email: 'john@example.com', ... }
+}
+```
+
+Or on failure:
+
+```javascript
+{
+    success: false,
+    errors: { email: ['Enter a valid email address.'] },
+    cleaned_data: {}
+}
+```
+
+### Saving
 
 ```javascript
 const result = await Glue.form.contact_form.save()
@@ -151,24 +197,7 @@ if (result.success) {
 }
 ```
 
-### ModelForm (GlueModelProxy)
-
-When you pass a ModelForm to `Glue.form()`, it creates a model proxy. Use it like any model proxy:
-
-```javascript
-// Fetch current values
-await Glue.model.task_form.get()
-
-// Modify fields
-Glue.model.task_form.title = 'Updated Task'
-Glue.model.task_form.done = true
-
-// Save (uses the ModelForm for validation)
-const result = await Glue.model.task_form.save()
-
-// Delete
-await Glue.model.task_form.delete()
-```
+The `save()` action runs validation first, then processes the cleaned data. For regular forms, the server returns the cleaned data in the response.
 
 ## Checking for Errors
 
@@ -192,28 +221,64 @@ Access field definitions through the `$fields` property:
 
 ```javascript
 const nameField = Glue.form.contact_form.$fields.name
-console.log(nameField.label)      // "Name"
-console.log(nameField.required)   // true
-console.log(nameField.type)       // "CharField"
-console.log(nameField.max_length) // 100
+console.log(nameField.label)       // 'Name'
+console.log(nameField.required)    // true
+console.log(nameField.type)        // 'CharField'
+console.log(nameField.max_length)  // 100
+console.log(nameField.help_text)   // null or help text string
+
+// Field value and errors
+console.log(nameField.value)       // current field value
+console.log(nameField.has_errors)  // true if field has validation errors
+console.log(nameField.error_text)  // error messages as string
 ```
 
-For foreign key fields with choices:
+### Choice Fields
+
+For fields with choices (e.g., `ChoiceField`, `MultipleChoiceField`), the field metadata includes the available choices:
 
 ```javascript
-const brandField = Glue.model.task_form.$fields.brand
+const priorityField = Glue.form.contact_form.$fields.priority
+console.log(priorityField.choices)
+// [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]
+```
+
+### Foreign Key Choices
+
+For fields that reference other models, choices are loaded lazily:
+
+```javascript
+const brandField = Glue.form.contact_form.$fields.brand
 const choices = await brandField.choices()
 // Returns: [[pk, "display name"], ...]
 ```
+
+Choices are cached across all proxy instances to avoid duplicate requests.
 
 ## Full Example: Contact Form
 
 ### Backend
 
 ```python
+# myapp/forms.py
+from django import forms
+
+
+class ContactForm(forms.Form):
+    name = forms.CharField(max_length=100, required=True)
+    email = forms.EmailField(required=True)
+    message = forms.CharField(widget=forms.Textarea, required=True)
+    priority = forms.ChoiceField(
+        choices=[('low', 'Low'), ('medium', 'Medium'), ('high', 'High')],
+        required=True,
+    )
+```
+
+```python
+# myapp/views.py
 from django.shortcuts import render
 from django_glue import Glue, GlueAccess
-from myapp.forms import ContactForm
+from .forms import ContactForm
 
 def contact_view(request):
     form = ContactForm()
@@ -236,12 +301,14 @@ def contact_view(request):
 <html>
 <head>
     <title>Contact Us</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body>
     <div x-data="{
         submitted: false,
         submitting: false,
         errors: {},
+
         async submitForm() {
             this.submitting = true
             const result = await Glue.form.contact_form.validate()
@@ -267,12 +334,21 @@ def contact_view(request):
             <form @submit.prevent="submitForm()">
                 <label>Name</label>
                 <input x-model="Glue.form.contact_form.name" type="text">
+                <template x-if="errors?.name">
+                    <span class="error" x-text="errors.name[0]"></span>
+                </template>
 
                 <label>Email</label>
                 <input x-model="Glue.form.contact_form.email" type="email">
+                <template x-if="errors?.email">
+                    <span class="error" x-text="errors.email[0]"></span>
+                </template>
 
                 <label>Message</label>
                 <textarea x-model="Glue.form.contact_form.message"></textarea>
+                <template x-if="errors?.message">
+                    <span class="error" x-text="errors.message[0]"></span>
+                </template>
 
                 <label>Priority</label>
                 <select x-model="Glue.form.contact_form.priority">

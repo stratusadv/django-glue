@@ -20,6 +20,10 @@ class GlueClient {
     querySet = {}
     /** @type {Object} */
     form = {}
+    /** @type {Object} */
+    template = {}
+    /** @type {Object} */
+    function = {}
 
     /** @type {number|null} */
     _keepLiveIntervalHandle = null
@@ -40,11 +44,22 @@ class GlueClient {
             this[proxyClass.name] = {}
         }
 
-        this[proxyClass.name][proxyUniqueName] = new proxyClass({
-            http: this.http,
-            proxyUniqueName: proxyUniqueName,
-            contextData: contextData,
-        })
+        let proxy;
+        if (subjectType === 'Function') {
+            proxy = proxyClass.create({
+                http: this.http,
+                proxyUniqueName: proxyUniqueName,
+                contextData: contextData,
+            });
+        } else {
+            proxy = new proxyClass({
+                http: this.http,
+                proxyUniqueName: proxyUniqueName,
+                contextData: contextData,
+            });
+        }
+
+        this[proxyClass.name][proxyUniqueName] = proxy
     }
 
     /**
@@ -92,6 +107,8 @@ class GlueClient {
                 ...this.model,
                 ...this.querySet,
                 ...this.form,
+                ...this.template,
+                ...this.function,
             })
 
             this.http.sendKeepLiveRequest(keepLiveNames).then(response => {

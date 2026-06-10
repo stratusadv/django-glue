@@ -128,10 +128,12 @@ urlpatterns = [
 <html>
 <head>
     <title>Task Dashboard</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body>
     <div x-data="{
         selectedTaskId: 1,
+
         async loadTaskDetail(taskId) {
             const view = Glue.view(`/tasks/${taskId}/detail/`)
             await view.renderInnerHtml(document.getElementById('task-detail'))
@@ -195,3 +197,15 @@ await view.renderInnerHtml(target)
 // After loading, the proxy is available
 await Glue.model.task_1.get()
 ```
+
+## Render Method Comparison
+
+| Method | Behavior | Use When |
+|--------|----------|----------|
+| `renderInnerHtml` | Replaces element's **contents** | Container has bindings you need to keep |
+| `renderOuterHtml` | Replaces the **element entirely** | Response HTML defines the container |
+| `renderInsertAdjacentHtmlBeforeEnd` | Inserts at end of element | Append content |
+| `renderInsertAdjacentHtmlAfterEnd` | Inserts after element | Add sibling after |
+| `renderInsertAdjacentHtmlBeforeBegin` | Inserts before element | Add sibling before |
+| `renderInsertAdjacentHtmlAfterBegin` | Inserts at start of element | Prepend content |
+| `get()` / `post()` | Returns HTML string | You want to handle insertion yourself |
