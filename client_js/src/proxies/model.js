@@ -25,14 +25,14 @@ class GlueModelProxy extends GlueFormProxy {
      * @param {GlueQuerySetProxy|null} [options.parentQuerySet] - Parent queryset proxy, if any.
      */
     constructor({
-                    http,
-                    proxyUniqueName,
-                    contextData,
-                    actions = null,
-                    autoFetch = false,
-                    values = null,
-                    parentQuerySet = null
-                }) {
+        http,
+        proxyUniqueName,
+        contextData,
+        actions = null,
+        autoFetch = false,
+        values = null,
+        parentQuerySet = null
+    }) {
         super({http, proxyUniqueName, contextData, actions, autoFetch});
         /** @type {Object|null} */
         this._values = values;
@@ -73,13 +73,12 @@ class GlueModelProxy extends GlueFormProxy {
     /**
      * Fetch current field values from the server. If the proxy was created from
      * a parent queryset, the request goes through the parent.
-     * @param {string|null} [pk] - Optional primary key to fetch.
      * @returns {Promise<void>}
      */
-    async get(pk = null) {
+    async get() {
         let data;
         if (this._parent) {
-            data = await this._parent._processAction('get', {id: pk})
+            data = await this._parent._processAction('get', {id: this._values?.id})
         } else {
             data = await this._processAction('get')
         }
@@ -89,6 +88,14 @@ class GlueModelProxy extends GlueFormProxy {
 
         this._loading = false;
         this._loaded = true;
+    }
+
+    async _defaultProcessAction(actionName) {
+        if (this._parent) {
+            return await this._parent._processAction(actionName, {id: this._values?.id})
+        } else {
+            return await this._processAction(actionName)
+        }
     }
 
     /**

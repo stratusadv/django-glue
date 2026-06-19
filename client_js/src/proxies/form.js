@@ -163,10 +163,9 @@ class GlueFormProxy extends BaseGlueProxy {
 
     /**
      * Fetch current field values from the server.
-     * @param {string|null} [pk] - Optional primary key to fetch.
      * @returns {Promise<Object>} The fetched field values.
      */
-    async get(pk = null) {
+    async get() {
         const data = await this._processAction('get');
         this._values = data;
         this._loading = false;

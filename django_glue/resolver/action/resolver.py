@@ -33,6 +33,7 @@ class ActionResolver(BaseResolver):
 
         action_response_data = proxy_instance.process_action(self.action, action_payload)
 
+        # TODO: this should just return the result of process action, which should return an ActionResponse (still needs to be made)
         return JsonResponse(
             data=action_response_data, safe=False, encoder=ActionDataJSONEncoder
         )

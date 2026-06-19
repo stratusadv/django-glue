@@ -43,10 +43,10 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
         form_class: type[ModelForm] | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
         self.fields = fields
         self.exclude = exclude
         self.form_class = form_class
+        super().__init__(**kwargs)
 
     @classmethod
     def from_action_request_data(

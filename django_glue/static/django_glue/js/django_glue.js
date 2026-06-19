@@ -7,6 +7,7 @@
       this._uniqueName = proxyUniqueName;
       this._contextData = contextData;
       this._actions = actions ? actions : contextData.actions;
+      this._defineCustomActions();
       this._listeners = {
         before: {},
         after: {},
@@ -69,6 +70,18 @@
         await this.emitListeners("error", actionName, event);
         throw err;
       }
+    }
+    async _defaultProcessAction(actionName) {
+      return await this._processAction(actionName);
+    }
+    _defineCustomActions() {
+      Object.keys(this._actions).forEach((actionName) => {
+        if (!(actionName in this)) {
+          this[actionName] = async () => {
+            return await this._defaultProcessAction(actionName);
+          };
+        }
+      });
     }
   }
   var base_default = BaseGlueProxy;
@@ -177,7 +190,7 @@
         });
       });
     }
-    async get(pk = null) {
+    async get() {
       const data = await this._processAction("get");
       this._values = data;
       this._loading = false;
@@ -267,16 +280,23 @@
     get _isNew() {
       return !this._values?.id;
     }
-    async get(pk = null) {
+    async get() {
       let data;
       if (this._parent) {
-        data = await this._parent._processAction("get", { id: pk });
+        data = await this._parent._processAction("get", { id: this._values?.id });
       } else {
         data = await this._processAction("get");
       }
       this._values = data;
       this._loading = false;
       this._loaded = true;
+    }
+    async _defaultProcessAction(actionName) {
+      if (this._parent) {
+        return await this._parent._processAction(actionName, { id: this._values?.id });
+      } else {
+        return await this._processAction(actionName);
+      }
     }
     async delete() {
       if (this._isNew && this._parent) {

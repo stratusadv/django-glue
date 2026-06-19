@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.db.models import QuerySet, Model
 from django.utils.functional import cached_property
 
@@ -25,6 +27,32 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         decoded_queryset = deserialize_queryset(encoded_query)
 
         return super().from_action_request_data(target=decoded_queryset, **kwargs)
+
+    def _register_subject_actions(self):
+        # TODO: this can be inherited from modelbase
+        queryset_class = self.get_model_class().objects.get_queryset().__class__
+        self._register_actions(subject_type=queryset_class, category='queryset')
+        self._register_actions(subject_type=self.get_model_class(), category='model')
+
+        if self.form_class is not None:
+            self._register_actions(subject_type=self._get_form_class(), category='form')
+
+    def _get_subject_action_target_by_category(
+        self,
+        category: str,
+        action_payload: ActionPayloadSchema
+    ) -> Any:
+        match category:
+            case 'model':
+                return self._get_model_instance_by_pk(pk=action_payload.post_data.get('id'))
+            case 'form':
+                model = self._get_model_instance_by_pk(pk=action_payload.post_data.get('id'))
+                # TODO: pass model to form
+                return self._get_form_instance()
+            case 'queryset':
+                return self.target
+            case _:
+                return None
 
     def get_model_class(self) -> type[Model]:
         return self.target.model

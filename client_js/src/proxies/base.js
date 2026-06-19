@@ -24,6 +24,8 @@ class BaseGlueProxy {
         /** @type {Object} */
         this._actions = !!actions ? actions : contextData.actions;
 
+        this._defineCustomActions()
+
         /**
          * @type {Object<string, Object<string, Function[]>>}
          */
@@ -138,6 +140,20 @@ class BaseGlueProxy {
 
             throw err;
         }
+    }
+
+    async _defaultProcessAction(actionName) {
+        return await this._processAction(actionName)
+    }
+
+    _defineCustomActions() {
+        Object.keys(this._actions).forEach(actionName => {
+            if (!(actionName in this)) {
+                this[actionName] = async () => {
+                    return await this._defaultProcessAction(actionName)
+                }
+            }
+        })
     }
 }
 

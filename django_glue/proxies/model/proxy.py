@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from django.apps import apps
 from django.db.models import Model
 from django.forms import model_to_dict
@@ -36,6 +38,24 @@ class GlueModelProxy(GlueModelProxyBase):
             target = model_class()
 
         return super().from_action_request_data(target=target, **kwargs)
+
+    def _register_subject_actions(self):
+        self._register_actions(subject_type=self.get_model_class(), category='model')
+        if self.form_class:
+            self._register_actions(subject_type=self.form_class, category='form')
+
+    def _get_subject_action_target_by_category(
+        self,
+        category: str,
+        action_payload: ActionPayloadSchema
+    ) -> Any:
+        match category:
+            case 'model':
+                return self.target
+            case 'form':
+                return self._get_form_instance()
+            case _:
+                return None
 
     def get_model_class(self) -> type[Model]:
         return self.target.__class__
