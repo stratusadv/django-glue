@@ -1,24 +1,32 @@
-from abc import abstractmethod, ABC
-from typing import Any
+from abc import ABCMeta, abstractmethod, ABC
 
 from django.core.handlers.wsgi import WSGIRequest
 from django.forms import Form
-from django.forms.models import ModelForm
-from django.http import JsonResponse
+from django.forms.models import ModelForm, ModelFormMetaclass
+from django.forms.forms import DeclarativeFieldsMetaclass
 
-from django_glue.form.response import JsonFormResponse
-from test_project.gorilla.models import Gorilla
-
-
-class _BaseJsonForm(ABC):
-    @abstractmethod
-    def process(self, request: WSGIRequest, payload: dict) -> JsonFormResponse:
-        raise NotImplementedError
+from django_glue.response import GlueJsonResponse
 
 
-class BaseJsonForm(Form, _BaseJsonForm, ABC):
+class _FormDeclarativeFieldsMetaclassABCMixin(DeclarativeFieldsMetaclass, ABCMeta):
     pass
 
 
-class BaseJsonModelForm(ModelForm, _BaseJsonForm, ABC):
+class _ModelFormMetaclassABCMixin(ModelFormMetaclass, ABCMeta):
+    pass
+
+
+class _BaseGlueForm(ABC):
+    GlueJsonResponse = GlueJsonResponse
+
+    @abstractmethod
+    def process(self, request: WSGIRequest, payload: dict) -> GlueJsonResponse:
+        raise NotImplementedError
+
+
+class GlueForm(_BaseGlueForm, Form, metaclass=_FormDeclarativeFieldsMetaclassABCMixin):
+    pass
+
+
+class GlueModelForm(_BaseGlueForm, ModelForm, metaclass=_ModelFormMetaclassABCMixin):
     pass

@@ -15,6 +15,9 @@
             {% url 'gorilla:skills' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Skills (M2M Test)' %}
 
+            {% url 'gorilla:progressive_form' as the_url %}
+            {% include 'element/nav_link_list_element.html' with url=the_url label='Build a Gorilla' %}
+
             {% url 'gorilla:random_arena' as the_url %}
             {% include 'element/nav_link_list_element.html' with url=the_url label='Arena (Template + Function)' %}
         </ul>

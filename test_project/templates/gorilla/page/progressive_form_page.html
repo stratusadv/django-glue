@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Build{% endblock %}
+
+{% block page_title %}Build a Gorilla{% endblock %}
+{% block page_subtitle %}Progressive Form using GlueForm{% endblock %}
+{% block page_nav %}
+    <a href="/" class="btn btn-outline-secondary btn-sm">Back to Combatants</a>
+{% endblock %}
+
+{% block content %}
+    <div x-data="{
+        progressive_form: Glue.form.progressive_form,
+    }">
+    </div>
+{% endblock %}

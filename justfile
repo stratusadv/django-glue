@@ -26,8 +26,7 @@ migrate-and-seed:
     {{ PYTHON }} seed.py
 
 opencode:
-    ./.venv/Scripts/activate.bat
-    opencode
+    ./.venv/Scripts/activate.bat; if ($?) { opencode . }
 
 run-doc-tests:
     mkdocs build --strict

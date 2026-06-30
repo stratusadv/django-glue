@@ -3,11 +3,14 @@ from __future__ import annotations
 from django.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
 from django_glue.proxies.form.mixin import GlueFormProxyMixin
 from django_glue.utils import get_class_from_path_string
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
 
 class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
@@ -15,7 +18,7 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
 
     _subject_type = BaseForm
 
-    def __init__(self, target: BaseForm, **kwargs):
+    def __init__(self, target: BaseForm, **kwargs) -> None:
         super().__init__(target=target, **kwargs)
         self.form_class_name = target.__class__.__name__
         self.form_module = target.__class__.__module__

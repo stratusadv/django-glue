@@ -1,5 +1,8 @@
 from django import forms
+from django.core.handlers.wsgi import WSGIRequest
 
+from django_glue.form.form import GlueModelForm
+from django_glue.response import GlueJsonResponse
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -24,6 +27,15 @@ class GorillaForm(forms.ModelForm):
             'profile_photo',
             'skills',
         ]
+
+
+class GorillaGlueModelForm(GlueModelForm):
+    def process(self, request: WSGIRequest, payload: dict) -> GlueJsonResponse:
+        return self.GlueJsonResponse({'hello': 'world'})
+
+    class Meta:
+        model = Gorilla
+        exclude = ['pk']
 
 
 class SkillForm(forms.ModelForm):
