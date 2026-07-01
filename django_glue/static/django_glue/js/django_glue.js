@@ -7,6 +7,7 @@
       this._uniqueName = proxyUniqueName;
       this._contextData = contextData;
       this._actions = actions ? actions : contextData.actions;
+      this._defineCustomActions();
       this._listeners = {
         before: {},
         after: {},
@@ -43,11 +44,11 @@
         await callback(event);
       }
     }
-    async _processAction(actionName, data = null) {
-      const eventData = data instanceof FormData ? Object.fromEntries(Array.from(data.keys()).map((key) => [
+    async _processAction(actionName, payload = null, contextOverrides = {}) {
+      const eventData = payload instanceof FormData ? Object.fromEntries(Array.from(payload.keys()).map((key) => [
         key,
-        data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
-      ])) : data;
+        payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
+      ])) : payload;
       const event = {
         action: actionName,
         proxy: this,
@@ -58,8 +59,8 @@
         const response = await this.http.sendActionRequest({
           uniqueName: this._uniqueName,
           action: actionName,
-          payload: data,
-          contextData: this._contextData
+          payload,
+          contextData: { ...this._contextData, ...contextOverrides }
         });
         event.result = response.data;
         await this.emitListeners("after", actionName, event);
@@ -69,6 +70,18 @@
         await this.emitListeners("error", actionName, event);
         throw err;
       }
+    }
+    async _defaultProcessAction(actionName, payload = {}) {
+      return await this._processAction(actionName, payload);
+    }
+    _defineCustomActions() {
+      Object.keys(this._actions).forEach((actionName) => {
+        if (!(actionName in this)) {
+          this[actionName] = async (payload = {}) => {
+            return await this._defaultProcessAction(actionName, payload);
+          };
+        }
+      });
     }
   }
   var base_default = BaseGlueProxy;
@@ -177,7 +190,7 @@
         });
       });
     }
-    async get(pk = null) {
+    async get() {
       const data = await this._processAction("get");
       this._values = data;
       this._loading = false;
@@ -267,10 +280,12 @@
     get _isNew() {
       return !this._values?.id;
     }
-    async get(pk = null) {
+    async get() {
       let data;
       if (this._parent) {
-        data = await this._parent._processAction("get", { id: pk });
+        data = await this._parent._processAction("get", null, {
+          instance_id: this._values?.id
+        });
       } else {
         data = await this._processAction("get");
       }
@@ -278,12 +293,23 @@
       this._loading = false;
       this._loaded = true;
     }
+    async _defaultProcessAction(actionName, payload) {
+      if (this._parent) {
+        return await this._parent._processAction(actionName, payload, {
+          instance_id: this._values?.id
+        });
+      } else {
+        return await this._processAction(actionName, payload);
+      }
+    }
     async delete() {
       if (this._isNew && this._parent) {
         await this._parent.refresh();
         return { success: true };
       }
-      const result = await this._processAction("delete", { id: this._values.id });
+      const result = await this._processAction("delete", null, {
+        instance_id: this._values.id
+      });
       if (this._parent) {
         await this._parent.refresh();
       }

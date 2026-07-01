@@ -25,14 +25,14 @@ class GlueModelProxy extends GlueFormProxy {
      * @param {GlueQuerySetProxy|null} [options.parentQuerySet] - Parent queryset proxy, if any.
      */
     constructor({
-                    http,
-                    proxyUniqueName,
-                    contextData,
-                    actions = null,
-                    autoFetch = false,
-                    values = null,
-                    parentQuerySet = null
-                }) {
+        http,
+        proxyUniqueName,
+        contextData,
+        actions = null,
+        autoFetch = false,
+        values = null,
+        parentQuerySet = null
+    }) {
         super({http, proxyUniqueName, contextData, actions, autoFetch});
         /** @type {Object|null} */
         this._values = values;
@@ -73,13 +73,14 @@ class GlueModelProxy extends GlueFormProxy {
     /**
      * Fetch current field values from the server. If the proxy was created from
      * a parent queryset, the request goes through the parent.
-     * @param {string|null} [pk] - Optional primary key to fetch.
      * @returns {Promise<void>}
      */
-    async get(pk = null) {
+    async get() {
         let data;
         if (this._parent) {
-            data = await this._parent._processAction('get', {id: pk})
+            data = await this._parent._processAction('get', null, {
+                instance_id: this._values?.id
+            })
         } else {
             data = await this._processAction('get')
         }
@@ -89,6 +90,20 @@ class GlueModelProxy extends GlueFormProxy {
 
         this._loading = false;
         this._loaded = true;
+    }
+
+    async _defaultProcessAction(actionName, payload) {
+        if (this._parent) {
+            // If a model proxy has a parent, we need to pass along the instance ID since this will
+            // be calling the owning queryset proxy methods, not the model methods. The queryset proxy
+            // methods need the ID to retrieve the proper model object. We pass it via context_data
+            // to avoid colliding with user-defined action parameters.
+            return await this._parent._processAction(actionName, payload, {
+                instance_id: this._values?.id
+            })
+        } else {
+            return await this._processAction(actionName, payload)
+        }
     }
 
     /**
@@ -101,7 +116,9 @@ class GlueModelProxy extends GlueFormProxy {
             await this._parent.refresh();
             return {success: true};
         }
-        const result = await this._processAction('delete', {id: this._values.id});
+        const result = await this._processAction('delete', null, {
+            instance_id: this._values.id
+        });
         if (this._parent) {
             await this._parent.refresh();
         }

@@ -1,5 +1,8 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.http import HttpRequest
+
+from django_glue.shortcuts.glue import Glue
 
 
 class Skill(models.Model):
@@ -47,6 +50,13 @@ class Gorilla(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @Glue.action(access=Glue.Access.DELETE)
+    def test_action(self, request: HttpRequest, foo: str | None = None) -> dict:
+        print(f"request.user: {request.user}")
+        print(f"message: {foo}")
+
+        return {'success': True, 'user': str(request.user), 'message': foo}
 
     def __str__(self):
         return self.name

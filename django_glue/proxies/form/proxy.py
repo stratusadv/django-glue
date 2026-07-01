@@ -31,6 +31,9 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
         target = form_class(initial=initial)
         return cls(target=target, **kwargs)
 
+    def _register_subject_actions(self):
+        self._register_actions(subject_type=self._get_form_class(), category='form')
+
     def _get_form_class(self) -> type[BaseForm]:
         """Return the form class for this proxy."""
         return self.target.__class__
@@ -58,7 +61,7 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
         return values
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: ActionPayloadSchema) -> dict:
+    def get(self, request) -> dict:
         """Return form field definitions and current values."""
         return {
             'fields': self._form_field_definitions,

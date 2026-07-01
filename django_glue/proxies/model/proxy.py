@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from typing import Any, TYPE_CHECKING
+
 from django.apps import apps
 from django.db.models import Model
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.proxies.decorators import action
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
 
 class GlueModelProxy(GlueModelProxyBase):
@@ -37,6 +41,24 @@ class GlueModelProxy(GlueModelProxyBase):
 
         return super().from_action_request_data(target=target, **kwargs)
 
+    def _register_subject_actions(self):
+        self._register_actions(subject_type=self.get_model_class(), category='model')
+        if self.form_class:
+            self._register_actions(subject_type=self.form_class, category='form')
+
+    def _get_subject_action_target_by_category(
+        self,
+        category: str,
+        action_payload: ActionPayloadSchema
+    ) -> Any:
+        match category:
+            case 'model':
+                return self.target
+            case 'form':
+                return self._get_form_instance()
+            case _:
+                return None
+
     def get_model_class(self) -> type[Model]:
         return self.target.__class__
 
@@ -51,11 +73,11 @@ class GlueModelProxy(GlueModelProxyBase):
         } | super()._build_context_data()
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: ActionPayloadSchema) -> dict:
+    def get(self, request) -> dict:
         return model_to_dict(
             instance=self._get_model_instance(), fields=self._form_field_definitions
         )
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, action_data: ActionPayloadSchema) -> None:
+    def delete(self, request) -> None:
         self._get_model_instance().delete()
