@@ -44,7 +44,7 @@
         await callback(event);
       }
     }
-    async _processAction(actionName, payload = null, contextOverrides = {}) {
+    async _processAction(actionName, payload = null, extraData = null) {
       const eventData = payload instanceof FormData ? Object.fromEntries(Array.from(payload.keys()).map((key) => [
         key,
         payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
@@ -60,7 +60,8 @@
           uniqueName: this._uniqueName,
           action: actionName,
           payload,
-          contextData: { ...this._contextData, ...contextOverrides }
+          contextData: this._contextData,
+          extraData
         });
         event.result = response.data;
         await this.emitListeners("after", actionName, event);
@@ -228,7 +229,7 @@
       return result;
     }
     async save() {
-      const result = await this._processAction("save", this._getFormData());
+      const result = await this._defaultProcessAction("save", this._getFormData());
       this._updateErrors(result.errors);
       if (result.success) {
         this._clearErrors();
@@ -393,13 +394,23 @@
         csrfProtected
       });
     }
-    async sendActionRequest({ uniqueName, action, payload, contextData }) {
+    async sendActionRequest({ uniqueName, action, payload, contextData, extraData = null }) {
       const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`;
       if (payload instanceof FormData) {
         payload.append("context_data", JSON.stringify(contextData));
+        if (extraData) {
+          payload.append("extra_data", JSON.stringify(extraData));
+        }
         return await this.sendFormPostRequest(url, payload);
       }
-      return await this.sendJsonPostRequest(url, { post_data: payload, context_data: contextData });
+      const requestBody = {
+        post_data: payload,
+        context_data: contextData
+      };
+      if (extraData) {
+        requestBody.extra_data = extraData;
+      }
+      return await this.sendJsonPostRequest(url, requestBody);
     }
     async sendKeepLiveRequest(uniqueNames) {
       return await this.sendJsonPostRequest(this._config.keepLiveUrlPath, { unique_names: uniqueNames });

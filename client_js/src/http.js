@@ -132,17 +132,29 @@ class GlueHttp {
      * @param {string} options.action - The action method name.
      * @param {Object|FormData} [options.payload] - The action payload data.
      * @param {Object} options.contextData - The proxy context data for server-side reconstruction.
+     * @param {Object} [options.extraData] - Proxy-type-specific runtime data (e.g., instance_id).
      * @returns {Promise<Object>} Response object.
      */
-    async sendActionRequest({uniqueName, action, payload, contextData}) {
+    async sendActionRequest({uniqueName, action, payload, contextData, extraData = null}) {
         const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
 
         if (payload instanceof FormData) {
             payload.append('context_data', JSON.stringify(contextData))
+            if (extraData) {
+                payload.append('extra_data', JSON.stringify(extraData))
+            }
             return await this.sendFormPostRequest(url, payload)
         }
 
-        return await this.sendJsonPostRequest(url, {post_data: payload, context_data: contextData})
+        const requestBody = {
+            post_data: payload,
+            context_data: contextData,
+        }
+        if (extraData) {
+            requestBody.extra_data = extraData
+        }
+
+        return await this.sendJsonPostRequest(url, requestBody)
     }
 
     /**

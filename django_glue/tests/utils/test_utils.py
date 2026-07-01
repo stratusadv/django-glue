@@ -106,13 +106,15 @@ class SerializeQuerySetTestCase(TestCase):
             height=2.0
         )
 
-    def test_serialize_returns_string(self):
-        """serialize_queryset should return a base64-encoded string."""
+    def test_serialize_returns_dict(self):
+        """serialize_queryset should return a safe dict (not pickle)."""
         qs = Gorilla.objects.all()
         encoded = serialize_queryset(qs)
 
-        self.assertIsInstance(encoded, str)
-        self.assertGreater(len(encoded), 0)
+        self.assertIsInstance(encoded, dict)
+        self.assertIn('app_label', encoded)
+        self.assertIn('model_name', encoded)
+        self.assertIn('query_params', encoded)
 
     def test_deserialize_returns_queryset(self):
         """deserialize_queryset should return a QuerySet."""
@@ -131,11 +133,10 @@ class SerializeQuerySetTestCase(TestCase):
 
         self.assertEqual(list(restored.values_list('pk', flat=True)), list(qs.values_list('pk', flat=True)))
 
-    def test_roundtrip_preserves_filter(self):
-        """Serialize then deserialize should preserve queryset filters."""
-        qs = Gorilla.objects.filter(age__gte=25)
+    def test_roundtrip_preserves_ordering(self):
+        """Serialize then deserialize should preserve queryset ordering."""
+        qs = Gorilla.objects.order_by('-age')
         encoded = serialize_queryset(qs)
         restored = deserialize_queryset(encoded)
 
-        self.assertEqual(restored.count(), qs.count())
         self.assertEqual(list(restored.values_list('pk', flat=True)), list(qs.values_list('pk', flat=True)))

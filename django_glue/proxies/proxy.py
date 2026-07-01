@@ -184,10 +184,14 @@ class BaseGlueProxy(ABC):
                 self.actions[action_category].items()
             })
 
-        return (
-            dict(actions=actions_data, subject_type=self._subject_type.__name__)
-            | self._build_context_data()
-        )
+        # make sure the context_data is always sorted the same for security checksums
+        return dict(sorted(
+            dict(
+                actions=actions_data,
+                subject_type=self._subject_type.__name__,
+                **self._build_context_data()
+            ).items()
+        ))
 
     def _build_action_kwargs(
         self,
@@ -202,6 +206,7 @@ class BaseGlueProxy(ABC):
         - 'post_data' param receives the full post_data dict
         - 'file_data' param receives the full file_data dict
         - 'context_data' param receives the full context_data dict
+        - 'extra_data' param receives the full extra_data dict
         - Other params are extracted from post_data by name
         """
         sig = inspect.signature(action_func)
@@ -209,6 +214,7 @@ class BaseGlueProxy(ABC):
         post_data = action_payload.post_data or {}
         file_data = action_payload.file_data or {}
         context_data = action_payload.context_data or {}
+        extra_data = action_payload.extra_data or {}
 
         params = list(sig.parameters.items())
         first_param_handled = False
@@ -230,6 +236,8 @@ class BaseGlueProxy(ABC):
                 kwargs[param_name] = file_data
             elif param_name == 'context_data':
                 kwargs[param_name] = context_data
+            elif param_name == 'extra_data':
+                kwargs[param_name] = extra_data
             # Regular params come from post_data by name
             elif param_name in post_data:
                 kwargs[param_name] = post_data[param_name]

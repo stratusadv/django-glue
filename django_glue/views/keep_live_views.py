@@ -14,5 +14,13 @@ def keep_live_view(request: HttpRequest) -> JsonResponse:
     if len(unique_names) > 0:
         glue_session.renew_proxies(unique_names)
 
-    return JsonResponse(data=glue_session.proxy_registry)
+    # Return only access levels, not internal signatures
+    registry_data = {}
+    for name, proxy_data in glue_session.proxy_registry.items():
+        if isinstance(proxy_data, dict):
+            registry_data[name] = proxy_data['access']
+        else:
+            registry_data[name] = proxy_data
+
+    return JsonResponse(data=registry_data)
 

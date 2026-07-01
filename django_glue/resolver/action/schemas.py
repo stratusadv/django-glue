@@ -11,8 +11,13 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
+# TODO: we need overhaul the way this is structured.
+# - The fields need better names
+# - file_data doesn't make sense here now that we are passing the full request object
+# - to actions. The actions can just get the file data straight from the request
 class ActionPayloadSchema(BaseModel):
     context_data: dict
+    extra_data: dict | None = None  # Proxy-type-specific runtime data (e.g., instance_id)
     post_data: dict | None = None
     file_data: dict | None = None
 
@@ -31,8 +36,11 @@ class ActionPayloadSchema(BaseModel):
                 message = 'context_data is required in a Glue action request'
                 raise AttributeError(message)
 
+            extra_data = post_data.pop('extra_data', None)
+
             return cls(
                 context_data=json.loads(context_data),
+                extra_data=json.loads(extra_data) if extra_data else None,
                 post_data=post_data,
                 file_data=request.FILES.dict(),
             )
