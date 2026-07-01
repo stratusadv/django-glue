@@ -52,11 +52,30 @@ class Gorilla(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     @Glue.action(access=Glue.Access.DELETE)
-    def test_action(self, request: HttpRequest, foo: str | None = None) -> dict:
-        print(f"request.user: {request.user}")
-        print(f"message: {foo}")
+    def battle_cry(self, request: HttpRequest, intensity: str = 'normal') -> dict:
+        """
+        Demonstrates a custom Glue action routed from frontend to server.
 
-        return {'success': True, 'user': str(request.user), 'message': foo}
+        The frontend calls: gorilla.battle_cry({intensity: 'fierce'})
+        This routes through django-glue to invoke this method on the server,
+        with the request object and named parameters automatically passed.
+        """
+        cries = {
+            'whisper': f'{self.name} softly grunts... 🦍',
+            'normal': f'{self.name} beats their chest! 🦍💪',
+            'fierce': f'{self.name} ROARS WITH PRIMAL FURY! 🦍🔥👊',
+        }
+        cry = cries.get(intensity, cries['normal'])
+
+        print(f"[Battle Cry] User '{request.user}' triggered {self.name}'s battle cry (intensity: {intensity})")
+
+        return {
+            'success': True,
+            'gorilla': self.name,
+            'cry': cry,
+            'intensity': intensity,
+            'triggered_by': str(request.user),
+        }
 
     def __str__(self):
         return self.name

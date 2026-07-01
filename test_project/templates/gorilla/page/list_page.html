@@ -240,9 +240,26 @@
                                 <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
                                     Delete
                                 </button>
-                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="console.log(await gorilla.test_action({foo: 'bar'}))">
-                                    Test
-                                </button>
+                            </div>
+                            <div class="d-flex gap-2 mt-2">
+                                <div class="btn-group flex-grow-1" x-data="{
+                                    cryIntensity: 'normal'    
+                                }">
+                                    <button type="button" class="btn btn-warning btn-sm" @click="
+                                        const result = await gorilla.battle_cry({intensity: cryIntensity || 'normal'});
+                                        if (result.success) {
+                                            $store.notifications.success(`${result.cry} (custom backend action triggered by: ${result.triggered_by})`);
+                                            console.log('🦍 Battle Cry Response:', result);
+                                        }
+                                    ">
+                                        🦍 Speak
+                                    </button>
+                                    <select class="form-select form-select-sm" style="max-width: 100px;" x-model="cryIntensity" @click.stop>
+                                        <option value="whisper">Whisper</option>
+                                        <option value="normal" selected>Normal</option>
+                                        <option value="fierce">Fierce</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
