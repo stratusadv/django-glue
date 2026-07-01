@@ -3,7 +3,6 @@ from __future__ import annotations
 from django.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
 from django_glue.proxies.form.mixin import GlueFormProxyMixin
@@ -58,7 +57,7 @@ class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
         return values
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: ActionPayloadSchema) -> dict:
+    def get(self, request) -> dict:
         """Return form field definitions and current values."""
         return {
             'fields': self._form_field_definitions,

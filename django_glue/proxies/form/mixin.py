@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.proxies.decorators import action
 
 
@@ -79,10 +78,9 @@ class GlueFormProxyMixin(ABC):
         return
 
     @action(access=GlueAccess.CHANGE)
-    def validate(self, action_data: ActionPayloadSchema) -> dict:
+    def validate(self, request, post_data: dict = None, file_data: dict = None) -> dict:
         """Validate form data without saving."""
-
-        form = self._get_form_instance(data=action_data.post_data, files=action_data.file_data)
+        form = self._get_form_instance(data=post_data, files=file_data)
 
         is_valid = form.is_valid()
 
@@ -93,9 +91,9 @@ class GlueFormProxyMixin(ABC):
         }
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, action_data: ActionPayloadSchema) -> dict:
+    def save(self, request, post_data: dict = None, file_data: dict = None) -> dict:
         """Validate and save form data."""
-        validation_result = self.validate(action_data)
+        validation_result = self.validate(request, post_data=post_data, file_data=file_data)
 
         if validation_result['success']:
             self._save(validation_result['cleaned_data'])
@@ -103,9 +101,8 @@ class GlueFormProxyMixin(ABC):
         return validation_result
 
     @action(access=GlueAccess.VIEW)
-    def foreign_key_choices(self, action_data: ActionPayloadSchema) -> list:
+    def foreign_key_choices(self, request, field_definition: list = None) -> list:
         """Get choices for a foreign key field."""
-        field_definition = action_data.post_data.get('field_definition')
         if (
             not field_definition
             or not isinstance(field_definition, (list, tuple))

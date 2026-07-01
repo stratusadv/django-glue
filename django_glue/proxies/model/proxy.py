@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from django.apps import apps
 from django.db.models import Model
 from django.forms import model_to_dict
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.proxies.decorators import action
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
 
 class GlueModelProxy(GlueModelProxyBase):
@@ -71,11 +73,11 @@ class GlueModelProxy(GlueModelProxyBase):
         } | super()._build_context_data()
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: ActionPayloadSchema) -> dict:
+    def get(self, request) -> dict:
         return model_to_dict(
             instance=self._get_model_instance(), fields=self._form_field_definitions
         )
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, action_data: ActionPayloadSchema) -> None:
+    def delete(self, request) -> None:
         self._get_model_instance().delete()

@@ -99,16 +99,17 @@ class BaseGlueProxy {
     /**
      * Execute a server-side action, emitting before/after/error listeners.
      * @param {string} actionName - The action method name.
-     * @param {Object|FormData|null} [data] - The action payload data.
+     * @param {Object|FormData|null} [payload] - The action payload data.
+     * @param {Object} [contextOverrides] - Additional context data to merge (e.g., instance_id for model instances inside of a queryset).
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, data = null) {
-        const eventData = data instanceof FormData ? Object.fromEntries(
-            Array.from(data.keys()).map(key => [
-                key, data.getAll(key).length > 1 ? data.getAll(key) : data.get(key)
+    async _processAction(actionName, payload = null, contextOverrides = {}) {
+        const eventData = payload instanceof FormData ? Object.fromEntries(
+            Array.from(payload.keys()).map(key => [
+                key, payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
             ])
-        ) : data;
+        ) : payload;
 
         const event = {
             action: actionName,
@@ -123,8 +124,8 @@ class BaseGlueProxy {
             const response = await this.http.sendActionRequest({
                 uniqueName: this._uniqueName,
                 action: actionName,
-                payload: data,
-                contextData: this._contextData
+                payload: payload,
+                contextData: {...this._contextData, ...contextOverrides}
             });
             event.result = response.data;
 
@@ -142,15 +143,15 @@ class BaseGlueProxy {
         }
     }
 
-    async _defaultProcessAction(actionName) {
-        return await this._processAction(actionName)
+    async _defaultProcessAction(actionName, payload = {}) {
+        return await this._processAction(actionName, payload)
     }
 
     _defineCustomActions() {
         Object.keys(this._actions).forEach(actionName => {
             if (!(actionName in this)) {
-                this[actionName] = async () => {
-                    return await this._defaultProcessAction(actionName)
+                this[actionName] = async (payload = {}) => {
+                    return await this._defaultProcessAction(actionName, payload)
                 }
             }
         })

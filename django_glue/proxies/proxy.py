@@ -10,11 +10,14 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC
-from typing import Any
+from typing import Any, Callable, TYPE_CHECKING
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
 from django_glue.resolver.action.schemas import ActionPayloadSchema
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 
 BASE_ACTION_CATEGORY_NAME = 'base'
@@ -90,14 +93,31 @@ class BaseGlueProxy(ABC):
                     parameters = inspect.signature(attr_value).parameters
                     parameter_data = {}
 
+                    # Skip internal params that are handled by _build_action_kwargs
+                    internal_params = {'self', 'args', 'kwargs', 'request', 'post_data', 'file_data', 'context_data'}
+                    first_param_seen = False
+
                     for param_name, param_value in parameters.items():
-                        if param_name in ['args', 'kwargs', 'self']:
+                        if param_name == 'self':
                             continue
 
-                        if isinstance(param_value.annotation, type):
-                            parameter_data[param_name] = param_value.annotation.__name__
+                        # Skip first param after self (always 'request')
+                        if not first_param_seen:
+                            first_param_seen = True
+                            continue
+
+                        # Skip other internal params
+                        if param_name in internal_params:
+                            continue
+
+                        # Convert annotation to string for JSON serialization
+                        annotation = param_value.annotation
+                        if annotation is inspect.Parameter.empty:
+                            parameter_data[param_name] = None
+                        elif isinstance(annotation, type):
+                            parameter_data[param_name] = annotation.__name__
                         else:
-                            parameter_data[param_name] = param_value.annotation
+                            parameter_data[param_name] = str(annotation)
 
                     cls._actions[cls.__name__][category][attr_name] = (
                         attr_value,
@@ -169,9 +189,63 @@ class BaseGlueProxy(ABC):
             | self._build_context_data()
         )
 
-    # TODO: this should be passed the request, and return an ActionResponse,
-    # and all registered actions should also return an ActionResponse
-    def process_action(self, action: str, action_payload: ActionPayloadSchema) -> dict:
+    def _build_action_kwargs(
+        self,
+        action_func: Callable,
+        action_payload: ActionPayloadSchema,
+        request: HttpRequest | None
+    ) -> dict:
+        """
+        Build kwargs for action based on its signature.
+
+        - First param after 'self' always receives request
+        - 'post_data' param receives the full post_data dict
+        - 'file_data' param receives the full file_data dict
+        - 'context_data' param receives the full context_data dict
+        - Other params are extracted from post_data by name
+        """
+        sig = inspect.signature(action_func)
+        kwargs = {}
+        post_data = action_payload.post_data or {}
+        file_data = action_payload.file_data or {}
+        context_data = action_payload.context_data or {}
+
+        params = list(sig.parameters.items())
+        first_param_handled = False
+
+        for param_name, param in params:
+            if param_name == 'self':
+                continue
+
+            # First param after self always gets request
+            if not first_param_handled:
+                first_param_handled = True
+                kwargs[param_name] = request
+                continue
+
+            # Special params for full dicts
+            if param_name == 'post_data':
+                kwargs[param_name] = post_data
+            elif param_name == 'file_data':
+                kwargs[param_name] = file_data
+            elif param_name == 'context_data':
+                kwargs[param_name] = context_data
+            # Regular params come from post_data by name
+            elif param_name in post_data:
+                kwargs[param_name] = post_data[param_name]
+            elif param.default is not inspect.Parameter.empty:
+                # Has default, skip (will use default)
+                pass
+            # else: missing required param - let Python raise TypeError
+
+        return kwargs
+
+    def process_action(
+        self,
+        action: str,
+        action_payload: ActionPayloadSchema,
+        request: HttpRequest | None = None
+    ) -> dict:
         for category, category_actions in self.actions.items():
             if action in category_actions:
                 action_func, _, required_access = category_actions[action]
@@ -190,7 +264,13 @@ class BaseGlueProxy(ABC):
                         current_access=self.access.name
                     )
 
-                return action_func(action_target, action_payload)
+                kwargs = self._build_action_kwargs(
+                    action_func=action_func,
+                    action_payload=action_payload,
+                    request=request
+                )
+
+                return action_func(action_target, **kwargs)
 
         raise GlueMissingActionError(
             action=action,
@@ -203,5 +283,3 @@ class BaseGlueProxy(ABC):
                 " '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
             )
         )
-
-        # TODO: validate that all actions have a single action_data: GlueActionRequestData param

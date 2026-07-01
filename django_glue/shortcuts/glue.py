@@ -14,10 +14,12 @@ from django_glue.proxies import (
     GlueTemplateProxy,
 )
 from django_glue.session import GlueSession
+from django_glue.proxies.decorators import action
 
 
 class Glue:
     Access = GlueAccess
+    action = staticmethod(action)
 
     @staticmethod
     def glue(

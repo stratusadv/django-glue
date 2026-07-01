@@ -1,4 +1,3 @@
-from django_glue.proxies.decorators import action as glue_action
 from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.shortcuts.glue import Glue
 from django_glue.shortcuts.urls import django_glue_urls

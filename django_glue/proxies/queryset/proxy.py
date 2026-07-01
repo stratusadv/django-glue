@@ -1,17 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from django.db.models import QuerySet, Model
 from django.utils.functional import cached_property
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.action.schemas import ActionPayloadSchema
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelProxy
 from django_glue.proxies.decorators import action
 from django_glue.proxies.model.base import GlueModelProxyBase
 from django_glue.utils import serialize_queryset, deserialize_queryset
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
 
 class GlueQuerySetProxy(GlueModelProxyBase):
@@ -42,11 +44,12 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         category: str,
         action_payload: ActionPayloadSchema
     ) -> Any:
+        instance_id = action_payload.context_data.get('instance_id')
         match category:
             case 'model':
-                return self._get_model_instance_by_pk(pk=action_payload.post_data.get('id'))
+                return self._get_model_instance_by_pk(pk=instance_id)
             case 'form':
-                model = self._get_model_instance_by_pk(pk=action_payload.post_data.get('id'))
+                model = self._get_model_instance_by_pk(pk=instance_id)
                 # TODO: pass model to form
                 return self._get_form_instance()
             case 'queryset':
@@ -179,11 +182,11 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             ]
 
     @action(access=GlueAccess.VIEW)
-    def query_with_params(self, action_data: ActionPayloadSchema) -> list:
-        if action_data.post_data:
-            if filter_params := action_data.post_data.get('filter'):
+    def query_with_params(self, request, post_data: dict = None) -> list:
+        if post_data:
+            if filter_params := post_data.get('filter'):
                 self._validate_filter_keys(filter_params)
-            self._apply_query_params(action_data.post_data)
+            self._apply_query_params(post_data)
 
         return self._output_data
 
@@ -213,33 +216,36 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return self._create_model_proxy_from_instance(target_instance)
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, action_data: ActionPayloadSchema) -> dict:
-        pk = action_data.post_data.get('id')
-        if pk:
+    def save(self, request, context_data: dict = None, post_data: dict = None, file_data: dict = None) -> dict:
+        context_data = context_data or {}
+        instance_id = context_data.get('instance_id')
+        if instance_id:
             # Update existing instance
-            proxy = self._get_target_model_instance_proxy(pk)
+            proxy = self._get_target_model_instance_proxy(instance_id)
         else:
             # Create new instance
             instance = self.get_model_class()()
             proxy = self._create_model_proxy_from_instance(instance)
-        return proxy.save(action_data)
+        return proxy.save(request, post_data=post_data, file_data=file_data)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, action_data: ActionPayloadSchema) -> dict:
-        pk = action_data.post_data.get('id')
-        if pk is None:
-            return {'success': False, 'error': 'id is required for delete action'}
-        return self._get_target_model_instance_proxy(pk).delete(action_data)
+    def delete(self, request, context_data: dict = None) -> dict:
+        context_data = context_data or {}
+        instance_id = context_data.get('instance_id')
+        if instance_id is None:
+            return {'success': False, 'error': 'instance_id is required for delete action'}
+        return self._get_target_model_instance_proxy(instance_id).delete(request)
 
     @action(access=GlueAccess.VIEW)
-    def get(self, action_data: ActionPayloadSchema) -> dict:
-        pk = action_data.post_data.get('id')
-        if pk is None:
-            return {'success': False, 'error': 'id is required for get action'}
-        return self._get_target_model_instance_proxy(pk).get(action_data)
+    def get(self, request, context_data: dict = None) -> dict:
+        context_data = context_data or {}
+        instance_id = context_data.get('instance_id')
+        if instance_id is None:
+            return {'success': False, 'error': 'instance_id is required for get action'}
+        return self._get_target_model_instance_proxy(instance_id).get(request)
 
     @action(access=GlueAccess.VIEW)
-    def new(self, action_data: ActionPayloadSchema) -> dict:
+    def new(self, request) -> dict:
         """Return default values for a new model instance."""
         model_class = self.get_model_class()
         instance = model_class()
