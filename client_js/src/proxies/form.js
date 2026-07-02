@@ -235,7 +235,7 @@ class GlueFormProxy extends BaseGlueProxy {
      * @returns {Promise<Object>} Save result with `{success, errors, ...}`.
      */
     async save() {
-        const result = await this._processAction('save', this._getFormData());
+        const result = await this._defaultProcessAction('save', this._getFormData());
 
         this._updateErrors(result.errors)
 

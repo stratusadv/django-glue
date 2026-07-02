@@ -44,7 +44,9 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         category: str,
         action_payload: ActionPayloadSchema
     ) -> Any:
-        instance_id = action_payload.context_data.get('instance_id')
+        # Get instance_id from extra_data (not context_data, which is signed)
+        extra_data = action_payload.extra_data or {}
+        instance_id = extra_data.get('instance_id')
         match category:
             case 'model':
                 return self._get_model_instance_by_pk(pk=instance_id)
@@ -216,9 +218,15 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return self._create_model_proxy_from_instance(target_instance)
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, request, context_data: dict = None, post_data: dict = None, file_data: dict = None) -> dict:
-        context_data = context_data or {}
-        instance_id = context_data.get('instance_id')
+    def save(
+        self,
+        request,
+        extra_data: dict = None,
+        post_data: dict = None,
+        file_data: dict = None
+    ) -> dict:
+        extra_data = extra_data or {}
+        instance_id = extra_data.get('instance_id')
         if instance_id:
             # Update existing instance
             proxy = self._get_target_model_instance_proxy(instance_id)
@@ -229,17 +237,17 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         return proxy.save(request, post_data=post_data, file_data=file_data)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, request, context_data: dict = None) -> dict:
-        context_data = context_data or {}
-        instance_id = context_data.get('instance_id')
+    def delete(self, request, extra_data: dict = None) -> dict:
+        extra_data = extra_data or {}
+        instance_id = extra_data.get('instance_id')
         if instance_id is None:
             return {'success': False, 'error': 'instance_id is required for delete action'}
         return self._get_target_model_instance_proxy(instance_id).delete(request)
 
     @action(access=GlueAccess.VIEW)
-    def get(self, request, context_data: dict = None) -> dict:
-        context_data = context_data or {}
-        instance_id = context_data.get('instance_id')
+    def get(self, request, extra_data: dict = None) -> dict:
+        extra_data = extra_data or {}
+        instance_id = extra_data.get('instance_id')
         if instance_id is None:
             return {'success': False, 'error': 'instance_id is required for get action'}
         return self._get_target_model_instance_proxy(instance_id).get(request)

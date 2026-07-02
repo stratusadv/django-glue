@@ -36,11 +36,6 @@ class Glue:
 
         GlueSession(request).register_proxy(proxy_instance)
 
-        if not hasattr(request, '__glue_context_data__'):
-            request.__glue_context_data__ = {}
-
-        request.__glue_context_data__[proxy_instance.unique_name] = proxy_instance.to_context_data()
-
     @staticmethod
     def model(
         request: HttpRequest,

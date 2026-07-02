@@ -23,7 +23,12 @@ class ActionResolver(BaseResolver):
 
         action_payload = ActionPayloadSchema.from_request(self.request)
 
-        proxy_access = GlueSession(self.request).get_proxy_access(self.unique_name)
+        session = GlueSession(self.request)
+
+        # Verify context_data hasn't been tampered with
+        session.verify_action_signature(self.unique_name, action_payload.context_data)
+
+        proxy_access = session.get_proxy_access(self.unique_name)
 
         proxy_instance = SUBJECT_TYPE_TO_PROXY_TYPE[
             action_payload.context_data['subject_type']

@@ -32,24 +32,19 @@ class ActionViewTestCase(TestCase):
         )
         self.request = self.factory.post('/')
         self.request.session = MockSession()
-        # Register the proxy
-        proxy = GlueModelProxy(
+        # Register the proxy and store context_data for later use
+        self.proxy = GlueModelProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.CHANGE,
         )
-        GlueSession(self.request).register_proxy(proxy)
+        GlueSession(self.request).register_proxy(self.proxy)
+        self.context_data = self.proxy.to_context_data()
 
     def _build_action_request(self, action, post_data=None):
         """Build a POST request for an action."""
-        context_data = {
-            'subject_type': 'Model',
-            'model_class': 'Gorilla',
-            'app_label': 'gorilla',
-            'target_pk': self.gorilla.pk,
-        }
         body = {
-            'context_data': context_data,
+            'context_data': self.context_data,
             'post_data': post_data or {},
             'file_data': {},
         }

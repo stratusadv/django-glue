@@ -96,8 +96,9 @@ class GlueModelProxy extends GlueFormProxy {
         if (this._parent) {
             // If a model proxy has a parent, we need to pass along the instance ID since this will
             // be calling the owning queryset proxy methods, not the model methods. The queryset proxy
-            // methods need the ID to retrieve the proper model object. We pass it via context_data
-            // to avoid colliding with user-defined action parameters.
+            // methods need the ID to retrieve the proper model object. We pass it via extra_data
+            // to avoid colliding with user-defined action parameters and to keep context_data immutable.
+
             return await this._parent._processAction(actionName, payload, {
                 instance_id: this._values?.id
             })

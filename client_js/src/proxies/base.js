@@ -100,11 +100,11 @@ class BaseGlueProxy {
      * Execute a server-side action, emitting before/after/error listeners.
      * @param {string} actionName - The action method name.
      * @param {Object|FormData|null} [payload] - The action payload data.
-     * @param {Object} [contextOverrides] - Additional context data to merge (e.g., instance_id for model instances inside of a queryset).
+     * @param {Object} [extraData] - Proxy-type-specific runtime data (e.g., instance_id for queryset items).
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, payload = null, contextOverrides = {}) {
+    async _processAction(actionName, payload = null, extraData = null) {
         const eventData = payload instanceof FormData ? Object.fromEntries(
             Array.from(payload.keys()).map(key => [
                 key, payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
@@ -125,7 +125,8 @@ class BaseGlueProxy {
                 uniqueName: this._uniqueName,
                 action: actionName,
                 payload: payload,
-                contextData: {...this._contextData, ...contextOverrides}
+                contextData: this._contextData,  // Never modified - signature verified server-side
+                extraData: extraData,  // Proxy-specific runtime data (not signed)
             });
             event.result = response.data;
 
