@@ -106,13 +106,13 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
         result = proxy.render_html(action_data)
 
         self.assertIn('html', result)
         self.assertIsInstance(result['html'], str)
 
-    def test_render_html_merges_context_data_with_post_data(self):
+    def test_render_html_merges_context_data_with_user_data(self):
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
@@ -122,7 +122,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'greeting': 'Override'},
+            user_data={'greeting': 'Override'},
         )
         result = proxy.render_html(action_data)
 
@@ -137,7 +137,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
 
         result = proxy.process_action('render_html', action_data)
         self.assertIn('html', result)
@@ -150,7 +150,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(context_data={}, post_data={})
+            action_data = ActionPayloadSchema(context_data={}, user_data={})
             result = proxy.process_action('render_html', action_data)
             self.assertIn('html', result)
 
@@ -161,14 +161,14 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
 
         with self.assertRaises(GlueError) as context:
             proxy.render_html(action_data)
 
         self.assertIn('Template not found', str(context.exception))
 
-    def test_render_html_with_no_post_data(self):
+    def test_render_html_with_no_user_data(self):
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
@@ -183,7 +183,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
         self.assertIn('Hello', result['html'])
 
     def test_render_html_context_data_overrides(self):
-        """post_data should override context_data values."""
+        """user_data should override context_data values."""
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
@@ -193,7 +193,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'greeting': 'Frontend'},
+            user_data={'greeting': 'Frontend'},
         )
         result = proxy.render_html(action_data)
 
@@ -237,7 +237,7 @@ class GlueTemplateProxyProcessActionAccessTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
         result = proxy.process_action('render_html', action_data)
 
         self.assertIn('html', result)

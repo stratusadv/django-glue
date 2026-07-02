@@ -61,6 +61,7 @@ class GlueFormProxy extends BaseGlueProxy {
             }
 
             fieldData.__glue__loadingChoices = true;
+            // Pass field_definition in user_data for this action
             fieldData.__glue__choicesPromise = this._processAction('foreign_key_choices', {
                 'field_definition': [
                     fieldName,
@@ -162,11 +163,45 @@ class GlueFormProxy extends BaseGlueProxy {
     }
 
     /**
+     * Override _processAction to include form field values in proxyData.
+     * This ensures the backend form instance always has access to accumulated field state.
+     * @param {string} actionName - The action method name.
+     * @param {Object|null} [userData] - Action-specific user data.
+     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state.
+     * @returns {Promise<Object>} The server response data.
+     * @private
+     */
+    async _processAction(actionName, userData = null, proxyData = null) {
+        // Always include form_values in proxyData so backend can bind the form
+        const formProxyData = {
+            ...(proxyData || {}),
+            form_values: this._values || {},
+        };
+
+        return await BaseGlueProxy.prototype._processAction.call(this, actionName, userData, formProxyData);
+    }
+
+    /**
+     * Handle proxy_data from server response.
+     * Updates form errors and field values from the response.
+     * @param {Object} proxyData - Proxy-intrinsic state from the server.
+     * @protected
+     */
+    _handleResponseProxyData(proxyData) {
+        if (proxyData.errors) {
+            this._updateErrors(proxyData.errors);
+        }
+        if (proxyData.form_values) {
+            this._values = {...this._values, ...proxyData.form_values};
+        }
+    }
+
+    /**
      * Fetch current field values from the server.
      * @returns {Promise<Object>} The fetched field values.
      */
     async get() {
-        const data = await this._processAction('get');
+        const data = await super._processAction('get');
         this._values = data;
         this._loading = false;
         this._loaded = true;
@@ -196,36 +231,12 @@ class GlueFormProxy extends BaseGlueProxy {
     }
 
     /**
-     * Build a FormData object from the current field values, handling arrays,
-     * files, blobs, and null values.
-     * @returns {FormData} The constructed FormData.
-     * @private
-     */
-    _getFormData() {
-        const formData = new FormData();
-        Object.entries(this._values).forEach(([fieldName, value]) => {
-            if (Array.isArray(value)) {
-                value.forEach(item => formData.append(fieldName, item));
-            } else if (value instanceof File || value instanceof Blob) {
-                formData.append(fieldName, value);
-            } else if (value instanceof FileList) {
-                Array.from(value).forEach(file => formData.append(fieldName, file));
-            } else {
-                formData.append(fieldName, value === null || value === undefined ? '' : value);
-            }
-        });
-
-        return formData;
-    }
-
-    /**
      * Validate the current field values against the server.
      * @returns {Promise<Object>} Validation result with `{success, errors, ...}`.
      */
     async validate() {
-        const result = await this._processAction('validate', this._values);
-        this._errors = result.errors || {};
-
+        const result = await this._processAction('validate');
+        this._updateErrors(result.errors);
         return result;
     }
 
@@ -235,14 +246,26 @@ class GlueFormProxy extends BaseGlueProxy {
      * @returns {Promise<Object>} Save result with `{success, errors, ...}`.
      */
     async save() {
-        const result = await this._defaultProcessAction('save', this._getFormData());
+        const result = await this._processAction('save');
 
         this._updateErrors(result.errors)
 
         if (result.success) {
             this._clearErrors()
-            this.get(this._values.id)
+            this.get()
         }
+
+        return result;
+    }
+
+    /**
+     * Process form with custom logic (e.g., multi-step workflows).
+     * @param {Object|null} [userData] - Action-specific user data (e.g., step number).
+     * @returns {Promise<Object>} Process result from the server.
+     */
+    async process(userData = null) {
+        const result = await this._processAction('process', userData);
+        this._updateErrors(this._errors)
 
         return result;
     }

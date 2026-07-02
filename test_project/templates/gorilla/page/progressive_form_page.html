@@ -3,14 +3,282 @@
 {% block title %}Build{% endblock %}
 
 {% block page_title %}Build a Gorilla{% endblock %}
-{% block page_subtitle %}Progressive Form using GlueForm{% endblock %}
+{% block page_subtitle %}Progressive Form using GlueForm - Multi-step state-based form workflow{% endblock %}
 {% block page_nav %}
     <a href="/" class="btn btn-outline-secondary btn-sm">Back to Combatants</a>
 {% endblock %}
 
+{% block extra_css %}
+.step-indicator {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+}
+
+.step-indicator .step {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin: 0 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.step-indicator .step.active {
+    background: var(--gorilla-green);
+    color: white;
+}
+
+.step-indicator .step.completed {
+    background: var(--gorilla-gold);
+    color: var(--gorilla-green-dark);
+}
+
+.step-indicator .step.pending {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.step-indicator .step-line {
+    width: 60px;
+    height: 3px;
+    background: #e9ecef;
+    align-self: center;
+}
+
+.step-indicator .step-line.completed {
+    background: var(--gorilla-gold);
+}
+
+.step-content {
+    min-height: 300px;
+}
+
+.result-card {
+    border-left: 4px solid var(--gorilla-green);
+    background: rgba(var(--gorilla-green-rgb), 0.1);
+}
+
+.result-card.error {
+    border-left-color: #dc3545;
+    background: rgba(220, 53, 69, 0.1);
+}
+{% endblock %}
+
 {% block content %}
     <div x-data="{
-        progressive_form: Glue.form.progressive_form,
+        gorilla: Glue.form.progressive_form,
+        currentStep: 1,
+        messages: [],
+        loading: false,
+        completedSteps: [],
+        gorillaId: null,
+
+        async processStep() {
+            this.loading = true;
+            this.messages = [];
+
+            try {
+                const response = await this.gorilla.process({payload: {
+                    step: this.currentStep
+                }});
+                // GlueJsonResponse returns {messages, payload}
+                this.messages = response.messages || [];
+                const payload = response.payload || {};
+
+                // Check if we have errors (no next_step means validation failed)
+                if (payload.next_step) {
+                    this.completedSteps.push(this.currentStep);
+                    this.currentStep = payload.next_step;
+                } else if (payload.gorilla_id) {
+                    // Final step succeeded
+                    this.completedSteps.push(this.currentStep);
+                    this.gorillaId = payload.gorilla_id;
+                }
+                // If neither next_step nor gorilla_id, validation failed - errors are on gorilla.$fields
+            } catch (error) {
+                this.messages = [{level_tag: 'error', message: 'An error occurred. Please try again.'}];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        goBack() {
+            if (this.currentStep > 1) {
+                this.currentStep--;
+                this.completedSteps = this.completedSteps.filter(s => s < this.currentStep);
+                this.messages = [];
+            }
+        },
+
+        resetForm() {
+            this.currentStep = 1;
+            this.completedSteps = [];
+            this.messages = [];
+            this.gorillaId = null;
+            this.gorilla.name = '';
+            this.gorilla.age = '';
+            this.gorilla.weight = '';
+            this.gorilla.height = '';
+            this.gorilla.description = '';
+        },
+
+        isStepCompleted(step) {
+            return this.completedSteps.includes(step);
+        },
+
+        hasErrorMessage() {
+            return this.messages.some(m => m.level_tag === 'error');
+        }
     }">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card card-gorilla">
+                    <div class="card-header bg-gorilla-green text-white text-center py-3">
+                        <h4 class="mb-0" style="font-family: 'Jersey 15', sans-serif;">
+                            Create New Fighter
+                        </h4>
+                    </div>
+
+                    <div class="card-body p-4">
+                        <!-- Step Indicator -->
+                        <div class="step-indicator">
+                            <div class="step"
+                                 :class="{
+                                     'active': currentStep === 1,
+                                     'completed': isStepCompleted(1),
+                                     'pending': currentStep !== 1 && !isStepCompleted(1)
+                                 }">
+                                1
+                            </div>
+                            <div class="step-line" :class="{'completed': isStepCompleted(1)}"></div>
+                            <div class="step"
+                                 :class="{
+                                     'active': currentStep === 2,
+                                     'completed': isStepCompleted(2),
+                                     'pending': currentStep !== 2 && !isStepCompleted(2)
+                                 }">
+                                2
+                            </div>
+                            <div class="step-line" :class="{'completed': isStepCompleted(2)}"></div>
+                            <div class="step"
+                                 :class="{
+                                     'active': currentStep === 3,
+                                     'completed': isStepCompleted(3),
+                                     'pending': currentStep !== 3 && !isStepCompleted(3)
+                                 }">
+                                3
+                            </div>
+                        </div>
+
+                        <!-- Step Content -->
+                        <div class="step-content">
+                            <!-- Step 1: Basic Info -->
+                            <div x-show="currentStep === 1" x-transition>
+                                <h5 class="text-gorilla-green mb-4">Step 1: Basic Information</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        {% include "components/glue_text_input.html" with glue_field="gorilla.$fields.name" input_class="form-control-gorilla" placeholder="Enter the fighter's name" %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.age" input_class="form-control-gorilla" placeholder="Enter age" %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Physical Attributes -->
+                            <div x-show="currentStep === 2" x-transition>
+                                <h5 class="text-gorilla-green mb-4">Step 2: Physical Attributes</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.weight" input_class="form-control-gorilla" placeholder="Enter weight" %}
+                                    </div>
+                                    <div class="col-md-6">
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.height" input_class="form-control-gorilla" placeholder="Enter height" %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Final Details -->
+                            <div x-show="currentStep === 3 && !gorillaId" x-transition>
+                                <h5 class="text-gorilla-green mb-4">Step 3: Final Details</h5>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        {% include "components/glue_textarea.html" with glue_field="gorilla.$fields.description" input_class="form-control-gorilla" rows="4" placeholder="Enter the fighter's backstory, achievements, and fighting spirit..." %}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Success State -->
+                            <div x-show="gorillaId" x-transition>
+                                <div class="text-center py-4">
+                                    <div class="mb-3">
+                                        <span style="font-size: 4rem;">&#129421;</span>
+                                    </div>
+                                    <h4 class="text-gorilla-green mb-3">Fighter Created!</h4>
+                                    <template x-for="msg in messages" :key="msg.message">
+                                        <p class="text-muted mb-4" x-text="msg.message"></p>
+                                    </template>
+                                    <div class="d-flex gap-2 justify-content-center">
+                                        <a :href="'/' + gorillaId + '/'" class="btn btn-gorilla">
+                                            View Fighter
+                                        </a>
+                                        <button class="btn btn-gorilla-secondary" @click="resetForm()">
+                                            Create Another
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Messages Display -->
+                        <div x-show="messages.length > 0 && !gorillaId" class="mt-3">
+                            <template x-for="msg in messages" :key="msg.message">
+                                <div class="alert mb-2"
+                                     :class="{
+                                         'alert-danger': msg.level_tag === 'error',
+                                         'alert-success': msg.level_tag === 'success',
+                                         'alert-warning': msg.level_tag === 'warning',
+                                         'alert-info': msg.level_tag === 'info'
+                                     }"
+                                     x-text="msg.message"></div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Footer with Navigation -->
+                    <div class="card-footer bg-gorilla-cream" x-show="!gorillaId">
+                        <div class="d-flex gap-2 justify-content-between">
+                            <button
+                                class="btn btn-gorilla-secondary"
+                                @click="goBack()"
+                                :disabled="currentStep === 1 || loading"
+                                x-show="currentStep > 1">
+                                Back
+                            </button>
+                            <div class="flex-grow-1"></div>
+                            <button
+                                class="btn btn-gorilla px-4"
+                                @click="processStep()"
+                                :disabled="loading">
+                                <span x-show="loading" class="spinner-border spinner-border-sm me-1"></span>
+                                <span x-text="currentStep === 3 ? 'Create Fighter' : 'Next Step'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debug Info (optional - shows what process() returns) -->
+                <div class="mt-4" x-show="messages.length > 0">
+                    <details class="small">
+                        <summary class="text-muted">Debug: process() response</summary>
+                        <pre class="bg-light p-2 rounded mt-1" x-text="JSON.stringify({messages, gorillaId, currentStep, completedSteps}, null, 2)"></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}

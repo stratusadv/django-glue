@@ -36,7 +36,7 @@ class ForeignKeyChoicesTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'field_definition': ('skills', {'type': 'ModelMultipleChoiceField'})}
+            user_data={'field_definition': ('skills', {'type': 'ModelMultipleChoiceField'})}
         )
 
         result = proxy.foreign_key_choices(action_data)
@@ -52,7 +52,7 @@ class ForeignKeyChoicesTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'field_definition': ('name', {'type': 'CharField'})}
+            user_data={'field_definition': ('name', {'type': 'CharField'})}
         )
 
         result = proxy.foreign_key_choices(action_data)
@@ -68,7 +68,7 @@ class ForeignKeyChoicesTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'field_definition': ('name', {'type': 'CharField'})}
+            user_data={'field_definition': ('name', {'type': 'CharField'})}
         )
 
         result = proxy.process_action('foreign_key_choices', action_data)
@@ -85,7 +85,7 @@ class ForeignKeyChoicesTestCase(TestCase):
 
             action_data = ActionPayloadSchema(
                 context_data={},
-                post_data={'field_definition': ('name', {'type': 'CharField'})}
+                user_data={'field_definition': ('name', {'type': 'CharField'})}
             )
 
             result = proxy.foreign_key_choices(action_data)

@@ -83,8 +83,8 @@
                 }, 'error');
             },
     }">
-        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="gorilla_form" modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
-        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla" modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
+        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_form" glue_type='form' modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
+        {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_model" glue_type='model' modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
 
         <!-- Profile Modal (Inner HTML) -->
         <div class="modal fade" id="profileModal" tabindex="-1">
@@ -176,7 +176,7 @@
                         x-model.debounce="search">
                 </div>
                 
-                <div class="d-flex gap-2 justify-content-center">
+                <div class="d-flex gap-2 justify-content-center flex-wrap">
                     <button class="btn btn-gorilla" type="button" @click="await gorillaQuerySet.prependNew()">
                         + Add Inline
                     </button>
@@ -186,6 +186,9 @@
                     <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addGorillaModelModal">
                         + Add via Model
                     </button>
+                    <a href="{% url 'gorilla:progressive_form' %}" class="btn btn-outline-secondary">
+                        + Add via Progressive Form
+                    </a>
                 </div>
                 
             </div>

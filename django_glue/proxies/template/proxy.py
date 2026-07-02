@@ -50,9 +50,9 @@ class GlueTemplateProxy(BaseGlueProxy):
         }
 
     @action(access=GlueAccess.VIEW)
-    def render_html(self, request, post_data: dict = None) -> dict:
-        post_data = post_data or {}
-        merged_context = {**self._context_data, **post_data}
+    def render_html(self, request, user_data: dict = None) -> dict:
+        user_data = user_data or {}
+        merged_context = {**self._context_data, **user_data}
 
         try:
             html = render_to_string(

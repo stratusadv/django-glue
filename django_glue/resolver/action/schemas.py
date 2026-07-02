@@ -5,45 +5,58 @@ import json
 
 from pydantic import BaseModel
 
-from django_glue.utils import get_request_body_data
-
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-# TODO: we need overhaul the way this is structured.
-# - The fields need better names
-# - file_data doesn't make sense here now that we are passing the full request object
-# - to actions. The actions can just get the file data straight from the request
 class ActionPayloadSchema(BaseModel):
+    """
+    Schema for action request payloads.
+
+    All action requests use multipart/form-data for consistent handling of
+    all data types including files.
+
+    Attributes:
+        context_data: Immutable proxy metadata used for server-side reconstruction.
+                     Signed and verified to prevent tampering.
+        proxy_data: Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
+                   This data is specific to the proxy type and persists across calls.
+        user_data: Action-specific user data (e.g., step number, filter params).
+                  This is what the user explicitly passes to the action.
+        file_data: File uploads from the request.
+    """
     context_data: dict
-    extra_data: dict | None = None  # Proxy-type-specific runtime data (e.g., instance_id)
-    post_data: dict | None = None
+    proxy_data: dict | None = None
+    user_data: dict | None = None
     file_data: dict | None = None
 
     @classmethod
     def from_request(cls, request: HttpRequest) -> ActionPayloadSchema:
-        if request.content_type == 'multipart/form-data':
-            post_data = {}
+        """
+        Parse an action request. All requests are expected to be multipart/form-data.
 
-            for key in request.POST:
-                values = request.POST.getlist(key)
-                # If multiple values, keep as list; otherwise unwrap single value
-                post_data[key] = values if len(values) > 1 else values[0]
+        The request POST data contains JSON-serialized strings for:
+        - context_data: Required. Proxy metadata for reconstruction.
+        - proxy_data: Optional. Proxy-intrinsic state (e.g., form_values).
+        - user_data: Optional. Action-specific user data.
 
-            context_data = post_data.pop('context_data', None)
-            if context_data is None:
-                message = 'context_data is required in a Glue action request'
-                raise AttributeError(message)
-
-            extra_data = post_data.pop('extra_data', None)
-
-            return cls(
-                context_data=json.loads(context_data),
-                extra_data=json.loads(extra_data) if extra_data else None,
-                post_data=post_data,
-                file_data=request.FILES.dict(),
+        Files are extracted from request.FILES.
+        """
+        if request.content_type != 'multipart/form-data':
+            raise ValueError(
+                f'Action requests must use multipart/form-data, got {request.content_type}'
             )
-        body_data = get_request_body_data(request)
 
-        return cls(**body_data)
+        context_data_raw = request.POST.get('context_data')
+        if context_data_raw is None:
+            raise AttributeError('context_data is required in a Glue action request')
+
+        proxy_data_raw = request.POST.get('proxy_data')
+        user_data_raw = request.POST.get('user_data')
+
+        return cls(
+            context_data=json.loads(context_data_raw),
+            proxy_data=json.loads(proxy_data_raw) if proxy_data_raw else None,
+            user_data=json.loads(user_data_raw) if user_data_raw else None,
+            file_data=request.FILES.dict() if request.FILES else None,
+        )

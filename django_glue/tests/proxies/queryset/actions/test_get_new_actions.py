@@ -39,7 +39,7 @@ class GlueQuerySetProxyGetTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'id': self.gorilla1.pk}
+            user_data={'id': self.gorilla1.pk}
         )
         result = proxy.get(action_data)
 
@@ -57,7 +57,7 @@ class GlueQuerySetProxyGetTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'id': 99999}
+            user_data={'id': 99999}
         )
 
         with self.assertRaises(GlueModelInstanceNotFoundError):
@@ -73,7 +73,7 @@ class GlueQuerySetProxyGetTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'id': self.gorilla1.pk}
+            user_data={'id': self.gorilla1.pk}
         )
 
         result = proxy.process_action('get', action_data)
@@ -90,7 +90,7 @@ class GlueQuerySetProxyGetTestCase(TestCase):
 
             action_data = ActionPayloadSchema(
                 context_data={},
-                post_data={'id': self.gorilla1.pk}
+                user_data={'id': self.gorilla1.pk}
             )
             result = proxy.get(action_data)
             self.assertEqual(result['name'], 'Gorilla 1')
@@ -225,14 +225,14 @@ class GlueQuerySetProxyNewTestCase(TestCase):
         self.assertEqual(reconstructed.target.count(), proxy.target.count())
 
     def test_get_returns_error_for_missing_pk(self):
-        """get() should return error dict when id is missing from post_data."""
+        """get() should return error dict when id is missing from user_data."""
         proxy = GlueQuerySetProxy(
             target=Gorilla.objects.all(),
             unique_name='gorillas',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
         result = proxy.get(action_data)
 
         self.assertFalse(result['success'])

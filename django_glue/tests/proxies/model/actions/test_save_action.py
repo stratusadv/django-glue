@@ -36,7 +36,7 @@ class GlueModelProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Updated Name',
                 'description': 'Updated description',
                 'age': 5,
@@ -60,7 +60,7 @@ class GlueModelProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Persisted Name',
                 'description': 'Persisted description',
                 'age': 1,
@@ -81,7 +81,7 @@ class GlueModelProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'New Name',
                 'description': 'New description',
                 'age': 10,
@@ -108,7 +108,7 @@ class GlueModelProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Allowed Update',
                 'description': 'Should be ignored',  # Not in fields
                 'age': 999,  # Not in fields
@@ -130,7 +130,7 @@ class GlueModelProxySaveTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'name': 'Should Fail'})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'name': 'Should Fail'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('save', action_data)
@@ -141,7 +141,7 @@ class GlueModelProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Updated with DELETE access',
                 'description': 'Description',
                 'age': 1,

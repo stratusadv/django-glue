@@ -37,7 +37,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'id': self.gorilla1.pk,
                 'name': 'Updated Gorilla 1',
                 'description': 'First gorilla',
@@ -63,7 +63,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'id': self.gorilla1.pk,
                 'name': 'New Name',
                 'description': 'First gorilla',
@@ -89,7 +89,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'id': 99999,
                 'name': 'Should Fail',
                 'description': 'Test',
@@ -113,7 +113,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'id': self.gorilla1.pk,
                 'name': 'Should Fail',
                 'description': 'Test',
@@ -135,7 +135,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'id': self.gorilla1.pk,
                 'name': 'Updated with DELETE access',
                 'description': 'First gorilla',
@@ -160,7 +160,7 @@ class GlueQuerySetProxySaveTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'New Gorilla',
                 'description': 'Created via save',
                 'age': 10,

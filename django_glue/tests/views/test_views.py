@@ -41,11 +41,11 @@ class ActionViewTestCase(TestCase):
         GlueSession(self.request).register_proxy(self.proxy)
         self.context_data = self.proxy.to_context_data()
 
-    def _build_action_request(self, action, post_data=None):
+    def _build_action_request(self, action, user_data=None):
         """Build a POST request for an action."""
         body = {
             'context_data': self.context_data,
-            'post_data': post_data or {},
+            'user_data': user_data or {},
             'file_data': {},
         }
         return self.factory.post(
@@ -76,7 +76,7 @@ class ActionViewTestCase(TestCase):
 
     def test_action_view_executes_save_action(self):
         """action_view should execute the save action and persist changes."""
-        post_data = {
+        user_data = {
             'name': 'Updated Name',
             'description': 'Test',
             'age': 25,
@@ -84,7 +84,7 @@ class ActionViewTestCase(TestCase):
             'height': 1.8,
             'rank_points': 0,
         }
-        request = self._build_action_request('save', post_data)
+        request = self._build_action_request('save', user_data)
         request.session = self.request.session
 
         response = action_view(request, 'gorilla', 'save')
@@ -114,7 +114,7 @@ class ActionViewTestCase(TestCase):
                 'app_label': 'gorilla',
                 'target_pk': self.gorilla.pk,
             },
-            'post_data': {},
+            'user_data': {},
             'file_data': {},
         }
         request = self.factory.post(

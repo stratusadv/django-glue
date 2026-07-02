@@ -144,7 +144,7 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'a': 5, 'b': 10},
+            user_data={'a': 5, 'b': 10},
         )
         result = proxy.execute(action_data)
 
@@ -159,7 +159,7 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'name': 'World', 'greeting': 'Hi'},
+            user_data={'name': 'World', 'greeting': 'Hi'},
         )
         result = proxy.execute(action_data)
 
@@ -174,13 +174,13 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'x': 21},
+            user_data={'x': 21},
         )
         result = proxy.execute(action_data)
 
         self.assertEqual(result['result'], 42)
 
-    def test_execute_with_partial_post_data(self):
+    def test_execute_with_partial_user_data(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.greet',
             unique_name='greet',
@@ -189,7 +189,7 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'name': 'World'},
+            user_data={'name': 'World'},
         )
         result = proxy.execute(action_data)
 
@@ -234,7 +234,7 @@ class GlueFunctionProxyProcessActionAccessTestCase(TestCase):
 
         action_data = ActionPayloadSchema(
             context_data={},
-            post_data={'a': 1, 'b': 2},
+            user_data={'a': 1, 'b': 2},
         )
         result = proxy.process_action('execute', action_data)
 
@@ -250,7 +250,7 @@ class GlueFunctionProxyProcessActionAccessTestCase(TestCase):
 
             action_data = ActionPayloadSchema(
                 context_data={},
-                post_data={'a': 1, 'b': 2},
+                user_data={'a': 1, 'b': 2},
             )
             result = proxy.process_action('execute', action_data)
             self.assertEqual(result['result'], 3)

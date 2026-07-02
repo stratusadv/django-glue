@@ -60,7 +60,7 @@ class BaseGlueProxyProcessActionTestCase(TestCase):
             access=GlueAccess.VIEW,  # Not enough for save
         )
 
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
 
         with self.assertRaises(GlueAccessError) as context:
             proxy.process_action('save', action_data)

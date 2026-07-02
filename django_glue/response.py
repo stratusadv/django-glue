@@ -3,6 +3,7 @@ from typing import Any
 from django.http import JsonResponse
 
 from django_glue.message import GlueMessage
+from django_glue.resolver.action.encoders import ActionDataJSONEncoder
 
 
 class GlueJsonResponse(JsonResponse):
@@ -22,4 +23,5 @@ class GlueJsonResponse(JsonResponse):
                 'payload': payload,
             },
             status=status,
+            encoder=ActionDataJSONEncoder,
         )

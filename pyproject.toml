@@ -119,4 +119,3 @@ exclude_lines = [
 ]
 fail_under = 70
 show_missing = true
-

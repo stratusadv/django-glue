@@ -26,7 +26,7 @@ class GlueFormProxySaveTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -44,7 +44,7 @@ class GlueFormProxySaveTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
+            user_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
         )
         result = proxy.save(action_data)
 
@@ -57,7 +57,7 @@ class GlueFormProxySaveTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -75,7 +75,7 @@ class GlueFormProxySaveTestCase(TestCase):
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'name': 'Test'})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'name': 'Test'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('save', action_data)
@@ -86,7 +86,7 @@ class GlueFormProxySaveTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.DELETE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',

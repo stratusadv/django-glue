@@ -228,7 +228,7 @@ describe('GlueHttp', () => {
 
             expect(capturedUrl).toBe('/__dg__/action/task/save/');
             expect(capturedOptions.body).toBe(JSON.stringify({
-                post_data: { title: 'Test' },
+                user_data: { title: 'Test' },
                 context_data: { subject_type: 'Model' }
             }));
         });

@@ -44,14 +44,14 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         category: str,
         action_payload: ActionPayloadSchema
     ) -> Any:
-        # Get instance_id from extra_data (not context_data, which is signed)
-        extra_data = action_payload.extra_data or {}
-        instance_id = extra_data.get('instance_id')
+        # Get instance_pk from proxy_data (not context_data, which is signed)
+        proxy_data = action_payload.proxy_data or {}
+        instance_pk = proxy_data.get('instance_pk')
         match category:
             case 'model':
-                return self._get_model_instance_by_pk(pk=instance_id)
+                return self._get_model_instance_by_pk(pk=instance_pk)
             case 'form':
-                model = self._get_model_instance_by_pk(pk=instance_id)
+                model = self._get_model_instance_by_pk(pk=instance_pk)
                 # TODO: pass model to form
                 return self._get_form_instance()
             case 'queryset':
@@ -184,11 +184,11 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             ]
 
     @action(access=GlueAccess.VIEW)
-    def query_with_params(self, request, post_data: dict = None) -> list:
-        if post_data:
-            if filter_params := post_data.get('filter'):
+    def query_with_params(self, request, user_data: dict = None) -> list:
+        if user_data:
+            if filter_params := user_data.get('filter'):
                 self._validate_filter_keys(filter_params)
-            self._apply_query_params(post_data)
+            self._apply_query_params(user_data)
 
         return self._output_data
 
@@ -221,42 +221,42 @@ class GlueQuerySetProxy(GlueModelProxyBase):
     def save(
         self,
         request,
-        extra_data: dict = None,
-        post_data: dict = None,
+        proxy_data: dict = None,
         file_data: dict = None
     ) -> dict:
-        extra_data = extra_data or {}
-        instance_id = extra_data.get('instance_id')
-        if instance_id:
+        proxy_data = proxy_data or {}
+        instance_pk = proxy_data.get('instance_pk')
+        if instance_pk:
             # Update existing instance
-            proxy = self._get_target_model_instance_proxy(instance_id)
+            proxy = self._get_target_model_instance_proxy(instance_pk)
         else:
             # Create new instance
             instance = self.get_model_class()()
             proxy = self._create_model_proxy_from_instance(instance)
-        return proxy.save(request, post_data=post_data, file_data=file_data)
+        return proxy.save(request, proxy_data=proxy_data, file_data=file_data)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, request, extra_data: dict = None) -> dict:
-        extra_data = extra_data or {}
-        instance_id = extra_data.get('instance_id')
-        if instance_id is None:
-            return {'success': False, 'error': 'instance_id is required for delete action'}
-        return self._get_target_model_instance_proxy(instance_id).delete(request)
+    def delete(self, request, proxy_data: dict = None) -> dict:
+        proxy_data = proxy_data or {}
+        instance_pk = proxy_data.get('instance_pk')
+        if instance_pk is None:
+            return {'success': False, 'error': 'instance_pk is required for delete action'}
+        return self._get_target_model_instance_proxy(instance_pk).delete(request)
 
     @action(access=GlueAccess.VIEW)
-    def get(self, request, extra_data: dict = None) -> dict:
-        extra_data = extra_data or {}
-        instance_id = extra_data.get('instance_id')
-        if instance_id is None:
-            return {'success': False, 'error': 'instance_id is required for get action'}
-        return self._get_target_model_instance_proxy(instance_id).get(request)
+    def get(self, request, proxy_data: dict = None) -> dict:
+        proxy_data = proxy_data or {}
+        instance_pk = proxy_data.get('instance_pk')
+        if instance_pk is None:
+            return {'success': False, 'error': 'instance_pk is required for get action'}
+        return self._get_target_model_instance_proxy(instance_pk).get(request)
 
     @action(access=GlueAccess.VIEW)
     def new(self, request) -> dict:
         """Return default values for a new model instance."""
         model_class = self.get_model_class()
         instance = model_class()
+        pk_field_name = model_class._meta.pk.name
 
         # Get related field names to skip (can't access related fields on unsaved instance)
         related_field_names = {
@@ -264,9 +264,9 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             if f.is_relation
         }
 
-        defaults = {'id': None}
+        defaults = {pk_field_name: None}
         for field_name, field_definition in self._form_field_definitions.items():
-            if field_name == 'id':
+            if field_name == pk_field_name:
                 continue
             if field_name in related_field_names:
                 # Related fields default to empty lists

@@ -142,7 +142,11 @@ class GlueModelProxyBase(GlueFormProxyMixin, BaseGlueProxy, ABC):
 
     def _build_context_data(self) -> dict:
         context_data = super()._build_context_data()
-        context_data.update({'fields': self._form_field_definitions, 'exclude': list(self.exclude)})
+        context_data.update({
+            'fields': self._form_field_definitions,
+            'exclude': list(self.exclude),
+            'pk_field_name': self.get_model_class()._meta.pk.name,
+        })
 
         if self.form_class:
             context_data.update(

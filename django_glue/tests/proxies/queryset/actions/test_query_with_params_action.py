@@ -178,7 +178,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'filter': {'age': 25}})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'filter': {'age': 25}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 1)
@@ -191,7 +191,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'filter': {'name__icontains': 'important'}}
+            context_data={}, user_data={'filter': {'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -207,7 +207,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'filter': {'age__gte': 25, 'name__icontains': 'important'}}
+            context_data={}, user_data={'filter': {'age__gte': 25, 'name__icontains': 'important'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -220,7 +220,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'filter': {'age__gte': 25}}
+            context_data={}, user_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -238,7 +238,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'filter': {'age__gte': 25}}
+            context_data={}, user_data={'filter': {'age__gte': 25}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -254,7 +254,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'filter': {'age': 25}})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'filter': {'age': 25}})
 
         # Should not raise
         result = proxy.process_action('query_with_params', action_data)
@@ -267,7 +267,7 @@ class GlueQuerySetProxyQueryWithParamsFilterTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'filter': {'name': 'Nonexistent Gorilla'}}
+            context_data={}, user_data={'filter': {'name': 'Nonexistent Gorilla'}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -295,7 +295,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'order_by': 'age'})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'order_by': 'age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 18)
@@ -308,7 +308,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.VIEW
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'order_by': '-age'})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'order_by': '-age'})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(result[0]['age'], 30)
@@ -322,7 +322,7 @@ class GlueQuerySetProxyQueryWithParamsOrderByTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'order_by': ['age', 'weight']}
+            context_data={}, user_data={'order_by': ['age', 'weight']}
         )
         result = proxy.query_with_params(action_data)
 
@@ -354,7 +354,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
         )
 
         action_data = dto.ActionPayloadSchema(
-            context_data={}, post_data={'slice': {'start': 2, 'stop': 5}}
+            context_data={}, user_data={'slice': {'start': 2, 'stop': 5}}
         )
         result = proxy.query_with_params(action_data)
 
@@ -370,7 +370,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'slice': {'stop': 3}})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'slice': {'stop': 3}})
         result = proxy.query_with_params(action_data)
 
         self.assertEqual(len(result), 3)
@@ -388,7 +388,7 @@ class GlueQuerySetProxyQueryWithParamsSliceTestCase(TestCase):
 
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={'filter': {'weight__gte': 200}},  # weight not in fields
+            user_data={'filter': {'weight__gte': 200}},  # weight not in fields
         )
 
         from django_glue.exceptions import GlueQuerySetFilterValidationError

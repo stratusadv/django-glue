@@ -9,6 +9,7 @@ from django_glue.proxies import (
     BaseGlueProxy,
     GlueFormProxy,
     GlueFunctionProxy,
+    GlueModelFormProxy,
     GlueModelProxy,
     GlueQuerySetProxy,
     GlueTemplateProxy,
@@ -90,16 +91,14 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs,
     ) -> None:
-        # If it's a ModelForm, create a model proxy with the form's instance
+        # If it's a ModelForm, use GlueModelFormProxy
         if isinstance(target, ModelForm):
-            instance = target.instance if target.instance.pk is not None else target._meta.model()
             Glue.glue(
                 request=request,
                 unique_name=unique_name,
-                target=instance,
-                proxy_class=GlueModelProxy,
+                target=target,
+                proxy_class=GlueModelFormProxy,
                 access=access,
-                form_class=target.__class__,
                 **kwargs,
             )
         else:

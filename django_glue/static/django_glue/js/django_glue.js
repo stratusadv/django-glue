@@ -44,42 +44,44 @@
         await callback(event);
       }
     }
-    async _processAction(actionName, payload = null, extraData = null) {
-      const eventData = payload instanceof FormData ? Object.fromEntries(Array.from(payload.keys()).map((key) => [
-        key,
-        payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
-      ])) : payload;
+    async _processAction(actionName, userData = null, proxyData = null) {
       const event = {
         action: actionName,
         proxy: this,
-        payload: eventData
+        userData
       };
       await this.emitListeners("before", actionName, event);
       try {
         const response = await this.http.sendActionRequest({
           uniqueName: this._uniqueName,
           action: actionName,
-          payload,
+          userData,
           contextData: this._contextData,
-          extraData
+          proxyData
         });
-        event.result = response.data;
+        const responseData = response.data;
+        if (responseData.proxy_data) {
+          this._handleResponseProxyData(responseData.proxy_data);
+        }
+        const data = responseData.data !== undefined ? responseData.data : responseData;
+        event.result = data;
         await this.emitListeners("after", actionName, event);
-        return response.data;
+        return data;
       } catch (err) {
         event.error = err;
         await this.emitListeners("error", actionName, event);
         throw err;
       }
     }
-    async _defaultProcessAction(actionName, payload = {}) {
-      return await this._processAction(actionName, payload);
+    _handleResponseProxyData(proxyData) {}
+    async _defaultProcessAction(actionName, userData = null) {
+      return await this._processAction(actionName, userData);
     }
     _defineCustomActions() {
       Object.keys(this._actions).forEach((actionName) => {
         if (!(actionName in this)) {
-          this[actionName] = async (payload = {}) => {
-            return await this._defaultProcessAction(actionName, payload);
+          this[actionName] = async (userData = null) => {
+            return await this._defaultProcessAction(actionName, userData);
           };
         }
       });
@@ -191,8 +193,23 @@
         });
       });
     }
+    async _processAction(actionName, userData = null, proxyData = null) {
+      const formProxyData = {
+        ...proxyData || {},
+        form_values: this._values || {}
+      };
+      return await base_default.prototype._processAction.call(this, actionName, userData, formProxyData);
+    }
+    _handleResponseProxyData(proxyData) {
+      if (proxyData.errors) {
+        this._updateErrors(proxyData.errors);
+      }
+      if (proxyData.form_values) {
+        this._values = { ...this._values, ...proxyData.form_values };
+      }
+    }
     async get() {
-      const data = await this._processAction("get");
+      const data = await super._processAction("get");
       this._values = data;
       this._loading = false;
       this._loaded = true;
@@ -208,33 +225,23 @@
         this._updateErrorAttributesForField(fieldName);
       });
     }
-    _getFormData() {
-      const formData = new FormData;
-      Object.entries(this._values).forEach(([fieldName, value]) => {
-        if (Array.isArray(value)) {
-          value.forEach((item) => formData.append(fieldName, item));
-        } else if (value instanceof File || value instanceof Blob) {
-          formData.append(fieldName, value);
-        } else if (value instanceof FileList) {
-          Array.from(value).forEach((file) => formData.append(fieldName, file));
-        } else {
-          formData.append(fieldName, value === null || value === undefined ? "" : value);
-        }
-      });
-      return formData;
-    }
     async validate() {
-      const result = await this._processAction("validate", this._values);
-      this._errors = result.errors || {};
+      const result = await this._processAction("validate");
+      this._updateErrors(result.errors);
       return result;
     }
     async save() {
-      const result = await this._defaultProcessAction("save", this._getFormData());
+      const result = await this._processAction("save");
       this._updateErrors(result.errors);
       if (result.success) {
         this._clearErrors();
-        this.get(this._values.id);
+        this.get();
       }
+      return result;
+    }
+    async process(userData = null) {
+      const result = await this._processAction("process", userData);
+      this._updateErrors(this._errors);
       return result;
     }
     hasErrors(fieldName) {
@@ -270,6 +277,10 @@
       }
       this.$key = `django-glue-${++_keyCounter}`;
       this._parent = parentQuerySet;
+      this._pkFieldName = contextData.pk_field_name || "id";
+    }
+    get _pk() {
+      return this._values?.[this._pkFieldName];
     }
     _defineExtraFields() {
       Object.keys(this._values).forEach((fieldName) => {
@@ -279,28 +290,24 @@
       });
     }
     get _isNew() {
-      return !this._values?.id;
+      return !this._pk;
     }
     async get() {
-      let data;
-      if (this._parent) {
-        data = await this._parent._processAction("get", null, {
-          instance_id: this._values?.id
-        });
-      } else {
-        data = await this._processAction("get");
-      }
+      const data = await this._processAction("get");
       this._values = data;
       this._loading = false;
       this._loaded = true;
     }
-    async _defaultProcessAction(actionName, payload) {
+    async _processAction(actionName, userData = null, proxyData = null) {
+      const modelProxyData = {
+        ...proxyData || {},
+        instance_pk: this._pk,
+        form_values: this._values || {}
+      };
       if (this._parent) {
-        return await this._parent._processAction(actionName, payload, {
-          instance_id: this._values?.id
-        });
+        return await this._parent._processAction(actionName, userData, modelProxyData);
       } else {
-        return await this._processAction(actionName, payload);
+        return await form_default.prototype._processAction.call(this, actionName, userData, modelProxyData);
       }
     }
     async delete() {
@@ -308,9 +315,7 @@
         await this._parent.refresh();
         return { success: true };
       }
-      const result = await this._processAction("delete", null, {
-        instance_id: this._values.id
-      });
+      const result = await this._processAction("delete");
       if (this._parent) {
         await this._parent.refresh();
       }
@@ -394,23 +399,62 @@
         csrfProtected
       });
     }
-    async sendActionRequest({ uniqueName, action, payload, contextData, extraData = null }) {
+    async sendActionRequest({ uniqueName, action, userData = null, contextData, proxyData = null }) {
       const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`;
-      if (payload instanceof FormData) {
-        payload.append("context_data", JSON.stringify(contextData));
-        if (extraData) {
-          payload.append("extra_data", JSON.stringify(extraData));
+      const formData = new FormData;
+      formData.append("context_data", JSON.stringify(contextData));
+      if (proxyData) {
+        const { files, data } = this._extractFiles(proxyData);
+        formData.append("proxy_data", JSON.stringify(data));
+        Object.entries(files).forEach(([key, value]) => {
+          if (value instanceof FileList) {
+            Array.from(value).forEach((file) => formData.append(key, file));
+          } else if (Array.isArray(value)) {
+            value.forEach((file) => formData.append(key, file));
+          } else {
+            formData.append(key, value);
+          }
+        });
+      }
+      if (userData) {
+        formData.append("user_data", JSON.stringify(userData));
+      }
+      return await this.sendFormPostRequest(url, formData);
+    }
+    _extractFiles(obj) {
+      const files = {};
+      const data = {};
+      const extractFromValue = (value, key) => {
+        if (value instanceof File || value instanceof Blob) {
+          files[key] = value;
+          return;
+        } else if (value instanceof FileList) {
+          files[key] = value;
+          return;
+        } else if (Array.isArray(value)) {
+          const hasFiles = value.some((v) => v instanceof File || v instanceof Blob);
+          if (hasFiles) {
+            files[key] = value.filter((v) => v instanceof File || v instanceof Blob);
+            const nonFiles = value.filter((v) => !(v instanceof File || v instanceof Blob));
+            return nonFiles.length > 0 ? nonFiles : undefined;
+          }
+          return value;
+        } else if (value && typeof value === "object") {
+          const nested = this._extractFiles(value);
+          Object.entries(nested.files).forEach(([k, v]) => {
+            files[`${key}.${k}`] = v;
+          });
+          return Object.keys(nested.data).length > 0 ? nested.data : undefined;
         }
-        return await this.sendFormPostRequest(url, payload);
-      }
-      const requestBody = {
-        post_data: payload,
-        context_data: contextData
+        return value;
       };
-      if (extraData) {
-        requestBody.extra_data = extraData;
-      }
-      return await this.sendJsonPostRequest(url, requestBody);
+      Object.entries(obj).forEach(([key, value]) => {
+        const result = extractFromValue(value, key);
+        if (result !== undefined) {
+          data[key] = result;
+        }
+      });
+      return { files, data };
     }
     async sendKeepLiveRequest(uniqueNames) {
       return await this.sendJsonPostRequest(this._config.keepLiveUrlPath, { unique_names: uniqueNames });
@@ -769,6 +813,7 @@
   // client_js/src/proxies/index.js
   var SUBJECT_TYPE_TO_PROXY_CLASS = {
     Model: model_default,
+    ModelForm: form_default,
     QuerySet: queryset_default,
     BaseForm: form_default,
     Template: template_default,

@@ -34,7 +34,7 @@ class ValidatePayloadTestCase(TestCase):
         """Should validate all fields in payload."""
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Updated Name',
                 'description': 'Test description',
                 'age': 5,
@@ -59,7 +59,7 @@ class ValidatePayloadTestCase(TestCase):
         )
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Updated',
                 'age': 10,
                 'description': 'Should be ignored',  # Not in fields
@@ -78,7 +78,7 @@ class ValidatePayloadTestCase(TestCase):
         """Invalid payload should return empty cleaned_data."""
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': ''  # Required field is empty
             },
         )
@@ -91,7 +91,7 @@ class ValidatePayloadTestCase(TestCase):
         """Should return errors on invalid field value."""
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': '',  # CharField is required
                 'age': 1,
             },
@@ -105,7 +105,7 @@ class ValidatePayloadTestCase(TestCase):
         """Form validation should clean/coerce data types."""
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Test Gorilla',
                 'description': '',
                 'age': '42',  # String should be coerced to int
@@ -126,7 +126,7 @@ class ValidatePayloadTestCase(TestCase):
         long_name = 'x' * 260
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': long_name,
                 'age': 1,
                 'weight': 200.0,
@@ -144,7 +144,7 @@ class ValidatePayloadTestCase(TestCase):
         # Gorilla.age has MinValueValidator(1), so 0 should fail
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={'name': 'Test', 'age': 0, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
+            user_data={'name': 'Test', 'age': 0, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
         result = self.proxy.validate(action_data)
 
@@ -156,7 +156,7 @@ class ValidatePayloadTestCase(TestCase):
         # Gorilla.age has MaxValueValidator(60), so 61 should fail
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={'name': 'Test', 'age': 61, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
+            user_data={'name': 'Test', 'age': 61, 'weight': 200.0, 'height': 1.8, 'rank_points': 0},
         )
         result = self.proxy.validate(action_data)
 
@@ -168,7 +168,7 @@ class ValidatePayloadTestCase(TestCase):
         # Gorilla.description has blank=True
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Test',
                 'description': '',
                 'age': 1,
@@ -197,7 +197,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
         # Empty name should fail validation
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': '',  # Required field empty
                 'age': 1,
                 'weight': 200.0,
@@ -219,7 +219,7 @@ class SaveActionValidationIntegrationTestCase(TestCase):
         proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'Updated Name',
                 'description': 'Test description',
                 'age': 1,

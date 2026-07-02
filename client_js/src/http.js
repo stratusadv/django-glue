@@ -127,34 +127,91 @@ class GlueHttp {
 
     /**
      * Send an action request to the Django Glue action endpoint.
+     * Always uses FormData to ensure consistent handling of all data types including files.
+     *
      * @param {Object} options - Action request parameters.
      * @param {string} options.uniqueName - The proxy unique name.
      * @param {string} options.action - The action method name.
-     * @param {Object|FormData} [options.payload] - The action payload data.
+     * @param {Object} [options.userData] - Action-specific user data (e.g., step number, filter params).
      * @param {Object} options.contextData - The proxy context data for server-side reconstruction.
-     * @param {Object} [options.extraData] - Proxy-type-specific runtime data (e.g., instance_id).
+     * @param {Object} [options.proxyData] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
      * @returns {Promise<Object>} Response object.
      */
-    async sendActionRequest({uniqueName, action, payload, contextData, extraData = null}) {
+    async sendActionRequest({uniqueName, action, userData = null, contextData, proxyData = null}) {
         const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
 
-        if (payload instanceof FormData) {
-            payload.append('context_data', JSON.stringify(contextData))
-            if (extraData) {
-                payload.append('extra_data', JSON.stringify(extraData))
+        const formData = new FormData()
+        formData.append('context_data', JSON.stringify(contextData))
+
+        if (proxyData) {
+            // Extract files from proxyData and append them separately
+            const {files, data} = this._extractFiles(proxyData)
+            formData.append('proxy_data', JSON.stringify(data))
+
+            // Append files directly to FormData
+            Object.entries(files).forEach(([key, value]) => {
+                if (value instanceof FileList) {
+                    Array.from(value).forEach(file => formData.append(key, file))
+                } else if (Array.isArray(value)) {
+                    value.forEach(file => formData.append(key, file))
+                } else {
+                    formData.append(key, value)
+                }
+            })
+        }
+
+        if (userData) {
+            formData.append('user_data', JSON.stringify(userData))
+        }
+
+        return await this.sendFormPostRequest(url, formData)
+    }
+
+    /**
+     * Extract File/Blob/FileList values from an object, returning files separately.
+     * @param {Object} obj - The object to extract files from.
+     * @returns {{files: Object, data: Object}} Object with files extracted and remaining data.
+     * @private
+     */
+    _extractFiles(obj) {
+        const files = {}
+        const data = {}
+
+        const extractFromValue = (value, key) => {
+            if (value instanceof File || value instanceof Blob) {
+                files[key] = value
+                return undefined
+            } else if (value instanceof FileList) {
+                files[key] = value
+                return undefined
+            } else if (Array.isArray(value)) {
+                // Check if array contains files
+                const hasFiles = value.some(v => v instanceof File || v instanceof Blob)
+                if (hasFiles) {
+                    files[key] = value.filter(v => v instanceof File || v instanceof Blob)
+                    const nonFiles = value.filter(v => !(v instanceof File || v instanceof Blob))
+                    return nonFiles.length > 0 ? nonFiles : undefined
+                }
+                return value
+            } else if (value && typeof value === 'object') {
+                // Recursively handle nested objects
+                const nested = this._extractFiles(value)
+                Object.entries(nested.files).forEach(([k, v]) => {
+                    files[`${key}.${k}`] = v
+                })
+                return Object.keys(nested.data).length > 0 ? nested.data : undefined
             }
-            return await this.sendFormPostRequest(url, payload)
+            return value
         }
 
-        const requestBody = {
-            post_data: payload,
-            context_data: contextData,
-        }
-        if (extraData) {
-            requestBody.extra_data = extraData
-        }
+        Object.entries(obj).forEach(([key, value]) => {
+            const result = extractFromValue(value, key)
+            if (result !== undefined) {
+                data[key] = result
+            }
+        })
 
-        return await this.sendJsonPostRequest(url, requestBody)
+        return {files, data}
     }
 
     /**

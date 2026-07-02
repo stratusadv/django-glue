@@ -99,22 +99,17 @@ class BaseGlueProxy {
     /**
      * Execute a server-side action, emitting before/after/error listeners.
      * @param {string} actionName - The action method name.
-     * @param {Object|FormData|null} [payload] - The action payload data.
-     * @param {Object} [extraData] - Proxy-type-specific runtime data (e.g., instance_id for queryset items).
+     * @param {Object|null} [userData] - Action-specific user data (e.g., step number, filter params).
+     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
+     *                                    Files in proxyData are automatically extracted and sent via FormData.
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, payload = null, extraData = null) {
-        const eventData = payload instanceof FormData ? Object.fromEntries(
-            Array.from(payload.keys()).map(key => [
-                key, payload.getAll(key).length > 1 ? payload.getAll(key) : payload.get(key)
-            ])
-        ) : payload;
-
+    async _processAction(actionName, userData = null, proxyData = null) {
         const event = {
             action: actionName,
             proxy: this,
-            payload: eventData,
+            userData: userData,
         };
 
         // Emit 'before' listeners
@@ -124,16 +119,25 @@ class BaseGlueProxy {
             const response = await this.http.sendActionRequest({
                 uniqueName: this._uniqueName,
                 action: actionName,
-                payload: payload,
+                userData: userData,
                 contextData: this._contextData,  // Never modified - signature verified server-side
-                extraData: extraData,  // Proxy-specific runtime data (not signed)
+                proxyData: proxyData,  // Proxy-intrinsic runtime state (not signed)
             });
-            event.result = response.data;
+
+            // Handle response proxy_data (e.g., form errors, updated values)
+            const responseData = response.data;
+            if (responseData.proxy_data) {
+                this._handleResponseProxyData(responseData.proxy_data);
+            }
+
+            // Extract the actual data (may be wrapped or direct)
+            const data = responseData.data !== undefined ? responseData.data : responseData;
+            event.result = data;
 
             // Emit 'after' listeners
             await this.emitListeners('after', actionName, event);
 
-            return response.data;
+            return data;
         } catch (err) {
             event.error = err;
 
@@ -144,15 +148,25 @@ class BaseGlueProxy {
         }
     }
 
-    async _defaultProcessAction(actionName, payload = {}) {
-        return await this._processAction(actionName, payload)
+    /**
+     * Handle proxy_data from server response.
+     * Override in subclasses to handle proxy-specific state updates.
+     * @param {Object} proxyData - Proxy-intrinsic state from the server.
+     * @protected
+     */
+    _handleResponseProxyData(proxyData) {
+        // Base implementation does nothing - override in subclasses
+    }
+
+    async _defaultProcessAction(actionName, userData = null) {
+        return await this._processAction(actionName, userData)
     }
 
     _defineCustomActions() {
         Object.keys(this._actions).forEach(actionName => {
             if (!(actionName in this)) {
-                this[actionName] = async (payload = {}) => {
-                    return await this._defaultProcessAction(actionName, payload)
+                this[actionName] = async (userData = null) => {
+                    return await this._defaultProcessAction(actionName, userData)
                 }
             }
         })

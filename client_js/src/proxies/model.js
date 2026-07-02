@@ -45,6 +45,16 @@ class GlueModelProxy extends GlueFormProxy {
         this.$key = `django-glue-${++_keyCounter}`
         /** @type {GlueQuerySetProxy|null} */
         this._parent = parentQuerySet
+        /** @type {string} */
+        this._pkFieldName = contextData.pk_field_name || 'id'
+    }
+
+    /**
+     * Get the primary key value for this model instance.
+     * @returns {*} The primary key value, or null/undefined if not set.
+     */
+    get _pk() {
+        return this._values?.[this._pkFieldName]
     }
 
     /**
@@ -67,7 +77,7 @@ class GlueModelProxy extends GlueFormProxy {
      * @type {boolean}
      */
     get _isNew() {
-        return !this._values?.id;
+        return !this._pk;
     }
 
     /**
@@ -76,34 +86,36 @@ class GlueModelProxy extends GlueFormProxy {
      * @returns {Promise<void>}
      */
     async get() {
-        let data;
-        if (this._parent) {
-            data = await this._parent._processAction('get', null, {
-                instance_id: this._values?.id
-            })
-        } else {
-            data = await this._processAction('get')
-        }
-
-        this._values = data
-
-
+        // instance_pk and parent routing are handled by _processAction override
+        const data = await this._processAction('get');
+        this._values = data;
         this._loading = false;
         this._loaded = true;
     }
 
-    async _defaultProcessAction(actionName, payload) {
-        if (this._parent) {
-            // If a model proxy has a parent, we need to pass along the instance ID since this will
-            // be calling the owning queryset proxy methods, not the model methods. The queryset proxy
-            // methods need the ID to retrieve the proper model object. We pass it via extra_data
-            // to avoid colliding with user-defined action parameters and to keep context_data immutable.
+    /**
+     * Override _processAction to include instance_pk, form_values, and route through parent if needed.
+     * @param {string} actionName - The action method name.
+     * @param {Object|null} [userData] - Action-specific user data.
+     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state.
+     * @returns {Promise<Object>} The server response data.
+     * @private
+     */
+    async _processAction(actionName, userData = null, proxyData = null) {
+        // Always include instance_pk and form_values in proxyData for model instances
+        const modelProxyData = {
+            ...(proxyData || {}),
+            instance_pk: this._pk,
+            form_values: this._values || {},
+        };
 
-            return await this._parent._processAction(actionName, payload, {
-                instance_id: this._values?.id
-            })
+        if (this._parent) {
+            // If a model proxy has a parent, route through the parent queryset proxy.
+            // The queryset proxy methods need the PK to retrieve the proper model object.
+            return await this._parent._processAction(actionName, userData, modelProxyData);
         } else {
-            return await this._processAction(actionName, payload)
+            // No parent - use prototype.call to ensure Alpine's proxy observes mutations
+            return await GlueFormProxy.prototype._processAction.call(this, actionName, userData, modelProxyData);
         }
     }
 
@@ -117,9 +129,8 @@ class GlueModelProxy extends GlueFormProxy {
             await this._parent.refresh();
             return {success: true};
         }
-        const result = await this._processAction('delete', null, {
-            instance_id: this._values.id
-        });
+        // instance_pk is automatically included by _processAction override
+        const result = await this._processAction('delete');
         if (this._parent) {
             await this._parent.refresh();
         }

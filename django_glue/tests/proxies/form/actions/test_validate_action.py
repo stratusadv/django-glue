@@ -26,7 +26,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -44,7 +44,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': '',  # Required field empty
                 'email': 'not-an-email',  # Invalid email
                 'message': 'Hello',
@@ -63,7 +63,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -82,7 +82,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
+            user_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
         )
         result = proxy.validate(action_data)
 
@@ -93,7 +93,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={}, post_data={'name': 'Test'})
+        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'name': 'Test'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('validate', action_data)
@@ -104,7 +104,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
         action_data = dto.ActionPayloadSchema(
             context_data={},
-            post_data={
+            user_data={
                 'name': '',
                 'email': 'john@example.com',
                 'message': 'Hello',

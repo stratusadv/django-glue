@@ -82,48 +82,56 @@ class BaseGlueProxy(ABC):
         if category not in cls._actions[cls.__name__]:
             cls._actions[cls.__name__][category] = {}
 
-        # Walk the MRO in reverse order (excluding object) so that child class
-        # actions override parent class actions with the same name
+        # First pass: collect all decorated action names and their access levels from the MRO
+        # This allows child classes to inherit @action decoration from parent classes
+        decorated_actions = {}
         for klass in reversed(subject_type.__mro__):
             if klass is object:
                 continue
-
             for attr_name, attr_value in klass.__dict__.items():
                 if hasattr(attr_value, '_required_glue_access'):
-                    parameters = inspect.signature(attr_value).parameters
-                    parameter_data = {}
+                    decorated_actions[attr_name] = attr_value._required_glue_access
 
-                    # Skip internal params that are handled by _build_action_kwargs
-                    internal_params = {'self', 'args', 'kwargs', 'request', 'post_data', 'file_data', 'context_data'}
-                    first_param_seen = False
+        # Second pass: register the actual implementation (may be overridden in child class)
+        # using the access level from the decorated parent
+        for attr_name, required_access in decorated_actions.items():
+            # Get the actual method implementation (resolves to child's override if exists)
+            actual_method = getattr(subject_type, attr_name)
 
-                    for param_name, param_value in parameters.items():
-                        if param_name == 'self':
-                            continue
+            parameters = inspect.signature(actual_method).parameters
+            parameter_data = {}
 
-                        # Skip first param after self (always 'request')
-                        if not first_param_seen:
-                            first_param_seen = True
-                            continue
+            # Skip internal params that are handled by _build_action_kwargs
+            internal_params = {'self', 'args', 'kwargs', 'request', 'user_data', 'file_data', 'context_data'}
+            first_param_seen = False
 
-                        # Skip other internal params
-                        if param_name in internal_params:
-                            continue
+            for param_name, param_value in parameters.items():
+                if param_name == 'self':
+                    continue
 
-                        # Convert annotation to string for JSON serialization
-                        annotation = param_value.annotation
-                        if annotation is inspect.Parameter.empty:
-                            parameter_data[param_name] = None
-                        elif isinstance(annotation, type):
-                            parameter_data[param_name] = annotation.__name__
-                        else:
-                            parameter_data[param_name] = str(annotation)
+                # Skip first param after self (always 'request')
+                if not first_param_seen:
+                    first_param_seen = True
+                    continue
 
-                    cls._actions[cls.__name__][category][attr_name] = (
-                        attr_value,
-                        parameter_data,
-                        attr_value._required_glue_access,
-                    )
+                # Skip other internal params
+                if param_name in internal_params:
+                    continue
+
+                # Convert annotation to string for JSON serialization
+                annotation = param_value.annotation
+                if annotation is inspect.Parameter.empty:
+                    parameter_data[param_name] = None
+                elif isinstance(annotation, type):
+                    parameter_data[param_name] = annotation.__name__
+                else:
+                    parameter_data[param_name] = str(annotation)
+
+            cls._actions[cls.__name__][category][attr_name] = (
+                actual_method,
+                parameter_data,
+                required_access,
+            )
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
@@ -203,18 +211,18 @@ class BaseGlueProxy(ABC):
         Build kwargs for action based on its signature.
 
         - First param after 'self' always receives request
-        - 'post_data' param receives the full post_data dict
+        - 'user_data' param receives the full user_data dict (action-specific data from user)
+        - 'proxy_data' param receives the full proxy_data dict (proxy-intrinsic state)
         - 'file_data' param receives the full file_data dict
         - 'context_data' param receives the full context_data dict
-        - 'extra_data' param receives the full extra_data dict
-        - Other params are extracted from post_data by name
+        - Other params are extracted from user_data by name
         """
         sig = inspect.signature(action_func)
         kwargs = {}
-        post_data = action_payload.post_data or {}
+        user_data = action_payload.user_data or {}
+        proxy_data = action_payload.proxy_data or {}
         file_data = action_payload.file_data or {}
         context_data = action_payload.context_data or {}
-        extra_data = action_payload.extra_data or {}
 
         params = list(sig.parameters.items())
         first_param_handled = False
@@ -230,17 +238,17 @@ class BaseGlueProxy(ABC):
                 continue
 
             # Special params for full dicts
-            if param_name == 'post_data':
-                kwargs[param_name] = post_data
+            if param_name == 'user_data':
+                kwargs[param_name] = user_data
+            elif param_name == 'proxy_data':
+                kwargs[param_name] = proxy_data
             elif param_name == 'file_data':
                 kwargs[param_name] = file_data
             elif param_name == 'context_data':
                 kwargs[param_name] = context_data
-            elif param_name == 'extra_data':
-                kwargs[param_name] = extra_data
-            # Regular params come from post_data by name
-            elif param_name in post_data:
-                kwargs[param_name] = post_data[param_name]
+            # Regular params come from user_data by name
+            elif param_name in user_data:
+                kwargs[param_name] = user_data[param_name]
             elif param.default is not inspect.Parameter.empty:
                 # Has default, skip (will use default)
                 pass
@@ -264,6 +272,10 @@ class BaseGlueProxy(ABC):
                         category=category,
                         action_payload=action_payload
                     )
+
+                # Store for get_response_proxy_data to access
+                self._last_action_target = action_target
+                self._last_action_category = category
 
                 if not self.access.has_access(required_access):
                     raise GlueAccessError(
@@ -291,3 +303,19 @@ class BaseGlueProxy(ABC):
                 " '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
             )
         )
+
+    def get_response_proxy_data(
+        self,
+        action: str,
+        action_payload: ActionPayloadSchema
+    ) -> dict | None:
+        """
+        Get proxy-intrinsic data to include in the response.
+
+        Override in subclasses to include proxy-specific state like form errors.
+        This is the response counterpart to proxy_data in the request.
+
+        Returns:
+            dict with proxy-intrinsic state, or None if no data to send.
+        """
+        return None

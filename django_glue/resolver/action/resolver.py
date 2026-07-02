@@ -4,6 +4,7 @@ from django_glue.resolver.action.encoders import ActionDataJSONEncoder
 from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.response import GlueJsonResponse
 from django_glue.session import GlueSession
 
 
@@ -14,9 +15,9 @@ class ActionResolver(BaseResolver):
         self.unique_name = unique_name
 
     def resolve(self) -> JsonResponse | HttpResponse:
-        if self.request.content_type not in ['application/json', 'multipart/form-data']:
+        if self.request.content_type != 'multipart/form-data':
             return HttpResponse(
-                content=f'Unsupported media type {self.request.content_type}',
+                content=f'Action requests must use multipart/form-data, got {self.request.content_type}',
                 status=400,
                 content_type='text/plain',
             )
@@ -36,11 +37,29 @@ class ActionResolver(BaseResolver):
             access=proxy_access, unique_name=self.unique_name, **action_payload.context_data
         )
 
-        action_response_data = proxy_instance.process_action(
+        action_result = proxy_instance.process_action(
             self.action, action_payload, request=self.request
         )
 
-        # TODO: this should just return the result of process action, which should return an ActionResponse (still needs to be made)
+        # Get proxy-intrinsic response data (e.g., form errors)
+        response_proxy_data = proxy_instance.get_response_proxy_data(
+            action=self.action,
+            action_payload=action_payload
+        )
+
+        # If the action already returned a GlueJsonResponse, inject proxy_data
+        if isinstance(action_result, GlueJsonResponse):
+            import json
+            content = json.loads(action_result.content)
+            content['proxy_data'] = response_proxy_data
+            action_result.content = json.dumps(content, cls=ActionDataJSONEncoder)
+            return action_result
+
         return JsonResponse(
-            data=action_response_data, safe=False, encoder=ActionDataJSONEncoder
+            data={
+                'data': action_result,
+                'proxy_data': response_proxy_data,
+            },
+            safe=True,
+            encoder=ActionDataJSONEncoder
         )

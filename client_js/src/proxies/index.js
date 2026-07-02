@@ -12,6 +12,7 @@ import GlueFunctionProxy from "./function"
  */
 export const SUBJECT_TYPE_TO_PROXY_CLASS = {
     'Model': GlueModelProxy,
+    'ModelForm': GlueFormProxy,
     'QuerySet': GlueQuerySetProxy,
     'BaseForm': GlueFormProxy,
     'Template': GlueTemplateProxy,

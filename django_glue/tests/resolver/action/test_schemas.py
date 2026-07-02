@@ -16,17 +16,17 @@ class ActionPayloadSchemaTestCase(TestCase):
         data = ActionPayloadSchema(context_data={'key': 'value'})
 
         self.assertEqual(data.context_data, {'key': 'value'})
-        self.assertIsNone(data.post_data)
+        self.assertIsNone(data.user_data)
         self.assertIsNone(data.file_data)
 
-    def test_accepts_optional_post_data(self):
-        """Should accept optional post_data."""
+    def test_accepts_optional_user_data(self):
+        """Should accept optional user_data."""
         data = ActionPayloadSchema(
             context_data={},
-            post_data={'field': 'value'}
+            user_data={'field': 'value'}
         )
 
-        self.assertEqual(data.post_data, {'field': 'value'})
+        self.assertEqual(data.user_data, {'field': 'value'})
 
     def test_accepts_optional_file_data(self):
         """Should accept optional file_data."""
@@ -48,7 +48,7 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
         """Should parse JSON request body correctly."""
         body = {
             'context_data': {'subject_type': 'Model'},
-            'post_data': {'name': 'Test'},
+            'user_data': {'name': 'Test'},
             'file_data': {},
         }
         request = self.factory.post(
@@ -60,11 +60,11 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
         data = ActionPayloadSchema.from_request(request)
 
         self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertEqual(data.post_data, {'name': 'Test'})
+        self.assertEqual(data.user_data, {'name': 'Test'})
         self.assertEqual(data.file_data, {})
 
-    def test_handles_json_without_post_data(self):
-        """Should handle JSON request without post_data."""
+    def test_handles_json_without_user_data(self):
+        """Should handle JSON request without user_data."""
         body = {
             'context_data': {'subject_type': 'Model'},
         }
@@ -77,7 +77,7 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
         data = ActionPayloadSchema.from_request(request)
 
         self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertIsNone(data.post_data)
+        self.assertIsNone(data.user_data)
 
 
 class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
@@ -112,7 +112,7 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
         data = ActionPayloadSchema.from_request(request)
 
         self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertEqual(data.post_data, {'name': 'Test', 'age': '25'})
+        self.assertEqual(data.user_data, {'name': 'Test', 'age': '25'})
 
     def test_handles_multiple_values_in_multipart(self):
         """Should handle multiple values for same key in multipart."""
@@ -141,7 +141,7 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
 
         data = ActionPayloadSchema.from_request(request)
 
-        self.assertEqual(data.post_data['tags'], ['tag1', 'tag2'])
+        self.assertEqual(data.user_data['tags'], ['tag1', 'tag2'])
 
     def test_raises_for_missing_context_data_in_multipart(self):
         """Should raise AttributeError when context_data is missing in multipart."""

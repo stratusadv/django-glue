@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.decorators import action
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
 
 class GlueFormProxyMixin(ABC):
@@ -17,7 +21,40 @@ class GlueFormProxyMixin(ABC):
     - Form validation logic
     - Error serialization
     - validate() and save() actions
+    - Response proxy_data with form errors
     """
+
+    def get_response_proxy_data(
+        self,
+        action: str,
+        action_payload: 'ActionPayloadSchema'
+    ) -> dict | None:
+        """
+        Return form state in response proxy_data.
+
+        Includes:
+        - errors: Form validation errors (if any)
+        - form_values: Current field values
+        """
+        action_target = getattr(self, '_last_action_target', None)
+        if action_target is None:
+            return None
+
+        # Check if action target is a form
+        if not hasattr(action_target, 'data'):
+            return None
+
+        proxy_data = {}
+
+        # Include form errors if present
+        if hasattr(action_target, 'errors') and action_target.errors:
+            proxy_data['errors'] = self._serialize_errors(action_target.errors)
+
+        # Include current form values
+        if action_target.data:
+            proxy_data['form_values'] = dict(action_target.data)
+
+        return proxy_data if proxy_data else None
 
     @abstractmethod
     def _get_form_class(self) -> type[BaseForm]:
@@ -78,9 +115,10 @@ class GlueFormProxyMixin(ABC):
         return
 
     @action(access=GlueAccess.CHANGE)
-    def validate(self, request, post_data: dict = None, file_data: dict = None) -> dict:
+    def validate(self, request, proxy_data: dict = None, file_data: dict = None) -> dict:
         """Validate form data without saving."""
-        form = self._get_form_instance(data=post_data, files=file_data)
+        form_values = proxy_data.get('form_values', {}) if proxy_data else {}
+        form = self._get_form_instance(data=form_values or None, files=file_data)
 
         is_valid = form.is_valid()
 
@@ -91,9 +129,9 @@ class GlueFormProxyMixin(ABC):
         }
 
     @action(access=GlueAccess.CHANGE)
-    def save(self, request, post_data: dict = None, file_data: dict = None) -> dict:
+    def save(self, request, proxy_data: dict = None, file_data: dict = None) -> dict:
         """Validate and save form data."""
-        validation_result = self.validate(request, post_data=post_data, file_data=file_data)
+        validation_result = self.validate(request, proxy_data=proxy_data, file_data=file_data)
 
         if validation_result['success']:
             self._save(validation_result['cleaned_data'])

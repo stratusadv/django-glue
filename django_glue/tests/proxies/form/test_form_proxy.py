@@ -180,6 +180,6 @@ class GlueFormProxyContextDataTestCase(TestCase):
         from django_glue.resolver.action.schemas import ActionPayloadSchema
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = ActionPayloadSchema(context_data={}, post_data={})
+        action_data = ActionPayloadSchema(context_data={}, user_data={})
         result = proxy.foreign_key_choices(action_data)
         self.assertEqual(result, [])

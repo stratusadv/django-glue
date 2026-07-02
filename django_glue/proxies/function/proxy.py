@@ -59,9 +59,9 @@ class GlueFunctionProxy(BaseGlueProxy):
         }
 
     @action(access=GlueAccess.VIEW)
-    def execute(self, request, post_data: dict = None) -> dict:
-        post_data = post_data or {}
-        result = self.function(**post_data)
+    def execute(self, request, user_data: dict = None) -> dict:
+        user_data = user_data or {}
+        result = self.function(**user_data)
 
         if asyncio.iscoroutine(result):
             result = asyncio.get_event_loop().run_until_complete(result)
