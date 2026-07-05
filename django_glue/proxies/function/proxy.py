@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
-from django_glue.utils import get_class_from_path_string
+from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionPayloadSchema
+    from django_glue.resolver.action.schemas import ActionRequest
 
 
 class GlueFunctionProxy(BaseGlueProxy):
@@ -22,10 +22,10 @@ class GlueFunctionProxy(BaseGlueProxy):
         target: str,
         **kwargs,
     ) -> None:
-        super().__init__(target=target, **kwargs)
+        super().__init__(subject=target, **kwargs)
 
         self.function_path = target
-        self.function = get_class_from_path_string(target)
+        self.function = get_attr_from_path_string(target)
 
         sig = inspect.signature(self.function)
         self._params = [
@@ -51,7 +51,7 @@ class GlueFunctionProxy(BaseGlueProxy):
             **kwargs,
         )
 
-    def _build_context_data(self) -> dict:
+    def _custom_contract_data(self) -> dict:
         return {
             'function_path': self.function_path,
             'params': self._params,
@@ -59,9 +59,9 @@ class GlueFunctionProxy(BaseGlueProxy):
         }
 
     @action(access=GlueAccess.VIEW)
-    def execute(self, request, user_data: dict = None) -> dict:
-        user_data = user_data or {}
-        result = self.function(**user_data)
+    def execute(self, request, action_kwargs: dict = None) -> dict:
+        action_kwargs = action_kwargs or {}
+        result = self.function(**action_kwargs)
 
         if asyncio.iscoroutine(result):
             result = asyncio.get_event_loop().run_until_complete(result)

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import GlueModelProxy from '../../src/proxies/model';
-import { createMockContextData, setupCookieMock } from '../testUtils';
+import { createMockcontract, setupCookieMock } from '../testUtils';
 
 describe('GlueModelProxy', () => {
     let originalFetch;
@@ -19,9 +19,9 @@ describe('GlueModelProxy', () => {
     });
 
     describe('constructor', () => {
-        it('creates field accessors from contextData.fields', () => {
+        it('creates field accessors from contract.fields', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { title: {}, done: {} },
                 { get: {}, save: {}, delete: {} }
             );
@@ -29,7 +29,7 @@ describe('GlueModelProxy', () => {
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { title: 'Test', done: false }
             });
 
@@ -39,7 +39,7 @@ describe('GlueModelProxy', () => {
 
         it('allows setting field values', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { title: {} },
                 { get: {}, save: {} }
             );
@@ -47,7 +47,7 @@ describe('GlueModelProxy', () => {
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { title: 'Original' }
             });
 
@@ -59,7 +59,7 @@ describe('GlueModelProxy', () => {
 
         it('initializes _values object when setting if null', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { title: {} },
                 { get: {}, save: {} }
             );
@@ -67,7 +67,7 @@ describe('GlueModelProxy', () => {
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: null
             });
 
@@ -78,7 +78,7 @@ describe('GlueModelProxy', () => {
 
         it('stores passed values', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, title: {} },
                 { get: {} }
             );
@@ -86,7 +86,7 @@ describe('GlueModelProxy', () => {
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 1, title: 'Test' }
             });
 
@@ -95,12 +95,12 @@ describe('GlueModelProxy', () => {
 
         it('creates $key property', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
 
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 1 }
             });
 
@@ -109,12 +109,12 @@ describe('GlueModelProxy', () => {
 
         it('creates $fields object', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({ name: {} }, {});
+            const contract = createMockcontract({ name: {} }, {});
 
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { name: 'test' }
             });
 
@@ -122,9 +122,9 @@ describe('GlueModelProxy', () => {
             expect(proxy.$fields.name).toBeDefined();
         });
 
-        it('defines extra fields not in contextData.fields', () => {
+        it('defines extra fields not in contract.fields', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 {}
             );
@@ -132,7 +132,7 @@ describe('GlueModelProxy', () => {
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 1, extra_field: 'extra' }
             });
 
@@ -143,12 +143,12 @@ describe('GlueModelProxy', () => {
     describe('_isNew', () => {
         it('returns true when values.id is falsy', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
 
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { title: 'New' }
             });
 
@@ -157,12 +157,12 @@ describe('GlueModelProxy', () => {
 
         it('returns true when values is null', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
 
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: null
             });
 
@@ -171,12 +171,12 @@ describe('GlueModelProxy', () => {
 
         it('returns false when values.id is set', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
 
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 1, title: 'Existing' }
             });
 
@@ -194,11 +194,11 @@ describe('GlueModelProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData({ title: {} }, {});
+            const contract = createMockcontract({ title: {} }, {});
             const proxy = new GlueModelProxy({
                 http: mockHttp,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 0 }
             });
 
@@ -220,11 +220,11 @@ describe('GlueModelProxy', () => {
                 })
             };
 
-            const parentContextData = createMockContextData({}, { get: {} });
+            const parentcontract = createMockcontract({}, { get: {} });
             const parent = {
                 http: parentMockHttp,
                 _uniqueName: 'tasks',
-                _contextData: parentContextData,
+                _contract: parentcontract,
                 _actions: { get: {} },
                 _listeners: { before: {}, after: {}, error: {} },
                 _processAction: async function(actionName, data) {
@@ -232,17 +232,17 @@ describe('GlueModelProxy', () => {
                         uniqueName: this._uniqueName,
                         action: actionName,
                         payload: data,
-                        contextData: this._contextData
+                        contract: this._contract
                     });
                     return response.data;
                 }
             };
 
-            const contextData = createMockContextData({ title: {} }, {});
+            const contract = createMockcontract({ title: {} }, {});
             const proxy = new GlueModelProxy({
                 http: parentMockHttp,
                 proxyUniqueName: 'tasks',
-                contextData,
+                contract,
                 values: { id: 0 },
                 parentQuerySet: parent
             });
@@ -265,11 +265,11 @@ describe('GlueModelProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData({ title: {} }, {});
+            const contract = createMockcontract({ title: {} }, {});
             const proxy = new GlueModelProxy({
                 http: mockHttp,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { id: 1 }
             });
 
@@ -285,11 +285,11 @@ describe('GlueModelProxy', () => {
                 refresh: refreshSpy
             };
 
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
             const proxy = new GlueModelProxy({
                 http: createMockHttp(),
                 proxyUniqueName: 'tasks',
-                contextData,
+                contract,
                 values: { title: 'New' },
                 parentQuerySet: parent
             });
@@ -309,11 +309,11 @@ describe('GlueModelProxy', () => {
                 refresh: refreshSpy
             };
 
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
             const proxy = new GlueModelProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData,
+                contract,
                 values: { id: 1 },
                 parentQuerySet: parent
             });
@@ -332,11 +332,11 @@ describe('GlueModelProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData({ name: {} }, {});
+            const contract = createMockcontract({ name: {} }, {});
             const proxy = new GlueModelProxy({
                 http: mockHttp,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { name: 'test' }
             });
 
@@ -351,11 +351,11 @@ describe('GlueModelProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData({ name: {} }, {});
+            const contract = createMockcontract({ name: {} }, {});
             const proxy = new GlueModelProxy({
                 http: mockHttp,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { name: 'test' }
             });
 
@@ -365,11 +365,11 @@ describe('GlueModelProxy', () => {
 
         it('has hasErrors method', () => {
             const http = createMockHttp();
-            const contextData = createMockContextData({ name: {} }, {});
+            const contract = createMockcontract({ name: {} }, {});
             const proxy = new GlueModelProxy({
                 http,
                 proxyUniqueName: 'task',
-                contextData,
+                contract,
                 values: { name: 'test' }
             });
 

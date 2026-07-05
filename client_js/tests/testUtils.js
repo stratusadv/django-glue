@@ -44,7 +44,7 @@ export function setupCookieMock(cookies = {}) {
  * @param {Object} initial - Initial values (for form proxies)
  * @returns {Object} Mock context data
  */
-export function createMockContextData(fields = {}, actions = {}, initial = {}) {
+export function createMockcontract(fields = {}, actions = {}, initial = {}) {
     return {
         fields: fields,
         actions: actions,

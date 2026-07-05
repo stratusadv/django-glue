@@ -23,7 +23,7 @@ class GlueFormProxyGetTestCase(TestCase):
         """get() should return field definitions."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('fields', result)
@@ -34,7 +34,7 @@ class GlueFormProxyGetTestCase(TestCase):
         """get() should return current values."""
         form = ContactForm(initial={'name': 'John'})
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('values', result)
@@ -44,7 +44,7 @@ class GlueFormProxyGetTestCase(TestCase):
         """get() should return empty errors dict."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('errors', result)
@@ -54,7 +54,7 @@ class GlueFormProxyGetTestCase(TestCase):
         """get() should work with VIEW access."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIsNotNone(result)

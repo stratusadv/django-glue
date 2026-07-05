@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
+from django_glue.maps import SUBJECT_TYPE_TO_PROXY_CLASS
 
 
 class GlueMapsSyncTestCase(TestCase):
@@ -22,7 +22,7 @@ class GlueMapsSyncTestCase(TestCase):
         # Extract keys from JS: look for string literals as keys in SUBJECT_TYPE_TO_PROXY_CLASS
         js_keys = set(re.findall(r"'(\w+)':\s*\w+", self.js_content))
 
-        py_keys = set(SUBJECT_TYPE_TO_PROXY_TYPE.keys())
+        py_keys = set(SUBJECT_TYPE_TO_PROXY_CLASS.keys())
 
         missing_in_js = py_keys - js_keys
         missing_in_py = js_keys - py_keys
@@ -38,4 +38,4 @@ class GlueMapsSyncTestCase(TestCase):
     def test_python_subject_type_keys_expected(self):
         """Verify the expected set of keys is present."""
         expected = {"Model", "QuerySet", "BaseForm", "Template", "Function"}
-        self.assertEqual(set(SUBJECT_TYPE_TO_PROXY_TYPE.keys()), expected)
+        self.assertEqual(set(SUBJECT_TYPE_TO_PROXY_CLASS.keys()), expected)

@@ -77,8 +77,8 @@ class ViewResolver(BaseResolver):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxy_context_data': getattr(
-                                self.glue_view_http_request, '__glue_context_data__', {}
+                            'proxy_definitions': getattr(
+                                self.glue_view_http_request, '__glue_proxy_definitions__', {}
                             ),
                             'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         },
@@ -90,8 +90,8 @@ class ViewResolver(BaseResolver):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxy_context_data': getattr(
-                                self.glue_view_http_request, '__glue_context_data__', {}
+                            'proxy_definitions': getattr(
+                                self.glue_view_http_request, '__glue_proxy_definitions__', {}
                             ),
                             'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         }

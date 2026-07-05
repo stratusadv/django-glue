@@ -13,13 +13,13 @@ class GlueFunctionProxy extends BaseGlueProxy {
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {Object} options.contract - Serialized proxy metadata from the server.
      */
-    constructor({http, proxyUniqueName, contextData}) {
-        super({http, proxyUniqueName, contextData});
+    constructor({http, proxyUniqueName, contract}) {
+        super({http, proxyUniqueName, contract});
 
         /** @type {Array<Object>} */
-        this._params = contextData.params || [];
+        this._params = contract.params || [];
     }
 
     /**
@@ -28,14 +28,14 @@ class GlueFunctionProxy extends BaseGlueProxy {
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {Object} options.contract - Serialized proxy metadata from the server.
      * @returns {Function} A callable that invokes the server-side function.
      */
-    static create({http, proxyUniqueName, contextData}) {
+    static create({http, name, contract}) {
         const instance = new GlueFunctionProxy({
             http,
-            proxyUniqueName,
-            contextData,
+            name,
+            contract,
         });
 
         const fn = async function (kwargs = {}) {
@@ -54,8 +54,8 @@ class GlueFunctionProxy extends BaseGlueProxy {
             return response.result;
         };
 
-        fn._uniqueName = proxyUniqueName;
-        fn._contextData = contextData;
+        fn._name = name;
+        fn._contract = contract;
         fn._params = instance._params;
         fn.addListener = instance.addListener.bind(instance);
         fn.removeListener = instance.removeListener.bind(instance);

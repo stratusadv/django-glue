@@ -5,9 +5,9 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.exceptions import GlueAccessError, GlueMissingActionError
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 from test_project.gorilla.models import Gorilla
 
 
@@ -25,13 +25,13 @@ class BaseGlueProxyProcessActionTestCase(TestCase):
 
     def test_process_action_calls_decorated_method(self):
         """process_action should call the decorated method for valid actions."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.process_action('get', action_data)
 
         self.assertIsInstance(result, dict)
@@ -39,13 +39,13 @@ class BaseGlueProxyProcessActionTestCase(TestCase):
 
     def test_process_action_raises_for_missing_action(self):
         """process_action should raise GlueMissingActionError for non-existent action."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
 
         with self.assertRaises(GlueMissingActionError) as context:
             proxy.process_action('nonexistent_action', action_data)
@@ -54,13 +54,13 @@ class BaseGlueProxyProcessActionTestCase(TestCase):
 
     def test_process_action_raises_for_insufficient_access(self):
         """process_action should raise GlueAccessError when access level is too low."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,  # Not enough for save
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
 
         with self.assertRaises(GlueAccessError) as context:
             proxy.process_action('save', action_data)
@@ -71,13 +71,13 @@ class BaseGlueProxyProcessActionTestCase(TestCase):
 
     def test_process_action_allows_higher_access(self):
         """process_action should allow higher access levels for actions."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.DELETE,  # Highest - should allow get (VIEW)
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.process_action('get', action_data)
 
         self.assertEqual(result['name'], 'Test Gorilla')
@@ -97,7 +97,7 @@ class BaseGlueProxyInitTestCase(TestCase):
 
     def test_accepts_glue_access_enum(self):
         """Proxy should accept GlueAccess enum for access parameter."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.CHANGE,
@@ -107,7 +107,7 @@ class BaseGlueProxyInitTestCase(TestCase):
 
     def test_accepts_string_for_access(self):
         """Proxy should accept a string for access parameter."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access='view',
@@ -117,7 +117,7 @@ class BaseGlueProxyInitTestCase(TestCase):
 
     def test_stores_unique_name(self):
         """Proxy should store the unique_name."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='my_gorilla',
             access=GlueAccess.VIEW,
@@ -138,7 +138,7 @@ class BaseGlueProxyInitTestCase(TestCase):
 
     def test_default_access_is_view(self):
         """Proxy should default to VIEW access when not specified."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
         )

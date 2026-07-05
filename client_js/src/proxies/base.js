@@ -9,20 +9,19 @@ class BaseGlueProxy {
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy in the session.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
-     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contextData.actions`.
+     * @param {string} options.uniqueName - The unique name of this proxy in the session.
+     * @param {Object} options.contract - Serialized proxy metadata from the server.
+     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
      */
-    constructor({http, proxyUniqueName, contextData, actions= null}) {
+    constructor({http, uniqueName, contract, actions = null}) {
         /** @type {GlueHttp} */
         this.http = http
         /** @type {string} */
-        this._uniqueName = proxyUniqueName;
+        this._uniqueName = uniqueName;
         /** @type {Object} */
-        this._contextData = contextData;
-        // TODO: move action data to subject_type level key in session/context_data
+        this._contract = contract;
         /** @type {Object} */
-        this._actions = !!actions ? actions : contextData.actions;
+        this._actions = !!actions ? actions : contract.actions;
 
         this._defineCustomActions()
 
@@ -99,17 +98,17 @@ class BaseGlueProxy {
     /**
      * Execute a server-side action, emitting before/after/error listeners.
      * @param {string} actionName - The action method name.
-     * @param {Object|null} [userData] - Action-specific user data (e.g., step number, filter params).
-     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
-     *                                    Files in proxyData are automatically extracted and sent via FormData.
+     * @param {Object|null} [actionKwargs] - Action-specific user data (e.g., step number, filter params).
+     * @param {Object|null} [state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
+     *                                    Files in proxyState are automatically extracted and sent via FormData.
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, userData = null, proxyData = null) {
+    async _processAction(actionName, actionKwargs = null, state = null) {
         const event = {
             action: actionName,
             proxy: this,
-            userData: userData,
+            actionKwargs: actionKwargs,
         };
 
         // Emit 'before' listeners
@@ -119,15 +118,15 @@ class BaseGlueProxy {
             const response = await this.http.sendActionRequest({
                 uniqueName: this._uniqueName,
                 action: actionName,
-                userData: userData,
-                contextData: this._contextData,  // Never modified - signature verified server-side
-                proxyData: proxyData,  // Proxy-intrinsic runtime state (not signed)
+                actionKwargs: actionKwargs,
+                contract: this._contract,  // Never modified - signature verified server-side
+                state,  // Proxy-intrinsic runtime state (not signed)
             });
 
-            // Handle response proxy_data (e.g., form errors, updated values)
+            // Handle response state (e.g., form errors, updated values)
             const responseData = response.data;
-            if (responseData.proxy_data) {
-                this._handleResponseProxyData(responseData.proxy_data);
+            if (responseData.state) {
+                this._updateState(responseData.state);
             }
 
             // Extract the actual data (may be wrapped or direct)
@@ -149,24 +148,24 @@ class BaseGlueProxy {
     }
 
     /**
-     * Handle proxy_data from server response.
+     * Handle proxy_state from server response.
      * Override in subclasses to handle proxy-specific state updates.
-     * @param {Object} proxyData - Proxy-intrinsic state from the server.
+     * @param {Object} state - Proxy-intrinsic state from the server.
      * @protected
      */
-    _handleResponseProxyData(proxyData) {
+    _updateState(state) {
         // Base implementation does nothing - override in subclasses
     }
 
-    async _defaultProcessAction(actionName, userData = null) {
-        return await this._processAction(actionName, userData)
+    async _defaultProcessAction(actionName, actionKwargs = null, state = null) {
+        return await this._processAction(actionName, actionKwargs, state)
     }
 
     _defineCustomActions() {
         Object.keys(this._actions).forEach(actionName => {
             if (!(actionName in this)) {
-                this[actionName] = async (userData = null) => {
-                    return await this._defaultProcessAction(actionName, userData)
+                this[actionName] = async (actionKwargs = null) => {
+                    return await this._defaultProcessAction(actionName, actionKwargs)
                 }
             }
         })

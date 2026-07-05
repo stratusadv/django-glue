@@ -7,7 +7,7 @@ from django.test import TestCase, RequestFactory
 
 from django_glue.utils import (
     get_request_body_data,
-    get_class_from_path_string,
+    get_attr_from_path_string,
     serialize_queryset,
     deserialize_queryset,
 )
@@ -66,25 +66,25 @@ class GetClassFromPathStringTestCase(TestCase):
 
     def test_returns_class_from_path(self):
         """Should return the class given a module path."""
-        cls = get_class_from_path_string('test_project.gorilla.models.Gorilla')
+        cls = get_attr_from_path_string('test_project.gorilla.models.Gorilla')
 
         self.assertEqual(cls, Gorilla)
 
     def test_returns_function_from_path(self):
         """Should also work for functions."""
-        func = get_class_from_path_string('django_glue.utils.get_request_body_data')
+        func = get_attr_from_path_string('django_glue.utils.get_request_body_data')
 
         self.assertEqual(func, get_request_body_data)
 
     def test_raises_for_invalid_module(self):
         """Should raise ModuleNotFoundError for invalid module path."""
         with self.assertRaises(ModuleNotFoundError):
-            get_class_from_path_string('nonexistent.module.ClassName')
+            get_attr_from_path_string('nonexistent.module.ClassName')
 
     def test_raises_for_invalid_class(self):
         """Should raise AttributeError for invalid class name."""
         with self.assertRaises(AttributeError):
-            get_class_from_path_string('test_project.gorilla.models.NonExistent')
+            get_attr_from_path_string('test_project.gorilla.models.NonExistent')
 
 
 class SerializeQuerySetTestCase(TestCase):

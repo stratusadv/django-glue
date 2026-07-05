@@ -17,8 +17,8 @@ class GlueModelProxy extends GlueFormProxy {
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {string} options.name - The unique name of this proxy.
+     * @param {Object} options.contract - Serialized proxy metadata from the server.
      * @param {Object|null} [options.actions] - Optional actions map.
      * @param {boolean} [options.autoFetch] - Whether to auto-fetch on first access.
      * @param {Object|null} [options.values] - Pre-populated field values (from queryset).
@@ -26,14 +26,14 @@ class GlueModelProxy extends GlueFormProxy {
      */
     constructor({
         http,
-        proxyUniqueName,
-        contextData,
+        name,
+        contract,
         actions = null,
         autoFetch = false,
         values = null,
         parentQuerySet = null
     }) {
-        super({http, proxyUniqueName, contextData, actions, autoFetch});
+        super({http, name, contract, actions, autoFetch});
         /** @type {Object|null} */
         this._values = values;
 
@@ -46,7 +46,7 @@ class GlueModelProxy extends GlueFormProxy {
         /** @type {GlueQuerySetProxy|null} */
         this._parent = parentQuerySet
         /** @type {string} */
-        this._pkFieldName = contextData.pk_field_name || 'id'
+        this._pkFieldName = contract.pk_field_name || 'id'
     }
 
     /**
@@ -96,15 +96,15 @@ class GlueModelProxy extends GlueFormProxy {
     /**
      * Override _processAction to include instance_pk, form_values, and route through parent if needed.
      * @param {string} actionName - The action method name.
-     * @param {Object|null} [userData] - Action-specific user data.
-     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state.
+     * @param {Object|null} [actionKwargs] - Action-specific user data.
+     * @param {Object|null} [state] - Proxy-intrinsic runtime state.
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, userData = null, proxyData = null) {
-        // Always include instance_pk and form_values in proxyData for model instances
-        const modelProxyData = {
-            ...(proxyData || {}),
+    async _processAction(actionName, actionKwargs = null, state = null) {
+        // Always include instance_pk and form_values in proxyState for model instances
+        const state = {
+            ...(state || {}),
             instance_pk: this._pk,
             form_values: this._values || {},
         };
@@ -112,10 +112,10 @@ class GlueModelProxy extends GlueFormProxy {
         if (this._parent) {
             // If a model proxy has a parent, route through the parent queryset proxy.
             // The queryset proxy methods need the PK to retrieve the proper model object.
-            return await this._parent._processAction(actionName, userData, modelProxyData);
+            return await this._parent._processAction(actionName, actionKwargs, state);
         } else {
             // No parent - use prototype.call to ensure Alpine's proxy observes mutations
-            return await GlueFormProxy.prototype._processAction.call(this, actionName, userData, modelProxyData);
+            return await GlueFormProxy.prototype._processAction.call(this, actionName, actionKwargs, state);
         }
     }
 

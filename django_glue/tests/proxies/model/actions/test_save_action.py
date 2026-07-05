@@ -11,7 +11,7 @@ django.setup()
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelProxy
+from django_glue.proxies import GlueModelInstanceProxy
 from django_glue.exceptions import GlueAccessError
 from django_glue.resolver.action import schemas as dto
 from test_project.gorilla.models import Gorilla
@@ -32,11 +32,11 @@ class GlueModelProxySaveTestCase(TestCase):
 
     def test_save_updates_instance_fields(self):
         """save() action should update model instance fields from payload."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'Updated Name',
                 'description': 'Updated description',
                 'age': 5,
@@ -56,11 +56,11 @@ class GlueModelProxySaveTestCase(TestCase):
 
     def test_save_persists_to_database(self):
         """save() action should persist changes to the database."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'Persisted Name',
                 'description': 'Persisted description',
                 'age': 1,
@@ -77,11 +77,11 @@ class GlueModelProxySaveTestCase(TestCase):
 
     def test_save_returns_validation_result(self):
         """save() action should return a validation result dict with success status."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.CHANGE)
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'New Name',
                 'description': 'New description',
                 'age': 10,
@@ -99,16 +99,16 @@ class GlueModelProxySaveTestCase(TestCase):
 
     def test_save_only_updates_included_fields(self):
         """save() action should ignore payload keys not in _included_fields."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.CHANGE,
             fields=['name'],  # Only these fields are allowed
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'Allowed Update',
                 'description': 'Should be ignored',  # Not in fields
                 'age': 999,  # Not in fields
@@ -124,24 +124,24 @@ class GlueModelProxySaveTestCase(TestCase):
 
     def test_save_requires_change_access(self):
         """save() action should require at least CHANGE access level."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'name': 'Should Fail'})
+        action_data = dto.ActionRequest(proxy_definition={},             action_kwargs={'name': 'Should Fail'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('save', action_data)
 
     def test_save_works_with_delete_access(self):
         """save() action should work with DELETE access level (cascading)."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'Updated with DELETE access',
                 'description': 'Description',
                 'age': 1,
@@ -158,7 +158,7 @@ class GlueModelProxySaveTestCase(TestCase):
         """from_action_request_data should load form_class from path string."""
         from test_project.test_forms import TestModelForm
 
-        proxy = GlueModelProxy.from_action_request_data(
+        proxy = GlueModelInstanceProxy.from_action_request_data(
             target_pk=self.gorilla.pk,
             model_class='Gorilla',
             app_label='gorilla',

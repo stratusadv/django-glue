@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueTemplateProxy
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 from django_glue.exceptions import GlueError
 
 
@@ -28,17 +28,17 @@ class GlueTemplateProxyInitTestCase(TestCase):
         self.assertEqual(proxy.template_name, 'base.html')
         self.assertEqual(proxy.unique_name, 'my_template')
 
-    def test_stores_context_data(self):
+    def test_stores_definition_context_data(self):
         proxy = GlueTemplateProxy(
             target='base.html',
             unique_name='my_template',
             access=GlueAccess.VIEW,
-            context_data={'foo': 'bar'},
+            definition_context_data={'foo': 'bar'},
         )
 
         self.assertEqual(proxy._context_data, {'foo': 'bar'})
 
-    def test_defaults_context_data_to_empty_dict(self):
+    def test_defaults_definition_context_data_to_empty_dict(self):
         proxy = GlueTemplateProxy(
             target='base.html',
             unique_name='my_template',
@@ -57,40 +57,40 @@ class GlueTemplateProxyInitTestCase(TestCase):
 
 
 class GlueTemplateProxyContextDataTestCase(TestCase):
-    """Tests for GlueTemplateProxy.to_context_data()."""
+    """Tests for GlueTemplateProxy.to_proxy_definition()."""
 
-    def test_to_context_data_includes_subject_type_template(self):
+    def test_to_proxy_definition_includes_subject_type_template(self):
         proxy = GlueTemplateProxy(
             target='base.html',
             unique_name='my_template',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertEqual(context_data['subject_type'], 'Template')
 
-    def test_to_context_data_includes_template_name(self):
+    def test_to_proxy_definition_includes_template_name(self):
         proxy = GlueTemplateProxy(
             target='components/card.html',
             unique_name='card',
             access=GlueAccess.VIEW,
-            context_data={'greeting': 'Hello'},
+            definition_context_data={'greeting': 'Hello'},
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertEqual(context_data['template_name'], 'components/card.html')
-        self.assertEqual(context_data['context_data'], {'greeting': 'Hello'})
+        self.assertEqual(context_data['definition_context_data'], {'greeting': 'Hello'})
 
-    def test_to_context_data_includes_actions(self):
+    def test_to_proxy_definition_includes_actions(self):
         proxy = GlueTemplateProxy(
             target='base.html',
             unique_name='my_template',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('actions', context_data)
         self.assertIn('render_html', context_data['actions'])
@@ -106,23 +106,23 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
         result = proxy.render_html(action_data)
 
         self.assertIn('html', result)
         self.assertIsInstance(result['html'], str)
 
-    def test_render_html_merges_context_data_with_user_data(self):
+    def test_render_html_merges_definition_context_data_with_action_kwargs(self):
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
             access=GlueAccess.VIEW,
-            context_data={'greeting': 'Default'},
+            definition_context_data={'greeting': 'Default'},
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'greeting': 'Override'},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'greeting': 'Override'},
         )
         result = proxy.render_html(action_data)
 
@@ -137,7 +137,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
 
         result = proxy.process_action('render_html', action_data)
         self.assertIn('html', result)
@@ -150,7 +150,7 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(context_data={}, user_data={})
+            action_data = ActionRequest(proxy_definition={}, action_kwargs={})
             result = proxy.process_action('render_html', action_data)
             self.assertIn('html', result)
 
@@ -161,14 +161,14 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
 
         with self.assertRaises(GlueError) as context:
             proxy.render_html(action_data)
 
         self.assertIn('Template not found', str(context.exception))
 
-    def test_render_html_with_no_user_data(self):
+    def test_render_html_with_no_action_kwargs(self):
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
@@ -176,24 +176,24 @@ class GlueTemplateProxyRenderHtmlTestCase(TestCase):
             context_data={'greeting': 'Hello'},
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.render_html(action_data)
 
         self.assertIn('html', result)
         self.assertIn('Hello', result['html'])
 
-    def test_render_html_context_data_overrides(self):
-        """user_data should override context_data values."""
+    def test_render_html_definition_context_data_overrides(self):
+        """action_kwargs should override definition_context_data values."""
         proxy = GlueTemplateProxy(
             target='glue_template_test.html',
             unique_name='test',
             access=GlueAccess.VIEW,
-            context_data={'greeting': 'Backend', 'extra': 'kept'},
+            definition_context_data={'greeting': 'Backend', 'extra': 'kept'},
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'greeting': 'Frontend'},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'greeting': 'Frontend'},
         )
         result = proxy.render_html(action_data)
 
@@ -207,7 +207,7 @@ class GlueTemplateProxyFromActionRequestDataTestCase(TestCase):
     def test_from_action_request_data_reconstructs_proxy(self):
         proxy = GlueTemplateProxy.from_action_request_data(
             template_name='base.html',
-            context_data={'foo': 'bar'},
+            definition_context_data={'foo': 'bar'},
             access=GlueAccess.VIEW,
             unique_name='my_template',
         )
@@ -217,7 +217,7 @@ class GlueTemplateProxyFromActionRequestDataTestCase(TestCase):
         self.assertEqual(proxy.unique_name, 'my_template')
         self.assertEqual(proxy.access, GlueAccess.VIEW)
 
-    def test_from_action_request_data_defaults_context_data(self):
+    def test_from_action_request_data_defaults_definition_context_data(self):
         proxy = GlueTemplateProxy.from_action_request_data(
             template_name='base.html',
             access=GlueAccess.VIEW,
@@ -237,7 +237,7 @@ class GlueTemplateProxyProcessActionAccessTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
         result = proxy.process_action('render_html', action_data)
 
         self.assertIn('html', result)

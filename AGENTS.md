@@ -456,7 +456,7 @@ Any `django_glue.settings` constant can be overridden by defining the same name 
 1. Django view calls `Glue.model(request, unique_name='task', target=task, access=GlueAccess.DELETE)`
 2. `Glue.glue()` creates `GlueModelProxy` instance
 3. `GlueSession.register_proxy()` stores `{unique_name: access}` in session + sets expiration
-4. `proxy.to_context_data()` serializes proxy metadata (actions, fields, model info)
+4. `proxy.to_proxy_definition()` serializes proxy metadata (actions, fields, model info)
 5. Context data stored on `request.__glue_context_data__['task']`
 6. Template renders `{% django_glue_init %}` which injects JS with proxy registry and context data
 7. JS client parses context data and creates JavaScript proxy objects
@@ -539,7 +539,7 @@ The JS client is a singleton `GlueClient` exposed as `window.Glue`. It mirrors t
 | `GlueFormProxy` extends mixin + `BaseGlueProxy` | `GlueFormProxy` extends `BaseGlueProxy` |
 | `GlueTemplateProxy` extends `BaseGlueProxy` | `GlueTemplateProxy` extends `BaseGlueProxy` |
 | `@action` decorator auto-registers methods | Actions come from `contextData.actions` sent from Python |
-| `to_context_data()` serializes proxy state | `contextData` received and used to build proxy |
+| `to_proxy_definition()` serializes proxy state | `contextData` received and used to build proxy |
 | `subject_type.__name__` in context data | `SUBJECT_TYPE_TO_PROXY_CLASS` map by string name |
 
 ### Event System

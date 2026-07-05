@@ -23,7 +23,7 @@ describe('GlueClient', () => {
     afterEach(() => {
         global.setInterval = originalSetInterval;
         global.clearInterval = originalClearInterval;
-        GlueClient.contextData = {};
+        GlueClient.contracts = {};
         GlueClient.proxyRegistry = {};
     });
 
@@ -38,7 +38,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config
             });
 
@@ -46,14 +46,14 @@ describe('GlueClient', () => {
             expect(client._config).toBe(config);
         });
 
-        it('defines proxy properties from contextData', () => {
+        it('defines proxy properties from contract', () => {
             const config = {
                 actionUrlPath: '/__dg__/action/',
                 keepLiveUrlPath: '/__dg__/keep_live/',
                 glueViewUrlPath: '/__dg__/glue_view/',
             };
 
-            const contextData = {
+            const contract = {
                 'task': {
                     subject_type: 'Model',
                     fields: { id: {}, title: {} },
@@ -70,7 +70,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: { task: 'view', tasks: 'change' },
-                contextDataForProxies: contextData,
+                contracts: contract,
                 config
             });
 
@@ -78,14 +78,14 @@ describe('GlueClient', () => {
             expect(client.querySet.tasks).toBeDefined();
         });
 
-        it('sets static contextData on GlueClient class', () => {
+        it('sets static contracts on GlueClient class', () => {
             const config = {
                 actionUrlPath: '/__dg__/action/',
                 keepLiveUrlPath: '/__dg__/keep_live/',
                 glueViewUrlPath: '/__dg__/glue_view/',
             };
 
-            const contextData = {
+            const contract = {
                 'task': {
                     subject_type: 'Model',
                     fields: { id: {} },
@@ -96,11 +96,11 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: { task: 'view' },
-                contextDataForProxies: contextData,
+                contracts: contract,
                 config
             });
 
-            expect(GlueClient.contextData.task).toBeDefined();
+            expect(GlueClient.contracts.task).toBeDefined();
         });
 
         it('sets static proxyRegistry on GlueClient class', () => {
@@ -114,7 +114,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: registry,
-                contextDataForProxies: {},
+                contracts: {},
                 config
             });
 
@@ -131,7 +131,7 @@ describe('GlueClient', () => {
             // Should not throw
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config
             });
         });
@@ -140,7 +140,7 @@ describe('GlueClient', () => {
             // Should not throw
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
             });
         });
     });
@@ -153,7 +153,7 @@ describe('GlueClient', () => {
                 glueViewUrlPath: '/__dg__/glue_view/',
             };
 
-            const contextData = {
+            const contract = {
                 'task': {
                     subject_type: 'Model',
                     fields: { id: {}, title: {} },
@@ -164,7 +164,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: { task: 'view' },
-                contextDataForProxies: contextData,
+                contracts: contract,
                 config
             });
 
@@ -180,7 +180,7 @@ describe('GlueClient', () => {
                 glueViewUrlPath: '/__dg__/glue_view/',
             };
 
-            const contextData = {
+            const contract = {
                 'tasks': {
                     subject_type: 'QuerySet',
                     fields: { id: {}, title: {} },
@@ -191,7 +191,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: { tasks: 'change' },
-                contextDataForProxies: contextData,
+                contracts: contract,
                 config
             });
 
@@ -207,7 +207,7 @@ describe('GlueClient', () => {
                 glueViewUrlPath: '/__dg__/glue_view/',
             };
 
-            const contextData = {
+            const contract = {
                 'contact_form': {
                     subject_type: 'BaseForm',
                     fields: { name: {}, email: {} },
@@ -218,7 +218,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: { contact_form: 'change' },
-                contextDataForProxies: contextData,
+                contracts: contract,
                 config
             });
 
@@ -239,7 +239,7 @@ describe('GlueClient', () => {
             client._config = config;
             client.http = { sendKeepLiveRequest: () => Promise.resolve({ ok: true }) };
 
-            const contextData = {
+            const contract = {
                 'task': {
                     subject_type: 'Model',
                     fields: { id: {} },
@@ -248,10 +248,10 @@ describe('GlueClient', () => {
                 }
             };
 
-            client.initializeProxies({ task: 'view' }, contextData);
+            client.initializeProxies({ task: 'view' }, contract);
 
             expect(client.model.task).toBeDefined();
-            expect(GlueClient.contextData.task).toBeDefined();
+            expect(GlueClient.contracts.task).toBeDefined();
         });
     });
 
@@ -272,7 +272,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config
             });
 
@@ -333,7 +333,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
@@ -351,7 +351,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
@@ -374,13 +374,13 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
@@ -437,7 +437,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
@@ -468,7 +468,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 
@@ -495,7 +495,7 @@ describe('GlueClient', () => {
 
             client.init({
                 proxyRegistryFromSession: {},
-                contextDataForProxies: {},
+                contracts: {},
                 config,
             });
 

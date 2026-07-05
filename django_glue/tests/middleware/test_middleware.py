@@ -5,7 +5,7 @@ from django.test import TestCase, RequestFactory
 
 from django_glue.middleware import DjangoGlueMiddleware
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.session import GlueSession
 from django_glue import settings
 from test_project.gorilla.models import Gorilla
@@ -47,7 +47,7 @@ class DjangoGlueMiddlewareTestCase(TestCase):
         request = self.factory.get('/')
         request.session = MockSession()
 
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
@@ -75,7 +75,7 @@ class DjangoGlueMiddlewareTestCase(TestCase):
         request = self.factory.post('/__dg__/action/gorilla/get/')
         request.session = MockSession()
 
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
@@ -96,7 +96,7 @@ class DjangoGlueMiddlewareTestCase(TestCase):
         request = self.factory.post('/__dg__/keep_live/')
         request.session = MockSession()
 
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,

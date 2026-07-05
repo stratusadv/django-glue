@@ -10,20 +10,27 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, Generic, Self, TypeVar, get_type_hints
+
+from pydantic import BaseModel, TypeAdapter, ValidationError
+from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.exceptions import GlueAccessError, GlueMissingActionError
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.actions import GlueAction
+from django_glue.proxies.contract import GlueProxyContract
+from django_glue.exceptions import GlueAccessError
+from django_glue.response import ActionResult
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
+    from django_glue.resolver.action.schemas import ActionRequest
 
 
 BASE_ACTION_CATEGORY_NAME = 'base'
 
+TContract = TypeVar('TContract', bound=GlueProxyContract)
 
-class BaseGlueProxy(ABC):
+
+class BaseGlueProxy(ABC, Generic[TContract]):
     """
     Abstract base class for all Django Glue proxies.
 
@@ -50,42 +57,35 @@ class BaseGlueProxy(ABC):
     """
 
     _subject_type: type
-    _actions = {}
+    _actions: dict[str, GlueAction] = {}
 
     def __init__(
-        self, target: Any, unique_name: str, access: GlueAccess | str = GlueAccess.VIEW, **kwargs
-    ):
-        if not isinstance(target, self._subject_type):
-            raise ValueError(
-                f"The value passed to 'target' for {self.__class__} must be an instance of {self._subject_type.__name__} (according to the type assigned to '{self.__class__.__name__}.obj_class')."
-            )
+        self,
+        name: str,
+        namespace: str,
+        access: GlueAccess,
+    ) -> None:
+        self.name = name
+        self.namespace = namespace
+        self.access = access
+        self.access = access
+        self._register_actions_for_class(target_class=self.__class__)
 
-        self.unique_name = unique_name
-
-        if isinstance(access, GlueAccess):
-            self.access = access
-        else:
-            self.access = GlueAccess(access)
-
-        self.target = target
-
-        self._register_subject_actions()
+    # TODO: Override this to define how the proxy subject
+    # is constructed from the action_request object
+    @classmethod
+    def _from_action_request(cls, action_request: ActionRequest) -> Self:
+        raise NotImplementedError
 
     @classmethod
-    def _register_actions(cls, subject_type: type, category: str | None = None):
-        if cls.__name__ not in cls._actions:
-            cls._actions[cls.__name__] = {}
-
-        if category is None:
-            category = BASE_ACTION_CATEGORY_NAME
-
-        if category not in cls._actions[cls.__name__]:
-            cls._actions[cls.__name__][category] = {}
-
+    def _register_actions_for_class(
+        cls,
+        target_class: type,
+    ) -> None:
         # First pass: collect all decorated action names and their access levels from the MRO
         # This allows child classes to inherit @action decoration from parent classes
         decorated_actions = {}
-        for klass in reversed(subject_type.__mro__):
+        for klass in reversed(target_class.__mro__):
             if klass is object:
                 continue
             for attr_name, attr_value in klass.__dict__.items():
@@ -96,28 +96,12 @@ class BaseGlueProxy(ABC):
         # using the access level from the decorated parent
         for attr_name, required_access in decorated_actions.items():
             # Get the actual method implementation (resolves to child's override if exists)
-            actual_method = getattr(subject_type, attr_name)
+            actual_method = getattr(target_class, attr_name)
 
             parameters = inspect.signature(actual_method).parameters
-            parameter_data = {}
+            parameter_data: dict[str, str | None] = {}
 
-            # Skip internal params that are handled by _build_action_kwargs
-            internal_params = {'self', 'args', 'kwargs', 'request', 'user_data', 'file_data', 'context_data'}
-            first_param_seen = False
-
-            for param_name, param_value in parameters.items():
-                if param_name == 'self':
-                    continue
-
-                # Skip first param after self (always 'request')
-                if not first_param_seen:
-                    first_param_seen = True
-                    continue
-
-                # Skip other internal params
-                if param_name in internal_params:
-                    continue
-
+            for param_name, param_value in list(parameters.items())[2:]:
                 # Convert annotation to string for JSON serialization
                 annotation = param_value.annotation
                 if annotation is inspect.Parameter.empty:
@@ -127,195 +111,140 @@ class BaseGlueProxy(ABC):
                 else:
                     parameter_data[param_name] = str(annotation)
 
-            cls._actions[cls.__name__][category][attr_name] = (
-                actual_method,
-                parameter_data,
-                required_access,
+            cls._actions[attr_name] = GlueAction(
+                name=attr_name,
+                parameters=parameter_data,
+                required_access=required_access,
+                target_class_path=f'{target_class.__module__}.{target_class.__name__}'
             )
 
     @classmethod
     def __init_subclass__(cls, **kwargs):
         is_abstract = inspect.isabstract(cls)
         if not hasattr(cls, '_subject_type') and not is_abstract:
-            raise TypeError(
-                f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type' attribute that matches the expected type of the __init__ 'target' parameter."
+            msg = (
+                f"BaseGlueProxy subclass {cls.__name__} must define '_subject_type "
+                "attribute that matches the expected type of the __init__ 'target' parameter."
             )
+            raise TypeError(msg)
 
-        cls._register_actions(subject_type=cls, category=BASE_ACTION_CATEGORY_NAME)
-
-    def _register_subject_actions(self):
-        pass
-
-    def _get_subject_action_target_by_category(
+    def _get_external_target_for_action_request(
         self,
-        category: str,
-        action_payload: ActionPayloadSchema
-    ) -> Any:
+        action_request: ActionRequest
+    ) -> tuple[GlueAction, Any]:
+        raise NotImplementedError
+
+    @property
+    def state(self) -> BaseModel | None:
         return None
 
     @property
-    def actions(self) -> dict:
-        """Return the registered actions for this proxy class and its subject actions."""
-        return self._actions[self.__class__.__name__]
-
-    @classmethod
-    def from_action_request_data(
-        cls, access: GlueAccess, unique_name: str, **kwargs
-    ) -> BaseGlueProxy:
-        """
-        Reconstruct a proxy instance from data sent to action_view.
-
-        Called when processing an action request to recreate the proxy from
-        data sent in a request the action_view. Subclasses can override this to handle additional
-        reconstruction logic (e.g., fetching model instances from the database).
-
-        Args:
-            access: The access level for this proxy.
-            unique_name: The unique identifier for this proxy.
-            **kwargs: Additional data stored in the session registry.
-
-        Returns:
-            A new proxy instance configured with the provided data.
-
-        """
-        return cls(access=access, unique_name=unique_name, **kwargs)
-
-    def _build_context_data(self) -> dict:
+    def _custom_contract_data(self) -> dict:
         return {}
 
-    def to_context_data(self):
-        actions_data = {}
-        for action_category in self.actions.keys():
-            actions_data.update({
-                action_name: dict(action_parameters)
-                for action_name, (_, action_parameters, _) in
-                self.actions[action_category].items()
-            })
+    @property
+    def _action_contract_data(self) -> dict:
+        return {
+            action_name: action.model_dump()
+            for action_name, action in self._actions.items()
+        }
 
-        # make sure the context_data is always sorted the same for security checksums
-        return dict(sorted(
-            dict(
-                actions=actions_data,
-                subject_type=self._subject_type.__name__,
-                **self._build_context_data()
-            ).items()
-        ))
+    def register_with_request(self, request: HttpRequest) -> None:
+        request_proxy_contracts = request.__dict__['__glue_proxy_contracts__']
+
+        if not request_proxy_contracts:
+            request_proxy_contracts = {}
+
+        request_proxy_contracts[self] = GlueProxyContract.initialize({
+            'name': self.name,
+            'namespace': self.namespace,
+            'access': self.access,
+            'subject_type': self._subject_type.__name__,
+            'actions': self._action_contract_data,
+            'custom_data': self._custom_contract_data
+        }).model_dump()
 
     def _build_action_kwargs(
         self,
-        action_func: Callable,
-        action_payload: ActionPayloadSchema,
-        request: HttpRequest | None
+        action_callable: Callable,
+        action_request: ActionRequest,
     ) -> dict:
-        """
-        Build kwargs for action based on its signature.
+        unwrapped_func = inspect.unwrap(action_callable)
+        sig = inspect.signature(unwrapped_func)
 
-        - First param after 'self' always receives request
-        - 'user_data' param receives the full user_data dict (action-specific data from user)
-        - 'proxy_data' param receives the full proxy_data dict (proxy-intrinsic state)
-        - 'file_data' param receives the full file_data dict
-        - 'context_data' param receives the full context_data dict
-        - Other params are extracted from user_data by name
-        """
-        sig = inspect.signature(action_func)
+        # Safely resolve string annotations (e.g., from __future__ import annotations)
+        type_hints = get_type_hints(unwrapped_func)
+
         kwargs = {}
-        user_data = action_payload.user_data or {}
-        proxy_data = action_payload.proxy_data or {}
-        file_data = action_payload.file_data or {}
-        context_data = action_payload.context_data or {}
-
+        action_kwargs = action_request.action_kwargs or {}
         params = list(sig.parameters.items())
-        first_param_handled = False
 
-        for param_name, param in params:
-            if param_name == 'self':
-                continue
+        # Handle request param
+        request_param_name, _ = params[1]
+        kwargs[request_param_name] = action_request.request
 
-            # First param after self always gets request
-            if not first_param_handled:
-                first_param_handled = True
-                kwargs[param_name] = request
-                continue
+        for param_name, param in params[2:]:
+            if param_name in action_kwargs:
+                raw_value = action_kwargs[param_name]
 
-            # Special params for full dicts
-            if param_name == 'user_data':
-                kwargs[param_name] = user_data
-            elif param_name == 'proxy_data':
-                kwargs[param_name] = proxy_data
-            elif param_name == 'file_data':
-                kwargs[param_name] = file_data
-            elif param_name == 'context_data':
-                kwargs[param_name] = context_data
-            # Regular params come from user_data by name
-            elif param_name in user_data:
-                kwargs[param_name] = user_data[param_name]
+                # Check if we have a type hint for this parameter
+                if param_name in type_hints:
+                    annotation = type_hints[param_name]
+                    try:
+                        # TypeAdapter validates and optionally coerces the data
+                        validator = TypeAdapter(annotation)
+                        kwargs[param_name] = validator.validate_python(raw_value)
+                    except ValidationError as e:
+                        # Surface a clean error pointing out exactly which param failed
+                        msg = f"Validation failed for param '{param_name}': {e}"
+                        raise TypeError(msg) from e
+                else:
+                    # No type hint provided, just pass the value
+                    kwargs[param_name] = raw_value
+
             elif param.default is not inspect.Parameter.empty:
-                # Has default, skip (will use default)
                 pass
-            # else: missing required param - let Python raise TypeError
 
         return kwargs
 
-    def process_action(
-        self,
-        action: str,
-        action_payload: ActionPayloadSchema,
-        request: HttpRequest | None = None
-    ) -> dict:
-        for category, category_actions in self.actions.items():
-            if action in category_actions:
-                action_func, _, required_access = category_actions[action]
-                if category == BASE_ACTION_CATEGORY_NAME:
-                    action_target = self
-                else:
-                    action_target = self._get_subject_action_target_by_category(
-                        category=category,
-                        action_payload=action_payload
-                    )
+    @classmethod
+    def process_action_request(
+        cls,
+        action_request: ActionRequest,
+        **kwargs
+    ) -> ActionResult:
+        instance = cls._from_action_request(action_request=action_request)
 
-                # Store for get_response_proxy_data to access
-                self._last_action_target = action_target
-                self._last_action_category = category
+        action = cls._actions[action_request.action_name]
 
-                if not self.access.has_access(required_access):
-                    raise GlueAccessError(
-                        action=action,
-                        required_access=required_access.name,
-                        current_access=self.access.name
-                    )
-
-                kwargs = self._build_action_kwargs(
-                    action_func=action_func,
-                    action_payload=action_payload,
-                    request=request
-                )
-
-                return action_func(action_target, **kwargs)
-
-        raise GlueMissingActionError(
-            action=action,
-            proxy_name=self.unique_name,
-            reason=(
-                "No valid action candidate was found for the {self.__class__.__name__}"
-                " proxy for subject type {self._subject_type.__name__}."
-                " A method must be defined either directly on the proxy class, or the "
-                " proxy's subject class, and it must be decorated with"
-                " '@action(access=GlueAccess.<REQUIRED_ACCESS>)'"
+        if issubclass(action.target_class, cls):
+            # the action targets the proxy instance itself
+            action_target = instance
+        else:
+            # the action targets something external (e.g. a model class, queryset class)
+            # subclasses with override the below method to define custom logic for building
+            # externally typed targets
+            action_target = instance._get_external_target_for_action_request(
+                action_request=action_request
             )
+
+        if not instance.access.has_access(action.required_access):
+            raise GlueAccessError(
+                action=action.name,
+                required_access=action.required_access,
+                current_access=instance.access
+            )
+
+        action_callable = action.callable
+
+        action_kwargs = instance._build_action_kwargs(
+            action_callable=action_callable,
+            action_request=action_request,
         )
 
-    def get_response_proxy_data(
-        self,
-        action: str,
-        action_payload: ActionPayloadSchema
-    ) -> dict | None:
-        """
-        Get proxy-intrinsic data to include in the response.
+        action_result_data = action_callable(action_target, **action_kwargs)
 
-        Override in subclasses to include proxy-specific state like form errors.
-        This is the response counterpart to proxy_data in the request.
-
-        Returns:
-            dict with proxy-intrinsic state, or None if no data to send.
-        """
-        return None
+        return ActionResult(
+            proxy_state=instance.state,
+            payload=action_result_data,
+        )

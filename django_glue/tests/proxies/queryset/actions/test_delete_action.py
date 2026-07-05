@@ -38,7 +38,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'id': gorilla1_pk})
+        action_data = dto.ActionRequest(proxy_definition={},             action_kwargs={'id': gorilla1_pk})
         # Delete gorilla1 via payload
         proxy.delete(action_data)
 
@@ -52,7 +52,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'id': 99999})
+        action_data = dto.ActionRequest(proxy_definition={},             action_kwargs={'id': 99999})
 
         with self.assertRaises(GlueModelInstanceNotFoundError):
             proxy.delete(action_data)
@@ -65,7 +65,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'id': self.gorilla1.pk})
+        action_data = dto.ActionRequest(proxy_definition={},             action_kwargs={'id': self.gorilla1.pk})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
@@ -78,7 +78,7 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
             access=GlueAccess.CHANGE,  # Not enough for delete
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'id': self.gorilla1.pk})
+        action_data = dto.ActionRequest(proxy_definition={},             action_kwargs={'id': self.gorilla1.pk})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
@@ -99,14 +99,14 @@ class GlueQuerySetProxyDeleteTestCase(TestCase):
         self.assertEqual(instance.name, 'Gorilla 1')
 
     def test_delete_returns_error_for_missing_pk(self):
-        """delete() should return error dict when id is missing from user_data."""
+        """delete() should return error dict when id is missing from action_kwargs."""
         proxy = GlueQuerySetProxy(
             target=Gorilla.objects.all(),
             unique_name='gorillas',
             access=GlueAccess.DELETE,
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={})
+        action_data = dto.ActionRequest(proxy_definition={}, action_kwargs={})
         result = proxy.delete(action_data)
 
         self.assertFalse(result['success'])

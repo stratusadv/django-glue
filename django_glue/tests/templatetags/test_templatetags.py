@@ -66,7 +66,7 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('gorilla', rendered)
 
-    def test_tag_includes_proxy_context_data(self):
+    def test_tag_includes_proxy_definitions(self):
         """Tag should include proxy context data when proxies are registered."""
         Glue.model(
             request=self.request,

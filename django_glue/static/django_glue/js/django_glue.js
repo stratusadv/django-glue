@@ -2,11 +2,11 @@
   // client_js/src/proxies/base.js
   class BaseGlueProxy {
     static name = "baseGlueProxy";
-    constructor({ http, proxyUniqueName, contextData, actions = null }) {
+    constructor({ http, proxyUniqueName, proxyDefinition, actions = null }) {
       this.http = http;
       this._uniqueName = proxyUniqueName;
-      this._contextData = contextData;
-      this._actions = actions ? actions : contextData.actions;
+      this._proxyDefinition = proxyDefinition;
+      this._actions = actions ? actions : proxyDefinition.actions;
       this._defineCustomActions();
       this._listeners = {
         before: {},
@@ -44,24 +44,24 @@
         await callback(event);
       }
     }
-    async _processAction(actionName, userData = null, proxyData = null) {
+    async _processAction(actionName, actionKwargs = null, proxyState = null) {
       const event = {
         action: actionName,
         proxy: this,
-        userData
+        actionKwargs
       };
       await this.emitListeners("before", actionName, event);
       try {
         const response = await this.http.sendActionRequest({
           uniqueName: this._uniqueName,
           action: actionName,
-          userData,
-          contextData: this._contextData,
-          proxyData
+          actionKwargs,
+          proxyDefinition: this._proxyDefinition,
+          proxyState
         });
         const responseData = response.data;
-        if (responseData.proxy_data) {
-          this._handleResponseProxyData(responseData.proxy_data);
+        if (responseData.proxy_state) {
+          this._handleResponseProxyState(responseData.proxy_state);
         }
         const data = responseData.data !== undefined ? responseData.data : responseData;
         event.result = data;
@@ -73,15 +73,15 @@
         throw err;
       }
     }
-    _handleResponseProxyData(proxyData) {}
-    async _defaultProcessAction(actionName, userData = null) {
-      return await this._processAction(actionName, userData);
+    _handleResponseProxyState(proxyState) {}
+    async _defaultProcessAction(actionName, actionKwargs = null) {
+      return await this._processAction(actionName, actionKwargs);
     }
     _defineCustomActions() {
       Object.keys(this._actions).forEach((actionName) => {
         if (!(actionName in this)) {
-          this[actionName] = async (userData = null) => {
-            return await this._defaultProcessAction(actionName, userData);
+          this[actionName] = async (actionKwargs = null) => {
+            return await this._defaultProcessAction(actionName, actionKwargs);
           };
         }
       });
@@ -92,9 +92,9 @@
   // client_js/src/proxies/form.js
   class GlueFormProxy extends base_default {
     static name = "form";
-    constructor({ http, proxyUniqueName, contextData, actions = null }) {
-      super({ http, proxyUniqueName, contextData, actions });
-      this._values = { ...this._contextData.initial || {} };
+    constructor({ http, proxyUniqueName, proxyDefinition, actions = null }) {
+      super({ http, proxyUniqueName, proxyDefinition, actions });
+      this._values = { ...this._proxyDefinition.initial || {} };
       this._errors = {};
       this._defineFields();
       Object.defineProperty(this, "$fields", {
@@ -161,7 +161,7 @@
     }
     _defineFields() {
       this._fields = {};
-      Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
+      Object.entries(this._proxyDefinition.fields).forEach(([fieldName, fieldData]) => {
         this._defineFieldNameProperty(fieldName);
         fieldData = { ...fieldData };
         if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
@@ -193,19 +193,19 @@
         });
       });
     }
-    async _processAction(actionName, userData = null, proxyData = null) {
-      const formProxyData = {
-        ...proxyData || {},
+    async _processAction(actionName, actionKwargs = null, proxyState = null) {
+      const formProxyState = {
+        ...proxyState || {},
         form_values: this._values || {}
       };
-      return await base_default.prototype._processAction.call(this, actionName, userData, formProxyData);
+      return await base_default.prototype._processAction.call(this, actionName, actionKwargs, formProxyState);
     }
-    _handleResponseProxyData(proxyData) {
-      if (proxyData.errors) {
-        this._updateErrors(proxyData.errors);
+    _handleResponseProxyState(proxyState) {
+      if (proxyState.errors) {
+        this._updateErrors(proxyState.errors);
       }
-      if (proxyData.form_values) {
-        this._values = { ...this._values, ...proxyData.form_values };
+      if (proxyState.form_values) {
+        this._values = { ...this._values, ...proxyState.form_values };
       }
     }
     async get() {
@@ -239,8 +239,8 @@
       }
       return result;
     }
-    async process(userData = null) {
-      const result = await this._processAction("process", userData);
+    async process(actionKwargs = null) {
+      const result = await this._processAction("process", actionKwargs);
       this._updateErrors(this._errors);
       return result;
     }
@@ -264,20 +264,20 @@
     constructor({
       http,
       proxyUniqueName,
-      contextData,
+      proxyDefinition,
       actions = null,
       autoFetch = false,
       values = null,
       parentQuerySet = null
     }) {
-      super({ http, proxyUniqueName, contextData, actions, autoFetch });
+      super({ http, proxyUniqueName, proxyDefinition, actions, autoFetch });
       this._values = values;
       if (values) {
         this._defineExtraFields();
       }
       this.$key = `django-glue-${++_keyCounter}`;
       this._parent = parentQuerySet;
-      this._pkFieldName = contextData.pk_field_name || "id";
+      this._pkFieldName = proxyDefinition.pk_field_name || "id";
     }
     get _pk() {
       return this._values?.[this._pkFieldName];
@@ -298,16 +298,16 @@
       this._loading = false;
       this._loaded = true;
     }
-    async _processAction(actionName, userData = null, proxyData = null) {
-      const modelProxyData = {
-        ...proxyData || {},
+    async _processAction(actionName, actionKwargs = null, proxyState = null) {
+      const modelProxyState = {
+        ...proxyState || {},
         instance_pk: this._pk,
         form_values: this._values || {}
       };
       if (this._parent) {
-        return await this._parent._processAction(actionName, userData, modelProxyData);
+        return await this._parent._processAction(actionName, actionKwargs, modelProxyState);
       } else {
-        return await form_default.prototype._processAction.call(this, actionName, userData, modelProxyData);
+        return await form_default.prototype._processAction.call(this, actionName, actionKwargs, modelProxyState);
       }
     }
     async delete() {
@@ -399,13 +399,13 @@
         csrfProtected
       });
     }
-    async sendActionRequest({ uniqueName, action, userData = null, contextData, proxyData = null }) {
+    async sendActionRequest({ uniqueName, action, actionKwargs = null, proxyDefinition, proxyState = null }) {
       const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`;
       const formData = new FormData;
-      formData.append("context_data", JSON.stringify(contextData));
-      if (proxyData) {
-        const { files, data } = this._extractFiles(proxyData);
-        formData.append("proxy_data", JSON.stringify(data));
+      formData.append("proxy_definition", JSON.stringify(proxyDefinition));
+      if (proxyState) {
+        const { files, data } = this._extractFiles(proxyState);
+        formData.append("proxy_state", JSON.stringify(data));
         Object.entries(files).forEach(([key, value]) => {
           if (value instanceof FileList) {
             Array.from(value).forEach((file) => formData.append(key, file));
@@ -416,8 +416,8 @@
           }
         });
       }
-      if (userData) {
-        formData.append("user_data", JSON.stringify(userData));
+      if (actionKwargs) {
+        formData.append("action_kwargs", JSON.stringify(actionKwargs));
       }
       return await this.sendFormPostRequest(url, formData);
     }
@@ -492,7 +492,7 @@
         }),
         csrfProtected: true
       });
-      window.Glue.initializeProxies(viewResponse.data.proxy_registry_data, viewResponse.data.proxy_context_data);
+      window.Glue.initializeProxies(viewResponse.data.proxy_registry_data, viewResponse.data.proxy_definitions);
       return viewResponse.data.html;
     }
     async renderInnerHtml(target_element, payload = {}) {
@@ -522,7 +522,7 @@
 
   // client_js/src/client.js
   class GlueClient {
-    static contextData = {};
+    static proxyDefinitions = {};
     static proxyClassesForSubjectTypes = {};
     static proxyRegistry = {};
     model = {};
@@ -531,8 +531,8 @@
     template = {};
     function = {};
     _keepLiveIntervalHandle = null;
-    _defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
-      const { subject_type: subjectType } = contextData;
+    _defineProxyUniqueNameAsPropertyFromDefinition(proxyUniqueName, proxyDefinition) {
+      const { subject_type: subjectType } = proxyDefinition;
       let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType];
       if (!(proxyClass.name in this)) {
         this[proxyClass.name] = {};
@@ -542,13 +542,13 @@
         proxy = proxyClass.create({
           http: this.http,
           proxyUniqueName,
-          contextData
+          proxyDefinition
         });
       } else {
         proxy = new proxyClass({
           http: this.http,
           proxyUniqueName,
-          contextData
+          proxyDefinition
         });
       }
       this[proxyClass.name][proxyUniqueName] = proxy;
@@ -594,19 +594,19 @@
     }
     init({
       proxyRegistryFromSession,
-      contextDataForProxies,
+      proxyDefinitions,
       config = {}
     }) {
       this._config = config;
       this.http = new http_default(this._config);
-      this.initializeProxies(proxyRegistryFromSession, contextDataForProxies);
+      this.initializeProxies(proxyRegistryFromSession, proxyDefinitions);
     }
-    initializeProxies(proxyRegistryFromSession, contextDataForProxies) {
-      for (const [proxyUniqueName, contextData] of Object.entries(contextDataForProxies)) {
-        this._defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData);
+    initializeProxies(proxyRegistryFromSession, proxyDefinitions) {
+      for (const [proxyUniqueName, proxyDefinition] of Object.entries(proxyDefinitions)) {
+        this._defineProxyUniqueNameAsPropertyFromDefinition(proxyUniqueName, proxyDefinition);
       }
       Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession);
-      Object.assign(GlueClient.contextData, contextDataForProxies);
+      Object.assign(GlueClient.proxyDefinitions, proxyDefinitions);
       this._initializeKeepLivePulse();
     }
     view(url, shared_payload = {}) {
@@ -633,7 +633,7 @@
       const proxy = new model_default({
         http: this.http,
         proxyUniqueName: this._uniqueName,
-        contextData: client_default.contextData[this._uniqueName],
+        proxyDefinition: client_default.proxyDefinitions[this._uniqueName],
         values: { ...item },
         parentQuerySet: this
       });
@@ -731,8 +731,8 @@
   // client_js/src/proxies/template.js
   class GlueTemplateProxy extends base_default {
     static name = "template";
-    constructor({ http, proxyUniqueName, contextData, sharedPayload = {} }) {
-      super({ http, proxyUniqueName, contextData });
+    constructor({ http, proxyUniqueName, proxyDefinition, sharedPayload = {} }) {
+      super({ http, proxyUniqueName, proxyDefinition });
       this._sharedPayload = sharedPayload;
     }
     async _renderHtml(payload = {}) {
@@ -776,15 +776,15 @@
   // client_js/src/proxies/function.js
   class GlueFunctionProxy extends base_default {
     static name = "function";
-    constructor({ http, proxyUniqueName, contextData }) {
-      super({ http, proxyUniqueName, contextData });
-      this._params = contextData.params || [];
+    constructor({ http, proxyUniqueName, proxyDefinition }) {
+      super({ http, proxyUniqueName, proxyDefinition });
+      this._params = proxyDefinition.params || [];
     }
-    static create({ http, proxyUniqueName, contextData }) {
+    static create({ http, proxyUniqueName, proxyDefinition }) {
       const instance = new GlueFunctionProxy({
         http,
         proxyUniqueName,
-        contextData
+        proxyDefinition
       });
       const fn = async function(kwargs = {}) {
         if (!isObject(kwargs)) {
@@ -800,7 +800,7 @@
         return response.result;
       };
       fn._uniqueName = proxyUniqueName;
-      fn._contextData = contextData;
+      fn._proxyDefinition = proxyDefinition;
       fn._params = instance._params;
       fn.addListener = instance.addListener.bind(instance);
       fn.removeListener = instance.removeListener.bind(instance);

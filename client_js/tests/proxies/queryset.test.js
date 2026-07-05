@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import GlueQuerySetProxy from '../../src/proxies/queryset';
 import GlueClient from '../../src/client';
-import { createMockContextData, setupCookieMock } from '../testUtils';
+import { createMockcontract, setupCookieMock } from '../testUtils';
 
 describe('GlueQuerySetProxy', () => {
     let originalFetch;
@@ -10,8 +10,8 @@ describe('GlueQuerySetProxy', () => {
         originalFetch = global.fetch;
         setupCookieMock({ csrftoken: 'test-token' });
 
-        // Set up GlueClient.contextData for queryset item building
-        GlueClient.contextData = {
+        // Set up GlueClient.contract for queryset item building
+        GlueClient.contract = {
             'tasks': {
                 fields: { id: {}, title: {}, done: {} },
                 actions: { save: {}, delete: {} }
@@ -21,7 +21,7 @@ describe('GlueQuerySetProxy', () => {
 
     afterEach(() => {
         global.fetch = originalFetch;
-        GlueClient.contextData = {};
+        GlueClient.contract = {};
     });
 
     describe('queryWithParams', () => {
@@ -32,7 +32,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, title: {} },
                 { query_with_params: {} }
             );
@@ -40,7 +40,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.queryWithParams();
@@ -57,7 +57,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -65,7 +65,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams();
@@ -80,7 +80,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -88,7 +88,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.queryWithParams();
@@ -107,7 +107,7 @@ describe('GlueQuerySetProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -115,7 +115,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams({ filter: { done: false } });
@@ -135,7 +135,7 @@ describe('GlueQuerySetProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -143,7 +143,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams({ filter: { done: false } });
@@ -161,7 +161,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -169,7 +169,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.all();
@@ -186,7 +186,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, done: {} },
                 { query_with_params: {} }
             );
@@ -194,7 +194,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const result = proxy.filter({ done: false });
@@ -210,7 +210,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, title: {} },
                 { query_with_params: {} }
             );
@@ -218,7 +218,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             proxy.filter({ title__icontains: 'urgent' });
@@ -233,7 +233,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -241,7 +241,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const result = proxy.orderBy({ title: 'asc' });
@@ -257,7 +257,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -265,7 +265,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             proxy.slice(0, 10);
@@ -278,7 +278,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -286,7 +286,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             proxy.sliceStart(5);
@@ -299,7 +299,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -307,7 +307,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             proxy.sliceEnd(10);
@@ -324,7 +324,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -332,7 +332,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams();
@@ -352,7 +352,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -360,7 +360,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams();
@@ -383,7 +383,7 @@ describe('GlueQuerySetProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -391,7 +391,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams();
@@ -410,7 +410,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -418,7 +418,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             expect(proxy.isEmpty).toBe(false);
@@ -430,7 +430,7 @@ describe('GlueQuerySetProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: [] }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { query_with_params: {} }
             );
@@ -438,7 +438,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await proxy.queryWithParams();
@@ -456,7 +456,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, title: {} },
                 { new: {} }
             );
@@ -464,7 +464,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.pushNew();
@@ -480,7 +480,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {}, title: {} },
                 { new: {} }
             );
@@ -488,7 +488,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.pushNew('end');
@@ -503,7 +503,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { new: {} }
             );
@@ -511,7 +511,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             await expect(proxy.pushNew('invalid')).rejects.toThrow('Invalid location');
@@ -526,7 +526,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { new: {} }
             );
@@ -534,7 +534,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.prependNew();
@@ -548,7 +548,7 @@ describe('GlueQuerySetProxy', () => {
                 }))
             };
 
-            const contextData = createMockContextData(
+            const contract = createMockcontract(
                 { id: {} },
                 { new: {} }
             );
@@ -556,7 +556,7 @@ describe('GlueQuerySetProxy', () => {
             const proxy = new GlueQuerySetProxy({
                 http: mockHttp,
                 proxyUniqueName: 'tasks',
-                contextData
+                contract
             });
 
             const items = await proxy.appendNew();

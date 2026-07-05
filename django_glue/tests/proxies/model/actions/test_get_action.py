@@ -11,7 +11,7 @@ django.setup()
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelProxy
+from django_glue.proxies import GlueModelInstanceProxy
 from django_glue.resolver.action import schemas as dto
 from test_project.gorilla.models import Gorilla
 
@@ -31,9 +31,9 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_returns_model_as_dict(self):
         """get() action should return the model instance as a dictionary."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIsInstance(result, dict)
@@ -43,9 +43,9 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_includes_id_field(self):
         """get() action should include the id field."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('id', result)
@@ -53,14 +53,14 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_respects_fields_filter(self):
         """get() action should only include specified fields when fields parameter is used."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
             fields=['name', 'age'],
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('name', result)
@@ -70,14 +70,14 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_respects_exclude_filter(self):
         """get() action should exclude specified fields when exclude parameter is used."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
             exclude=['description', 'age'],
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         result = proxy.get(action_data)
 
         self.assertIn('name', result)
@@ -87,9 +87,9 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_get_works_with_view_access(self):
         """get() action should work with VIEW access level."""
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
 
         # Should not raise
         result = proxy.process_action('get', action_data)
@@ -98,9 +98,9 @@ class GlueModelProxyGetTestCase(TestCase):
     def test_get_works_with_higher_access_levels(self):
         """get() action should work with CHANGE and DELETE access levels."""
         for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
-            proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=access)
+            proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=access)
 
-            action_data = dto.ActionPayloadSchema(context_data={})
+            action_data = dto.ActionRequest(proxy_definition={})
             result = proxy.get(action_data)
             self.assertEqual(result['name'], 'Test Gorilla')
 
@@ -109,7 +109,7 @@ class GlueModelProxyGetTestCase(TestCase):
         from django_glue.exceptions import GlueModelInstanceNotFoundError
 
         with self.assertRaises(GlueModelInstanceNotFoundError) as context:
-            GlueModelProxy.from_action_request_data(
+            GlueModelInstanceProxy.from_action_request_data(
                 target_pk=99999,
                 model_class='Gorilla',
                 app_label='gorilla',
@@ -122,7 +122,7 @@ class GlueModelProxyGetTestCase(TestCase):
 
     def test_from_action_request_data_creates_new_instance(self):
         """from_action_request_data should create a new unsaved instance when target_pk is None."""
-        proxy = GlueModelProxy.from_action_request_data(
+        proxy = GlueModelInstanceProxy.from_action_request_data(
             target_pk=None,
             model_class='Gorilla',
             app_label='gorilla',
@@ -130,5 +130,5 @@ class GlueModelProxyGetTestCase(TestCase):
             unique_name='gorilla',
         )
 
-        self.assertIsInstance(proxy.target, Gorilla)
-        self.assertIsNone(proxy.target.pk)
+        self.assertIsInstance(proxy.subject, Gorilla)
+        self.assertIsNone(proxy.subject.pk)

@@ -6,7 +6,7 @@ from django.test import TestCase
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueQuerySetProxy
 from django_glue.exceptions import GlueModelInstanceNotFoundError, GlueAccessError
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 from test_project.gorilla.models import Gorilla
 
 
@@ -37,9 +37,9 @@ class GlueQuerySetProxyGetTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'id': self.gorilla1.pk}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'id': self.gorilla1.pk}
         )
         result = proxy.get(action_data)
 
@@ -55,9 +55,9 @@ class GlueQuerySetProxyGetTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'id': 99999}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'id': 99999}
         )
 
         with self.assertRaises(GlueModelInstanceNotFoundError):
@@ -71,9 +71,9 @@ class GlueQuerySetProxyGetTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'id': self.gorilla1.pk}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'id': self.gorilla1.pk}
         )
 
         result = proxy.process_action('get', action_data)
@@ -88,9 +88,9 @@ class GlueQuerySetProxyGetTestCase(TestCase):
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(
-                context_data={},
-                user_data={'id': self.gorilla1.pk}
+            action_data = ActionRequest(
+                proxy_definition={},
+                action_kwargs={'id': self.gorilla1.pk}
             )
             result = proxy.get(action_data)
             self.assertEqual(result['name'], 'Gorilla 1')
@@ -107,7 +107,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.new(action_data)
 
         self.assertIsInstance(result, dict)
@@ -121,7 +121,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.new(action_data)
 
         self.assertIn('name', result)
@@ -136,7 +136,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.new(action_data)
 
         # Gorilla.age has default=18
@@ -156,7 +156,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.new(action_data)
 
         self.assertIn('skills', result)
@@ -171,7 +171,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             fields=['name', 'age'],
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.new(action_data)
 
         self.assertIn('name', result)
@@ -187,7 +187,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={})
+        action_data = ActionRequest(proxy_definition={})
         result = proxy.process_action('new', action_data)
 
         self.assertIsInstance(result, dict)
@@ -201,7 +201,7 @@ class GlueQuerySetProxyNewTestCase(TestCase):
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(context_data={})
+            action_data = ActionRequest(proxy_definition={})
             result = proxy.new(action_data)
             self.assertIsInstance(result, dict)
 
@@ -225,14 +225,14 @@ class GlueQuerySetProxyNewTestCase(TestCase):
         self.assertEqual(reconstructed.target.count(), proxy.target.count())
 
     def test_get_returns_error_for_missing_pk(self):
-        """get() should return error dict when id is missing from user_data."""
+        """get() should return error dict when id is missing from action_kwargs."""
         proxy = GlueQuerySetProxy(
             target=Gorilla.objects.all(),
             unique_name='gorillas',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
         result = proxy.get(action_data)
 
         self.assertFalse(result['success'])

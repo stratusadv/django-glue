@@ -8,7 +8,7 @@ import GlueView from "./view";
  */
 class GlueClient {
     /** @type {Object} */
-    static contextData = {}
+    static proxyContracts = {}
     /** @type {Object} */
     static proxyClassesForSubjectTypes = {}
     /** @type {Object} */
@@ -32,11 +32,11 @@ class GlueClient {
      * Create a proxy instance from context data and attach it to the appropriate
      * namespace (`model`, `querySet`, or `form`).
      * @param {string} proxyUniqueName - The unique name of the proxy.
-     * @param {Object} contextData - Serialized proxy metadata from the server.
+     * @param {Object} proxyContract - Serialized proxy contract from the server.
      * @private
      */
-    _defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData) {
-        const {subject_type: subjectType} = contextData
+    _defineProxyUniqueNameAsPropertyFromContract(proxyUniqueName, proxyContract) {
+        const {subject_type: subjectType} = proxyContract
 
         let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[subjectType]
 
@@ -49,13 +49,13 @@ class GlueClient {
             proxy = proxyClass.create({
                 http: this.http,
                 proxyUniqueName: proxyUniqueName,
-                contextData: contextData,
+                proxyContract: proxyContract,
             });
         } else {
             proxy = new proxyClass({
                 http: this.http,
                 proxyUniqueName: proxyUniqueName,
-                contextData: contextData,
+                proxyContract: proxyContract,
             });
         }
 
@@ -123,34 +123,33 @@ class GlueClient {
     }
 
     /**
-     * Initialize the Glue client with server-provided proxy registry and context data.
+     * Initialize the Glue client with server-provided proxy registry and proxy definitions.
      * @param {Object} proxyRegistryFromSession - Proxy registry from the Django session.
-     * @param {Object} contextDataForProxies - Serialized context data for each proxy.
+     * @param {Object} proxyContracts - Serialized proxy contracts for each proxy.
      * @param {GlueConfig} [config] - The GlueConfig instance.
      */
     init({
-              proxyRegistryFromSession,
-              contextDataForProxies,
-              config = {},
-          }) {
+        proxyContracts,
+        config = {},
+    }) {
         this._config = config
         this.http = new GlueHttp(this._config)
 
-        this.initializeProxies(proxyRegistryFromSession, contextDataForProxies)
+        this.initializeProxies(proxyRegistryFromSession, proxyContracts)
     }
 
     /**
-     * Initialize proxy instances from registry and context data, then start keep-alive polling.
+     * Initialize proxy instances from registry and proxy definitions, then start keep-alive polling.
      * @param {Object} proxyRegistryFromSession - Proxy registry from the Django session.
-     * @param {Object} contextDataForProxies - Serialized context data for each proxy.
+     * @param {Object} proxyContracts - Serialized proxy contracts for each proxy.
      */
-    initializeProxies(proxyRegistryFromSession, contextDataForProxies) {
-        for (const [proxyUniqueName, contextData] of Object.entries(contextDataForProxies)) {
-            this._defineProxyUniqueNameAsPropertyFromContextData(proxyUniqueName, contextData)
+    initializeProxies(proxyRegistryFromSession, proxyContracts) {
+        for (const [proxyUniqueName, proxyContract] of Object.entries(proxyContracts)) {
+            this._defineProxyUniqueNameAsPropertyFromContract(proxyUniqueName, proxyContract)
         }
 
         Object.assign(GlueClient.proxyRegistry, proxyRegistryFromSession)
-        Object.assign(GlueClient.contextData, contextDataForProxies)
+        Object.assign(GlueClient.proxyContracts, proxyContracts)
 
         this._initializeKeepLivePulse()
     }

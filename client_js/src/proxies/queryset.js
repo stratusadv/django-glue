@@ -27,7 +27,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {Object} options.proxyDefinition - Serialized proxy metadata from the server.
      */
     constructor(options) {
         super(options);
@@ -51,7 +51,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         const proxy = new GlueModelProxy({
             http: this.http,
             proxyUniqueName: this._uniqueName,
-            contextData: GlueClient.contextData[this._uniqueName],
+            proxyDefinition: GlueClient.proxyDefinitions[this._uniqueName],
             values: {...item},
             parentQuerySet: this
         })

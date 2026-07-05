@@ -4,9 +4,9 @@ Tests for foreign_key_choices() action on proxies.
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelProxy, GlueQuerySetProxy
+from django_glue.proxies import GlueModelInstanceProxy, GlueQuerySetProxy
 from django_glue.exceptions import GlueAccessError
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -34,9 +34,9 @@ class ForeignKeyChoicesTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'field_definition': ('skills', {'type': 'ModelMultipleChoiceField'})}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'field_definition': ('skills', {'type': 'ModelMultipleChoiceField'})}
         )
 
         result = proxy.foreign_key_choices(action_data)
@@ -44,15 +44,15 @@ class ForeignKeyChoicesTestCase(TestCase):
 
     def test_foreign_key_choices_returns_empty_for_non_fk_field(self):
         """foreign_key_choices should return empty list for non-FK field types."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'field_definition': ('name', {'type': 'CharField'})}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
         )
 
         result = proxy.foreign_key_choices(action_data)
@@ -60,15 +60,15 @@ class ForeignKeyChoicesTestCase(TestCase):
 
     def test_foreign_key_choices_works_with_view_access(self):
         """foreign_key_choices should work with VIEW access level."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'field_definition': ('name', {'type': 'CharField'})}
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
         )
 
         result = proxy.process_action('foreign_key_choices', action_data)
@@ -77,15 +77,15 @@ class ForeignKeyChoicesTestCase(TestCase):
     def test_foreign_key_choices_works_with_higher_access(self):
         """foreign_key_choices should work with CHANGE and DELETE access."""
         for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
-            proxy = GlueModelProxy(
+            proxy = GlueModelInstanceProxy(
                 target=self.gorilla,
                 unique_name='gorilla',
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(
-                context_data={},
-                user_data={'field_definition': ('name', {'type': 'CharField'})}
+            action_data = ActionRequest(
+                proxy_definition={},
+                action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
             )
 
             result = proxy.foreign_key_choices(action_data)

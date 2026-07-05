@@ -31,7 +31,7 @@ describe('GlueView', () => {
             data: {
                 html: '<div>Rendered HTML</div>',
                 proxy_registry_data: {},
-                proxy_context_data: {},
+                proxy_definitions: {},
             },
         }));
 

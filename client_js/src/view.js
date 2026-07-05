@@ -67,7 +67,7 @@ class GlueView {
 
         window.Glue.initializeProxies(
             viewResponse.data.proxy_registry_data,
-            viewResponse.data.proxy_context_data,
+            viewResponse.data.proxy_definitions,
         )
 
         return viewResponse.data.html

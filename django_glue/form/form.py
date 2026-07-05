@@ -7,7 +7,7 @@ from django.forms.forms import DeclarativeFieldsMetaclass
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.decorators import action
-from django_glue.response import GlueJsonResponse
+from django_glue.response import ActionResult
 
 
 class _FormDeclarativeFieldsMetaclassABCMixin(DeclarativeFieldsMetaclass, ABCMeta):
@@ -19,7 +19,7 @@ class _ModelFormMetaclassABCMixin(ModelFormMetaclass, ABCMeta):
 
 
 class _BaseGlueForm(ABC):
-    GlueJsonResponse = GlueJsonResponse
+    GlueJsonResponse = ActionResult
 
     @abstractmethod
     @action(access=GlueAccess.DELETE)

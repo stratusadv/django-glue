@@ -1,121 +1,113 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Self, cast
 
 from django.db.models import QuerySet, Model
+from django.http import HttpRequest
 from django.utils.functional import cached_property
+from django.forms.models import ModelForm
 
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
-from django_glue.proxies import GlueModelProxy
+from django_glue.proxies import GlueModelInstanceProxy
 from django_glue.proxies.decorators import action
-from django_glue.proxies.model.base import GlueModelProxyBase
-from django_glue.utils import serialize_queryset, deserialize_queryset
+from django_glue.proxies.model.proxy import BaseGlueModelProxy
+from django_glue.proxies.queryset.contract import GlueQuerySetProxyContractData
+from django_glue.proxies.queryset.state import GlueQuerySetProxyState
+from django_glue.utils import deserialize_queryset, get_attr_from_path_string, serialize_queryset
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionPayloadSchema
+    from django_glue.resolver.action.schemas import ActionRequest
 
 
-class GlueQuerySetProxy(GlueModelProxyBase):
+_slice = slice
+
+class GlueQuerySetProxy(BaseGlueModelProxy):
     _subject_type = QuerySet
 
-    def __init__(self, target: QuerySet, **kwargs) -> None:
-        super().__init__(target=target, **kwargs)
+    def __init__(
+        self,
+        queryset: QuerySet,
+        instance_pk: int | str | None = None,
+        **kwargs
+    ) -> None:
+        self.queryset = queryset
 
-        self.encoded_query = serialize_queryset(target)
+        model_class = cast('type[Model]' ,queryset.model)
+        model_instance = model_class.objects.filter(pk=instance_pk).first() or model_class()
+
+        self._register_actions_for_class(queryset.__class__)
+
+        self.queryset = queryset
+        super().__init__(model_instance=model_instance, **kwargs)
 
     @classmethod
-    def from_action_request_data(cls, encoded_query: str, **kwargs) -> GlueQuerySetProxy:
-        decoded_queryset = deserialize_queryset(encoded_query)
+    def _from_action_request(cls, action_request: ActionRequest) -> Self:
+        contract_data = GlueQuerySetProxyContractData(**action_request.contract.custom_data)
+        state_data = GlueQuerySetProxyState(**action_request.contract.custom_data)
 
-        return super().from_action_request_data(target=decoded_queryset, **kwargs)
+        return cls._from_deconstructed_action_request_data(
+            name=action_request.contract.name,
+            access=action_request.contract.access,
+            model_class_path=contract_data.model_class_path,
+            form_class_path=contract_data.form_class_path,
+            allowed_fields=contract_data.allowed_fields,
+            instance_pk=state_data.instance_pk,
+            state=state_data,
+            queryset=deserialize_queryset(contract_data.encoded_queryset)
+        )
 
-    def _register_subject_actions(self):
-        # TODO: this can be inherited from modelbase
-        queryset_class = self.get_model_class().objects.get_queryset().__class__
-        self._register_actions(subject_type=queryset_class, category='queryset')
-        self._register_actions(subject_type=self.get_model_class(), category='model')
-
-        if self.form_class is not None:
-            self._register_actions(subject_type=self._get_form_class(), category='form')
-
-    def _get_subject_action_target_by_category(
-        self,
-        category: str,
-        action_payload: ActionPayloadSchema
-    ) -> Any:
-        # Get instance_pk from proxy_data (not context_data, which is signed)
-        proxy_data = action_payload.proxy_data or {}
-        instance_pk = proxy_data.get('instance_pk')
-        match category:
-            case 'model':
-                return self._get_model_instance_by_pk(pk=instance_pk)
-            case 'form':
-                model = self._get_model_instance_by_pk(pk=instance_pk)
-                # TODO: pass model to form
-                return self._get_form_instance()
-            case 'queryset':
-                return self.target
-            case _:
-                return None
-
-    def get_model_class(self) -> type[Model]:
-        return self.target.model
-
-    def _get_model_instance(self) -> Model:
-        """
-        QuerySet proxy doesn't have a single instance.
-        This returns a new unsaved instance for form field extraction only.
-        """
-        return self.get_model_class()()
-
-    def _build_context_data(self) -> dict:
-        return {'encoded_query': self.encoded_query} | super()._build_context_data()
+    @property
+    def _custom_contract_data(self) -> dict:
+        return {
+            'encoded_query': serialize_queryset(self.queryset)
+        } | super()._custom_contract_data
 
     @cached_property
     def _select_related_field_names(self) -> set[str]:
-        select_related_dict = getattr(self.target.query, 'select_related')
+        select_related_dict = self.queryset.query.select_related
 
         if select_related_dict:
-            return set(
-                name for name in self._form_field_definitions
+            return {
+                name for name in self._field_metadata
                 if name in select_related_dict
-            )
+            }
 
         return set()
 
     @cached_property
     def _m2m_field_names(self) -> set[str]:
-        model_class = self.get_model_class()
+        model_class = self.model_instance.__class__
+
         return {
             f.name for f in model_class._meta.many_to_many if
-            f.name in self._form_field_definitions
+            f.name in self._field_metadata
         }
 
     @cached_property
     def _non_m2m_field_names(self) -> set[str]:
-        return set([
-            name for name in self._form_field_definitions if
+        return {
+            name for name in self._field_metadata if
             name not in self._m2m_field_names
-        ])
+        }
 
     @cached_property
     def _field_args_for_values_query(self) -> set[str]:
-        model = self.get_model_class()
+        model_class = self.model_instance.__class__
         fields = []
         for field_name in self._non_m2m_field_names:
             if field_name in self._select_related_field_names:
                 # Expand each field in the related model using dunder notation
-                field_obj = model._meta.get_field(field_name)
-                related_model = field_obj.related_model
+                field_obj = model_class._meta.get_field(field_name)
+                related_model = cast('type[Model]', field_obj.related_model)
                 for related_model_field in related_model._meta.fields:
                     fields.append(f'{field_name}__{related_model_field.name}')
             else:
                 fields.append(field_name)
 
-        return {*fields, *self.target.query.annotations}
+        return {*fields, *self.queryset.query.annotations}
 
-    def _roll_up_related_fields_in_obj_dict(self, obj_dict: dict):
+    def _roll_up_related_fields_in_obj_dict(self, obj_dict: dict) -> None:
         for related_field_name in self._select_related_field_names:
             nested = {}
             for name, value in list(obj_dict.items()):
@@ -126,12 +118,14 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                     del obj_dict[name]
             obj_dict[related_field_name] = nested
 
-    def _add_m2m_field_to_output_data(self, output_data: list[dict]):
+    def _add_m2m_field_to_output_data(self, output_data: list[dict]) -> None:
+        model_class = self.model_instance.__class__
+
         if self._m2m_field_names:
-            pk_field = self.get_model_class()._meta.pk.name
+            pk_field = model_class._meta.pk.name
 
             # Prefetch all instances with their M2M relations in one query per M2M field
-            instances = self.target.prefetch_related(*self._m2m_field_names)
+            instances = self.queryset.prefetch_related(*self._m2m_field_names)
             instance_map = {getattr(inst, pk_field): inst for inst in instances}
 
             for item in output_data:
@@ -141,9 +135,19 @@ class GlueQuerySetProxy(GlueModelProxyBase):
                         getattr(instance, m2m_name).values_list('pk', flat=True))
 
     @property
+    def state(self) -> GlueQuerySetProxyState:
+        return GlueQuerySetProxyState(
+            instance_data=self.form_instance.data,
+            errors=self.form_instance.errors,
+            files=self.form_instance.files,
+            instance_pk=self.model_instance.pk,
+            list_data=self._output_data
+        )
+
+    @property
     def _output_data(self) -> list[dict]:
         output_data = list(
-            self.target.values(*self._field_args_for_values_query)
+            self.queryset.values(*self._field_args_for_values_query)
         )
 
         for obj_dict in output_data:
@@ -163,34 +167,37 @@ class GlueQuerySetProxy(GlueModelProxyBase):
             # Extract base field name from ORM lookup syntax (e.g., 'title__icontains' -> 'title')
             base_field = key.split('__')[0]
 
-            if base_field not in self._form_field_definitions:
+            if base_field not in self._field_metadata:
                 raise GlueQuerySetFilterValidationError(
-                    field=base_field, allowed_fields=list(self._form_field_definitions.keys())
+                    field=base_field, allowed_fields=list(self._field_metadata.keys())
                 )
 
-    def _apply_query_params(self, params: dict) -> None:
-        if order_by := params.get('order_by'):
+    # TODO: need to update the action processor to send in full kwarg dict if the action asks for it
+    @action(access=GlueAccess.VIEW)
+    def query_with_params(
+        self,
+        request: HttpRequest,
+        filter: dict,
+        order_by: list | str,
+        slice: dict,
+    ) -> None:
+        if filter:
+            self._validate_filter_keys(filter)
+            self.queryset = self.queryset.filter(**filter)
+
+        if order_by:
             if isinstance(order_by, str):
                 order_by = [order_by]
-            self.target = self.target.order_by(*order_by)
+            self.queryset = self.queryset.order_by(*order_by)
 
-        if filter_params := params.get('filter'):
-            self.target = self.target.filter(**filter_params)
 
-        if slice_params := params.get('slice'):
-            self.target = self.target[
-                slice(slice_params.get('start'),
-                      slice_params.get('stop'))
+        if slice:
+            self.queryset = self.queryset[
+                _slice(
+                    slice.get('start'),
+                    slice.get('stop')
+                )
             ]
-
-    @action(access=GlueAccess.VIEW)
-    def query_with_params(self, request, user_data: dict = None) -> list:
-        if user_data:
-            if filter_params := user_data.get('filter'):
-                self._validate_filter_keys(filter_params)
-            self._apply_query_params(user_data)
-
-        return self._output_data
 
     def _get_model_instance_by_pk(self, pk: int | str) -> Model:
         """
@@ -199,62 +206,40 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         Raises GlueModelInstanceNotFoundError if the instance does not exist.
         """
         try:
-            return self.target.get(pk=pk)
-        except self.target.model.DoesNotExist:
-            raise GlueModelInstanceNotFoundError(model_name=self.target.model.__name__, pk=pk)
+            return self.queryset.get(pk=pk)
+        except self.queryset.model.DoesNotExist:
+            raise GlueModelInstanceNotFoundError(model_name=self.queryset.model.__name__, pk=pk)
 
-    def _create_model_proxy_from_instance(self, instance: Model) -> GlueModelProxy:
-        return GlueModelProxy(
-            target=instance,
-            unique_name=self.unique_name,
+    def _create_model_proxy_from_instance(self) -> GlueModelInstanceProxy:
+        if self.form_class_path:
+            form_class = cast('type[ModelForm]', get_attr_from_path_string(self.form_class_path))
+        else:
+            form_class = None
+
+        return GlueModelInstanceProxy(
+            model_instance=self.model_instance,
+            name=self.name,
             access=self.access,
-            fields=self.fields,
-            exclude=self.exclude,
-            form_class=self.form_class,
+            fields=list(self._field_metadata.keys()),
+            form_class=form_class,
         )
 
-    def _get_target_model_instance_proxy(self, pk: int) -> GlueModelProxy:
-        target_instance = self._get_model_instance_by_pk(pk)
-        return self._create_model_proxy_from_instance(target_instance)
-
     @action(access=GlueAccess.CHANGE)
-    def save(
-        self,
-        request,
-        proxy_data: dict = None,
-        file_data: dict = None
-    ) -> dict:
-        proxy_data = proxy_data or {}
-        instance_pk = proxy_data.get('instance_pk')
-        if instance_pk:
-            # Update existing instance
-            proxy = self._get_target_model_instance_proxy(instance_pk)
-        else:
-            # Create new instance
-            instance = self.get_model_class()()
-            proxy = self._create_model_proxy_from_instance(instance)
-        return proxy.save(request, proxy_data=proxy_data, file_data=file_data)
+    def save(self, request: HttpRequest) -> None:
+        return self._create_model_proxy_from_instance().save(request)
 
     @action(access=GlueAccess.DELETE)
-    def delete(self, request, proxy_data: dict = None) -> dict:
-        proxy_data = proxy_data or {}
-        instance_pk = proxy_data.get('instance_pk')
-        if instance_pk is None:
-            return {'success': False, 'error': 'instance_pk is required for delete action'}
-        return self._get_target_model_instance_proxy(instance_pk).delete(request)
+    def delete(self, request: HttpRequest) -> None:
+        return self._create_model_proxy_from_instance().save(request)
 
     @action(access=GlueAccess.VIEW)
-    def get(self, request, proxy_data: dict = None) -> dict:
-        proxy_data = proxy_data or {}
-        instance_pk = proxy_data.get('instance_pk')
-        if instance_pk is None:
-            return {'success': False, 'error': 'instance_pk is required for get action'}
-        return self._get_target_model_instance_proxy(instance_pk).get(request)
+    def get(self, request: HttpRequest) -> dict:
+        return self._create_model_proxy_from_instance().get(request)
 
     @action(access=GlueAccess.VIEW)
     def new(self, request) -> dict:
         """Return default values for a new model instance."""
-        model_class = self.get_model_class()
+        model_class = self.model_instance.__class__
         instance = model_class()
         pk_field_name = model_class._meta.pk.name
 
@@ -265,7 +250,7 @@ class GlueQuerySetProxy(GlueModelProxyBase):
         }
 
         defaults = {pk_field_name: None}
-        for field_name, field_definition in self._form_field_definitions.items():
+        for field_name, field_definition in self._field_metadata.items():
             if field_name == pk_field_name:
                 continue
             if field_name in related_field_names:

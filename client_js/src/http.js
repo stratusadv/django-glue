@@ -131,22 +131,22 @@ class GlueHttp {
      *
      * @param {Object} options - Action request parameters.
      * @param {string} options.uniqueName - The proxy unique name.
-     * @param {string} options.action - The action method name.
-     * @param {Object} [options.userData] - Action-specific user data (e.g., step number, filter params).
-     * @param {Object} options.contextData - The proxy context data for server-side reconstruction.
-     * @param {Object} [options.proxyData] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
+     * @param {string} options.action - The proxy action method name.
+     * @param {Object} [options.actionKwargs] - Action-specific keyword arguments (e.g., step number, filter params).
+     * @param {Object} options.contract - The proxy contract for server-side verification and reconstruction.
+     * @param {Object} [options.state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
      * @returns {Promise<Object>} Response object.
      */
-    async sendActionRequest({uniqueName, action, userData = null, contextData, proxyData = null}) {
+    async sendProxyActionRequest({uniqueName, action, actionKwargs = null, contract, state = null}) {
         const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
 
         const formData = new FormData()
-        formData.append('context_data', JSON.stringify(contextData))
+        formData.append('proxy_definition', JSON.stringify(contract))
 
-        if (proxyData) {
-            // Extract files from proxyData and append them separately
-            const {files, data} = this._extractFiles(proxyData)
-            formData.append('proxy_data', JSON.stringify(data))
+        if (state) {
+            // Extract files from state and append them separately
+            const {files, data} = this._extractFiles(state)
+            formData.append('proxy_state', JSON.stringify(data))
 
             // Append files directly to FormData
             Object.entries(files).forEach(([key, value]) => {
@@ -160,8 +160,8 @@ class GlueHttp {
             })
         }
 
-        if (userData) {
-            formData.append('user_data', JSON.stringify(userData))
+        if (actionKwargs) {
+            formData.append('action_kwargs', JSON.stringify(actionKwargs))
         }
 
         return await this.sendFormPostRequest(url, formData)
@@ -212,15 +212,6 @@ class GlueHttp {
         })
 
         return {files, data}
-    }
-
-    /**
-     * Send a keep-alive request to renew proxy expiration timestamps.
-     * @param {string[]} uniqueNames - Array of proxy unique names to renew.
-     * @returns {Promise<Object>} Response object.
-     */
-    async sendKeepLiveRequest(uniqueNames) {
-        return await this.sendJsonPostRequest(this._config.keepLiveUrlPath, {'unique_names': uniqueNames})
     }
 }
 

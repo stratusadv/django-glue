@@ -11,7 +11,7 @@ from django_glue.views.action_views import action_view
 from django_glue.views.keep_live_views import keep_live_view
 from django_glue.views.session_data_views import session_data_view
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.session import GlueSession
 from django_glue import settings
 from test_project.gorilla.models import Gorilla
@@ -33,19 +33,19 @@ class ActionViewTestCase(TestCase):
         self.request = self.factory.post('/')
         self.request.session = MockSession()
         # Register the proxy and store context_data for later use
-        self.proxy = GlueModelProxy(
+        self.proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.CHANGE,
         )
         GlueSession(self.request).register_proxy(self.proxy)
-        self.context_data = self.proxy.to_context_data()
+        self.context_data = self.proxy.to_contract()
 
-    def _build_action_request(self, action, user_data=None):
+    def _build_action_request(self, action, action_kwargs=None):
         """Build a POST request for an action."""
         body = {
-            'context_data': self.context_data,
-            'user_data': user_data or {},
+            'proxy_definition': self.context_data,
+            'action_kwargs': action_kwargs or {},
             'file_data': {},
         }
         return self.factory.post(
@@ -76,7 +76,7 @@ class ActionViewTestCase(TestCase):
 
     def test_action_view_executes_save_action(self):
         """action_view should execute the save action and persist changes."""
-        user_data = {
+        action_kwargs = {
             'name': 'Updated Name',
             'description': 'Test',
             'age': 25,
@@ -84,7 +84,7 @@ class ActionViewTestCase(TestCase):
             'height': 1.8,
             'rank_points': 0,
         }
-        request = self._build_action_request('save', user_data)
+        request = self._build_action_request('save', action_kwargs)
         request.session = self.request.session
 
         response = action_view(request, 'gorilla', 'save')
@@ -108,13 +108,13 @@ class ActionViewTestCase(TestCase):
         request = self.factory.post('/')
         request.session = MockSession()
         body = {
-            'context_data': {
+            'proxy_definition': {
                 'subject_type': 'Model',
                 'model_class': 'Gorilla',
                 'app_label': 'gorilla',
                 'target_pk': self.gorilla.pk,
             },
-            'user_data': {},
+            'action_kwargs': {},
             'file_data': {},
         }
         request = self.factory.post(
@@ -143,7 +143,7 @@ class KeepLiveViewTestCase(TestCase):
         )
         self.request = self.factory.post('/')
         self.request.session = MockSession()
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,
@@ -213,7 +213,7 @@ class SessionDataViewTestCase(TestCase):
         )
         self.request = self.factory.get('/')
         self.request.session = MockSession()
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,

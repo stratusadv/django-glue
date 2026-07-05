@@ -7,7 +7,7 @@ from django_glue.shortcuts.glue import Glue
 from django_glue.shortcuts.urls import django_glue_urls
 from django_glue.access.access import GlueAccess
 from django_glue.session import GlueSession
-from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 from django_glue.proxies.form.proxy import GlueFormProxy
 from test_project.gorilla.models import Gorilla
@@ -42,8 +42,8 @@ class GlueModelTestCase(TestCase):
         session = GlueSession(self.request)
         self.assertIn('gorilla', session.proxy_registry)
 
-    def test_model_sets_context_data(self):
-        """Glue.model should set context data on the request."""
+    def test_model_sets_proxy_definitions(self):
+        """Glue.model should set proxy definitions on the request."""
         Glue.model(
             request=self.request,
             unique_name='gorilla',
@@ -51,11 +51,11 @@ class GlueModelTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
 
-        self.assertTrue(hasattr(self.request, '__glue_context_data__'))
-        self.assertIn('gorilla', self.request.__glue_context_data__)
+        self.assertTrue(hasattr(self.request, '__glue_proxy_definitions__'))
+        self.assertIn('gorilla', self.request.__glue_proxy_definitions__)
 
-    def test_model_context_data_includes_subject_type(self):
-        """Glue.model context data should include Model subject type."""
+    def test_model_proxy_definitions_includes_subject_type(self):
+        """Glue.model proxy definitions should include Model subject type."""
         Glue.model(
             request=self.request,
             unique_name='gorilla',
@@ -63,7 +63,7 @@ class GlueModelTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        context = self.request.__glue_context_data__['gorilla']
+        context = self.request.__glue_proxy_definitions__['gorilla']
         self.assertEqual(context['subject_type'], 'Model')
 
     def test_model_with_fields_filter(self):
@@ -76,7 +76,7 @@ class GlueModelTestCase(TestCase):
             fields=['name', 'age'],
         )
 
-        context = self.request.__glue_context_data__['gorilla']
+        context = self.request.__glue_proxy_definitions__['gorilla']
         field_names = list(context['fields'].keys())
         self.assertIn('name', field_names)
         self.assertIn('age', field_names)
@@ -91,7 +91,7 @@ class GlueModelTestCase(TestCase):
             exclude=['description', 'weight'],
         )
 
-        context = self.request.__glue_context_data__['gorilla']
+        context = self.request.__glue_proxy_definitions__['gorilla']
         field_names = list(context['fields'].keys())
         self.assertNotIn('description', field_names)
         self.assertNotIn('weight', field_names)
@@ -135,8 +135,8 @@ class GlueQuerySetTestCase(TestCase):
         session = GlueSession(self.request)
         self.assertIn('gorillas', session.proxy_registry)
 
-    def test_queryset_sets_context_data(self):
-        """Glue.queryset should set context data on the request."""
+    def test_queryset_sets_proxy_definitions(self):
+        """Glue.queryset should set proxy definitions on the request."""
         Glue.queryset(
             request=self.request,
             unique_name='gorillas',
@@ -144,11 +144,11 @@ class GlueQuerySetTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
 
-        self.assertTrue(hasattr(self.request, '__glue_context_data__'))
-        self.assertIn('gorillas', self.request.__glue_context_data__)
+        self.assertTrue(hasattr(self.request, '__glue_proxy_definitions__'))
+        self.assertIn('gorillas', self.request.__glue_proxy_definitions__)
 
-    def test_queryset_context_data_includes_subject_type(self):
-        """Glue.queryset context data should include QuerySet subject type."""
+    def test_queryset_proxy_definitions_includes_subject_type(self):
+        """Glue.queryset proxy definitions should include QuerySet subject type."""
         Glue.queryset(
             request=self.request,
             unique_name='gorillas',
@@ -156,7 +156,7 @@ class GlueQuerySetTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        context = self.request.__glue_context_data__['gorillas']
+        context = self.request.__glue_proxy_definitions__['gorillas']
         self.assertEqual(context['subject_type'], 'QuerySet')
 
 
@@ -178,7 +178,7 @@ class GlueFormTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
 
-        context = self.request.__glue_context_data__['contact_form']
+        context = self.request.__glue_proxy_definitions__['contact_form']
         self.assertEqual(context['subject_type'], 'BaseForm')
 
     def test_form_with_modelform_registers_as_model_proxy(self):
@@ -199,7 +199,7 @@ class GlueFormTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
 
-        context = self.request.__glue_context_data__['gorilla_form']
+        context = self.request.__glue_proxy_definitions__['gorilla_form']
         self.assertEqual(context['subject_type'], 'Model')
 
     def test_form_with_new_modelform_creates_blank_instance(self):
@@ -213,7 +213,7 @@ class GlueFormTestCase(TestCase):
             access=GlueAccess.CHANGE,
         )
 
-        context = self.request.__glue_context_data__['gorilla_form']
+        context = self.request.__glue_proxy_definitions__['gorilla_form']
         self.assertEqual(context['subject_type'], 'Model')
         self.assertIsNone(context['target_pk'])
 

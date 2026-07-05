@@ -5,7 +5,7 @@ describe('GlueFunctionProxy', () => {
     let mockHttp;
     let fn;
 
-    const contextData = {
+    const contract = {
         subject_type: 'Function',
         function_path: 'myapp.utils.add_numbers',
         params: [
@@ -31,7 +31,7 @@ describe('GlueFunctionProxy', () => {
         fn = GlueFunctionProxy.create({
             http: mockHttp,
             proxyUniqueName: 'add',
-            contextData: contextData,
+            contract: contract,
         });
     });
 
@@ -48,7 +48,7 @@ describe('GlueFunctionProxy', () => {
 
         it('attaches metadata properties', () => {
             expect(fn._uniqueName).toBe('add');
-            expect(fn._contextData).toBe(contextData);
+            expect(fn._contract).toBe(contract);
             expect(fn._params).toEqual([
                 {name: 'a', type: 'int'},
                 {name: 'b', type: 'int'},
@@ -122,7 +122,7 @@ describe('GlueFunctionProxy', () => {
             const greetFn = GlueFunctionProxy.create({
                 http: mockHttp,
                 proxyUniqueName: 'greet',
-                contextData: {
+                contract: {
                     subject_type: 'Function',
                     function_path: 'myapp.utils.greet',
                     params: [

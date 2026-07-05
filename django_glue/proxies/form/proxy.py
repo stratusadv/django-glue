@@ -1,70 +1,145 @@
 from __future__ import annotations
 
-from django.forms import BaseForm
+from abc import ABC
+from typing import Self, cast
+
+from django.forms.forms import BaseForm
+from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.decorators import action
-from django_glue.proxies.form.mixin import GlueFormProxyMixin
-from django_glue.utils import get_class_from_path_string
-from typing import TYPE_CHECKING
+from django_glue.proxies.form.contract import GlueFormProxyContractData
+from django_glue.proxies.form.state import GlueFormProxyState
+from django_glue.proxies.proxy import BaseGlueProxy
+from django_glue.resolver.action.schemas import ActionRequest
+from django_glue.utils import get_attr_from_path_string
 
-if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionPayloadSchema
 
+class GlueFormProxy(BaseGlueProxy):
+    """
+    Mixin providing form-related functionality for proxies.
 
-class GlueFormProxy(GlueFormProxyMixin, BaseGlueProxy):
-    """Proxy for Django Form instances."""
+    Provides:
+    - Field definition extraction for frontend
+    - Form validation logic
+    - Error serialization
+    - validate() and save() actions
+    - Response proxy_state with form errors
+    """
 
-    _subject_type = BaseForm
+    def __init__(
+            self,
+            form_instance: BaseForm,
+            namespace: str = 'form',
+            **kwargs
+        ) -> None:
+        self.form_instance = form_instance
 
-    def __init__(self, target: BaseForm, **kwargs) -> None:
-        super().__init__(target=target, **kwargs)
-        self.form_class_name = target.__class__.__name__
-        self.form_module = target.__class__.__module__
+        form_class = self.form_instance.__class__
+        self.form_class_path = f'{form_class.__module__}.{form_class.__name__}'
+
+        self._register_actions_for_class(target_class=self.form_instance.__class__)
+
+        super().__init__(
+            **kwargs,
+            namespace=namespace
+        )
 
     @classmethod
-    def from_action_request_data(
-        cls, form_class_path: str, initial: dict, instance_pk: int | str | None = None, **kwargs
-    ) -> GlueFormProxy:
-        form_class = get_class_from_path_string(form_class_path)
-        target = form_class(initial=initial)
-        return cls(target=target, **kwargs)
+    def _from_action_request(cls, action_request: ActionRequest) -> Self:
+        contract_data = GlueFormProxyContractData.model_validate(
+            action_request.contract.custom_data
+        )
 
-    def _register_subject_actions(self):
-        self._register_actions(subject_type=self._get_form_class(), category='form')
+        if not contract_data.form_class_path:
+            raise ValueError()
 
-    def _get_form_class(self) -> type[BaseForm]:
-        """Return the form class for this proxy."""
-        return self.target.__class__
+        form_class = cast(
+            'type[BaseForm]', get_attr_from_path_string(contract_data.form_class_path)
+        )
 
-    def _build_context_data(self) -> dict:
+        if action_request.state:
+            state_data = GlueFormProxyState.model_validate(action_request.state)
+            form = form_class(initial=state_data.instance_data, files=state_data.files)
+        else:
+            form = form_class()
+
+        return cls(
+            name=action_request.contract.name,
+            access=action_request.contract.access,
+            form_instance=form
+        )
+
+
+    @property
+    def _field_metadata(self) -> dict:
+        """Extract field definitions from the form to aid in frontend rendering."""
+        form = self.form_instance
+
+        # Get editable form fields from form
+        fields = {}
+        for name, field in form.fields.items():
+            field_def = {
+                'type': field.__class__.__name__,
+                'required': field.required,
+                'disabled': field.disabled,
+                'label': str(field.label) if field.label else name,
+                'help_text': str(field.help_text) if field.help_text else '',
+                'widget': field.widget.__class__.__name__,
+                'editable': True,
+            }
+
+            if hasattr(field, 'choices') and field.choices:
+                field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
+            if hasattr(field, 'max_length') and field.max_length:
+                field_def['max_length'] = field.max_length
+            if hasattr(field, 'min_length') and field.min_length:
+                field_def['min_length'] = field.min_length
+            fields[name] = field_def
+
+        return fields
+
+    @property
+    def _custom_contract_data(self) -> dict:
+        form_class = self.form_instance.__class__
+
         return {
-            'form_class_path': f'{self.form_module}.{self.form_class_name}',
-            'fields': self._form_field_definitions,
-            'initial': self._get_initial_values(),
-        } | super()._build_context_data()
+            'fields': self._field_metadata,
+            'form_class_path': f'{form_class.__module__}.{form_class.__name__}',
+        }
 
+    @property
+    def state(self) -> GlueFormProxyState:
+        return GlueFormProxyState(
+            instance_data=self.form_instance.data,
+            errors=self.form_instance.errors,
+            files=self.form_instance.files
+        )
 
-    def _get_initial_values(self) -> dict:
-        """Get initial form values."""
-        values = {}
-        for name, field in self.target.fields.items():
-            # Check form's initial dict first, then field's initial
-            if name in self.target.initial:
-                values[name] = self.target.initial[name]
-            elif field.initial is not None:
-                values[name] = field.initial
-            else:
-                values[name] = None
+    @property
+    def errors(self) -> dict:
+        """Convert Django ErrorDict to JSON-serializable dict."""
+        self.form_instance.is_valid()
+        return self.form_instance.errors
 
-        return values
+    @action(access=GlueAccess.CHANGE)
+    def validate(self, request: HttpRequest) -> dict:
+        return {'valid': bool(self.errors)}
 
     @action(access=GlueAccess.VIEW)
-    def get(self, request) -> dict:
-        """Return form field definitions and current values."""
-        return {
-            'fields': self._form_field_definitions,
-            'values': self._get_initial_values(),
-            'errors': {},
-        }
+    def foreign_key_choices(
+        self,
+        request,
+        field_name: str | None = None
+    ) -> list:
+        """Get choices for a foreign key field."""
+        if not field_name:
+            return []
+
+        field = self.form_instance.fields[field_name]
+
+        if field.__class__.__name__ not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
+            return []
+
+
+        return [[obj.pk, f'{obj}'] for obj in field.queryset.all()]

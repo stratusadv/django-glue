@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from typing import Any, Sequence
 
 from django.db.models import Model, QuerySet
@@ -10,11 +11,11 @@ from django_glue.proxies import (
     GlueFormProxy,
     GlueFunctionProxy,
     GlueModelFormProxy,
-    GlueModelProxy,
+    GlueModelInstanceProxy,
     GlueQuerySetProxy,
     GlueTemplateProxy,
 )
-from django_glue.session import GlueSession
+
 from django_glue.proxies.decorators import action
 
 
@@ -31,11 +32,12 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         **kwargs,
     ) -> None:
-        proxy_instance = proxy_class(
-            target=target, unique_name=unique_name, access=access, **kwargs
-        )
-
-        GlueSession(request).register_proxy(proxy_instance)
+        proxy_class(
+            subject=target,
+            name=unique_name,
+            access=access,
+            **kwargs
+        ).register_with_request(request)
 
     @staticmethod
     def model(
@@ -52,7 +54,7 @@ class Glue:
             request=request,
             unique_name=unique_name,
             target=target,
-            proxy_class=GlueModelProxy,
+            proxy_class=GlueModelInstanceProxy,
             access=access,
             fields=fields,
             exclude=exclude,
@@ -116,7 +118,7 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-        context_data: dict | None = None,
+        definition_context_data: dict | None = None,
         **kwargs,
     ) -> None:
         Glue.glue(
@@ -125,7 +127,7 @@ class Glue:
             target=target,
             proxy_class=GlueTemplateProxy,
             access=GlueAccess.VIEW,
-            context_data=context_data or {},
+            definition_context_data=definition_context_data or {},
             **kwargs,
         )
 

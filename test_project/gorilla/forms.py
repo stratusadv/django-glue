@@ -2,7 +2,7 @@ from django import forms
 from django.core.handlers.wsgi import WSGIRequest
 
 from django_glue.form.form import GlueModelForm
-from django_glue.response import GlueJsonResponse
+from django_glue.response import ActionResult
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -43,7 +43,7 @@ class GorillaGlueModelForm(GlueModelForm):
         for field in self.fields.values():
             field.required = False
 
-    def process(self, request: WSGIRequest, payload: dict) -> GlueJsonResponse:
+    def process(self, request: WSGIRequest, payload: dict) -> ActionResult:
         """
         Handle progressive form steps.
 

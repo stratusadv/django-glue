@@ -5,33 +5,33 @@ import json
 
 from django.test import TestCase, RequestFactory
 
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 
 
 class ActionPayloadSchemaTestCase(TestCase):
     """Tests for ActionPayloadSchema Pydantic model."""
 
-    def test_validates_required_context_data(self):
-        """Should require context_data field."""
-        data = ActionPayloadSchema(context_data={'key': 'value'})
+    def test_validates_required_proxy_definition(self):
+        """Should require proxy_definition field."""
+        data = ActionRequest(proxy_definition={'key': 'value'})
 
-        self.assertEqual(data.context_data, {'key': 'value'})
-        self.assertIsNone(data.user_data)
+        self.assertEqual(data.proxy_definition, {'key': 'value'})
+        self.assertIsNone(data.action_kwargs)
         self.assertIsNone(data.file_data)
 
-    def test_accepts_optional_user_data(self):
-        """Should accept optional user_data."""
-        data = ActionPayloadSchema(
-            context_data={},
-            user_data={'field': 'value'}
+    def test_accepts_optional_action_kwargs(self):
+        """Should accept optional action_kwargs."""
+        data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'field': 'value'}
         )
 
-        self.assertEqual(data.user_data, {'field': 'value'})
+        self.assertEqual(data.action_kwargs, {'field': 'value'})
 
     def test_accepts_optional_file_data(self):
         """Should accept optional file_data."""
-        data = ActionPayloadSchema(
-            context_data={},
+        data = ActionRequest(
+            proxy_definition={},
             file_data={'file': 'data'}
         )
 
@@ -47,8 +47,8 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
     def test_parses_json_request(self):
         """Should parse JSON request body correctly."""
         body = {
-            'context_data': {'subject_type': 'Model'},
-            'user_data': {'name': 'Test'},
+            'proxy_definition': {'subject_type': 'Model'},
+            'action_kwargs': {'name': 'Test'},
             'file_data': {},
         }
         request = self.factory.post(
@@ -57,16 +57,16 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
             content_type='application/json'
         )
 
-        data = ActionPayloadSchema.from_request(request)
+        data = ActionRequest.from_request(request)
 
-        self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertEqual(data.user_data, {'name': 'Test'})
+        self.assertEqual(data.proxy_definition, {'subject_type': 'Model'})
+        self.assertEqual(data.action_kwargs, {'name': 'Test'})
         self.assertEqual(data.file_data, {})
 
-    def test_handles_json_without_user_data(self):
-        """Should handle JSON request without user_data."""
+    def test_handles_json_without_action_kwargs(self):
+        """Should handle JSON request without action_kwargs."""
         body = {
-            'context_data': {'subject_type': 'Model'},
+            'proxy_definition': {'subject_type': 'Model'},
         }
         request = self.factory.post(
             '/',
@@ -74,10 +74,10 @@ class ActionPayloadSchemaFromRequestJsonTestCase(TestCase):
             content_type='application/json'
         )
 
-        data = ActionPayloadSchema.from_request(request)
+        data = ActionRequest.from_request(request)
 
-        self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertIsNone(data.user_data)
+        self.assertEqual(data.proxy_definition, {'subject_type': 'Model'})
+        self.assertIsNone(data.action_kwargs)
 
 
 class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
@@ -92,7 +92,7 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
         boundary = 'BoUnDaRyStRiNg'
         body = (
             f'--{boundary}\r\n'
-            f'Content-Disposition: form-data; name="context_data"\r\n\r\n'
+            f'Content-Disposition: form-data; name="proxy_definition"\r\n\r\n'
             f'{json.dumps({"subject_type": "Model"})}\r\n'
             f'--{boundary}\r\n'
             f'Content-Disposition: form-data; name="name"\r\n\r\n'
@@ -109,10 +109,10 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
             content_type=f'multipart/form-data; boundary={boundary}'
         )
 
-        data = ActionPayloadSchema.from_request(request)
+        data = ActionRequest.from_request(request)
 
-        self.assertEqual(data.context_data, {'subject_type': 'Model'})
-        self.assertEqual(data.user_data, {'name': 'Test', 'age': '25'})
+        self.assertEqual(data.proxy_definition, {'subject_type': 'Model'})
+        self.assertEqual(data.action_kwargs, {'name': 'Test', 'age': '25'})
 
     def test_handles_multiple_values_in_multipart(self):
         """Should handle multiple values for same key in multipart."""
@@ -122,7 +122,7 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
         boundary = 'BoUnDaRyStRiNg'
         body = (
             f'--{boundary}\r\n'
-            f'Content-Disposition: form-data; name="context_data"\r\n\r\n'
+            f'Content-Disposition: form-data; name="proxy_definition"\r\n\r\n'
             f'{json.dumps({"subject_type": "Model"})}\r\n'
             f'--{boundary}\r\n'
             f'Content-Disposition: form-data; name="tags"\r\n\r\n'
@@ -139,12 +139,12 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
             content_type=f'multipart/form-data; boundary={boundary}'
         )
 
-        data = ActionPayloadSchema.from_request(request)
+        data = ActionRequest.from_request(request)
 
-        self.assertEqual(data.user_data['tags'], ['tag1', 'tag2'])
+        self.assertEqual(data.action_kwargs['tags'], ['tag1', 'tag2'])
 
-    def test_raises_for_missing_context_data_in_multipart(self):
-        """Should raise AttributeError when context_data is missing in multipart."""
+    def test_raises_for_missing_proxy_definition_in_multipart(self):
+        """Should raise AttributeError when proxy_definition is missing in multipart."""
         from django.test import RequestFactory
         factory = RequestFactory()
 
@@ -163,4 +163,4 @@ class ActionPayloadSchemaFromRequestMultipartTestCase(TestCase):
         )
 
         with self.assertRaises(AttributeError):
-            ActionPayloadSchema.from_request(request)
+            ActionRequest.from_request(request)

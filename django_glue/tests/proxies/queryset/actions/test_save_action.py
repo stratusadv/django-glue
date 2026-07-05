@@ -35,9 +35,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'id': self.gorilla1.pk,
                 'name': 'Updated Gorilla 1',
                 'description': 'First gorilla',
@@ -61,9 +61,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'id': self.gorilla1.pk,
                 'name': 'New Name',
                 'description': 'First gorilla',
@@ -87,9 +87,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'id': 99999,
                 'name': 'Should Fail',
                 'description': 'Test',
@@ -111,9 +111,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'id': self.gorilla1.pk,
                 'name': 'Should Fail',
                 'description': 'Test',
@@ -133,9 +133,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.DELETE
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'id': self.gorilla1.pk,
                 'name': 'Updated with DELETE access',
                 'description': 'First gorilla',
@@ -158,9 +158,9 @@ class GlueQuerySetProxySaveTestCase(TestCase):
             target=Gorilla.objects.all(), unique_name='gorillas', access=GlueAccess.CHANGE
         )
 
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'New Gorilla',
                 'description': 'Created via save',
                 'age': 10,

@@ -11,7 +11,7 @@ django.setup()
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelProxy
+from django_glue.proxies import GlueModelInstanceProxy
 from django_glue.exceptions import GlueAccessError
 from django_glue.resolver.action import schemas as dto
 from test_project.gorilla.models import Gorilla
@@ -30,10 +30,10 @@ class GlueModelProxyDeleteTestCase(TestCase):
         """delete() action should remove the model instance from the database."""
         gorilla_pk = self.gorilla.pk
 
-        proxy = GlueModelProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
+        proxy = GlueModelInstanceProxy(target=self.gorilla, unique_name='gorilla', access=GlueAccess.DELETE)
 
         # Call delete action
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
         proxy.delete(action_data)
 
         # Verify instance is deleted
@@ -41,26 +41,26 @@ class GlueModelProxyDeleteTestCase(TestCase):
 
     def test_delete_requires_delete_access(self):
         """delete() action should require DELETE access level."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.VIEW,  # Insufficient access
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)
 
     def test_delete_with_change_access_raises_error(self):
         """delete() action should fail with only CHANGE access."""
-        proxy = GlueModelProxy(
+        proxy = GlueModelInstanceProxy(
             target=self.gorilla,
             unique_name='gorilla',
             access=GlueAccess.CHANGE,  # Not enough for delete
         )
 
-        action_data = dto.ActionPayloadSchema(context_data={})
+        action_data = dto.ActionRequest(proxy_definition={})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('delete', action_data)

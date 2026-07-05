@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import BaseGlueProxy from '../../src/proxies/base';
-import { createMockContextData, setupCookieMock } from '../testUtils';
+import { createMockcontract, setupCookieMock } from '../testUtils';
 
 describe('BaseGlueProxy', () => {
     let originalFetch;
@@ -17,51 +17,51 @@ describe('BaseGlueProxy', () => {
     describe('constructor', () => {
         it('stores http instance', () => {
             const http = { sendActionRequest: () => Promise.resolve({ data: {} }) };
-            const contextData = createMockContextData({}, { get: {} });
+            const contract = createMockcontract({}, { get: {} });
             const proxy = new BaseGlueProxy({
                 http,
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             expect(proxy.http).toBe(http);
         });
 
         it('stores uniqueName as private _uniqueName', () => {
-            const contextData = createMockContextData({}, { get: {} });
+            const contract = createMockcontract({}, { get: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             expect(proxy._uniqueName).toBe('test_proxy');
         });
 
-        it('stores contextData as private _contextData', () => {
-            const contextData = createMockContextData({ id: {} }, { get: {} });
+        it('stores contract as private _contract', () => {
+            const contract = createMockcontract({ id: {} }, { get: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
-            expect(proxy._contextData).toBe(contextData);
+            expect(proxy._contract).toBe(contract);
         });
 
-        it('uses actions from contextData if not provided', () => {
-            const contextData = createMockContextData({}, { save: {}, delete: {} });
+        it('uses actions from contract if not provided', () => {
+            const contract = createMockcontract({}, { save: {}, delete: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             expect(proxy._actions).toEqual({ save: {}, delete: {} });
         });
 
-        it('prefers actions parameter over contextData.actions', () => {
-            const contextData = createMockContextData({}, { save: {} });
+        it('prefers actions parameter over contract.actions', () => {
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData,
+                contract,
                 actions: { custom: {} }
             });
 
@@ -69,10 +69,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('initializes empty listeners', () => {
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             expect(proxy._listeners).toEqual({ before: {}, after: {}, error: {} });
@@ -81,10 +81,10 @@ describe('BaseGlueProxy', () => {
 
     describe('addListener', () => {
         it('registers a callback for an action', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const callback = () => {};
@@ -94,10 +94,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('defaults to after listener type', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const callback = () => {};
@@ -107,10 +107,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('supports before, after, and error types', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const cb = () => {};
@@ -124,10 +124,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('throws on invalid listener type', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             expect(() => proxy.addListener('save', () => {}, 'invalid'))
@@ -135,10 +135,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('returns proxy for chaining', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const result = proxy.addListener('save', () => {});
@@ -148,10 +148,10 @@ describe('BaseGlueProxy', () => {
 
     describe('removeListener', () => {
         it('removes a callback for an action', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const callback = () => {};
@@ -162,10 +162,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('returns proxy for chaining', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const result = proxy.removeListener('save', () => {});
@@ -175,10 +175,10 @@ describe('BaseGlueProxy', () => {
 
     describe('clearListeners', () => {
         it('removes all listeners', () => {
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             proxy.addListener('save', () => {}, 'before');
@@ -189,10 +189,10 @@ describe('BaseGlueProxy', () => {
         });
 
         it('returns proxy for chaining', () => {
-            const contextData = createMockContextData({}, {});
+            const contract = createMockcontract({}, {});
             const proxy = new BaseGlueProxy({
                 proxyUniqueName: 'test_proxy',
-                contextData
+                contract
             });
 
             const result = proxy.clearListeners();
@@ -210,11 +210,11 @@ describe('BaseGlueProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'my_proxy',
-                contextData
+                contract
             });
 
             const result = await proxy._processAction('save', { field: 'value' });
@@ -223,7 +223,7 @@ describe('BaseGlueProxy', () => {
                 uniqueName: 'my_proxy',
                 action: 'save',
                 payload: { field: 'value' },
-                contextData
+                contract
             });
             expect(result).toEqual({ result: 'success' });
         });
@@ -237,11 +237,11 @@ describe('BaseGlueProxy', () => {
                 })
             };
 
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'test',
-                contextData
+                contract
             });
 
             proxy.addListener('save', () => { order.push('before'); }, 'before');
@@ -257,11 +257,11 @@ describe('BaseGlueProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: { id: 1 } }))
             };
 
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'test',
-                contextData
+                contract
             });
 
             proxy.addListener('save', (event) => { capturedEvent = event; }, 'after');
@@ -278,11 +278,11 @@ describe('BaseGlueProxy', () => {
                 sendActionRequest: mock(() => Promise.reject(new Error('network error')))
             };
 
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'test',
-                contextData
+                contract
             });
 
             proxy.addListener('save', (event) => { capturedError = event.error; }, 'error');
@@ -297,11 +297,11 @@ describe('BaseGlueProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: {} }))
             };
 
-            const contextData = createMockContextData({}, { save: {} });
+            const contract = createMockcontract({}, { save: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'test',
-                contextData
+                contract
             });
 
             proxy.addListener('save', (event) => { capturedPayload = event.payload; }, 'before');
@@ -320,11 +320,11 @@ describe('BaseGlueProxy', () => {
                 sendActionRequest: mock(() => Promise.resolve({ data: { id: 1, name: 'test' } }))
             };
 
-            const contextData = createMockContextData({}, { get: {} });
+            const contract = createMockcontract({}, { get: {} });
             const proxy = new BaseGlueProxy({
                 http: mockHttp,
                 proxyUniqueName: 'test',
-                contextData
+                contract
             });
 
             const result = await proxy._processAction('get');

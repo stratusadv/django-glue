@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { createMockFetch, setupCookieMock, createMockContextData } from './testUtils';
+import { createMockFetch, setupCookieMock, createMockcontract } from './testUtils';
 
 describe('testUtils', () => {
     describe('createMockFetch', () => {
@@ -67,9 +67,9 @@ describe('testUtils', () => {
         });
     });
 
-    describe('createMockContextData', () => {
+    describe('createMockcontract', () => {
         it('returns object with fields, actions, initial', () => {
-            const data = createMockContextData(
+            const data = createMockcontract(
                 { name: {} },
                 { get: {} },
                 { name: 'init' }
@@ -81,7 +81,7 @@ describe('testUtils', () => {
         });
 
         it('returns empty defaults', () => {
-            const data = createMockContextData();
+            const data = createMockcontract();
             expect(data.fields).toEqual({});
             expect(data.actions).toEqual({});
             expect(data.initial).toEqual({});

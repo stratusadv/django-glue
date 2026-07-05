@@ -223,13 +223,13 @@ describe('GlueHttp', () => {
                 uniqueName: 'task',
                 action: 'save',
                 payload: { title: 'Test' },
-                contextData: { subject_type: 'Model' }
+                contract: { subject_type: 'Model' }
             });
 
             expect(capturedUrl).toBe('/__dg__/action/task/save/');
             expect(capturedOptions.body).toBe(JSON.stringify({
-                user_data: { title: 'Test' },
-                context_data: { subject_type: 'Model' }
+                action_kwargs: { title: 'Test' },
+                proxy_definition: { subject_type: 'Model' }
             }));
         });
 
@@ -254,12 +254,12 @@ describe('GlueHttp', () => {
                 uniqueName: 'task',
                 action: 'save',
                 payload: formData,
-                contextData: { subject_type: 'Model' }
+                contract: { subject_type: 'Model' }
             });
 
             expect(capturedUrl).toBe('/__dg__/action/task/save/');
             expect(capturedOptions.body).toBeInstanceOf(FormData);
-            expect(capturedOptions.body.get('context_data')).toBe(JSON.stringify({ subject_type: 'Model' }));
+            expect(capturedOptions.body.get('proxy_definition')).toBe(JSON.stringify({ subject_type: 'Model' }));
         });
     });
 

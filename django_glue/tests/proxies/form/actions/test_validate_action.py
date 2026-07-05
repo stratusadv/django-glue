@@ -24,9 +24,9 @@ class GlueFormProxyValidateTestCase(TestCase):
         """validate() should return is_valid=True for valid data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -42,9 +42,9 @@ class GlueFormProxyValidateTestCase(TestCase):
         """validate() should return is_valid=False for invalid data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': '',  # Required field empty
                 'email': 'not-an-email',  # Invalid email
                 'message': 'Hello',
@@ -61,9 +61,9 @@ class GlueFormProxyValidateTestCase(TestCase):
         """validate() should return cleaned_data when valid."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': 'John Doe',
                 'email': 'john@example.com',
                 'message': 'Hello world',
@@ -80,9 +80,9 @@ class GlueFormProxyValidateTestCase(TestCase):
         """validate() should return empty cleaned_data when invalid."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={'name': '', 'email': 'invalid', 'message': '', 'priority': 'medium'},
         )
         result = proxy.validate(action_data)
 
@@ -93,7 +93,7 @@ class GlueFormProxyValidateTestCase(TestCase):
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
 
-        action_data = dto.ActionPayloadSchema(context_data={}, user_data={'name': 'Test'})
+        action_data = dto.ActionRequest(proxy_definition={}, action_kwargs={'name': 'Test'})
 
         with self.assertRaises(GlueAccessError):
             proxy.process_action('validate', action_data)
@@ -102,9 +102,9 @@ class GlueFormProxyValidateTestCase(TestCase):
         """validate() should return errors as lists of strings."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.CHANGE)
-        action_data = dto.ActionPayloadSchema(
-            context_data={},
-            user_data={
+        action_data = dto.ActionRequest(
+            proxy_definition={},
+            action_kwargs={
                 'name': '',
                 'email': 'john@example.com',
                 'message': 'Hello',

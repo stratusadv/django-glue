@@ -6,10 +6,10 @@ describe('GlueTemplateProxy', () => {
     let mockHttp;
     let proxy;
 
-    const contextData = {
+    const contract = {
         subject_type: 'Template',
         template_name: 'components/card.html',
-        context_data: { defaultName: 'World' },
+        definition_proxy_definition: { defaultName: 'World' },
         actions: {
             render_html: {},
         },
@@ -29,7 +29,7 @@ describe('GlueTemplateProxy', () => {
         proxy = new GlueTemplateProxy({
             http: mockHttp,
             proxyUniqueName: 'card',
-            contextData: contextData,
+            contract: contract,
         });
     });
 
@@ -42,8 +42,8 @@ describe('GlueTemplateProxy', () => {
             expect(proxy._uniqueName).toBe('card');
         });
 
-        it('stores context data', () => {
-            expect(proxy._contextData).toBe(contextData);
+        it('stores proxy definition', () => {
+            expect(proxy._contract).toBe(contract);
         });
 
         it('defaults sharedPayload to empty object', () => {
@@ -54,7 +54,7 @@ describe('GlueTemplateProxy', () => {
             const p = new GlueTemplateProxy({
                 http: mockHttp,
                 proxyUniqueName: 'card',
-                contextData: contextData,
+                contract: contract,
                 sharedPayload: { sharedKey: 'shared' },
             });
 
@@ -94,7 +94,7 @@ describe('GlueTemplateProxy', () => {
             const p = new GlueTemplateProxy({
                 http: mockHttp,
                 proxyUniqueName: 'card',
-                contextData: contextData,
+                contract: contract,
                 sharedPayload: { shared: 'yes', override: 'shared' },
             });
 

@@ -142,7 +142,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
         """Should include full form class path in context data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertEqual(context_data['form_class_path'], 'test_project.test_forms.ContactForm')
 
@@ -150,7 +150,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
         """Should include field definitions in context data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('fields', context_data)
         self.assertIn('name', context_data['fields'])
@@ -159,7 +159,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
         """Should include initial values in context data."""
         form = ContactForm(initial={'name': 'John'})
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('initial', context_data)
         self.assertEqual(context_data['initial']['name'], 'John')
@@ -168,7 +168,7 @@ class GlueFormProxyContextDataTestCase(TestCase):
         """Should include available actions in context data."""
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('actions', context_data)
         self.assertIn('get', context_data['actions'])
@@ -177,9 +177,9 @@ class GlueFormProxyContextDataTestCase(TestCase):
 
     def test_foreign_key_choices_returns_empty_for_missing_field_definition(self):
         """foreign_key_choices should return empty list when field_definition is missing."""
-        from django_glue.resolver.action.schemas import ActionPayloadSchema
+        from django_glue.resolver.action.schemas import ActionRequest
         form = ContactForm()
         proxy = GlueFormProxy(target=form, unique_name='contact_form', access=GlueAccess.VIEW)
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
         result = proxy.foreign_key_choices(action_data)
         self.assertEqual(result, [])

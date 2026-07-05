@@ -11,7 +11,7 @@ from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.proxies import GlueFunctionProxy
-from django_glue.resolver.action.schemas import ActionPayloadSchema
+from django_glue.resolver.action.schemas import ActionRequest
 from django_glue.exceptions import GlueAccessError
 
 
@@ -81,52 +81,52 @@ class GlueFunctionProxyInitTestCase(TestCase):
 
 
 class GlueFunctionProxyContextDataTestCase(TestCase):
-    """Tests for GlueFunctionProxy.to_context_data()."""
+    """Tests for GlueFunctionProxy.to_proxy_definition()."""
 
-    def test_to_context_data_includes_subject_type_function(self):
+    def test_to_proxy_definition_includes_subject_type_function(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.add_numbers',
             unique_name='add',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertEqual(context_data['subject_type'], 'Function')
 
-    def test_to_context_data_includes_function_path(self):
+    def test_to_proxy_definition_includes_function_path(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.add_numbers',
             unique_name='add',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertEqual(context_data['function_path'], 'django_glue.tests.proxies.function.test_function_proxy.add_numbers')
 
-    def test_to_context_data_includes_params(self):
+    def test_to_proxy_definition_includes_params(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.greet',
             unique_name='greet',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('params', context_data)
         self.assertEqual(len(context_data['params']), 2)
         self.assertEqual(context_data['params'][0]['name'], 'name')
         self.assertEqual(context_data['params'][1]['name'], 'greeting')
 
-    def test_to_context_data_includes_actions(self):
+    def test_to_proxy_definition_includes_actions(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.add_numbers',
             unique_name='add',
             access=GlueAccess.VIEW,
         )
 
-        context_data = proxy.to_context_data()
+        context_data = proxy.to_contract()
 
         self.assertIn('actions', context_data)
         self.assertIn('execute', context_data['actions'])
@@ -142,9 +142,9 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'a': 5, 'b': 10},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'a': 5, 'b': 10},
         )
         result = proxy.execute(action_data)
 
@@ -157,9 +157,9 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'name': 'World', 'greeting': 'Hi'},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'name': 'World', 'greeting': 'Hi'},
         )
         result = proxy.execute(action_data)
 
@@ -172,24 +172,24 @@ class GlueFunctionProxyExecuteTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'x': 21},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'x': 21},
         )
         result = proxy.execute(action_data)
 
         self.assertEqual(result['result'], 42)
 
-    def test_execute_with_partial_user_data(self):
+    def test_execute_with_partial_action_kwargs(self):
         proxy = GlueFunctionProxy(
             target='django_glue.tests.proxies.function.test_function_proxy.greet',
             unique_name='greet',
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'name': 'World'},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'name': 'World'},
         )
         result = proxy.execute(action_data)
 
@@ -232,9 +232,9 @@ class GlueFunctionProxyProcessActionAccessTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'a': 1, 'b': 2},
+        action_data = ActionRequest(
+            proxy_definition={},
+            action_kwargs={'a': 1, 'b': 2},
         )
         result = proxy.process_action('execute', action_data)
 
@@ -248,9 +248,9 @@ class GlueFunctionProxyProcessActionAccessTestCase(TestCase):
                 access=access,
             )
 
-            action_data = ActionPayloadSchema(
-                context_data={},
-                user_data={'a': 1, 'b': 2},
+            action_data = ActionRequest(
+                proxy_definition={},
+                action_kwargs={'a': 1, 'b': 2},
             )
             result = proxy.process_action('execute', action_data)
             self.assertEqual(result['result'], 3)

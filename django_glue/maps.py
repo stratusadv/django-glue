@@ -1,5 +1,5 @@
 from django_glue.proxies import (
-    GlueModelProxy,
+    GlueModelInstanceProxy,
     GlueFormProxy,
     GlueModelFormProxy,
     GlueQuerySetProxy,
@@ -8,8 +8,8 @@ from django_glue.proxies import (
 )
 
 
-SUBJECT_TYPE_TO_PROXY_TYPE = {
-    'Model': GlueModelProxy,
+SUBJECT_TYPE_TO_PROXY_CLASS = {
+    'Model': GlueModelInstanceProxy,
     'ModelForm': GlueModelFormProxy,
     'QuerySet': GlueQuerySetProxy,
     'BaseForm': GlueFormProxy,

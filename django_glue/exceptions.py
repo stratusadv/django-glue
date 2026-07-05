@@ -64,8 +64,8 @@ class GlueQuerySetFilterValidationError(GlueError):
         super().__init__(f"Cannot filter on field '{field}'. Allowed fields: {allowed_fields}")
 
 
-class GlueContextDataTamperingError(GlueError):
-    """Raised when context_data signature doesn't match, indicating tampering."""
+class GlueProxyContractDefinitionTamperingError(GlueError):
+    """Raised when proxy_definition signature doesn't match, indicating tampering."""
 
     def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name

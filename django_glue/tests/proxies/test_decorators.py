@@ -6,7 +6,7 @@ from django.test import TestCase
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.decorators import action
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.model.proxy import GlueModelProxy
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 
 
 class ActionDecoratorTestCase(TestCase):
@@ -43,7 +43,7 @@ class ActionDecoratorProxyRegistrationTestCase(TestCase):
     def test_action_is_registered_in_proxy_actions(self):
         """Actions decorated with @action should be registered in proxy._actions."""
         # GlueModelProxy already has get, save, delete, validate, foreign_key_choices
-        actions = GlueModelProxy._actions['GlueModelProxy']
+        actions = GlueModelInstanceProxy._actions['GlueModelProxy']
 
         self.assertIn('get', actions)
         self.assertIn('save', actions)
@@ -53,7 +53,7 @@ class ActionDecoratorProxyRegistrationTestCase(TestCase):
 
     def test_action_registration_stores_access_level(self):
         """Registered actions should store their required access level."""
-        actions = GlueModelProxy._actions['GlueModelProxy']
+        actions = GlueModelInstanceProxy._actions['GlueModelProxy']
 
         # get requires VIEW
         _, _, access = actions['get']
@@ -69,7 +69,7 @@ class ActionDecoratorProxyRegistrationTestCase(TestCase):
 
     def test_action_registration_stores_parameters(self):
         """Registered actions should store their parameter annotations."""
-        actions = GlueModelProxy._actions['GlueModelProxy']
+        actions = GlueModelInstanceProxy._actions['GlueModelProxy']
 
         # get should have action_data parameter
         _, params, _ = actions['get']

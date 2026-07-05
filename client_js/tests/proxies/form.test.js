@@ -9,7 +9,7 @@ describe('GlueFormProxy', () => {
         sendActionRequest: mock(() => Promise.resolve(response))
     });
 
-    function createFormContextData(fields = {}, initial = {}, actions = {}) {
+    function createFormcontract(fields = {}, initial = {}, actions = {}) {
         return {
             fields: fields,
             initial: initial,
@@ -27,9 +27,9 @@ describe('GlueFormProxy', () => {
     });
 
     describe('constructor', () => {
-        it('creates field accessors from contextData.fields', () => {
+        it('creates field accessors from contract.fields', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { name: { type: 'text' }, email: { type: 'email' } },
                 { name: 'John', email: 'john@example.com' }
             );
@@ -37,16 +37,16 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'contact_form',
-                contextData
+                contract
             });
 
             expect(proxy.name).toBe('John');
             expect(proxy.email).toBe('john@example.com');
         });
 
-        it('initializes _values from contextData.initial', () => {
+        it('initializes _values from contract.initial', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { title: {} },
                 { title: 'Initial Value' }
             );
@@ -54,7 +54,7 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             expect(proxy._values).toEqual({ title: 'Initial Value' });
@@ -62,12 +62,12 @@ describe('GlueFormProxy', () => {
 
         it('starts with empty _errors', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
+            const contract = createFormcontract({ name: {} }, {});
 
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             expect(proxy._errors).toEqual({});
@@ -75,7 +75,7 @@ describe('GlueFormProxy', () => {
 
         it('stores field definitions in $fields', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { name: { type: 'text', required: true } },
                 {}
             );
@@ -83,7 +83,7 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             expect(proxy.$fields.name.type).toBe('text');
@@ -94,12 +94,12 @@ describe('GlueFormProxy', () => {
 
         it('allows setting field values via property', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, { name: 'Original' });
+            const contract = createFormcontract({ name: {} }, { name: 'Original' });
 
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             proxy.name = 'Updated';
@@ -110,7 +110,7 @@ describe('GlueFormProxy', () => {
 
         it('creates field properties on $fields', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { name: { type: 'text', required: true } },
                 {}
             );
@@ -118,7 +118,7 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             expect(proxy.$fields.name.type).toBe('text');
@@ -127,12 +127,12 @@ describe('GlueFormProxy', () => {
 
         it('creates error attributes for fields', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: { type: 'text' } }, {});
+            const contract = createFormcontract({ name: { type: 'text' } }, {});
 
             const proxy = new GlueFormProxy({
                 http,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             expect(proxy.$fields.name.has_errors).toBe(false);
@@ -150,7 +150,7 @@ describe('GlueFormProxy', () => {
                 })
             };
 
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { name: {} },
                 { name: 'Test' }
             );
@@ -158,7 +158,7 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             const result = await proxy.validate();
@@ -174,12 +174,12 @@ describe('GlueFormProxy', () => {
                 }))
             };
 
-            const contextData = createFormContextData({ name: {} }, {});
+            const contract = createFormcontract({ name: {} }, {});
 
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             await proxy.validate();
@@ -194,12 +194,12 @@ describe('GlueFormProxy', () => {
                 }))
             };
 
-            const contextData = createFormContextData({ name: { type: 'text' } }, {});
+            const contract = createFormcontract({ name: { type: 'text' } }, {});
 
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             await proxy.validate();
@@ -219,7 +219,7 @@ describe('GlueFormProxy', () => {
                 }
             };
 
-            const contextData = createFormContextData(
+            const contract = createFormcontract(
                 { name: { type: 'text' } },
                 { name: 'Submit Me' }
             );
@@ -227,7 +227,7 @@ describe('GlueFormProxy', () => {
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             const result = await proxy.save();
@@ -247,12 +247,12 @@ describe('GlueFormProxy', () => {
                 }))
             };
 
-            const contextData = createFormContextData({ email: {} }, { email: 'bad' });
+            const contract = createFormcontract({ email: {} }, { email: 'bad' });
 
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             await proxy.save();
@@ -267,12 +267,12 @@ describe('GlueFormProxy', () => {
                 }))
             };
 
-            const contextData = createFormContextData({ name: {} }, { name: 'Valid' });
+            const contract = createFormcontract({ name: {} }, { name: 'Valid' });
 
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             proxy._errors = { name: ['Old error'] };
@@ -285,16 +285,16 @@ describe('GlueFormProxy', () => {
     describe('hasErrors', () => {
         it('returns false when no errors', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ name: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             expect(proxy.hasErrors()).toBe(false);
         });
 
         it('returns true when errors exist', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ name: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._errors = { name: ['Error'] };
             expect(proxy.hasErrors()).toBe(true);
@@ -302,8 +302,8 @@ describe('GlueFormProxy', () => {
 
         it('returns true for specific field with errors', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: { type: 'text' }, email: { type: 'email' } }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ name: { type: 'text' }, email: { type: 'email' } }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._errors = { name: ['Error'] };
             expect(proxy.hasErrors('name')).toBe(true);
@@ -315,8 +315,8 @@ describe('GlueFormProxy', () => {
     describe('_clearErrors', () => {
         it('removes all errors', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {}, email: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ name: {}, email: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._errors = { name: ['Error'], email: ['Another error'] };
             proxy._clearErrors();
@@ -328,8 +328,8 @@ describe('GlueFormProxy', () => {
     describe('_getFormData', () => {
         it('converts values to FormData', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ name: {}, count: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ name: {}, count: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._values = { name: 'test', count: 42 };
             const formData = proxy._getFormData();
@@ -340,8 +340,8 @@ describe('GlueFormProxy', () => {
 
         it('handles array values', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ tags: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ tags: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._values = { tags: ['a', 'b'] };
             const formData = proxy._getFormData();
@@ -351,8 +351,8 @@ describe('GlueFormProxy', () => {
 
         it('converts null and undefined to empty string', () => {
             const http = createMockHttp();
-            const contextData = createFormContextData({ a: {}, b: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
+            const contract = createFormcontract({ a: {}, b: {} }, {});
+            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contract });
 
             proxy._values = { a: null, b: undefined };
             const formData = proxy._getFormData();
@@ -372,11 +372,11 @@ describe('GlueFormProxy', () => {
                 })
             };
 
-            const contextData = createFormContextData({ name: {} }, {});
+            const contract = createFormcontract({ name: {} }, {});
             const proxy = new GlueFormProxy({
                 http: mockHttp,
                 proxyUniqueName: 'form',
-                contextData
+                contract
             });
 
             proxy.get();

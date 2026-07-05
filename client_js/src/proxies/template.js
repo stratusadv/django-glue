@@ -12,11 +12,11 @@ class GlueTemplateProxy extends BaseGlueProxy {
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
+     * @param {Object} options.proxyDefinition - Serialized proxy metadata from the server.
      * @param {Object} [options.sharedPayload={}] - Payload merged into every request.
      */
-    constructor({http, proxyUniqueName, contextData, sharedPayload = {}}) {
-        super({http, proxyUniqueName, contextData});
+    constructor({http, proxyUniqueName, proxyDefinition, sharedPayload = {}}) {
+        super({http, proxyUniqueName, proxyDefinition});
 
         /** @type {Object} */
         this._sharedPayload = sharedPayload;
