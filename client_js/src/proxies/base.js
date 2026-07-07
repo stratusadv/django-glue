@@ -1,29 +1,37 @@
 /**
  * Base proxy class. Provides the listener/event system and the core
- * `_processAction` method that all proxy types use to invoke server-side actions.
+ * action invocation mechanism that all proxy types use to invoke server-side actions.
  */
 class BaseGlueProxy {
-    /** @type {string} */
-    static name = 'baseGlueProxy'
+    /** @type {boolean} */
+    _loaded = false;
+    /** @type {boolean} */
+    _loading = false;
 
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.uniqueName - The unique name of this proxy in the session.
-     * @param {Object} options.contract - Serialized proxy metadata from the server.
+     * @param {string} options.name - The unique name of this proxy in the session.
+     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
      * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
+     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, uniqueName, contract, actions = null}) {
+    constructor({http, name, contract, state = null, actions = null, namespace = 'base'}) {
         /** @type {GlueHttp} */
         this.http = http
         /** @type {string} */
-        this._uniqueName = uniqueName;
+        this._namespace = namespace
+        /** @type {string} */
+        this._name = name;
         /** @type {Object} */
         this._contract = contract;
         /** @type {Object} */
+        this._state = state;
+        /** @type {Object} */
         this._actions = !!actions ? actions : contract.actions;
 
-        this._defineCustomActions()
+        this._defineDefaultActions()
 
         /**
          * @type {Object<string, Object<string, Function[]>>}
@@ -33,7 +41,6 @@ class BaseGlueProxy {
             after: {},
             error: {}
         }
-
     }
 
     /**
@@ -86,10 +93,9 @@ class BaseGlueProxy {
      * @param {string} type - Listener type: 'before', 'after', or 'error'.
      * @param {string} actionName - The action name.
      * @param {Object} event - The event payload.
-     * @private
      */
     async emitListeners(type, actionName, event) {
-        const listeners = this._listeners[type]?.[actionName] || [];
+        const listeners = this._listeners?.[type]?.[actionName] || [];
         for (const callback of listeners) {
             await callback(event);
         }
@@ -98,77 +104,90 @@ class BaseGlueProxy {
     /**
      * Execute a server-side action, emitting before/after/error listeners.
      * @param {string} actionName - The action method name.
-     * @param {Object|null} [actionKwargs] - Action-specific user data (e.g., step number, filter params).
-     * @param {Object|null} [state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
-     *                                    Files in proxyState are automatically extracted and sent via FormData.
+     * @param {Object|null} [actionKwargs] - Action-specific user data.
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, actionKwargs = null, state = null) {
+    async _processAction(actionName, actionKwargs = null) {
         const event = {
             action: actionName,
             proxy: this,
-            actionKwargs: actionKwargs,
+            actionKwargs,
         };
 
-        // Emit 'before' listeners
         await this.emitListeners('before', actionName, event);
+
+        this._loading = true;
 
         try {
             const response = await this.http.sendActionRequest({
-                uniqueName: this._uniqueName,
+                name: this._name,
                 action: actionName,
-                actionKwargs: actionKwargs,
-                contract: this._contract,  // Never modified - signature verified server-side
-                state,  // Proxy-intrinsic runtime state (not signed)
+                actionKwargs,
+                contract: this._contract,
+                state: this._state,
             });
 
-            // Handle response state (e.g., form errors, updated values)
             const responseData = response.data;
-            if (responseData.state) {
-                this._updateState(responseData.state);
+
+            // Mutate _state in place so Alpine's Proxy keeps the same reference
+            if (this._state) {
+                Object.assign(this._state, responseData.state);
+            } else {
+                this._state = responseData.state;
             }
+
+            this._handleActionResponse(actionName, actionKwargs, responseData);
 
             // Extract the actual data (may be wrapped or direct)
             const data = responseData.data !== undefined ? responseData.data : responseData;
             event.result = data;
 
-            // Emit 'after' listeners
             await this.emitListeners('after', actionName, event);
 
             return data;
         } catch (err) {
             event.error = err;
 
-            // Emit 'error' listeners
             await this.emitListeners('error', actionName, event);
 
             throw err;
+        } finally {
+            this._loading = false;
         }
     }
 
-    /**
-     * Handle proxy_state from server response.
-     * Override in subclasses to handle proxy-specific state updates.
-     * @param {Object} state - Proxy-intrinsic state from the server.
-     * @protected
-     */
-    _updateState(state) {
-        // Base implementation does nothing - override in subclasses
-    }
+    _handleActionResponse(actionName, actionKwargs, response) {}
 
-    async _defaultProcessAction(actionName, actionKwargs = null, state = null) {
-        return await this._processAction(actionName, actionKwargs, state)
-    }
+    _defineDefaultActions() {
+        Object.entries(this._actions).forEach(([actionKey, action]) => {
+            const [actionProvider, actionName] = actionKey.split('.').slice(0, 2)
+            const accessPath = action.client_proxy_access_path
+            const accessPathParts = accessPath ? [accessPath.split('.'), ''] : ['']
 
-    _defineCustomActions() {
-        Object.keys(this._actions).forEach(actionName => {
-            if (!(actionName in this)) {
-                this[actionName] = async (actionKwargs = null) => {
-                    return await this._defaultProcessAction(actionName, actionKwargs)
+            let propertyTarget = this
+            accessPathParts.forEach(pathPart => {
+                if (pathPart) {
+                    propertyTarget[pathPart] = {
+                        _processAction: this._processAction.bind(this),
+                    }
+                    propertyTarget = propertyTarget[pathPart]
                 }
-            }
-        })
+
+                if (!(actionName in propertyTarget)) {
+                    Object.defineProperty(propertyTarget, actionName, {
+                        get: function () {
+                            return async (actionKwargs = null) => {
+                                debugger
+                                return await this._processAction(actionKey, actionKwargs);
+                            };
+                        },
+                        enumerable: true,
+                        configurable: true
+                    });
+                }
+            })
+        });
     }
 }
 

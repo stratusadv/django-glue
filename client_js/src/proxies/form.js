@@ -5,36 +5,35 @@ import BaseGlueProxy from "./base";
  * save, and foreign-key choice loading. Supports both regular Forms and ModelForms.
  */
 class GlueFormProxy extends BaseGlueProxy {
-    /** @type {string} */
-    static name = 'form'
+    /** @type {Object} Reactive field values for Alpine compatibility */
+    _values = {};
 
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.uniqueName - The unique name of this proxy.
-     * @param {Object} options.contract - Serialized proxy contract from the server.
-     * @param {Object|null} [options.actions] - Optional actions map.
+     * @param {string} options.name - The unique name of this proxy in the session.
+     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
+     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
+     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, uniqueName, contract, actions = null}) {
-        super({http, uniqueName, contract, actions});
-
-        /** @type {Object} */
-        this._values = {...(this._contract.initial || {})};
-
-        /** @type {Object} */
-        this._errors = {};
-
+    constructor({http, name, contract, state, actions = null, namespace = 'form'}) {
+        super({http, name, contract, state, actions, namespace});
         this._defineFields()
+    }
 
-        Object.defineProperty(this, '$fields', {
-            get: () => {
-                return this._fields
-            },
-            set: value => {
-                this._fields = value
-            },
-        })
-
+    /**
+     * Load instance data from state into reactive field values.
+     * Called during construction for child proxies and after actions complete.
+     */
+    loadInstanceData() {
+        if (this._state?.instance_data) {
+            this._loaded = true;
+            for (const fieldName of Object.keys(this._fields)) {
+                this[fieldName] = this._state.instance_data[fieldName];
+                this._fields[fieldName].value = this._state.instance_data[fieldName];
+            }
+        }
     }
 
     /**
@@ -45,47 +44,31 @@ class GlueFormProxy extends BaseGlueProxy {
      * @private
      */
     _defineModelChoiceField(fieldName, field) {
-        // Initialize shared choice caching on the original fieldData (once)
-        // This ensures choices are loaded only once across all model proxy instances
-        if (!field.hasOwnProperty('__choicesCache')) {
-            field.__glue__choicesCache = [];
-            field.__glue__choicesLoaded = false;
-            field.__glue__loadingChoices = false;
-            field.__glue__choicesPromise = null;
-        }
+        field.__glue__choicesLoaded = false;
+        field.__glue__loadingChoices = false;
+        field.__glue__choicesCache = [];
 
-        const choicesAction = async function () {
-            // If already loading, return the existing promise to avoid duplicate requests
-            if (field.__glue__choicesPromise) {
-                return field.__glue__choicesPromise;
-            }
+        const proxy = this
 
-            field.__glue__loadingChoices = true;
-            // Pass field_definition in action_kwargs for this action
-            field.__glue__choicesPromise = this._processAction('foreign_key_choices', {
-                'field_definition': [
-                    fieldName,
-                    field
-                ]
-            }).then(data => {
-                field.__glue__choicesCache = data;
+        Object.defineProperty(field, 'choices', {
+            get: async function() {
+                if (!field.__glue__choicesLoaded && !field.__glue__loadingChoices) {
+                    field.__glue__loadingChoices = true;
+                    const response = await proxy._processAction('GlueFormProxy.foreign_key_choices', { field_name: fieldName });
+                    field.choices = response.response_payload;
+                    field.__glue__choicesLoaded = true;
+                    field.__glue__loadingChoices = false;
+                }
+                return field.__glue__choicesCache;
+            },
+            set: function (value) {
+                field.__glue__choicesCache = value;
                 field.__glue__choicesLoaded = true;
-                return data;
-            }).finally(() => {
-                field.__glue__loadingChoices = false;
-            });
+            },
+            configurable: true
+        });
 
-            return field.__glue__choicesPromise;
-        }.bind(this)
-
-        field.choices = async function () {
-            if (!field.__glue__choicesLoaded) {
-                await choicesAction();
-            }
-            return field.__glue__choicesCache;
-        }
-
-        return field
+        return field;
     }
 
     /**
@@ -94,25 +77,59 @@ class GlueFormProxy extends BaseGlueProxy {
      * @param {string} fieldName - The field name.
      * @private
      */
-    _defineFieldNameProperty(fieldName) {
+    _defineFieldNameProperty(fieldName, field) {
+        field = {...field}
+
+        if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(field.type)) {
+            field = this._defineModelChoiceField(fieldName, field)
+        }
+
         Object.defineProperty(this, fieldName, {
             get: function () {
-                if (!this._loaded && !this._values) {
+                if (!this._loaded && !this._state.instance_data) {
                     if (!this._loading) {
                         this._loading = true;
-                        this.get()
+                        this.load().then(() => {
+                            this.loadInstanceData()
+                            this._loading = false;
+                        })
                     }
                 }
 
-                return this._values?.[fieldName];
+                return this._values[fieldName];
             },
             set: function (value) {
-                if (!this._values) {
-                    this._values = {};
-                }
                 this._values[fieldName] = value;
+                if (!this._state.instance_data) {
+                    this._state.instance_data = {};
+                }
+                this._state.instance_data[fieldName] = value;
             }
         })
+
+        if (!field.hasOwnProperty('value')) {
+            Object.defineProperty(field, 'value', {
+                get: function () {
+                    return this._values[fieldName];
+                }.bind(this),
+                set: function (val) {
+                    this._values[fieldName] = val;
+                    if (!this._state.instance_data) this._state.instance_data = {};
+                    this._state.instance_data[fieldName] = val;
+                }.bind(this)
+            });
+        }
+
+        if (!field.hasOwnProperty('errors')) {
+            Object.defineProperty(field, 'errors', {
+                get: function () {
+                    return this._state._errors?.[fieldName];
+                }.bind(this),
+            });
+        }
+
+        this._fields[fieldName] = field;
+        this._fields[fieldName]['name'] = fieldName;
     }
 
     /**
@@ -121,91 +138,28 @@ class GlueFormProxy extends BaseGlueProxy {
      */
     _defineFields() {
         this._fields = {}
-        Object.entries(this._contract.fields).forEach(([fieldName, field]) => {
-            this._defineFieldNameProperty(fieldName)
 
-            // Clone field so each proxy instance owns its own copy,
-            // avoiding shared references that cause bound getters to overwrite each other
-            field = {...field}
-
-            if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(field.type)) {
-                field = this._defineModelChoiceField(fieldName, field)
-            }
-
-            this._fields[fieldName] = field;
-            this._fields[fieldName]['name'] = fieldName;
-
-            if (!field.hasOwnProperty('value')) {
-                Object.defineProperty(field, 'value', {
-                    get: function () {
-                        return this._values?.[fieldName];
-                    }.bind(this),
-                    set: function (val) {
-                        if (!this._values) this._values = {};
-                        this._values[fieldName] = val;
-                    }.bind(this)
-                });
-            }
-
-            if (!field.hasOwnProperty('errors')) {
-                Object.defineProperty(field, 'errors', {
-                    get: function () {
-                        return this._errors?.[fieldName];
-                    }.bind(this),
-                });
+        Object.keys(this._fields).forEach(k => delete this._fields[k]);
+        Object.entries(this._contract.custom_data.allowed_fields).forEach(([fieldName, field]) => {
+            if (!this.hasOwnProperty(fieldName)) {
+                this._defineFieldNameProperty(fieldName, field)
             }
 
             Object.keys(this._fields[fieldName]).forEach(attributeName => {
                 this._updateErrorAttributesForField(fieldName)
             })
-
         })
-    }
 
-    /**
-     * Override _processAction to include form field values in proxyState.
-     * This ensures the backend form instance always has access to accumulated field state.
-     * @param {string} actionName - The action method name.
-     * @param {Object|null} [actionKwargs] - Action-specific user data.
-     * @param {Object|null} [state] - Proxy-intrinsic runtime state.
-     * @returns {Promise<Object>} The server response data.
-     * @private
-     */
-    async _processAction(actionName, actionKwargs = null, state = null) {
-        // Always include form_values in proxyState so backend can bind the form
-        const state = {
-            ...(state || {}),
-            form_values: this._values || {},
-        };
-
-        return await BaseGlueProxy.prototype._processAction.call(this, actionName, actionKwargs, state);
-    }
-
-    /**
-     * Handle state from server response.
-     * Updates form errors and field values from the response.
-     * @param {Object} state - Proxy-intrinsic state from the server.
-     * @protected
-     */
-    _updateState(state) {
-        if (state.errors) {
-            this._updateErrors(state.errors);
+        if (!this.hasOwnProperty('$fields')) {
+            Object.defineProperty(this, '$fields', {
+                get: function() {
+                    return this._fields
+                },
+                set: value => {
+                    this._fields = value
+                },
+            })
         }
-        if (state.form_values) {
-            this._values = {...this._values, ...state.form_values};
-        }
-    }
-
-    /**
-     * Fetch current field values from the server.
-     * @returns {Promise<Object>} The fetched field values.
-     */
-    async get() {
-        const data = await super._processAction('get');
-        this._values = data;
-        this._loading = false;
-        this._loaded = true;
-        return data;
     }
 
     /**
@@ -214,60 +168,8 @@ class GlueFormProxy extends BaseGlueProxy {
      * @private
      */
     _updateErrorAttributesForField(fieldName) {
-        this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
-        this._fields[fieldName][`error_text`] = this._errors[fieldName]?.join(', ');
-    }
-
-    /**
-     * Update error state for all fields.
-     * @param {Object} errors - Error mapping from the server.
-     * @private
-     */
-    _updateErrors(errors) {
-        this._errors = errors || {};
-        Object.keys(this._fields).forEach(fieldName => {
-            this._updateErrorAttributesForField(fieldName);
-        });
-    }
-
-    /**
-     * Validate the current field values against the server.
-     * @returns {Promise<Object>} Validation result with `{success, errors, ...}`.
-     */
-    async validate() {
-        const result = await this._processAction('validate');
-        this._updateErrors(result.errors);
-        return result;
-    }
-
-    /**
-     * Save the current field values to the server. On success, clears errors
-     * and refreshes field data.
-     * @returns {Promise<Object>} Save result with `{success, errors, ...}`.
-     */
-    async save() {
-        const result = await this._processAction('save');
-
-        this._updateErrors(result.errors)
-
-        if (result.success) {
-            this._clearErrors()
-            this.get()
-        }
-
-        return result;
-    }
-
-    /**
-     * Process form with custom logic (e.g., multi-step workflows).
-     * @param {Object|null} [actionKwargs] - Action-specific user data (e.g., step number).
-     * @returns {Promise<Object>} Process result from the server.
-     */
-    async process(actionKwargs = null) {
-        const result = await this._processAction('process', actionKwargs);
-        this._updateErrors(this._errors)
-
-        return result;
+        this._fields[fieldName][`has_errors`] = this._state._errors?.[fieldName]?.length > 0;
+        this._fields[fieldName][`error_text`] = this._state._errors?.[fieldName]?.join(', ');
     }
 
     /**
@@ -283,12 +185,14 @@ class GlueFormProxy extends BaseGlueProxy {
         return Object.keys(this._errors).length > 0;
     }
 
-    /**
-     * Clear all validation errors.
-     * @private
-     */
-    _clearErrors() {
-        this._errors = {};
+    _handleActionResponse(actionName, actionKwargs, response) {
+        // this.loadInstanceData();
+
+        // if (actionName === 'foreign_key_choices' && actionKwargs?.field_name) {
+        //     const fieldName = actionKwargs.field_name;
+        //     this._fields[fieldName].choices = response.response_payload;
+        //     this._fields[fieldName].__glue__choicesLoaded = true;
+        // }
     }
 }
 

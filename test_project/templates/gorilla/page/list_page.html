@@ -225,18 +225,18 @@
                         </div>
                         <div class="card-footer bg-gorilla-cream">
                             <div class="d-flex gap-2 mb-2">
-                                <a :href="gorillaDetailUrl(gorilla.id)" class="btn btn-outline-secondary btn-sm flex-grow-1">
+                                <a :href="gorillaDetailUrl(gorilla.pk)" class="btn btn-outline-secondary btn-sm flex-grow-1">
                                     Profile
                                 </a>
-                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModal(gorilla.id)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModal(gorilla.pk)">
                                     Profile (Inner)
                                 </button>
-                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModalOuter(gorilla.id)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModalOuter(gorilla.pk)">
                                     Profile (Outer)
                                 </button>
                             </div>
                             <div class="d-flex gap-2">
-                                <a :href="gorillaArenaUrl(gorilla.id)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
+                                <a :href="gorillaArenaUrl(gorilla.pk)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
                                     Arena
                                 </a>
                                 <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
@@ -244,6 +244,9 @@
                                 </button>
                                 <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
                                     Delete
+                                </button>
+                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="gorilla.services.increment_age()">
+                                    Increment Age
                                 </button>
                             </div>
                             <div class="d-flex gap-2 mt-2">

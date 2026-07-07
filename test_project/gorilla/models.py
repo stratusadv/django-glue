@@ -3,6 +3,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.http import HttpRequest
 
 from django_glue.shortcuts.glue import Glue
+from test_project.gorilla.gorilla_service import GorillaService
 
 
 class Skill(models.Model):
@@ -69,6 +70,9 @@ class Gorilla(models.Model):
 
         print(f"[Battle Cry] User '{request.user}' triggered {self.name}'s battle cry (intensity: {intensity})")
 
+        self.age = self.age + 1
+        self.save()
+
         return {
             'success': True,
             'gorilla': self.name,
@@ -80,5 +84,28 @@ class Gorilla(models.Model):
     def __str__(self):
         return self.name
 
+    def shout(self, volume: int) -> str:
+        return 'A' * volume
+
+    @Glue.attribute()
+    def something(self):
+        return None
+
     class Meta:
         db_table = 'gorilla'
+
+
+    class GlueMeta:
+        attributes = [
+            ('something', Glue.Access.VIEW)
+        ]
+
+        action_providers = [
+            (
+                GorillaService,
+                {
+                    'client_proxy_access_path': 'services.processor',
+                    'provider_factory': lambda g: GorillaService(g)
+                }
+            )
+        ]

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import TYPE_CHECKING
+
+from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
+from django_glue.proxies.function.contract import GlueFunctionProxyContractData
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
+from django_glue.resolver.action.schemas import ActionRequest
 from django_glue.utils import get_attr_from_path_string
-
-if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionRequest
 
 
 class GlueFunctionProxy(BaseGlueProxy):
@@ -19,13 +19,13 @@ class GlueFunctionProxy(BaseGlueProxy):
 
     def __init__(
         self,
-        target: str,
+        function_path: str,
         **kwargs,
     ) -> None:
-        super().__init__(subject=target, **kwargs)
+        super().__init__(**kwargs)
 
-        self.function_path = target
-        self.function = get_attr_from_path_string(target)
+        self.function_path = function_path
+        self.function = get_attr_from_path_string(function_path)
 
         sig = inspect.signature(self.function)
         self._params = [
@@ -41,25 +41,27 @@ class GlueFunctionProxy(BaseGlueProxy):
         ]
 
     @classmethod
-    def from_action_request_data(
+    def from_action_request(
         cls,
-        function_path: str,
+        action_request: ActionRequest,
         **kwargs,
     ) -> GlueFunctionProxy:
+        contract_data = GlueFunctionProxyContractData(**action_request.contract.custom_data)
+
         return cls(
-            target=function_path,
+            function_path=contract_data.function_path,
             **kwargs,
         )
 
+    @property
     def _custom_contract_data(self) -> dict:
         return {
             'function_path': self.function_path,
             'params': self._params,
-            'subject_type': self._subject_type_name
         }
 
     @action(access=GlueAccess.VIEW)
-    def execute(self, request, action_kwargs: dict = None) -> dict:
+    def execute(self, request: HttpRequest, action_kwargs: dict | None = None) -> dict:
         action_kwargs = action_kwargs or {}
         result = self.function(**action_kwargs)
 

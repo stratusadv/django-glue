@@ -4,17 +4,15 @@ from typing import TYPE_CHECKING, Any
 import json
 
 from django.http import JsonResponse
-from pydantic import BaseModel, ValidationError, model_validator
-from pydantic.dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from django_glue.proxies.contract import GlueProxyContract
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_CLASS
+from django_glue.maps import get_subject_type_to_proxy_class
 from django.http import HttpRequest
 
 if TYPE_CHECKING:
     from django_glue.proxies.proxy import BaseGlueProxy
 
-@dataclass
 class ActionRequest(BaseModel):
     """
     BaseModel for action requests.
@@ -37,6 +35,8 @@ class ActionRequest(BaseModel):
 
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     request: HttpRequest
     action_name: str
     contract: GlueProxyContract
@@ -44,8 +44,9 @@ class ActionRequest(BaseModel):
     action_kwargs: dict | None = None
 
     @model_validator(mode='before')
-    def _process_request(self, data: Any) -> dict:
-        request = data.get('request', None)
+    @classmethod
+    def _process_request(cls, data: Any) -> dict:
+        request = data.get('request') if isinstance(data, dict) else None
         if not isinstance(request, HttpRequest):
             msg = 'ActionRequest objects must be constructed from HttpRequests'
             raise ValidationError(msg)
@@ -66,26 +67,18 @@ class ActionRequest(BaseModel):
             msg = 'Incoming HttpRequest has no path parameters'
             raise ValidationError(msg)
 
-        if request.resolver_match.kwargs.get('proxy_name') != contract.name:
+        if request.resolver_match.kwargs.get('unique_name') != contract.name:
             msg = (
                 'Incoming HttpRequest tried to request action for a '
                 'proxy other than the one in the contract it sent.'
             )
             raise ValidationError(msg)
 
-        action_name = request.resolver_match.kwargs.get('action')
-        if not action_name or action_name not in contract.actions:
-            msg = (
-                'Incoming HttpRequest requested an'
-                ' invalid action the proxy contract it contained.'
-            )
-            raise ValidationError(msg)
-
-        raw_proxy_state = request.POST.get('raw_proxy_state')
+        raw_proxy_state = request.POST.get('state')
         action_kwargs_raw = request.POST.get('action_kwargs')
 
         return {
-            'action_name': action_name,
+            'action_name': request.resolver_match.kwargs.get('action'),
             'request': request,
             'contract': GlueProxyContract(**json.loads(raw_proxy_contract)),
             'action_kwargs': json.loads(action_kwargs_raw) if action_kwargs_raw else None,
@@ -97,10 +90,11 @@ class ActionRequest(BaseModel):
         return self.contract.actions[self.action_name].target_class
 
     def process(self) -> JsonResponse:
-        proxy_class: BaseGlueProxy = SUBJECT_TYPE_TO_PROXY_CLASS[
+        proxy_class: BaseGlueProxy = get_subject_type_to_proxy_class()[
             self.contract.namespace
         ]
 
-        return proxy_class.process_action_request(self).to_response()
+        result = proxy_class.process_action_request(self)
+        return result.to_response()
 
 

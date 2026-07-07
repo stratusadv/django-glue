@@ -16,7 +16,7 @@ class GlueModelInstanceProxy(BaseGlueModelProxy):
     @classmethod
     def _from_action_request(cls, action_request: ActionRequest) -> Self:
         contract_data = GlueModelInstanceProxyContractData(**action_request.contract.custom_data)
-        state_data = GlueFormProxyState(**action_request.contract.custom_data)
+        state_data = GlueFormProxyState(**action_request.state) if action_request.state else None
 
         return cls._from_deconstructed_action_request_data(
             name=action_request.contract.name,
@@ -25,7 +25,8 @@ class GlueModelInstanceProxy(BaseGlueModelProxy):
             form_class_path=contract_data.form_class_path,
             allowed_fields=contract_data.allowed_fields,
             instance_pk=contract_data.target_pk,
-            state=state_data
+            state=state_data,
+            request=action_request.request
         )
 
     @property

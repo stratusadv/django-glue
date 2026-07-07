@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.http import HttpRequest
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
 
 from django_glue.access.access import GlueAccess
+from django_glue.proxies.template.contract import GlueTemplateProxyContractData
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
 
 if TYPE_CHECKING:
     from django_glue.resolver.action.schemas import ActionRequest
@@ -16,57 +18,55 @@ if TYPE_CHECKING:
 
 class GlueTemplateProxy(BaseGlueProxy):
     _subject_type = str
-    _subject_type_name = 'Template'
 
     def __init__(
         self,
-        target: str,
-        definition_context_data: dict | None = None,
+        template_path: str,
+        initial_context_data: dict | None = None,
+        namespace: str = 'template',
         **kwargs,
     ) -> None:
-        super().__init__(subject=target, **kwargs)
+        super().__init__(namespace=namespace, **kwargs)
 
-        self.template_name = target
-        self._context_data = definition_context_data or {}
+        self.template_path = template_path
+        self.initial_context_data = initial_context_data or {}
 
     @classmethod
-    def from_action_request_data(
-        cls,
-        template_name: str,
-        definition_context_data: dict | None = None,
-        **kwargs
-    ) -> GlueTemplateProxy:
+    def from_action_request(cls, action_request: ActionRequest) -> GlueTemplateProxy:
+        contract_data = GlueTemplateProxyContractData(**action_request.contract.custom_data)
+
         return cls(
-            target=template_name,
-            definition_context_data=definition_context_data,
-            **kwargs,
+            name=action_request.contract.name,
+            access=action_request.contract.access,
+            template_path=contract_data.template_path,
+            initial_context_data=contract_data.initial_context_data
         )
 
+    @property
     def _custom_contract_data(self) -> dict:
         return {
-            'template_name': self.template_name,
-            'definition_context_data': self._context_data,
-            'subject_type': self._subject_type_name
+            'template_path': self.template_path,
+            'initial_context_data': self.template_path,
         }
 
     @action(access=GlueAccess.VIEW)
-    def render_html(self, request, action_kwargs: dict = None) -> dict:
+    def render_html(self, request: HttpRequest, **action_kwargs: dict) -> dict:
         action_kwargs = action_kwargs or {}
-        merged_context = {**self._context_data, **action_kwargs}
+        merged_context = {**self.initial_context_data, **action_kwargs}
 
         try:
             html = render_to_string(
-                template_name=self.template_name,
+                template_name=self.template_path,
                 context=merged_context
             )
         except TemplateDoesNotExist as e:
             raise GlueResolverError(
-                response_error=f'Template not found: {self.template_name}',
+                response_error=f'Template not found: {self.template_path}',
                 response_status=404,
             ) from e
         except TemplateSyntaxError as e:
             raise GlueResolverError(
-                response_error=f'Template syntax error in {self.template_name}: {e!s}',
+                response_error=f'Template syntax error in {self.template_path}: {e!s}',
                 response_status=500,
             ) from e
 

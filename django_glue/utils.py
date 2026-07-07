@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import pickle
+from collections import UserDict
 from typing import Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,7 +21,10 @@ def get_attr_from_path_string(class_path_string: str) -> Callable:
     import importlib  # noqa: PLC0415
 
     module = importlib.import_module(module_path)
-    return getattr(module, class_name)
+    try:
+        return getattr(module, class_name)
+    except AttributeError as e:
+        raise e
 
 
 def serialize_queryset(queryset: QuerySet) -> str:
@@ -46,3 +50,24 @@ def deserialize_queryset(encoded_query: str) -> QuerySet:
     queryset = query.model.objects.all()
     queryset.query = query
     return queryset
+
+
+class AppendOnlyDict(UserDict):
+    def __setitem__(self, key, value):
+        # This catch-all intercepts direct assignment, .update(), and __init__
+        if key in self.data:
+            raise KeyError(f"Cannot overwrite existing key: '{key}'")
+        super().__setitem__(key, value)
+
+    def __delitem__(self, key):
+        raise KeyError("Items cannot be removed from this dictionary")
+
+    # Group and block all deletion methods cleanly
+    def pop(self, key, default=None):
+        raise AttributeError("Deletion is disabled")
+        
+    def popitem(self):
+        raise AttributeError("Deletion is disabled")
+        
+    def clear(self):
+        raise AttributeError("Deletion is disabled")

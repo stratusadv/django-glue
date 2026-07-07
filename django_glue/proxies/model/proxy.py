@@ -9,23 +9,22 @@ from __future__ import annotations
 
 from abc import ABC
 from itertools import chain
-from typing import Self, Sequence, TypeVar, cast, TYPE_CHECKING
+from typing import Self, Sequence, cast, TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.db.models import Model
 from django.forms import model_to_dict, modelform_factory
-from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
 from django_glue.proxies.form.proxy import GlueFormProxy
-from django_glue.proxies.form.state import GlueFormProxyState
-from django_glue.proxies.model.contract import GlueModelProxyContractData
 from django_glue.utils import get_attr_from_path_string
 from django.forms.models import ModelForm
+from django_glue.proxies.form.state import GlueFormProxyState
 
-
-TModelContract = TypeVar('TModelContract', bound=GlueModelProxyContractData)
+if TYPE_CHECKING:
+    from django_glue.actions.action import GlueAction
+    from django.http import HttpRequest
 
 
 class BaseGlueModelProxy(GlueFormProxy, ABC):
@@ -37,9 +36,12 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
         fields: Sequence | dict = (),
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] | None = None,
+        form_instance: ModelForm | None = None,
+        namespace: str = 'model',
         **kwargs,
     ) -> None:
         self.model_instance = model_instance
+        self.namespace = namespace
 
         self.form_class_path = None
         if form_class:
@@ -48,24 +50,30 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
 
             self.form_class_path = f'{form_class.__module__}.{form_class.__name__}'
 
-        if not form_class:
-            if fields == ():
-                fields = [field.name for field in model_instance._meta.fields]
+        # Use provided form_instance, or create one
+        if form_instance is None:
+            if not form_class:
+                if fields == ():
+                    fields = [
+                        field.name for field in chain(
+                            model_instance._meta.fields,
+                            model_instance._meta.many_to_many
+                        ) if field.editable
+                    ]
 
-            form_class = modelform_factory(
-                self.model_instance.__class__,
-                fields=list(set(fields) - set(exclude)),
-            )
+                form_class = modelform_factory(
+                    self.model_instance.__class__,
+                    fields=list(set(fields) - set(exclude)),
+                )
 
-        form = form_class(instance=self.model_instance)
+            form_instance = form_class(instance=self.model_instance)
 
-        self._register_actions_for_class(self.model_instance.__class__)
-
-        super().__init__(form_instance=form, **kwargs)
+        super().__init__(form_instance=form_instance, namespace=namespace, **kwargs)
 
     @classmethod
     def _from_deconstructed_action_request_data(
         cls,
+        request: HttpRequest,
         name: str,
         access: str,
         model_class_path: str,
@@ -90,21 +98,21 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
                 fields=list(allowed_fields.keys()),
             )
 
-        model_instance = model_class()
-        if instance_pk:
-            model_instance = model_class.objects.get(pk=instance_pk)
+        model_instance = model_class.objects.get(pk=instance_pk) if instance_pk else model_class()
 
-            if state:
-                form = form_class(
-                    initial=state.instance_data,
-                    instance=model_instance,
-                    files=state.files
-                )
-            else:
-                form = form_class(instance=model_instance)
-
+        if request.FILES:
+            # We know we need the form bound here.
+            form = form_class(
+                data=state.instance_data if state else None,
+                instance=model_instance,
+                files=request.FILES or None
+            )
         else:
-            form = form_class()
+            form = form_class(
+                initial=state.instance_data if state else None,
+                instance=model_instance,
+                files=request.FILES or None
+            )
 
         return cls(
             model_instance=model_instance,
@@ -119,7 +127,7 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
         model_class = self.model_instance.__class__
 
         contract_data = {
-            'fields': self._field_metadata,
+            'allowed_fields': self._field_metadata,
             'model_class_path': f'{model_class.__module__}.{model_class.__name__}',
             'pk_field_name': self.model_instance.__class__._meta.pk.name,
         }
@@ -131,6 +139,15 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
 
         return contract_data
 
+    def get_state(self) -> GlueFormProxyState:
+        return GlueFormProxyState(
+            instance_data=model_to_dict(
+                instance=self.model_instance,
+                fields=list(self._field_metadata.keys())
+            ),
+            errors=self.form_instance.errors,
+        )
+
     def _set_m2m_fields(self, field_data: dict) -> None:
         model_instance = self.model_instance
         model_meta = model_instance._meta
@@ -140,6 +157,15 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
                 continue
             if field.name in field_data:
                 field.save_form_data(model_instance, field_data[field.name])
+
+    def _get_action_target(
+        self,
+        action: GlueAction,
+    ) -> Any:
+        if issubclass(self.model_instance.__class__, action.target_class):
+            return self.model_instance
+
+        return super()._get_action_target(action)
 
     @action(access=GlueAccess.VIEW)
     def get(self, request: HttpRequest) -> dict:
@@ -155,4 +181,5 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
     @transaction.atomic
     @action(access=GlueAccess.CHANGE)
     def save(self, request: HttpRequest) -> None:
-        cast('ModelForm', self.form_instance).save()
+        if not self.errors:
+            cast('ModelForm', self.form_instance).save()

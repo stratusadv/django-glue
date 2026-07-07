@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 
-from pydantic import BaseModel, field_validator
-from django.core import signing
+from pydantic import BaseModel, model_validator
+from django.conf import settings
 
-from typing import TYPE_CHECKING
+from typing import Self, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from django_glue.actions import GlueAction
     from django_glue.access.access import GlueAccess
+    from django_glue.actions.action import GlueAction
 
 
 class GlueProxyContract(BaseModel):
@@ -18,25 +20,29 @@ class GlueProxyContract(BaseModel):
     actions: dict[str, GlueAction]
     namespace: str
     access: GlueAccess
+    subject_type: str
     original_signature: str
     custom_data: dict
 
     @classmethod
     def initialize(cls, data: dict) -> GlueProxyContract:
-        return cls.model_validate(**{
-            'original_signature': cls._sign_data(data),
-            **data
-        })
+        signature = cls._sign_data(data)
+        return cls.model_validate({**data, 'original_signature': signature})
 
     @staticmethod
     def _sign_data(data: dict) -> str:
-        return signing.dumps(json.dumps(data, sort_keys=True).encode('utf-8'))
+        data_str = json.dumps(data, default=str, sort_keys=True)
+        secret_key = settings.SECRET_KEY.encode()
+        return hmac.new(secret_key, data_str.encode(), hashlib.sha256).hexdigest()
 
     @property
     def computed_signature(self) -> str:
-        return self._sign_data(self.model_dump(exclude={'original_signature'}))
+        return self._sign_data(self.model_dump(exclude={'original_signature'}, exclude_none=True))
 
-    @field_validator('original_signature', mode='after')
-    def validate_original_signature(self, value: str) -> bool:
-        return self.computed_signature == value
+    @model_validator(mode='after')
+    def validate_original_signature(self) -> Self:
+        if self.computed_signature != self.original_signature:
+            raise ValueError('Contract original signature does not match its computed signature! The data may have been tampered with!')
+
+        return self
 

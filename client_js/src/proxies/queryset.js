@@ -8,16 +8,8 @@ import GlueClient from "../client";
  * a full {@link GlueModelProxy}.
  */
 class GlueQuerySetProxy extends BaseGlueProxy {
-    /** @type {string} */
-    static name = 'querySet'
-
     /** @type {GlueModelProxy[]} */
     _items = [];
-    /** @type {boolean} */
-    _loaded = false;
-    /** @type {boolean} */
-    _loading = false;
-
     /** @type {Object} */
     _queryParams = {}
     /** @type {Object} */
@@ -26,11 +18,14 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.proxyDefinition - Serialized proxy metadata from the server.
+     * @param {string} options.name - The unique name of this proxy in the session.
+     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
+     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
+     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor(options) {
-        super(options);
+    constructor({http, name, contract, state, actions = null, namespace = 'queryset'}) {
+        super({http, name, contract, state, actions, namespace});
     }
 
     /**
@@ -48,20 +43,28 @@ class GlueQuerySetProxy extends BaseGlueProxy {
      * @returns {GlueModelProxy} The child proxy.
      */
     buildChildModelProxy(item) {
+        // Access pk_field_name directly from contract to avoid timing issues
+        // with parent constructor calling _handleStateUpdate before child sets _pkFieldName
+        const pkFieldName = this._contract.custom_data.pk_field_name || 'id'
         const proxy = new GlueModelProxy({
             http: this.http,
-            proxyUniqueName: this._uniqueName,
-            proxyDefinition: GlueClient.proxyDefinitions[this._uniqueName],
-            values: {...item},
-            parentQuerySet: this
+            name: this._name,
+            contract: this._contract,
+            state: {
+                instance_pk: item[pkFieldName],
+                instance_data: item,
+                errors: {},
+                files: {}
+            },
+            parentQuerySet: this,
         })
 
         // Forward child proxy events to the queryset's listeners
-        const querysetProxy = this;
+        const querySetProxy = this;
         Object.keys(proxy._actions).forEach(actionName => {
             ['before', 'after', 'error'].forEach(type => {
                 proxy.addListener(actionName, (event) => {
-                    querysetProxy.emitListeners(type, actionName, event);
+                    querySetProxy.emitListeners(type, actionName, event);
                 }, type);
             });
         });
@@ -81,12 +84,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         }
 
         if (!this._loaded || !this._isEqual(this._prevQueryParams, this._queryParams)) {
-            this._loading = true;
-            const data = await this._processAction('query_with_params', this._queryParams);
-            this._items = data.map(item => this.buildChildModelProxy(item))
+            await this._processAction('GlueQuerySetProxy.query_with_params', this._queryParams);
             this._prevQueryParams = this._queryParams
             this._loaded = true;
-            this._loading = false;
         }
 
         return this._items
@@ -231,26 +231,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this._items
     }
 
-    /**
-     * Bulk save data to the server, then refresh the queryset.
-     * @param {Object} data - The data to save.
-     * @returns {Promise<Object>} Save result.
-     */
-    async save(data) {
-        const result = await this._processAction('save', data);
-        await this.refresh();
-        return result;
-    }
-
-    /**
-     * Bulk delete items matching the given parameters, then refresh the queryset.
-     * @param {Object} params - Delete conditions.
-     * @returns {Promise<Object>} Delete result.
-     */
-    async delete(params) {
-        const result = await this._processAction('delete', params);
-        await this.refresh();
-        return result;
+    _handleActionResponse(actionName, actionKwargs, response) {
+        if (this._state?.list_data) {
+            this._items = this._state.list_data.map(item => this.buildChildModelProxy(item))
+        }
     }
 }
 

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_CLASS
+from django_glue.maps import get_subject_type_to_proxy_class
 
 
 class GlueMapsSyncTestCase(TestCase):
@@ -19,10 +19,10 @@ class GlueMapsSyncTestCase(TestCase):
 
     def test_python_and_js_subject_type_keys_match(self):
         """The keys in maps.py and index.js must be identical."""
-        # Extract keys from JS: look for string literals as keys in SUBJECT_TYPE_TO_PROXY_CLASS
+        # Extract keys from JS: look for string literals as keys in get_subject_type_to_proxy_class()
         js_keys = set(re.findall(r"'(\w+)':\s*\w+", self.js_content))
 
-        py_keys = set(SUBJECT_TYPE_TO_PROXY_CLASS.keys())
+        py_keys = set(get_subject_type_to_proxy_class().keys())
 
         missing_in_js = py_keys - js_keys
         missing_in_py = js_keys - py_keys
@@ -38,4 +38,4 @@ class GlueMapsSyncTestCase(TestCase):
     def test_python_subject_type_keys_expected(self):
         """Verify the expected set of keys is present."""
         expected = {"Model", "QuerySet", "BaseForm", "Template", "Function"}
-        self.assertEqual(set(SUBJECT_TYPE_TO_PROXY_CLASS.keys()), expected)
+        self.assertEqual(set(get_subject_type_to_proxy_class().keys()), expected)

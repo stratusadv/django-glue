@@ -16,12 +16,14 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.actions import GlueAction
+from django_glue.actions.decorators import GLUE_ACTIONS
+from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.proxies.contract import GlueProxyContract
 from django_glue.exceptions import GlueAccessError
 from django_glue.response import ActionResult
 
 if TYPE_CHECKING:
+    from django_glue.actions.action import GlueAction
     from django_glue.resolver.action.schemas import ActionRequest
 
 
@@ -57,7 +59,6 @@ class BaseGlueProxy(ABC, Generic[TContract]):
     """
 
     _subject_type: type
-    _actions: dict[str, GlueAction] = {}
 
     def __init__(
         self,
@@ -68,8 +69,6 @@ class BaseGlueProxy(ABC, Generic[TContract]):
         self.name = name
         self.namespace = namespace
         self.access = access
-        self.access = access
-        self._register_actions_for_class(target_class=self.__class__)
 
     # TODO: Override this to define how the proxy subject
     # is constructed from the action_request object
@@ -78,48 +77,8 @@ class BaseGlueProxy(ABC, Generic[TContract]):
         raise NotImplementedError
 
     @classmethod
-    def _register_actions_for_class(
-        cls,
-        target_class: type,
-    ) -> None:
-        # First pass: collect all decorated action names and their access levels from the MRO
-        # This allows child classes to inherit @action decoration from parent classes
-        decorated_actions = {}
-        for klass in reversed(target_class.__mro__):
-            if klass is object:
-                continue
-            for attr_name, attr_value in klass.__dict__.items():
-                if hasattr(attr_value, '_required_glue_access'):
-                    decorated_actions[attr_name] = attr_value._required_glue_access
-
-        # Second pass: register the actual implementation (may be overridden in child class)
-        # using the access level from the decorated parent
-        for attr_name, required_access in decorated_actions.items():
-            # Get the actual method implementation (resolves to child's override if exists)
-            actual_method = getattr(target_class, attr_name)
-
-            parameters = inspect.signature(actual_method).parameters
-            parameter_data: dict[str, str | None] = {}
-
-            for param_name, param_value in list(parameters.items())[2:]:
-                # Convert annotation to string for JSON serialization
-                annotation = param_value.annotation
-                if annotation is inspect.Parameter.empty:
-                    parameter_data[param_name] = None
-                elif isinstance(annotation, type):
-                    parameter_data[param_name] = annotation.__name__
-                else:
-                    parameter_data[param_name] = str(annotation)
-
-            cls._actions[attr_name] = GlueAction(
-                name=attr_name,
-                parameters=parameter_data,
-                required_access=required_access,
-                target_class_path=f'{target_class.__module__}.{target_class.__name__}'
-            )
-
-    @classmethod
     def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
         is_abstract = inspect.isabstract(cls)
         if not hasattr(cls, '_subject_type') and not is_abstract:
             msg = (
@@ -128,14 +87,20 @@ class BaseGlueProxy(ABC, Generic[TContract]):
             )
             raise TypeError(msg)
 
-    def _get_external_target_for_action_request(
-        self,
-        action_request: ActionRequest
-    ) -> tuple[GlueAction, Any]:
+    @property
+    def primary_subject(self) -> Any:
         raise NotImplementedError
 
-    @property
-    def state(self) -> BaseModel | None:
+    def _get_action_target(
+        self,
+        action: GlueAction,
+    ) -> Any:
+        if issubclass(action.target_class, self.__class__):
+            return self
+
+        return None
+
+    def get_state(self) -> BaseModel | None:
         return None
 
     @property
@@ -144,25 +109,29 @@ class BaseGlueProxy(ABC, Generic[TContract]):
 
     @property
     def _action_contract_data(self) -> dict:
-        return {
-            action_name: action.model_dump()
-            for action_name, action in self._actions.items()
+        action_data = {
+            action_name: action.model_dump(exclude={'provider_factory'}, exclude_none=True)
+            for action_name, action in GLUE_ACTIONS.items()
+            if self._get_action_target(action) is not None
         }
 
+        return action_data
+
     def register_with_request(self, request: HttpRequest) -> None:
-        request_proxy_contracts = request.__dict__['__glue_proxy_contracts__']
+        if DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY not in request.__dict__:
+            request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY] = {}
 
-        if not request_proxy_contracts:
-            request_proxy_contracts = {}
-
-        request_proxy_contracts[self] = GlueProxyContract.initialize({
-            'name': self.name,
-            'namespace': self.namespace,
-            'access': self.access,
-            'subject_type': self._subject_type.__name__,
-            'actions': self._action_contract_data,
-            'custom_data': self._custom_contract_data
-        }).model_dump()
+        request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY][self.name] = {
+            'state': {},
+            'contract': GlueProxyContract.initialize({
+                'name': self.name,
+                'namespace': self.namespace,
+                'access': self.access,
+                'subject_type': self._subject_type.__name__,
+                'actions': self._action_contract_data,
+                'custom_data': self._custom_contract_data
+            }).model_dump(),
+        }
 
     def _build_action_kwargs(
         self,
@@ -173,7 +142,7 @@ class BaseGlueProxy(ABC, Generic[TContract]):
         sig = inspect.signature(unwrapped_func)
 
         # Safely resolve string annotations (e.g., from __future__ import annotations)
-        type_hints = get_type_hints(unwrapped_func)
+        type_hints = get_type_hints(unwrapped_func, globalns={'HttpRequest': HttpRequest})
 
         kwargs = {}
         action_kwargs = action_request.action_kwargs or {}
@@ -215,18 +184,7 @@ class BaseGlueProxy(ABC, Generic[TContract]):
     ) -> ActionResult:
         instance = cls._from_action_request(action_request=action_request)
 
-        action = cls._actions[action_request.action_name]
-
-        if issubclass(action.target_class, cls):
-            # the action targets the proxy instance itself
-            action_target = instance
-        else:
-            # the action targets something external (e.g. a model class, queryset class)
-            # subclasses with override the below method to define custom logic for building
-            # externally typed targets
-            action_target = instance._get_external_target_for_action_request(
-                action_request=action_request
-            )
+        action: GlueAction = GLUE_ACTIONS[action_request.action_name]
 
         if not instance.access.has_access(action.required_access):
             raise GlueAccessError(
@@ -234,6 +192,15 @@ class BaseGlueProxy(ABC, Generic[TContract]):
                 required_access=action.required_access,
                 current_access=instance.access
             )
+
+        action_target = instance._get_action_target(action)
+        if not action_target:
+            raise ValueError(f'No valid action target was found for {action.target_class.__class__.__name__}')
+
+        # If action has a provider factory, that means the target must be updated to be an instance
+        # the action provider constructed using the original action target.
+        if action.provider_factory is not None:
+            action_target = action.provider_factory(action_target)
 
         action_callable = action.callable
 
@@ -245,6 +212,6 @@ class BaseGlueProxy(ABC, Generic[TContract]):
         action_result_data = action_callable(action_target, **action_kwargs)
 
         return ActionResult(
-            proxy_state=instance.state,
+            state=instance.get_state(), # send fresh, updated state after the action was run
             payload=action_result_data,
         )

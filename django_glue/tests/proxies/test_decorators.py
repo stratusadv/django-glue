@@ -4,7 +4,7 @@ Tests for Django Glue @action decorator.
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 

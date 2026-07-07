@@ -6,7 +6,7 @@ from django.forms.models import ModelForm, ModelFormMetaclass
 from django.forms.forms import DeclarativeFieldsMetaclass
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
 from django_glue.response import ActionResult
 
 

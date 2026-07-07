@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self, cast
+from typing import TYPE_CHECKING, Self, cast, Any
 
 from django.db.models import QuerySet, Model
 from django.http import HttpRequest
@@ -10,17 +10,19 @@ from django.forms.models import ModelForm
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelInstanceProxy
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action, action_provider
 from django_glue.proxies.model.proxy import BaseGlueModelProxy
 from django_glue.proxies.queryset.contract import GlueQuerySetProxyContractData
 from django_glue.proxies.queryset.state import GlueQuerySetProxyState
-from django_glue.utils import deserialize_queryset, get_attr_from_path_string, serialize_queryset
+from django_glue.utils import deserialize_queryset, serialize_queryset
 
 if TYPE_CHECKING:
+    from django_glue.actions.action import GlueAction
     from django_glue.resolver.action.schemas import ActionRequest
 
 
 _slice = slice
+
 
 class GlueQuerySetProxy(BaseGlueModelProxy):
     _subject_type = QuerySet
@@ -29,22 +31,23 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
         self,
         queryset: QuerySet,
         instance_pk: int | str | None = None,
+        model_instance: Model | None = None,
+        namespace: str = 'querySet',
         **kwargs
     ) -> None:
         self.queryset = queryset
+        model_class = cast('type[Model]', queryset.model)
 
-        model_class = cast('type[Model]' ,queryset.model)
-        model_instance = model_class.objects.filter(pk=instance_pk).first() or model_class()
-
-        self._register_actions_for_class(queryset.__class__)
+        if not model_instance:
+            model_instance = model_class.objects.filter(pk=instance_pk).first() or model_class()
 
         self.queryset = queryset
-        super().__init__(model_instance=model_instance, **kwargs)
+        super().__init__(model_instance=model_instance, namespace=namespace, **kwargs)
 
     @classmethod
     def _from_action_request(cls, action_request: ActionRequest) -> Self:
         contract_data = GlueQuerySetProxyContractData(**action_request.contract.custom_data)
-        state_data = GlueQuerySetProxyState(**action_request.contract.custom_data)
+        state_data = GlueQuerySetProxyState.model_validate(action_request.state)
 
         return cls._from_deconstructed_action_request_data(
             name=action_request.contract.name,
@@ -54,13 +57,14 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
             allowed_fields=contract_data.allowed_fields,
             instance_pk=state_data.instance_pk,
             state=state_data,
-            queryset=deserialize_queryset(contract_data.encoded_queryset)
+            queryset=deserialize_queryset(contract_data.encoded_queryset),
+            request=action_request.request
         )
 
     @property
     def _custom_contract_data(self) -> dict:
         return {
-            'encoded_query': serialize_queryset(self.queryset)
+            'encoded_queryset': serialize_queryset(self.queryset)
         } | super()._custom_contract_data
 
     @cached_property
@@ -94,7 +98,7 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
     @cached_property
     def _field_args_for_values_query(self) -> set[str]:
         model_class = self.model_instance.__class__
-        fields = []
+        fields = [model_class._meta.pk.name] # Force the pk to be included
         for field_name in self._non_m2m_field_names:
             if field_name in self._select_related_field_names:
                 # Expand each field in the related model using dunder notation
@@ -134,12 +138,10 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
                     item[m2m_name] = list(
                         getattr(instance, m2m_name).values_list('pk', flat=True))
 
-    @property
-    def state(self) -> GlueQuerySetProxyState:
+    def get_state(self) -> GlueQuerySetProxyState:
         return GlueQuerySetProxyState(
             instance_data=self.form_instance.data,
             errors=self.form_instance.errors,
-            files=self.form_instance.files,
             instance_pk=self.model_instance.pk,
             list_data=self._output_data
         )
@@ -199,6 +201,15 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
                 )
             ]
 
+    def _get_action_target(
+        self,
+        action: GlueAction,
+    ) -> Any:
+        if issubclass(self.queryset.__class__, action.target_class):
+            return self.queryset
+
+        return super()._get_action_target(action)
+
     def _get_model_instance_by_pk(self, pk: int | str) -> Model:
         """
         Retrieves a model instance by primary key from the queryset.
@@ -211,17 +222,15 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
             raise GlueModelInstanceNotFoundError(model_name=self.queryset.model.__name__, pk=pk)
 
     def _create_model_proxy_from_instance(self) -> GlueModelInstanceProxy:
-        if self.form_class_path:
-            form_class = cast('type[ModelForm]', get_attr_from_path_string(self.form_class_path))
-        else:
-            form_class = None
+        form = cast('ModelForm', self.form_instance)
 
         return GlueModelInstanceProxy(
             model_instance=self.model_instance,
+            form_instance=form,
             name=self.name,
             access=self.access,
             fields=list(self._field_metadata.keys()),
-            form_class=form_class,
+            form_class=form.__class__,
         )
 
     @action(access=GlueAccess.CHANGE)
@@ -230,7 +239,7 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
 
     @action(access=GlueAccess.DELETE)
     def delete(self, request: HttpRequest) -> None:
-        return self._create_model_proxy_from_instance().save(request)
+        self._create_model_proxy_from_instance().delete(request)
 
     @action(access=GlueAccess.VIEW)
     def get(self, request: HttpRequest) -> dict:

@@ -2,7 +2,6 @@ from django import template
 from django_glue.conf import settings
 
 from django_glue import constants
-from django_glue.session import GlueSession
 
 register = template.Library()
 
@@ -21,15 +20,14 @@ def django_glue_init(context: dict) -> dict:
         context[constants.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS_KEY] = (
             settings.DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS
         )
-        context[constants.DJANGO_GLUE_SESSION_PROXY_REGISTRY_KEY] = GlueSession(
-            request
-        ).proxy_registry
-        context[constants.DJANGO_GLUE_PROXIES_PROXY_DEFINITIONS_KEY] = {}
-        context[constants.DJANGO_SESSION_EXPIRY_MESSAGE_KEY] = (
-            settings.DJANGO_GLUE_SESSION_EXPIRY_MESSAGE
-        )
+        context[constants.DJANGO_GLUE_PROXIES_SCRIPT_NAME_KEY] = constants.DJANGO_GLUE_PROXIES_SCRIPT_NAME
 
-        if hasattr(request, '__glue_proxy_definitions__'):
-            context[constants.DJANGO_GLUE_PROXIES_PROXY_DEFINITIONS_KEY] = request.__glue_proxy_definitions__
+        context[constants.DJANGO_GLUE_PROXIES_KEY] = {}
+
+        if hasattr(request, constants.DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY):
+            context[constants.DJANGO_GLUE_PROXIES_KEY] = getattr(
+                request,
+                constants.DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+            )
 
     return context

@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from abc import ABC
-from typing import Self, cast
+from typing import Any, Self, cast, TYPE_CHECKING
 
 from django.forms.forms import BaseForm
-from django.http import HttpRequest
-
+from django.forms import ModelForm
+from django.db import transaction
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.decorators import action
+from django_glue.actions.decorators import action
 from django_glue.proxies.form.contract import GlueFormProxyContractData
 from django_glue.proxies.form.state import GlueFormProxyState
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.resolver.action.schemas import ActionRequest
 from django_glue.utils import get_attr_from_path_string
+
+if TYPE_CHECKING:
+    from django_glue.resolver.action.schemas import ActionRequest
+    from django.http import HttpRequest
+    from django_glue.actions.action import GlueAction
 
 
 class GlueFormProxy(BaseGlueProxy):
@@ -27,6 +30,8 @@ class GlueFormProxy(BaseGlueProxy):
     - Response proxy_state with form errors
     """
 
+    _subject_type = BaseForm
+
     def __init__(
             self,
             form_instance: BaseForm,
@@ -35,10 +40,10 @@ class GlueFormProxy(BaseGlueProxy):
         ) -> None:
         self.form_instance = form_instance
 
-        form_class = self.form_instance.__class__
-        self.form_class_path = f'{form_class.__module__}.{form_class.__name__}'
-
-        self._register_actions_for_class(target_class=self.form_instance.__class__)
+        # Only set form_class_path if not already set by a subclass
+        if not hasattr(self, 'form_class_path'):
+            form_class = self.form_instance.__class__
+            self.form_class_path = f'{form_class.__module__}.{form_class.__name__}'
 
         super().__init__(
             **kwargs,
@@ -60,9 +65,9 @@ class GlueFormProxy(BaseGlueProxy):
 
         if action_request.state:
             state_data = GlueFormProxyState.model_validate(action_request.state)
-            form = form_class(initial=state_data.instance_data, files=state_data.files)
+            form = form_class(initial=state_data.instance_data, files=action_request.request.FILES)
         else:
-            form = form_class()
+            form = form_class(files=action_request.request.FILES)
 
         return cls(
             name=action_request.contract.name,
@@ -70,6 +75,14 @@ class GlueFormProxy(BaseGlueProxy):
             form_instance=form
         )
 
+    def _get_action_target(
+        self,
+        action: GlueAction,
+    ) -> Any:
+        if issubclass(self.form_instance.__class__, action.target_class):
+            return self.form_instance
+
+        return super()._get_action_target(action)
 
     @property
     def _field_metadata(self) -> dict:
@@ -90,7 +103,11 @@ class GlueFormProxy(BaseGlueProxy):
             }
 
             if hasattr(field, 'choices') and field.choices:
-                field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
+                if field.__class__.__name__ not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
+                    field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
+                else:
+                    field_def['choices'] = []
+
             if hasattr(field, 'max_length') and field.max_length:
                 field_def['max_length'] = field.max_length
             if hasattr(field, 'min_length') and field.min_length:
@@ -101,24 +118,35 @@ class GlueFormProxy(BaseGlueProxy):
 
     @property
     def _custom_contract_data(self) -> dict:
-        form_class = self.form_instance.__class__
-
         return {
-            'fields': self._field_metadata,
-            'form_class_path': f'{form_class.__module__}.{form_class.__name__}',
+            'allowed_fields': self._field_metadata,
+            'form_class_path': self.form_class_path,
         }
 
-    @property
-    def state(self) -> GlueFormProxyState:
+    def get_state(self) -> GlueFormProxyState:
         return GlueFormProxyState(
-            instance_data=self.form_instance.data,
+            instance_data=self.form_instance.data or self.form_instance.initial,
             errors=self.form_instance.errors,
-            files=self.form_instance.files
         )
+
+    def _bind_form(self) -> None:
+        if not self.form_instance.is_bound:
+            form_class = self.form_instance.__class__
+
+            form_kwargs = {
+                'data': self.form_instance.initial,
+                'files': self.form_instance.files
+            }
+
+            if issubclass(form_class, ModelForm):
+                form_kwargs['instance'] = getattr(self.form_instance, 'instance', None)
+
+            self.form_instance = form_class(**form_kwargs)
 
     @property
     def errors(self) -> dict:
         """Convert Django ErrorDict to JSON-serializable dict."""
+        self._bind_form()
         self.form_instance.is_valid()
         return self.form_instance.errors
 
@@ -141,5 +169,14 @@ class GlueFormProxy(BaseGlueProxy):
         if field.__class__.__name__ not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
             return []
 
-
         return [[obj.pk, f'{obj}'] for obj in field.queryset.all()]
+
+    @action(access=GlueAccess.VIEW)
+    def load(self, request: HttpRequest) -> None:
+        pass
+
+    @transaction.atomic
+    @action(access=GlueAccess.CHANGE)
+    def save(self, request: HttpRequest) -> None:
+        if not self.errors:
+            cast('ModelForm', self.form_instance).save()

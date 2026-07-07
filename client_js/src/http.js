@@ -137,25 +137,26 @@ class GlueHttp {
      * @param {Object} [options.state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
      * @returns {Promise<Object>} Response object.
      */
-    async sendProxyActionRequest({uniqueName, action, actionKwargs = null, contract, state = null}) {
-        const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
+    async sendActionRequest({name, action, actionKwargs = null, contract, state = null}) {
+        const url = `${this._config.actionUrlPath}${name}/${action}/`
 
         const formData = new FormData()
-        formData.append('proxy_definition', JSON.stringify(contract))
+        formData.append('contract', JSON.stringify(contract))
 
         if (state) {
             // Extract files from state and append them separately
             const {files, data} = this._extractFiles(state)
-            formData.append('proxy_state', JSON.stringify(data))
+            formData.append('state', JSON.stringify(data))
 
-            // Append files directly to FormData
+            // Append files directly to FormData, stripping 'instance_data.' prefix
             Object.entries(files).forEach(([key, value]) => {
+                const fieldKey = key.replace('instance_data.', '', 1);
                 if (value instanceof FileList) {
-                    Array.from(value).forEach(file => formData.append(key, file))
+                    Array.from(value).forEach(file => formData.append(fieldKey, file))
                 } else if (Array.isArray(value)) {
-                    value.forEach(file => formData.append(key, file))
+                    value.forEach(file => formData.append(fieldKey, file))
                 } else {
-                    formData.append(key, value)
+                    formData.append(fieldKey, value)
                 }
             })
         }

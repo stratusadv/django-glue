@@ -7,16 +7,15 @@ import {isObject} from "../utils";
  * parameter names.
  */
 class GlueFunctionProxy extends BaseGlueProxy {
-    static name = 'function';
-
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contract - Serialized proxy metadata from the server.
+     * @param {string} options.name - The unique name of this proxy in the session.
+     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, proxyUniqueName, contract}) {
-        super({http, proxyUniqueName, contract});
+    constructor({http, name, contract, namespace = 'function'}) {
+        super({http, name, contract, namespace});
 
         /** @type {Array<Object>} */
         this._params = contract.params || [];
@@ -27,7 +26,7 @@ class GlueFunctionProxy extends BaseGlueProxy {
      * Fields inside the single object parameter for the function arguments are mapped to the function's parameter names.
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
+     * @param {string} options.name - The unique name of this proxy.
      * @param {Object} options.contract - Serialized proxy metadata from the server.
      * @returns {Function} A callable that invokes the server-side function.
      */
