@@ -85,7 +85,7 @@ django-glue/
 │   │   ├── view.js                   # GlueView - server-side HTML rendering
     │   │   └── proxies/
     │   │       ├── index.js              # SUBJECT_TYPE_TO_PROXY_CLASS, window globals
-    │   │       ├── base.js               # BaseGlueProxy - listeners, _processAction
+    │   │       ├── base.js               # BaseGlueProxy - listeners, _processAttributeEvent
     │   │       ├── form.js               # GlueFormProxy - field accessors, validation
     │   │       ├── model.js              # GlueModelProxy - get, delete, _isNew
     │   │       ├── queryset.js           # GlueQuerySetProxy - filter, child proxies
@@ -406,7 +406,7 @@ await view.renderInnerHtml('#target-element', { param: 'value' })
 | `django_glue/urls.py` | URL configuration (namespace: `__dg__`) |
 | `client_js/src/client.js` | GlueClient singleton - init, keep-alive, proxy creation |
 | `client_js/src/http.js` | GlueHttp - fetch wrapper, CSRF, timeout, action requests |
-| `client_js/src/proxies/base.js` | BaseGlueProxy - listener system, _processAction |
+| `client_js/src/proxies/base.js` | BaseGlueProxy - listener system, _processAttributeEvent |
 | `client_js/src/proxies/model.js` | GlueModelProxy - field accessors, get, delete |
 | `client_js/src/proxies/queryset.js` | GlueQuerySetProxy - filter, child proxy creation |
 | `client_js/src/proxies/form.js` | GlueFormProxy - field definitions, validation, FormData |

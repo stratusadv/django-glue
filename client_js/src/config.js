@@ -6,7 +6,7 @@
  *     requestTimeoutSeconds: 30,
  *     sessionExpiryMessage: 'Session expired.',
  *     keepLiveIntervalSeconds: 600,
- *     actionUrlPath: '/__dg__/action/',
+ *     attributeEventUrlPath: '/__dg__/bound_attribute_event/',
  *     keepLiveUrlPath: '/__dg__/keep_live/',
  *     glueViewUrlPath: '/__dg__/glue_view/',
  *   });
@@ -17,7 +17,7 @@ class GlueConfig {
      * @param {number} [options.requestTimeoutSeconds=30] - Timeout for HTTP requests in seconds.
      * @param {string} [options.sessionExpiryMessage] - Message shown when session expires.
      * @param {number} [options.keepLiveIntervalSeconds=600] - Keep-alive polling interval in seconds.
-     * @param {string} [options.actionUrlPath] - URL path for action requests.
+     * @param {string} [options.attributeEventUrlPath] - URL path for bound attribute event requests.
      * @param {string} [options.keepLiveUrlPath] - URL path for keep-alive requests.
      * @param {string} [options.glueViewUrlPath] - URL path for glue view requests.
      */
@@ -26,7 +26,7 @@ class GlueConfig {
             requestTimeoutSeconds = 30,
             sessionExpiryMessage = 'Session expired. Do you want to reload the page?',
             keepLiveIntervalSeconds = 600,
-            actionUrlPath,
+            attributeEventUrlPath,
             keepLiveUrlPath,
             glueViewUrlPath,
         }
@@ -38,7 +38,7 @@ class GlueConfig {
         /** @type {number} */
         this.keepLiveIntervalSeconds = keepLiveIntervalSeconds
         /** @type {string} */
-        this.actionUrlPath = actionUrlPath
+        this.attributeEventUrlPath = attributeEventUrlPath
         /** @type {string} */
         this.keepLiveUrlPath = keepLiveUrlPath
         /** @type {string} */

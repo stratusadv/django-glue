@@ -23,8 +23,8 @@
     gorilla: Glue.model.gorilla,
     init() {
         this.gorilla.addListener('save', event => {
-            if (event.result.errors) {
-                $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
+            if (event.proxy.hasErrors()) {
+                $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
             }
             else {
                 $store.notifications.success('Fighter saved successfully!');
@@ -36,6 +36,16 @@
         this.gorilla.addListener('delete', () => {
             $store.notifications.error('Failed to delete fighter.');
         }, 'error');
+    },
+    errorSummary(proxy) {
+        const errors = proxy._state?.errors || {};
+        const messages = Object.entries(errors)
+            .map(([field, fieldErrors]) => {
+                const label = proxy.$fields?.[field]?.label || field;
+                const text = Array.isArray(fieldErrors) ? fieldErrors.join(', ') : fieldErrors;
+                return `${label}: ${text}`;
+            });
+        return messages.length ? messages.join(' ') : 'Check form for errors.';
     }
 }">
     <div class="row justify-content-center">

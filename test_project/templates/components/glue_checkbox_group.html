@@ -4,24 +4,24 @@
     {% include 'components/glue_label.html' %}
     <div class="border rounded p-3{% if input_class %} {{ input_class }}{% endif %}" {% if max_height %}style="max-height: {{ max_height }}; overflow-y: auto;"{% endif %}>
         <div class="row">
-            <template x-for="choice in {{ glue_field }}?.choices || []" :key="choice[0]">
+            <template x-for="choice in {{ glue_field }}?.choices || []" :key="choice.pk ?? choice[0]">
                 <div class="col-md-{{ columns|default:'4' }} col-lg-{{ columns|default:'4' }}">
                     <div class="form-check">
                         <input
                             type="checkbox"
                             class="form-check-input"
-                            :id="'{{ field }}-' + choice[0]"
-                            :value="choice[0]"
-                            :checked="{{ glue_field }}.value && {{ glue_field }}.includes(choice[0])"
+                            :id="'{{ field }}-' + (choice.pk ?? choice[0])"
+                            :value="choice.pk ?? choice[0]"
+                            :checked="{{ glue_field }}.value && {{ glue_field }}.includes(choice.pk ?? choice[0])"
                             @change="
                                 if ($event.target.checked) {
-                                    {{ glue_field }}.value = [...({{ glue_field }}.value || []), choice[0]];
+                                    {{ glue_field }}.value = [...({{ glue_field }}.value || []), choice.pk ?? choice[0]];
                                 } else {
-                                    {{ glue_field }}.value = ({{ glue_field }}.value || []).filter(v => v !== choice[0]);
+                                    {{ glue_field }}.value = ({{ glue_field }}.value || []).filter(v => v !== (choice.pk ?? choice[0]));
                                 }
                             "
                             :disabled="{{ glue_field }}?.disabled">
-                        <label class="form-check-label" :for="'{{ field }}-' + choice[0]" x-text="choice[1]"></label>
+                        <label class="form-check-label" :for="'{{ field }}-' + (choice.pk ?? choice[0])" x-text="choice.__str__ ?? choice[1]"></label>
                     </div>
                 </div>
             </template>

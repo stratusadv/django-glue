@@ -1,6 +1,6 @@
 /**
  * Base proxy class. Provides the listener/event system and the core
- * action invocation mechanism that all proxy types use to invoke server-side actions.
+ * bound attribute event mechanism that all proxy types use to invoke server-side attributes.
  */
 class BaseGlueProxy {
     /** @type {boolean} */
@@ -8,16 +8,16 @@ class BaseGlueProxy {
     /** @type {boolean} */
     _loading = false;
 
-    /**
-     * @param {Object} options - Constructor options.
-     * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.name - The unique name of this proxy in the session.
-     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
-     * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
-     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
-     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
-     */
-    constructor({http, name, contract, state = null, actions = null, namespace = 'base'}) {
+     /**
+      * @param {Object} options - Constructor options.
+      * @param {GlueHttp} options.http - The HTTP client instance.
+      * @param {string} options.name - The unique name of this proxy in the session.
+      * @param {Object} options.policy - Proxy policy - immutable and enforces integrity of the proxy.
+      * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
+      * @param {Object|null} [options.attributes] - Optional attributes map; falls back to `policy.bound_attributes`.
+      * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
+      */
+    constructor({http, name, policy, state = null, attributes = null, namespace = 'base'}) {
         /** @type {GlueHttp} */
         this.http = http
         /** @type {string} */
@@ -25,13 +25,13 @@ class BaseGlueProxy {
         /** @type {string} */
         this._name = name;
         /** @type {Object} */
-        this._contract = contract;
+        this._policy = policy;
         /** @type {Object} */
         this._state = state;
         /** @type {Object} */
-        this._actions = !!actions ? actions : contract.actions;
+        this._attributes = !!attributes ? attributes : policy.bound_attributes;
 
-        this._defineDefaultActions()
+        this._defineAttributeProperties()
 
         /**
          * @type {Object<string, Object<string, Function[]>>}
@@ -44,32 +44,32 @@ class BaseGlueProxy {
     }
 
     /**
-     * Add a listener for an action.
-     * @param {string} actionName - The action to listen for (e.g., 'save', 'delete')
+     * Add a listener for a bound attribute.
+     * @param {string} attributeName - The attribute to listen for (e.g., 'save', 'delete')
      * @param {Function} callback - The callback function
      * @param {string} [type='after'] - When to call: 'before', 'after' (default), or 'error'
      * @returns {this} The proxy instance for chaining.
      */
-    addListener(actionName, callback, type = 'after') {
+    addListener(attributeName, callback, type = 'after') {
         if (!this._listeners[type]) {
             throw new Error(`Invalid listener type: _${type}. Use 'before', 'after', or 'error'.`);
         }
-        if (!this._listeners[type][actionName]) {
-            this._listeners[type][actionName] = [];
+        if (!this._listeners[type][attributeName]) {
+            this._listeners[type][attributeName] = [];
         }
-        this._listeners[type][actionName].push(callback);
+        this._listeners[type][attributeName].push(callback);
         return this;
     }
 
     /**
-     * Remove a listener for an action.
-     * @param {string} actionName - The action name
+     * Remove a listener for a bound attribute.
+     * @param {string} attributeName - The attribute name
      * @param {Function} callback - The callback to remove
      * @param {string} [type='after'] - The listener type: 'before', 'after' (default), or 'error'
      * @returns {this} The proxy instance for chaining.
      */
-    removeListener(actionName, callback, type = 'after') {
-        const listeners = this._listeners[type]?.[actionName];
+    removeListener(attributeName, callback, type = 'after') {
+        const listeners = this._listeners[type]?.[attributeName];
         if (listeners) {
             const index = listeners.indexOf(callback);
             if (index > -1) {
@@ -89,67 +89,61 @@ class BaseGlueProxy {
     }
 
     /**
-     * Emit listeners for a given action and event type.
+     * Emit listeners for a given bound attribute and event type.
      * @param {string} type - Listener type: 'before', 'after', or 'error'.
-     * @param {string} actionName - The action name.
+     * @param {string} attributeName - The attribute name.
      * @param {Object} event - The event payload.
      */
-    async emitListeners(type, actionName, event) {
-        const listeners = this._listeners?.[type]?.[actionName] || [];
+    async emitListeners(type, attributeName, event) {
+
+        const listeners = this._listeners?.[type]?.[attributeName] || [];
         for (const callback of listeners) {
             await callback(event);
         }
     }
 
     /**
-     * Execute a server-side action, emitting before/after/error listeners.
-     * @param {string} actionName - The action method name.
-     * @param {Object|null} [actionKwargs] - Action-specific user data.
+     * Execute a server-side bound attribute, emitting before/after/error listeners.
+     * @param {string} attributeName - The bound attribute name.
+     * @param {Object|null} [eventKwargs] - Event-specific user data.
      * @returns {Promise<Object>} The server response data.
      * @private
      */
-    async _processAction(actionName, actionKwargs = null) {
+    async _processAttributeEvent(attributeName, eventKwargs = null) {
+        const shortName = attributeName.split('.').pop();
         const event = {
-            action: actionName,
+            attribute: attributeName,
             proxy: this,
-            actionKwargs,
+            eventKwargs: eventKwargs,
         };
 
-        await this.emitListeners('before', actionName, event);
+        await this.emitListeners('before', shortName, event);
 
         this._loading = true;
 
         try {
-            const response = await this.http.sendActionRequest({
+            const response = await this.http.sendAttributeEventRequest({
                 name: this._name,
-                action: actionName,
-                actionKwargs,
-                contract: this._contract,
+                attribute: attributeName,
+                eventKwargs: eventKwargs,
+                policy: this._policy,
                 state: this._state,
             });
 
             const responseData = response.data;
 
-            // Mutate _state in place so Alpine's Proxy keeps the same reference
-            if (this._state) {
-                Object.assign(this._state, responseData.state);
-            } else {
-                this._state = responseData.state;
-            }
+            this._handleEventResponse(attributeName, eventKwargs, responseData);
 
-            this._handleActionResponse(actionName, actionKwargs, responseData);
-
-            // Extract the actual data (may be wrapped or direct)
-            const data = responseData.data !== undefined ? responseData.data : responseData;
+            const data = responseData.result ?? {};
             event.result = data;
 
-            await this.emitListeners('after', actionName, event);
+            await this.emitListeners('after', shortName, event);
 
             return data;
         } catch (err) {
             event.error = err;
 
-            await this.emitListeners('error', actionName, event);
+            await this.emitListeners('error', shortName, event);
 
             throw err;
         } finally {
@@ -157,36 +151,52 @@ class BaseGlueProxy {
         }
     }
 
-    _handleActionResponse(actionName, actionKwargs, response) {}
-
-    _defineDefaultActions() {
-        Object.entries(this._actions).forEach(([actionKey, action]) => {
-            const [actionProvider, actionName] = actionKey.split('.').slice(0, 2)
-            const accessPath = action.client_proxy_access_path
-            const accessPathParts = accessPath ? [accessPath.split('.'), ''] : ['']
-
-            let propertyTarget = this
-            accessPathParts.forEach(pathPart => {
-                if (pathPart) {
-                    propertyTarget[pathPart] = {
-                        _processAction: this._processAction.bind(this),
+    _handleEventResponse(attributeName, eventKwargs, response) {
+        if (this._state) {
+            // Mutate instance_data in place rather than replacing it.
+            // This preserves Alpine's proxy wrapper so reactivity continues to work.
+            if (this._state.instance_data && response.state.instance_data) {
+                for (const key of Object.keys(this._state.instance_data)) {
+                    if (!(key in response.state.instance_data)) {
+                        delete this._state.instance_data[key];
                     }
-                    propertyTarget = propertyTarget[pathPart]
                 }
+                for (const [key, value] of Object.entries(response.state.instance_data)) {
+                    this._state.instance_data[key] = value;
+                }
+                // Update other state properties (errors, namespace, etc.) without touching instance_data
+                for (const [key, value] of Object.entries(response.state)) {
+                    if (key !== 'instance_data') {
+                        this._state[key] = value;
+                    }
+                }
+            } else {
+                Object.assign(this._state, response.state);
+            }
+        } else {
+            this._state = response.state;
+        }
+    }
 
-                if (!(actionName in propertyTarget)) {
-                    Object.defineProperty(propertyTarget, actionName, {
-                        get: function () {
-                            return async (actionKwargs = null) => {
-                                debugger
-                                return await this._processAction(actionKey, actionKwargs);
-                            };
-                        },
-                        enumerable: true,
-                        configurable: true
-                    });
+    _defineAttributeProperties() {
+        Object.entries(this._attributes).forEach(([attributePath, attribute]) => {
+            const proxy = this
+            let target = proxy;
+            const attributePartsParts = attributePath.split('.')
+
+            for (let i = 1; i < attributePartsParts.length; i++) {
+                const attributePart = attributePartsParts[i]
+
+                if (i === attributePartsParts.length - 1) {
+                    target[attributePart] = async function (eventKwargs = null) {
+                        return await this._processAttributeEvent(attributePath, eventKwargs);
+                    };
                 }
-            })
+                else {
+                    target[attributePart] = target
+                    target = target[attributePart]
+                }
+            }
         });
     }
 }

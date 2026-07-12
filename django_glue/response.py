@@ -1,33 +1,31 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, ClassVar
 
-
 from django.http import JsonResponse
-from pydantic import BaseModel
 
 from django_glue.message import GlueMessage
-from django_glue.resolver.action.encoders import ActionDataJSONEncoder
+from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
 
 
 @dataclass
-class ActionResult:
+class GlueResponse:
     Message: ClassVar[type] = GlueMessage
-    state: BaseModel | None
-    payload: dict[str, Any] | None = None
+    state: dict | None = None
+    result: Any = None
     messages: list[GlueMessage] | None = None
     status: int = 200
 
-    def to_response(self) -> JsonResponse:
+    def to_json_response(self) -> JsonResponse:
+        data = {
+            'result': self.result if self.result is not None else {},
+            'state': self.state,
+        }
+        if self.messages is not None:
+            data['messages'] = [message.to_dict() for message in self.messages]
+
         return JsonResponse(
-            data={
-                'messages': [message.to_dict() for message in self.messages]
-                if self.messages is not None
-                else None,
-                'response_payload': self.payload,
-                'state': self.state.model_dump() if self.state else None
-            },
+            data=data,
             status=self.status,
             safe=True,
-            encoder=ActionDataJSONEncoder,
+            encoder=BoundAttributeDataJSONEncoder,
         )
-

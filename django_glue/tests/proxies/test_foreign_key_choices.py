@@ -1,18 +1,24 @@
-"""
-Tests for foreign_key_choices() action on proxies.
-"""
 from django.test import TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueModelInstanceProxy, GlueQuerySetProxy
-from django_glue.exceptions import GlueAccessError
-from django_glue.resolver.action.schemas import ActionRequest
+from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
+from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 from test_project.gorilla.models import Gorilla, Skill
 
 
-class ForeignKeyChoicesTestCase(TestCase):
-    """Tests for foreign_key_choices() action."""
+def make_model_proxy(model, access=GlueAccess.VIEW):
+    state, _ = GlueModelInstanceProxy._build_state(model)
+    return GlueModelInstanceProxy(name='gorilla', namespace='model', access=access, state=state)
 
+
+def make_queryset_proxy(queryset, access=GlueAccess.VIEW):
+    model_instance = queryset.model()
+    state, _ = GlueQuerySetProxy._build_state(model_instance)
+    state.queryset = queryset
+    return GlueQuerySetProxy(name='gorillas', namespace='querySet', access=access, state=state)
+
+
+class ForeignKeyChoicesTestCase(TestCase):
     def setUp(self):
         self.skill1 = Skill.objects.create(name='Punch', description='Basic punch', difficulty=1, level=1)
         self.skill2 = Skill.objects.create(name='Kick', description='Basic kick', difficulty=2, level=1)
@@ -21,72 +27,53 @@ class ForeignKeyChoicesTestCase(TestCase):
             description='Test',
             age=25,
             weight=350.0,
-            height=1.8
+            height=1.8,
         )
 
-    def test_foreign_key_choices_returns_choices_for_model_proxy(self):
-        """foreign_key_choices should return choices for FK fields on model proxy."""
-        # Gorilla doesn't have FK fields, but skills is M2M.
-        # Let's test with the skills M2M field via the queryset proxy
-        proxy = GlueQuerySetProxy(
-            target=Gorilla.objects.all(),
-            unique_name='gorillas',
-            access=GlueAccess.VIEW,
+    def test_foreign_key_choices_returns_choices_for_model_multiple_choice_field(self):
+        proxy = make_queryset_proxy(Gorilla.objects.all())
+
+        result = proxy.foreign_key_choices(request=None, field_name='skills')
+
+        self.assertEqual(result, [
+            {'pk': self.skill1.pk, '__str__': 'Punch'},
+            {'pk': self.skill2.pk, '__str__': 'Kick'},
+        ])
+
+    def test_foreign_key_choices_returns_requested_extra_fields(self):
+        proxy = make_queryset_proxy(Gorilla.objects.all())
+
+        result = proxy.foreign_key_choices(
+            request=None,
+            field_name='skills',
+            choice_fields=['difficulty'],
         )
 
-        action_data = ActionRequest(
-            proxy_definition={},
-            action_kwargs={'field_definition': ('skills', {'type': 'ModelMultipleChoiceField'})}
-        )
+        self.assertEqual(result, [
+            {'pk': self.skill1.pk, '__str__': 'Punch', 'difficulty': 1},
+            {'pk': self.skill2.pk, '__str__': 'Kick', 'difficulty': 2},
+        ])
 
-        result = proxy.foreign_key_choices(action_data)
-        self.assertIsInstance(result, list)
+    def test_foreign_key_choices_returns_empty_for_non_model_choice_field(self):
+        proxy = make_model_proxy(self.gorilla)
 
-    def test_foreign_key_choices_returns_empty_for_non_fk_field(self):
-        """foreign_key_choices should return empty list for non-FK field types."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
+        result = proxy.foreign_key_choices(request=None, field_name='name')
 
-        action_data = ActionRequest(
-            proxy_definition={},
-            action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
-        )
-
-        result = proxy.foreign_key_choices(action_data)
         self.assertEqual(result, [])
 
-    def test_foreign_key_choices_works_with_view_access(self):
-        """foreign_key_choices should work with VIEW access level."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
+    def test_foreign_key_choices_returns_empty_for_missing_field_name(self):
+        proxy = make_model_proxy(self.gorilla)
+
+        result = proxy.foreign_key_choices(request=None)
+
+        self.assertEqual(result, [])
+
+    def test_foreign_key_choices_is_registered_with_view_access(self):
+        proxy = make_model_proxy(self.gorilla, access=GlueAccess.DELETE)
+
+        bound_attributes = proxy.discover_bound_attributes()
+
+        self.assertEqual(
+            bound_attributes['GlueModelInstanceProxy.foreign_key_choices'].required_access,
+            GlueAccess.VIEW,
         )
-
-        action_data = ActionRequest(
-            proxy_definition={},
-            action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
-        )
-
-        result = proxy.process_action('foreign_key_choices', action_data)
-        self.assertIsNotNone(result)
-
-    def test_foreign_key_choices_works_with_higher_access(self):
-        """foreign_key_choices should work with CHANGE and DELETE access."""
-        for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
-            proxy = GlueModelInstanceProxy(
-                target=self.gorilla,
-                unique_name='gorilla',
-                access=access,
-            )
-
-            action_data = ActionRequest(
-                proxy_definition={},
-                action_kwargs={'field_definition': ('name', {'type': 'CharField'})}
-            )
-
-            result = proxy.foreign_key_choices(action_data)
-            self.assertIsNotNone(result)

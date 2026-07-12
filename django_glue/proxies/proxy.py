@@ -2,82 +2,68 @@
 Base proxy class for Django Glue.
 
 This module provides the abstract base class that all proxy types inherit from,
-defining the core interface for action registration, access control, and
-session/context data serialization.
+defining the core interface for policy registration, access control, and
+bound attribute discovery.
 """
 
 from __future__ import annotations
 
-import inspect
 from abc import ABC
-from typing import Any, Callable, TYPE_CHECKING, Generic, Self, TypeVar, get_type_hints
+import inspect
+from typing import Any, TYPE_CHECKING, Self
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
 from django.http import HttpRequest
 
-from django_glue.access.access import GlueAccess
-from django_glue.actions.decorators import GLUE_ACTIONS
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
-from django_glue.proxies.contract import GlueProxyContract
-from django_glue.exceptions import GlueAccessError
-from django_glue.response import ActionResult
 
 if TYPE_CHECKING:
-    from django_glue.actions.action import GlueAction
-    from django_glue.resolver.action.schemas import ActionRequest
+    from django_glue.proxies.state import BaseProxyState
+    from django_glue.access.access import GlueAccess
+    from django_glue.bound_attributes.attribute import BoundProxyAttribute
+    from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
 
 
-BASE_ACTION_CATEGORY_NAME = 'base'
-
-TContract = TypeVar('TContract', bound=GlueProxyContract)
-
-
-class BaseGlueProxy(ABC, Generic[TContract]):
+class BaseGlueProxy(ABC):
     """
     Abstract base class for all Django Glue proxies.
 
-    Proxies act as intermediaries between Django backend objects (models, querysets,
-    forms) and the JavaScript frontend. They expose actions that can be called from
-    the client and enforce access control.
+    A proxy is a thin composition of identity (name, namespace, access),
+    state (Django objects), and bound attributes (callable operations).
 
     Subclasses must define:
         _subject_type: The type of object this proxy wraps (e.g., Model, QuerySet).
+        _state_class: The state class that holds Django objects for this proxy type.
 
     Attributes:
-        unique_name: Identifier used to reference this proxy from JavaScript.
+        name: Identifier used to reference this proxy from JavaScript.
+        namespace: Namespace under which this proxy is accessible (model, querySet, form, etc.).
         access: The access level granted to the client (VIEW, CHANGE, or DELETE).
-        target: The wrapped Django object.
-
-    Example:
-        class GlueModelProxy(BaseGlueProxy):
-            _subject_type = Model
-
-            @action(access=GlueAccess.VIEW)
-            def get(self):
-                return model_to_dict(self.target)
+        state: The proxy's state object holding Django instances.
 
     """
 
     _subject_type: type
+    _state_class: type[BaseProxyState]
 
     def __init__(
         self,
         name: str,
         namespace: str,
         access: GlueAccess,
+        state: type[BaseProxyState],
     ) -> None:
         self.name = name
         self.namespace = namespace
         self.access = access
-
-    # TODO: Override this to define how the proxy subject
-    # is constructed from the action_request object
-    @classmethod
-    def _from_action_request(cls, action_request: ActionRequest) -> Self:
-        raise NotImplementedError
+        self.state = state
 
     @classmethod
-    def __init_subclass__(cls, **kwargs):
+    def _from_attribute_event(cls, event: BoundProxyAttributeEvent) -> Self:
+        state = cls._state_class.deserialize(event)
+        return cls(event.policy.name, event.policy.namespace, event.policy.access, state)
+
+    @classmethod
+    def __init_subclass__(cls, **kwargs) -> None:
         super().__init_subclass__(**kwargs)
         is_abstract = inspect.isabstract(cls)
         if not hasattr(cls, '_subject_type') and not is_abstract:
@@ -86,132 +72,62 @@ class BaseGlueProxy(ABC, Generic[TContract]):
                 "attribute that matches the expected type of the __init__ 'target' parameter."
             )
             raise TypeError(msg)
+        if not hasattr(cls, '_state_class') and not is_abstract:
+            msg = (
+                f"BaseGlueProxy subclass {cls.__name__} must define '_state_class "
+                "attribute that provides state management for this proxy type."
+            )
+            raise TypeError(msg)
 
-    @property
-    def primary_subject(self) -> Any:
-        raise NotImplementedError
+    # --- Policy Registration ---
 
-    def _get_action_target(
-        self,
-        action: GlueAction,
-    ) -> Any:
-        if issubclass(action.target_class, self.__class__):
-            return self
+    def _register_with_request(self, request: HttpRequest) -> None:
+        from django_glue.proxies.policy import ProxyPolicy  # noqa: PLC0415
 
-        return None
-
-    def get_state(self) -> BaseModel | None:
-        return None
-
-    @property
-    def _custom_contract_data(self) -> dict:
-        return {}
-
-    @property
-    def _action_contract_data(self) -> dict:
-        action_data = {
-            action_name: action.model_dump(exclude={'provider_factory'}, exclude_none=True)
-            for action_name, action in GLUE_ACTIONS.items()
-            if self._get_action_target(action) is not None
-        }
-
-        return action_data
-
-    def register_with_request(self, request: HttpRequest) -> None:
         if DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY not in request.__dict__:
             request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY] = {}
 
         request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY][self.name] = {
-            'state': {},
-            'contract': GlueProxyContract.initialize({
+            'state': self.state.serialize() if self.state else {},
+            'policy': ProxyPolicy.new_signed_policy({
                 'name': self.name,
-                'namespace': self.namespace,
                 'access': self.access,
-                'subject_type': self._subject_type.__name__,
-                'actions': self._action_contract_data,
-                'custom_data': self._custom_contract_data
+                'bound_attributes': self._policy_data,
+                'subject_details': {
+                    'namespace': self.namespace,
+                    **self._custom_policy_details,
+                },
             }).model_dump(),
         }
 
-    def _build_action_kwargs(
-        self,
-        action_callable: Callable,
-        action_request: ActionRequest,
-    ) -> dict:
-        unwrapped_func = inspect.unwrap(action_callable)
-        sig = inspect.signature(unwrapped_func)
+    # --- Discovery for attributes that are bound directly on the target classes ---
+    @property
+    def targets(self) -> list[Any]:
+        return [self]
 
-        # Safely resolve string annotations (e.g., from __future__ import annotations)
-        type_hints = get_type_hints(unwrapped_func, globalns={'HttpRequest': HttpRequest})
+    def _get_bound_attribute_owner(self, bound_attribute: BoundProxyAttribute) -> Any:
+        for target in self.targets:
+            if isinstance(target, bound_attribute.target_class):
+                return target
+        return None
 
-        kwargs = {}
-        action_kwargs = action_request.action_kwargs or {}
-        params = list(sig.parameters.items())
+    @property
+    def _custom_policy_details(self) -> dict:
+        return {}
 
-        # Handle request param
-        request_param_name, _ = params[1]
-        kwargs[request_param_name] = action_request.request
+    @property
+    def _policy_data(self) -> dict:
+        bound_attributes = self.discover_bound_attributes()
+        return {
+            bound_attribute_name: bound_attribute.model_dump(exclude_none=True)
+            for bound_attribute_name, bound_attribute in bound_attributes.items()
+            if self._get_bound_attribute_owner(bound_attribute) is not None
+        }
 
-        for param_name, param in params[2:]:
-            if param_name in action_kwargs:
-                raw_value = action_kwargs[param_name]
+    def discover_bound_attributes(self) -> dict[str, BoundProxyAttribute]:
+        from django_glue.bound_attributes.attribute import discover_bound_attributes_on_target  # noqa: PLC0415
 
-                # Check if we have a type hint for this parameter
-                if param_name in type_hints:
-                    annotation = type_hints[param_name]
-                    try:
-                        # TypeAdapter validates and optionally coerces the data
-                        validator = TypeAdapter(annotation)
-                        kwargs[param_name] = validator.validate_python(raw_value)
-                    except ValidationError as e:
-                        # Surface a clean error pointing out exactly which param failed
-                        msg = f"Validation failed for param '{param_name}': {e}"
-                        raise TypeError(msg) from e
-                else:
-                    # No type hint provided, just pass the value
-                    kwargs[param_name] = raw_value
-
-            elif param.default is not inspect.Parameter.empty:
-                pass
-
-        return kwargs
-
-    @classmethod
-    def process_action_request(
-        cls,
-        action_request: ActionRequest,
-        **kwargs
-    ) -> ActionResult:
-        instance = cls._from_action_request(action_request=action_request)
-
-        action: GlueAction = GLUE_ACTIONS[action_request.action_name]
-
-        if not instance.access.has_access(action.required_access):
-            raise GlueAccessError(
-                action=action.name,
-                required_access=action.required_access,
-                current_access=instance.access
-            )
-
-        action_target = instance._get_action_target(action)
-        if not action_target:
-            raise ValueError(f'No valid action target was found for {action.target_class.__class__.__name__}')
-
-        # If action has a provider factory, that means the target must be updated to be an instance
-        # the action provider constructed using the original action target.
-        if action.provider_factory is not None:
-            action_target = action.provider_factory(action_target)
-
-        action_callable = action.callable
-
-        action_kwargs = instance._build_action_kwargs(
-            action_callable=action_callable,
-            action_request=action_request,
-        )
-
-        action_result_data = action_callable(action_target, **action_kwargs)
-
-        return ActionResult(
-            state=instance.get_state(), # send fresh, updated state after the action was run
-            payload=action_result_data,
-        )
+        all_bound_attributes: dict[str, BoundProxyAttribute] = {}
+        for target in self.targets:
+            all_bound_attributes.update(discover_bound_attributes_on_target(target))
+        return all_bound_attributes

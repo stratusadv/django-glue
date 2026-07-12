@@ -27,29 +27,29 @@ class GlueClient {
      * Create a proxy instance from context data and register it as a property in the appropriate
      * namespace (`model`, `querySet`, or `form`).
      * @param {string} name - The unique name of the proxy.
-     * @param {Object} contract - Serialized proxy contract from the server.
+     * @param {Object} policy - Serialized proxy policy from the server.
      * @private
      */
-    _registerProxyAsProperty(name, {contract, state}) {
-        let proxyClass = PROXY_NAMESPACE_TO_PROXY_CLASS[contract.namespace]
+    _registerProxyAsProperty(name, {policy, state}) {
+        let proxyClass = PROXY_NAMESPACE_TO_PROXY_CLASS[policy.subject_details.namespace]
 
         let proxy;
-        if (contract.namespace === 'function') {
+        if (policy.subject_details.namespace === 'function') {
             proxy = proxyClass.create({
                 http: this.http,
                 name: name,
-                contract: contract,
+                policy: policy,
             });
         } else {
             proxy = new proxyClass({
                 http: this.http,
                 name: name,
-                contract: contract,
+                policy: policy,
                 state: state,
             });
         }
 
-        this[contract.namespace][name] = proxy
+        this[policy.subject_details.namespace][name] = proxy
     }
 
     /**

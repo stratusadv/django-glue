@@ -11,13 +11,13 @@ let _keyCounter = 0;
  * behavior including lazy loading, deletion, and parent queryset tracking.
  */
 class GlueModelProxy extends GlueFormProxy {
-    /**
+     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.name - The unique name of this proxy in the session.
-     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.policy - Proxy policy - immutable and enforces integrity of the proxy.
      * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
-     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
+     * @param {Object|null} [options.attributes] - Optional attributes map; falls back to `policy.bound_attributes`.
      * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      * @param {boolean} [options.autoFetch] - Whether to auto-fetch on first access.
      * @param {GlueQuerySetProxy|null} [options.parentQuerySet] - Parent queryset proxy, if any.
@@ -26,14 +26,14 @@ class GlueModelProxy extends GlueFormProxy {
     constructor({
         http,
         name,
-        contract,
+        policy,
         state,
-        actions = null,
+        attributes = null,
         autoFetch = false,
         parentQuerySet = null,
         namespace = 'model'
     }) {
-        super({http, name, contract, state, actions, autoFetch, namespace});
+        super({http, name, policy, state, attributes, autoFetch, namespace});
 
         if (this._state.instance_data) {
             this._defineExtraFields()
@@ -45,7 +45,7 @@ class GlueModelProxy extends GlueFormProxy {
         /** @type {GlueQuerySetProxy|null} */
         this._parent = parentQuerySet
         /** @type {string} */
-        this._pkFieldName = contract.custom_data?.pk_field_name || 'id'
+        this._pkFieldName = policy.subject_details?.pk_field_name || 'id'
     }
 
     /**
@@ -53,7 +53,7 @@ class GlueModelProxy extends GlueFormProxy {
      * @returns {*} The primary key value, or null/undefined if not set.
      */
     get pk() {
-        let pk = this._contract.custom_data.target_pk
+        let pk = this._policy.subject_details.target_pk
 
         if (!pk) {
             pk = this._state.instance_data?.[this._pkFieldName]
@@ -82,17 +82,17 @@ class GlueModelProxy extends GlueFormProxy {
      * @type {boolean}
      */
     get _isNew() {
-        return !this._pk;
+        return !this.pk;
     }
 
     /**
-     * Handle state updates after actions complete.
+     * Handle state updates after bound attribute events complete.
      * Refreshes the parent queryset if this model proxy is a child.
      * @private
      */
-    _handleActionResponse(actionName, actionKwargs, response) {
-        super._handleActionResponse(actionName, actionKwargs, response);
-
+    _handleEventResponse(attributeName, eventKwargs, response) {
+        super._handleEventResponse(attributeName, eventKwargs, response);
+        
         if (this._state.instance_data) {
             this._defineExtraFields();
             for (const fieldName of Object.keys(this._state.instance_data)) {

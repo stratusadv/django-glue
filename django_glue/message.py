@@ -1,7 +1,10 @@
+from dataclasses import dataclass
+
 from django_glue.enums import MessageLevel
 from django.contrib.messages import Message
 
 
+@dataclass
 class GlueMessage(Message):
     Level = MessageLevel
 

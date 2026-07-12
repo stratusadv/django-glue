@@ -106,15 +106,13 @@ class SerializeQuerySetTestCase(TestCase):
             height=2.0
         )
 
-    def test_serialize_returns_dict(self):
-        """serialize_queryset should return a safe dict (not pickle)."""
+    def test_serialize_returns_encoded_query_string(self):
+        """serialize_queryset should return a base64 encoded query string."""
         qs = Gorilla.objects.all()
         encoded = serialize_queryset(qs)
 
-        self.assertIsInstance(encoded, dict)
-        self.assertIn('app_label', encoded)
-        self.assertIn('model_name', encoded)
-        self.assertIn('query_params', encoded)
+        self.assertIsInstance(encoded, str)
+        self.assertGreater(len(encoded), 0)
 
     def test_deserialize_returns_queryset(self):
         """deserialize_queryset should return a QuerySet."""

@@ -1,6 +1,6 @@
 /**
  * HTTP client for Django Glue. Handles fetch requests, CSRF tokens, timeouts,
- * and serialization for action and keep-alive requests.
+ * and serialization for bound attribute events and keep-alive requests.
  */
 class GlueHttp {
     /**
@@ -126,22 +126,22 @@ class GlueHttp {
     }
 
     /**
-     * Send an action request to the Django Glue action endpoint.
+     * Send a bound attribute event request to the Django Glue endpoint.
      * Always uses FormData to ensure consistent handling of all data types including files.
      *
-     * @param {Object} options - Action request parameters.
-     * @param {string} options.uniqueName - The proxy unique name.
-     * @param {string} options.action - The proxy action method name.
-     * @param {Object} [options.actionKwargs] - Action-specific keyword arguments (e.g., step number, filter params).
-     * @param {Object} options.contract - The proxy contract for server-side verification and reconstruction.
+     * @param {Object} options - Bound attribute event request parameters.
+     * @param {string} options.name - The proxy unique name.
+     * @param {string} options.attribute - The bound attribute name.
+     * @param {Object} [options.eventKwargs] - Event-specific keyword arguments (e.g., step number, filter params).
+     * @param {Object} options.policy - The proxy policy for server-side verification and reconstruction.
      * @param {Object} [options.state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
      * @returns {Promise<Object>} Response object.
      */
-    async sendActionRequest({name, action, actionKwargs = null, contract, state = null}) {
-        const url = `${this._config.actionUrlPath}${name}/${action}/`
+    async sendAttributeEventRequest({name, attribute, eventKwargs = null, policy, state = null}) {
+        const url = `${this._config.attributeEventUrlPath}${name}/${attribute}/`
 
         const formData = new FormData()
-        formData.append('contract', JSON.stringify(contract))
+        formData.append('policy', JSON.stringify(policy))
 
         if (state) {
             // Extract files from state and append them separately
@@ -161,8 +161,8 @@ class GlueHttp {
             })
         }
 
-        if (actionKwargs) {
-            formData.append('action_kwargs', JSON.stringify(actionKwargs))
+        if (eventKwargs) {
+            formData.append('event_kwargs', JSON.stringify(eventKwargs))
         }
 
         return await this.sendFormPostRequest(url, formData)

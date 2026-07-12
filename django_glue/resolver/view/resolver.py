@@ -7,7 +7,7 @@ from django.urls import reverse, resolve, NoReverseMatch
 
 from django_glue.conf import settings
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
-from django_glue.resolver.action.encoders import ActionDataJSONEncoder
+from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.view.request import ViewHttpRequest
@@ -82,7 +82,7 @@ class ViewResolver(BaseResolver):
                             ),
                         },
                         safe=False,
-                        encoder=ActionDataJSONEncoder,
+                        encoder=BoundAttributeDataJSONEncoder,
                     )
 
                 if isinstance(response, HttpResponse):

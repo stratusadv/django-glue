@@ -5,6 +5,6 @@ x-model="{{ glue_field }}.value"
 {% if not exclude_class %}
 class="form-{{ form_class_type|default:'control' }} form-select-{{ size|default:'sm' }}{% if input_class %} {{ input_class }}{% endif %}"
 {% endif %}
-:class="{'is-invalid': {{ glue_field }}.has_errors}"
+:class="{'is-invalid': {{ glue_field }}.hasErrors}"
 :required="{{ glue_field }}.required"
 :disabled="{{ glue_field }}.disabled"

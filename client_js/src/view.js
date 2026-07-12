@@ -65,10 +65,10 @@ class GlueView {
             csrfProtected: true
         })
 
-        window.Glue.initializeProxies(
-            viewResponse.data.proxy_registry_data,
-            viewResponse.data.proxy_definitions,
-        )
+        window.Glue.init({
+            proxies: viewResponse.data.proxies,
+            config: this.http._config,
+        })
 
         return viewResponse.data.html
     }

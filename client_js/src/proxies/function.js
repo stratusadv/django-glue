@@ -7,34 +7,34 @@ import {isObject} from "../utils";
  * parameter names.
  */
 class GlueFunctionProxy extends BaseGlueProxy {
-    /**
+     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.name - The unique name of this proxy in the session.
-     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.policy - Proxy policy - immutable and enforces integrity of the proxy.
      * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, name, contract, namespace = 'function'}) {
-        super({http, name, contract, namespace});
+    constructor({http, name, policy, namespace = 'function'}) {
+        super({http, name, policy, namespace});
 
         /** @type {Array<Object>} */
-        this._params = contract.params || [];
+        this._params = policy.subject_details.params || [];
     }
 
     /**
-     * Factory that returns a callable function wrapping the execute action.
+     * Factory that returns a callable function wrapping the execute bound attribute.
      * Fields inside the single object parameter for the function arguments are mapped to the function's parameter names.
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.name - The unique name of this proxy.
-     * @param {Object} options.contract - Serialized proxy metadata from the server.
+     * @param {Object} options.policy - Serialized proxy policy from the server.
      * @returns {Function} A callable that invokes the server-side function.
      */
-    static create({http, name, contract}) {
+    static create({http, name, policy}) {
         const instance = new GlueFunctionProxy({
             http,
             name,
-            contract,
+            policy,
         });
 
         const fn = async function (kwargs = {}) {
@@ -49,12 +49,12 @@ class GlueFunctionProxy extends BaseGlueProxy {
                 }
             });
 
-            const response = await instance._processAction('execute', payload);
+            const response = await instance.execute(payload);
             return response.result;
         };
 
         fn._name = name;
-        fn._contract = contract;
+        fn._policy = policy;
         fn._params = instance._params;
         fn.addListener = instance.addListener.bind(instance);
         fn.removeListener = instance.removeListener.bind(instance);

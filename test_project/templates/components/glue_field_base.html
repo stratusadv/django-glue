@@ -1,6 +1,6 @@
 <div class="{% if wrapper_class %}{{ wrapper_class }}{% else %}mb-3{% endif %}">
     {% block field_content %}
-        <div class="invalid-feedback" x-text="{{ glue_field }}.error_text"></div>
+        <div class="invalid-feedback" x-text="{{ glue_field }}.errorText"></div>
     {% endblock %}
     <small class="text-muted d-block" x-show="{{ glue_field }}.help_text" x-text="{{ glue_field }}.help_text"></small>
 </div>

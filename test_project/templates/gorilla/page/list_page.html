@@ -27,7 +27,7 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
-            gorillaQuerySet: Glue.querySet.gorillas,
+            get gorillaQuerySet() { return Glue.querySet.gorillas },
             async openProfileModal(gorillaId) {
                 try {
                     const viewGlue = Glue.view(`/${gorillaId}/template/`);
@@ -64,23 +64,6 @@
                 };
             },
             async init() {
-                this.gorillaQuerySet.addListener('save', event => {
-                    if (event.result.errors) {
-                        $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
-                    }
-                    else {
-                        $store.notifications.success('Fighter saved successfully!');
-                    }
-                });
-                this.gorillaQuerySet.addListener('save', () => {
-                    $store.notifications.error('Failed to save fighter.');
-                }, 'error');
-                this.gorillaQuerySet.addListener('delete', () => {
-                    $store.notifications.success('Fighter deleted.');
-                });
-                this.gorillaQuerySet.addListener('delete', () => {
-                    $store.notifications.error('Failed to delete fighter.');
-                }, 'error');
             },
     }">
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_form" glue_type='form' modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
@@ -197,7 +180,58 @@
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
             <template x-for="gorilla in gorillaQuerySet.queryWithParams(queryParams)" :key="gorilla.$key">
-                <div class="col-md-6 col-lg-4">
+                <div class="col-md-6 col-lg-4" x-data="{
+                    skillDropdownOpen: false,
+                    init() {
+                        gorilla.addListener('save', event => {
+                            if (event.proxy.hasErrors()) {
+                                $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
+                            } else {
+                                $store.notifications.success('Fighter saved successfully!');
+                            }
+                        });
+                        gorilla.addListener('save', () => {
+                            $store.notifications.error('Failed to save fighter.');
+                        }, 'error');
+                        gorilla.addListener('delete', () => {
+                            $store.notifications.success('Fighter deleted.');
+                        });
+                        gorilla.addListener('delete', () => {
+                            $store.notifications.error('Failed to delete fighter.');
+                        }, 'error');
+                    },
+                    errorSummary(proxy) {
+                        const errors = proxy._state?.errors || {};
+                        const messages = Object.entries(errors)
+                            .map(([field, fieldErrors]) => {
+                                const label = proxy.$fields?.[field]?.label || field;
+                                const text = Array.isArray(fieldErrors) ? fieldErrors.join(', ') : fieldErrors;
+                                return `${label}: ${text}`;
+                            });
+                        return messages.length ? messages.join(' ') : 'Check form for errors.';
+                    },
+                    selectedSkillIds() {
+                        return gorilla.skills.map(skill => Number(skill.pk));
+                    },
+                    isSkillSelected(choice) {
+                        return this.selectedSkillIds().includes(Number(choice.pk));
+                    },
+                    toggleSkill(choice) {
+                        const skillId = Number(choice.pk);
+                        if (this.isSkillSelected(choice)) {
+                            gorilla.skills = gorilla.skills.filter(skill => Number(skill.pk) !== skillId);
+                        } else {
+                            gorilla.skills = [...gorilla.skills, choice];
+                        }
+                    },
+                    skillsSummary() {
+                        const selectedIds = this.selectedSkillIds();
+                        const names = gorilla.$fields.skills.choices
+                            .filter(choice => selectedIds.includes(Number(choice.pk)))
+                            .map(choice => choice.__str__);
+                        return names.length ? names.join(', ') : 'No skills selected';
+                    },
+                }">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">
                             {% include "components/glue_text_input.html" with glue_field="gorilla.$fields.name" size="sm" input_class="bg-transparent border-0 text-white fw-bold fs-5 p-0" placeholder="Fighter Name" hide_label=True %}
@@ -222,6 +256,43 @@
                                     {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.rank_points" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                             </div>
+
+                            <div class="mt-3">
+                                <label class="form-label fw-bold">Skills</label>
+                                <div class="dropdown w-100">
+                                    <button
+                                        type="button"
+                                        class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center"
+                                        @click="skillDropdownOpen = !skillDropdownOpen"
+                                        :title="skillsSummary()">
+                                        <span class="text-truncate" x-text="skillsSummary()"></span>
+                                        <span class="ms-2">▼</span>
+                                    </button>
+                                    <div
+                                        x-show="skillDropdownOpen"
+                                        x-transition
+                                        @click.away="skillDropdownOpen = false"
+                                        class="dropdown-menu show w-100 p-2"
+                                        style="max-height: 220px; overflow-y: auto; z-index: 1050;">
+                                        <template x-for="choice in gorilla.$fields.skills.choices || []" :key="choice.pk">
+                                            <label class="dropdown-item d-flex align-items-center gap-2 mb-0">
+                                                <input
+                                                    type="checkbox"
+                                                    class="form-check-input m-0"
+                                                    :checked="isSkillSelected(choice)"
+                                                    @change="toggleSkill(choice)">
+                                                <span x-text="choice.__str__"></span>
+                                            </label>
+                                        </template>
+                                        <div
+                                            class="dropdown-item text-muted small"
+                                            x-show="(gorilla.$fields.skills.choices || []).length === 0">
+                                            No skills available
+                                        </div>
+                                    </div>
+                                </div>
+                                <small class="text-muted">Save the fighter to persist skill changes.</small>
+                            </div>
                         </div>
                         <div class="card-footer bg-gorilla-cream">
                             <div class="d-flex gap-2 mb-2">
@@ -245,15 +316,60 @@
                                 <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
                                     Delete
                                 </button>
-                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="gorilla.services.increment_age()">
-                                    Increment Age
-                                </button>
+                            </div>
+                            <div class="d-flex gap-2 mt-2" x-data="{ dropdownOpen: false }">
+                                <div class="btn-group flex-grow-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" @click="dropdownOpen = !dropdownOpen">
+                                        Actions ▼
+                                    </button>
+                                    <div x-show="dropdownOpen"
+                                         x-transition
+                                         @click.away="dropdownOpen = false"
+                                         class="dropdown-menu show position-absolute bg-white border shadow rounded mt-1"
+                                         style="z-index: 1050; width: 100%;">
+                                        <button type="button" class="btn btn-sm btn-outline-dark w-100 text-start" @click="
+                                            const result = await gorilla.something();
+                                            $store.notifications.success(`Validate: ${JSON.stringify(result)}`);
+                                            dropdownOpen = false;
+                                        ">
+                                            something
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-dark w-100 text-start" @click="
+                                            const result = await gorilla.shout({volume: 5});
+                                            $store.notifications.success(`Get: ${JSON.stringify(result)}`);
+                                            dropdownOpen = false;
+                                        ">
+                                            Shout
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-dark w-100 text-start" @click="
+                                            const result = await gorilla.save();
+                                            $store.notifications.success(`Save: ${JSON.stringify(result)}`);
+                                            dropdownOpen = false;
+                                        ">
+                                            Save
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger w-100 text-start" @click="
+                                            if (confirm('Delete this fighter?')) {
+                                                await gorilla.delete();
+                                                $store.notifications.success('Deleted via dropdown.');
+                                            }
+                                            dropdownOpen = false;
+                                        ">
+                                            Delete
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger w-100 text-start" @click="
+                                            await gorilla.services.increment_age_and_save();
+                                        ">
+                                            Test Services
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                             <div class="d-flex gap-2 mt-2">
                                 <div class="btn-group flex-grow-1" x-data="{
                                     cryIntensity: 'normal'    
                                 }">
-                                    <button type="button" class="btn btn-warning btn-sm" @click="
+                                    <button type="button" class="btn btn-warning stn-sm" @click="
                                         const result = await gorilla.battle_cry({intensity: cryIntensity || 'normal'});
                                         if (result.success) {
                                             $store.notifications.success(`${result.cry} (custom backend action triggered by: ${result.triggered_by})`);

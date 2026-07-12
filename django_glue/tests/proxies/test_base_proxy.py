@@ -1,146 +1,106 @@
-"""
-Tests for BaseGlueProxy process_action and core functionality.
-"""
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.proxy import BaseGlueProxy
+from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
-from django_glue.exceptions import GlueAccessError, GlueMissingActionError
-from django_glue.resolver.action.schemas import ActionRequest
+from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 from test_project.gorilla.models import Gorilla
 
 
-class BaseGlueProxyProcessActionTestCase(TestCase):
-    """Tests for BaseGlueProxy.process_action()."""
-
-    def setUp(self):
-        self.gorilla = Gorilla.objects.create(
-            name='Test Gorilla',
-            description='Test',
-            age=25,
-            weight=350.0,
-            height=1.8
-        )
-
-    def test_process_action_calls_decorated_method(self):
-        """process_action should call the decorated method for valid actions."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
-
-        action_data = ActionRequest(proxy_definition={})
-        result = proxy.process_action('get', action_data)
-
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result['name'], 'Test Gorilla')
-
-    def test_process_action_raises_for_missing_action(self):
-        """process_action should raise GlueMissingActionError for non-existent action."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,
-        )
-
-        action_data = ActionRequest(proxy_definition={})
-
-        with self.assertRaises(GlueMissingActionError) as context:
-            proxy.process_action('nonexistent_action', action_data)
-
-        self.assertEqual(context.exception.action, 'nonexistent_action')
-
-    def test_process_action_raises_for_insufficient_access(self):
-        """process_action should raise GlueAccessError when access level is too low."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.VIEW,  # Not enough for save
-        )
-
-        action_data = ActionRequest(proxy_definition={}, action_kwargs={})
-
-        with self.assertRaises(GlueAccessError) as context:
-            proxy.process_action('save', action_data)
-
-        self.assertEqual(context.exception.action, 'save')
-        self.assertEqual(context.exception.required_access, 'CHANGE')
-        self.assertEqual(context.exception.current_access, 'VIEW')
-
-    def test_process_action_allows_higher_access(self):
-        """process_action should allow higher access levels for actions."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.DELETE,  # Highest - should allow get (VIEW)
-        )
-
-        action_data = ActionRequest(proxy_definition={})
-        result = proxy.process_action('get', action_data)
-
-        self.assertEqual(result['name'], 'Test Gorilla')
+def make_model_proxy(model, name='gorilla', access=GlueAccess.VIEW):
+    state, _ = GlueModelInstanceProxy._build_state(model)
+    return GlueModelInstanceProxy(name=name, namespace='model', access=access, state=state)
 
 
 class BaseGlueProxyInitTestCase(TestCase):
-    """Tests for BaseGlueProxy initialization."""
-
     def setUp(self):
         self.gorilla = Gorilla.objects.create(
             name='Test Gorilla',
             description='Test',
             age=25,
             weight=350.0,
-            height=1.8
+            height=1.8,
         )
 
-    def test_accepts_glue_access_enum(self):
-        """Proxy should accept GlueAccess enum for access parameter."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access=GlueAccess.CHANGE,
-        )
+    def test_stores_identity_and_state(self):
+        proxy = make_model_proxy(self.gorilla, name='my_gorilla', access=GlueAccess.CHANGE)
 
+        self.assertEqual(proxy.name, 'my_gorilla')
+        self.assertEqual(proxy.namespace, 'model')
         self.assertEqual(proxy.access, GlueAccess.CHANGE)
+        self.assertIs(proxy.state.model, self.gorilla)
 
-    def test_accepts_string_for_access(self):
-        """Proxy should accept a string for access parameter."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-            access='view',
+    def test_from_attribute_event_reconstructs_proxy_state(self):
+        state, form_class_path = GlueModelInstanceProxy._build_state(self.gorilla)
+        proxy = GlueModelInstanceProxy(name='gorilla', namespace='model', access=GlueAccess.VIEW, state=state)
+        proxy._form_class_path = form_class_path
+        request = RequestFactory().get('/')
+        proxy._register_with_request(request)
+        registered = getattr(request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY)['gorilla']
+        subject_details = {'form_class_path': None, **registered['policy']['subject_details']}
+
+        class Event:
+            policy = type('Policy', (), {
+                'name': 'gorilla',
+                'namespace': 'model',
+                'access': GlueAccess.VIEW,
+                'subject_details': type('SubjectDetails', (), subject_details)(),
+            })()
+            proxy_state = registered['state']
+            request = type('Request', (), {'FILES': {}})()
+
+        reconstructed = GlueModelInstanceProxy._from_attribute_event(Event())
+
+        self.assertEqual(reconstructed.name, 'gorilla')
+        self.assertEqual(reconstructed.state.model.pk, self.gorilla.pk)
+
+
+class BaseGlueProxyBoundAttributesTestCase(TestCase):
+    def setUp(self):
+        self.gorilla = Gorilla.objects.create(
+            name='Test Gorilla',
+            description='Test',
+            age=25,
+            weight=350.0,
+            height=1.8,
         )
 
-        self.assertEqual(proxy.access, GlueAccess.VIEW)
+    def test_discovers_bound_attributes_on_proxy_and_targets(self):
+        proxy = make_model_proxy(self.gorilla)
 
-    def test_stores_unique_name(self):
-        """Proxy should store the unique_name."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='my_gorilla',
-            access=GlueAccess.VIEW,
-        )
+        bound_attributes = proxy.discover_bound_attributes()
 
-        self.assertEqual(proxy.unique_name, 'my_gorilla')
+        self.assertIn('GlueModelInstanceProxy.get', bound_attributes)
+        self.assertIn('GlueModelInstanceProxy.save', bound_attributes)
+        self.assertIn('GlueModelInstanceProxy.delete', bound_attributes)
+        self.assertIn('Gorilla.battle_cry', bound_attributes)
 
-    def test_raises_for_wrong_target_type(self):
-        """Proxy should raise ValueError for wrong target type."""
-        from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
+    def test_get_bound_attribute_owner_returns_matching_target(self):
+        proxy = make_model_proxy(self.gorilla)
+        bound_attribute = proxy.discover_bound_attributes()['Gorilla.battle_cry']
 
-        with self.assertRaises(ValueError):
-            GlueQuerySetProxy(
-                target=self.gorilla,  # Model, not QuerySet
-                unique_name='bad',
-                access=GlueAccess.VIEW,
-            )
+        self.assertIs(proxy._get_bound_attribute_owner(bound_attribute), self.gorilla)
 
-    def test_default_access_is_view(self):
-        """Proxy should default to VIEW access when not specified."""
-        proxy = GlueModelInstanceProxy(
-            target=self.gorilla,
-            unique_name='gorilla',
-        )
+    def test_policy_data_only_includes_attributes_with_available_owner(self):
+        proxy = make_model_proxy(self.gorilla)
 
-        self.assertEqual(proxy.access, GlueAccess.VIEW)
+        policy_data = proxy._policy_data
+
+        self.assertIn('GlueModelInstanceProxy.get', policy_data)
+        self.assertIn('Gorilla.battle_cry', policy_data)
+
+    def test_register_with_request_stores_state_and_signed_policy(self):
+        proxy = make_model_proxy(self.gorilla)
+        request = RequestFactory().get('/')
+
+        proxy._register_with_request(request)
+
+        registered = getattr(request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY)['gorilla']
+        self.assertIn('state', registered)
+        self.assertIn('policy', registered)
+        self.assertEqual(registered['policy']['name'], 'gorilla')
+        self.assertEqual(registered['policy']['subject_details']['namespace'], 'model')
+
+    def test_query_set_proxy_rejects_wrong_state_shape_by_constructor_contract(self):
+        with self.assertRaises(TypeError):
+            GlueQuerySetProxy(name='bad', namespace='querySet', access=GlueAccess.VIEW)

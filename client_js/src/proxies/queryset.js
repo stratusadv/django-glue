@@ -1,6 +1,5 @@
 import BaseGlueProxy from "./base";
 import GlueModelProxy from "./model";
-import GlueClient from "../client";
 
 /**
  * Proxy for a Django QuerySet. Provides querying, filtering, ordering, slicing,
@@ -15,17 +14,17 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     /** @type {Object} */
     _prevQueryParams = {}
 
-    /**
+     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
      * @param {string} options.name - The unique name of this proxy in the session.
-     * @param {Object} options.contract - Proxy contract - immutable and enforces integrity of the proxy.
+     * @param {Object} options.policy - Proxy policy - immutable and enforces integrity of the proxy.
      * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
-     * @param {Object|null} [options.actions] - Optional actions map; falls back to `contract.actions`.
+     * @param {Object|null} [options.attributes] - Optional attributes map; falls back to `policy.bound_attributes`.
      * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, name, contract, state, actions = null, namespace = 'queryset'}) {
-        super({http, name, contract, state, actions, namespace});
+    constructor({http, name, policy, state, attributes = null, namespace = 'querySet'}) {
+        super({http, name, policy, state, attributes, namespace});
     }
 
     /**
@@ -43,32 +42,44 @@ class GlueQuerySetProxy extends BaseGlueProxy {
      * @returns {GlueModelProxy} The child proxy.
      */
     buildChildModelProxy(item) {
-        // Access pk_field_name directly from contract to avoid timing issues
-        // with parent constructor calling _handleStateUpdate before child sets _pkFieldName
-        const pkFieldName = this._contract.custom_data.pk_field_name || 'id'
+        const pkFieldName = this._policy.subject_details.pk_field_name || 'id'
+        if (!item.__policy__) {
+            throw new Error(`Child proxy item missing __policy__ for pk ${item[pkFieldName]}`)
+        }
+        const childName = item.__policy__.name || `${this._name}__${item[pkFieldName]}`
+
+        const querySetProxy = this
+
         const proxy = new GlueModelProxy({
             http: this.http,
-            name: this._name,
-            contract: this._contract,
+            name: childName,
+            policy: item.__policy__,
             state: {
-                instance_pk: item[pkFieldName],
+                namespace: 'model',
                 instance_data: item,
                 errors: {},
-                files: {}
             },
-            parentQuerySet: this,
         })
 
-        // Forward child proxy events to the queryset's listeners
-        const querySetProxy = this;
-        Object.keys(proxy._actions).forEach(actionName => {
-            ['before', 'after', 'error'].forEach(type => {
-                proxy.addListener(actionName, (event) => {
-                    querySetProxy.emitListeners(type, actionName, event);
-                }, type);
-            });
-        });
+        // Forward child delete/save events to the parent queryset so list-level listeners fire.
+        proxy.addListener('delete', async (event) => {
+            await this.emitListeners('after', 'delete', event)
+            await this.refresh()
+        }, 'after')
+        proxy.addListener('delete', async (event) => {
+            await this.emitListeners('error', 'delete', event)
+        }, 'error')
+        proxy.addListener('save', async (event) => {
+            await this.emitListeners('after', 'save', event)
+            if (!event.proxy.hasErrors()) {
+                await this.refresh()
+            }
+        }, 'after')
+        proxy.addListener('save', async (event) => {
+            await this.emitListeners('error', 'save', event)
+        }, 'error')
 
+        globalThis.Glue['model'][proxy._name] = proxy
         return proxy
     }
 
@@ -84,7 +95,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         }
 
         if (!this._loaded || !this._isEqual(this._prevQueryParams, this._queryParams)) {
-            await this._processAction('GlueQuerySetProxy.query_with_params', this._queryParams);
+            await this._processAttributeEvent('GlueQuerySetProxy.query_with_params', this._queryParams);
             this._prevQueryParams = this._queryParams
             this._loaded = true;
         }
@@ -217,7 +228,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
      * @returns {Promise<GlueModelProxy[]>} Updated items array.
      */
     async pushNew(location = 'start') {
-        const defaults = await this._processAction('new');
+        const defaults = await this._processAttributeEvent('GlueQuerySetProxy.new');
         const newObj = this.buildChildModelProxy(defaults)
 
         if (location == 'end') {
@@ -231,7 +242,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this._items
     }
 
-    _handleActionResponse(actionName, actionKwargs, response) {
+    _handleEventResponse(attributeName, eventKwargs, response) {
+        super._handleEventResponse(attributeName, eventKwargs, response);
+
         if (this._state?.list_data) {
             this._items = this._state.list_data.map(item => this.buildChildModelProxy(item))
         }

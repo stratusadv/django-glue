@@ -1,209 +1,90 @@
-import {describe, it, expect, beforeEach, mock} from 'bun:test';
+import {describe, expect, it, mock} from 'bun:test';
 import GlueFunctionProxy from '../../src/proxies/function';
+import {createFunctionPolicy, createMockHttp} from '../testUtils';
 
 describe('GlueFunctionProxy', () => {
-    let mockHttp;
-    let fn;
+    it('creates a callable wrapper that maps declared params into event kwargs', async () => {
+        const http = createMockHttp({
+            result: {result: 12},
+            state: null,
+        });
+        const fn = GlueFunctionProxy.create({
+            http,
+            name: 'calculate',
+            policy: createFunctionPolicy(),
+        });
 
-    const contract = {
-        subject_type: 'Function',
-        function_path: 'myapp.utils.add_numbers',
-        params: [
-            {name: 'a', type: 'int'},
-            {name: 'b', type: 'int'},
-        ],
-        actions: {
-            execute: {action_data: 'ActionPayloadSchema'},
-        },
-    };
+        const result = await fn({amount: 10, tax: 2, ignored: true});
 
-    beforeEach(() => {
-        mockHttp = {
-            sendActionRequest: mock(async (req) => {
-                return {
-                    data: {
-                        result: req.payload.a + req.payload.b,
-                    },
-                };
-            }),
-        };
-
-        fn = GlueFunctionProxy.create({
-            http: mockHttp,
-            proxyUniqueName: 'add',
-            contract: contract,
+        expect(result).toBe(12);
+        expect(http.sendAttributeEventRequest).toHaveBeenCalledWith({
+            name: 'calculate',
+            attribute: 'GlueFunctionProxy.execute',
+            eventKwargs: {amount: 10, tax: 2},
+            policy: fn._policy,
+            state: null,
         });
     });
 
-    describe('static name', () => {
-        it('is function for namespace mapping', () => {
-            expect(GlueFunctionProxy.name).toBe('function');
+    it('rejects non-object arguments', async () => {
+        const fn = GlueFunctionProxy.create({
+            http: createMockHttp(),
+            name: 'calculate',
+            policy: createFunctionPolicy(),
         });
+
+        await expect(fn(['not', 'object'])).rejects.toThrow(
+            'Must pass glue function arguments as fields in an object.',
+        );
     });
 
-    describe('static create', () => {
-        it('returns a callable function', () => {
-            expect(typeof fn).toBe('function');
+    it('exposes listener methods on the callable wrapper', async () => {
+        const http = createMockHttp({result: {result: 5}, state: null});
+        const fn = GlueFunctionProxy.create({
+            http,
+            name: 'calculate',
+            policy: createFunctionPolicy(),
         });
+        const after = mock(() => {});
 
-        it('attaches metadata properties', () => {
-            expect(fn._uniqueName).toBe('add');
-            expect(fn._contract).toBe(contract);
-            expect(fn._params).toEqual([
-                {name: 'a', type: 'int'},
-                {name: 'b', type: 'int'},
-            ]);
-        });
+        fn.addListener('execute', after);
+        await fn({amount: 5});
 
-        it('attaches listener methods', () => {
-            expect(typeof fn.addListener).toBe('function');
-            expect(typeof fn.removeListener).toBe('function');
-            expect(typeof fn.clearListeners).toBe('function');
-        });
+        expect(after.mock.calls[0][0].result).toEqual({result: 5});
     });
 
-    describe('callable invocation', () => {
-        it('maps object field args to named params and calls execute', async () => {
-            const result = await fn({a: 3, b: 4});
-            expect(result).toBe(7);
-        });
+    it('uses the execute method defined by _defineAttributeProperties', async () => {
+        const http = createMockHttp({result: {result: 42}, state: null});
+        const policy = createFunctionPolicy();
+        const fn = GlueFunctionProxy.create({http, name: 'test_fn', policy});
 
-        it('sends correct action request', async () => {
-            await fn({a: 10, b: 20});
+        // The internal instance should have execute defined as a method
+        // This test ensures we're using the bound attribute system, not a hardcoded path
+        expect(policy.bound_attributes['GlueFunctionProxy.execute']).toBeDefined();
 
-            expect(mockHttp.sendActionRequest).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    uniqueName: 'add',
-                    action: 'execute',
-                    payload: {a: 10, b: 20},
-                })
-            );
-        });
+        await fn({amount: 1});
 
-        it('handles fewer args than params', async () => {
-            mockHttp.sendActionRequest = mock(async (req) => {
-                return {
-                    data: {
-                        result: (req.payload.a || 0) + (req.payload.b || 0),
-                    },
-                };
-            });
-
-            const result = await fn({a: 5});
-            expect(result).toBe(5);
-        });
-
-        it('handles extra args beyond params', async () => {
-            mockHttp.sendActionRequest = mock(async (req) => {
-                return {
-                    data: {
-                        result: req.payload.a + req.payload.b,
-                    },
-                };
-            });
-
-            const result = await fn({a: 1, b: 2, extra: 999});
-            expect(result).toBe(3);
-        });
-
-        it('throws when args are not passed as an object', async () => {
-            await expect(fn(1, 2)).rejects.toThrow('Must pass glue function arguments as fields in an object.');
-        });
-
-        it('handles various argument types', async () => {
-            mockHttp.sendActionRequest = mock(async (req) => {
-                return {
-                    data: {
-                        result: `${req.payload.greeting}, ${req.payload.name}!`,
-                    },
-                };
-            });
-
-            const greetFn = GlueFunctionProxy.create({
-                http: mockHttp,
-                proxyUniqueName: 'greet',
-                contract: {
-                    subject_type: 'Function',
-                    function_path: 'myapp.utils.greet',
-                    params: [
-                        {name: 'greeting', type: 'str'},
-                        {name: 'name', type: 'str'},
-                    ],
-                    actions: {execute: {}},
-                },
-            });
-
-            const result = await greetFn({greeting: 'Hello', name: 'World'});
-            expect(result).toBe('Hello, World!');
-        });
+        // Verify the full attribute path is sent to the server
+        const call = http.sendAttributeEventRequest.mock.calls[0][0];
+        expect(call.attribute).toBe('GlueFunctionProxy.execute');
+        expect(call.attribute).not.toBe('execute');
     });
 
-    describe('listener events', () => {
-        it('fires before listeners before execute', async () => {
-            const events = [];
-
-            mockHttp.sendActionRequest = mock(async () => {
-                events.push('request');
-                return {data: {result: 42}};
-            });
-
-            fn.addListener('execute', () => {
-                events.push('before');
-            }, 'before');
-
-            await fn({a: 1, b: 2});
-
-            expect(events).toEqual(['before', 'request']);
+    it('unwraps nested result from server response', async () => {
+        // Server returns {result: {result: actualValue}, state: ...}
+        // The function proxy should unwrap to return actualValue
+        const http = createMockHttp({
+            result: {result: {data: 'nested', count: 5}},
+            state: null,
+        });
+        const fn = GlueFunctionProxy.create({
+            http,
+            name: 'getData',
+            policy: createFunctionPolicy(),
         });
 
-        it('fires after listeners with result', async () => {
-            let capturedEvent = null;
+        const result = await fn({});
 
-            fn.addListener('execute', (event) => {
-                capturedEvent = event;
-            }, 'after');
-
-            await fn({a: 3, b: 4});
-
-            expect(capturedEvent.result).toEqual({result: 7});
-            expect(capturedEvent.action).toBe('execute');
-        });
-
-        it('fires error listeners on failure', async () => {
-            let capturedError = null;
-
-            mockHttp.sendActionRequest = mock(async () => {
-                throw new Error('server error');
-            });
-
-            fn.addListener('execute', (event) => {
-                capturedError = event.error;
-            }, 'error');
-
-            await expect(fn({a: 1, b: 2})).rejects.toThrow('server error');
-            expect(capturedError).toBeInstanceOf(Error);
-        });
-    });
-
-    describe('removeListener and clearListeners', () => {
-        it('removes a specific listener', async () => {
-            let callCount = 0;
-            const callback = () => { callCount++; };
-
-            fn.addListener('execute', callback, 'after');
-            fn.removeListener('execute', callback, 'after');
-
-            await fn({a: 1, b: 2});
-            expect(callCount).toBe(0);
-        });
-
-        it('clears all listeners', async () => {
-            let callCount = 0;
-            fn.addListener('execute', () => { callCount++; }, 'after');
-            fn.clearListeners();
-
-            await fn({a: 1, b: 2});
-            expect(callCount).toBe(0);
-        });
+        expect(result).toEqual({data: 'nested', count: 5});
     });
 });

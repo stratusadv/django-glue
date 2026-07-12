@@ -1,7 +1,7 @@
 __VERSION__ = '1.0.0a3'
 
 UNIQUE_NAME_KEY = 'unique_name'
-ACTION_KEY = 'action'
+BOUND_ATTRIBUTE_KEY = 'bound_attribute'
 GLUE_TYPE_KEY = 'glue_type'
 
 # Fields
@@ -21,7 +21,5 @@ DJANGO_GLUE_PROXIES_SCRIPT_NAME = 'django-glue-proxies'
 
 # Url
 BASE_URL_NAME = '__dg__'
-ACTION_URL_NAME = 'action'
-KEEP_LIVE_URL_NAME = 'keep_live'
-SESSION_DATA_URL_NAME = 'session_data'
+BOUND_ATTRIBUTE_EVENT_URL_NAME = 'bound_attribute_event'
 GLUE_VIEW_URL_NAME = 'glue_view'

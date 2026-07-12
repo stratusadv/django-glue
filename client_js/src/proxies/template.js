@@ -11,19 +11,20 @@ class GlueTemplateProxy extends BaseGlueProxy {
     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.proxyDefinition - Serialized proxy metadata from the server.
+     * @param {string} options.name - The unique name of this proxy.
+     * @param {Object} options.policy - Serialized proxy policy from the server.
+     * @param {Object} [options.state] - Proxy state.
      * @param {Object} [options.sharedPayload={}] - Payload merged into every request.
      */
-    constructor({http, proxyUniqueName, proxyDefinition, sharedPayload = {}}) {
-        super({http, proxyUniqueName, proxyDefinition});
+    constructor({http, name, policy, state = null, sharedPayload = {}}) {
+        super({http, name, policy, state});
 
         /** @type {Object} */
         this._sharedPayload = sharedPayload;
     }
 
     /**
-     * Fetch rendered HTML from the server by calling the render_html action.
+     * Fetch rendered HTML from the server by calling the render_html bound attribute.
      * Merges sharedPayload with the per-call payload.
      * @param {Object} [payload] - Additional context data merged with sharedPayload.
      * @returns {Promise<string>} Rendered HTML string.
@@ -35,7 +36,7 @@ class GlueTemplateProxy extends BaseGlueProxy {
             ...payload,
         };
 
-        const response = await this._processAction('render_html', mergedPayload);
+        const response = await this.render_html(mergedPayload);
 
         return response.html;
     }

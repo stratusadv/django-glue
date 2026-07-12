@@ -2,71 +2,65 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from django.http import HttpRequest
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies.template.contract import GlueTemplateProxyContractData
-from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.actions.decorators import action
+from django_glue.proxies.template.state import GlueTemplateProxyState
+from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.resolver.exceptions import GlueResolverError
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionRequest
+    from django.http import HttpRequest
+    pass
 
 
 class GlueTemplateProxy(BaseGlueProxy):
+    """Proxy for a Django template. Provides server-side rendering."""
+
     _subject_type = str
-
-    def __init__(
-        self,
-        template_path: str,
-        initial_context_data: dict | None = None,
-        namespace: str = 'template',
-        **kwargs,
-    ) -> None:
-        super().__init__(namespace=namespace, **kwargs)
-
-        self.template_path = template_path
-        self.initial_context_data = initial_context_data or {}
+    _state_class = GlueTemplateProxyState
 
     @classmethod
-    def from_action_request(cls, action_request: ActionRequest) -> GlueTemplateProxy:
-        contract_data = GlueTemplateProxyContractData(**action_request.contract.custom_data)
-
-        return cls(
-            name=action_request.contract.name,
-            access=action_request.contract.access,
-            template_path=contract_data.template_path,
-            initial_context_data=contract_data.initial_context_data
-        )
+    def register_policy(
+        cls,
+        request: HttpRequest,
+        target: str,
+        name: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        namespace: str = 'template',
+        initial_context_data: dict | None = None,
+    ) -> None:
+        state = GlueTemplateProxyState(template_path=target, context_data=initial_context_data or {})
+        proxy = cls(name=name, namespace=namespace, access=access, state=state)
+        proxy._register_with_request(request)
 
     @property
-    def _custom_contract_data(self) -> dict:
+    def _custom_policy_details(self) -> dict:
         return {
-            'template_path': self.template_path,
-            'initial_context_data': self.template_path,
+            'template_path': self.state.template_path,
+            'initial_context_data': self.state.context_data,
         }
 
-    @action(access=GlueAccess.VIEW)
-    def render_html(self, request: HttpRequest, **action_kwargs: dict) -> dict:
-        action_kwargs = action_kwargs or {}
-        merged_context = {**self.initial_context_data, **action_kwargs}
+    @bind_attribute(access=GlueAccess.VIEW)
+    def render_html(self, request: HttpRequest, **context_kwargs: dict) -> dict:
+        context_kwargs = context_kwargs or {}
+        merged_context = {**self.state.context_data, **context_kwargs}
 
         try:
             html = render_to_string(
-                template_name=self.template_path,
-                context=merged_context
+                template_name=self.state.template_path,
+                context=merged_context,
             )
         except TemplateDoesNotExist as e:
             raise GlueResolverError(
-                response_error=f'Template not found: {self.template_path}',
+                response_error=f'Template not found: {self.state.template_path}',
                 response_status=404,
             ) from e
         except TemplateSyntaxError as e:
             raise GlueResolverError(
-                response_error=f'Template syntax error in {self.template_path}: {e!s}',
+                response_error=f'Template syntax error in {self.state.template_path}: {e!s}',
                 response_status=500,
             ) from e
 

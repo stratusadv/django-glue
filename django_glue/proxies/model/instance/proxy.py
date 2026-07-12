@@ -1,36 +1,36 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self, cast
-from django.db.models import Model
+from typing import TYPE_CHECKING, Any, Sequence
 
-from django_glue.proxies.form.state import GlueFormProxyState
-from django_glue.proxies.model.instance.contract import GlueModelInstanceProxyContractData
+from django.db.models import Model
+from django.forms.models import ModelForm
+
+from django_glue.access.access import GlueAccess
 from django_glue.proxies.model.proxy import BaseGlueModelProxy
-from django_glue.utils import get_attr_from_path_string
+from django_glue.proxies.model.instance.state import GlueModelInstanceProxyState
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionRequest
+    from django.http import HttpRequest
 
 
 class GlueModelInstanceProxy(BaseGlueModelProxy):
+    """Proxy for a single Django model instance."""
+
+    _state_class = GlueModelInstanceProxyState
+
     @classmethod
-    def _from_action_request(cls, action_request: ActionRequest) -> Self:
-        contract_data = GlueModelInstanceProxyContractData(**action_request.contract.custom_data)
-        state_data = GlueFormProxyState(**action_request.state) if action_request.state else None
-
-        return cls._from_deconstructed_action_request_data(
-            name=action_request.contract.name,
-            access=action_request.contract.access,
-            model_class_path=contract_data.model_class_path,
-            form_class_path=contract_data.form_class_path,
-            allowed_fields=contract_data.allowed_fields,
-            instance_pk=contract_data.target_pk,
-            state=state_data,
-            request=action_request.request
-        )
-
-    @property
-    def _custom_contract_data(self) -> dict:
-        return {
-            'target_pk': self.model_instance.pk,
-        } | super()._custom_contract_data
+    def register(
+        cls,
+        request: HttpRequest,
+        target: Model,
+        name: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        namespace: str = 'model',
+        fields: Sequence | dict = (),
+        exclude: Sequence[str] = (),
+        form_class: type[ModelForm] | None = None,
+    ) -> None:
+        state, form_class_path = cls._build_state(target, fields, exclude, form_class)
+        proxy = cls(name=name, namespace=namespace, access=access, state=state)
+        proxy._form_class_path = form_class_path
+        proxy._register_with_request(request)

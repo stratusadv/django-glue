@@ -1,182 +1,127 @@
 from __future__ import annotations
 
-from typing import Any, Self, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.forms.forms import BaseForm
-from django.forms import ModelForm
-from django.db import transaction
+
 from django_glue.access.access import GlueAccess
-from django_glue.actions.decorators import action
-from django_glue.proxies.form.contract import GlueFormProxyContractData
+from django_glue.bound_attributes.decorators import bind_attribute
 from django_glue.proxies.form.state import GlueFormProxyState
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionRequest
     from django.http import HttpRequest
-    from django_glue.actions.action import GlueAction
 
 
 class GlueFormProxy(BaseGlueProxy):
-    """
-    Mixin providing form-related functionality for proxies.
-
-    Provides:
-    - Field definition extraction for frontend
-    - Form validation logic
-    - Error serialization
-    - validate() and save() actions
-    - Response proxy_state with form errors
-    """
+    """Proxy for a Django form. Provides field metadata, validation, and save operations."""
 
     _subject_type = BaseForm
-
-    def __init__(
-            self,
-            form_instance: BaseForm,
-            namespace: str = 'form',
-            **kwargs
-        ) -> None:
-        self.form_instance = form_instance
-
-        # Only set form_class_path if not already set by a subclass
-        if not hasattr(self, 'form_class_path'):
-            form_class = self.form_instance.__class__
-            self.form_class_path = f'{form_class.__module__}.{form_class.__name__}'
-
-        super().__init__(
-            **kwargs,
-            namespace=namespace
-        )
+    _state_class = GlueFormProxyState
 
     @classmethod
-    def _from_action_request(cls, action_request: ActionRequest) -> Self:
-        contract_data = GlueFormProxyContractData.model_validate(
-            action_request.contract.custom_data
-        )
+    def register(
+        cls,
+        request: HttpRequest,
+        target: BaseForm,
+        name: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        namespace: str = 'form',
+    ) -> None:
+        from django_glue.proxies.form.state import GlueFormProxyState  # noqa: PLC0415
 
-        if not contract_data.form_class_path:
-            raise ValueError()
+        state = GlueFormProxyState(form=target)
+        proxy = cls(name=name, namespace=namespace, access=access, state=state)
+        proxy._register_with_request(request)
 
-        form_class = cast(
-            'type[BaseForm]', get_attr_from_path_string(contract_data.form_class_path)
-        )
-
-        if action_request.state:
-            state_data = GlueFormProxyState.model_validate(action_request.state)
-            form = form_class(initial=state_data.instance_data, files=action_request.request.FILES)
-        else:
-            form = form_class(files=action_request.request.FILES)
-
-        return cls(
-            name=action_request.contract.name,
-            access=action_request.contract.access,
-            form_instance=form
-        )
-
-    def _get_action_target(
-        self,
-        action: GlueAction,
-    ) -> Any:
-        if issubclass(self.form_instance.__class__, action.target_class):
-            return self.form_instance
-
-        return super()._get_action_target(action)
+    @property
+    def targets(self) -> list:
+        return [self.state.form, *super().targets]
 
     @property
     def _field_metadata(self) -> dict:
-        """Extract field definitions from the form to aid in frontend rendering."""
-        form = self.form_instance
-
-        # Get editable form fields from form
+        form = self.state.form
         fields = {}
-        for name, field in form.fields.items():
+        for field_name, field in form.fields.items():
             field_def = {
                 'type': field.__class__.__name__,
                 'required': field.required,
                 'disabled': field.disabled,
-                'label': str(field.label) if field.label else name,
+                'label': str(field.label) if field.label else field_name,
                 'help_text': str(field.help_text) if field.help_text else '',
                 'widget': field.widget.__class__.__name__,
                 'editable': True,
             }
-
-            if hasattr(field, 'choices') and field.choices:
-                if field.__class__.__name__ not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
-                    field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
-                else:
-                    field_def['choices'] = []
+            if hasattr(field, 'queryset'):
+                field_def['choices'] = []
+                field_def['pk_field'] = field.queryset.model._meta.pk.name
+                field_def['choice_model_path'] = (
+                    f'{field.queryset.model.__module__}.{field.queryset.model.__name__}'
+                )
+                field_def['choices_cache_key'] = (
+                    f'{form.__class__.__module__}.{form.__class__.__name__}.'
+                    f'{field_name}.{field.queryset.model._meta.label_lower}'
+                )
+            elif hasattr(field, 'choices') and field.choices:
+                field_def['choices'] = [(str(value), str(label)) for value, label in field.choices]
 
             if hasattr(field, 'max_length') and field.max_length:
                 field_def['max_length'] = field.max_length
             if hasattr(field, 'min_length') and field.min_length:
                 field_def['min_length'] = field.min_length
-            fields[name] = field_def
-
+            fields[field_name] = field_def
         return fields
 
     @property
-    def _custom_contract_data(self) -> dict:
-        return {
-            'allowed_fields': self._field_metadata,
-            'form_class_path': self.form_class_path,
+    def _custom_policy_details(self) -> dict:
+        form_class_path = f'{self.state.form.__class__.__module__}.{self.state.form.__class__.__name__}'
+
+        details = {
+            'included_fields': self._field_metadata,
+            'form_class_path': form_class_path,
+            'target_pk': self.state.target_pk
         }
 
-    def get_state(self) -> GlueFormProxyState:
-        return GlueFormProxyState(
-            instance_data=self.form_instance.data or self.form_instance.initial,
-            errors=self.form_instance.errors,
-        )
+        model_instance = getattr(self.state.form, 'instance', None)
 
-    def _bind_form(self) -> None:
-        if not self.form_instance.is_bound:
-            form_class = self.form_instance.__class__
+        if model_instance:
+            details.update({
+                'pk_field_name': model_instance.__class__._meta.pk.name,
+                'target_pk': model_instance.pk,
+            })
 
-            form_kwargs = {
-                'data': self.form_instance.initial,
-                'files': self.form_instance.files
-            }
+        return details
 
-            if issubclass(form_class, ModelForm):
-                form_kwargs['instance'] = getattr(self.form_instance, 'instance', None)
-
-            self.form_instance = form_class(**form_kwargs)
-
-    @property
-    def errors(self) -> dict:
-        """Convert Django ErrorDict to JSON-serializable dict."""
-        self._bind_form()
-        self.form_instance.is_valid()
-        return self.form_instance.errors
-
-    @action(access=GlueAccess.CHANGE)
+    @bind_attribute(access=GlueAccess.CHANGE)
     def validate(self, request: HttpRequest) -> dict:
-        return {'valid': bool(self.errors)}
+        return {'valid': not bool(self.state.errors)}
 
-    @action(access=GlueAccess.VIEW)
+    @bind_attribute(access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
-        request,
-        field_name: str | None = None
+        request: HttpRequest,
+        field_name: str | None = None,
+        choice_fields: list[str] | None = None,
     ) -> list:
-        """Get choices for a foreign key field."""
         if not field_name:
             return []
-
-        field = self.form_instance.fields[field_name]
-
-        if field.__class__.__name__ not in ['ModelChoiceField', 'ModelMultipleChoiceField']:
+        field = self.state.form.fields[field_name]
+        if field.__class__.__name__ not in ('ModelChoiceField', 'ModelMultipleChoiceField'):
             return []
 
-        return [[obj.pk, f'{obj}'] for obj in field.queryset.all()]
+        def serialize_choice(obj) -> dict[str, Any]:
+            choice = {'pk': obj.pk, '__str__': f'{obj}'}
+            for choice_field in choice_fields or []:
+                choice[choice_field] = getattr(obj, choice_field)
+            return choice
 
-    @action(access=GlueAccess.VIEW)
+        return [serialize_choice(obj) for obj in field.queryset.all()]
+
+    @bind_attribute(access=GlueAccess.VIEW)
     def load(self, request: HttpRequest) -> None:
         pass
 
-    @transaction.atomic
-    @action(access=GlueAccess.CHANGE)
+    @bind_attribute(access=GlueAccess.CHANGE)
     def save(self, request: HttpRequest) -> None:
-        if not self.errors:
-            cast('ModelForm', self.form_instance).save()
+        if not self.state.errors:
+            self.state.form.save()

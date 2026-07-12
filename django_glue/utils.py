@@ -4,7 +4,7 @@ import base64
 import json
 import pickle
 from collections import UserDict
-from typing import Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -21,10 +21,19 @@ def get_attr_from_path_string(class_path_string: str) -> Callable:
     import importlib  # noqa: PLC0415
 
     module = importlib.import_module(module_path)
-    try:
-        return getattr(module, class_name)
-    except AttributeError as e:
-        raise e
+
+    return getattr(module, class_name)
+
+
+def get_attr_from_path_string_on_instance(instance: Any, path: str) -> Any:
+    """Resolve a dotted path on an instance (e.g., 'services.increment_age_and_save')."""
+    current = instance
+    for part in path.split('.'):
+        current = getattr(current, part, None)
+        if current is None:
+            return None
+    return current
+
 
 
 def serialize_queryset(queryset: QuerySet) -> str:
@@ -51,23 +60,3 @@ def deserialize_queryset(encoded_query: str) -> QuerySet:
     queryset.query = query
     return queryset
 
-
-class AppendOnlyDict(UserDict):
-    def __setitem__(self, key, value):
-        # This catch-all intercepts direct assignment, .update(), and __init__
-        if key in self.data:
-            raise KeyError(f"Cannot overwrite existing key: '{key}'")
-        super().__setitem__(key, value)
-
-    def __delitem__(self, key):
-        raise KeyError("Items cannot be removed from this dictionary")
-
-    # Group and block all deletion methods cleanly
-    def pop(self, key, default=None):
-        raise AttributeError("Deletion is disabled")
-        
-    def popitem(self):
-        raise AttributeError("Deletion is disabled")
-        
-    def clear(self):
-        raise AttributeError("Deletion is disabled")

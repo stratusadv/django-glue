@@ -5,14 +5,12 @@ from django.forms import ModelForm, BaseForm
 from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.actions.action import register_target_actions
-from django_glue.actions.decorators import action, action_provider
+from django_glue.bound_attributes.decorators import bind_attribute
 
 
 class Glue:
     Access = GlueAccess
-    action = staticmethod(action)
-    action_provider = staticmethod(action_provider)
+    attribute = staticmethod(bind_attribute)
 
     @staticmethod
     def model(
@@ -26,22 +24,15 @@ class Glue:
     ) -> None:
         from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 
-        proxy = GlueModelInstanceProxy(
+        GlueModelInstanceProxy.register(
+            request=request,
+            target=target,
             name=unique_name,
             access=access,
-            model_instance=target,
             fields=fields,
             exclude=exclude,
             form_class=form_class,
         )
-
-        for t in [
-            proxy,
-            target
-        ]:
-            register_target_actions(t)
-
-            proxy.register_with_request(request)
 
     @staticmethod
     def queryset(
@@ -55,22 +46,15 @@ class Glue:
     ) -> None:
         from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 
-        proxy = GlueQuerySetProxy(
+        GlueQuerySetProxy.register(
+            request=request,
+            target=target,
             name=unique_name,
             access=access,
-            queryset=target,
             fields=fields,
             exclude=exclude,
             form_class=form_class,
         )
-
-        for t in [
-            proxy,
-            target
-        ]:
-            register_target_actions(t)
-
-        proxy.register_with_request(request)
 
     @staticmethod
     def form(
@@ -81,19 +65,12 @@ class Glue:
     ) -> None:
         from django_glue.proxies.form.proxy import GlueFormProxy
 
-        proxy = GlueFormProxy(
+        GlueFormProxy.register(
+            request=request,
+            target=target,
             name=unique_name,
             access=access,
-            form_instance=target,
         )
-
-        for t in [
-            proxy.register_with_request(request),
-            target
-        ]:
-            register_target_actions(t)
-
-        proxy.register_with_request(request)
 
     @staticmethod
     def template(
@@ -104,22 +81,12 @@ class Glue:
     ) -> None:
         from django_glue.proxies.template.proxy import GlueTemplateProxy
 
-        proxy = GlueTemplateProxy(
+        GlueTemplateProxy.register_policy(
             request=request,
+            target=target,
             name=unique_name,
-            template_path=target,
-            proxy_class=GlueTemplateProxy,
-            access=GlueAccess.VIEW,
-            initial_context_data=initial_context_data or {},
+            initial_context_data=initial_context_data,
         )
-
-        for t in [
-            proxy,
-            target
-        ]:
-            register_target_actions(t)
-
-        proxy.register_with_request(request)
 
     @staticmethod
     def function(
@@ -130,18 +97,8 @@ class Glue:
     ) -> None:
         from django_glue.proxies.function.proxy import GlueFunctionProxy
 
-        proxy = GlueFunctionProxy(
+        GlueFunctionProxy.register_policy(
             request=request,
+            target=target,
             name=unique_name,
-            function_path=target,
-            access=GlueAccess.VIEW,
-            **kwargs,
         )
-
-        for t in [
-            proxy,
-            target
-        ]:
-            register_target_actions(t)
-
-        proxy.register_with_request(request)
