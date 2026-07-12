@@ -4,7 +4,9 @@ __pycache__/
 .vscode/
 .claude/
 .codegraph/
+.opencode/
 .playwright-cli/
+.playwright-mcp/
 dist/
 eval/
 *.egg-info/
