@@ -1,4 +1,4 @@
-__VERSION__ = '1.0.0a3'
+__VERSION__ = '1.0.0a4'
 
 UNIQUE_NAME_KEY = 'unique_name'
 BOUND_ATTRIBUTE_KEY = 'bound_attribute'
