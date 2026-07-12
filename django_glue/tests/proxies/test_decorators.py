@@ -39,7 +39,6 @@ class BoundAttributeDecoratorProxyRegistrationTestCase(TestCase):
 
     def test_attribute_is_discovered_in_proxy_bound_attributes(self):
         """Attributes decorated with @attribute should be discovered by discover_bound_attributes."""
-        from django.test import RequestFactory  # noqa: PLC0415
         from test_project.gorilla.models import Gorilla  # noqa: PLC0415
 
         gorilla = Gorilla.objects.create(

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from django_glue.proxies.form.state import GlueFormProxyState
 from django_glue.proxies.policy import ProxyPolicySubjectDetails
 from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
-from django.db.models.fields.files import FieldFile
 from django.forms.models import ModelMultipleChoiceField
 from django.forms import modelform_factory
 from django_glue.utils import get_attr_from_path_string

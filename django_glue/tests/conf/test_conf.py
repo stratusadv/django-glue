@@ -4,7 +4,6 @@ Tests for Django Glue Settings configuration.
 from django.test import TestCase, override_settings
 
 from django_glue.conf import settings
-from django_glue import settings as default_settings
 
 
 class SettingsTestCase(TestCase):

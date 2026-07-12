@@ -12,7 +12,6 @@ from django_glue.utils import (
     deserialize_queryset,
 )
 from test_project.gorilla.models import Gorilla
-from django_glue.proxies.proxy import BaseGlueProxy
 
 
 class GetRequestBodyDataTestCase(TestCase):

@@ -1,0 +1,61 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "Page not found (404)" [level=1] [ref=e3]
+    - table [ref=e4]:
+      - rowgroup [ref=e5]:
+        - row [ref=e6]:
+          - rowheader "Request Method:" [ref=e7]
+          - cell "GET" [ref=e8]
+        - row [ref=e9]:
+          - rowheader "Request URL:" [ref=e10]
+          - cell "http://localhost:8080/gorilla/arena/1/" [ref=e11]
+  - main [ref=e12]:
+    - paragraph [ref=e13]:
+      - text: Using the URLconf defined in
+      - code [ref=e14]: test_project.urls
+      - text: ", Django tried these URL patterns, in this order:"
+    - list [ref=e15]:
+      - listitem [ref=e16]:
+        - code
+        - code [ref=e17]: "[name='list']"
+      - listitem [ref=e18]:
+        - code
+        - code [ref=e19]: <int:pk>/ [name='detail']
+      - listitem [ref=e20]:
+        - code
+        - code [ref=e21]: <int:pk>/template/ [name='detail_template']
+      - listitem [ref=e22]:
+        - code
+        - code [ref=e23]: progressive_form/ [name='progressive_form']
+      - listitem [ref=e24]:
+        - code
+        - code [ref=e25]: <int:pk>/arena/ [name='arena']
+      - listitem [ref=e26]:
+        - code
+        - code [ref=e27]: skills/ [name='skills']
+      - listitem [ref=e28]:
+        - code
+        - code [ref=e29]: arena/ [name='random_arena']
+      - listitem [ref=e30]:
+        - code [ref=e31]: fight/
+      - listitem [ref=e32]:
+        - code [ref=e33]: comments/
+      - listitem [ref=e34]:
+        - code [ref=e35]: lab/
+      - listitem [ref=e36]:
+        - code [ref=e37]: admin/
+      - listitem [ref=e38]:
+        - code [ref=e39]: __dg__/
+      - listitem [ref=e40]:
+        - code [ref=e41]: ^media/(?P<path>.*)$
+    - paragraph [ref=e42]:
+      - text: The current path,
+      - code [ref=e43]: gorilla/arena/1/
+      - text: ", didn’t match any of these."
+  - contentinfo [ref=e44]:
+    - paragraph [ref=e45]:
+      - text: You’re seeing this error because you have
+      - code [ref=e46]: DEBUG = True
+      - text: in your Django settings file. Change that to
+      - code [ref=e47]: "False"
+      - text: ", and Django will display a standard 404 page."

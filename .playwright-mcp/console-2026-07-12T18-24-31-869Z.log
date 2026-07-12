@@ -1,0 +1,10 @@
+[   20280ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:8080/__dg__/bound_attribute_event/calculate_fighter_rank/execute/:0
+[   20281ms] [ERROR] Failed to calculate rank: Error: An error occurred when sending a glue http request: 1 validation error for BoundProxyAttributeEvent
+  Value error, Bound attribute for event was not included in policy: execute [type=value_error, input_value=<WSGIRequest: POST '/__dg..._fighter_rank/execute/'>, input_type=WSGIRequest]
+    For further information visit https://errors.pydantic.dev/2.13/v/value_error
+    at GlueHttp.sendRequest (http://localhost:8080/static/django_glue/js/django_glue.js?v=1.0.0a3:701:17)
+    at async GlueHttp.sendFormPostRequest (http://localhost:8080/static/django_glue/js/django_glue.js?v=1.0.0a3:724:14)
+    at async GlueHttp.sendAttributeEventRequest (http://localhost:8080/static/django_glue/js/django_glue.js?v=1.0.0a3:752:14)
+    at async GlueFunctionProxy._processAttributeEvent (http://localhost:8080/static/django_glue/js/django_glue.js?v=1.0.0a3:60:26)
+    at async Proxy.fn (http://localhost:8080/static/django_glue/js/django_glue.js?v=1.0.0a3:627:26)
+    at async Proxy.loadRank (eval at <anonymous> (https://cdn.jsdelivr.net/npm/alpinejs@3.14.x/dist/cdn.min.js:5:665), <anonymous>:40:35) @ :46

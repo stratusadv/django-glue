@@ -1,7 +1,7 @@
 """
 Tests for Django Glue template tags.
 """
-from django.test import TestCase, RequestFactory, override_settings
+from django.test import TestCase, RequestFactory
 from django.template import Template, Context
 
 from django_glue.shortcuts.glue import Glue
