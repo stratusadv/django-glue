@@ -2,7 +2,8 @@ from django import forms
 from django.core.handlers.wsgi import WSGIRequest
 
 from django_glue.form.form import GlueModelForm
-from django_glue.response import GlueJsonResponse
+
+from django_glue.response import GlueResponse
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -43,7 +44,7 @@ class GorillaGlueModelForm(GlueModelForm):
         for field in self.fields.values():
             field.required = False
 
-    def process(self, request: WSGIRequest, payload: dict) -> GlueJsonResponse:
+    def process(self, request: WSGIRequest, step: int = 1, **kwargs) -> GlueResponse:
         """
         Handle progressive form steps.
 
@@ -55,8 +56,7 @@ class GorillaGlueModelForm(GlueModelForm):
         Step 2: Physical attributes (weight, height)
         Step 3: Final details (description) - saves the model
         """
-        Message = self.GlueJsonResponse.Message
-        step = payload.get('step', 1)
+        Message = GlueResponse.Message
 
         if step == 1:
             # Validate basic info fields
@@ -68,13 +68,13 @@ class GorillaGlueModelForm(GlueModelForm):
                 self.add_error('age', 'Age must be at least 1.')
 
             if self.errors:
-                return self.GlueJsonResponse(
-                    payload={'step': step},
+                return GlueResponse(
+                    result={'step': step},
                     messages=[Message(Message.Level.ERROR, 'Please fix the errors above.')],
                 )
 
-            return self.GlueJsonResponse(
-                payload={'step': step, 'next_step': 2},
+            return GlueResponse(
+                result={'step': step, 'next_step': 2},
                 messages=[Message(Message.Level.SUCCESS, 'Basic info validated!')],
             )
 
@@ -91,13 +91,13 @@ class GorillaGlueModelForm(GlueModelForm):
                 self.add_error('height', 'Height must be at least 1.0 m.')
 
             if self.errors:
-                return self.GlueJsonResponse(
-                    payload={'step': step},
+                return GlueResponse(
+                    result={'step': step},
                     messages=[Message(Message.Level.ERROR, 'Please fix the errors above.')],
                 )
 
-            return self.GlueJsonResponse(
-                payload={'step': step, 'next_step': 3},
+            return GlueResponse(
+                result={'step': step, 'next_step': 3},
                 messages=[Message(Message.Level.SUCCESS, 'Physical attributes validated!')],
             )
 
@@ -105,17 +105,17 @@ class GorillaGlueModelForm(GlueModelForm):
             # Final step - validate and save the model
             if self.is_valid():
                 gorilla = self.save()
-                return self.GlueJsonResponse(
-                    payload={'step': step, 'gorilla_id': gorilla.pk},
+                return GlueResponse(
+                    result={'step': step, 'gorilla_id': gorilla.pk},
                     messages=[Message(Message.Level.SUCCESS, f'Fighter "{gorilla.name}" created!')],
                 )
             else:
-                return self.GlueJsonResponse(
-                    payload={'step': step},
+                return GlueResponse(
+                    result={'step': step},
                     messages=[Message(Message.Level.ERROR, 'Please fix the validation errors.')],
                 )
 
-        return self.GlueJsonResponse(
+        return GlueResponse(
             messages=[Message(Message.Level.ERROR, f'Invalid step: {step}')],
         )
 

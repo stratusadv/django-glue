@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from django_glue.maps import SUBJECT_TYPE_TO_PROXY_TYPE
+from django_glue.maps import ProxyType
 
 
 class GlueMapsSyncTestCase(TestCase):
@@ -19,10 +19,10 @@ class GlueMapsSyncTestCase(TestCase):
 
     def test_python_and_js_subject_type_keys_match(self):
         """The keys in maps.py and index.js must be identical."""
-        # Extract keys from JS: look for string literals as keys in SUBJECT_TYPE_TO_PROXY_CLASS
+        # Extract keys from JS: look for string literals as keys in get_subject_type_to_proxy_class()
         js_keys = set(re.findall(r"'(\w+)':\s*\w+", self.js_content))
 
-        py_keys = set(SUBJECT_TYPE_TO_PROXY_TYPE.keys())
+        py_keys = set(ProxyType.get_namespaces())
 
         missing_in_js = py_keys - js_keys
         missing_in_py = js_keys - py_keys
@@ -35,7 +35,7 @@ class GlueMapsSyncTestCase(TestCase):
                 parts.append(f"Keys in JS but not Python: {missing_in_py}")
             self.fail("\n  ".join(parts))
 
-    def test_python_subject_type_keys_expected(self):
-        """Verify the expected set of keys is present."""
-        expected = {"Model", "QuerySet", "BaseForm", "Template", "Function"}
-        self.assertEqual(set(SUBJECT_TYPE_TO_PROXY_TYPE.keys()), expected)
+    def test_python_namespace_values_expected(self):
+        """Verify the expected set of namespace values is present."""
+        expected = {"querySet", "model", "form", "template", "function"}
+        self.assertEqual(set(ProxyType.get_namespaces()), expected)

@@ -3,6 +3,10 @@ __pycache__/
 .venv*/
 .vscode/
 .claude/
+.codegraph/
+.opencode/
+.playwright-cli/
+.playwright-mcp/
 dist/
 eval/
 *.egg-info/

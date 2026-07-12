@@ -46,6 +46,20 @@
         redCornerChoices: [],
         blueCornerChoices: [],
         fightItems: [],
+        cornerId(corner) {
+            if (corner && typeof corner === 'object') {
+                return Number(corner.id ?? corner.pk);
+            }
+            return Number(corner);
+        },
+        cornerChoice(corner, choices) {
+            const cornerId = this.cornerId(corner);
+            return (choices || []).find(choice => Number(choice.pk) === cornerId);
+        },
+        cornerRank(corner, choices) {
+            return this.cornerChoice(corner, choices)?.rank_points
+                ?? (corner && typeof corner === 'object' ? corner.rank_points : null);
+        },
         async init() {
             this.fights.addListener('save', () => {
                 $store.notifications.success('Fight saved successfully!');
@@ -66,8 +80,8 @@
                 filter: {name__icontains: this.search}
             });
             if (this.fightItems.length > 0 && this.redCornerChoices.length === 0) {
-                this.redCornerChoices = await this.fightItems[0].$fields.red_corner.choices();
-                this.blueCornerChoices = await this.fightItems[0].$fields.blue_corner.choices();
+                this.redCornerChoices = this.fightItems[0].$fields.red_corner.buildChoices('rank_points');
+                this.blueCornerChoices = this.fightItems[0].$fields.blue_corner.buildChoices('rank_points');
             }
         }
     }">
@@ -110,11 +124,11 @@
                                     <span class="corner-label text-danger">Red Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in redCornerChoices" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.red_corner.id === choice[0]"></option>
+                                        <template x-for="choice in redCornerChoices" :key="choice.pk">
+                                            <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.red_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-text="`Rank: ${fight.red_corner.rank_points}`"></span>
+                                    <span x-show="cornerRank(fight.red_corner, redCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.red_corner, redCornerChoices)}`"></span>
                                 </div>
                                 <div class="col-2 text-center">
                                     <span class="vs-badge">VS</span>
@@ -123,11 +137,11 @@
                                     <span class="corner-label text-primary">Blue Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in blueCornerChoices" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.blue_corner.id === choice[0]"></option>
+                                        <template x-for="choice in blueCornerChoices" :key="choice.pk">
+                                            <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.blue_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-text="`Rank: ${fight.blue_corner.rank_points}`"></span>
+                                    <span x-show="cornerRank(fight.blue_corner, blueCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.blue_corner, blueCornerChoices)}`"></span>
                                 </div>
                             </div>
 
@@ -147,8 +161,8 @@
                                     <label class="form-label small text-muted mb-1">Location</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.location">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$fields.location.choices || []" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.location === choice[0]"></option>
+                                        <template x-for="[value, label] in fight.$fields.location.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.location === value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -156,8 +170,8 @@
                                     <label class="form-label small text-muted mb-1">Weather</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.weather_conditions">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$fields.weather_conditions.choices || []" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.weather_conditions === choice[0]"></option>
+                                        <template x-for="[value, label] in fight.$fields.weather_conditions.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.weather_conditions === value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -165,8 +179,8 @@
                                     <label class="form-label small text-muted mb-1">Terrain</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.terrain_type">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$fields.terrain_type.choices || []" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.terrain_type === choice[0]"></option>
+                                        <template x-for="[value, label] in fight.$fields.terrain_type.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.terrain_type === value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -178,8 +192,8 @@
                                     <label class="form-label small text-muted mb-1">Status</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.status">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.$fields.status.choices || []" :key="choice[0]">
-                                            <option :value="choice[0]" x-text="choice[1]" :selected="fight.status === choice[0]"></option>
+                                        <template x-for="[value, label] in fight.$fields.status.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.status === value"></option>
                                         </template>
                                     </select>
                                 </div>

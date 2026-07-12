@@ -82,21 +82,20 @@
             this.messages = [];
 
             try {
-                const response = await this.gorilla.process({payload: {
+                // GlueJsonResponse returns {messages, ...payloadFields}
+                const result = await this.gorilla.process({
                     step: this.currentStep
-                }});
-                // GlueJsonResponse returns {messages, payload}
-                this.messages = response.messages || [];
-                const payload = response.payload || {};
+                });
+                this.messages = result.messages || [];
 
                 // Check if we have errors (no next_step means validation failed)
-                if (payload.next_step) {
+                if (result.next_step) {
                     this.completedSteps.push(this.currentStep);
-                    this.currentStep = payload.next_step;
-                } else if (payload.gorilla_id) {
+                    this.currentStep = result.next_step;
+                } else if (result.gorilla_id) {
                     // Final step succeeded
                     this.completedSteps.push(this.currentStep);
-                    this.gorillaId = payload.gorilla_id;
+                    this.gorillaId = result.gorilla_id;
                 }
                 // If neither next_step nor gorilla_id, validation failed - errors are on gorilla.$fields
             } catch (error) {

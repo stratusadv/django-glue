@@ -6,12 +6,12 @@ from django.template.response import TemplateResponse
 from django.urls import reverse, resolve, NoReverseMatch
 
 from django_glue.conf import settings
-from django_glue.resolver.action.encoders import ActionDataJSONEncoder
+from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.view.request import ViewHttpRequest
 from django_glue.resolver.view.schemas import ViewBodySchema
-from django_glue.session import GlueSession
 
 
 class ViewResolver(BaseResolver):
@@ -77,23 +77,21 @@ class ViewResolver(BaseResolver):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxy_context_data': getattr(
-                                self.glue_view_http_request, '__glue_context_data__', {}
+                            'proxies': getattr(
+                                self.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY, {}
                             ),
-                            'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         },
                         safe=False,
-                        encoder=ActionDataJSONEncoder,
+                        encoder=BoundAttributeDataJSONEncoder,
                     )
 
                 if isinstance(response, HttpResponse):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxy_context_data': getattr(
-                                self.glue_view_http_request, '__glue_context_data__', {}
+                            'proxies': getattr(
+                                self.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY, {}
                             ),
-                            'proxy_registry_data': GlueSession(self.request).proxy_registry,
                         }
                     )
 

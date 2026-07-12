@@ -5,87 +5,225 @@ import BaseGlueProxy from "./base";
  * save, and foreign-key choice loading. Supports both regular Forms and ModelForms.
  */
 class GlueFormProxy extends BaseGlueProxy {
-    /** @type {string} */
-    static name = 'form'
+    static choicesCache = new Map();
+    /** @type {Object} Reactive field values for Alpine compatibility */
 
-    /**
+     /**
      * @param {Object} options - Constructor options.
      * @param {GlueHttp} options.http - The HTTP client instance.
-     * @param {string} options.proxyUniqueName - The unique name of this proxy.
-     * @param {Object} options.contextData - Serialized proxy metadata from the server.
-     * @param {Object|null} [options.actions] - Optional actions map.
+     * @param {string} options.name - The unique name of this proxy in the session.
+     * @param {Object} options.policy - Proxy policy - immutable and enforces integrity of the proxy.
+     * @param {Object} options.state - Proxy state - mutable, dedicated vehicle for state changes in the proxy.
+     * @param {Object|null} [options.attributes] - Optional attributes map; falls back to `policy.bound_attributes`.
+     * @param {string} options.namespace - Namespace under which this proxy will be accessible in the main Glue instance.
      */
-    constructor({http, proxyUniqueName, contextData, actions = null}) {
-        super({http, proxyUniqueName, contextData, actions});
-
-        /** @type {Object} */
-        this._values = {...(this._contextData.initial || {})};
-
-        /** @type {Object} */
-        this._errors = {};
-
+    constructor({http, name, policy, state, attributes = null, namespace = 'form'}) {
+        super({http, name, policy, state, attributes, namespace});
+        this._pkFieldName = policy.subject_details?.pk_field_name || 'id'
         this._defineFields()
+        this._refreshFieldErrorAttributes()
+    }
 
-        Object.defineProperty(this, '$fields', {
-            get: () => {
-                return this._fields
-            },
-            set: value => {
-                this._fields = value
-            },
-        })
-
+    /**
+     * Load instance data from state into reactive field values.
+     * Called during construction for child proxies and after bound attribute events complete.
+     */
+    loadInstanceData() {
+        if (this._state?.instance_data) {
+            this._loaded = true;
+            for (const fieldName of Object.keys(this._fields)) {
+                this[fieldName] = this._state.instance_data[fieldName];
+                this._fields[fieldName].value = this._state.instance_data[fieldName];
+            }
+        }
     }
 
     /**
      * Attach lazy-loading choices to a ModelChoiceField or ModelMultipleChoiceField.
      * @param {string} fieldName - The field name.
-     * @param {Object} fieldData - The field definition object.
+     * @param {Object} field - The field definition object.
      * @returns {Object} The updated fieldData with a `choices` async accessor.
      * @private
      */
-    _defineModelChoiceField(fieldName, fieldData) {
-        // Initialize shared choice caching on the original fieldData (once)
-        // This ensures choices are loaded only once across all model proxy instances
-        if (!fieldData.hasOwnProperty('__choicesCache')) {
-            fieldData.__glue__choicesCache = [];
-            fieldData.__glue__choicesLoaded = false;
-            fieldData.__glue__loadingChoices = false;
-            fieldData.__glue__choicesPromise = null;
+    _defineModelChoiceField(fieldName, field) {
+        const cacheKey = this._getChoicesCacheKey(fieldName, field);
+        const cached = GlueFormProxy.choicesCache.get(cacheKey);
+
+        field.__glue__choicesCacheKey = cacheKey;
+        field.__glue__choicesLoaded = Boolean(cached?.loadedFields?.has('__str__'));
+        field.__glue__loadingChoices = Boolean(cached?.promise && cached?.pendingFields?.has('__str__'));
+        field.__glue__choicesData = cached?.data || [];
+
+        const proxy = this
+
+        Object.defineProperty(field, 'choices',  {
+            get: function() {
+                proxy._ensureFieldChoices(fieldName, this);
+                // Always read from cache to ensure all proxies see the same data
+                const cached = GlueFormProxy.choicesCache.get(this.__glue__choicesCacheKey);
+                return cached?.data || this.__glue__choicesData;
+            },
+            enumerable: true,
+            configurable: true
+        });
+
+        field.buildChoices = function(...choiceFields) {
+            return proxy._buildFieldChoices(fieldName, this, choiceFields);
+        };
+
+        return field;
+    }
+
+    _getChoicesCacheKey(fieldName, field) {
+        const subject = this._policy.subject_details || {};
+        return field.choices_cache_key
+            || [
+                subject.model_class_path,
+                subject.form_class_path,
+                field.choice_model_path,
+                fieldName,
+            ].filter(Boolean).join(':')
+            || `${field.type}:${fieldName}`;
+    }
+
+    _ensureFieldChoices(fieldName, field, choiceFields = []) {
+        const cacheKey = this._getChoicesCacheKey(fieldName, field);
+        const cached = this._getOrCreateChoicesCache(cacheKey, field);
+        const requiredFields = this._normalizeChoiceFields(choiceFields);
+        const missingFields = requiredFields.filter(choiceField => !cached.loadedFields.has(choiceField));
+
+        if (missingFields.length === 0) {
+            this._applyCachedChoicesToField(field, cached);
+            return cached.promise || Promise.resolve(cached.data);
         }
 
-        const choicesAction = async function () {
-            // If already loading, return the existing promise to avoid duplicate requests
-            if (fieldData.__glue__choicesPromise) {
-                return fieldData.__glue__choicesPromise;
+        if (cached.promise) {
+            field.__glue__loadingChoices = true;
+            if (missingFields.every(choiceField => cached.pendingFields.has(choiceField))) {
+                return cached.promise;
             }
-
-            fieldData.__glue__loadingChoices = true;
-            // Pass field_definition in user_data for this action
-            fieldData.__glue__choicesPromise = this._processAction('foreign_key_choices', {
-                'field_definition': [
-                    fieldName,
-                    fieldData
-                ]
-            }).then(data => {
-                fieldData.__glue__choicesCache = data;
-                fieldData.__glue__choicesLoaded = true;
-                return data;
-            }).finally(() => {
-                fieldData.__glue__loadingChoices = false;
-            });
-
-            return fieldData.__glue__choicesPromise;
-        }.bind(this)
-
-        fieldData.choices = async function () {
-            if (!fieldData.__glue__choicesLoaded) {
-                await choicesAction();
-            }
-            return fieldData.__glue__choicesCache;
+            return cached.promise.then(() => this._ensureFieldChoices(fieldName, field, choiceFields));
         }
 
-        return fieldData
+        field.__glue__loadingChoices = true;
+        missingFields.forEach(choiceField => cached.pendingFields.add(choiceField));
+
+        const promise = this.foreign_key_choices({
+            field_name: fieldName,
+            choice_fields: missingFields.filter(choiceField => !['pk', '__str__'].includes(choiceField)),
+        }).then(result => {
+            const choices = Array.isArray(result) ? result : [];
+            this._cacheFieldChoices(fieldName, choices, missingFields);
+            return cached.data;
+        }).finally(() => {
+            missingFields.forEach(choiceField => cached.pendingFields.delete(choiceField));
+            cached.promise = null;
+            field.__glue__loadingChoices = false;
+        });
+
+        cached.promise = promise;
+        return promise;
+    }
+
+    _buildFieldChoices(fieldName, field, choiceFields = []) {
+        this._ensureFieldChoices(fieldName, field, choiceFields);
+        const cacheKey = this._getChoicesCacheKey(fieldName, field);
+        return GlueFormProxy.choicesCache.get(cacheKey)?.data || [];
+    }
+
+    _normalizeChoiceFields(choiceFields = []) {
+        return ['pk', '__str__', ...choiceFields].filter((choiceField, index, fields) => {
+            return choiceField && fields.indexOf(choiceField) === index;
+        });
+    }
+
+    _getOrCreateChoicesCache(cacheKey, field) {
+        let cached = GlueFormProxy.choicesCache.get(cacheKey);
+
+        if (!cached) {
+            cached = {
+                data: field.__glue__choicesData || [],
+                loadedFields: new Set(),
+                pendingFields: new Set(),
+                promise: null,
+            };
+            GlueFormProxy.choicesCache.set(cacheKey, cached);
+        }
+
+        return cached;
+    }
+
+    _applyCachedChoicesToField(field, cached) {
+        field.__glue__choicesLoaded = cached.loadedFields.has('__str__');
+        field.__glue__loadingChoices = Boolean(cached.promise);
+        field.__glue__choicesData = cached.data;
+    }
+
+    _cacheFieldChoices(fieldName, choices, choiceFields = []) {
+        const field = this._fields[fieldName];
+        if (!field) return;
+
+        const cacheKey = this._getChoicesCacheKey(fieldName, field);
+        const cached = this._getOrCreateChoicesCache(cacheKey, field);
+
+        if (Array.isArray(choices)) {
+            choices.forEach(choice => this._mergeChoice(cached.data, choice));
+        }
+
+        this._normalizeChoiceFields(choiceFields).forEach(choiceField => cached.loadedFields.add(choiceField));
+        this._applyCachedChoicesToField(field, cached);
+    }
+
+    _mergeChoice(choices, choice) {
+        if (!choice || typeof choice !== 'object') return;
+
+        const existing = choices.find(item => item.pk === choice.pk);
+        if (existing) {
+            Object.assign(existing, choice);
+        } else {
+            choices.push(choice);
+        }
+    }
+
+    /**
+     * Lazily load choices for a ModelChoiceField.
+     * @param {string} fieldName - The field name.
+     * @param {Object} field - The field definition object.
+     * @returns {Promise<void>}
+     * @private
+     */
+    async _loadFieldChoices(fieldName, field) {
+        if (field.__glue__choicesLoaded || field.__glue__loadingChoices) {
+            return;
+        }
+        await this._ensureFieldChoices(fieldName, field);
+    }
+
+    /**
+     * Update choices array for a field.
+     * @param {string} fieldName - The field name.
+     * @param {Array} choices - The new choices array.
+     * @private
+     */
+    _setFieldChoices(fieldName, choices, choiceFields = []) {
+        const field = this._fields[fieldName];
+        if (!field) return;
+
+        this._cacheFieldChoices(fieldName, choices, choiceFields);
+    }
+
+    /**
+     * Get the primary key value for this model instance.
+     * @returns {*} The primary key value, or null/undefined if not set.
+     */
+    get pk() {
+        let pk = this._policy.subject_details.target_pk
+
+        if (!pk) {
+            pk = this._state.instance_data?.[this._pkFieldName]
+        }
+
+        return pk
     }
 
     /**
@@ -94,25 +232,72 @@ class GlueFormProxy extends BaseGlueProxy {
      * @param {string} fieldName - The field name.
      * @private
      */
-    _defineFieldNameProperty(fieldName) {
+    _defineFieldNameProperty(fieldName, field) {
+        field = {...(field || {})}
+
+        if (field.type === 'ModelMultipleChoiceField') {
+            if (!this._state.instance_data) {
+                this._state.instance_data = {};
+            }
+            if (this._state.instance_data[fieldName] === undefined || this._state.instance_data[fieldName] === null) {
+                this._state.instance_data[fieldName] = [];
+            }
+        }
+
+        if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(field.type)) {
+            field = this._defineModelChoiceField(fieldName, field)
+        }
+
         Object.defineProperty(this, fieldName, {
             get: function () {
-                if (!this._loaded && !this._values) {
+                if (!this._loaded && !this._state.instance_data) {
                     if (!this._loading) {
                         this._loading = true;
-                        this.get()
+                        this.load().then(() => {
+                            this.loadInstanceData()
+                            this._loading = false;
+                        })
                     }
                 }
 
-                return this._values?.[fieldName];
+                return this._state.instance_data[fieldName];
             },
             set: function (value) {
-                if (!this._values) {
-                    this._values = {};
+                if (!this._state.instance_data) {
+                    this._state.instance_data = {};
                 }
-                this._values[fieldName] = value;
+                this._state.instance_data[fieldName] = value;
             }
         })
+
+        if (!field.hasOwnProperty('value')) {
+            Object.defineProperty(field, 'value', {
+                get: function () {
+                    return this._state.instance_data[fieldName];
+                }.bind(this),
+                set: function (val) {
+                    if (!this._state.instance_data) this._state.instance_data = {};
+                    this._state.instance_data[fieldName] = val;
+                }.bind(this)
+            });
+        }
+
+        if (!field.hasOwnProperty('errors')) {
+            Object.defineProperty(field, 'errors', {
+                get: function () {
+                    return this._state.errors?.[fieldName];
+                }.bind(this),
+                enumerable: true,
+                configurable: true
+            });
+        }
+
+        // Initialize error attributes (will be refreshed after each event response)
+        field.hasErrors = false;
+        field.errorText = '';
+
+        this._fields[fieldName] = field;
+        this._fields[fieldName]['name'] = fieldName;
     }
 
     /**
@@ -121,153 +306,40 @@ class GlueFormProxy extends BaseGlueProxy {
      */
     _defineFields() {
         this._fields = {}
-        Object.entries(this._contextData.fields).forEach(([fieldName, fieldData]) => {
-            this._defineFieldNameProperty(fieldName)
+        this._fields[this.pkFieldName] = this.pk
 
-            // Clone fieldData so each proxy instance owns its own copy,
-            // avoiding shared references that cause bound getters to overwrite each other
-            fieldData = {...fieldData}
+        Object.keys(this._fields).forEach(k => delete this._fields[k]);
 
-            if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(fieldData.type)) {
-                fieldData = this._defineModelChoiceField(fieldName, fieldData)
+        Object.entries(this._policy.subject_details.included_fields).forEach(([fieldName, field]) => {
+            if (!this.hasOwnProperty(fieldName)) {
+                this._defineFieldNameProperty(fieldName, field)
             }
-
-            this._fields[fieldName] = fieldData;
-            this._fields[fieldName]['name'] = fieldName;
-
-            if (!fieldData.hasOwnProperty('value')) {
-                Object.defineProperty(fieldData, 'value', {
-                    get: function () {
-                        return this._values?.[fieldName];
-                    }.bind(this),
-                    set: function (val) {
-                        if (!this._values) this._values = {};
-                        this._values[fieldName] = val;
-                    }.bind(this)
-                });
-            }
-
-            if (!fieldData.hasOwnProperty('errors')) {
-                Object.defineProperty(fieldData, 'errors', {
-                    get: function () {
-                        return this._errors?.[fieldName];
-                    }.bind(this),
-                });
-            }
-
-            Object.keys(this._fields[fieldName]).forEach(attributeName => {
-                this._updateErrorAttributesForField(fieldName)
-            })
-
         })
-    }
 
-    /**
-     * Override _processAction to include form field values in proxyData.
-     * This ensures the backend form instance always has access to accumulated field state.
-     * @param {string} actionName - The action method name.
-     * @param {Object|null} [userData] - Action-specific user data.
-     * @param {Object|null} [proxyData] - Proxy-intrinsic runtime state.
-     * @returns {Promise<Object>} The server response data.
-     * @private
-     */
-    async _processAction(actionName, userData = null, proxyData = null) {
-        // Always include form_values in proxyData so backend can bind the form
-        const formProxyData = {
-            ...(proxyData || {}),
-            form_values: this._values || {},
-        };
-
-        return await BaseGlueProxy.prototype._processAction.call(this, actionName, userData, formProxyData);
-    }
-
-    /**
-     * Handle proxy_data from server response.
-     * Updates form errors and field values from the response.
-     * @param {Object} proxyData - Proxy-intrinsic state from the server.
-     * @protected
-     */
-    _handleResponseProxyData(proxyData) {
-        if (proxyData.errors) {
-            this._updateErrors(proxyData.errors);
-        }
-        if (proxyData.form_values) {
-            this._values = {...this._values, ...proxyData.form_values};
+        if (!this.hasOwnProperty('$fields')) {
+            Object.defineProperty(this, '$fields', {
+                get: function() {
+                    return this._fields
+                },
+                set: value => {
+                    this._fields = value
+                },
+            })
         }
     }
 
     /**
-     * Fetch current field values from the server.
-     * @returns {Promise<Object>} The fetched field values.
-     */
-    async get() {
-        const data = await super._processAction('get');
-        this._values = data;
-        this._loading = false;
-        this._loaded = true;
-        return data;
-    }
-
-    /**
-     * Update has_errors and error_text attributes for a field.
-     * @param {string} fieldName - The field name.
+     * Refresh reactive error attributes on all fields.
+     * This mutates actual properties to trigger Alpine reactivity.
      * @private
      */
-    _updateErrorAttributesForField(fieldName) {
-        this._fields[fieldName][`has_errors`] = this._errors[fieldName]?.length > 0;
-        this._fields[fieldName][`error_text`] = this._errors[fieldName]?.join(', ');
-    }
-
-    /**
-     * Update error state for all fields.
-     * @param {Object} errors - Error mapping from the server.
-     * @private
-     */
-    _updateErrors(errors) {
-        this._errors = errors || {};
+    _refreshFieldErrorAttributes() {
         Object.keys(this._fields).forEach(fieldName => {
-            this._updateErrorAttributesForField(fieldName);
+            const field = this._fields[fieldName];
+            // Mutate actual properties to trigger Alpine reactivity
+            field.hasErrors = this._state?.errors?.[fieldName]?.length > 0;
+            field.errorText = this._state?.errors?.[fieldName]?.join(', ');
         });
-    }
-
-    /**
-     * Validate the current field values against the server.
-     * @returns {Promise<Object>} Validation result with `{success, errors, ...}`.
-     */
-    async validate() {
-        const result = await this._processAction('validate');
-        this._updateErrors(result.errors);
-        return result;
-    }
-
-    /**
-     * Save the current field values to the server. On success, clears errors
-     * and refreshes field data.
-     * @returns {Promise<Object>} Save result with `{success, errors, ...}`.
-     */
-    async save() {
-        const result = await this._processAction('save');
-
-        this._updateErrors(result.errors)
-
-        if (result.success) {
-            this._clearErrors()
-            this.get()
-        }
-
-        return result;
-    }
-
-    /**
-     * Process form with custom logic (e.g., multi-step workflows).
-     * @param {Object|null} [userData] - Action-specific user data (e.g., step number).
-     * @returns {Promise<Object>} Process result from the server.
-     */
-    async process(userData = null) {
-        const result = await this._processAction('process', userData);
-        this._updateErrors(this._errors)
-
-        return result;
     }
 
     /**
@@ -277,19 +349,30 @@ class GlueFormProxy extends BaseGlueProxy {
      */
     hasErrors(fieldName) {
         if (fieldName) {
-            return Boolean(this._errors[fieldName] && this._errors[fieldName].length > 0);
+            return Boolean(this._state?.errors?.[fieldName] && this._state.errors[fieldName].length > 0);
         }
 
-        return Object.keys(this._errors).length > 0;
+        return Object.keys(this._state?.errors || {}).length > 0;
     }
 
-    /**
-     * Clear all validation errors.
-     * @private
-     */
-    _clearErrors() {
-        this._errors = {};
+    _handleEventResponse(attributeName, eventKwargs, response) {
+        super._handleEventResponse(attributeName, eventKwargs, response);
+
+        if (attributeName.endsWith('foreign_key_choices') && eventKwargs?.field_name) {
+            const fieldName = eventKwargs.field_name;
+            this._setFieldChoices(fieldName, response.result, eventKwargs.choice_fields || []);
+        }
+
+        // Refresh error attributes to trigger Alpine reactivity
+        this._refreshFieldErrorAttributes();
+
+        // Only load instance data from server if there are no errors.
+        // When errors exist, preserve user's input so they can correct it.
+        if (!this.hasErrors()) {
+            this.loadInstanceData();
+        }
     }
+
 }
 
 export default GlueFormProxy;

@@ -46,8 +46,8 @@ class GlueViewResolverTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertIn('html', data)
-        self.assertIn('proxy_context_data', data)
-        self.assertIn('proxy_registry_data', data)
+        self.assertIn('proxies', data)
+        self.assertIsInstance(data['proxies'], dict)
 
     def test_handles_http_response(self):
         """Should handle plain HttpResponse and return JSON."""

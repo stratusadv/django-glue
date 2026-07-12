@@ -219,7 +219,7 @@ def dashboard_view(request):
 
 | Method | Behavior | Use When |
 |--------|----------|----------|
-| `renderInnerHtml` | Replaces element's **contents** | Container has bindings you need to keep |
+| `renderInnerHtml` | Replaces element's **contents** | Container has bound_attributes you need to keep |
 | `renderOuterHtml` | Replaces the **element entirely** | Response HTML defines the container |
 | `renderInsertAdjacentHtmlBeforeEnd` | Inserts at end of element | Append content |
 | `renderInsertAdjacentHtmlAfterEnd` | Inserts after element | Add sibling after |

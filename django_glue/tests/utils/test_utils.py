@@ -7,12 +7,11 @@ from django.test import TestCase, RequestFactory
 
 from django_glue.utils import (
     get_request_body_data,
-    get_class_from_path_string,
+    get_attr_from_path_string,
     serialize_queryset,
     deserialize_queryset,
 )
 from test_project.gorilla.models import Gorilla
-from django_glue.proxies.proxy import BaseGlueProxy
 
 
 class GetRequestBodyDataTestCase(TestCase):
@@ -66,25 +65,25 @@ class GetClassFromPathStringTestCase(TestCase):
 
     def test_returns_class_from_path(self):
         """Should return the class given a module path."""
-        cls = get_class_from_path_string('test_project.gorilla.models.Gorilla')
+        cls = get_attr_from_path_string('test_project.gorilla.models.Gorilla')
 
         self.assertEqual(cls, Gorilla)
 
     def test_returns_function_from_path(self):
         """Should also work for functions."""
-        func = get_class_from_path_string('django_glue.utils.get_request_body_data')
+        func = get_attr_from_path_string('django_glue.utils.get_request_body_data')
 
         self.assertEqual(func, get_request_body_data)
 
     def test_raises_for_invalid_module(self):
         """Should raise ModuleNotFoundError for invalid module path."""
         with self.assertRaises(ModuleNotFoundError):
-            get_class_from_path_string('nonexistent.module.ClassName')
+            get_attr_from_path_string('nonexistent.module.ClassName')
 
     def test_raises_for_invalid_class(self):
         """Should raise AttributeError for invalid class name."""
         with self.assertRaises(AttributeError):
-            get_class_from_path_string('test_project.gorilla.models.NonExistent')
+            get_attr_from_path_string('test_project.gorilla.models.NonExistent')
 
 
 class SerializeQuerySetTestCase(TestCase):
@@ -106,15 +105,13 @@ class SerializeQuerySetTestCase(TestCase):
             height=2.0
         )
 
-    def test_serialize_returns_dict(self):
-        """serialize_queryset should return a safe dict (not pickle)."""
+    def test_serialize_returns_encoded_query_string(self):
+        """serialize_queryset should return a base64 encoded query string."""
         qs = Gorilla.objects.all()
         encoded = serialize_queryset(qs)
 
-        self.assertIsInstance(encoded, dict)
-        self.assertIn('app_label', encoded)
-        self.assertIn('model_name', encoded)
-        self.assertIn('query_params', encoded)
+        self.assertIsInstance(encoded, str)
+        self.assertGreater(len(encoded), 0)
 
     def test_deserialize_returns_queryset(self):
         """deserialize_queryset should return a QuerySet."""

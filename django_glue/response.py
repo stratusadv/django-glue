@@ -1,27 +1,31 @@
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 from django.http import JsonResponse
 
 from django_glue.message import GlueMessage
-from django_glue.resolver.action.encoders import ActionDataJSONEncoder
+from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
 
 
-class GlueJsonResponse(JsonResponse):
-    Message = GlueMessage
+@dataclass
+class GlueResponse:
+    Message: ClassVar[type] = GlueMessage
+    state: dict | None = None
+    result: Any = None
+    messages: list[GlueMessage] | None = None
+    status: int = 200
 
-    def __init__(
-        self,
-        payload: dict[str, Any] | None = None,
-        messages: list[GlueMessage] | None = None,
-        status: int = 200,
-    ) -> None:
-        super().__init__(
-            data={
-                'messages': [message.to_dict() for message in messages]
-                if messages is not None
-                else None,
-                'payload': payload,
-            },
-            status=status,
-            encoder=ActionDataJSONEncoder,
+    def to_json_response(self) -> JsonResponse:
+        data = {
+            'result': self.result if self.result is not None else {},
+            'state': self.state,
+        }
+        if self.messages is not None:
+            data['messages'] = [message.to_dict() for message in self.messages]
+
+        return JsonResponse(
+            data=data,
+            status=self.status,
+            safe=True,
+            encoder=BoundAttributeDataJSONEncoder,
         )

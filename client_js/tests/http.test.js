@@ -1,287 +1,163 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import {afterEach, beforeEach, describe, expect, it, mock} from 'bun:test';
 import GlueHttp from '../src/http';
-import { setupCookieMock } from './testUtils';
+import {createFormPolicy, setupCookieMock} from './testUtils';
 
 describe('GlueHttp', () => {
-    let http;
     let originalFetch;
-
-    const createConfig = () => ({
-        requestTimeoutSeconds: 30,
-        actionUrlPath: '/__dg__/action/',
-        keepLiveUrlPath: '/__dg__/keep_live/',
-        glueViewUrlPath: '/__dg__/glue_view/',
-    });
+    let http;
 
     beforeEach(() => {
         originalFetch = global.fetch;
-        setupCookieMock({ csrftoken: 'test-csrf-token' });
-        http = new GlueHttp(createConfig());
+        setupCookieMock({csrftoken: 'test-csrf-token'});
+        http = new GlueHttp({
+            requestTimeoutSeconds: 30,
+            attributeEventUrlPath: '/__dg__/bound_attribute_event/',
+            glueViewUrlPath: '/__dg__/glue_view/',
+        });
     });
 
     afterEach(() => {
         global.fetch = originalFetch;
     });
 
-    describe('getCookie', () => {
-        it('returns cookie value by name', () => {
-            expect(http.getCookie('csrftoken')).toBe('test-csrf-token');
-        });
-
-        it('returns null for missing cookie', () => {
-            expect(http.getCookie('nonexistent')).toBeNull();
-        });
+    it('reads a cookie by name', () => {
+        expect(http.getCookie('csrftoken')).toBe('test-csrf-token');
+        expect(http.getCookie('missing')).toBeNull();
     });
 
-    describe('sendRequest', () => {
-        it('sends GET request with correct headers', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            await http.sendRequest('/test', { method: 'GET', contentType: 'application/json' });
-
-            expect(capturedOptions.method).toBe('GET');
-            expect(capturedOptions.headers['Content-Type']).toBe('application/json');
-            expect(capturedOptions.signal).toBeInstanceOf(AbortSignal);
-        });
-
-        it('includes CSRF token for protected requests', async () => {
-            // Mock getCookie to return a token
-            const testHttp = new GlueHttp(createConfig());
-            testHttp.getCookie = (name) => name === 'csrftoken' ? 'test-csrf-token' : null;
-
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            // Must pass csrfProtected: true explicitly (source bug: default only applies when no args)
-            await testHttp.sendRequest('/test', {
-                method: 'POST',
-                contentType: 'application/json',
-                body: '{}',
-                csrfProtected: true
-            });
-
-            expect(capturedOptions.headers['X-CSRFToken']).toBe('test-csrf-token');
-        });
-
-        it('sends POST request with body', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            const body = JSON.stringify({ key: 'value' });
-            await http.sendRequest('/test', { method: 'POST', body });
-
-            expect(capturedOptions.method).toBe('POST');
-            expect(capturedOptions.body).toBe(body);
-        });
-
-        it('skips CSRF token when csrfProtected is false', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            await http.sendRequest('/test', { method: 'GET', csrfProtected: false });
-
-            expect(capturedOptions.headers['X-CSRFToken']).toBeUndefined();
-        });
-
-        it('removes Content-Type for multipart/form-data', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            await http.sendRequest('/test', {
-                method: 'POST',
-                body: new FormData(),
-                contentType: 'multipart/form-data',
-            });
-
-            expect(capturedOptions.headers['Content-Type']).toBeUndefined();
-        });
-
-        it('throws error on non-ok response', async () => {
-            global.fetch = mock(() => Promise.resolve({
-                ok: false,
-                text: () => Promise.resolve('Server error'),
-                clone: function() { return this; }
-            }));
-
-            await expect(http.sendRequest('/test', { method: 'GET' }))
-                .rejects.toThrow('An error occurred when sending a glue http request');
-        });
-
-        it('returns response object with ok, body, httpResponse, data', async () => {
-            const mockResponse = {
+    it('sends JSON requests with csrf headers', async () => {
+        let capturedOptions;
+        global.fetch = mock((url, options) => {
+            capturedOptions = options;
+            return Promise.resolve({
                 ok: true,
-                text: () => Promise.resolve('{"result": "ok"}'),
-                json: () => Promise.resolve({ result: 'ok' }),
-                clone: function() { return this; }
-            };
-            global.fetch = mock(() => Promise.resolve(mockResponse));
-
-            const result = await http.sendRequest('/test', { method: 'GET' });
-
-            expect(result.ok).toBe(true);
-            expect(result.body).toBe('{"result": "ok"}');
-            expect(result.httpResponse).toBe(mockResponse);
-            expect(result.data).toEqual({ result: 'ok' });
+                text: () => Promise.resolve('{"ok":true}'),
+                json: () => Promise.resolve({ok: true}),
+                clone: function () {
+                    return this;
+                },
+            });
         });
+
+        const response = await http.sendJsonPostRequest('/test/', {name: 'Ada'});
+
+        expect(response.data).toEqual({ok: true});
+        expect(capturedOptions.method).toBe('POST');
+        expect(capturedOptions.headers['Content-Type']).toBe('application/json');
+        expect(capturedOptions.headers['X-CSRFToken']).toBe('test-csrf-token');
+        expect(capturedOptions.body).toBe(JSON.stringify({name: 'Ada'}));
     });
 
-    describe('sendJsonPostRequest', () => {
-        it('sends POST with JSON body', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
+    it('throws response text for non-ok responses', async () => {
+        global.fetch = mock(() => Promise.resolve({
+            ok: false,
+            text: () => Promise.resolve('Nope'),
+        }));
 
-            await http.sendJsonPostRequest('/test', { key: 'value' });
-
-            expect(capturedOptions.method).toBe('POST');
-            expect(capturedOptions.body).toBe(JSON.stringify({ key: 'value' }));
-            expect(capturedOptions.headers['Content-Type']).toBe('application/json');
-        });
-
-        it('sends empty object when data is null', async () => {
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
-            });
-
-            await http.sendJsonPostRequest('/test', null);
-
-            expect(capturedOptions.body).toBe(JSON.stringify({}));
-        });
+        await expect(http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'}))
+            .rejects.toThrow('An error occurred when sending a glue http request: Nope');
     });
 
-    describe('sendActionRequest', () => {
-        it('sends JSON action request with correct URL and payload', async () => {
-            let capturedUrl = null;
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedUrl = url;
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{"success": true}'),
-                    json: () => Promise.resolve({ success: true }),
-                    clone: function() { return this; }
-                });
+    it('omits content-type for FormData requests', async () => {
+        let capturedOptions;
+        global.fetch = mock((url, options) => {
+            capturedOptions = options;
+            return Promise.resolve({
+                ok: true,
+                text: () => Promise.resolve('{}'),
+                json: () => Promise.resolve({}),
+                clone: function () {
+                    return this;
+                },
             });
-
-            await http.sendActionRequest({
-                uniqueName: 'task',
-                action: 'save',
-                payload: { title: 'Test' },
-                contextData: { subject_type: 'Model' }
-            });
-
-            expect(capturedUrl).toBe('/__dg__/action/task/save/');
-            expect(capturedOptions.body).toBe(JSON.stringify({
-                user_data: { title: 'Test' },
-                context_data: { subject_type: 'Model' }
-            }));
         });
 
-        it('sends FormData action request for file uploads', async () => {
-            let capturedUrl = null;
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedUrl = url;
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{"success": true}'),
-                    json: () => Promise.resolve({ success: true }),
-                    clone: function() { return this; }
-                });
-            });
+        await http.sendFormPostRequest('/upload/', new FormData());
 
-            const formData = new FormData();
-            formData.append('file', new Blob(['content']), 'test.txt');
-
-            await http.sendActionRequest({
-                uniqueName: 'task',
-                action: 'save',
-                payload: formData,
-                contextData: { subject_type: 'Model' }
-            });
-
-            expect(capturedUrl).toBe('/__dg__/action/task/save/');
-            expect(capturedOptions.body).toBeInstanceOf(FormData);
-            expect(capturedOptions.body.get('context_data')).toBe(JSON.stringify({ subject_type: 'Model' }));
-        });
+        expect(capturedOptions.headers['Content-Type']).toBeUndefined();
+        expect(capturedOptions.body).toBeInstanceOf(FormData);
     });
 
-    describe('sendKeepLiveRequest', () => {
-        it('posts to keep_live URL with unique_names', async () => {
-            let capturedUrl = null;
-            let capturedOptions = null;
-            global.fetch = mock((url, options) => {
-                capturedUrl = url;
-                capturedOptions = options;
-                return Promise.resolve({
-                    ok: true,
-                    text: () => Promise.resolve('{}'),
-                    json: () => Promise.resolve({}),
-                    clone: function() { return this; }
-                });
+    it('sends bound attribute events as FormData', async () => {
+        let capturedUrl;
+        let capturedBody;
+        const policy = createFormPolicy();
+
+        global.fetch = mock((url, options) => {
+            capturedUrl = url;
+            capturedBody = options.body;
+            return Promise.resolve({
+                ok: true,
+                text: () => Promise.resolve('{}'),
+                json: () => Promise.resolve({}),
+                clone: function () {
+                    return this;
+                },
             });
-
-            await http.sendKeepLiveRequest(['proxy1', 'proxy2']);
-
-            expect(capturedUrl).toBe('/__dg__/keep_live/');
-            expect(capturedOptions.body).toBe(JSON.stringify({ unique_names: ['proxy1', 'proxy2'] }));
         });
+
+        await http.sendAttributeEventRequest({
+            name: 'contact',
+            attribute: 'GlueFormProxy.validate',
+            eventKwargs: {step: 2},
+            policy,
+            state: {instance_data: {name: 'Ada'}},
+        });
+
+        expect(capturedUrl).toBe('/__dg__/bound_attribute_event/contact/GlueFormProxy.validate/');
+        expect(JSON.parse(capturedBody.get('policy'))).toEqual(policy);
+        expect(JSON.parse(capturedBody.get('state'))).toEqual({instance_data: {name: 'Ada'}});
+        expect(JSON.parse(capturedBody.get('event_kwargs'))).toEqual({step: 2});
+    });
+
+    it('extracts nested file values into separate FormData fields', async () => {
+        let capturedBody;
+        const file = new File(['content'], 'avatar.txt');
+
+        global.fetch = mock((url, options) => {
+            capturedBody = options.body;
+            return Promise.resolve({
+                ok: true,
+                text: () => Promise.resolve('{}'),
+                json: () => Promise.resolve({}),
+                clone: function () {
+                    return this;
+                },
+            });
+        });
+
+        await http.sendAttributeEventRequest({
+            name: 'contact',
+            attribute: 'GlueFormProxy.save',
+            policy: createFormPolicy(),
+            state: {instance_data: {name: 'Ada', avatar: file}},
+        });
+
+        expect(capturedBody.get('avatar')).toBe(file);
+        expect(JSON.parse(capturedBody.get('state'))).toEqual({instance_data: {name: 'Ada'}});
+    });
+
+    it('extracts arrays of files while preserving non-file array values', async () => {
+        const fileA = new File(['a'], 'a.txt');
+        const fileB = new File(['b'], 'b.txt');
+
+        const {files, data} = http._extractFiles({
+            attachments: [fileA, fileB, 'keep'],
+            tags: ['alpha', 'beta'],
+        });
+
+        expect(files.attachments).toEqual([fileA, fileB]);
+        expect(data.attachments).toEqual(['keep']);
+        expect(data.tags).toEqual(['alpha', 'beta']);
+    });
+
+    it('extracts FileList values without including them in JSON state', async () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+
+        const {files, data} = http._extractFiles({uploads: input.files});
+
+        expect(files.uploads).toBe(input.files);
+        expect(data.uploads).toBeUndefined();
     });
 });

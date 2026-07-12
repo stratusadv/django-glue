@@ -1,4 +1,4 @@
-from django.http import JsonResponse, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_http_methods
 
 from django_glue.resolver.view.resolver import ViewResolver

@@ -7,7 +7,7 @@ from django.shortcuts import render
 from django.contrib import messages
 
 from django_glue import Glue
-from django_glue.proxies import GlueModelProxy, GlueQuerySetProxy, GlueFormProxy
+from django_glue.proxies import GlueModelInstanceProxy, GlueQuerySetProxy, GlueFormProxy
 from test_project.gorilla.forms import GorillaForm
 from test_project.gorilla.models import Gorilla
 
@@ -38,7 +38,7 @@ def speed_view(request: HttpRequest) -> HttpResponse:
     unique_names = [str(uuid4()) for _ in range(max(counts))]
 
     glue_types_targets = {
-        'model': (Gorilla.objects.first(), GlueModelProxy),
+        'model': (Gorilla.objects.first(), GlueModelInstanceProxy),
         'querySet': (Gorilla.objects.all(), GlueQuerySetProxy),
         'form': (GorillaForm(), GlueFormProxy),
     }

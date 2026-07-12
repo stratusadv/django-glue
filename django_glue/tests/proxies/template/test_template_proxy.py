@@ -1,243 +1,128 @@
-"""
-Tests for GlueTemplateProxy.
-"""
 import os
 import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from django_glue.access.access import GlueAccess
-from django_glue.proxies import GlueTemplateProxy
-from django_glue.resolver.action.schemas import ActionPayloadSchema
-from django_glue.exceptions import GlueError
+from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.proxies.template.proxy import GlueTemplateProxy
+from django_glue.proxies.template.state import GlueTemplateProxyState
+from django_glue.resolver.exceptions import GlueResolverError
 
 
-class GlueTemplateProxyInitTestCase(TestCase):
-    """Tests for GlueTemplateProxy initialization."""
+def make_template_proxy(
+    template_path='glue_template_test.html',
+    name='test',
+    access=GlueAccess.VIEW,
+    context_data=None,
+):
+    return GlueTemplateProxy(
+        name=name,
+        namespace='template',
+        access=access,
+        state=GlueTemplateProxyState(
+            template_path=template_path,
+            context_data=context_data or {},
+        ),
+    )
 
-    def test_stores_template_name(self):
-        proxy = GlueTemplateProxy(
-            target='base.html',
-            unique_name='my_template',
-            access=GlueAccess.VIEW,
+
+class GlueTemplateProxyStateTestCase(TestCase):
+    def test_stores_template_path(self):
+        proxy = make_template_proxy(template_path='base.html', name='my_template')
+
+        self.assertEqual(proxy.state.template_path, 'base.html')
+        self.assertEqual(proxy.name, 'my_template')
+
+    def test_stores_initial_context_data(self):
+        proxy = make_template_proxy(context_data={'foo': 'bar'})
+
+        self.assertEqual(proxy.state.context_data, {'foo': 'bar'})
+
+    def test_serializes_runtime_state(self):
+        state = GlueTemplateProxyState(template_path='base.html', context_data={'foo': 'bar'})
+
+        self.assertEqual(
+            state.serialize(),
+            {'namespace': 'template', 'context_data': {'foo': 'bar'}},
         )
 
-        self.assertEqual(proxy.template_name, 'base.html')
-        self.assertEqual(proxy.unique_name, 'my_template')
 
-    def test_stores_context_data(self):
-        proxy = GlueTemplateProxy(
-            target='base.html',
-            unique_name='my_template',
-            access=GlueAccess.VIEW,
-            context_data={'foo': 'bar'},
+class GlueTemplateProxyPolicyTestCase(TestCase):
+    def test_custom_policy_details_include_template_path(self):
+        proxy = make_template_proxy(template_path='components/card.html', context_data={'greeting': 'Hello'})
+
+        self.assertEqual(proxy._custom_policy_details['template_path'], 'components/card.html')
+        self.assertEqual(proxy._custom_policy_details['initial_context_data'], {'greeting': 'Hello'})
+
+    def test_register_policy_serializes_template_details(self):
+        request = RequestFactory().get('/')
+
+        GlueTemplateProxy.register_policy(
+            request=request,
+            target='glue_template_test.html',
+            name='card',
+            initial_context_data={'greeting': 'Hello'},
         )
 
-        self.assertEqual(proxy._context_data, {'foo': 'bar'})
+        registered = getattr(request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY)['card']
+        subject_details = registered['policy']['subject_details']
 
-    def test_defaults_context_data_to_empty_dict(self):
-        proxy = GlueTemplateProxy(
-            target='base.html',
-            unique_name='my_template',
-            access=GlueAccess.VIEW,
+        self.assertEqual(subject_details['namespace'], 'template')
+        self.assertEqual(subject_details['template_path'], 'glue_template_test.html')
+        self.assertEqual(subject_details['initial_context_data'], {'greeting': 'Hello'})
+
+
+class GlueTemplateProxyBoundAttributesTestCase(TestCase):
+    def test_discovers_render_html_bound_attribute(self):
+        proxy = make_template_proxy()
+
+        bound_attributes = proxy.discover_bound_attributes()
+
+        self.assertIn('GlueTemplateProxy.render_html', bound_attributes)
+        self.assertEqual(
+            bound_attributes['GlueTemplateProxy.render_html'].required_access,
+            GlueAccess.VIEW,
         )
-
-        self.assertEqual(proxy._context_data, {})
-
-    def test_raises_for_non_string_target(self):
-        with self.assertRaises(ValueError):
-            GlueTemplateProxy(
-                target=123,
-                unique_name='bad',
-                access=GlueAccess.VIEW,
-            )
-
-
-class GlueTemplateProxyContextDataTestCase(TestCase):
-    """Tests for GlueTemplateProxy.to_context_data()."""
-
-    def test_to_context_data_includes_subject_type_template(self):
-        proxy = GlueTemplateProxy(
-            target='base.html',
-            unique_name='my_template',
-            access=GlueAccess.VIEW,
-        )
-
-        context_data = proxy.to_context_data()
-
-        self.assertEqual(context_data['subject_type'], 'Template')
-
-    def test_to_context_data_includes_template_name(self):
-        proxy = GlueTemplateProxy(
-            target='components/card.html',
-            unique_name='card',
-            access=GlueAccess.VIEW,
-            context_data={'greeting': 'Hello'},
-        )
-
-        context_data = proxy.to_context_data()
-
-        self.assertEqual(context_data['template_name'], 'components/card.html')
-        self.assertEqual(context_data['context_data'], {'greeting': 'Hello'})
-
-    def test_to_context_data_includes_actions(self):
-        proxy = GlueTemplateProxy(
-            target='base.html',
-            unique_name='my_template',
-            access=GlueAccess.VIEW,
-        )
-
-        context_data = proxy.to_context_data()
-
-        self.assertIn('actions', context_data)
-        self.assertIn('render_html', context_data['actions'])
-
-
-class GlueTemplateProxyRenderHtmlTestCase(TestCase):
-    """Tests for GlueTemplateProxy.render_html() action."""
 
     def test_render_html_with_simple_template(self):
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-        )
+        proxy = make_template_proxy()
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
-        result = proxy.render_html(action_data)
+        result = proxy.render_html(request=None)
 
         self.assertIn('html', result)
         self.assertIsInstance(result['html'], str)
 
-    def test_render_html_merges_context_data_with_user_data(self):
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-            context_data={'greeting': 'Default'},
-        )
+    def test_render_html_merges_context_data_with_kwargs(self):
+        proxy = make_template_proxy(context_data={'greeting': 'Default'})
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'greeting': 'Override'},
-        )
-        result = proxy.render_html(action_data)
+        result = proxy.render_html(request=None, greeting='Override')
 
-        self.assertIn('html', result)
         self.assertIn('Override', result['html'])
         self.assertNotIn('Default', result['html'])
 
-    def test_render_html_with_view_access(self):
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-        )
+    def test_render_html_uses_state_context_when_no_kwargs_are_sent(self):
+        proxy = make_template_proxy(context_data={'greeting': 'Hello'})
 
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
+        result = proxy.render_html(request=None)
 
-        result = proxy.process_action('render_html', action_data)
-        self.assertIn('html', result)
-
-    def test_render_html_with_higher_access(self):
-        for access in [GlueAccess.CHANGE, GlueAccess.DELETE]:
-            proxy = GlueTemplateProxy(
-                target='glue_template_test.html',
-                unique_name='test',
-                access=access,
-            )
-
-            action_data = ActionPayloadSchema(context_data={}, user_data={})
-            result = proxy.process_action('render_html', action_data)
-            self.assertIn('html', result)
-
-    def test_render_html_raises_for_missing_template(self):
-        proxy = GlueTemplateProxy(
-            target='nonexistent/missing.html',
-            unique_name='missing',
-            access=GlueAccess.VIEW,
-        )
-
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
-
-        with self.assertRaises(GlueError) as context:
-            proxy.render_html(action_data)
-
-        self.assertIn('Template not found', str(context.exception))
-
-    def test_render_html_with_no_user_data(self):
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-            context_data={'greeting': 'Hello'},
-        )
-
-        action_data = ActionPayloadSchema(context_data={})
-        result = proxy.render_html(action_data)
-
-        self.assertIn('html', result)
         self.assertIn('Hello', result['html'])
 
-    def test_render_html_context_data_overrides(self):
-        """user_data should override context_data values."""
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-            context_data={'greeting': 'Backend', 'extra': 'kept'},
-        )
+    def test_render_html_context_kwargs_override_state_context(self):
+        proxy = make_template_proxy(context_data={'greeting': 'Backend', 'extra': 'kept'})
 
-        action_data = ActionPayloadSchema(
-            context_data={},
-            user_data={'greeting': 'Frontend'},
-        )
-        result = proxy.render_html(action_data)
+        result = proxy.render_html(request=None, greeting='Frontend')
 
         self.assertIn('Frontend', result['html'])
         self.assertNotIn('Backend', result['html'])
 
+    def test_render_html_raises_for_missing_template(self):
+        proxy = make_template_proxy(template_path='nonexistent/missing.html')
 
-class GlueTemplateProxyFromActionRequestDataTestCase(TestCase):
-    """Tests for GlueTemplateProxy.from_action_request_data()."""
+        with self.assertRaises(GlueResolverError) as context:
+            proxy.render_html(request=None)
 
-    def test_from_action_request_data_reconstructs_proxy(self):
-        proxy = GlueTemplateProxy.from_action_request_data(
-            template_name='base.html',
-            context_data={'foo': 'bar'},
-            access=GlueAccess.VIEW,
-            unique_name='my_template',
-        )
-
-        self.assertEqual(proxy.template_name, 'base.html')
-        self.assertEqual(proxy._context_data, {'foo': 'bar'})
-        self.assertEqual(proxy.unique_name, 'my_template')
-        self.assertEqual(proxy.access, GlueAccess.VIEW)
-
-    def test_from_action_request_data_defaults_context_data(self):
-        proxy = GlueTemplateProxy.from_action_request_data(
-            template_name='base.html',
-            access=GlueAccess.VIEW,
-            unique_name='my_template',
-        )
-
-        self.assertEqual(proxy._context_data, {})
-
-
-class GlueTemplateProxyProcessActionAccessTestCase(TestCase):
-    """Tests for access control on GlueTemplateProxy actions."""
-
-    def test_render_html_requires_view_access(self):
-        proxy = GlueTemplateProxy(
-            target='glue_template_test.html',
-            unique_name='test',
-            access=GlueAccess.VIEW,
-        )
-
-        action_data = ActionPayloadSchema(context_data={}, user_data={})
-        result = proxy.process_action('render_html', action_data)
-
-        self.assertIn('html', result)
+        self.assertIn('Template not found', str(context.exception))

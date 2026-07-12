@@ -11,12 +11,11 @@ import GlueFunctionProxy from "./function"
  * @type {Object<string, Function>}
  */
 export const SUBJECT_TYPE_TO_PROXY_CLASS = {
-    'Model': GlueModelProxy,
-    'ModelForm': GlueFormProxy,
-    'QuerySet': GlueQuerySetProxy,
-    'BaseForm': GlueFormProxy,
-    'Template': GlueTemplateProxy,
-    'Function': GlueFunctionProxy,
+    'model': GlueModelProxy,
+    'form': GlueFormProxy,
+    'querySet': GlueQuerySetProxy,
+    'template': GlueTemplateProxy,
+    'function': GlueFunctionProxy,
 }
 
 /** @type {Function} */

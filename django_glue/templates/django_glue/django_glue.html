@@ -3,22 +3,27 @@
 
 <script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
-{{ DJANGO_GLUE_SESSION_PROXY_REGISTRY|json_script:"django-glue-proxy-registry" }}
-{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA|json_script:"django-glue-context-data" }}
+{{ DJANGO_GLUE_PROXIES|json_script:DJANGO_GLUE_PROXIES_SCRIPT_NAME }}
 
 <script>
     const glueConfig = new GlueConfig({
         requestTimeoutSeconds: 30,
-        keepLiveIntervalSeconds: {{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }},
-        sessionExpiryMessage: '{{ DJANGO_SESSION_EXPIRY_MESSAGE }}',
-        actionUrlPath: '{{ DJANGO_GLUE_URLS.action }}',
-        keepLiveUrlPath: '{{ DJANGO_GLUE_URLS.keep_live }}',
+        attributeEventUrlPath: '{{ DJANGO_GLUE_URLS.bound_attribute_event }}',
         glueViewUrlPath: '{{ DJANGO_GLUE_URLS.glue_view }}',
     })
 
+    const proxies = JSON.parse(document.getElementById('{{ DJANGO_GLUE_PROXIES_SCRIPT_NAME }}').textContent)
+
     Glue.init({
-        proxyRegistryFromSession: JSON.parse(document.getElementById('django-glue-proxy-registry').textContent),
-        contextDataForProxies: JSON.parse(document.getElementById('django-glue-context-data').textContent),
+        proxies: proxies,
         config: glueConfig
     })
+
+    // document.addEventListener('alpine:init', () => {
+    //     Object.entries(proxies).forEach(([name, proxy]) => {
+    //         const namespace = proxy.policy.subject_details.namespace
+    //         Glue[namespace][name] = Alpine.reactive(Glue[namespace][name])
+    //     })
+    // })
+
 </script>

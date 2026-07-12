@@ -1,6 +1,6 @@
 /**
  * HTTP client for Django Glue. Handles fetch requests, CSRF tokens, timeouts,
- * and serialization for action and keep-alive requests.
+ * and serialization for bound attribute events and keep-alive requests.
  */
 class GlueHttp {
     /**
@@ -126,42 +126,43 @@ class GlueHttp {
     }
 
     /**
-     * Send an action request to the Django Glue action endpoint.
+     * Send a bound attribute event request to the Django Glue endpoint.
      * Always uses FormData to ensure consistent handling of all data types including files.
      *
-     * @param {Object} options - Action request parameters.
-     * @param {string} options.uniqueName - The proxy unique name.
-     * @param {string} options.action - The action method name.
-     * @param {Object} [options.userData] - Action-specific user data (e.g., step number, filter params).
-     * @param {Object} options.contextData - The proxy context data for server-side reconstruction.
-     * @param {Object} [options.proxyData] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
+     * @param {Object} options - Bound attribute event request parameters.
+     * @param {string} options.name - The proxy unique name.
+     * @param {string} options.attribute - The bound attribute name.
+     * @param {Object} [options.eventKwargs] - Event-specific keyword arguments (e.g., step number, filter params).
+     * @param {Object} options.policy - The proxy policy for server-side verification and reconstruction.
+     * @param {Object} [options.state] - Proxy-intrinsic runtime state (e.g., form_values, instance_pk).
      * @returns {Promise<Object>} Response object.
      */
-    async sendActionRequest({uniqueName, action, userData = null, contextData, proxyData = null}) {
-        const url = `${this._config.actionUrlPath}${uniqueName}/${action}/`
+    async sendAttributeEventRequest({name, attribute, eventKwargs = null, policy, state = null}) {
+        const url = `${this._config.attributeEventUrlPath}${name}/${attribute}/`
 
         const formData = new FormData()
-        formData.append('context_data', JSON.stringify(contextData))
+        formData.append('policy', JSON.stringify(policy))
 
-        if (proxyData) {
-            // Extract files from proxyData and append them separately
-            const {files, data} = this._extractFiles(proxyData)
-            formData.append('proxy_data', JSON.stringify(data))
+        if (state) {
+            // Extract files from state and append them separately
+            const {files, data} = this._extractFiles(state)
+            formData.append('state', JSON.stringify(data))
 
-            // Append files directly to FormData
+            // Append files directly to FormData, stripping 'instance_data.' prefix
             Object.entries(files).forEach(([key, value]) => {
+                const fieldKey = key.replace('instance_data.', '', 1);
                 if (value instanceof FileList) {
-                    Array.from(value).forEach(file => formData.append(key, file))
+                    Array.from(value).forEach(file => formData.append(fieldKey, file))
                 } else if (Array.isArray(value)) {
-                    value.forEach(file => formData.append(key, file))
+                    value.forEach(file => formData.append(fieldKey, file))
                 } else {
-                    formData.append(key, value)
+                    formData.append(fieldKey, value)
                 }
             })
         }
 
-        if (userData) {
-            formData.append('user_data', JSON.stringify(userData))
+        if (eventKwargs) {
+            formData.append('event_kwargs', JSON.stringify(eventKwargs))
         }
 
         return await this.sendFormPostRequest(url, formData)
@@ -212,15 +213,6 @@ class GlueHttp {
         })
 
         return {files, data}
-    }
-
-    /**
-     * Send a keep-alive request to renew proxy expiration timestamps.
-     * @param {string[]} uniqueNames - Array of proxy unique names to renew.
-     * @returns {Promise<Object>} Response object.
-     */
-    async sendKeepLiveRequest(uniqueNames) {
-        return await this.sendJsonPostRequest(this._config.keepLiveUrlPath, {'unique_names': uniqueNames})
     }
 }
 

@@ -1,234 +1,82 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import {describe, expect, it} from 'bun:test';
 import GlueTemplateProxy from '../../src/proxies/template';
-import { createMockFetch, setupCookieMock } from '../testUtils';
+import {createMockHttp, createTemplatePolicy} from '../testUtils';
 
 describe('GlueTemplateProxy', () => {
-    let mockHttp;
-    let proxy;
-
-    const contextData = {
-        subject_type: 'Template',
-        template_name: 'components/card.html',
-        context_data: { defaultName: 'World' },
-        actions: {
-            render_html: {},
-        },
-    };
-
-    beforeEach(() => {
-        mockHttp = {
-            sendActionRequest: mock(async (req) => {
-                return {
-                    data: {
-                        html: `<div>${req.payload?.name || 'Default'}</div>`,
-                    },
-                };
+    function makeTemplate(html = '<strong>Hello</strong>') {
+        return new GlueTemplateProxy({
+            http: createMockHttp({
+                result: {html},
+                state: null,
             }),
-        };
+            name: 'card',
+            policy: createTemplatePolicy(),
+            sharedPayload: {shared: true},
+        });
+    }
 
-        proxy = new GlueTemplateProxy({
-            http: mockHttp,
-            proxyUniqueName: 'card',
-            contextData: contextData,
+    it('renders html with shared and per-call context', async () => {
+        const proxy = makeTemplate();
+
+        const html = await proxy._renderHtml({name: 'Ada'});
+
+        expect(html).toBe('<strong>Hello</strong>');
+        expect(proxy.http.sendAttributeEventRequest.mock.calls[0][0].eventKwargs).toEqual({
+            shared: true,
+            name: 'Ada',
         });
     });
 
-    describe('constructor', () => {
-        it('stores http instance', () => {
-            expect(proxy.http).toBe(mockHttp);
-        });
+    it('uses the render_html method defined by _defineAttributeProperties', async () => {
+        const policy = createTemplatePolicy();
+        const proxy = makeTemplate();
 
-        it('stores unique name', () => {
-            expect(proxy._uniqueName).toBe('card');
-        });
+        // The policy should have the full attribute path registered
+        expect(policy.bound_attributes['GlueTemplateProxy.render_html']).toBeDefined();
 
-        it('stores context data', () => {
-            expect(proxy._contextData).toBe(contextData);
-        });
+        await proxy._renderHtml({});
 
-        it('defaults sharedPayload to empty object', () => {
-            expect(proxy._sharedPayload).toEqual({});
-        });
-
-        it('accepts sharedPayload option', () => {
-            const p = new GlueTemplateProxy({
-                http: mockHttp,
-                proxyUniqueName: 'card',
-                contextData: contextData,
-                sharedPayload: { sharedKey: 'shared' },
-            });
-
-            expect(p._sharedPayload).toEqual({ sharedKey: 'shared' });
-        });
+        // Verify the full attribute path is sent to the server
+        const call = proxy.http.sendAttributeEventRequest.mock.calls[0][0];
+        expect(call.attribute).toBe('GlueTemplateProxy.render_html');
+        expect(call.attribute).not.toBe('render_html');
     });
 
-    describe('static name', () => {
-        it('is template for namespace mapping', () => {
-            expect(GlueTemplateProxy.name).toBe('template');
-        });
+    it('replaces inner and outer html', async () => {
+        const proxy = makeTemplate('<span>Rendered</span>');
+        const inner = document.createElement('div');
+        const outer = document.createElement('section');
+        document.body.appendChild(outer);
+
+        await proxy.renderInnerHtml(inner);
+        await proxy.renderOuterHtml(outer);
+
+        expect(inner.innerHTML).toBe('<span>Rendered</span>');
+        expect(document.body.lastChild.outerHTML).toBe('<span>Rendered</span>');
     });
 
-    describe('_renderHtml', () => {
-        it('calls render_html action with payload', async () => {
-            const html = await proxy._renderHtml({ name: 'John' });
+    it('inserts adjacent html at requested positions', async () => {
+        const proxy = makeTemplate('<em>Rendered</em>');
+        const target = document.createElement('div');
+        target.innerHTML = '<p>Existing</p>';
+        document.body.appendChild(target);
 
-            expect(html).toBe('<div>John</div>');
-            expect(mockHttp.sendActionRequest).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    uniqueName: 'card',
-                    action: 'render_html',
-                    payload: { name: 'John' },
-                })
-            );
-        });
+        await proxy.renderInsertAdjacentHtmlBeforeEnd(target);
+        await proxy.renderInsertAdjacentHtmlAfterBegin(target);
 
-        it('merges sharedPayload with per-call payload', async () => {
-            mockHttp.sendActionRequest = mock(async (req) => {
-                return {
-                    data: {
-                        html: JSON.stringify(req.payload),
-                    },
-                };
-            });
-
-            const p = new GlueTemplateProxy({
-                http: mockHttp,
-                proxyUniqueName: 'card',
-                contextData: contextData,
-                sharedPayload: { shared: 'yes', override: 'shared' },
-            });
-
-            const html = await p._renderHtml({ call: 'yes', override: 'call' });
-
-            expect(JSON.parse(html)).toEqual({
-                shared: 'yes',
-                override: 'call',
-                call: 'yes',
-            });
-        });
-
-        it('returns HTML string from response', async () => {
-            const html = await proxy._renderHtml({});
-            expect(typeof html).toBe('string');
-        });
+        expect(target.innerHTML).toBe('<em>Rendered</em><p>Existing</p><em>Rendered</em>');
     });
 
-    describe('renderInnerHtml', () => {
-        it('sets innerHTML of target element', async () => {
-            const el = document.createElement('div');
+    it('inserts adjacent html before and after the target element', async () => {
+        const proxy = makeTemplate('<em>Rendered</em>');
+        const target = document.createElement('div');
+        target.textContent = 'Target';
+        document.body.appendChild(target);
 
-            await proxy.renderInnerHtml(el, { name: 'Test' });
+        await proxy.renderInsertAdjacentHtmlBeforeBegin(target);
+        await proxy.renderInsertAdjacentHtmlAfterEnd(target);
 
-            expect(el.innerHTML).toBe('<div>Test</div>');
-        });
-    });
-
-    describe('renderOuterHtml', () => {
-        it('sets outerHTML of target element', async () => {
-            const parent = document.createElement('div');
-            const el = document.createElement('span');
-            parent.appendChild(el);
-
-            await proxy.renderOuterHtml(el, { name: 'Replaced' });
-
-            expect(parent.innerHTML).toBe('<div>Replaced</div>');
-        });
-    });
-
-    describe('renderInsertAdjacentHtmlBeforeEnd', () => {
-        it('inserts HTML at end of children', async () => {
-            const el = document.createElement('div');
-            el.innerHTML = '<span>existing</span>';
-
-            await proxy.renderInsertAdjacentHtmlBeforeEnd(el, { name: 'Appended' });
-
-            expect(el.innerHTML).toBe('<span>existing</span><div>Appended</div>');
-        });
-    });
-
-    describe('renderInsertAdjacentHtmlAfterEnd', () => {
-        it('inserts HTML after the element', async () => {
-            const parent = document.createElement('div');
-            const el = document.createElement('span');
-            const sibling = document.createElement('div');
-            parent.appendChild(el);
-            parent.appendChild(sibling);
-
-            await proxy.renderInsertAdjacentHtmlAfterEnd(el, { name: 'Inserted' });
-
-            expect(parent.innerHTML).toBe('<span></span><div>Inserted</div><div></div>');
-        });
-    });
-
-    describe('renderInsertAdjacentHtmlBeforeBegin', () => {
-        it('inserts HTML before the element', async () => {
-            const parent = document.createElement('div');
-            const el = document.createElement('span');
-            const sibling = document.createElement('div');
-            parent.appendChild(el);
-            parent.appendChild(sibling);
-
-            await proxy.renderInsertAdjacentHtmlBeforeBegin(el, { name: 'Inserted' });
-
-            expect(parent.innerHTML).toBe('<div>Inserted</div><span></span><div></div>');
-        });
-    });
-
-    describe('renderInsertAdjacentHtmlAfterBegin', () => {
-        it('inserts HTML at beginning of children', async () => {
-            const el = document.createElement('div');
-            el.innerHTML = '<span>existing</span>';
-
-            await proxy.renderInsertAdjacentHtmlAfterBegin(el, { name: 'Prepended' });
-
-            expect(el.innerHTML).toBe('<div>Prepended</div><span>existing</span>');
-        });
-    });
-
-    describe('listener events', () => {
-        it('fires before listeners before render', async () => {
-            const events = [];
-
-            mockHttp.sendActionRequest = mock(async () => {
-                events.push('request');
-                return { data: { html: '<div>ok</div>' } };
-            });
-
-            proxy.addListener('render_html', () => {
-                events.push('before');
-            }, 'before');
-
-            await proxy._renderHtml({ name: 'Test' });
-
-            expect(events).toEqual(['before', 'request']);
-        });
-
-        it('fires after listeners with result', async () => {
-            let capturedEvent = null;
-
-            proxy.addListener('render_html', (event) => {
-                capturedEvent = event;
-            }, 'after');
-
-            await proxy._renderHtml({ name: 'Test' });
-
-            expect(capturedEvent.result).toEqual({ html: '<div>Test</div>' });
-            expect(capturedEvent.action).toBe('render_html');
-        });
-
-        it('fires error listeners on failure', async () => {
-            let capturedError = null;
-
-            mockHttp.sendActionRequest = mock(async () => {
-                throw new Error('server error');
-            });
-
-            proxy.addListener('render_html', (event) => {
-                capturedError = event.error;
-            }, 'error');
-
-            await expect(proxy._renderHtml({})).rejects.toThrow('server error');
-            expect(capturedError).toBeInstanceOf(Error);
-        });
+        expect(target.previousSibling.outerHTML).toBe('<em>Rendered</em>');
+        expect(target.nextSibling.outerHTML).toBe('<em>Rendered</em>');
     });
 });

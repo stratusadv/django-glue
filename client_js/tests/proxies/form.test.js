@@ -1,390 +1,380 @@
-import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
+import {beforeEach, describe, expect, it, mock} from 'bun:test';
 import GlueFormProxy from '../../src/proxies/form';
-import { setupCookieMock } from '../testUtils';
+import {createFormPolicy, createMockHttp, createState} from '../testUtils';
 
 describe('GlueFormProxy', () => {
-    let originalFetch;
-
-    const createMockHttp = (response = { data: { success: true, errors: {} } }) => ({
-        sendActionRequest: mock(() => Promise.resolve(response))
+    beforeEach(() => {
+        GlueFormProxy.choicesCache.clear();
     });
 
-    function createFormContextData(fields = {}, initial = {}, actions = {}) {
-        return {
-            fields: fields,
-            initial: initial,
-            actions: Object.keys(actions).length ? actions : { get: {}, validate: {}, save: {} }
-        };
+    function makeForm({policy = createFormPolicy(), state = createState({name: 'Ada'})} = {}) {
+        return new GlueFormProxy({
+            http: createMockHttp({result: {valid: true}, state}),
+            name: 'contact',
+            policy,
+            state,
+        });
     }
 
-    beforeEach(() => {
-        originalFetch = global.fetch;
-        setupCookieMock({ csrftoken: 'test-token' });
+    it('defines field accessors from policy field metadata', () => {
+        const proxy = makeForm();
+
+        expect(proxy.name).toBe('Ada');
+        proxy.email = 'ada@example.com';
+
+        expect(proxy._state.instance_data.email).toBe('ada@example.com');
+        expect(proxy.$fields.name.name).toBe('name');
     });
 
-    afterEach(() => {
-        global.fetch = originalFetch;
+    it('loads state instance data into field values', () => {
+        const proxy = makeForm({state: createState({name: 'Ada', email: 'ada@example.com'})});
+
+        proxy.loadInstanceData();
+
+        expect(proxy.$fields.name.value).toBe('Ada');
+        expect(proxy.$fields.email.value).toBe('ada@example.com');
+        expect(proxy._loaded).toBe(true);
     });
 
-    describe('constructor', () => {
-        it('creates field accessors from contextData.fields', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData(
-                { name: { type: 'text' }, email: { type: 'email' } },
-                { name: 'John', email: 'john@example.com' }
+    it('reports validation errors from state', () => {
+        const proxy = makeForm({
+            state: {
+                instance_data: {name: ''},
+                errors: {name: ['Required']},
+            },
+        });
+
+        expect(proxy.hasErrors()).toBe(true);
+        expect(proxy.hasErrors('name')).toBe(true);
+        expect(proxy.hasErrors('email')).toBe(false);
+        expect(proxy.$fields.name.hasErrors).toBe(true);
+    });
+
+    it('refreshes field error metadata after event responses', () => {
+        const proxy = makeForm({state: createState({name: 'Ada'})});
+
+        proxy._handleEventResponse(
+            'GlueFormProxy.save',
+            null,
+            {
+                result: null,
+                state: {
+                    instance_data: {name: 'Ada'},
+                    errors: {name: ['Required']},
+                },
+            },
+        );
+
+        expect(proxy.$fields.name.hasErrors).toBe(true);
+        expect(proxy.$fields.name.errorText).toBe('Required');
+
+        proxy._handleEventResponse(
+            'GlueFormProxy.save',
+            null,
+            {
+                result: null,
+                state: {
+                    instance_data: {name: 'Ada'},
+                    errors: {},
+                },
+            },
+        );
+
+        expect(proxy.$fields.name.hasErrors).toBe(false);
+        expect(proxy.$fields.name.errorText).toBeUndefined();
+    });
+
+    it('updates field choices from foreign key choice responses', () => {
+        const policy = createFormPolicy({
+            subject_details: {
+                included_fields: {
+                    owner: {type: 'ModelChoiceField', label: 'Owner'},
+                },
+            },
+        });
+        const proxy = makeForm({policy, state: createState({owner: null})});
+
+        proxy._handleEventResponse(
+            'foreign_key_choices',
+            {field_name: 'owner'},
+            {result: [{pk: 1, __str__: 'Jane'}], state: proxy._state},
+        );
+
+        // choices is a getter property that returns the choices array
+        expect(proxy.$fields.owner.choices).toEqual([{pk: 1, __str__: 'Jane'}]);
+    });
+
+    describe('ModelChoiceField choices', () => {
+        function makeFormWithChoiceField() {
+            const policy = createFormPolicy({
+                subject_details: {
+                    included_fields: {
+                        category: {type: 'ModelChoiceField', label: 'Category'},
+                    },
+                },
+            });
+            return makeForm({policy, state: createState({category: null})});
+        }
+
+        it('initializes choices as empty array before loading', () => {
+            const proxy = makeFormWithChoiceField();
+            // Mark as already loading to prevent trigger, so we can test initial state
+            proxy.$fields.category.__glue__loadingChoices = true;
+            expect(proxy.$fields.category.choices).toEqual([]);
+        });
+
+        it('populates choices when response is received via _handleEventResponse', () => {
+            const proxy = makeFormWithChoiceField();
+
+            // Simulate response from server
+            proxy._handleEventResponse(
+                'foreign_key_choices',
+                {field_name: 'category'},
+                {
+                    result: [
+                        {pk: 1, __str__: 'Tech'},
+                        {pk: 2, __str__: 'Sports'},
+                        {pk: 3, __str__: 'Music'},
+                    ],
+                    state: proxy._state,
+                },
             );
 
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'contact_form',
-                contextData
-            });
-
-            expect(proxy.name).toBe('John');
-            expect(proxy.email).toBe('john@example.com');
+            expect(proxy.$fields.category.choices).toEqual([
+                {pk: 1, __str__: 'Tech'},
+                {pk: 2, __str__: 'Sports'},
+                {pk: 3, __str__: 'Music'},
+            ]);
         });
 
-        it('initializes _values from contextData.initial', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData(
-                { title: {} },
-                { title: 'Initial Value' }
+        it('returns consistent choices data on multiple accesses', () => {
+            const proxy = makeFormWithChoiceField();
+
+            // Simulate response
+            proxy._handleEventResponse(
+                'foreign_key_choices',
+                {field_name: 'category'},
+                {result: [{pk: 1, __str__: 'Tech'}, {pk: 2, __str__: 'Sports'}], state: proxy._state},
             );
 
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
-            });
+            // Access choices multiple times
+            const choices1 = proxy.$fields.category.choices;
+            const choices2 = proxy.$fields.category.choices;
+            const choices3 = proxy.$fields.category.choices;
 
-            expect(proxy._values).toEqual({ title: 'Initial Value' });
+            // All should return the same data
+            expect(choices1).toEqual([{pk: 1, __str__: 'Tech'}, {pk: 2, __str__: 'Sports'}]);
+            expect(choices2).toEqual([{pk: 1, __str__: 'Tech'}, {pk: 2, __str__: 'Sports'}]);
+            expect(choices3).toEqual([{pk: 1, __str__: 'Tech'}, {pk: 2, __str__: 'Sports'}]);
         });
 
-        it('starts with empty _errors', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
+        it('handles empty choices response', () => {
+            const proxy = makeFormWithChoiceField();
 
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            expect(proxy._errors).toEqual({});
-        });
-
-        it('stores field definitions in $fields', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData(
-                { name: { type: 'text', required: true } },
-                {}
+            proxy._handleEventResponse(
+                'foreign_key_choices',
+                {field_name: 'category'},
+                {result: [], state: proxy._state},
             );
 
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            expect(proxy.$fields.name.type).toBe('text');
-            expect(proxy.$fields.name.required).toBe(true);
-            expect(proxy.$fields.name.name).toBe('name');
-            expect(proxy.$fields.name.has_errors).toBe(false);
+            expect(proxy.$fields.category.choices).toEqual([]);
         });
 
-        it('allows setting field values via property', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, { name: 'Original' });
-
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
+        it('loads choices lazily on first choices access', async () => {
+            const proxy = makeFormWithChoiceField();
+            proxy.http = createMockHttp({
+                result: [{pk: 1, __str__: 'Lazy'}],
+                state: proxy._state,
             });
 
-            proxy.name = 'Updated';
+            expect(proxy.$fields.category.choices).toEqual([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
 
-            expect(proxy.name).toBe('Updated');
-            expect(proxy._values.name).toBe('Updated');
+            expect(proxy.http.sendAttributeEventRequest.mock.calls[0][0].attribute).toBe(
+                'GlueFormProxy.foreign_key_choices',
+            );
+            expect(proxy.$fields.category.choices).toEqual([{pk: 1, __str__: 'Lazy'}]);
         });
 
-        it('creates field properties on $fields', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData(
-                { name: { type: 'text', required: true } },
-                {}
+        it('does not start another lazy choices request while loading or loaded', async () => {
+            const proxy = makeFormWithChoiceField();
+            const field = proxy.$fields.category;
+
+            field.__glue__loadingChoices = true;
+            await proxy._loadFieldChoices('category', field);
+            expect(proxy.http.sendAttributeEventRequest).not.toHaveBeenCalled();
+
+            field.__glue__loadingChoices = false;
+            field.__glue__choicesLoaded = true;
+            await proxy._loadFieldChoices('category', field);
+            expect(proxy.http.sendAttributeEventRequest).not.toHaveBeenCalled();
+        });
+
+        it('sets choices when the backing choices array is missing', () => {
+            const proxy = makeFormWithChoiceField();
+            delete proxy.$fields.category.__glue__choicesData;
+
+            proxy._setFieldChoices('category', [{pk: 1, __str__: 'A'}]);
+
+            expect(proxy.$fields.category.choices).toEqual([{pk: 1, __str__: 'A'}]);
+        });
+
+        it('ignores choice updates for missing fields', () => {
+            const proxy = makeFormWithChoiceField();
+
+            expect(() => proxy._setFieldChoices('missing', [{pk: 1, __str__: 'A'}])).not.toThrow();
+        });
+
+        it('correctly identifies ModelChoiceField type', () => {
+            const proxy = makeFormWithChoiceField();
+            expect(proxy.$fields.category.type).toBe('ModelChoiceField');
+        });
+
+        it('sets up choices data structure for ModelMultipleChoiceField', () => {
+            const policy = createFormPolicy({
+                subject_details: {
+                    included_fields: {
+                        skills: {type: 'ModelMultipleChoiceField', label: 'Skills'},
+                    },
+                },
+            });
+            const proxy = makeForm({policy, state: createState({skills: []})});
+
+            // Simulate response
+            proxy._handleEventResponse(
+                'foreign_key_choices',
+                {field_name: 'skills'},
+                {result: [{pk: 1, __str__: 'Skill A'}, {pk: 2, __str__: 'Skill B'}], state: proxy._state},
             );
 
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            expect(proxy.$fields.name.type).toBe('text');
-            expect(proxy.$fields.name.required).toBe(true);
+            expect(proxy.$fields.skills.choices).toEqual([
+                {pk: 1, __str__: 'Skill A'},
+                {pk: 2, __str__: 'Skill B'},
+            ]);
         });
 
-        it('creates error attributes for fields', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: { type: 'text' } }, {});
-
-            const proxy = new GlueFormProxy({
-                http,
-                proxyUniqueName: 'form',
-                contextData
+        it('initializes missing ModelMultipleChoiceField values as an empty array', () => {
+            const policy = createFormPolicy({
+                subject_details: {
+                    included_fields: {
+                        skills: {type: 'ModelMultipleChoiceField', label: 'Skills'},
+                    },
+                },
             });
 
-            expect(proxy.$fields.name.has_errors).toBe(false);
-            expect(proxy.$fields.name.error_text).toBeUndefined();
+            const missing = makeForm({policy, state: createState({})});
+            const nullValue = makeForm({policy, state: createState({skills: null})});
+
+            expect(missing.skills).toEqual([]);
+            expect(nullValue.skills).toEqual([]);
+            expect(Array.isArray(missing.$fields.skills.value)).toBe(true);
+            expect(Array.isArray(nullValue.$fields.skills.value)).toBe(true);
+        });
+
+        it('shares lazy choice requests across matching fields', async () => {
+            const policy = createFormPolicy({
+                subject_details: {
+                    model_class_path: 'test_project.gorilla.models.Gorilla',
+                    included_fields: {
+                        skills: {
+                            type: 'ModelMultipleChoiceField',
+                            label: 'Skills',
+                            choices_cache_key: 'gorilla.skills',
+                        },
+                    },
+                },
+            });
+            const http = createMockHttp({
+                result: [{pk: 1, __str__: 'Skill A'}],
+                state: createState({skills: []}),
+            });
+            const first = makeForm({policy, state: createState({skills: []})});
+            const second = makeForm({policy, state: createState({skills: []})});
+            first.http = http;
+            second.http = http;
+
+            expect(first.$fields.skills.choices).toEqual([]);
+            expect(second.$fields.skills.choices).toEqual([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(http.sendAttributeEventRequest).toHaveBeenCalledTimes(1);
+            expect(first.$fields.skills.choices).toEqual([{pk: 1, __str__: 'Skill A'}]);
+            expect(second.$fields.skills.choices).toEqual([{pk: 1, __str__: 'Skill A'}]);
+        });
+
+        it('enriches the shared choices cache with buildChoices fields', async () => {
+            const proxy = makeFormWithChoiceField();
+            proxy.http = {
+                sendAttributeEventRequest: mock(async ({eventKwargs}) => ({
+                    data: {
+                        result: eventKwargs.choice_fields?.includes('rank_points')
+                            ? [{pk: 1, __str__: 'Koko', rank_points: 200}]
+                            : [{pk: 1, __str__: 'Koko'}],
+                        state: proxy._state,
+                    },
+                })),
+            };
+
+            const defaultChoices = proxy.$fields.category.choices;
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const enrichedChoices = proxy.$fields.category.buildChoices('rank_points');
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(enrichedChoices).toBe(defaultChoices);
+            expect(proxy.$fields.category.choices).toEqual([
+                {pk: 1, __str__: 'Koko', rank_points: 200},
+            ]);
+            expect(proxy.http.sendAttributeEventRequest.mock.calls[1][0].eventKwargs).toEqual({
+                field_name: 'category',
+                choice_fields: ['rank_points'],
+            });
         });
     });
 
-    describe('validate', () => {
-        it('sends validate action with current values', async () => {
-            let capturedPayload = null;
-            const mockHttp = {
-                sendActionRequest: mock((req) => {
-                    capturedPayload = req.payload;
-                    return Promise.resolve({ data: { success: true, errors: {} } });
-                })
-            };
+    it('processes validate and save bound attributes through the base event path', async () => {
+        const state = createState({name: 'Ada'});
+        const proxy = makeForm({state});
 
-            const contextData = createFormContextData(
-                { name: {} },
-                { name: 'Test' }
-            );
+        await proxy.validate();
+        await proxy.save();
 
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
+        expect(proxy.http.sendAttributeEventRequest.mock.calls[0][0].attribute).toBe('GlueFormProxy.validate');
+        expect(proxy.http.sendAttributeEventRequest.mock.calls[1][0].attribute).toBe('GlueFormProxy.save');
+    });
 
-            const result = await proxy.validate();
+    it('creates instance_data when setting field values on an empty state', () => {
+        const proxy = makeForm({state: {errors: {}}});
 
-            expect(capturedPayload).toEqual({ name: 'Test' });
-            expect(result).toEqual({ success: true, errors: {} });
-        });
+        proxy.name = 'Ada';
+        proxy.$fields.email.value = 'ada@example.com';
 
-        it('updates _errors from validation response', async () => {
-            const mockHttp = {
-                sendActionRequest: mock(() => Promise.resolve({
-                    data: { success: false, errors: { name: ['Required'] } }
-                }))
-            };
-
-            const contextData = createFormContextData({ name: {} }, {});
-
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            await proxy.validate();
-
-            expect(proxy._errors).toEqual({ name: ['Required'] });
-        });
-
-        it('updates _errors after validation', async () => {
-            const mockHttp = {
-                sendActionRequest: mock(() => Promise.resolve({
-                    data: { success: false, errors: { name: ['Required', 'Too short'] } }
-                }))
-            };
-
-            const contextData = createFormContextData({ name: { type: 'text' } }, {});
-
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            await proxy.validate();
-
-            // validate() sets _errors directly but does NOT call _updateErrors()
-            expect(proxy._errors).toEqual({ name: ['Required', 'Too short'] });
+        expect(proxy._state.instance_data).toEqual({
+            name: 'Ada',
+            email: 'ada@example.com',
         });
     });
 
-    describe('save', () => {
-        it('sends save action with FormData', async () => {
-            const capturedReqs = [];
-            const mockHttp = {
-                sendActionRequest: function(req) {
-                    capturedReqs.push(req);
-                    return Promise.resolve({ data: { success: true, errors: {} } });
-                }
-            };
-
-            const contextData = createFormContextData(
-                { name: { type: 'text' } },
-                { name: 'Submit Me' }
-            );
-
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            const result = await proxy.save();
-
-            // save() triggers 'save' action, then on success calls get()
-            expect(capturedReqs.length).toBeGreaterThanOrEqual(1);
-            const saveReq = capturedReqs.find(r => r.action === 'save');
-            expect(saveReq).not.toBeNull();
-            expect(saveReq.payload).toBeInstanceOf(FormData);
-            expect(result.success).toBe(true);
+    it('submits model choice objects without mutating them on the client', async () => {
+        const policy = createFormPolicy({
+            subject_details: {
+                included_fields: {
+                    owner: {type: 'ModelChoiceField', label: 'Owner', pk_field: 'id'},
+                    skills: {type: 'ModelMultipleChoiceField', label: 'Skills', pk_field: 'id'},
+                },
+            },
         });
-
-        it('updates _errors from save response', async () => {
-            const mockHttp = {
-                sendActionRequest: mock(() => Promise.resolve({
-                    data: { success: false, errors: { email: ['Invalid email'] } }
-                }))
-            };
-
-            const contextData = createFormContextData({ email: {} }, { email: 'bad' });
-
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            await proxy.save();
-
-            expect(proxy._errors).toEqual({ email: ['Invalid email'] });
+        const state = createState({
+            owner: {pk: 7, __str__: 'Jane'},
+            skills: [{pk: 1, __str__: 'Skill A'}],
         });
+        const proxy = makeForm({policy, state});
 
-        it('clears errors on successful save', async () => {
-            const mockHttp = {
-                sendActionRequest: mock(() => Promise.resolve({
-                    data: { success: true, errors: {} }
-                }))
-            };
+        await proxy.save();
 
-            const contextData = createFormContextData({ name: {} }, { name: 'Valid' });
-
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            proxy._errors = { name: ['Old error'] };
-            await proxy.save();
-
-            expect(proxy._errors).toEqual({});
-        });
-    });
-
-    describe('hasErrors', () => {
-        it('returns false when no errors', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            expect(proxy.hasErrors()).toBe(false);
-        });
-
-        it('returns true when errors exist', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._errors = { name: ['Error'] };
-            expect(proxy.hasErrors()).toBe(true);
-        });
-
-        it('returns true for specific field with errors', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: { type: 'text' }, email: { type: 'email' } }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._errors = { name: ['Error'] };
-            expect(proxy.hasErrors('name')).toBe(true);
-            // hasErrors returns undefined for field without errors (truthy check needed)
-            expect(proxy.hasErrors('email')).toBeFalsy();
-        });
-    });
-
-    describe('_clearErrors', () => {
-        it('removes all errors', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {}, email: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._errors = { name: ['Error'], email: ['Another error'] };
-            proxy._clearErrors();
-
-            expect(proxy._errors).toEqual({});
-        });
-    });
-
-    describe('_getFormData', () => {
-        it('converts values to FormData', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ name: {}, count: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._values = { name: 'test', count: 42 };
-            const formData = proxy._getFormData();
-
-            expect(formData.get('name')).toBe('test');
-            expect(formData.get('count')).toBe('42');
-        });
-
-        it('handles array values', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ tags: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._values = { tags: ['a', 'b'] };
-            const formData = proxy._getFormData();
-
-            expect(formData.getAll('tags')).toEqual(['a', 'b']);
-        });
-
-        it('converts null and undefined to empty string', () => {
-            const http = createMockHttp();
-            const contextData = createFormContextData({ a: {}, b: {} }, {});
-            const proxy = new GlueFormProxy({ http, proxyUniqueName: 'form', contextData });
-
-            proxy._values = { a: null, b: undefined };
-            const formData = proxy._getFormData();
-
-            expect(formData.get('a')).toBe('');
-            expect(formData.get('b')).toBe('');
-        });
-    });
-
-    describe('get', () => {
-        it('calls _processAction with get action', async () => {
-            let capturedAction = null;
-            const mockHttp = {
-                sendActionRequest: mock((req) => {
-                    capturedAction = req.action;
-                    return Promise.resolve({ data: { name: 'Fetched' } });
-                })
-            };
-
-            const contextData = createFormContextData({ name: {} }, {});
-            const proxy = new GlueFormProxy({
-                http: mockHttp,
-                proxyUniqueName: 'form',
-                contextData
-            });
-
-            proxy.get();
-            await new Promise(resolve => setTimeout(resolve, 10));
-
-            expect(capturedAction).toBe('get');
-            expect(proxy._values).toEqual({ name: 'Fetched' });
-            expect(proxy._loaded).toBe(true);
-        });
+        const submittedState = proxy.http.sendAttributeEventRequest.mock.calls[0][0].state;
+        expect(submittedState.instance_data.owner).toEqual({pk: 7, __str__: 'Jane'});
+        expect(submittedState.instance_data.skills).toEqual([{pk: 1, __str__: 'Skill A'}]);
+        expect(proxy._state.instance_data.owner).toEqual({pk: 7, __str__: 'Jane'});
+        expect(proxy._state.instance_data.skills).toEqual([{pk: 1, __str__: 'Skill A'}]);
     });
 });

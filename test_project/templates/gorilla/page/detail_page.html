@@ -34,8 +34,8 @@
         gorilla: Glue.model.gorilla,
         init() {
             this.gorilla.addListener('save', event => {
-                if (event.result.errors) {
-                    $store.notifications.error(`Failed to save fighter. Errors: ${Object.keys(event.result.errors).map(field => `${field}: ${event.result.errors[field]}`).join('\n')}`);
+                if (event.proxy.hasErrors()) {
+                    $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
                 }
                 else {
                     $store.notifications.success('Fighter saved successfully!');
@@ -50,6 +50,16 @@
             this.gorilla.addListener('delete', () => {
                 $store.notifications.error('Failed to delete fighter.');
             }, 'error');
+        },
+        errorSummary(proxy) {
+            const errors = proxy._state?.errors || {};
+            const messages = Object.entries(errors)
+                .map(([field, fieldErrors]) => {
+                    const label = proxy.$fields?.[field]?.label || field;
+                    const text = Array.isArray(fieldErrors) ? fieldErrors.join(', ') : fieldErrors;
+                    return `${label}: ${text}`;
+                });
+            return messages.length ? messages.join(' ') : 'Check form for errors.';
         }
     }">
         <div class="row justify-content-center">
@@ -181,23 +191,23 @@
                                 <label class="form-label fw-bold">Fighting Skills (ManyToMany Test)</label>
                                 <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
                                     <div class="row">
-                                        <template x-for="choice in gorilla.$fields.skills.choices" :key="choice[0]">
+                                        <template x-for="choice in gorilla.$fields.skills.choices" :key="choice.pk">
                                             <div class="col-md-6 col-lg-4">
                                                 <div class="form-check">
                                                     <input
                                                         type="checkbox"
                                                         class="form-check-input"
-                                                        :id="'skill-' + choice[0]"
-                                                        :value="choice[0]"
-                                                        :checked="gorilla.skills?.includes(parseInt(choice[0]))"
+                                                        :id="'skill-' + choice.pk"
+                                                        :value="choice.pk"
+                                                        :checked="gorilla.skills.map(skill => Number(skill.pk)).includes(Number(choice.pk))"
                                                         @change="
                                                             if ($event.target.checked) {
-                                                                gorilla.skills = [...gorilla.skills, parseInt(choice[0])];
+                                                                gorilla.skills = [...gorilla.skills, choice];
                                                             } else {
-                                                                gorilla.skills = gorilla.skills.filter(s => s !== parseInt(choice[0]));
+                                                                gorilla.skills = gorilla.skills.filter(skill => Number(skill.pk) !== Number(choice.pk));
                                                             }
                                                         ">
-                                                    <label class="form-check-label" :for="'skill-' + choice[0]" x-text="choice[1]"></label>
+                                                    <label class="form-check-label" :for="'skill-' + choice.pk" x-text="choice.__str__"></label>
                                                 </div>
                                             </div>
                                         </template>

@@ -6,67 +6,61 @@ from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
 
 from django_glue.access.access import GlueAccess
-from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.proxies.proxy import BaseGlueProxy
-from django_glue.proxies.decorators import action
+from django_glue.proxies.template.state import GlueTemplateProxyState
+from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.resolver.exceptions import GlueResolverError
 
 if TYPE_CHECKING:
-    from django_glue.resolver.action.schemas import ActionPayloadSchema
+    from django.http import HttpRequest
+    pass
 
 
 class GlueTemplateProxy(BaseGlueProxy):
+    """Proxy for a Django template. Provides server-side rendering."""
+
     _subject_type = str
-    _subject_type_name = 'Template'
-
-    def __init__(
-        self,
-        target: str,
-        context_data: dict | None = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(target=target, **kwargs)
-
-        self.template_name = target
-        self._context_data = context_data or {}
+    _state_class = GlueTemplateProxyState
 
     @classmethod
-    def from_action_request_data(
+    def register_policy(
         cls,
-        template_name: str,
-        context_data: dict | None = None,
-        **kwargs,
-    ) -> GlueTemplateProxy:
-        return cls(
-            target=template_name,
-            context_data=context_data,
-            **kwargs,
-        )
+        request: HttpRequest,
+        target: str,
+        name: str,
+        access: GlueAccess = GlueAccess.VIEW,
+        namespace: str = 'template',
+        initial_context_data: dict | None = None,
+    ) -> None:
+        state = GlueTemplateProxyState(template_path=target, context_data=initial_context_data or {})
+        proxy = cls(name=name, namespace=namespace, access=access, state=state)
+        proxy._register_with_request(request)
 
-    def _build_context_data(self) -> dict:
+    @property
+    def _custom_policy_details(self) -> dict:
         return {
-            'template_name': self.template_name,
-            'context_data': self._context_data,
-            'subject_type': self._subject_type_name
+            'template_path': self.state.template_path,
+            'initial_context_data': self.state.context_data,
         }
 
-    @action(access=GlueAccess.VIEW)
-    def render_html(self, request, user_data: dict = None) -> dict:
-        user_data = user_data or {}
-        merged_context = {**self._context_data, **user_data}
+    @bind_attribute(access=GlueAccess.VIEW)
+    def render_html(self, request: HttpRequest, **context_kwargs: dict) -> dict:
+        context_kwargs = context_kwargs or {}
+        merged_context = {**self.state.context_data, **context_kwargs}
 
         try:
             html = render_to_string(
-                template_name=self.template_name,
-                context=merged_context
+                template_name=self.state.template_path,
+                context=merged_context,
             )
         except TemplateDoesNotExist as e:
             raise GlueResolverError(
-                response_error=f'Template not found: {self.template_name}',
+                response_error=f'Template not found: {self.state.template_path}',
                 response_status=404,
             ) from e
         except TemplateSyntaxError as e:
             raise GlueResolverError(
-                response_error=f'Template syntax error in {self.template_name}: {e!s}',
+                response_error=f'Template syntax error in {self.state.template_path}: {e!s}',
                 response_status=500,
             ) from e
 

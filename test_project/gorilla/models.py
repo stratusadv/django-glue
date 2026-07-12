@@ -3,6 +3,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 from django.http import HttpRequest
 
 from django_glue.shortcuts.glue import Glue
+from test_project.gorilla.services import GorillaServiceDescriptor
 
 
 class Skill(models.Model):
@@ -51,7 +52,9 @@ class Gorilla(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    @Glue.action(access=Glue.Access.DELETE)
+    services = GorillaServiceDescriptor()
+
+    @Glue.attribute(access=Glue.Access.DELETE)
     def battle_cry(self, request: HttpRequest, intensity: str = 'normal') -> dict:
         """
         Demonstrates a custom Glue action routed from frontend to server.
@@ -69,6 +72,9 @@ class Gorilla(models.Model):
 
         print(f"[Battle Cry] User '{request.user}' triggered {self.name}'s battle cry (intensity: {intensity})")
 
+        self.age = self.age + 1
+        self.save()
+
         return {
             'success': True,
             'gorilla': self.name,
@@ -80,5 +86,20 @@ class Gorilla(models.Model):
     def __str__(self):
         return self.name
 
+    def shout(self, volume: int) -> str:
+        return 'A' * volume
+
+    def something(self):
+        self.age = self.age + 1
+        self.save()
+
     class Meta:
         db_table = 'gorilla'
+
+
+    class GlueMeta:
+        attributes = [
+            ('something', {'access': Glue.Access.VIEW, 'perist_state': True}),
+            ('shout', Glue.Access.VIEW),
+            ('services', {'access': Glue.Access.VIEW, 'perist_state': True}),
+        ]

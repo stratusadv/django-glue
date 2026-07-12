@@ -1,49 +1,52 @@
 set windows-shell := ["powershell.exe", "-c"]
-set shell := ["sh", "-c"]
-set dotenv-load := true
+set dotenv-load
 set dotenv-filename := "development.env"
 
-export PYTHONPATH := if os() == "linux" { env_var_or_default("PYTHONPATH_APPEND", "") + ":." } else { env_var_or_default("PYTHONPATH_APPEND", "") + ";." }
+export PYTHONPATH := if os() == "linux" { env_var_or_default('PYTHONPATH_APPEND', '') + ':.'} else { env_var_or_default('PYTHONPATH_APPEND', '') + ';.' }
+
 PYTHON := if os() == "linux" { ".venv/bin/python" } else { ".venv/Scripts/python.exe" }
 
 default:
-    just --list
+	just --list
 
-js-build:
-    bun run build
+make-migrations:
+	{{PYTHON}} ./manage.py makemigrations
 
-js-tests:
-    bun test
+migrate:
+	{{PYTHON}} ./manage.py migrate
 
-js-coverage:
-    bun test --coverage
-
-js-tests-watch:
-    bun test --watch
-
-migrate-and-seed:
-    {{ PYTHON }} manage.py migrate
-    {{ PYTHON }} seed.py
-
-opencode:
-    ./.venv/Scripts/activate.bat; if ($?) { opencode . }
-
-run-doc-tests:
-    mkdocs build --strict
-
-run-coverage:
-    {{ PYTHON }} -m pytest django_glue/tests/ --cov=django_glue --cov-report=term-missing -v
+python *ARGS:
+	{{PYTHON}} "{{ARGS}}"
 
 run-server:
-    {{ PYTHON }} manage.py runserver
+	{{PYTHON}} ./manage.py runserver
 
-run-tests:
-    {{ PYTHON }} -m pytest django_glue/tests/ -v
+shell:
+	{{PYTHON}} ./manage.py shell
 
-lock:
-    bun install
-    uv lock
+run-worker:
+	{{PYTHON}} ./worker.py
 
-venv:
-    uv venv .venv/
-    uv pip install -e .[development,documentation]
+test-app *PATTERN:
+	{{PYTHON}} -m pytest {{PATTERN}}
+
+test:
+	{{PYTHON}} -m pytest .
+
+test-failed:
+	{{PYTHON}} -m pytest . --ff --lf
+
+test-coverage:
+	{{PYTHON}} -m pytest . --cov=app --cov-report=term-missing --cov-report=html:.test_coverage/
+
+test-e2e *ARGS:
+	{{PYTHON}} -m pytest -m e2e {{ARGS}}
+
+test-e2e-headed *ARGS:
+	{{PYTHON}} -m pytest -m e2e --headed --slowmo 1000 {{ARGS}}
+
+demo NAME="" SPEED="normal":
+	$env:DEMO_SPEED='{{SPEED}}'; {{PYTHON}} -m pytest -m demo --headed --video on {{ if NAME == "" { "" } else { "-k '" + replace(NAME, "-", "_") + "'" } }}
+
+demos:
+	{{PYTHON}} -m pytest -m demo --collect-only -q

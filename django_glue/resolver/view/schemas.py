@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from django.urls import reverse, NoReverseMatch
@@ -10,7 +9,7 @@ from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.utils import get_request_body_data
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest, JsonResponse
+    from django.http import HttpRequest
 
 
 class ViewBodySchema(BaseModel):

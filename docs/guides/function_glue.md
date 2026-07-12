@@ -210,7 +210,7 @@ Function proxies default to `VIEW` access, as calling a function is considered a
 | Feature | `Glue.function`                  | `Glue.model` actions |
 |---------|----------------------------------|---------------------|
 | Target | Any callable function            | Django model instance |
-| Parameters | Keyword args mapped by signature | Field data via `user_data` |
+| Parameters | Keyword args mapped by signature | Field data via `action_kwargs` |
 | Validation | No built-in validation           | Django ModelForm validation |
 | Return value | Function's return value          | Action-specific result dict |
 | Use case | Arbitrary server-side computation | CRUD operations on models |

@@ -1,85 +1,44 @@
-import { describe, it, expect } from 'bun:test';
+import {describe, expect, it} from 'bun:test';
 import GlueConfig from '../src/config';
 
 describe('GlueConfig', () => {
-    describe('constructor defaults', () => {
-        it('sets default requestTimeoutSeconds', () => {
-            const config = new GlueConfig({
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.requestTimeoutSeconds).toBe(30);
+    it('sets defaults for request timeout, expiry message, and keep live interval', () => {
+        const config = new GlueConfig({
+            attributeEventUrlPath: '/__dg__/bound_attribute_event/',
+            keepLiveUrlPath: '/__dg__/keep_live/',
+            glueViewUrlPath: '/__dg__/glue_view/',
         });
 
-        it('sets default sessionExpiryMessage', () => {
-            const config = new GlueConfig({
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.sessionExpiryMessage).toBe('Session expired. Do you want to reload the page?');
-        });
-
-        it('sets default keepLiveIntervalSeconds', () => {
-            const config = new GlueConfig({
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.keepLiveIntervalSeconds).toBe(600);
-        });
-
-        it('sets minimumKeepLiveIntervalSeconds', () => {
-            const config = new GlueConfig({
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.minimumKeepLiveIntervalSeconds).toBe(120);
-        });
+        expect(config.requestTimeoutSeconds).toBe(30);
+        expect(config.sessionExpiryMessage).toBe('Session expired. Do you want to reload the page?');
+        expect(config.keepLiveIntervalSeconds).toBe(600);
+        expect(config.minimumKeepLiveIntervalSeconds).toBe(120);
     });
 
-    describe('custom values', () => {
-        it('accepts custom requestTimeoutSeconds', () => {
-            const config = new GlueConfig({
-                requestTimeoutSeconds: 60,
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.requestTimeoutSeconds).toBe(60);
+    it('stores configured URL paths', () => {
+        const config = new GlueConfig({
+            attributeEventUrlPath: '/custom/bound_attribute_event/',
+            keepLiveUrlPath: '/custom/keep_live/',
+            glueViewUrlPath: '/custom/glue_view/',
         });
 
-        it('accepts custom sessionExpiryMessage', () => {
-            const config = new GlueConfig({
-                sessionExpiryMessage: 'Custom message',
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.sessionExpiryMessage).toBe('Custom message');
+        expect(config.attributeEventUrlPath).toBe('/custom/bound_attribute_event/');
+        expect(config.keepLiveUrlPath).toBe('/custom/keep_live/');
+        expect(config.glueViewUrlPath).toBe('/custom/glue_view/');
+    });
+
+    it('accepts custom timing and message options', () => {
+        const config = new GlueConfig({
+            requestTimeoutSeconds: 60,
+            sessionExpiryMessage: 'Expired',
+            keepLiveIntervalSeconds: 300,
+            attributeEventUrlPath: '/events/',
+            keepLiveUrlPath: '/keep-live/',
+            glueViewUrlPath: '/view/',
         });
 
-        it('accepts custom keepLiveIntervalSeconds', () => {
-            const config = new GlueConfig({
-                keepLiveIntervalSeconds: 300,
-                actionUrlPath: '/__dg__/action/',
-                keepLiveUrlPath: '/__dg__/keep_live/',
-                glueViewUrlPath: '/__dg__/glue_view/',
-            });
-            expect(config.keepLiveIntervalSeconds).toBe(300);
-        });
-
-        it('stores url paths', () => {
-            const config = new GlueConfig({
-                actionUrlPath: '/custom/action/',
-                keepLiveUrlPath: '/custom/keep_live/',
-                glueViewUrlPath: '/custom/glue_view/',
-            });
-            expect(config.actionUrlPath).toBe('/custom/action/');
-            expect(config.keepLiveUrlPath).toBe('/custom/keep_live/');
-            expect(config.glueViewUrlPath).toBe('/custom/glue_view/');
-        });
+        expect(config.requestTimeoutSeconds).toBe(60);
+        expect(config.sessionExpiryMessage).toBe('Expired');
+        expect(config.keepLiveIntervalSeconds).toBe(300);
     });
 });
