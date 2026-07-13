@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from django.http import JsonResponse
@@ -13,13 +13,14 @@ class GlueResponse:
     state: dict | None = None
     policy: dict | None = None
     result: Any = None
-    messages: list[GlueMessage] | None = None
+    messages: list[GlueMessage] = field(default_factory=list)
     status: int = 200
 
     def to_json_response(self) -> JsonResponse:
         data = {
             'result': self.result if self.result is not None else {},
             'state': self.state,
+            'messages': [message.to_dict() for message in self.messages]
         }
         if self.policy is not None:
             data['policy'] = self.policy
