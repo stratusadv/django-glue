@@ -17,7 +17,7 @@ class SettingsTestCase(TestCase):
     def test_returns_default_proxy_policy_max_age(self):
         """Should return default proxy policy max age."""
         value = settings.DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS
-        self.assertEqual(value, 600)
+        self.assertEqual(value, 86400)
 
     @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=300)
     def test_overrides_proxy_policy_max_age_with_django_setting(self):

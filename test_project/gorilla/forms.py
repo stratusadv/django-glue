@@ -1,8 +1,7 @@
 from django import forms
 from django.core.handlers.wsgi import WSGIRequest
 
-from django_glue.form.form import GlueModelForm
-
+from django_glue import Glue
 from django_glue.response import GlueResponse
 from test_project.gorilla.models import Gorilla, Skill
 
@@ -30,7 +29,7 @@ class GorillaForm(forms.ModelForm):
         ]
 
 
-class GorillaGlueModelForm(GlueModelForm):
+class GorillaGlueModelForm(forms.ModelForm):
     """
     Multi-step progressive form for creating a gorilla fighter.
 
@@ -44,6 +43,7 @@ class GorillaGlueModelForm(GlueModelForm):
         for field in self.fields.values():
             field.required = False
 
+    @Glue.Attribute(access=Glue.Access.DELETE)
     def process(self, request: WSGIRequest, step: int = 1, **kwargs) -> GlueResponse:
         """
         Handle progressive form steps.

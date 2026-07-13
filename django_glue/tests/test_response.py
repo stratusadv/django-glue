@@ -58,7 +58,7 @@ class GlueResponseTestCase(TestCase):
     def test_exposes_message_class(self):
         self.assertIs(GlueResponse.Message, GlueMessage)
 
-    def test_no_messages_excludes_messages_key(self):
+    def test_no_messages_includes_empty_messages_list(self):
         response = GlueResponse(
             result={'valid': True},
             state=None,
@@ -67,4 +67,4 @@ class GlueResponseTestCase(TestCase):
         data = json.loads(response.content)
 
         self.assertEqual(data['result'], {'valid': True})
-        self.assertNotIn('messages', data)
+        self.assertEqual(data['messages'], [])
