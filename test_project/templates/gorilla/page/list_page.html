@@ -31,8 +31,7 @@
             async openProfileModal(gorillaId) {
                 try {
                     const viewGlue = Glue.view(`/${gorillaId}/template/`);
-                    const targetEl = document.getElementById('profileModalBody');
-                    await viewGlue.renderInnerHtml(targetEl);
+                    await viewGlue.renderInnerHtml(this.$refs.profileModalBody);
                     const modal = new bootstrap.Modal(document.getElementById('profileModal'));
                     modal.show();
                 } catch (error) {
@@ -42,7 +41,8 @@
             async openProfileModalOuter(gorillaId) {
                 try {
                     const viewGlue = Glue.view(`/${gorillaId}/template/`);
-                    const targetEl = document.getElementById('profileModalOuterBody');
+                    const targetEl = document.createElement('div');
+                    this.$refs.profileModalOuterBody.replaceChildren(targetEl);
                     await viewGlue.renderOuterHtml(targetEl);
                     const modal = new bootstrap.Modal(document.getElementById('profileModalOuter'));
                     modal.show();
@@ -77,7 +77,7 @@
                         <h5 class="modal-title">Fighter Profile (Inner HTML)</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body" id="profileModalBody">
+                    <div class="modal-body" x-ref="profileModalBody">
                         <div class="text-center py-4">
                             <div class="spinner-border text-gorilla" role="status">
                                 <span class="visually-hidden">Loading...</span>
@@ -96,7 +96,7 @@
                         <h5 class="modal-title">Fighter Profile (Outer HTML)</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
-                    <div class="modal-body" id="profileModalOuterBody">
+                    <div class="modal-body" x-ref="profileModalOuterBody">
                         <div class="text-center py-4">
                             <div class="spinner-border text-gorilla" role="status">
                                 <span class="visually-hidden">Loading...</span>
@@ -180,7 +180,7 @@
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
             <template x-for="gorilla in gorillaQuerySet.queryWithParams(queryParams)" :key="gorilla.$key">
-                <div class="col-md-6 col-lg-4" x-data="{
+                <div class="col-md-6" x-data="{
                     skillDropdownOpen: false,
                     init() {
                         gorilla.addListener('save', event => {
@@ -317,10 +317,43 @@
                                     Delete
                                 </button>
                             </div>
+                            <div class="d-flex gap-2 mt-2">
+                                <div class="btn-group flex-grow-1" x-data="{
+                                    cryIntensity: 'normal',
+                                    useLocalMessages: false,
+                                    init() {
+                                        const localHandler = ({messages}) => {
+                                            messages.forEach(message => {
+                                                $store.notifications.warning(`From Local Message Handler: ${message.message}`);
+                                            });
+                                        };
+
+                                        this.$watch('useLocalMessages', value => {
+                                            gorilla.onMessage(value ? localHandler : null);
+                                        });
+                                    }
+                                }">
+                                    <button type="button" class="btn btn-warning stn-sm" @click="
+                                        const result = await gorilla.battle_cry({intensity: cryIntensity || 'normal'});
+                                        console.log('Battle Cry Response:', result);
+                                    ">
+                                        🦍 Speak
+                                    </button>
+                                    <select class="form-select form-select-sm" style="max-width: 100px;" x-model="cryIntensity" @click.stop>
+                                        <option value="whisper">Whisper</option>
+                                        <option value="normal" selected>Normal</option>
+                                        <option value="fierce">Fierce</option>
+                                    </select>
+                                    <label class="btn btn-outline-warning btn-sm d-flex align-items-center gap-1" @click.stop>
+                                        <input class="form-check-input m-0" type="checkbox" x-model="useLocalMessages">
+                                        Use local message handler
+                                    </label>
+                                </div>
+                            </div>
                             <div class="d-flex gap-2 mt-2" x-data="{ dropdownOpen: false }">
                                 <div class="btn-group flex-grow-1">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" @click="dropdownOpen = !dropdownOpen">
-                                        Actions ▼
+                                        More Actions ▼
                                     </button>
                                     <div x-show="dropdownOpen"
                                          x-transition
@@ -363,26 +396,6 @@
                                             Test Services
                                         </button>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-2 mt-2">
-                                <div class="btn-group flex-grow-1" x-data="{
-                                    cryIntensity: 'normal'    
-                                }">
-                                    <button type="button" class="btn btn-warning stn-sm" @click="
-                                        const result = await gorilla.battle_cry({intensity: cryIntensity || 'normal'});
-                                        if (result.success) {
-                                            $store.notifications.success(`${result.cry} (custom backend action triggered by: ${result.triggered_by})`);
-                                            console.log('🦍 Battle Cry Response:', result);
-                                        }
-                                    ">
-                                        🦍 Speak
-                                    </button>
-                                    <select class="form-select form-select-sm" style="max-width: 100px;" x-model="cryIntensity" @click.stop>
-                                        <option value="whisper">Whisper</option>
-                                        <option value="normal" selected>Normal</option>
-                                        <option value="fierce">Fierce</option>
-                                    </select>
                                 </div>
                             </div>
                         </div>

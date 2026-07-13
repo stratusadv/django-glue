@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from django.http import HttpRequest, JsonResponse, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse, resolve, NoReverseMatch
+from django.utils.functional import cached_property
 
 from django_glue.conf import settings
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
@@ -19,7 +20,7 @@ class ViewResolver(BaseResolver):
         self.request = request
         self.view_body = ViewBodySchema.from_request(request)
 
-    @property
+    @cached_property
     def glue_view_http_request(self) -> ViewHttpRequest:
         return ViewHttpRequest(
             base_request=self.request,

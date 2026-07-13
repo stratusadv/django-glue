@@ -59,6 +59,7 @@ class GlueFunctionProxy extends BaseGlueProxy {
         fn.addListener = instance.addListener.bind(instance);
         fn.removeListener = instance.removeListener.bind(instance);
         fn.clearListeners = instance.clearListeners.bind(instance);
+        fn.onMessage = instance.onMessage.bind(instance);
 
         return fn;
     }

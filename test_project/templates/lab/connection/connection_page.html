@@ -38,16 +38,10 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="p-3 rounded" style="background: var(--gorilla-cream);">
                                 <div class="fs-2 fw-bold" style="color: var(--gorilla-green);">{{ proxy_count }}</div>
                                 <small class="text-muted">Active Proxies</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="p-3 rounded" style="background: var(--gorilla-cream);">
-                                <div class="fs-2 fw-bold" style="color: var(--gorilla-gold);">{{ keep_live_entries|length }}</div>
-                                <small class="text-muted">Keep-Alive Entries</small>
                             </div>
                         </div>
                     </div>
@@ -59,7 +53,6 @@
                                 <thead>
                                     <tr>
                                         <th>Proxy Name</th>
-                                        <th>Expires (Unix)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -67,13 +60,6 @@
                                         <tr>
                                             <td>
                                                 <code>{{ name }}</code>
-                                            </td>
-                                            <td>
-                                                {% if keep_live_entries|get_item:name %}
-                                                    <span class="text-success">{{ keep_live_entries|get_item:name }}</span>
-                                                {% else %}
-                                                    <span class="text-danger">No expiry set</span>
-                                                {% endif %}
                                             </td>
                                         </tr>
                                     {% endfor %}

@@ -2,6 +2,7 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.http import HttpRequest
 
+from django_glue.response import GlueResponse
 from django_glue.shortcuts.glue import Glue
 from test_project.gorilla.services import GorillaServiceDescriptor
 
@@ -55,7 +56,7 @@ class Gorilla(models.Model):
     services = GorillaServiceDescriptor()
 
     @Glue.attribute(access=Glue.Access.DELETE)
-    def battle_cry(self, request: HttpRequest, intensity: str = 'normal') -> dict:
+    def battle_cry(self, request: HttpRequest, intensity: str = 'normal') -> GlueResponse:
         """
         Demonstrates a custom Glue action routed from frontend to server.
 
@@ -72,16 +73,21 @@ class Gorilla(models.Model):
 
         print(f"[Battle Cry] User '{request.user}' triggered {self.name}'s battle cry (intensity: {intensity})")
 
-        self.age = self.age + 1
-        self.save()
-
-        return {
-            'success': True,
-            'gorilla': self.name,
-            'cry': cry,
-            'intensity': intensity,
-            'triggered_by': str(request.user),
-        }
+        return GlueResponse(
+            result={
+                'success': True,
+                'gorilla': self.name,
+                'cry': cry,
+                'intensity': intensity,
+                'triggered_by': str(request.user),
+            },
+            messages=[
+                GlueResponse.Message(
+                    GlueResponse.Message.Level.SUCCESS,
+                    f'{cry} (triggered by {request.user})',
+                )
+            ],
+        )
 
     def __str__(self):
         return self.name

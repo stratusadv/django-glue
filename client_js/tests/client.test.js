@@ -47,6 +47,13 @@ describe('GlueClient', () => {
         expect(client.http).toBeInstanceOf(GlueHttp);
     });
 
+    it('stores the global message handler', () => {
+        const onMessage = mock(() => {});
+
+        expect(client.onMessage(onMessage)).toBe(client);
+        expect(client._onMessage).toBe(onMessage);
+    });
+
     it('registers form, model, and queryset proxies by namespace', () => {
         client.init({
             config,

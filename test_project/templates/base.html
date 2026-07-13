@@ -214,6 +214,19 @@
     </style>
 
     {% django_glue_init %}
+    <script>
+        Glue.onMessage(({messages}) => {
+            messages.forEach(message => {
+                const notificationStore = Alpine.store('notifications');
+                if (!notificationStore) {
+                    return;
+                }
+
+                const type = message.level_tag === 'error' ? 'danger' : message.level_tag;
+                notificationStore.show(type, message.message);
+            });
+        });
+    </script>
 </head>
 <body x-data="{ labOpen: false }">
 <!-- Lab Toggle -->

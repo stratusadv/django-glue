@@ -2,6 +2,7 @@ from django.test import RequestFactory, TestCase
 
 from django_glue.access.access import GlueAccess
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.proxies.policy import ProxyPolicy
 from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
 from test_project.gorilla.models import Gorilla
@@ -100,6 +101,8 @@ class BaseGlueProxyBoundAttributesTestCase(TestCase):
         self.assertIn('policy', registered)
         self.assertEqual(registered['policy']['name'], 'gorilla')
         self.assertEqual(registered['policy']['subject_details']['namespace'], 'model')
+        self.assertIn('created_at', registered['policy'])
+        ProxyPolicy.model_validate(registered['policy'])
 
     def test_query_set_proxy_rejects_wrong_state_shape_by_constructor_contract(self):
         with self.assertRaises(TypeError):

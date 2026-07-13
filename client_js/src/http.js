@@ -1,6 +1,6 @@
 /**
  * HTTP client for Django Glue. Handles fetch requests, CSRF tokens, timeouts,
- * and serialization for bound attribute events and keep-alive requests.
+ * and serialization for bound attribute events.
  */
 class GlueHttp {
     /**

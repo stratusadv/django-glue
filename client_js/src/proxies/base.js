@@ -41,6 +41,19 @@ class BaseGlueProxy {
             after: {},
             error: {}
         }
+
+        /** @type {Function|null} */
+        this._onMessage = null
+    }
+
+    /**
+     * Configure a message handler for this proxy. Overrides the global Glue client handler.
+     * @param {Function|null} callback - Handler called when a GlueResponse includes messages.
+     * @returns {this} The proxy instance for chaining.
+     */
+    onMessage(callback) {
+        this._onMessage = callback;
+        return this;
     }
 
     /**
@@ -133,6 +146,7 @@ class BaseGlueProxy {
             const responseData = response.data;
 
             this._handleEventResponse(attributeName, eventKwargs, responseData);
+            await this._handleMessages(responseData, attributeName, eventKwargs);
 
             const data = responseData.result ?? {};
             event.result = data;
@@ -149,6 +163,26 @@ class BaseGlueProxy {
         } finally {
             this._loading = false;
         }
+    }
+
+    async _handleMessages(response, attributeName, eventKwargs) {
+        const messages = response?.messages || [];
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return;
+        }
+
+        const handler = this._onMessage || globalThis.Glue?._onMessage;
+        if (!handler) {
+            return;
+        }
+
+        await handler({
+            messages,
+            response,
+            proxy: this,
+            attribute: attributeName,
+            eventKwargs,
+        });
     }
 
     _handleEventResponse(attributeName, eventKwargs, response) {

@@ -50,9 +50,7 @@ urlpatterns = [
 ```
 
 This registers the internal endpoints under the `__dg__` namespace:
-- `/__dg__/action/<unique_name>/<action>/` — Execute a proxy action
-- `/__dg__/keep_live/` — Renew proxy expiration
-- `/__dg__/session_data/` — Get proxy registry
+- `/__dg__/bound_attribute_event/<proxy_name>/<attribute_name>/` — Execute a bound proxy attribute
 - `/__dg__/glue_view/` — Execute a Django view for HTML rendering
 
 ## Add Template Tag
@@ -86,11 +84,8 @@ The `{% django_glue_init %}` tag injects:
 Override defaults in your `settings.py`:
 
 ```python
-# Keep-alive interval in seconds (default: 600)
-DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS = 600
-
-# Session expiry confirmation message (default: 'Session expired. Do you want to reload the page?')
-DJANGO_GLUE_SESSION_EXPIRY_MESSAGE = 'Your session has expired.'
+# Signed proxy policy max age in seconds (default: 600)
+DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 600
 ```
 
 ## Verify Installation

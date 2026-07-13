@@ -11,6 +11,7 @@ from django.test import TestCase, RequestFactory
 from django_glue.resolver.view.resolver import ViewResolver
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.tests.conftest import MockSession
+from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 
 
 class GlueViewResolverTestCase(TestCase):
@@ -128,6 +129,24 @@ class GlueViewResolverTestCase(TestCase):
         from django_glue.resolver.view.request import ViewHttpRequest
         self.assertIsInstance(wrapped, ViewHttpRequest)
         self.assertEqual(wrapped.method, 'POST')
+
+    def test_glue_view_http_request_is_reused_for_registered_proxies(self):
+        """Registered proxies should be read from the same wrapped request used by the view."""
+        request = self._build_request('/admin/')
+
+        resolver = ViewResolver(request)
+        wrapped = resolver.glue_view_http_request
+        setattr(
+            wrapped,
+            DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY,
+            {'gorilla': {'state': {}, 'policy': {}}},
+        )
+
+        self.assertIs(resolver.glue_view_http_request, wrapped)
+        self.assertEqual(
+            getattr(resolver.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY),
+            {'gorilla': {'state': {}, 'policy': {}}},
+        )
 
     def test_handles_template_response(self):
         """Should handle TemplateResponse and return rendered HTML."""

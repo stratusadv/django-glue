@@ -31,7 +31,7 @@ class GlueModelProxy extends GlueFormProxy {
         attributes = null,
         autoFetch = false,
         parentQuerySet = null,
-        namespace = 'model'
+        namespace = 'model',
     }) {
         super({http, name, policy, state, attributes, autoFetch, namespace});
 

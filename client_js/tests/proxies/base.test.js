@@ -1,8 +1,12 @@
-import {describe, expect, it, mock} from 'bun:test';
+import {afterEach, describe, expect, it, mock} from 'bun:test';
 import BaseGlueProxy from '../../src/proxies/base';
 import {createMockHttp, createPolicy} from '../testUtils';
 
 describe('BaseGlueProxy', () => {
+    afterEach(() => {
+        delete globalThis.Glue;
+    });
+
     function makeProxy(response = {result: {ok: true}, state: {loaded: true}}) {
         return new BaseGlueProxy({
             http: createMockHttp(response),
@@ -58,6 +62,72 @@ describe('BaseGlueProxy', () => {
         expect(before.mock.calls[0][0].proxy).toBe(proxy);
         expect(before.mock.calls[0][0].eventKwargs).toEqual({page: 1});
         expect(after.mock.calls[0][0].result).toEqual({answer: 42});
+    });
+
+    it('calls the global client message handler when a response includes messages', async () => {
+        const onMessage = mock(() => {});
+        const proxy = new BaseGlueProxy({
+            http: createMockHttp({
+                result: {ok: true},
+                state: {loaded: true},
+                messages: [{level: 25, level_tag: 'success', message: 'Saved', tags: 'success'}],
+            }),
+            name: 'thing',
+            policy: createPolicy('base', {
+                bound_attributes: {'GlueBaseProxy.load': {}},
+            }),
+            state: {loaded: false},
+        });
+        globalThis.Glue = {_onMessage: onMessage};
+
+        await proxy.load({page: 1});
+
+        expect(onMessage).toHaveBeenCalledTimes(1);
+        expect(onMessage.mock.calls[0][0].messages[0].message).toBe('Saved');
+        expect(onMessage.mock.calls[0][0].proxy).toBe(proxy);
+        expect(onMessage.mock.calls[0][0].attribute).toBe('GlueBaseProxy.load');
+        expect(onMessage.mock.calls[0][0].eventKwargs).toEqual({page: 1});
+    });
+
+    it('does not call message handlers when messages are missing or empty', async () => {
+        const onMessage = mock(() => {});
+        const proxy = new BaseGlueProxy({
+            http: createMockHttp({result: {ok: true}, state: {loaded: true}, messages: []}),
+            name: 'thing',
+            policy: createPolicy('base', {
+                bound_attributes: {'GlueBaseProxy.load': {}},
+            }),
+            state: {loaded: false},
+        });
+        globalThis.Glue = {_onMessage: onMessage};
+
+        await proxy.load();
+
+        expect(onMessage).not.toHaveBeenCalled();
+    });
+
+    it('uses proxy-specific message handlers instead of the global handler', async () => {
+        const globalOnMessage = mock(() => {});
+        const proxyOnMessage = mock(() => {});
+        const proxy = new BaseGlueProxy({
+            http: createMockHttp({
+                result: {ok: true},
+                state: {loaded: true},
+                messages: [{level: 20, level_tag: 'info', message: 'Proxy message', tags: 'info'}],
+            }),
+            name: 'thing',
+            policy: createPolicy('base', {
+                bound_attributes: {'GlueBaseProxy.load': {}},
+            }),
+            state: {loaded: false},
+        });
+        globalThis.Glue = {_onMessage: globalOnMessage};
+
+        proxy.onMessage(proxyOnMessage);
+        await proxy.load();
+
+        expect(proxyOnMessage).toHaveBeenCalledTimes(1);
+        expect(globalOnMessage).not.toHaveBeenCalled();
     });
 
     it('emits error listeners and rethrows request failures', async () => {

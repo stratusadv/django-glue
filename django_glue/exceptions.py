@@ -75,6 +75,14 @@ class GlueInvalidPolicyError(GlueError):
         )
 
 
+class GlueExpiredPolicyError(GlueError):
+    """Raised when a proxy policy is older than the configured max age."""
+
+    def __init__(self, unique_name: str) -> None:
+        self.unique_name = unique_name
+        super().__init__(f"Policy for proxy '{unique_name}' has expired.")
+
+
 class GlueBoundAttributeCallError(GlueError):
     """Raised when calling a bound attribute fails. Provides detailed context about the failure."""
 

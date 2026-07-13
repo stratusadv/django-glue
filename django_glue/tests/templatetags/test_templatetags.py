@@ -43,14 +43,6 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('__dg__', rendered)
 
-    def test_tag_includes_keep_live_interval(self):
-        """Tag should include keep-alive interval."""
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_MILLISECONDS }}')
-        context = Context({'request': self.request})
-
-        rendered = template.render(context)
-        self.assertIn('600', rendered)
-
     def test_tag_includes_proxy_registry(self):
         """Tag should include proxy registry data."""
         Glue.model(

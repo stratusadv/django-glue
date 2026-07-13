@@ -16,6 +16,11 @@
         after: {},
         error: {}
       };
+      this._onMessage = null;
+    }
+    onMessage(callback) {
+      this._onMessage = callback;
+      return this;
     }
     addListener(attributeName, callback, type = "after") {
       if (!this._listeners[type]) {
@@ -66,6 +71,7 @@
         });
         const responseData = response.data;
         this._handleEventResponse(attributeName, eventKwargs, responseData);
+        await this._handleMessages(responseData, attributeName, eventKwargs);
         const data = responseData.result ?? {};
         event.result = data;
         await this.emitListeners("after", shortName, event);
@@ -77,6 +83,23 @@
       } finally {
         this._loading = false;
       }
+    }
+    async _handleMessages(response, attributeName, eventKwargs) {
+      const messages = response?.messages || [];
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return;
+      }
+      const handler = this._onMessage || globalThis.Glue?._onMessage;
+      if (!handler) {
+        return;
+      }
+      await handler({
+        messages,
+        response,
+        proxy: this,
+        attribute: attributeName,
+        eventKwargs
+      });
     }
     _handleEventResponse(attributeName, eventKwargs, response) {
       if (this._state) {
@@ -633,6 +656,7 @@
       fn.addListener = instance.addListener.bind(instance);
       fn.removeListener = instance.removeListener.bind(instance);
       fn.clearListeners = instance.clearListeners.bind(instance);
+      fn.onMessage = instance.onMessage.bind(instance);
       return fn;
     }
   }
@@ -825,12 +849,29 @@
       });
       return viewResponse.data.html;
     }
+    _htmlToFragment(html) {
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      return template.content;
+    }
     async renderInnerHtml(target_element, payload = {}) {
-      target_element.innerHTML = await this._fetchView(payload);
+      const html = await this._fetchView(payload);
+      target_element.replaceChildren(this._htmlToFragment(html));
     }
     async _renderInsertAdjacentHtml(target_element, position, payload = {}) {
       const html = await this._fetchView(payload);
-      target_element.insertAdjacentHTML(position, html);
+      const fragment = this._htmlToFragment(html);
+      if (position === "beforeend") {
+        target_element.append(fragment);
+      } else if (position === "afterbegin") {
+        target_element.prepend(fragment);
+      } else if (position === "beforebegin") {
+        target_element.before(fragment);
+      } else if (position === "afterend") {
+        target_element.after(fragment);
+      } else {
+        throw new Error(`Invalid insert position: ${position}`);
+      }
     }
     async renderInsertAdjacentHtmlBeforeEnd(target_element, payload = {}) {
       await this._renderInsertAdjacentHtml(target_element, "beforeend", payload);
@@ -845,7 +886,8 @@
       await this._renderInsertAdjacentHtml(target_element, "afterbegin", payload);
     }
     async renderOuterHtml(target_element, payload = {}) {
-      target_element.outerHTML = await this._fetchView(payload);
+      const html = await this._fetchView(payload);
+      target_element.replaceWith(this._htmlToFragment(html));
     }
   }
   var view_default = GlueView;
@@ -859,6 +901,11 @@
     form = {};
     template = {};
     function = {};
+    _onMessage = null;
+    onMessage(callback) {
+      this._onMessage = callback;
+      return this;
+    }
     _registerProxyAsProperty(name, { policy, state }) {
       let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[policy.subject_details.namespace];
       let proxy;
@@ -904,19 +951,12 @@
   class GlueConfig {
     constructor({
       requestTimeoutSeconds = 30,
-      sessionExpiryMessage = "Session expired. Do you want to reload the page?",
-      keepLiveIntervalSeconds = 600,
       attributeEventUrlPath,
-      keepLiveUrlPath,
       glueViewUrlPath
     }) {
       this.requestTimeoutSeconds = requestTimeoutSeconds;
-      this.sessionExpiryMessage = sessionExpiryMessage;
-      this.keepLiveIntervalSeconds = keepLiveIntervalSeconds;
       this.attributeEventUrlPath = attributeEventUrlPath;
-      this.keepLiveUrlPath = keepLiveUrlPath;
       this.glueViewUrlPath = glueViewUrlPath;
-      this.minimumKeepLiveIntervalSeconds = 120;
     }
   }
   var config_default = GlueConfig;

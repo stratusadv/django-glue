@@ -5,11 +5,8 @@ from django.shortcuts import render
 from django.contrib import messages
 from django.contrib.auth import logout
 
-
-
 # def connection_view(request: HttpRequest) -> HttpResponse:
 #     proxy_names = list(session.proxy_registry.keys())
-#     keep_live_entries = dict(session.keep_live_registry)
 
 #     context = {
 #         'page_title': 'Test Lab',
@@ -17,7 +14,6 @@ from django.contrib.auth import logout
 #         'page_subtitle': 'Inspect and manage your Glue session proxies',
 #         'proxy_count': len(proxy_names),
 #         'proxy_names': proxy_names,
-#         'keep_live_entries': keep_live_entries,
 #     }
 
 #     return render(request, 'lab/connection/connection_page.html', context=context)
@@ -45,7 +41,6 @@ def delete_session(request: HttpRequest) -> HttpResponse:
 
 #         if proxy_name:
 #             session.proxy_registry.pop(proxy_name, None)
-#             session.keep_live_registry.pop(proxy_name, None)
 #             session._set_modified()
 #             messages.error(request, f"Proxy '{proxy_name}' has been removed.")
 
@@ -66,7 +61,6 @@ def delete_session(request: HttpRequest) -> HttpResponse:
 # def expire_session(request: HttpRequest) -> HttpResponse:
 #     session = GlueSession(request)
 
-#     session.keep_live_registry.clear()
 #     session.proxy_registry.clear()
 #     session._set_modified()
 #     messages.error(request, 'All proxies have been expired.')

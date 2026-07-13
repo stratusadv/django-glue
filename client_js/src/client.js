@@ -3,8 +3,8 @@ import {SUBJECT_TYPE_TO_PROXY_CLASS as PROXY_NAMESPACE_TO_PROXY_CLASS} from "./p
 import GlueView from "./view";
 
 /**
- * Main Django Glue client. Manages proxy initialization, keep-alive polling,
- * and provides the public API for model, queryset, and form proxies.
+ * Main Django Glue client. Manages proxy initialization and provides the public API
+ * for model, queryset, form, template, and function proxies.
  */
 class GlueClient {
     /** @type {Object} */
@@ -22,6 +22,19 @@ class GlueClient {
     template = {}
     /** @type {Object} */
     function = {}
+    /** @type {Function|null} */
+    _onMessage = null
+
+    /**
+     * Configure the global message handler for GlueResponse messages.
+     * Proxy-specific handlers configured with `proxy.onMessage()` take precedence.
+     * @param {Function|null} callback - Handler called when a proxy response includes messages.
+     * @returns {this} The client instance for chaining.
+     */
+    onMessage(callback) {
+        this._onMessage = callback
+        return this
+    }
 
     /**
      * Create a proxy instance from context data and register it as a property in the appropriate

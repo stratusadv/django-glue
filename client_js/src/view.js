@@ -74,12 +74,25 @@ class GlueView {
     }
 
     /**
+     * Parse an HTML string into DOM nodes suitable for insertion.
+     * @param {string} html - The rendered HTML string.
+     * @returns {DocumentFragment} Parsed DOM fragment.
+     * @private
+     */
+    _htmlToFragment(html) {
+        const template = document.createElement('template')
+        template.innerHTML = html
+        return template.content
+    }
+
+    /**
      * Replace the inner HTML of a target element with rendered HTML from the view.
      * @param {HTMLElement} target_element - The DOM element to update.
      * @param {Object} [payload] - Request payload.
      */
     async renderInnerHtml(target_element, payload = {}) {
-        target_element.innerHTML = await this._fetchView(payload)
+        const html = await this._fetchView(payload)
+        target_element.replaceChildren(this._htmlToFragment(html))
     }
 
     /**
@@ -91,7 +104,19 @@ class GlueView {
      */
     async _renderInsertAdjacentHtml(target_element, position, payload = {}) {
         const html = await this._fetchView(payload)
-        target_element.insertAdjacentHTML(position, html)
+        const fragment = this._htmlToFragment(html)
+
+        if (position === 'beforeend') {
+            target_element.append(fragment)
+        } else if (position === 'afterbegin') {
+            target_element.prepend(fragment)
+        } else if (position === 'beforebegin') {
+            target_element.before(fragment)
+        } else if (position === 'afterend') {
+            target_element.after(fragment)
+        } else {
+            throw new Error(`Invalid insert position: ${position}`)
+        }
     }
 
     /**
@@ -136,7 +161,8 @@ class GlueView {
      * @param {Object} [payload] - Request payload.
      */
     async renderOuterHtml(target_element, payload = {}) {
-        target_element.outerHTML = await this._fetchView(payload)
+        const html = await this._fetchView(payload)
+        target_element.replaceWith(this._htmlToFragment(html))
     }
 }
 

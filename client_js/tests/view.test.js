@@ -85,6 +85,47 @@ describe('GlueView', () => {
         expect(document.body.lastChild.outerHTML).toBe('<div>Rendered HTML</div>');
     });
 
+    it('renders html by inserting parsed DOM nodes', async () => {
+        mockHttp.sendRequest = mock(async () => ({
+            data: {
+                html: '<section><button>Rendered Button</button></section><p>Extra Node</p>',
+                proxies: {},
+            },
+        }));
+
+        const view = new GlueView(mockHttp, '/fragment/');
+        const target = document.createElement('div');
+        target.innerHTML = '<span>Existing</span>';
+        document.body.appendChild(target);
+
+        await view.renderInnerHtml(target);
+
+        expect(target.children.length).toBe(2);
+        expect(target.firstElementChild.tagName).toBe('SECTION');
+        expect(target.lastElementChild.tagName).toBe('P');
+        expect(target.querySelector('button').textContent).toBe('Rendered Button');
+    });
+
+    it('replaces outer html with parsed DOM nodes', async () => {
+        mockHttp.sendRequest = mock(async () => ({
+            data: {
+                html: '<article>Replacement</article><aside>Sibling</aside>',
+                proxies: {},
+            },
+        }));
+
+        const view = new GlueView(mockHttp, '/fragment/');
+        const target = document.createElement('div');
+        target.id = 'replace-me';
+        document.body.appendChild(target);
+
+        await view.renderOuterHtml(target);
+
+        expect(document.getElementById('replace-me')).toBeNull();
+        expect(document.body.lastElementChild.outerHTML).toBe('<aside>Sibling</aside>');
+        expect(document.body.lastElementChild.previousElementSibling.outerHTML).toBe('<article>Replacement</article>');
+    });
+
     it('inserts adjacent html', async () => {
         const view = new GlueView(mockHttp, '/fragment/');
         const target = document.createElement('div');

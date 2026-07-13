@@ -1,15 +1,19 @@
 import json
 import os
+from datetime import timedelta
+from unittest.mock import patch
 
 import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
 from pydantic import ValidationError
 
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.exceptions import GlueExpiredPolicyError
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
 from django_glue.tests.proxies.queryset.helpers import make_queryset_proxy
 from test_project.gorilla.models import Gorilla
@@ -70,3 +74,14 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
             BoundProxyAttributeEvent.model_validate(request)
 
         self.assertIn('Proxy name mismatch between URL path and policy', str(cm.exception))
+
+    @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=60)
+    def test_expired_policy_raises_expired_policy_error(self):
+        stale_now = timezone.now() - timedelta(seconds=61)
+        with patch('django_glue.proxies.policy.timezone.now', return_value=stale_now):
+            policy = self._queryset_policy()
+
+        request = self._event_request(policy)
+
+        with self.assertRaises(GlueExpiredPolicyError):
+            BoundProxyAttributeEvent.model_validate(request)
