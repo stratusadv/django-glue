@@ -10,6 +10,7 @@ from django_glue.access.access import GlueAccess
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.proxies.function.proxy import GlueFunctionProxy
 from django_glue.proxies.function.state import GlueFunctionProxyState
+from django_glue.tests.conftest import MockSession
 
 
 FUNCTION_PATH = 'django_glue.tests.proxies.function.test_function_proxy.add_numbers'
@@ -63,6 +64,7 @@ class GlueFunctionProxyPolicyTestCase(TestCase):
 
     def test_register_policy_serializes_params(self):
         request = RequestFactory().get('/')
+        request.session = MockSession()
 
         GlueFunctionProxy.register_policy(
             request=request,
@@ -83,6 +85,7 @@ class GlueFunctionProxyPolicyTestCase(TestCase):
 
     def test_register_policy_raises_for_invalid_path(self):
         request = RequestFactory().get('/')
+        request.session = MockSession()
 
         with self.assertRaises(ModuleNotFoundError):
             GlueFunctionProxy.register_policy(

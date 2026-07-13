@@ -157,12 +157,36 @@ class BaseGlueProxy {
         } catch (err) {
             event.error = err;
 
+            await this._handleExpiry(err, attributeName, eventKwargs);
+
             await this.emitListeners('error', shortName, event);
 
             throw err;
         } finally {
             this._loading = false;
         }
+    }
+
+    async _handleExpiry(error, attributeName, eventKwargs) {
+        if (!this._isExpiryError(error)) {
+            return;
+        }
+
+        const handler = globalThis.Glue?._onExpiry || this._defaultExpiryHandler;
+        await handler({
+            error,
+            proxy: this,
+            attribute: attributeName,
+            eventKwargs,
+        });
+    }
+
+    _isExpiryError(error) {
+        return error?.code === 'proxy_policy_expired';
+    }
+
+    _defaultExpiryHandler() {
+        globalThis.alert?.('Your session has expired. Please refresh the page.');
     }
 
     async _handleMessages(response, attributeName, eventKwargs) {
@@ -186,6 +210,10 @@ class BaseGlueProxy {
     }
 
     _handleEventResponse(attributeName, eventKwargs, response) {
+        if (response.policy) {
+            this._policy = response.policy;
+        }
+
         if (this._state) {
             // Mutate instance_data in place rather than replacing it.
             // This preserves Alpine's proxy wrapper so reactivity continues to work.

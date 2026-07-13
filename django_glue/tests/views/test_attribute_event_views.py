@@ -1,12 +1,16 @@
 import json
 import os
 import django
+from datetime import timedelta
+from unittest.mock import patch
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.tests.conftest import MockSession
 from django_glue.tests.proxies.model.helpers import make_model_proxy
 from django_glue.tests.proxies.queryset.helpers import make_queryset_proxy
 from django_glue.views.attribute_event_views import proxy_bound_attribute_event_view
@@ -28,6 +32,7 @@ class AttributeEventViewTestCase(TestCase):
 
     def _queryset_policy(self, access):
         registration_request = self.factory.get('/')
+        registration_request.session = MockSession(session_key='session-1')
         proxy = make_queryset_proxy(Gorilla.objects.all(), access=access)
         proxy._register_with_request(registration_request)
         return registration_request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY]['gorillas']['policy']
@@ -48,6 +53,7 @@ class AttributeEventViewTestCase(TestCase):
             (),
             {'kwargs': {'proxy_name': 'gorillas', 'attribute_name': 'GlueQuerySetProxy.delete'}},
         )()
+        request.session = MockSession(session_key='session-1')
         
         # Invoke the view directly
         response = proxy_bound_attribute_event_view(
@@ -58,13 +64,18 @@ class AttributeEventViewTestCase(TestCase):
         
         # Assert response status code is 403 Forbidden
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Insufficient access to access 'delete'", response.content.decode('utf-8'))
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'proxy_access_denied')
+        self.assertIn("Insufficient access to access 'delete'", data['error']['message'])
 
     def test_foreign_key_choices_returns_json_array_result(self):
         registration_request = self.factory.get('/')
+        registration_request.session = MockSession(session_key='session-1')
         proxy = make_model_proxy(self.gorilla, name='gorilla', access='view')
         proxy._register_with_request(registration_request)
         proxy_data = registration_request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY]['gorilla']
+        original_signature = proxy_data['policy']['original_signature']
+        refreshed_now = timezone.now() + timedelta(seconds=30)
 
         request = self.factory.post(
             '/__dg__/bound_attribute_event/gorilla/GlueModelInstanceProxy.foreign_key_choices/',
@@ -84,12 +95,14 @@ class AttributeEventViewTestCase(TestCase):
                 }
             },
         )()
+        request.session = MockSession(session_key='session-1')
 
-        response = proxy_bound_attribute_event_view(
-            request,
-            proxy_name='gorilla',
-            attribute_name='GlueModelInstanceProxy.foreign_key_choices',
-        )
+        with patch('django_glue.proxies.policy.timezone.now', return_value=refreshed_now):
+            response = proxy_bound_attribute_event_view(
+                request,
+                proxy_name='gorilla',
+                attribute_name='GlueModelInstanceProxy.foreign_key_choices',
+            )
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -100,3 +113,43 @@ class AttributeEventViewTestCase(TestCase):
                 {'pk': self.skill_2.pk, '__str__': 'Kick'},
             ],
         )
+        self.assertEqual(data['policy']['created_at'], refreshed_now.timestamp())
+        self.assertNotEqual(data['policy']['original_signature'], original_signature)
+
+    def test_decorated_nested_descriptor_attribute_is_exposed_without_glue_meta(self):
+        registration_request = self.factory.get('/')
+        registration_request.session = MockSession(session_key='session-1')
+        proxy = make_model_proxy(self.gorilla, name='gorilla', access='change')
+        proxy._register_with_request(registration_request)
+        proxy_data = registration_request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY]['gorilla']
+
+        self.assertIn('Gorilla.services.increment_age', proxy_data['policy']['bound_attributes'])
+
+        request = self.factory.post(
+            '/__dg__/bound_attribute_event/gorilla/Gorilla.services.increment_age/',
+            data={
+                'policy': json.dumps(proxy_data['policy']),
+                'state': json.dumps(proxy_data['state']),
+            },
+        )
+        request.resolver_match = type(
+            'ResolverMatch',
+            (),
+            {
+                'kwargs': {
+                    'proxy_name': 'gorilla',
+                    'attribute_name': 'Gorilla.services.increment_age',
+                }
+            },
+        )()
+        request.session = MockSession(session_key='session-1')
+
+        response = proxy_bound_attribute_event_view(
+            request,
+            proxy_name='gorilla',
+            attribute_name='Gorilla.services.increment_age',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.gorilla.refresh_from_db()
+        self.assertEqual(self.gorilla.age, 19)

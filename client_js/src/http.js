@@ -77,7 +77,7 @@ class GlueHttp {
             const response = await fetch(url, options)
 
             if (!response.ok) {
-                throw Error(`An error occurred when sending a glue http request: ${await response.text()}`)
+                throw await this._buildRequestError(response)
             }
 
             return {
@@ -91,6 +91,26 @@ class GlueHttp {
         } finally {
             clearTimeout(timeoutId);
         }
+    }
+
+    async _buildRequestError(response) {
+        const body = await response.text()
+        let payload = null
+
+        try {
+            payload = JSON.parse(body)
+        } catch (_) {
+            // Plain text responses are still supported for non-Glue failures.
+        }
+
+        const errorData = payload?.error
+        const message = errorData?.message || body
+        const error = new Error(`An error occurred when sending a glue http request: ${message}`)
+        error.status = response.status
+        error.code = errorData?.code
+        error.payload = errorData || null
+
+        return error
     }
 
     /**

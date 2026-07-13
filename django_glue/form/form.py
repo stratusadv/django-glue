@@ -6,7 +6,7 @@ from django.forms.models import ModelForm, ModelFormMetaclass
 from django.forms.forms import DeclarativeFieldsMetaclass
 
 from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.response import GlueResponse
 
 
@@ -22,7 +22,7 @@ class _BaseGlueForm(ABC):
     GlueResponse = GlueResponse
 
     @abstractmethod
-    @bind_attribute(access=GlueAccess.DELETE)
+    @Attribute(access=GlueAccess.DELETE)
     def process(self, request: WSGIRequest, **kwargs) -> GlueResponse:
         raise NotImplementedError
 

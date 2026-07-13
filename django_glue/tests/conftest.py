@@ -21,9 +21,15 @@ def pytest_configure():
 class MockSession(dict):
     """A dict subclass that has a modified attribute like Django sessions."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, session_key='test-session', **kwargs):
         super().__init__(*args, **kwargs)
         self.modified = False
+        self.session_key = session_key
+
+    def save(self):
+        if self.session_key is None:
+            self.session_key = 'test-session'
+        self.modified = True
 
 
 @pytest.fixture

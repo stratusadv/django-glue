@@ -78,11 +78,30 @@
         return data;
       } catch (err) {
         event.error = err;
+        await this._handleExpiry(err, attributeName, eventKwargs);
         await this.emitListeners("error", shortName, event);
         throw err;
       } finally {
         this._loading = false;
       }
+    }
+    async _handleExpiry(error, attributeName, eventKwargs) {
+      if (!this._isExpiryError(error)) {
+        return;
+      }
+      const handler = globalThis.Glue?._onExpiry || this._defaultExpiryHandler;
+      await handler({
+        error,
+        proxy: this,
+        attribute: attributeName,
+        eventKwargs
+      });
+    }
+    _isExpiryError(error) {
+      return error?.code === "proxy_policy_expired";
+    }
+    _defaultExpiryHandler() {
+      globalThis.alert?.("Your session has expired. Please refresh the page.");
     }
     async _handleMessages(response, attributeName, eventKwargs) {
       const messages = response?.messages || [];
@@ -102,6 +121,9 @@
       });
     }
     _handleEventResponse(attributeName, eventKwargs, response) {
+      if (response.policy) {
+        this._policy = response.policy;
+      }
       if (this._state) {
         if (this._state.instance_data && response.state.instance_data) {
           for (const key of Object.keys(this._state.instance_data)) {
@@ -722,7 +744,7 @@
       try {
         const response = await fetch(url, options);
         if (!response.ok) {
-          throw Error(`An error occurred when sending a glue http request: ${await response.text()}`);
+          throw await this._buildRequestError(response);
         }
         return {
           ok: response.ok,
@@ -735,6 +757,20 @@
       } finally {
         clearTimeout(timeoutId);
       }
+    }
+    async _buildRequestError(response) {
+      const body = await response.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(body);
+      } catch (_) {}
+      const errorData = payload?.error;
+      const message = errorData?.message || body;
+      const error = new Error(`An error occurred when sending a glue http request: ${message}`);
+      error.status = response.status;
+      error.code = errorData?.code;
+      error.payload = errorData || null;
+      return error;
     }
     async sendJsonPostRequest(url, data, csrfProtected = true) {
       return await this.sendRequest(url, {
@@ -902,8 +938,13 @@
     template = {};
     function = {};
     _onMessage = null;
+    _onExpiry = null;
     onMessage(callback) {
       this._onMessage = callback;
+      return this;
+    }
+    onExpiry(callback) {
+      this._onExpiry = callback;
       return this;
     }
     _registerProxyAsProperty(name, { policy, state }) {

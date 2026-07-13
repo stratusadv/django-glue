@@ -5,6 +5,7 @@ from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.proxies.policy import ProxyPolicy
 from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
+from django_glue.tests.conftest import MockSession
 from test_project.gorilla.models import Gorilla
 
 
@@ -36,6 +37,7 @@ class BaseGlueProxyInitTestCase(TestCase):
         proxy = GlueModelInstanceProxy(name='gorilla', namespace='model', access=GlueAccess.VIEW, state=state)
         proxy._form_class_path = form_class_path
         request = RequestFactory().get('/')
+        request.session = MockSession(session_key='session-1')
         proxy._register_with_request(request)
         registered = getattr(request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY)['gorilla']
         subject_details = {'form_class_path': None, **registered['policy']['subject_details']}
@@ -44,6 +46,7 @@ class BaseGlueProxyInitTestCase(TestCase):
             policy = type('Policy', (), {
                 'name': 'gorilla',
                 'namespace': 'model',
+                'session_id': registered['policy']['session_id'],
                 'access': GlueAccess.VIEW,
                 'subject_details': type('SubjectDetails', (), subject_details)(),
             })()
@@ -93,6 +96,7 @@ class BaseGlueProxyBoundAttributesTestCase(TestCase):
     def test_register_with_request_stores_state_and_signed_policy(self):
         proxy = make_model_proxy(self.gorilla)
         request = RequestFactory().get('/')
+        request.session = MockSession(session_key=None)
 
         proxy._register_with_request(request)
 
@@ -100,6 +104,7 @@ class BaseGlueProxyBoundAttributesTestCase(TestCase):
         self.assertIn('state', registered)
         self.assertIn('policy', registered)
         self.assertEqual(registered['policy']['name'], 'gorilla')
+        self.assertEqual(registered['policy']['session_id'], 'test-session')
         self.assertEqual(registered['policy']['subject_details']['namespace'], 'model')
         self.assertIn('created_at', registered['policy'])
         ProxyPolicy.model_validate(registered['policy'])

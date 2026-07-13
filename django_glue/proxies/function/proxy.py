@@ -7,7 +7,7 @@ import inspect
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.function.state import GlueFunctionProxyState
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.utils import get_attr_from_path_string
 from typing import TYPE_CHECKING
 
@@ -56,7 +56,7 @@ class GlueFunctionProxy(BaseGlueProxy):
             'params': getattr(self, '_params', []),
         }
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def execute(self, request: HttpRequest, **function_kwargs: dict) -> dict:
         function = get_attr_from_path_string(self.state.function_path)
         result = function(**function_kwargs)

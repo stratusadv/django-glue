@@ -1,7 +1,9 @@
 from django.test import TestCase
+import inspect
 
 from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.attribute import discover_bound_attributes_on_target
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
 
 
@@ -10,7 +12,7 @@ class BoundAttributeDecoratorTestCase(TestCase):
 
     def test_sets_required_glue_access(self):
         """@attribute should set __required_glue_access__ on the wrapped function."""
-        @bind_attribute(GlueAccess.VIEW)
+        @Attribute(access=GlueAccess.VIEW)
         def my_attribute(self, event_data):
             return {'success': True}
 
@@ -18,7 +20,7 @@ class BoundAttributeDecoratorTestCase(TestCase):
 
     def test_preserves_function_name(self):
         """@attribute should preserve the original function name via functools.wraps."""
-        @bind_attribute(GlueAccess.CHANGE)
+        @Attribute(access=GlueAccess.CHANGE)
         def my_save_attribute(self, event_data):
             return {'success': True}
 
@@ -26,12 +28,97 @@ class BoundAttributeDecoratorTestCase(TestCase):
 
     def test_preserves_function_docstring(self):
         """@attribute should preserve the original function docstring."""
-        @bind_attribute(GlueAccess.VIEW)
+        @Attribute(access=GlueAccess.VIEW)
         def documented_attribute(self, event_data):
             """This is my bound attribute docstring."""
             return {'success': True}
 
         self.assertEqual(documented_attribute.__doc__, 'This is my bound attribute docstring.')
+
+    def test_descriptor_stores_non_callable_attribute(self):
+        class Example:
+            status = Attribute('ready', access=GlueAccess.VIEW)
+
+        example = Example()
+
+        self.assertEqual(example.status, 'ready')
+        example.status = 'busy'
+        self.assertEqual(example.status, 'busy')
+        self.assertEqual(Example.status.__required_glue_access__, GlueAccess.VIEW)
+        self.assertFalse(Example.status.is_callable)
+
+    def test_decorates_computed_property(self):
+        class Example:
+            @Attribute(access=GlueAccess.VIEW)
+            @property
+            def status(self):
+                return 'computed'
+
+        example = Example()
+        self.assertEqual(example.status, 'computed')
+        static_status = inspect.getattr_static(Example, 'status')
+        self.assertEqual(static_status.__required_glue_access__, GlueAccess.VIEW)
+        self.assertFalse(static_status.is_callable)
+
+    def test_wraps_descriptor_attribute(self):
+        class StatusDescriptor:
+            def __get__(self, instance, owner):
+                if instance is None:
+                    return self
+                return 'descriptor'
+
+        class Example:
+            status = Attribute(StatusDescriptor(), access=GlueAccess.VIEW)
+
+        example = Example()
+
+        self.assertEqual(example.status, 'descriptor')
+        self.assertIsInstance(Example.status, StatusDescriptor)
+        static_status = inspect.getattr_static(Example, 'status')
+        self.assertEqual(static_status.__required_glue_access__, GlueAccess.VIEW)
+        self.assertFalse(static_status.is_callable)
+
+    def test_discovers_non_callable_attributes(self):
+        class Example:
+            status = Attribute('ready', access=GlueAccess.VIEW)
+
+            @Attribute(access=GlueAccess.CHANGE)
+            @property
+            def computed_status(self):
+                return 'computed'
+
+        bound_attributes = discover_bound_attributes_on_target(Example())
+
+        self.assertEqual(bound_attributes['Example.status'].required_access, GlueAccess.VIEW)
+        self.assertFalse(bound_attributes['Example.status'].is_callable)
+        self.assertEqual(
+            bound_attributes['Example.computed_status'].required_access,
+            GlueAccess.CHANGE,
+        )
+        self.assertFalse(bound_attributes['Example.computed_status'].is_callable)
+
+    def test_wrapped_descriptor_class_access_and_nested_discovery(self):
+        class Service:
+            @Attribute(access=GlueAccess.CHANGE)
+            def save_model_obj(self):
+                return 'saved'
+
+        class ServicesDescriptor:
+            def __get__(self, instance, owner):
+                return Service()
+
+        class Example:
+            services = Attribute(ServicesDescriptor(), access=GlueAccess.VIEW)
+
+        self.assertEqual(Example.services.save_model_obj(), 'saved')
+
+        bound_attributes = discover_bound_attributes_on_target(Example())
+
+        self.assertIn('Example.services.save_model_obj', bound_attributes)
+        self.assertEqual(
+            bound_attributes['Example.services.save_model_obj'].required_access,
+            GlueAccess.CHANGE,
+        )
 
 
 class BoundAttributeDecoratorProxyRegistrationTestCase(TestCase):

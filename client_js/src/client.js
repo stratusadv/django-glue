@@ -24,6 +24,8 @@ class GlueClient {
     function = {}
     /** @type {Function|null} */
     _onMessage = null
+    /** @type {Function|null} */
+    _onExpiry = null
 
     /**
      * Configure the global message handler for GlueResponse messages.
@@ -33,6 +35,16 @@ class GlueClient {
      */
     onMessage(callback) {
         this._onMessage = callback
+        return this
+    }
+
+    /**
+     * Configure the global proxy expiry handler.
+     * @param {Function|null} callback - Handler called when a proxy policy has expired.
+     * @returns {this} The client instance for chaining.
+     */
+    onExpiry(callback) {
+        this._onExpiry = callback
         return this
     }
 

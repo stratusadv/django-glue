@@ -43,6 +43,11 @@ class BoundProxyAttributeEvent(BaseModel):
             msg = 'Proxy name mismatch between URL path and policy'
             raise ValueError(msg)
 
+        current_session_id = request.session.session_key
+        if policy.session_id != current_session_id:
+            from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
+            raise GlueInvalidPolicyError(policy.name)
+
         bound_attribute_name = request.resolver_match.kwargs.get('attribute_name')
         if not bound_attribute_name:
             msg = 'No bound_attribute name sent in URL path'
@@ -65,6 +70,8 @@ class BoundProxyAttributeEvent(BaseModel):
                 required_access=bound_attribute.required_access.value,
                 current_access=policy.access.value,
             )
+
+        policy.refresh_signature()
 
         return {
             'request': request,

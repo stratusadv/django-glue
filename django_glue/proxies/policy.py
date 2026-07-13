@@ -29,6 +29,7 @@ ProxyPolicySubjectDetails = Annotated[
 
 
 class ProxyPolicy(BaseModel):
+    session_id: str
     name: str
     bound_attributes: dict[str, BoundProxyAttribute]
     access: GlueAccess
@@ -62,6 +63,13 @@ class ProxyPolicy(BaseModel):
     @property
     def computed_signature(self) -> str:
         return self._sign_data(self.model_dump(exclude={'original_signature'}, exclude_none=True))
+
+    def refresh_signature(self) -> Self:
+        self.created_at = timezone.now().timestamp()
+        self.original_signature = self._sign_data(
+            self.model_dump(exclude={'original_signature'}, exclude_none=True)
+        )
+        return self
 
     @model_validator(mode='after')
     def validate_original_signature(self) -> Self:

@@ -10,7 +10,7 @@ from django.forms import model_to_dict, modelform_factory
 from django.forms.models import ModelForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.proxies.form.proxy import GlueFormProxy
 from django_glue.proxies.model.instance.state import GlueModelInstanceProxyState
 
@@ -85,19 +85,19 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
     def targets(self) -> list[Any]:
         return [self.state.model, *super().targets]
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def get(self, request: HttpRequest) -> dict:
         return model_to_dict(
             instance=self.state.model,
             fields=list(self._field_metadata.keys()),
         )
 
-    @bind_attribute(access=GlueAccess.DELETE)
+    @Attribute(access=GlueAccess.DELETE)
     def delete(self, request: HttpRequest) -> None:
         self.state.model.delete()
 
     @transaction.atomic
-    @bind_attribute(access=GlueAccess.CHANGE)
+    @Attribute(access=GlueAccess.CHANGE)
     def save(self, request: HttpRequest) -> None:
         if not self.state.errors:
             cast('ModelForm', self.state.form).save()

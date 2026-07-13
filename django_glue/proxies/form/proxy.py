@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from django.forms.forms import BaseForm
 
 from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.proxies.form.state import GlueFormProxyState
 from django_glue.proxies.proxy import BaseGlueProxy
 
@@ -92,11 +92,11 @@ class GlueFormProxy(BaseGlueProxy):
 
         return details
 
-    @bind_attribute(access=GlueAccess.CHANGE)
+    @Attribute(access=GlueAccess.CHANGE)
     def validate(self, request: HttpRequest) -> dict:
         return {'valid': not bool(self.state.errors)}
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         request: HttpRequest,
@@ -117,11 +117,11 @@ class GlueFormProxy(BaseGlueProxy):
 
         return [serialize_choice(obj) for obj in field.queryset.all()]
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def load(self, request: HttpRequest) -> None:
         pass
 
-    @bind_attribute(access=GlueAccess.CHANGE)
+    @Attribute(access=GlueAccess.CHANGE)
     def save(self, request: HttpRequest) -> None:
         if not self.state.errors:
             self.state.form.save()

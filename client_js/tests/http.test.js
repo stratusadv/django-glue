@@ -51,11 +51,38 @@ describe('GlueHttp', () => {
     it('throws response text for non-ok responses', async () => {
         global.fetch = mock(() => Promise.resolve({
             ok: false,
+            status: 500,
             text: () => Promise.resolve('Nope'),
         }));
 
         await expect(http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'}))
             .rejects.toThrow('An error occurred when sending a glue http request: Nope');
+    });
+
+    it('preserves structured glue error data for non-ok responses', async () => {
+        global.fetch = mock(() => Promise.resolve({
+            ok: false,
+            status: 403,
+            text: () => Promise.resolve(JSON.stringify({
+                error: {
+                    code: 'proxy_policy_expired',
+                    message: "Policy for proxy 'thing' has expired.",
+                    status: 403,
+                },
+            })),
+        }));
+
+        try {
+            await http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'});
+            throw new Error('Expected request to fail');
+        } catch (error) {
+            expect(error.message).toBe(
+                "An error occurred when sending a glue http request: Policy for proxy 'thing' has expired."
+            );
+            expect(error.code).toBe('proxy_policy_expired');
+            expect(error.status).toBe(403);
+            expect(error.payload.message).toBe("Policy for proxy 'thing' has expired.");
+        }
     });
 
     it('omits content-type for FormData requests', async () => {

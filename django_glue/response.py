@@ -11,6 +11,7 @@ from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSON
 class GlueResponse:
     Message: ClassVar[type] = GlueMessage
     state: dict | None = None
+    policy: dict | None = None
     result: Any = None
     messages: list[GlueMessage] | None = None
     status: int = 200
@@ -20,6 +21,8 @@ class GlueResponse:
             'result': self.result if self.result is not None else {},
             'state': self.state,
         }
+        if self.policy is not None:
+            data['policy'] = self.policy
         if self.messages is not None:
             data['messages'] = [message.to_dict() for message in self.messages]
 

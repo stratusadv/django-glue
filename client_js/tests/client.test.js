@@ -54,6 +54,13 @@ describe('GlueClient', () => {
         expect(client._onMessage).toBe(onMessage);
     });
 
+    it('stores the global expiry handler', () => {
+        const onExpiry = mock(() => {});
+
+        expect(client.onExpiry(onExpiry)).toBe(client);
+        expect(client._onExpiry).toBe(onExpiry);
+    });
+
     it('registers form, model, and queryset proxies by namespace', () => {
         client.init({
             config,

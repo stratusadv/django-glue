@@ -12,11 +12,10 @@ from abc import ABC
 import inspect
 from typing import Any, TYPE_CHECKING, Self
 
-from django.http import HttpRequest
-
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
     from django_glue.proxies.state import BaseProxyState
     from django_glue.access.access import GlueAccess
     from django_glue.bound_attributes.attribute import BoundProxyAttribute
@@ -50,17 +49,20 @@ class BaseGlueProxy(ABC):
         name: str,
         namespace: str,
         access: GlueAccess,
-        state: type[BaseProxyState],
+        state: BaseProxyState,
     ) -> None:
         self.name = name
         self.namespace = namespace
         self.access = access
         self.state = state
+        self.session_id: str | None = None
 
     @classmethod
     def _from_attribute_event(cls, event: BoundProxyAttributeEvent) -> Self:
         state = cls._state_class.deserialize(event)
-        return cls(event.policy.name, event.policy.namespace, event.policy.access, state)
+        proxy = cls(event.policy.name, event.policy.namespace, event.policy.access, state)
+        proxy.session_id = event.policy.session_id
+        return proxy
 
     @classmethod
     def __init_subclass__(cls, **kwargs) -> None:
@@ -87,9 +89,14 @@ class BaseGlueProxy(ABC):
         if DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY not in request.__dict__:
             request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY] = {}
 
+        if request.session.session_key is None:
+            request.session.save()
+        self.session_id = request.session.session_key
+
         request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY][self.name] = {
             'state': self.state.serialize() if self.state else {},
             'policy': ProxyPolicy.new_signed_policy({
+                'session_id': self.session_id,
                 'name': self.name,
                 'access': self.access,
                 'bound_attributes': self._policy_data,

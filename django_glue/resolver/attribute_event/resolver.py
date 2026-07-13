@@ -74,12 +74,15 @@ class ProxyBoundAttributeEventResolver(BaseResolver):
             result_data = self._resolve_attribute_on_owner(attribute_owner, attr_name)
 
         state_dict = proxy.state.serialize()
+        policy_dict = self.event.policy.model_dump()
 
         if isinstance(result_data, GlueResponse):
             result_data.state = state_dict
+            result_data.policy = policy_dict
             return result_data.to_json_response()
 
         return GlueResponse(
             state=state_dict,
+            policy=policy_dict,
             result=result_data,
         ).to_json_response()

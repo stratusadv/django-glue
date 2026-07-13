@@ -7,10 +7,12 @@ import {createQuerySetPolicy, setupCookieMock} from './testUtils';
 describe('proxy policy expiry request path', () => {
     afterEach(() => {
         global.fetch = undefined;
+        delete globalThis.Glue;
     });
 
     it('surfaces expired policy rejections from bound attribute requests', async () => {
         setupCookieMock({csrftoken: 'csrf-token'});
+        globalThis.Glue = {_onExpiry: mock(() => {})};
 
         const expiredPolicy = {
             ...createQuerySetPolicy(),
@@ -26,7 +28,14 @@ describe('proxy policy expiry request path', () => {
 
             return {
                 ok: false,
-                text: () => Promise.resolve("Policy for proxy 'gorillas' has expired."),
+                status: 403,
+                text: () => Promise.resolve(JSON.stringify({
+                    error: {
+                        code: 'proxy_policy_expired',
+                        message: "Policy for proxy 'gorillas' has expired.",
+                        status: 403,
+                    },
+                })),
                 clone: function () {
                     return this;
                 },
@@ -46,6 +55,7 @@ describe('proxy policy expiry request path', () => {
         });
 
         await expect(proxy.all()).rejects.toThrow("Policy for proxy 'gorillas' has expired.");
+        expect(globalThis.Glue._onExpiry).toHaveBeenCalledTimes(1);
         expect(submittedPolicy.created_at).toBe(1);
         expect(global.fetch.mock.calls[0][0]).toBe('/__dg__/bound_attribute_event/gorillas/GlueQuerySetProxy.query_with_params/');
         expect(global.fetch.mock.calls[0][1].headers['X-CSRFToken']).toBe('csrf-token');

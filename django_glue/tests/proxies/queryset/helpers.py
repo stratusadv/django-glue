@@ -18,4 +18,5 @@ def make_queryset_proxy(queryset, name='gorillas', access=GlueAccess.VIEW, field
     )
     proxy = GlueQuerySetProxy(name=name, namespace='querySet', access=access, state=state)
     proxy._form_class_path = form_class_path
+    proxy.session_id = 'test-session'
     return proxy

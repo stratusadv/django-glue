@@ -1,18 +1,17 @@
-from django_glue.access.access import GlueAccess
+from django_glue.shortcuts.glue import Glue
 
 
 class GorillaService:
     def __init__(self, gorilla):
         self.gorilla = gorilla
 
-    def increment_age_and_save(self):
+    @Glue.Attribute(access=Glue.Access.CHANGE)
+    def increment_age(self):
         self.gorilla.age += 1
         self.gorilla.save()
 
-    class GlueMeta:
-        attributes = [
-            ('increment_age_and_save', {'access': GlueAccess.CHANGE}),
-        ]
+    def increment_age_and_save(self):
+        self.increment_age()
 
 
 class GorillaServiceDescriptor:

@@ -8,7 +8,7 @@ from django.template.loader import render_to_string
 from django_glue.access.access import GlueAccess
 from django_glue.proxies.proxy import BaseGlueProxy
 from django_glue.proxies.template.state import GlueTemplateProxyState
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.resolver.exceptions import GlueResolverError
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ class GlueTemplateProxy(BaseGlueProxy):
             'initial_context_data': self.state.context_data,
         }
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def render_html(self, request: HttpRequest, **context_kwargs: dict) -> dict:
         context_kwargs = context_kwargs or {}
         merged_context = {**self.state.context_data, **context_kwargs}

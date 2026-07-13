@@ -3,9 +3,22 @@ from django.views.decorators.http import require_http_methods
 from pydantic import ValidationError
 
 from django.conf import settings
-from django_glue.exceptions import GlueAccessError, GlueInvalidPolicyError
+from django_glue.exceptions import GlueError
 from django_glue.resolver.attribute_event.resolver import ProxyBoundAttributeEventResolver
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
+
+
+def _error_response(error: GlueError, *, status: int = 403) -> JsonResponse:
+    return JsonResponse(
+        {
+            'error': {
+                'code': error.code,
+                'message': str(error),
+                'status': status,
+            }
+        },
+        status=status,
+    )
 
 
 @require_http_methods(['POST'])
@@ -14,12 +27,8 @@ from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEven
 def proxy_bound_attribute_event_view(request: HttpRequest, *, proxy_name: str, attribute_name: str) -> JsonResponse | HttpResponse:
     try:
         event = BoundProxyAttributeEvent.model_validate(request)
-    except (GlueAccessError, GlueInvalidPolicyError) as e:
-        return HttpResponse(
-            content=str(e),
-            status=403,
-            content_type='text/plain',
-        )
+    except GlueError as e:
+        return _error_response(e)
     except ValidationError as e:
         if 'Insufficient access' in str(e):
             return HttpResponse(
@@ -35,9 +44,5 @@ def proxy_bound_attribute_event_view(request: HttpRequest, *, proxy_name: str, a
 
     try:
         return ProxyBoundAttributeEventResolver(event).resolve()
-    except (GlueAccessError, GlueInvalidPolicyError) as e:
-        return HttpResponse(
-            content=str(e),
-            status=403,
-            content_type='text/plain',
-        )
+    except GlueError as e:
+        return _error_response(e)

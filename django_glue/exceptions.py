@@ -11,9 +11,13 @@ from typing import Any
 class GlueError(Exception):
     """Base exception for all Django Glue errors."""
 
+    code = 'glue_error'
+
 
 class GlueProxyNotFoundError(GlueError):
     """Raised when a proxy with the given unique_name is not found in the session."""
+
+    code = 'proxy_not_found'
 
     def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
@@ -22,6 +26,8 @@ class GlueProxyNotFoundError(GlueError):
 
 class GlueAccessError(GlueError):
     """Raised when a user lacks permission to access a bound attribute on a proxy."""
+
+    code = 'proxy_access_denied'
 
     def __init__(self, attribute: str, required_access: str, current_access: str) -> None:
         self.attribute = attribute
@@ -36,6 +42,8 @@ class GlueAccessError(GlueError):
 class GlueMissingAttributeError(GlueError):
     """Raised when a requested bound attribute does not exist or is not properly exposed."""
 
+    code = 'missing_attribute'
+
     def __init__(self, attribute: str, proxy_name: str, reason: str | None = None) -> None:
         self.attribute = attribute
         self.proxy_name = proxy_name
@@ -49,6 +57,8 @@ class GlueMissingAttributeError(GlueError):
 class GlueModelInstanceNotFoundError(GlueError):
     """Raised when a model instance is not found during proxy operations (get, save, delete)."""
 
+    code = 'model_instance_not_found'
+
     def __init__(self, model_name: str, pk: Any) -> None:
         self.model_name = model_name
         self.pk = pk
@@ -58,6 +68,8 @@ class GlueModelInstanceNotFoundError(GlueError):
 class GlueQuerySetFilterValidationError(GlueError):
     """Raised when filter parameters reference disallowed fields."""
 
+    code = 'queryset_filter_validation_error'
+
     def __init__(self, field: str, allowed_fields: list) -> None:
         self.field = field
         self.allowed_fields = allowed_fields
@@ -66,6 +78,8 @@ class GlueQuerySetFilterValidationError(GlueError):
 
 class GlueInvalidPolicyError(GlueError):
     """Raised when proxy policy signature doesn't match, indicating tampering."""
+
+    code = 'proxy_policy_invalid'
 
     def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
@@ -78,6 +92,8 @@ class GlueInvalidPolicyError(GlueError):
 class GlueExpiredPolicyError(GlueError):
     """Raised when a proxy policy is older than the configured max age."""
 
+    code = 'proxy_policy_expired'
+
     def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
         super().__init__(f"Policy for proxy '{unique_name}' has expired.")
@@ -85,6 +101,8 @@ class GlueExpiredPolicyError(GlueError):
 
 class GlueBoundAttributeCallError(GlueError):
     """Raised when calling a bound attribute fails. Provides detailed context about the failure."""
+
+    code = 'bound_attribute_call_error'
 
     def __init__(self, callable_attr: Any, original_error: Exception, provided_kwargs: list[str]) -> None:
         import inspect

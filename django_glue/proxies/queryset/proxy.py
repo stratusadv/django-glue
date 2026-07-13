@@ -8,7 +8,7 @@ from django.utils.functional import cached_property
 from django_glue.access.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueModelInstanceNotFoundError
 from django_glue.proxies import GlueModelInstanceProxy
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 from django_glue.proxies.model.proxy import BaseGlueModelProxy
 from django_glue.proxies.policy import ProxyPolicy
 from django_glue.proxies.queryset.state import GlueQuerySetProxyState
@@ -139,6 +139,7 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
             child_subject_details['form_class_path'] = self._custom_policy_details['form_class_path']
 
         return ProxyPolicy.new_signed_policy({
+            'session_id': self.session_id,
             'name': child_name,
             'access': self.access,
             'bound_attributes': self._child_model_bound_attributes,
@@ -179,7 +180,7 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
                     allowed_fields=list(self._field_metadata.keys()),
                 )
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def query_with_params(
         self,
         request: HttpRequest,
@@ -233,11 +234,11 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
             namespace='model',
         )
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def get(self, request: HttpRequest) -> dict:
         return self._create_model_proxy_from_instance().get(request)
 
-    @bind_attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW)
     def new(self, request: HttpRequest) -> dict:
         """Return default values for a new model instance."""
         model_class = self.state.model.__class__

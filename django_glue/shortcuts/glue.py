@@ -5,12 +5,12 @@ from django.forms import ModelForm, BaseForm
 from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import bind_attribute
+from django_glue.bound_attributes.decorators import Attribute
 
 
 class Glue:
     Access = GlueAccess
-    attribute = staticmethod(bind_attribute)
+    Attribute = Attribute
 
     @staticmethod
     def model(

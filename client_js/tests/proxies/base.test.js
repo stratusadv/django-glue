@@ -64,6 +64,23 @@ describe('BaseGlueProxy', () => {
         expect(after.mock.calls[0][0].result).toEqual({answer: 42});
     });
 
+    it('replaces policy when response includes a refreshed policy', async () => {
+        const refreshedPolicy = createPolicy('base', {
+            created_at: 123,
+            original_signature: 'new-signature',
+            bound_attributes: {'GlueBaseProxy.load': {}},
+        });
+        const proxy = makeProxy({
+            result: {ok: true},
+            state: {loaded: true},
+            policy: refreshedPolicy,
+        });
+
+        await proxy.load();
+
+        expect(proxy._policy).toEqual(refreshedPolicy);
+    });
+
     it('calls the global client message handler when a response includes messages', async () => {
         const onMessage = mock(() => {});
         const proxy = new BaseGlueProxy({
@@ -143,6 +160,45 @@ describe('BaseGlueProxy', () => {
 
         expect(onError.mock.calls[0][0].error).toBe(error);
         expect(proxy._loading).toBe(false);
+    });
+
+    it('uses the global expiry handler for expired policy errors', async () => {
+        const error = new Error("An error occurred when sending a glue http request: Policy for proxy 'thing' has expired.");
+        error.code = 'proxy_policy_expired';
+        const onExpiry = mock(() => {});
+        const proxy = makeProxy();
+        proxy.http.sendAttributeEventRequest = mock(async () => {
+            throw error;
+        });
+        globalThis.Glue = {_onExpiry: onExpiry};
+
+        await expect(proxy.load()).rejects.toThrow("Policy for proxy 'thing' has expired.");
+
+        expect(onExpiry).toHaveBeenCalledTimes(1);
+        expect(onExpiry.mock.calls[0][0].error).toBe(error);
+        expect(onExpiry.mock.calls[0][0].proxy).toBe(proxy);
+        expect(onExpiry.mock.calls[0][0].attribute).toBe('GlueBaseProxy.load');
+    });
+
+    it('shows a default browser alert for expired policy errors', async () => {
+        const error = new Error("An error occurred when sending a glue http request: Policy for proxy 'thing' has expired.");
+        error.code = 'proxy_policy_expired';
+        const originalAlert = globalThis.alert;
+        const alert = mock(() => {});
+        const proxy = makeProxy();
+        proxy.http.sendAttributeEventRequest = mock(async () => {
+            throw error;
+        });
+        globalThis.Glue = {};
+        globalThis.alert = alert;
+
+        try {
+            await expect(proxy.load()).rejects.toThrow("Policy for proxy 'thing' has expired.");
+        } finally {
+            globalThis.alert = originalAlert;
+        }
+
+        expect(alert).toHaveBeenCalledWith('Your session has expired. Please refresh the page.');
     });
 
     it('removes and clears listeners', () => {

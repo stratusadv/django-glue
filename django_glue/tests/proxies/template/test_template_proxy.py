@@ -11,6 +11,7 @@ from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.proxies.template.proxy import GlueTemplateProxy
 from django_glue.proxies.template.state import GlueTemplateProxyState
 from django_glue.resolver.exceptions import GlueResolverError
+from django_glue.tests.conftest import MockSession
 
 
 def make_template_proxy(
@@ -60,6 +61,7 @@ class GlueTemplateProxyPolicyTestCase(TestCase):
 
     def test_register_policy_serializes_template_details(self):
         request = RequestFactory().get('/')
+        request.session = MockSession()
 
         GlueTemplateProxy.register_policy(
             request=request,

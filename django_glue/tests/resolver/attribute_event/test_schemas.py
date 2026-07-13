@@ -13,8 +13,9 @@ from django.utils import timezone
 from pydantic import ValidationError
 
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
-from django_glue.exceptions import GlueExpiredPolicyError
+from django_glue.exceptions import GlueExpiredPolicyError, GlueInvalidPolicyError
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
+from django_glue.tests.conftest import MockSession
 from django_glue.tests.proxies.queryset.helpers import make_queryset_proxy
 from test_project.gorilla.models import Gorilla
 
@@ -32,6 +33,7 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
 
     def _queryset_policy(self):
         registration_request = self.factory.get('/')
+        registration_request.session = MockSession(session_key='session-1')
         proxy = make_queryset_proxy(Gorilla.objects.all())
         proxy._register_with_request(registration_request)
         return registration_request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY]['gorillas']['policy']
@@ -46,6 +48,7 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
             (),
             {'kwargs': {'proxy_name': proxy_name, 'attribute_name': attribute_name}},
         )()
+        request.session = MockSession(session_key='session-1')
         return request
 
     def test_validates_bound_attribute_event_request(self):
@@ -55,6 +58,25 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
 
         self.assertEqual(event.policy.name, 'gorillas')
         self.assertEqual(event.bound_attribute.name, 'new')
+
+    def test_valid_request_refreshes_policy_signature_and_timestamp(self):
+        policy = self._queryset_policy()
+        original_signature = policy['original_signature']
+        refreshed_now = timezone.now() + timedelta(seconds=30)
+
+        with patch('django_glue.proxies.policy.timezone.now', return_value=refreshed_now):
+            event = BoundProxyAttributeEvent.model_validate(self._event_request(policy))
+
+        self.assertEqual(event.policy.created_at, refreshed_now.timestamp())
+        self.assertNotEqual(event.policy.original_signature, original_signature)
+        self.assertEqual(event.policy.original_signature, event.policy.computed_signature)
+
+    def test_session_id_mismatch_raises_invalid_policy_error(self):
+        request = self._event_request(self._queryset_policy())
+        request.session = MockSession(session_key='other-session')
+
+        with self.assertRaises(GlueInvalidPolicyError):
+            BoundProxyAttributeEvent.model_validate(request)
 
     def test_missing_bound_attribute_raises_pydantic_validation_error(self):
         request = self._event_request(self._queryset_policy(), attribute_name='new')
