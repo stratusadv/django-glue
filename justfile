@@ -51,3 +51,6 @@ demo NAME="" SPEED="normal":
 
 demos:
 	{{PYTHON}} -m pytest -m demo --collect-only -q
+
+act *ARGS:
+	act {{ARGS}}
