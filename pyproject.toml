@@ -102,6 +102,9 @@ apps = ["django_glue.tests"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "test_project.settings"
 pythonpath = ["."]
+markers = [
+    "e2e: browser-level tests against the Django test project",
+]
 
 [tool.coverage.run]
 source = ["django_glue"]
