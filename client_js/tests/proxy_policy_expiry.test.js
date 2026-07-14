@@ -28,12 +28,13 @@ describe('proxy policy expiry request path', () => {
 
             return {
                 ok: false,
-                status: 403,
+                status: 419,
                 text: () => Promise.resolve(JSON.stringify({
                     error: {
                         code: 'proxy_policy_expired',
                         message: "Policy for proxy 'gorillas' has expired.",
-                        status: 403,
+                        status: 419,
+                        details: {proxy: 'gorillas'},
                     },
                 })),
                 clone: function () {
@@ -56,6 +57,8 @@ describe('proxy policy expiry request path', () => {
 
         await expect(proxy.all()).rejects.toThrow("Policy for proxy 'gorillas' has expired.");
         expect(globalThis.Glue._onExpiry).toHaveBeenCalledTimes(1);
+        expect(globalThis.Glue._onExpiry.mock.calls[0][0].error.status).toBe(419);
+        expect(globalThis.Glue._onExpiry.mock.calls[0][0].error.details).toEqual({proxy: 'gorillas'});
         expect(submittedPolicy.created_at).toBe(1);
         expect(global.fetch.mock.calls[0][0]).toBe('/__dg__/bound_attribute_event/gorillas/GlueQuerySetProxy.query_with_params/');
         expect(global.fetch.mock.calls[0][1].headers['X-CSRFToken']).toBe('csrf-token');

@@ -1,4 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, mock} from 'bun:test';
+import {GlueHttpError} from '../src/errors';
 import GlueHttp from '../src/http';
 import {createFormPolicy, setupCookieMock} from './testUtils';
 
@@ -55,8 +56,17 @@ describe('GlueHttp', () => {
             text: () => Promise.resolve('Nope'),
         }));
 
-        await expect(http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'}))
-            .rejects.toThrow('An error occurred when sending a glue http request: Nope');
+        try {
+            await http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'});
+            throw new Error('Expected request to fail');
+        } catch (error) {
+            expect(error).toBeInstanceOf(GlueHttpError);
+            expect(error.message).toBe('An error occurred when sending a glue http request: Nope');
+            expect(error.status).toBe(500);
+            expect(error.code).toBeNull();
+            expect(error.isGlueError).toBe(false);
+            expect(error.responseBody).toBe('Nope');
+        }
     });
 
     it('preserves structured glue error data for non-ok responses', async () => {
@@ -68,6 +78,7 @@ describe('GlueHttp', () => {
                     code: 'proxy_policy_expired',
                     message: "Policy for proxy 'thing' has expired.",
                     status: 403,
+                    details: {proxy: 'thing'},
                 },
             })),
         }));
@@ -76,11 +87,14 @@ describe('GlueHttp', () => {
             await http.sendRequest('/broken/', {method: 'GET', contentType: 'application/json'});
             throw new Error('Expected request to fail');
         } catch (error) {
+            expect(error).toBeInstanceOf(GlueHttpError);
             expect(error.message).toBe(
                 "An error occurred when sending a glue http request: Policy for proxy 'thing' has expired."
             );
             expect(error.code).toBe('proxy_policy_expired');
             expect(error.status).toBe(403);
+            expect(error.isGlueError).toBe(true);
+            expect(error.details).toEqual({proxy: 'thing'});
             expect(error.payload.message).toBe("Policy for proxy 'thing' has expired.");
         }
     });

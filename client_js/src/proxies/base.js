@@ -160,11 +160,26 @@ class BaseGlueProxy {
             await this._handleExpiry(err, attributeName, eventKwargs);
 
             await this.emitListeners('error', shortName, event);
+            await this._handleError(err, attributeName, eventKwargs);
 
             throw err;
         } finally {
             this._loading = false;
         }
+    }
+
+    async _handleError(error, attributeName, eventKwargs) {
+        const handler = globalThis.Glue?._onError;
+        if (!handler) {
+            return;
+        }
+
+        await handler({
+            error,
+            proxy: this,
+            attribute: attributeName,
+            eventKwargs,
+        });
     }
 
     async _handleExpiry(error, attributeName, eventKwargs) {

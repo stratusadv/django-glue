@@ -2,7 +2,7 @@ import inspect
 from typing import Any, get_type_hints
 from django.http import HttpRequest, JsonResponse, HttpResponse
 
-from django_glue.exceptions import GlueAccessError
+from django_glue.exceptions import GlueAccessError, GlueMissingAttributeError
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.response import GlueResponse
@@ -24,8 +24,11 @@ class ProxyBoundAttributeEventResolver(BaseResolver):
         )
 
         if not attribute_owner:
-            msg = f'No valid attribute owner for {self.event.bound_attribute.target_class.__name__}'
-            raise ValueError(msg)
+            raise GlueMissingAttributeError(
+                attribute=self.event.bound_attribute.name,
+                proxy_name=self.event.policy.name,
+                reason=f'No valid attribute owner for {self.event.bound_attribute.target_class.__name__}',
+            )
 
         return attribute_owner
 
@@ -52,7 +55,7 @@ class ProxyBoundAttributeEventResolver(BaseResolver):
 
         return kwargs
 
-    def resolve(self) -> JsonResponse | HttpResponse:
+    def resolve(self) -> JsonResponse:
         proxy = self._load_proxy_from_event()
         attribute_owner = self._get_attribute_owner_from_event(proxy)
 

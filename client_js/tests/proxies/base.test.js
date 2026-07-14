@@ -162,6 +162,54 @@ describe('BaseGlueProxy', () => {
         expect(proxy._loading).toBe(false);
     });
 
+    it('calls the global error handler for request failures', async () => {
+        const error = new Error('network');
+        const onError = mock(() => {});
+        const proxy = makeProxy();
+        proxy.http.sendAttributeEventRequest = mock(async () => {
+            throw error;
+        });
+        globalThis.Glue = {_onError: onError};
+
+        await expect(proxy.load({page: 1})).rejects.toThrow('network');
+
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].error).toBe(error);
+        expect(onError.mock.calls[0][0].proxy).toBe(proxy);
+        expect(onError.mock.calls[0][0].attribute).toBe('GlueBaseProxy.load');
+        expect(onError.mock.calls[0][0].eventKwargs).toEqual({page: 1});
+    });
+
+    it('default global error handler logs to console.error', async () => {
+        const error = new Error('network');
+        const originalConsoleError = console.error;
+        const consoleError = mock(() => {});
+        const proxy = makeProxy();
+        proxy.http.sendAttributeEventRequest = mock(async () => {
+            throw error;
+        });
+        console.error = consoleError;
+        globalThis.Glue = {
+            _onError({error, proxy, attribute}) {
+                console.error('[Django Glue] Bound attribute event failed', {
+                    error,
+                    proxy,
+                    attribute,
+                });
+            },
+        };
+
+        try {
+            await expect(proxy.load()).rejects.toThrow('network');
+        } finally {
+            console.error = originalConsoleError;
+        }
+
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        expect(consoleError.mock.calls[0][0]).toBe('[Django Glue] Bound attribute event failed');
+        expect(consoleError.mock.calls[0][1].error).toBe(error);
+    });
+
     it('uses the global expiry handler for expired policy errors', async () => {
         const error = new Error("An error occurred when sending a glue http request: Policy for proxy 'thing' has expired.");
         error.code = 'proxy_policy_expired';

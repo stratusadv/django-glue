@@ -80,10 +80,23 @@
         event.error = err;
         await this._handleExpiry(err, attributeName, eventKwargs);
         await this.emitListeners("error", shortName, event);
+        await this._handleError(err, attributeName, eventKwargs);
         throw err;
       } finally {
         this._loading = false;
       }
+    }
+    async _handleError(error, attributeName, eventKwargs) {
+      const handler = globalThis.Glue?._onError;
+      if (!handler) {
+        return;
+      }
+      await handler({
+        error,
+        proxy: this,
+        attribute: attributeName,
+        eventKwargs
+      });
     }
     async _handleExpiry(error, attributeName, eventKwargs) {
       if (!this._isExpiryError(error)) {
@@ -699,6 +712,20 @@
   window.GlueTemplateProxy = template_default;
   window.GlueFunctionProxy = function_default;
 
+  // client_js/src/errors.js
+  class GlueHttpError extends Error {
+    constructor({ message, status = null, code = null, payload = null, responseBody = "" }) {
+      super(`An error occurred when sending a glue http request: ${message}`);
+      this.name = "GlueHttpError";
+      this.status = status;
+      this.code = code;
+      this.payload = payload;
+      this.details = payload?.details || {};
+      this.responseBody = responseBody;
+      this.isGlueError = Boolean(code);
+    }
+  }
+
   // client_js/src/http.js
   class GlueHttp {
     constructor(config) {
@@ -766,11 +793,13 @@
       } catch (_) {}
       const errorData = payload?.error;
       const message = errorData?.message || body;
-      const error = new Error(`An error occurred when sending a glue http request: ${message}`);
-      error.status = response.status;
-      error.code = errorData?.code;
-      error.payload = errorData || null;
-      return error;
+      return new GlueHttpError({
+        message,
+        status: response.status,
+        code: errorData?.code,
+        payload: errorData || null,
+        responseBody: body
+      });
     }
     async sendJsonPostRequest(url, data, csrfProtected = true) {
       return await this.sendRequest(url, {
@@ -939,6 +968,7 @@
     function = {};
     _onMessage = null;
     _onExpiry = null;
+    _onError = this._defaultErrorHandler;
     onMessage(callback) {
       this._onMessage = callback;
       return this;
@@ -946,6 +976,17 @@
     onExpiry(callback) {
       this._onExpiry = callback;
       return this;
+    }
+    onError(callback) {
+      this._onError = callback;
+      return this;
+    }
+    _defaultErrorHandler({ error, proxy, attribute }) {
+      console.error("[Django Glue] Bound attribute event failed", {
+        error,
+        proxy,
+        attribute
+      });
     }
     _registerProxyAsProperty(name, { policy, state }) {
       let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[policy.subject_details.namespace];
@@ -1007,4 +1048,5 @@
   window.Glue = Glue;
   window.GlueConfig = config_default;
   window.GlueHttp = http_default;
+  window.GlueHttpError = GlueHttpError;
 })();

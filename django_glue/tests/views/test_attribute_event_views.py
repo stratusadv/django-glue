@@ -7,13 +7,14 @@ from unittest.mock import patch
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
 from django_glue.tests.conftest import MockSession
 from django_glue.tests.proxies.model.helpers import make_model_proxy
 from django_glue.tests.proxies.queryset.helpers import make_queryset_proxy
-from django_glue.views.attribute_event_views import proxy_bound_attribute_event_view
+from django_glue.exceptions import GlueBoundAttributeCallError
+from django_glue.views.attribute_event_views import _error_response, proxy_bound_attribute_event_view
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -66,7 +67,84 @@ class AttributeEventViewTestCase(TestCase):
         self.assertEqual(response.status_code, 403)
         data = json.loads(response.content)
         self.assertEqual(data['error']['code'], 'proxy_access_denied')
+        self.assertEqual(data['error']['status'], 403)
+        self.assertEqual(data['error']['details']['attribute'], 'delete')
         self.assertIn("Insufficient access to access 'delete'", data['error']['message'])
+
+    def test_proxy_bound_attribute_event_view_missing_policy_returns_400(self):
+        request = self.factory.post(
+            '/__dg__/bound_attribute_event/gorillas/GlueQuerySetProxy.delete/',
+            data={},
+        )
+        request.resolver_match = type(
+            'ResolverMatch',
+            (),
+            {'kwargs': {'proxy_name': 'gorillas', 'attribute_name': 'GlueQuerySetProxy.delete'}},
+        )()
+        request.session = MockSession(session_key='session-1')
+
+        response = proxy_bound_attribute_event_view(
+            request,
+            proxy_name='gorillas',
+            attribute_name='GlueQuerySetProxy.delete',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'missing_policy')
+        self.assertEqual(data['error']['status'], 400)
+
+    def test_proxy_bound_attribute_event_view_missing_attribute_returns_404(self):
+        policy = self._queryset_policy(access='view')
+        request = self.factory.post(
+            '/__dg__/bound_attribute_event/gorillas/not_in_policy/',
+            data={'policy': json.dumps(policy)},
+        )
+        request.resolver_match = type(
+            'ResolverMatch',
+            (),
+            {'kwargs': {'proxy_name': 'gorillas', 'attribute_name': 'not_in_policy'}},
+        )()
+        request.session = MockSession(session_key='session-1')
+
+        response = proxy_bound_attribute_event_view(
+            request,
+            proxy_name='gorillas',
+            attribute_name='not_in_policy',
+        )
+
+        self.assertEqual(response.status_code, 404)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'missing_attribute')
+        self.assertEqual(data['error']['details']['attribute'], 'not_in_policy')
+
+    @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=60)
+    def test_proxy_bound_attribute_event_view_expired_policy_returns_419(self):
+        stale_now = timezone.now() - timedelta(seconds=61)
+        with patch('django_glue.proxies.policy.timezone.now', return_value=stale_now):
+            policy = self._queryset_policy(access='view')
+
+        request = self.factory.post(
+            '/__dg__/bound_attribute_event/gorillas/GlueQuerySetProxy.new/',
+            data={'policy': json.dumps(policy)},
+        )
+        request.resolver_match = type(
+            'ResolverMatch',
+            (),
+            {'kwargs': {'proxy_name': 'gorillas', 'attribute_name': 'GlueQuerySetProxy.new'}},
+        )()
+        request.session = MockSession(session_key='session-1')
+
+        response = proxy_bound_attribute_event_view(
+            request,
+            proxy_name='gorillas',
+            attribute_name='GlueQuerySetProxy.new',
+        )
+
+        self.assertEqual(response.status_code, 419)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'proxy_policy_expired')
+        self.assertEqual(data['error']['status'], 419)
 
     def test_foreign_key_choices_returns_json_array_result(self):
         registration_request = self.factory.get('/')
@@ -153,3 +231,79 @@ class AttributeEventViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.age, 19)
+
+    @override_settings(DEBUG=False)
+    def test_internal_attribute_errors_are_sanitized_when_debug_is_disabled(self):
+        def broken_attribute(request):
+            raise RuntimeError('database credentials leaked')
+
+        error = GlueBoundAttributeCallError(
+            callable_attr=broken_attribute,
+            original_error=RuntimeError('database credentials leaked'),
+            provided_kwargs=['request'],
+        )
+
+        response = _error_response(error)
+
+        self.assertEqual(response.status_code, 500)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'bound_attribute_call_error')
+        self.assertEqual(data['error']['message'], 'An unexpected Glue server error occurred.')
+        self.assertEqual(data['error']['details'], {})
+
+    @override_settings(DEBUG=True)
+    def test_internal_attribute_errors_include_details_when_debug_is_enabled(self):
+        def broken_attribute(request):
+            raise RuntimeError('debug details available')
+
+        error = GlueBoundAttributeCallError(
+            callable_attr=broken_attribute,
+            original_error=RuntimeError('debug details available'),
+            provided_kwargs=['request'],
+        )
+
+        response = _error_response(error)
+
+        self.assertEqual(response.status_code, 500)
+        data = json.loads(response.content)
+        self.assertIn('debug details available', data['error']['message'])
+        self.assertEqual(data['error']['details']['original_error'], 'debug details available')
+
+    @override_settings(DEBUG=False)
+    def test_internal_attribute_errors_are_logged_on_the_backend(self):
+        policy = self._queryset_policy(access='view')
+
+        request = self.factory.post(
+            '/__dg__/bound_attribute_event/gorillas/GlueQuerySetProxy.new/',
+            data={'policy': json.dumps(policy)},
+        )
+        request.resolver_match = type(
+            'ResolverMatch',
+            (),
+            {'kwargs': {'proxy_name': 'gorillas', 'attribute_name': 'GlueQuerySetProxy.new'}},
+        )()
+        request.session = MockSession(session_key='session-1')
+
+        def broken_attribute(request):
+            raise RuntimeError('backend-only details')
+
+        error = GlueBoundAttributeCallError(
+            callable_attr=broken_attribute,
+            original_error=RuntimeError('backend-only details'),
+            provided_kwargs=['request'],
+        )
+
+        with (
+            patch('django_glue.views.attribute_event_views.ProxyBoundAttributeEventResolver.resolve', side_effect=error),
+            patch('django_glue.views.attribute_event_views.logger.exception') as log_exception,
+        ):
+            response = proxy_bound_attribute_event_view(
+                request,
+                proxy_name='gorillas',
+                attribute_name='GlueQuerySetProxy.new',
+            )
+
+        self.assertEqual(response.status_code, 500)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['message'], 'An unexpected Glue server error occurred.')
+        log_exception.assert_called_once()

@@ -26,6 +26,8 @@ class GlueClient {
     _onMessage = null
     /** @type {Function|null} */
     _onExpiry = null
+    /** @type {Function|null} */
+    _onError = this._defaultErrorHandler
 
     /**
      * Configure the global message handler for GlueResponse messages.
@@ -46,6 +48,25 @@ class GlueClient {
     onExpiry(callback) {
         this._onExpiry = callback
         return this
+    }
+
+    /**
+     * Configure the global bound attribute error handler.
+     * The default handler logs errors with `console.error`.
+     * @param {Function|null} callback - Handler called when a bound attribute request fails.
+     * @returns {this} The client instance for chaining.
+     */
+    onError(callback) {
+        this._onError = callback
+        return this
+    }
+
+    _defaultErrorHandler({error, proxy, attribute}) {
+        console.error('[Django Glue] Bound attribute event failed', {
+            error,
+            proxy,
+            attribute,
+        })
     }
 
     /**

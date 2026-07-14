@@ -1,3 +1,5 @@
+import {GlueHttpError} from "./errors";
+
 /**
  * HTTP client for Django Glue. Handles fetch requests, CSRF tokens, timeouts,
  * and serialization for bound attribute events.
@@ -105,12 +107,13 @@ class GlueHttp {
 
         const errorData = payload?.error
         const message = errorData?.message || body
-        const error = new Error(`An error occurred when sending a glue http request: ${message}`)
-        error.status = response.status
-        error.code = errorData?.code
-        error.payload = errorData || null
-
-        return error
+        return new GlueHttpError({
+            message,
+            status: response.status,
+            code: errorData?.code,
+            payload: errorData || null,
+            responseBody: body,
+        })
     }
 
     /**

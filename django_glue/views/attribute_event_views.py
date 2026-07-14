@@ -1,48 +1,68 @@
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.views.decorators.http import require_http_methods
-from pydantic import ValidationError
+import logging
 
 from django.conf import settings
-from django_glue.exceptions import GlueError
+from django.http import HttpRequest, JsonResponse
+from django.views.decorators.http import require_POST
+from pydantic import ValidationError
+
+from django_glue.exceptions import GlueError, GlueRequestError
 from django_glue.resolver.attribute_event.resolver import ProxyBoundAttributeEventResolver
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
 
+logger = logging.getLogger('django.request')
 
-def _error_response(error: GlueError, *, status: int = 403) -> JsonResponse:
+
+def _error_response(error: GlueError) -> JsonResponse:
+    is_server_error = error.status >= 500
+    expose_details = settings.DEBUG or not is_server_error
+
     return JsonResponse(
         {
             'error': {
                 'code': error.code,
-                'message': str(error),
-                'status': status,
+                'message': str(error) if expose_details else 'An unexpected Glue server error occurred.',
+                'status': error.status,
+                'details': error.details() if expose_details else {},
             }
         },
-        status=status,
+        status=error.status,
     )
 
 
-@require_http_methods(['POST'])
-# Including variadic kwargs here purely for the purpose
-# of showing proxy_name and bound_attribute_name in logs
-def proxy_bound_attribute_event_view(request: HttpRequest, *, proxy_name: str, attribute_name: str) -> JsonResponse | HttpResponse:
+@require_POST
+def proxy_bound_attribute_event_view(
+    request: HttpRequest,
+    *,
+    proxy_name: str,
+    attribute_name: str
+) -> JsonResponse:
     try:
         event = BoundProxyAttributeEvent.model_validate(request)
     except GlueError as e:
+        if e.status >= 500:
+            logger.exception(
+                "Django Glue bound attribute event failed while validating request: proxy=%s attribute=%s",
+                proxy_name,
+                attribute_name,
+            )
         return _error_response(e)
     except ValidationError as e:
-        if 'Insufficient access' in str(e):
-            return HttpResponse(
-                content=str(e),
-                status=403,
-                content_type='text/plain',
+        message = f'{e}' if settings.DEBUG else 'Malformed Glue Proxy Event'
+        return _error_response(
+            GlueRequestError(
+                code='malformed_event',
+                message=message,
+                details={'errors': e.errors(include_input=False)} if settings.DEBUG else {},
             )
-        return HttpResponse(
-            content=f'{e}' if settings.DEBUG else 'Malformed Glue Proxy Event',
-            status=400,
-            content_type='text/plain',
         )
 
     try:
         return ProxyBoundAttributeEventResolver(event).resolve()
     except GlueError as e:
+        if e.status >= 500:
+            logger.exception(
+                "Django Glue bound attribute event failed: proxy=%s attribute=%s",
+                proxy_name,
+                attribute_name,
+            )
         return _error_response(e)

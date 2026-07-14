@@ -9,6 +9,7 @@ import './src/proxies';
 import GlueClient from './src/client'
 import GlueConfig from "./src/config";
 import GlueHttp from "./src/http";
+import {GlueHttpError} from "./src/errors";
 
 /**
  * The singleton Glue client instance. Access as `window.Glue`.
@@ -24,3 +25,6 @@ window.GlueConfig = GlueConfig
 
 /** @type {Function} */
 window.GlueHttp = GlueHttp
+
+/** @type {Function} */
+window.GlueHttpError = GlueHttpError

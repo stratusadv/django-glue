@@ -10,10 +10,13 @@ django.setup()
 
 from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
-from pydantic import ValidationError
-
 from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
-from django_glue.exceptions import GlueExpiredPolicyError, GlueInvalidPolicyError
+from django_glue.exceptions import (
+    GlueExpiredPolicyError,
+    GlueInvalidPolicyError,
+    GlueMissingAttributeError,
+    GlueRequestError,
+)
 from django_glue.resolver.attribute_event.schemas import BoundProxyAttributeEvent
 from django_glue.tests.conftest import MockSession
 from django_glue.tests.proxies.queryset.helpers import make_queryset_proxy
@@ -78,24 +81,25 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
         with self.assertRaises(GlueInvalidPolicyError):
             BoundProxyAttributeEvent.model_validate(request)
 
-    def test_missing_bound_attribute_raises_pydantic_validation_error(self):
+    def test_missing_bound_attribute_raises_missing_attribute_error(self):
         request = self._event_request(self._queryset_policy(), attribute_name='new')
 
-        with self.assertRaises(ValidationError) as cm:
+        with self.assertRaises(GlueMissingAttributeError) as cm:
             BoundProxyAttributeEvent.model_validate(request)
 
-        self.assertIn(
-            'Bound attribute for event was not included in policy: new',
-            str(cm.exception),
-        )
+        self.assertEqual(cm.exception.code, 'missing_attribute')
+        self.assertEqual(cm.exception.status, 404)
+        self.assertEqual(cm.exception.attribute, 'new')
 
-    def test_proxy_name_mismatch_raises_pydantic_validation_error(self):
+    def test_proxy_name_mismatch_raises_request_error(self):
         request = self._event_request(self._queryset_policy(), proxy_name='wrong')
 
-        with self.assertRaises(ValidationError) as cm:
+        with self.assertRaises(GlueRequestError) as cm:
             BoundProxyAttributeEvent.model_validate(request)
 
-        self.assertIn('Proxy name mismatch between URL path and policy', str(cm.exception))
+        self.assertEqual(cm.exception.code, 'proxy_name_mismatch')
+        self.assertEqual(cm.exception.status, 400)
+        self.assertEqual(cm.exception.details()['path_proxy'], 'wrong')
 
     @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=60)
     def test_expired_policy_raises_expired_policy_error(self):

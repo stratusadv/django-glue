@@ -13,6 +13,7 @@ from django.test import TestCase
 from django_glue.exceptions import (
     GlueError,
     GlueProxyNotFoundError,
+    GlueRequestError,
     GlueAccessError,
     GlueMissingAttributeError,
     GlueModelInstanceNotFoundError,
@@ -27,6 +28,7 @@ class GlueExceptionsTestCase(TestCase):
         """All custom exceptions should inherit from GlueError."""
         exception_classes = [
             GlueProxyNotFoundError,
+            GlueRequestError,
             GlueAccessError,
             GlueMissingAttributeError,
             GlueModelInstanceNotFoundError,
@@ -43,8 +45,22 @@ class GlueExceptionsTestCase(TestCase):
         exc = GlueProxyNotFoundError('my_task')
 
         self.assertEqual(exc.unique_name, 'my_task')
+        self.assertEqual(exc.status, 404)
+        self.assertEqual(exc.details(), {'proxy': 'my_task'})
         self.assertIn('my_task', str(exc))
         self.assertIn('not found', str(exc).lower())
+
+    def test_glue_request_error(self):
+        """GlueRequestError should support precise codes, statuses, and details."""
+        exc = GlueRequestError(
+            code='missing_policy',
+            message='"policy" is required',
+            details={'field': 'policy'},
+        )
+
+        self.assertEqual(exc.code, 'missing_policy')
+        self.assertEqual(exc.status, 400)
+        self.assertEqual(exc.details(), {'field': 'policy'})
 
     def test_glue_access_error(self):
         """GlueAccessError should contain attribute, required_access, and current_access."""
@@ -53,6 +69,8 @@ class GlueExceptionsTestCase(TestCase):
         self.assertEqual(exc.attribute, 'save')
         self.assertEqual(exc.required_access, 'CHANGE')
         self.assertEqual(exc.current_access, 'VIEW')
+        self.assertEqual(exc.status, 403)
+        self.assertEqual(exc.details()['attribute'], 'save')
         self.assertIn('save', str(exc))
         self.assertIn('CHANGE', str(exc))
         self.assertIn('VIEW', str(exc))
@@ -66,6 +84,8 @@ class GlueExceptionsTestCase(TestCase):
         self.assertEqual(exc.attribute, 'unknown_attribute')
         self.assertEqual(exc.proxy_name, 'my_proxy')
         self.assertEqual(exc.reason, 'Method does not exist')
+        self.assertEqual(exc.status, 404)
+        self.assertEqual(exc.details()['reason'], 'Method does not exist')
         self.assertIn('unknown_attribute', str(exc))
         self.assertIn('my_proxy', str(exc))
 
@@ -82,6 +102,8 @@ class GlueExceptionsTestCase(TestCase):
 
         self.assertEqual(exc.model_name, 'Task')
         self.assertEqual(exc.pk, 999)
+        self.assertEqual(exc.status, 404)
+        self.assertEqual(exc.details(), {'model': 'Task', 'pk': 999})
         self.assertIn('Task', str(exc))
         self.assertIn('999', str(exc))
 
@@ -93,5 +115,7 @@ class GlueExceptionsTestCase(TestCase):
 
         self.assertEqual(exc.field, 'password')
         self.assertEqual(exc.allowed_fields, ['id', 'title', 'done'])
+        self.assertEqual(exc.status, 422)
+        self.assertEqual(exc.details()['field'], 'password')
         self.assertIn('password', str(exc))
         self.assertIn('id', str(exc))

@@ -61,6 +61,13 @@ describe('GlueClient', () => {
         expect(client._onExpiry).toBe(onExpiry);
     });
 
+    it('stores the global error handler', () => {
+        const onError = mock(() => {});
+
+        expect(client.onError(onError)).toBe(client);
+        expect(client._onError).toBe(onError);
+    });
+
     it('registers form, model, and queryset proxies by namespace', () => {
         client.init({
             config,
