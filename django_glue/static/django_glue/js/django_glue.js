@@ -187,16 +187,33 @@
       super({ http, name, policy, state, attributes, namespace });
       this._pkFieldName = policy.subject_details?.pk_field_name || "id";
       this._defineFields();
+      this.loadInstanceData();
       this._refreshFieldErrorAttributes();
     }
     loadInstanceData() {
       if (this._state?.instance_data) {
         this._loaded = true;
         for (const fieldName of Object.keys(this._fields)) {
-          this[fieldName] = this._state.instance_data[fieldName];
-          this._fields[fieldName].value = this._state.instance_data[fieldName];
+          const value = this._parseFieldValue(this._fields[fieldName], this._state.instance_data[fieldName]);
+          this[fieldName] = value;
+          this._fields[fieldName].value = value;
         }
       }
+    }
+    _parseFieldValue(field, value) {
+      if (value === null || value === undefined || value === "") {
+        return value;
+      }
+      if (value instanceof Date) {
+        return value;
+      }
+      if (field.type === "DateField") {
+        return new Date(`${value}T00:00:00`);
+      }
+      if (field.type === "DateTimeField") {
+        return new Date(value);
+      }
+      return value;
     }
     _defineModelChoiceField(fieldName, field) {
       const cacheKey = this._getChoicesCacheKey(fieldName, field);

@@ -5,7 +5,7 @@ from django_glue.proxies.queryset.state import GlueQuerySetProxyState
 
 def make_queryset_proxy(queryset, name='gorillas', access=GlueAccess.VIEW, fields=(), exclude=(), form_class=None):
     model_instance = queryset.model()
-    model_state, form_class_path = GlueQuerySetProxy._build_state(
+    model_state, form_class_path, included_field_names = GlueQuerySetProxy._build_state(
         model_instance,
         fields=fields,
         exclude=exclude,
@@ -18,5 +18,6 @@ def make_queryset_proxy(queryset, name='gorillas', access=GlueAccess.VIEW, field
     )
     proxy = GlueQuerySetProxy(name=name, namespace='querySet', access=access, state=state)
     proxy._form_class_path = form_class_path
+    proxy._policy_included_field_names = included_field_names
     proxy.session_id = 'test-session'
     return proxy

@@ -10,8 +10,10 @@ from test_project.gorilla.models import Gorilla
 
 
 def make_model_proxy(model, name='gorilla', access=GlueAccess.VIEW):
-    state, _ = GlueModelInstanceProxy._build_state(model)
-    return GlueModelInstanceProxy(name=name, namespace='model', access=access, state=state)
+    state, _, included_field_names = GlueModelInstanceProxy._build_state(model)
+    proxy = GlueModelInstanceProxy(name=name, namespace='model', access=access, state=state)
+    proxy._policy_included_field_names = included_field_names
+    return proxy
 
 
 class BaseGlueProxyInitTestCase(TestCase):
@@ -33,9 +35,10 @@ class BaseGlueProxyInitTestCase(TestCase):
         self.assertIs(proxy.state.model, self.gorilla)
 
     def test_from_attribute_event_reconstructs_proxy_state(self):
-        state, form_class_path = GlueModelInstanceProxy._build_state(self.gorilla)
+        state, form_class_path, included_field_names = GlueModelInstanceProxy._build_state(self.gorilla)
         proxy = GlueModelInstanceProxy(name='gorilla', namespace='model', access=GlueAccess.VIEW, state=state)
         proxy._form_class_path = form_class_path
+        proxy._policy_included_field_names = included_field_names
         request = RequestFactory().get('/')
         request.session = MockSession(session_key='session-1')
         proxy._register_with_request(request)

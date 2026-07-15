@@ -131,8 +131,9 @@ class BoundAttributeDecoratorProxyRegistrationTestCase(TestCase):
         gorilla = Gorilla.objects.create(
             name='Test', description='Test', age=10, weight=200.0, height=1.5
         )
-        state, _ = GlueModelInstanceProxy._build_state(gorilla)
+        state, _, included_field_names = GlueModelInstanceProxy._build_state(gorilla)
         proxy = GlueModelInstanceProxy(name='test', namespace='model', access=GlueAccess.VIEW, state=state)
+        proxy._policy_included_field_names = included_field_names
 
         bound_attributes = proxy.discover_bound_attributes()
         binding_names = [b.name for b in bound_attributes.values()]
@@ -150,8 +151,9 @@ class BoundAttributeDecoratorProxyRegistrationTestCase(TestCase):
         gorilla = Gorilla.objects.create(
             name='Test', description='Test', age=10, weight=200.0, height=1.5
         )
-        state, _ = GlueModelInstanceProxy._build_state(gorilla)
+        state, _, included_field_names = GlueModelInstanceProxy._build_state(gorilla)
         proxy = GlueModelInstanceProxy(name='test', namespace='model', access=GlueAccess.VIEW, state=state)
+        proxy._policy_included_field_names = included_field_names
 
         bound_attributes = proxy.discover_bound_attributes()
 
@@ -171,8 +173,9 @@ class BoundAttributeDecoratorProxyRegistrationTestCase(TestCase):
         gorilla = Gorilla.objects.create(
             name='Test', description='Test', age=10, weight=200.0, height=1.5
         )
-        state, _ = GlueModelInstanceProxy._build_state(gorilla)
+        state, _, included_field_names = GlueModelInstanceProxy._build_state(gorilla)
         proxy = GlueModelInstanceProxy(name='test', namespace='model', access=GlueAccess.VIEW, state=state)
+        proxy._policy_included_field_names = included_field_names
 
         bound_attributes = proxy.discover_bound_attributes()
 

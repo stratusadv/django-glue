@@ -7,15 +7,19 @@ from test_project.gorilla.models import Gorilla, Skill
 
 
 def make_model_proxy(model, access=GlueAccess.VIEW):
-    state, _ = GlueModelInstanceProxy._build_state(model)
-    return GlueModelInstanceProxy(name='gorilla', namespace='model', access=access, state=state)
+    state, _, included_field_names = GlueModelInstanceProxy._build_state(model)
+    proxy = GlueModelInstanceProxy(name='gorilla', namespace='model', access=access, state=state)
+    proxy._policy_included_field_names = included_field_names
+    return proxy
 
 
 def make_queryset_proxy(queryset, access=GlueAccess.VIEW):
     model_instance = queryset.model()
-    state, _ = GlueQuerySetProxy._build_state(model_instance)
+    state, _, included_field_names = GlueQuerySetProxy._build_state(model_instance)
     state.queryset = queryset
-    return GlueQuerySetProxy(name='gorillas', namespace='querySet', access=access, state=state)
+    proxy = GlueQuerySetProxy(name='gorillas', namespace='querySet', access=access, state=state)
+    proxy._policy_included_field_names = included_field_names
+    return proxy
 
 
 class ForeignKeyChoicesTestCase(TestCase):

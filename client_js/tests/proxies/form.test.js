@@ -36,6 +36,88 @@ describe('GlueFormProxy', () => {
         expect(proxy._loaded).toBe(true);
     });
 
+    it('parses DateField and DateTimeField values when constructed', () => {
+        const policy = createFormPolicy({
+            subject_details: {
+                included_fields: {
+                    birthday: {type: 'DateField', label: 'Birthday'},
+                    created_at: {type: 'DateTimeField', label: 'Created at'},
+                    starts_at: {type: 'TimeField', label: 'Starts at'},
+                    name: {type: 'CharField', label: 'Name'},
+                },
+            },
+        });
+        const proxy = makeForm({
+            policy,
+            state: createState({
+                birthday: '2026-07-14',
+                created_at: '2026-07-14T12:34:56.000Z',
+                starts_at: '12:34:56',
+                name: 'Ada',
+            }),
+        });
+
+        expect(proxy.birthday).toBeInstanceOf(Date);
+        expect(proxy.birthday.getFullYear()).toBe(2026);
+        expect(proxy.birthday.getMonth()).toBe(6);
+        expect(proxy.birthday.getDate()).toBe(14);
+        expect(proxy.created_at).toBeInstanceOf(Date);
+        expect(proxy.created_at.toISOString()).toBe('2026-07-14T12:34:56.000Z');
+        expect(proxy.starts_at).toBe('12:34:56');
+        expect(proxy.name).toBe('Ada');
+    });
+
+    it('leaves null and empty date values unchanged', () => {
+        const policy = createFormPolicy({
+            subject_details: {
+                included_fields: {
+                    birthday: {type: 'DateField', label: 'Birthday'},
+                    created_at: {type: 'DateTimeField', label: 'Created at'},
+                },
+            },
+        });
+        const proxy = makeForm({
+            policy,
+            state: createState({
+                birthday: '',
+                created_at: null,
+            }),
+        });
+
+        expect(proxy.birthday).toBe('');
+        expect(proxy.created_at).toBeNull();
+    });
+
+    it('parses date values after event response refreshes', () => {
+        const policy = createFormPolicy({
+            subject_details: {
+                included_fields: {
+                    created_at: {type: 'DateTimeField', label: 'Created at'},
+                },
+            },
+        });
+        const proxy = makeForm({
+            policy,
+            state: createState({created_at: '2026-07-14T12:34:56.000Z'}),
+        });
+
+        proxy._handleEventResponse(
+            'GlueFormProxy.save',
+            null,
+            {
+                result: null,
+                state: {
+                    instance_data: {created_at: '2026-07-15T01:02:03.000Z'},
+                    errors: {},
+                },
+            },
+        );
+
+        expect(proxy.created_at).toBeInstanceOf(Date);
+        expect(proxy.created_at.toISOString()).toBe('2026-07-15T01:02:03.000Z');
+        expect(proxy.$fields.created_at.value).toBe(proxy.created_at);
+    });
+
     it('reports validation errors from state', () => {
         const proxy = makeForm({
             state: {

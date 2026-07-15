@@ -49,6 +49,28 @@ class GlueModelInstanceProxyBoundAttributesTestCase(TestCase):
 
         self.assertEqual(set(result), {'name', 'age'})
 
+    def test_get_includes_default_non_editable_fields(self):
+        proxy = make_model_proxy(self.gorilla)
+
+        result = proxy.get(request=None)
+        fields = proxy._custom_policy_details['included_fields']
+        state_data = proxy.serialize_state()['instance_data']
+
+        self.assertEqual(result['created_at'], self.gorilla.created_at)
+        self.assertEqual(result['updated_at'], self.gorilla.updated_at)
+        self.assertIn('T', state_data['created_at'])
+        self.assertIn('created_at', fields)
+        self.assertFalse(fields['created_at']['editable'])
+        self.assertTrue(fields['created_at']['disabled'])
+
+    def test_non_editable_fields_do_not_join_generated_model_form(self):
+        proxy = make_model_proxy(self.gorilla, fields=['name', 'created_at'])
+
+        result = proxy.get(request=None)
+
+        self.assertEqual(set(result), {'name', 'created_at'})
+        self.assertEqual(list(proxy.state.form.fields), ['name'])
+
     def test_get_respects_exclude_filter(self):
         proxy = make_model_proxy(self.gorilla, exclude=['description', 'age'])
 

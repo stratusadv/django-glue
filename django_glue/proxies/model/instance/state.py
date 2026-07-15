@@ -25,13 +25,13 @@ class GlueModelInstanceProxyState(GlueFormProxyState):
         super().__init__(form)
         self.model = model
 
-    def serialize(self) -> dict:
-        from django.forms import model_to_dict  # noqa: PLC0415
+    def serialize(self, field_names: list[str] | None = None) -> dict:
         from django.db.models.fields.files import FieldFile  # noqa: PLC0415
+        from django_glue.proxies.model.proxy import BaseGlueModelProxy  # noqa: PLC0415
 
-        instance_data = model_to_dict(
-            instance=self.model,
-            fields=[f for f in self.form.fields if f in self.form.fields],
+        instance_data = BaseGlueModelProxy._serialize_model_instance(
+            self.model,
+            field_names or list(self.form.fields),
         )
         
         # Serialize FieldFile objects (e.g., ImageFieldFile) as browser-friendly
@@ -75,7 +75,7 @@ class GlueModelInstanceProxyState(GlueFormProxyState):
         else:
             form_class = modelform_factory(
                 model_class,
-                fields=list(subject_details.included_fields.keys()),
+                fields=cls._editable_model_field_names_from_policy_details(subject_details),
             )
 
         return form_class
@@ -84,3 +84,16 @@ class GlueModelInstanceProxyState(GlueFormProxyState):
     def deserialize(cls, event: BoundProxyAttributeEvent) -> GlueModelInstanceProxyState:
         form = cls._build_form_instance_from_event(event)
         return cls(model=form.instance, form=form)
+
+    @classmethod
+    def _editable_model_field_names_from_policy_details(
+        cls,
+        subject_details: ProxyPolicySubjectDetails,
+    ) -> list[str]:
+        model_class = get_attr_from_path_string(subject_details.model_class_path)
+        included_field_names = list(subject_details.included_fields.keys())
+        return [
+            field_name
+            for field_name in included_field_names
+            if model_class._meta.get_field(field_name).editable
+        ]

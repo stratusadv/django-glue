@@ -28,10 +28,15 @@ class GlueQuerySetProxyState(GlueFormProxyState):
         self.instance_pk = instance_pk
         self.list_data: list[dict[str, Any]] | None = None
 
-    def serialize(self) -> dict:
+    def serialize(self, field_names: list[str] | None = None) -> dict:
+        from django_glue.proxies.model.proxy import BaseGlueModelProxy  # noqa: PLC0415
+
         return {
             'namespace': self.namespace,
-            'instance_data': self.form.data or self.form.initial,
+            'instance_data': BaseGlueModelProxy._serialize_model_instance(
+                self.model,
+                field_names or list(self.form.fields),
+            ),
             'errors': dict(self.form.errors),
             'instance_pk': self.instance_pk,
             'list_data': self.list_data,
@@ -49,9 +54,14 @@ class GlueQuerySetProxyState(GlueFormProxyState):
         if subject_details.form_class_path:
             form_class = get_attr_from_path_string(subject_details.form_class_path)
         else:
+            from django_glue.proxies.model.proxy import BaseGlueModelProxy  # noqa: PLC0415
+
             form_class = modelform_factory(
                 model_class,
-                fields=list(subject_details.included_fields.keys()),
+                fields=BaseGlueModelProxy._editable_model_field_names(
+                    model_class,
+                    list(subject_details.included_fields.keys()),
+                ),
             )
 
         state_data = event.proxy_state

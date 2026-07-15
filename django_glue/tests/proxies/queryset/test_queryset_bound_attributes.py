@@ -44,6 +44,21 @@ class GlueQuerySetProxyBoundAttributesTestCase(TestCase):
         self.assertEqual(len(proxy.state.list_data), 3)
         self.assertTrue(all('__policy__' in item for item in proxy.state.list_data))
 
+    def test_query_with_params_includes_default_non_editable_fields(self):
+        proxy = make_queryset_proxy(Gorilla.objects.filter(pk=self.gorilla1.pk))
+
+        proxy.query_with_params(request=None, filter=None, order_by=None, slice=None)
+
+        item = proxy.state.list_data[0]
+        fields = proxy._custom_policy_details['included_fields']
+        child_fields = item['__policy__']['subject_details']['included_fields']
+
+        self.assertEqual(item['created_at'], self.gorilla1.created_at)
+        self.assertEqual(item['updated_at'], self.gorilla1.updated_at)
+        self.assertIn('created_at', fields)
+        self.assertIn('created_at', child_fields)
+        self.assertFalse(fields['created_at']['editable'])
+
     def test_query_with_params_serializes_m2m_values_as_choice_objects(self):
         skill = Skill.objects.create(name='Grappling')
         self.gorilla1.skills.add(skill)

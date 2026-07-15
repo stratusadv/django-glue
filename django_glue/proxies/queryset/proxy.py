@@ -42,10 +42,16 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
     ) -> None:
         model_class = target.model
         model_instance = model_class()
-        state, form_class_path = cls._build_state(model_instance, fields, exclude, form_class)
+        state, form_class_path, included_field_names = cls._build_state(
+            model_instance,
+            fields,
+            exclude,
+            form_class,
+        )
         state.queryset = target
         proxy = cls(name=name, namespace=namespace, access=access, state=state)
         proxy._form_class_path = form_class_path
+        proxy._policy_included_field_names = included_field_names
         proxy._register_with_request(request)
 
     @property
@@ -227,12 +233,15 @@ class GlueQuerySetProxy(BaseGlueModelProxy):
             model=self.state.model,
             form=self.state.form,
         )
-        return GlueModelInstanceProxy(
+        proxy = GlueModelInstanceProxy(
             name=self.name,
             access=self.access,
             state=model_state,
             namespace='model',
         )
+        proxy.policy = getattr(self, 'policy', None)
+        proxy._policy_included_field_names = self._included_field_names
+        return proxy
 
     @Attribute(access=GlueAccess.VIEW)
     def get(self, request: HttpRequest) -> dict:

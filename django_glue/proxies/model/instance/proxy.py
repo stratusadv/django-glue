@@ -30,7 +30,8 @@ class GlueModelInstanceProxy(BaseGlueModelProxy):
         exclude: Sequence[str] = (),
         form_class: type[ModelForm] | None = None,
     ) -> None:
-        state, form_class_path = cls._build_state(target, fields, exclude, form_class)
+        state, form_class_path, included_field_names = cls._build_state(target, fields, exclude, form_class)
         proxy = cls(name=name, namespace=namespace, access=access, state=state)
         proxy._form_class_path = form_class_path
+        proxy._policy_included_field_names = included_field_names
         proxy._register_with_request(request)

@@ -56,12 +56,14 @@ class BaseGlueProxy(ABC):
         self.access = access
         self.state = state
         self.session_id: str | None = None
+        self.policy = None
 
     @classmethod
     def _from_attribute_event(cls, event: BoundProxyAttributeEvent) -> Self:
         state = cls._state_class.deserialize(event)
         proxy = cls(event.policy.name, event.policy.namespace, event.policy.access, state)
         proxy.session_id = event.policy.session_id
+        proxy.policy = event.policy
         return proxy
 
     @classmethod
@@ -94,7 +96,7 @@ class BaseGlueProxy(ABC):
         self.session_id = request.session.session_key
 
         request.__dict__[DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY][self.name] = {
-            'state': self.state.serialize() if self.state else {},
+            'state': self.serialize_state(),
             'policy': ProxyPolicy.new_signed_policy({
                 'session_id': self.session_id,
                 'name': self.name,
@@ -106,6 +108,9 @@ class BaseGlueProxy(ABC):
                 },
             }).model_dump(),
         }
+
+    def serialize_state(self) -> dict:
+        return self.state.serialize() if self.state else {}
 
     # --- Discovery for attributes that are bound directly on the target classes ---
     @property
