@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any, Sequence, TYPE_CHECKING
 
 from django.forms import modelform_factory
@@ -42,7 +43,7 @@ class ModelGlue(BaseGlue):
         self.exclude = tuple(exclude)
         self.form_class = form_class
 
-    @property
+    @cached_property
     def identity(self) -> dict[str, Any]:
         instance = self.instance
         return {
@@ -51,7 +52,7 @@ class ModelGlue(BaseGlue):
             'pk_field_name': instance._meta.pk.name,
         }
 
-    @property
+    @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         attributes = {
             field_name: DjangoModelFieldGlueAttribute(
@@ -81,7 +82,7 @@ class ModelGlue(BaseGlue):
             data[field_name] = self.attributes[field_name].get_value()
         return {'instance_data': data, 'errors': {}}
 
-    @property
+    @cached_property
     def metadata(self) -> GlueMetadata:
         fields: dict[str, Any] = {}
         for field_name in self.get_field_names():
@@ -147,6 +148,10 @@ class ModelGlue(BaseGlue):
         if form.is_valid():
             form.save()
         return form
+
+    @Attribute(access=GlueAccess.VIEW)
+    def load(self) -> dict[str, Any]:
+        return {'state': self.state}
 
     @Attribute(access=GlueAccess.CHANGE)
     def save(

@@ -32,10 +32,10 @@ glue_object_resolver_registry = GlueObjectResolverRegistry()
 
 
 def _register_builtins() -> None:
-    from django_glue.glue.django.form.object import FormGlue  # noqa: PLC0415
-    from django_glue.glue.django.model.object import ModelGlue  # noqa: PLC0415
-    from django_glue.glue.django.queryset import QuerySetGlue  # noqa: PLC0415
-    from django_glue.glue.django.template import TemplateGlue  # noqa: PLC0415
+    from django_glue.glue.objects.django.form.object import FormGlue  # noqa: PLC0415
+    from django_glue.glue.objects.django.model.object import ModelGlue  # noqa: PLC0415
+    from django_glue.glue.objects.django.queryset import QuerySetGlue  # noqa: PLC0415
+    from django_glue.glue.objects.django.template import TemplateGlue  # noqa: PLC0415
     from django_glue.glue.function import FunctionGlue  # noqa: PLC0415
 
     glue_object_resolver_registry.register_glue_object_class(ModelGlue)

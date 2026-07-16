@@ -352,7 +352,6 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         self.assertEqual(policy.namespace, 'querySet')
         self.assertIn('query_with_params', policy.attributes)
-        self.assertIn('new', policy.attributes)
         self.assertEqual(metadata['fields']['skills']['type'], 'ManyToManyField')
         self.assertEqual(list(resolved.queryset), [gorilla])
 
@@ -432,3 +431,130 @@ class GlueObjectResolverRegistryTestCase(TestCase):
 
 def sample_function(amount: int, tax: float = 0.0):
     return amount + tax
+
+
+class LazyLoadingTestCase(TestCase):
+    """Tests for lazy loading behavior - state is not included in manifests."""
+
+    def test_model_manifest_does_not_include_state(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
+
+        manifest = glue_object.manifest.model_dump()
+
+        self.assertIn('policy', manifest)
+        self.assertIn('metadata', manifest)
+        self.assertNotIn('state', manifest)
+
+    def test_model_load_attribute_returns_state(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
+
+        result = glue_object.load()
+
+        self.assertIn('state', result)
+        self.assertEqual(result['state']['instance_data']['name'], 'Koko')
+
+    def test_form_manifest_does_not_include_state(self):
+        form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
+        glue_object = FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE))
+
+        manifest = glue_object.manifest.model_dump()
+
+        self.assertIn('policy', manifest)
+        self.assertIn('metadata', manifest)
+        self.assertNotIn('state', manifest)
+
+    def test_form_load_attribute_returns_state(self):
+        form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
+        glue_object = FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE))
+
+        result = glue_object.load()
+
+        self.assertIn('state', result)
+        self.assertIn('instance_data', result['state'])
+
+    def test_queryset_state_returns_empty_dict(self):
+        Gorilla.objects.create(name='Koko')
+        queryset = Gorilla.objects.all()
+        glue_object = QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name'])
+
+        state = glue_object.state
+
+        self.assertEqual(state, {})
+
+    def test_queryset_query_with_params_returns_items_with_state(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        queryset = Gorilla.objects.all()
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            queryset,
+            request=request,
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['name'],
+        )
+        policy = glue_object.policy
+
+        result = glue_object.call_attribute(
+            state=None,
+            attribute_name='query_with_params',
+            kwargs={},
+            policy=policy,
+            request=request,
+        )
+
+        self.assertIn('items', result)
+        self.assertEqual(len(result['items']), 1)
+        item = result['items'][0]
+        self.assertIn('state', item)
+        self.assertEqual(item['state']['instance_data']['name'], 'Koko')
+
+
+class CachedPropertyTestCase(TestCase):
+    """Tests for cached_property behavior on Glue objects."""
+
+    def test_model_attributes_are_cached(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
+
+        attrs1 = glue_object.attributes
+        attrs2 = glue_object.attributes
+
+        self.assertIs(attrs1, attrs2)
+
+    def test_model_identity_is_cached(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
+
+        id1 = glue_object.identity
+        id2 = glue_object.identity
+
+        self.assertIs(id1, id2)
+
+    def test_model_metadata_is_cached(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
+
+        meta1 = glue_object.metadata
+        meta2 = glue_object.metadata
+
+        self.assertIs(meta1, meta2)
+
+    def test_form_attributes_are_cached(self):
+        form = ContactForm()
+        glue_object = FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE))
+
+        attrs1 = glue_object.attributes
+        attrs2 = glue_object.attributes
+
+        self.assertIs(attrs1, attrs2)
+
+    def test_queryset_attributes_are_cached(self):
+        queryset = Gorilla.objects.all()
+        glue_object = QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name'])
+
+        attrs1 = glue_object.attributes
+        attrs2 = glue_object.attributes
+
+        self.assertIs(attrs1, attrs2)

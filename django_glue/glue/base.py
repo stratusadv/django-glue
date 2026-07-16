@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from functools import cached_property
 from typing import Any, TYPE_CHECKING
 
 from django.http import HttpRequest
@@ -49,11 +50,10 @@ class BaseGlue(ABC):
     def manifest(self) -> GlueManifest:
         return GlueManifest(
             policy=self.policy,
-            state=self.state, # TODO: Defer loading state
             metadata=self.metadata,
         )
 
-    @property
+    @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         """Runtime attributes exposed by this object."""
         return discover_glue_attributes(self)
@@ -63,7 +63,6 @@ class BaseGlue(ABC):
     def identity(self) -> dict[str, Any]:
         """Object-specific target identity for the policy."""
         raise NotImplementedError
-
 
     @property
     @abstractmethod

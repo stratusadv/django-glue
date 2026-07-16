@@ -31,7 +31,7 @@ class GluePolicy(BaseModel):
     def from_glue_object(
         cls,
         *,
-        glue_object: 'BaseGlue',
+        glue_object: BaseGlue,
     ) -> Self:
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,

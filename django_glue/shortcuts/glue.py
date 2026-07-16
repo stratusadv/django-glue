@@ -6,10 +6,10 @@ from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.django.form.object import FormGlue
-from django_glue.glue.django.model.object import ModelGlue
-from django_glue.glue.django.queryset import QuerySetGlue
-from django_glue.glue.django.template import TemplateGlue
+from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.glue.objects.django.queryset import QuerySetGlue
+from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.attributes import Attribute
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY

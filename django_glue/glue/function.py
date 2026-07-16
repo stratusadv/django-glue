@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from functools import cached_property
 from typing import Any, Callable
 
 from django.http import HttpRequest
@@ -39,7 +40,7 @@ class FunctionGlue(BaseGlue):
     def state(self) -> dict[str, Any]:
         return {'function_path': self.target}
 
-    @property
+    @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
             'namespace': self.namespace,
@@ -79,7 +80,7 @@ class FunctionGlue(BaseGlue):
                 'type': str(param.annotation) if param.annotation != inspect.Parameter.empty else None,
             }
             for param_name, param in sig.parameters.items()
-            if param.namespace in (
+            if param.kind in (
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 inspect.Parameter.KEYWORD_ONLY,
             )

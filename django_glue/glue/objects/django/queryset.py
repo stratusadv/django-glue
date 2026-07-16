@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import base64
 import pickle
+from functools import cached_property
 from typing import Any, Sequence, TYPE_CHECKING
 
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute, discover_glue_attributes
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.django.model.object import ModelGlue
+from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.metadata import GlueMetadata
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
@@ -40,7 +41,7 @@ class QuerySetGlue(BaseGlue):
         self.fields = tuple(fields)
         self.exclude = tuple(exclude)
 
-    @property
+    @cached_property
     def identity(self) -> dict[str, Any]:
         return {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
@@ -56,7 +57,7 @@ class QuerySetGlue(BaseGlue):
         excluded = set(self.exclude)
         return [name for name in names if name not in excluded]
 
-    @property
+    @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         model_instance = self.queryset.model()
         model_object = ModelGlue(
@@ -77,15 +78,9 @@ class QuerySetGlue(BaseGlue):
 
     @property
     def state(self) -> dict[str, Any]:
-        return {
-            'items': [
-                self._build_child_model_payload(instance)
-                for instance in self.queryset
-            ],
-            'query': {},
-        }
+        return {}
 
-    @property
+    @cached_property
     def metadata(self) -> GlueMetadata:
         model_instance = self.queryset.model()
         return ModelGlue(
@@ -155,19 +150,9 @@ class QuerySetGlue(BaseGlue):
             queryset = queryset[slice(slice_data.get('start'), slice_data.get('stop'))]
 
         self.queryset = queryset
-        return {'items': self.state['items']}
 
-    @Attribute(access=GlueAccess.VIEW)
-    def new(self, policy: GluePolicy) -> dict[str, Any]:
-        model_class = get_attr_from_path_string(policy.identity['model_class_path'])
-        instance = model_class()
-        data = {policy.identity.get('pk_field_name', 'id'): None}
-        for field_name in self._field_names_from_policy(policy, model_class):
-            if field_name in data:
-                continue
-            field = model_class._meta.get_field(field_name)
-            data[field_name] = [] if field.is_relation else getattr(instance, field_name)
-        return data
+        items = [self._build_child_model_payload(instance) for instance in queryset]
+        return {'items': items, 'query': {}}
 
     def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
         child_name = f'{self.policy.name}.{instance.pk}'
@@ -178,4 +163,8 @@ class QuerySetGlue(BaseGlue):
             access=self.policy.access,
             fields=self._field_names_from_policy(self.policy, instance.__class__),
         )
-        return child_object.manifest.model_dump()
+
+        return {
+            **child_object.manifest.model_dump(),
+            'state': child_object.state,
+        }

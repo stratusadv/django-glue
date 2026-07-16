@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any
 
 from django.http import HttpRequest
@@ -44,7 +45,7 @@ class TemplateGlue(BaseGlue):
             'context_data': self.initial_context_data,
         }
 
-    @property
+    @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
             'namespace': self.namespace,

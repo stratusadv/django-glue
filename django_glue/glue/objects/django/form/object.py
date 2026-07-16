@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Any
 
 from django import forms
@@ -29,14 +30,14 @@ class FormGlue(BaseGlue):
         super().__init__(request=request, name=name, access=access)
         self.form = form
 
-    @property
+    @cached_property
     def identity(self) -> dict[str, Any]:
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
         }
 
-    @property
+    @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         attributes = {
             name: DjangoFormFieldGlue(
@@ -57,7 +58,7 @@ class FormGlue(BaseGlue):
             'errors': dict(self.form.errors),
         }
 
-    @property
+    @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
             'namespace': self.namespace,
@@ -83,6 +84,10 @@ class FormGlue(BaseGlue):
         )
         glue_object.policy = policy
         return glue_object
+
+    @Attribute(access=GlueAccess.VIEW)
+    def load(self) -> dict[str, Any]:
+        return {'state': self.state}
 
     @Attribute(access=GlueAccess.CHANGE)
     def validate(self, state: dict[str, Any], request: HttpRequest) -> dict[str, Any]:
