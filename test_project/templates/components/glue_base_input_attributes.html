@@ -1,6 +1,6 @@
 name="{{ glue_field }}.name"
 {% if not exclude_x_model %}
-x-model="{{ glue_field }}.value"
+x-model="{{ glue_field }}"
 {% endif %}
 {% if not exclude_class %}
 class="form-{{ form_class_type|default:'control' }} form-select-{{ size|default:'sm' }}{% if input_class %} {{ input_class }}{% endif %}"

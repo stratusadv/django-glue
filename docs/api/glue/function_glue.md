@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.proxies.function.proxy.GlueFunctionProxy
+::: django_glue.glue.function.PythonFunctionGlue

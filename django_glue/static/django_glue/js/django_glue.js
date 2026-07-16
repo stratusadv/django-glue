@@ -1,746 +1,115 @@
 (() => {
-  // client_js/src/proxies/base.js
-  class BaseGlueProxy {
-    _loaded = false;
-    _loading = false;
-    constructor({ http, name, policy, state = null, attributes = null, namespace = "base" }) {
-      this.http = http;
-      this._namespace = namespace;
-      this._name = name;
-      this._policy = policy;
-      this._state = state;
-      this._attributes = attributes ? attributes : policy.bound_attributes;
-      this._defineAttributeProperties();
-      this._listeners = {
-        before: {},
-        after: {},
-        error: {}
-      };
-      this._onMessage = null;
-    }
-    onMessage(callback) {
-      this._onMessage = callback;
-      return this;
-    }
-    addListener(attributeName, callback, type = "after") {
-      if (!this._listeners[type]) {
-        throw new Error(`Invalid listener type: _${type}. Use 'before', 'after', or 'error'.`);
-      }
-      if (!this._listeners[type][attributeName]) {
-        this._listeners[type][attributeName] = [];
-      }
-      this._listeners[type][attributeName].push(callback);
-      return this;
-    }
-    removeListener(attributeName, callback, type = "after") {
-      const listeners = this._listeners[type]?.[attributeName];
-      if (listeners) {
-        const index = listeners.indexOf(callback);
-        if (index > -1) {
-          listeners.splice(index, 1);
-        }
-      }
-      return this;
-    }
-    clearListeners() {
-      this._listeners = {};
-      return this;
-    }
-    async emitListeners(type, attributeName, event) {
-      const listeners = this._listeners?.[type]?.[attributeName] || [];
-      for (const callback of listeners) {
-        await callback(event);
-      }
-    }
-    async _processAttributeEvent(attributeName, eventKwargs = null) {
-      const shortName = attributeName.split(".").pop();
-      const event = {
-        attribute: attributeName,
-        proxy: this,
-        eventKwargs
-      };
-      await this.emitListeners("before", shortName, event);
-      this._loading = true;
-      try {
-        const response = await this.http.sendAttributeEventRequest({
-          name: this._name,
-          attribute: attributeName,
-          eventKwargs,
-          policy: this._policy,
-          state: this._state
-        });
-        const responseData = response.data;
-        this._handleEventResponse(attributeName, eventKwargs, responseData);
-        await this._handleMessages(responseData, attributeName, eventKwargs);
-        const data = responseData.result ?? {};
-        event.result = data;
-        await this.emitListeners("after", shortName, event);
-        return data;
-      } catch (err) {
-        event.error = err;
-        await this._handleExpiry(err, attributeName, eventKwargs);
-        await this.emitListeners("error", shortName, event);
-        await this._handleError(err, attributeName, eventKwargs);
-        throw err;
-      } finally {
-        this._loading = false;
-      }
-    }
-    async _handleError(error, attributeName, eventKwargs) {
-      const handler = globalThis.Glue?._onError;
-      if (!handler) {
-        return;
-      }
-      await handler({
-        error,
-        proxy: this,
-        attribute: attributeName,
-        eventKwargs
-      });
-    }
-    async _handleExpiry(error, attributeName, eventKwargs) {
-      if (!this._isExpiryError(error)) {
-        return;
-      }
-      const handler = globalThis.Glue?._onExpiry || this._defaultExpiryHandler;
-      await handler({
-        error,
-        proxy: this,
-        attribute: attributeName,
-        eventKwargs
-      });
-    }
-    _isExpiryError(error) {
-      return error?.code === "proxy_policy_expired";
-    }
-    _defaultExpiryHandler() {
-      globalThis.alert?.("Your session has expired. Please refresh the page.");
-    }
-    async _handleMessages(response, attributeName, eventKwargs) {
-      const messages = response?.messages || [];
-      if (!Array.isArray(messages) || messages.length === 0) {
-        return;
-      }
-      const handler = this._onMessage || globalThis.Glue?._onMessage;
-      if (!handler) {
-        return;
-      }
-      await handler({
-        messages,
-        response,
-        proxy: this,
-        attribute: attributeName,
-        eventKwargs
-      });
-    }
-    _handleEventResponse(attributeName, eventKwargs, response) {
-      if (response.policy) {
-        this._policy = response.policy;
-      }
-      if (this._state) {
-        if (this._state.instance_data && response.state.instance_data) {
-          for (const key of Object.keys(this._state.instance_data)) {
-            if (!(key in response.state.instance_data)) {
-              delete this._state.instance_data[key];
-            }
-          }
-          for (const [key, value] of Object.entries(response.state.instance_data)) {
-            this._state.instance_data[key] = value;
-          }
-          for (const [key, value] of Object.entries(response.state)) {
-            if (key !== "instance_data") {
-              this._state[key] = value;
-            }
-          }
-        } else {
-          Object.assign(this._state, response.state);
-        }
-      } else {
-        this._state = response.state;
-      }
-    }
-    _defineAttributeProperties() {
-      Object.entries(this._attributes).forEach(([attributePath, attribute]) => {
-        const proxy = this;
-        let target = proxy;
-        const attributePartsParts = attributePath.split(".");
-        for (let i = 1;i < attributePartsParts.length; i++) {
-          const attributePart = attributePartsParts[i];
-          if (i === attributePartsParts.length - 1) {
-            target[attributePart] = async function(eventKwargs = null) {
-              return await this._processAttributeEvent(attributePath, eventKwargs);
-            };
-          } else {
-            target[attributePart] = target;
-            target = target[attributePart];
-          }
-        }
-      });
-    }
-  }
-  var base_default = BaseGlueProxy;
-
-  // client_js/src/proxies/form.js
-  class GlueFormProxy extends base_default {
-    static choicesCache = new Map;
-    constructor({ http, name, policy, state, attributes = null, namespace = "form" }) {
-      super({ http, name, policy, state, attributes, namespace });
-      this._pkFieldName = policy.subject_details?.pk_field_name || "id";
-      this._defineFields();
-      this.loadInstanceData();
-      this._refreshFieldErrorAttributes();
-    }
-    loadInstanceData() {
-      if (this._state?.instance_data) {
-        this._loaded = true;
-        for (const fieldName of Object.keys(this._fields)) {
-          const value = this._parseFieldValue(this._fields[fieldName], this._state.instance_data[fieldName]);
-          this[fieldName] = value;
-          this._fields[fieldName].value = value;
-        }
-      }
-    }
-    _parseFieldValue(field, value) {
-      if (value === null || value === undefined || value === "") {
-        return value;
-      }
-      if (value instanceof Date) {
-        return value;
-      }
-      if (field.type === "DateField") {
-        return new Date(`${value}T00:00:00`);
-      }
-      if (field.type === "DateTimeField") {
-        return new Date(value);
-      }
-      return value;
-    }
-    _defineModelChoiceField(fieldName, field) {
-      const cacheKey = this._getChoicesCacheKey(fieldName, field);
-      const cached = GlueFormProxy.choicesCache.get(cacheKey);
-      field.__glue__choicesCacheKey = cacheKey;
-      field.__glue__choicesLoaded = Boolean(cached?.loadedFields?.has("__str__"));
-      field.__glue__loadingChoices = Boolean(cached?.promise && cached?.pendingFields?.has("__str__"));
-      field.__glue__choicesData = cached?.data || [];
-      const proxy = this;
-      Object.defineProperty(field, "choices", {
-        get: function() {
-          proxy._ensureFieldChoices(fieldName, this);
-          const cached2 = GlueFormProxy.choicesCache.get(this.__glue__choicesCacheKey);
-          return cached2?.data || this.__glue__choicesData;
-        },
-        enumerable: true,
-        configurable: true
-      });
-      field.buildChoices = function(...choiceFields) {
-        return proxy._buildFieldChoices(fieldName, this, choiceFields);
-      };
-      return field;
-    }
-    _getChoicesCacheKey(fieldName, field) {
-      const subject = this._policy.subject_details || {};
-      return field.choices_cache_key || [
-        subject.model_class_path,
-        subject.form_class_path,
-        field.choice_model_path,
-        fieldName
-      ].filter(Boolean).join(":") || `${field.type}:${fieldName}`;
-    }
-    _ensureFieldChoices(fieldName, field, choiceFields = []) {
-      const cacheKey = this._getChoicesCacheKey(fieldName, field);
-      const cached = this._getOrCreateChoicesCache(cacheKey, field);
-      const requiredFields = this._normalizeChoiceFields(choiceFields);
-      const missingFields = requiredFields.filter((choiceField) => !cached.loadedFields.has(choiceField));
-      if (missingFields.length === 0) {
-        this._applyCachedChoicesToField(field, cached);
-        return cached.promise || Promise.resolve(cached.data);
-      }
-      if (cached.promise) {
-        field.__glue__loadingChoices = true;
-        if (missingFields.every((choiceField) => cached.pendingFields.has(choiceField))) {
-          return cached.promise;
-        }
-        return cached.promise.then(() => this._ensureFieldChoices(fieldName, field, choiceFields));
-      }
-      field.__glue__loadingChoices = true;
-      missingFields.forEach((choiceField) => cached.pendingFields.add(choiceField));
-      const promise = this.foreign_key_choices({
-        field_name: fieldName,
-        choice_fields: missingFields.filter((choiceField) => !["pk", "__str__"].includes(choiceField))
-      }).then((result) => {
-        const choices = Array.isArray(result) ? result : [];
-        this._cacheFieldChoices(fieldName, choices, missingFields);
-        return cached.data;
-      }).finally(() => {
-        missingFields.forEach((choiceField) => cached.pendingFields.delete(choiceField));
-        cached.promise = null;
-        field.__glue__loadingChoices = false;
-      });
-      cached.promise = promise;
-      return promise;
-    }
-    _buildFieldChoices(fieldName, field, choiceFields = []) {
-      this._ensureFieldChoices(fieldName, field, choiceFields);
-      const cacheKey = this._getChoicesCacheKey(fieldName, field);
-      return GlueFormProxy.choicesCache.get(cacheKey)?.data || [];
-    }
-    _normalizeChoiceFields(choiceFields = []) {
-      return ["pk", "__str__", ...choiceFields].filter((choiceField, index, fields) => {
-        return choiceField && fields.indexOf(choiceField) === index;
-      });
-    }
-    _getOrCreateChoicesCache(cacheKey, field) {
-      let cached = GlueFormProxy.choicesCache.get(cacheKey);
-      if (!cached) {
-        cached = {
-          data: field.__glue__choicesData || [],
-          loadedFields: new Set,
-          pendingFields: new Set,
-          promise: null
-        };
-        GlueFormProxy.choicesCache.set(cacheKey, cached);
-      }
-      return cached;
-    }
-    _applyCachedChoicesToField(field, cached) {
-      field.__glue__choicesLoaded = cached.loadedFields.has("__str__");
-      field.__glue__loadingChoices = Boolean(cached.promise);
-      field.__glue__choicesData = cached.data;
-    }
-    _cacheFieldChoices(fieldName, choices, choiceFields = []) {
-      const field = this._fields[fieldName];
-      if (!field)
-        return;
-      const cacheKey = this._getChoicesCacheKey(fieldName, field);
-      const cached = this._getOrCreateChoicesCache(cacheKey, field);
-      if (Array.isArray(choices)) {
-        choices.forEach((choice) => this._mergeChoice(cached.data, choice));
-      }
-      this._normalizeChoiceFields(choiceFields).forEach((choiceField) => cached.loadedFields.add(choiceField));
-      this._applyCachedChoicesToField(field, cached);
-    }
-    _mergeChoice(choices, choice) {
-      if (!choice || typeof choice !== "object")
-        return;
-      const existing = choices.find((item) => item.pk === choice.pk);
-      if (existing) {
-        Object.assign(existing, choice);
-      } else {
-        choices.push(choice);
-      }
-    }
-    async _loadFieldChoices(fieldName, field) {
-      if (field.__glue__choicesLoaded || field.__glue__loadingChoices) {
-        return;
-      }
-      await this._ensureFieldChoices(fieldName, field);
-    }
-    _setFieldChoices(fieldName, choices, choiceFields = []) {
-      const field = this._fields[fieldName];
-      if (!field)
-        return;
-      this._cacheFieldChoices(fieldName, choices, choiceFields);
-    }
-    get pk() {
-      let pk = this._policy.subject_details.target_pk;
-      if (!pk) {
-        pk = this._state.instance_data?.[this._pkFieldName];
-      }
-      return pk;
-    }
-    _defineFieldNameProperty(fieldName, field) {
-      field = { ...field || {} };
-      if (field.type === "ModelMultipleChoiceField") {
-        if (!this._state.instance_data) {
-          this._state.instance_data = {};
-        }
-        if (this._state.instance_data[fieldName] === undefined || this._state.instance_data[fieldName] === null) {
-          this._state.instance_data[fieldName] = [];
-        }
-      }
-      if (["ModelChoiceField", "ModelMultipleChoiceField"].includes(field.type)) {
-        field = this._defineModelChoiceField(fieldName, field);
-      }
-      Object.defineProperty(this, fieldName, {
-        get: function() {
-          if (!this._loaded && !this._state.instance_data) {
-            if (!this._loading) {
-              this._loading = true;
-              this.load().then(() => {
-                this.loadInstanceData();
-                this._loading = false;
-              });
-            }
-          }
-          return this._state.instance_data[fieldName];
-        },
-        set: function(value) {
-          if (!this._state.instance_data) {
-            this._state.instance_data = {};
-          }
-          this._state.instance_data[fieldName] = value;
-        }
-      });
-      if (!field.hasOwnProperty("value")) {
-        Object.defineProperty(field, "value", {
-          get: function() {
-            return this._state.instance_data[fieldName];
-          }.bind(this),
-          set: function(val) {
-            if (!this._state.instance_data)
-              this._state.instance_data = {};
-            this._state.instance_data[fieldName] = val;
-          }.bind(this)
-        });
-      }
-      if (!field.hasOwnProperty("errors")) {
-        Object.defineProperty(field, "errors", {
-          get: function() {
-            return this._state.errors?.[fieldName];
-          }.bind(this),
-          enumerable: true,
-          configurable: true
-        });
-      }
-      field.hasErrors = false;
-      field.errorText = "";
-      this._fields[fieldName] = field;
-      this._fields[fieldName]["name"] = fieldName;
-    }
-    _defineFields() {
-      this._fields = {};
-      this._fields[this.pkFieldName] = this.pk;
-      Object.keys(this._fields).forEach((k) => delete this._fields[k]);
-      Object.entries(this._policy.subject_details.included_fields).forEach(([fieldName, field]) => {
-        if (!this.hasOwnProperty(fieldName)) {
-          this._defineFieldNameProperty(fieldName, field);
-        }
-      });
-      if (!this.hasOwnProperty("$fields")) {
-        Object.defineProperty(this, "$fields", {
-          get: function() {
-            return this._fields;
-          },
-          set: (value) => {
-            this._fields = value;
-          }
-        });
-      }
-    }
-    _refreshFieldErrorAttributes() {
-      Object.keys(this._fields).forEach((fieldName) => {
-        const field = this._fields[fieldName];
-        field.hasErrors = this._state?.errors?.[fieldName]?.length > 0;
-        field.errorText = this._state?.errors?.[fieldName]?.join(", ");
-      });
-    }
-    hasErrors(fieldName) {
-      if (fieldName) {
-        return Boolean(this._state?.errors?.[fieldName] && this._state.errors[fieldName].length > 0);
-      }
-      return Object.keys(this._state?.errors || {}).length > 0;
-    }
-    _handleEventResponse(attributeName, eventKwargs, response) {
-      super._handleEventResponse(attributeName, eventKwargs, response);
-      if (attributeName.endsWith("foreign_key_choices") && eventKwargs?.field_name) {
-        const fieldName = eventKwargs.field_name;
-        this._setFieldChoices(fieldName, response.result, eventKwargs.choice_fields || []);
-      }
-      this._refreshFieldErrorAttributes();
-      if (!this.hasErrors()) {
-        this.loadInstanceData();
-      }
-    }
-  }
-  var form_default = GlueFormProxy;
-
-  // client_js/src/proxies/model.js
-  var _keyCounter = 0;
-
-  class GlueModelProxy extends form_default {
-    constructor({
-      http,
-      name,
-      policy,
-      state,
-      attributes = null,
-      autoFetch = false,
-      parentQuerySet = null,
-      namespace = "model"
-    }) {
-      super({ http, name, policy, state, attributes, autoFetch, namespace });
-      if (this._state.instance_data) {
-        this._defineExtraFields();
-        this.loadInstanceData();
-      }
-      this.$key = `django-glue-${++_keyCounter}`;
-      this._parent = parentQuerySet;
-      this._pkFieldName = policy.subject_details?.pk_field_name || "id";
-    }
-    get pk() {
-      let pk = this._policy.subject_details.target_pk;
-      if (!pk) {
-        pk = this._state.instance_data?.[this._pkFieldName];
-      }
-      return pk;
-    }
-    _defineExtraFields() {
-      Object.keys(this._state.instance_data).forEach((fieldName) => {
-        if (!(fieldName in this)) {
-          this._defineFieldNameProperty(fieldName);
-        }
-      });
-    }
-    get _isNew() {
-      return !this.pk;
-    }
-    _handleEventResponse(attributeName, eventKwargs, response) {
-      super._handleEventResponse(attributeName, eventKwargs, response);
-      if (this._state.instance_data) {
-        this._defineExtraFields();
-        for (const fieldName of Object.keys(this._state.instance_data)) {
-          if (!(fieldName in this._fields)) {
-            this[fieldName] = this._state.instance_data[fieldName];
-          }
-        }
-      }
-      if (this._parent) {
-        this._parent.refresh();
-      }
-    }
-  }
-  var model_default = GlueModelProxy;
-
-  // client_js/src/proxies/queryset.js
-  class GlueQuerySetProxy extends base_default {
-    _items = [];
-    _queryParams = {};
-    _prevQueryParams = {};
-    constructor({ http, name, policy, state, attributes = null, namespace = "querySet" }) {
-      super({ http, name, policy, state, attributes, namespace });
-    }
-    *[Symbol.iterator]() {
-      yield* this._items;
-    }
-    buildChildModelProxy(item) {
-      const pkFieldName = this._policy.subject_details.pk_field_name || "id";
-      if (!item.__policy__) {
-        throw new Error(`Child proxy item missing __policy__ for pk ${item[pkFieldName]}`);
-      }
-      const childName = item.__policy__.name || `${this._name}__${item[pkFieldName]}`;
-      const querySetProxy = this;
-      const proxy = new model_default({
-        http: this.http,
-        name: childName,
-        policy: item.__policy__,
-        state: {
-          namespace: "model",
-          instance_data: item,
-          errors: {}
-        }
-      });
-      proxy.addListener("delete", async (event) => {
-        await this.emitListeners("after", "delete", event);
-        await this.refresh();
-      }, "after");
-      proxy.addListener("delete", async (event) => {
-        await this.emitListeners("error", "delete", event);
-      }, "error");
-      proxy.addListener("save", async (event) => {
-        await this.emitListeners("after", "save", event);
-        if (!event.proxy.hasErrors()) {
-          await this.refresh();
-        }
-      }, "after");
-      proxy.addListener("save", async (event) => {
-        await this.emitListeners("error", "save", event);
-      }, "error");
-      globalThis.Glue["model"][proxy._name] = proxy;
-      return proxy;
-    }
-    async queryWithParams(queryParams = null) {
-      if (queryParams) {
-        this._queryParams = queryParams;
-      }
-      if (!this._loaded || !this._isEqual(this._prevQueryParams, this._queryParams)) {
-        await this._processAttributeEvent("GlueQuerySetProxy.query_with_params", this._queryParams);
-        this._prevQueryParams = this._queryParams;
-        this._loaded = true;
-      }
-      return this._items;
-    }
-    async all() {
-      return await this.queryWithParams();
-    }
-    filter(filterParams) {
-      return this.addQueryParam("filter", filterParams);
-    }
-    orderBy(orderParams) {
-      return this.addQueryParam("order_by", orderParams);
-    }
-    sliceStart(idx) {
-      return this.addQueryParam("slice", { start: idx });
-    }
-    sliceEnd(idx) {
-      return this.addQueryParam("slice", { stop: idx });
-    }
-    slice(start = 0, stop = null) {
-      return this.addQueryParam("slice", { start, stop });
-    }
-    addQueryParam(type, params) {
-      this._queryParams[type] = params;
-      return this;
-    }
-    _isEqual(a, b) {
-      return JSON.stringify(a) === JSON.stringify(b);
-    }
-    async refresh() {
-      this._items = [];
-      this._loaded = false;
-      return this.queryWithParams();
-    }
-    get isEmpty() {
-      return this._loaded && this._items.length === 0;
-    }
-    get isLoaded() {
-      return this._loaded;
-    }
-    async prependNew() {
-      return this.pushNew("start");
-    }
-    async appendNew() {
-      return this.pushNew("end");
-    }
-    async pushNew(location = "start") {
-      const defaults = await this._processAttributeEvent("GlueQuerySetProxy.new");
-      const newObj = this.buildChildModelProxy(defaults);
-      if (location == "end") {
-        this._items = [...this._items, newObj];
-      } else if (location == "start") {
-        this._items = [newObj, ...this._items];
-      } else {
-        throw new Error('Invalid location. Use "start" or "end".');
-      }
-      return this._items;
-    }
-    _handleEventResponse(attributeName, eventKwargs, response) {
-      super._handleEventResponse(attributeName, eventKwargs, response);
-      if (this._state?.list_data) {
-        this._items = this._state.list_data.map((item) => this.buildChildModelProxy(item));
-      }
-    }
-  }
-  var queryset_default = GlueQuerySetProxy;
-
-  // client_js/src/proxies/template.js
-  class GlueTemplateProxy extends base_default {
-    static name = "template";
-    constructor({ http, name, policy, state = null, sharedPayload = {} }) {
-      super({ http, name, policy, state });
-      this._sharedPayload = sharedPayload;
-    }
-    async _renderHtml(payload = {}) {
-      const mergedPayload = {
-        ...this._sharedPayload,
-        ...payload
-      };
-      const response = await this.render_html(mergedPayload);
-      return response.html;
-    }
-    async renderInnerHtml(targetElement, payload = {}) {
-      targetElement.innerHTML = await this._renderHtml(payload);
-    }
-    async _renderInsertAdjacentHtml(targetElement, position, payload = {}) {
-      const html = await this._renderHtml(payload);
-      targetElement.insertAdjacentHTML(position, html);
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(targetElement, payload = {}) {
-      await this._renderInsertAdjacentHtml(targetElement, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(targetElement, payload = {}) {
-      await this._renderInsertAdjacentHtml(targetElement, "afterend", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(targetElement, payload = {}) {
-      await this._renderInsertAdjacentHtml(targetElement, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(targetElement, payload = {}) {
-      await this._renderInsertAdjacentHtml(targetElement, "afterbegin", payload);
-    }
-    async renderOuterHtml(targetElement, payload = {}) {
-      targetElement.outerHTML = await this._renderHtml(payload);
-    }
-  }
-  var template_default = GlueTemplateProxy;
-
-  // client_js/src/utils.js
-  function isObject(val) {
-    return Object.prototype.toString.call(val) === "[object Object]";
-  }
-
-  // client_js/src/proxies/function.js
-  class GlueFunctionProxy extends base_default {
-    constructor({ http, name, policy, namespace = "function" }) {
-      super({ http, name, policy, namespace });
-      this._params = policy.subject_details.params || [];
-    }
-    static create({ http, name, policy }) {
-      const instance = new GlueFunctionProxy({
-        http,
-        name,
-        policy
-      });
-      const fn = async function(kwargs = {}) {
-        if (!isObject(kwargs)) {
-          throw Error("Must pass glue function arguments as fields in an object.");
-        }
-        const payload = {};
-        instance._params.forEach((param) => {
-          if (param.name in kwargs) {
-            payload[param.name] = kwargs[param.name];
-          }
-        });
-        const response = await instance.execute(payload);
-        return response.result;
-      };
-      fn._name = name;
-      fn._policy = policy;
-      fn._params = instance._params;
-      fn.addListener = instance.addListener.bind(instance);
-      fn.removeListener = instance.removeListener.bind(instance);
-      fn.clearListeners = instance.clearListeners.bind(instance);
-      fn.onMessage = instance.onMessage.bind(instance);
-      return fn;
-    }
-  }
-  var function_default = GlueFunctionProxy;
-
-  // client_js/src/proxies/index.js
-  var SUBJECT_TYPE_TO_PROXY_CLASS = {
-    model: model_default,
-    form: form_default,
-    querySet: queryset_default,
-    template: template_default,
-    function: function_default
+  var __defProp = Object.defineProperty;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __moduleCache = /* @__PURE__ */ new WeakMap;
+  var __toCommonJS = (from) => {
+    var entry = __moduleCache.get(from), desc;
+    if (entry)
+      return entry;
+    entry = __defProp({}, "__esModule", { value: true });
+    if (from && typeof from === "object" || typeof from === "function")
+      __getOwnPropNames(from).map((key) => !__hasOwnProp.call(entry, key) && __defProp(entry, key, {
+        get: () => from[key],
+        enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+      }));
+    __moduleCache.set(from, entry);
+    return entry;
   };
-  window.BaseGlueProxy = base_default;
-  window.GlueModelProxy = model_default;
-  window.GlueQuerySetProxy = queryset_default;
-  window.GlueFormProxy = form_default;
-  window.GlueTemplateProxy = template_default;
-  window.GlueFunctionProxy = function_default;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, {
+        get: all[name],
+        enumerable: true,
+        configurable: true,
+        set: (newValue) => all[name] = () => newValue
+      });
+  };
+
+  // client_js/django_glue.js
+  var exports_django_glue = {};
+  __export(exports_django_glue, {
+    parseJsonScriptById: () => parseJsonScriptById,
+    GlueClient: () => client_default
+  });
+
+  // client_js/src/config.js
+  class GlueConfig {
+    constructor(config = {}) {
+      const urls = config.urls || {};
+      this.attributeUrlPath = urls.callable_attribute || "/__dg__/callable_attribute/";
+      this.glueViewUrlPath = urls.glue_view || "/__dg__/glue_view/";
+      this.requestTimeoutSeconds = config.requestTimeoutSeconds || 30;
+    }
+  }
+  var config_default = GlueConfig;
 
   // client_js/src/errors.js
   class GlueHttpError extends Error {
-    constructor({ message, status = null, code = null, payload = null, responseBody = "" }) {
-      super(`An error occurred when sending a glue http request: ${message}`);
+    constructor({ message, status, code = null, payload = null, responseBody = null }) {
+      super(message);
       this.name = "GlueHttpError";
       this.status = status;
       this.code = code;
       this.payload = payload;
-      this.details = payload?.details || {};
       this.responseBody = responseBody;
-      this.isGlueError = Boolean(code);
     }
+  }
+
+  class GlueProxyError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "GlueProxyError";
+    }
+  }
+
+  // client_js/src/utils.js
+  function isPlainObject(value) {
+    return Object.prototype.toString.call(value) === "[object Object]";
+  }
+  function cloneValue(value) {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (value instanceof Date) {
+      return new Date(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => cloneValue(item));
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
+    }
+    return value;
+  }
+  function parseFieldValue(field, value) {
+    if (value === null || value === undefined || value === "" || value instanceof Date) {
+      return value;
+    }
+    const type = field?.type;
+    if (type === "DateField") {
+      return new Date(`${value}T00:00:00`);
+    }
+    if (["DateTimeField", "SplitDateTimeField"].includes(type)) {
+      return new Date(value);
+    }
+    return value;
+  }
+  function serializeValue(value) {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => serializeValue(item));
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, serializeValue(item)]));
+    }
+    return value;
+  }
+  function parseJsonScriptById(scriptId) {
+    return JSON.parse(document.getElementById(scriptId).textContent);
   }
 
   // client_js/src/http.js
@@ -752,41 +121,31 @@
       if (document?.cookie !== "") {
         const cookies = document.cookie.split(";").map((cookie) => cookie.trim());
         for (const cookie of cookies) {
-          if (cookie.substring(0, name.length + 1) === name + "=") {
+          if (cookie.substring(0, name.length + 1) === `${name}=`) {
             return decodeURIComponent(cookie.substring(name.length + 1));
           }
         }
       }
       return null;
     }
-    async sendRequest(url, requestOptions = {
-      body: "",
-      method: "GET",
-      contentType: "application/json",
-      csrfProtected: true,
-      timeoutSeconds: null
-    }) {
+    async sendRequest(url, requestOptions = {}) {
       const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds;
       const controller = new AbortController;
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-      const options = {
-        method: requestOptions.method,
-        headers: {
-          "Content-Type": requestOptions.contentType
-        },
-        signal: controller.signal
-      };
-      if (options.method === "POST") {
-        options.body = requestOptions.body;
+      const headers = {};
+      if (requestOptions.contentType && requestOptions.contentType !== "multipart/form-data") {
+        headers["Content-Type"] = requestOptions.contentType;
       }
-      if (requestOptions.csrfProtected) {
-        options.headers["X-CSRFToken"] = this.getCookie("csrftoken");
-      }
-      if (requestOptions.contentType === "multipart/form-data") {
-        delete options.headers["Content-Type"];
+      if (requestOptions.csrfProtected !== false) {
+        headers["X-CSRFToken"] = this.getCookie("csrftoken");
       }
       try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, {
+          method: requestOptions.method || "GET",
+          body: requestOptions.body,
+          headers,
+          signal: controller.signal
+        });
         if (!response.ok) {
           throw await this._buildRequestError(response);
         }
@@ -794,37 +153,11 @@
           ok: response.ok,
           body: await response.clone().text(),
           httpResponse: response,
-          data: response.ok ? await response.json() : null
+          data: await response.json()
         };
-      } catch (e) {
-        throw e;
       } finally {
         clearTimeout(timeoutId);
       }
-    }
-    async _buildRequestError(response) {
-      const body = await response.text();
-      let payload = null;
-      try {
-        payload = JSON.parse(body);
-      } catch (_) {}
-      const errorData = payload?.error;
-      const message = errorData?.message || body;
-      return new GlueHttpError({
-        message,
-        status: response.status,
-        code: errorData?.code,
-        payload: errorData || null,
-        responseBody: body
-      });
-    }
-    async sendJsonPostRequest(url, data, csrfProtected = true) {
-      return await this.sendRequest(url, {
-        body: JSON.stringify(data ?? {}),
-        method: "POST",
-        contentType: "application/json",
-        csrfProtected
-      });
     }
     async sendFormPostRequest(url, data, csrfProtected = true) {
       return await this.sendRequest(url, {
@@ -834,236 +167,1041 @@
         csrfProtected
       });
     }
-    async sendAttributeEventRequest({ name, attribute, eventKwargs = null, policy, state = null }) {
-      const url = `${this._config.attributeEventUrlPath}${name}/${attribute}/`;
+    async sendAttributeRequest({ name, policy, state = null, attribute, kwargs = {} }) {
       const formData = new FormData;
+      const { files, data } = this._extractFiles(serializeValue(state || {}));
       formData.append("policy", JSON.stringify(policy));
-      if (state) {
-        const { files, data } = this._extractFiles(state);
-        formData.append("state", JSON.stringify(data));
-        Object.entries(files).forEach(([key, value]) => {
-          const fieldKey = key.replace("instance_data.", "", 1);
-          if (value instanceof FileList) {
-            Array.from(value).forEach((file) => formData.append(fieldKey, file));
-          } else if (Array.isArray(value)) {
-            value.forEach((file) => formData.append(fieldKey, file));
-          } else {
-            formData.append(fieldKey, value);
-          }
-        });
-      }
-      if (eventKwargs) {
-        formData.append("event_kwargs", JSON.stringify(eventKwargs));
-      }
-      return await this.sendFormPostRequest(url, formData);
+      formData.append("state", JSON.stringify(data));
+      formData.append("attribute", attribute);
+      formData.append("kwargs", JSON.stringify(kwargs));
+      Object.entries(files).forEach(([key, value]) => {
+        if (value instanceof FileList) {
+          Array.from(value).forEach((file) => formData.append(key, file));
+        } else if (Array.isArray(value)) {
+          value.forEach((file) => formData.append(key, file));
+        } else {
+          formData.append(key, value);
+        }
+      });
+      return await this.sendFormPostRequest(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData);
     }
     _extractFiles(obj) {
       const files = {};
       const data = {};
       const extractFromValue = (value, key) => {
-        if (value instanceof File || value instanceof Blob) {
+        if (value instanceof File || value instanceof Blob || value instanceof FileList) {
           files[key] = value;
           return;
-        } else if (value instanceof FileList) {
-          files[key] = value;
-          return;
-        } else if (Array.isArray(value)) {
-          const hasFiles = value.some((v) => v instanceof File || v instanceof Blob);
-          if (hasFiles) {
-            files[key] = value.filter((v) => v instanceof File || v instanceof Blob);
-            const nonFiles = value.filter((v) => !(v instanceof File || v instanceof Blob));
-            return nonFiles.length > 0 ? nonFiles : undefined;
+        }
+        if (Array.isArray(value)) {
+          const hasFiles = value.some((item) => item instanceof File || item instanceof Blob);
+          if (!hasFiles) {
+            return value;
           }
-          return value;
-        } else if (value && typeof value === "object") {
+          files[key] = value.filter((item) => item instanceof File || item instanceof Blob);
+          const nonFiles = value.filter((item) => !(item instanceof File || item instanceof Blob));
+          return nonFiles.length > 0 ? nonFiles : undefined;
+        }
+        if (value && typeof value === "object") {
           const nested = this._extractFiles(value);
-          Object.entries(nested.files).forEach(([k, v]) => {
-            files[`${key}.${k}`] = v;
+          Object.entries(nested.files).forEach(([nestedKey, fileValue]) => {
+            files[`${key}.${nestedKey}`] = fileValue;
           });
           return Object.keys(nested.data).length > 0 ? nested.data : undefined;
         }
         return value;
       };
-      Object.entries(obj).forEach(([key, value]) => {
-        const result = extractFromValue(value, key);
-        if (result !== undefined) {
-          data[key] = result;
+      Object.entries(obj || {}).forEach(([key, value]) => {
+        const extracted = extractFromValue(value, key);
+        if (extracted !== undefined) {
+          data[key] = extracted;
         }
       });
       return { files, data };
+    }
+    async _buildRequestError(response) {
+      const body = await response.text();
+      let payload = null;
+      try {
+        payload = JSON.parse(body);
+      } catch (_) {}
+      const errorData = payload?.error;
+      return new GlueHttpError({
+        message: errorData?.message || body,
+        status: response.status,
+        code: errorData?.code,
+        payload: errorData || null,
+        responseBody: body
+      });
     }
   }
   var http_default = GlueHttp;
 
   // client_js/src/view.js
   class GlueView {
-    constructor(http, url, shared_payload = {}, skipEncodePath = true) {
-      let config_url = new URL(window.location.origin + url);
-      if (!skipEncodePath) {
-        config_url.searchParams.append("glue_encode_path", window.location.pathname);
-      }
+    constructor(http, url, sharedPayload = {}) {
       this.http = http;
-      this.url = config_url.pathname + config_url.search;
-      this.shared_payload = shared_payload;
+      this.url = new URL(url, window.location.origin).pathname;
+      this.sharedPayload = sharedPayload;
     }
     async get(payload = {}) {
       return await this._fetchView(payload, "GET");
     }
     async post(payload = {}) {
-      return await this._fetchView(payload);
+      return await this._fetchView(payload, "POST");
+    }
+    async renderInnerHtml(target, payload = {}) {
+      const element = this._resolveElement(target);
+      const html = await this.post(payload);
+      element.replaceChildren(this._htmlToFragment(html));
+      return html;
+    }
+    async renderOuterHtml(target, payload = {}) {
+      const element = this._resolveElement(target);
+      const html = await this.post(payload);
+      element.replaceWith(this._htmlToFragment(html));
+      return html;
     }
     async _fetchView(payload = {}, method = "POST") {
-      let viewResponse = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
+      const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
         method: "POST",
+        contentType: "application/json",
+        csrfProtected: true,
         body: JSON.stringify({
           url_path: this.url,
           method,
           view_payload: {
-            ...this.shared_payload,
+            ...this.sharedPayload,
             ...payload
           }
-        }),
-        csrfProtected: true
+        })
       });
-      window.Glue.init({
-        proxies: viewResponse.data.proxies,
-        config: this.http._config
-      });
-      return viewResponse.data.html;
+      globalThis.Glue.loadManifests(response.data?.manifest_list || []);
+      return response.data?.html || "";
+    }
+    _resolveElement(target) {
+      return typeof target === "string" ? document.querySelector(target) : target;
     }
     _htmlToFragment(html) {
       const template = document.createElement("template");
       template.innerHTML = html;
       return template.content;
     }
-    async renderInnerHtml(target_element, payload = {}) {
-      const html = await this._fetchView(payload);
-      target_element.replaceChildren(this._htmlToFragment(html));
-    }
-    async _renderInsertAdjacentHtml(target_element, position, payload = {}) {
-      const html = await this._fetchView(payload);
-      const fragment = this._htmlToFragment(html);
-      if (position === "beforeend") {
-        target_element.append(fragment);
-      } else if (position === "afterbegin") {
-        target_element.prepend(fragment);
-      } else if (position === "beforebegin") {
-        target_element.before(fragment);
-      } else if (position === "afterend") {
-        target_element.after(fragment);
-      } else {
-        throw new Error(`Invalid insert position: ${position}`);
-      }
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target_element, payload = {}) {
-      await this._renderInsertAdjacentHtml(target_element, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target_element, payload = {}) {
-      await this._renderInsertAdjacentHtml(target_element, "afterend", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(target_element, payload = {}) {
-      await this._renderInsertAdjacentHtml(target_element, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target_element, payload = {}) {
-      await this._renderInsertAdjacentHtml(target_element, "afterbegin", payload);
-    }
-    async renderOuterHtml(target_element, payload = {}) {
-      const html = await this._fetchView(payload);
-      target_element.replaceWith(this._htmlToFragment(html));
-    }
   }
   var view_default = GlueView;
 
-  // client_js/src/client.js
-  class GlueClient {
-    static proxies = {};
-    static proxyClassesForSubjectTypes = {};
-    model = {};
-    querySet = {};
-    form = {};
-    template = {};
-    function = {};
-    _onMessage = null;
-    _onExpiry = null;
-    _onError = this._defaultErrorHandler;
-    onMessage(callback) {
-      this._onMessage = callback;
+  // client_js/src/proxies/base.js
+  class BaseGlueProxy {
+    constructor({ http, policy, state = {}, metadata = {} }) {
+      this._http = http;
+      this._policy = cloneValue(policy);
+      this._name = this._policy?.name;
+      this._state = cloneValue(state || {});
+      this._metadata = cloneValue(metadata || {});
+      this._listeners = { before: {}, after: {}, error: {} };
+      this._onMessage = null;
+      this._onError = null;
+      this._defineCallableAttributes();
+    }
+    get $policy() {
+      return this._policy;
+    }
+    get $state() {
+      return this._state;
+    }
+    get $metadata() {
+      return this._metadata;
+    }
+    get $name() {
+      return this._name;
+    }
+    addListener(attribute, callback, when = "after") {
+      if (!this._listeners[when]) {
+        this._listeners[when] = {};
+      }
+      if (!this._listeners[when][attribute]) {
+        this._listeners[when][attribute] = [];
+      }
+      this._listeners[when][attribute].push(callback);
       return this;
     }
-    onExpiry(callback) {
-      this._onExpiry = callback;
+    async _call(attribute, kwargs = {}) {
+      return await this._performAttributeRequest(attribute, kwargs);
+    }
+    async _performAttributeRequest(attribute, kwargs = {}) {
+      const attributeRequest = { attribute, kwargs };
+      this._emit("before", attribute, { attributeRequest, object: this });
+      try {
+        const response = await this._http.sendAttributeRequest({
+          name: this._name,
+          policy: this._policy,
+          state: this._state,
+          attribute,
+          kwargs
+        });
+        this._applyResponse(response.data);
+        this._processMessages(response.data);
+        this._emit("after", attribute, {
+          attributeRequest,
+          object: this,
+          proxy: this,
+          response: response.data
+        });
+        return response.data?.result;
+      } catch (error) {
+        this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error });
+        const errorHandler = this._onError || window.Glue?._onError;
+        errorHandler?.({ error, attribute, attributeRequest, proxy: this });
+        throw error;
+      }
+    }
+    _applyResponse(data = {}) {
+      if (data.policy) {
+        this._policy = cloneValue(data.policy);
+      }
+      if (data.metadata !== undefined) {
+        this._metadata = cloneValue(data.metadata || {});
+      }
+      if (data.policy || data.metadata !== undefined) {
+        this._defineCallableAttributes();
+      }
+      if (data.state !== undefined) {
+        this._applyState(data.state || {});
+      }
+    }
+    _applyState(state) {
+      const nextState = this._parseState(cloneValue(state || {}));
+      if (!this._state || typeof this._state !== "object") {
+        this._state = nextState;
+        return;
+      }
+      if (this._state.instance_data && nextState.instance_data) {
+        Object.keys(this._state.instance_data).forEach((key) => {
+          if (!(key in nextState.instance_data)) {
+            delete this._state.instance_data[key];
+          }
+        });
+        Object.entries(nextState.instance_data).forEach(([key, value]) => {
+          this._state.instance_data[key] = value;
+        });
+        delete nextState.instance_data;
+      }
+      Object.keys(this._state).forEach((key) => {
+        if (!(key in nextState) && key !== "instance_data") {
+          delete this._state[key];
+        }
+      });
+      Object.assign(this._state, nextState);
+    }
+    _parseState(state) {
+      return state;
+    }
+    _defineCallableAttributes() {
+      Object.entries(this._metadata?.attributes || {}).forEach(([attributeName, spec]) => {
+        if (spec?.namespace !== "callable") {
+          return;
+        }
+        this._defineCallableAttribute(attributeName);
+      });
+    }
+    _defineCallableAttribute(attributeName) {
+      const parts = attributeName.split(".");
+      const methodName = parts.pop();
+      const owner = this._callableAttributeOwner(parts);
+      if (owner[methodName] !== undefined) {
+        return;
+      }
+      Object.defineProperty(owner, methodName, {
+        value: async function(kwargs = {}) {
+          const root = this.__glue__owner || this;
+          return await root._call(attributeName, kwargs);
+        },
+        enumerable: false,
+        configurable: true
+      });
+    }
+    _callableAttributeOwner(parts) {
+      return parts.reduce((current, part) => {
+        const cacheKey = `__glue__${part}`;
+        if (current[part] === undefined) {
+          Object.defineProperty(current, part, {
+            get: function() {
+              if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
+                Object.defineProperty(this, cacheKey, {
+                  value: {},
+                  enumerable: false,
+                  configurable: true
+                });
+              }
+              Object.defineProperty(this[cacheKey], "__glue__owner", {
+                value: this,
+                enumerable: false,
+                configurable: true
+              });
+              return this[cacheKey];
+            },
+            enumerable: false,
+            configurable: true
+          });
+        }
+        return current[part];
+      }, this);
+    }
+    onMessage(callback) {
+      this._onMessage = callback;
       return this;
     }
     onError(callback) {
       this._onError = callback;
       return this;
     }
-    _defaultErrorHandler({ error, proxy, attribute }) {
-      console.error("[Django Glue] Bound attribute event failed", {
-        error,
-        proxy,
-        attribute
+    _processMessages(data = {}) {
+      if (!data.messages?.length || typeof window === "undefined") {
+        return;
+      }
+      const handler = this._onMessage || window.Glue?._onMessage;
+      handler?.({ messages: data.messages, proxy: this });
+    }
+    _emit(when, attribute, payload) {
+      const listeners = [
+        ...this._listeners[when]?.[attribute] || [],
+        ...this._listeners[when]?.["*"] || []
+      ];
+      listeners.forEach((listener) => listener(payload));
+    }
+  }
+  var base_default = BaseGlueProxy;
+
+  // client_js/src/proxies/fields/base.js
+  function isFieldMetadataProperty(prop) {
+    return prop === "choices" || prop === "buildChoices" || prop === "selectedChoice" || prop === "selectedChoices" || prop === "selectedPks" || prop === "selectedLabel" || prop === "pk" || typeof prop === "string" && prop.startsWith("__glue__");
+  }
+
+  class FieldGlue {
+    constructor({ owner, name, metadata = {} }) {
+      this.name = name;
+      Object.defineProperty(this, "owner", {
+        value: owner,
+        enumerable: false,
+        configurable: true
+      });
+      this.updateMetadata(metadata);
+      Object.defineProperty(this, "__glue__isFieldProxy", {
+        value: true,
+        enumerable: false,
+        configurable: false
       });
     }
-    _registerProxyAsProperty(name, { policy, state }) {
-      let proxyClass = SUBJECT_TYPE_TO_PROXY_CLASS[policy.subject_details.namespace];
-      let proxy;
-      if (policy.subject_details.namespace === "function") {
-        proxy = proxyClass.create({
-          http: this.http,
-          name,
-          policy
-        });
-      } else {
-        proxy = new proxyClass({
-          http: this.http,
-          name,
-          policy,
-          state
-        });
-      }
-      this[policy.subject_details.namespace][name] = proxy;
+    get value() {
+      return this.owner._getFieldValue(this.name);
     }
-    async fetch(url, requestOptions = {
-      body: "",
-      method: "GET",
-      contentType: "application/json",
-      csrfProtected: true,
-      timeout: null
-    }) {
+    set value(value) {
+      this.owner._setFieldValue(this.name, value);
+    }
+    get errors() {
+      return this.owner._getFieldErrors()[this.name];
+    }
+    get hasErrors() {
+      return Boolean(this.errors?.length);
+    }
+    updateMetadata(metadata = {}) {
+      Object.entries(metadata).forEach(([key, value]) => {
+        if (["value", "errors", "hasErrors"].includes(key)) {
+          return;
+        }
+        this[key] = value;
+      });
+      this.name = this.name || metadata.name;
+    }
+    primitiveValue(hint = "default") {
+      const value = this.value;
+      if (value === null || value === undefined) {
+        return "";
+      }
+      if (value instanceof Date) {
+        return hint === "number" ? value.valueOf() : value.toString();
+      }
+      if (typeof value === "object") {
+        return Array.isArray(value) ? value.join(",") : String(value);
+      }
+      return value;
+    }
+    [Symbol.toPrimitive](hint) {
+      return this.primitiveValue(hint);
+    }
+    toString() {
+      return String(this.primitiveValue());
+    }
+    valueOf() {
+      return this.primitiveValue();
+    }
+    toJSON() {
+      return this.value;
+    }
+    asProxy() {
+      const field = this;
+      return new Proxy(this, {
+        get(target, prop, receiver) {
+          if (prop === Symbol.iterator) {
+            return target.value?.[Symbol.iterator]?.bind(target.value);
+          }
+          if (prop === "then") {
+            return;
+          }
+          if (prop === "choices" && target.choice_model_path && !target.__glue__choicesLoaded && !target.__glue__loadingChoices) {
+            target.ensureChoices([], receiver);
+          }
+          if (prop in target) {
+            return Reflect.get(target, prop, receiver);
+          }
+          const value = target.value;
+          const member = value?.[prop];
+          return typeof member === "function" ? member.bind(value) : member;
+        },
+        set(target, prop, value, receiver) {
+          if (prop === "value") {
+            target.value = value;
+            return true;
+          }
+          if (prop in target || isFieldMetadataProperty(prop)) {
+            return Reflect.set(target, prop, value, receiver);
+          }
+          const current = target.value;
+          if (current && typeof current === "object") {
+            current[prop] = value;
+            return true;
+          }
+          return Reflect.set(target, prop, value, receiver);
+        },
+        has(target, prop) {
+          return prop in target || prop in Object(field.value ?? {});
+        }
+      });
+    }
+  }
+  var base_default2 = FieldGlue;
+
+  // client_js/src/proxies/fields/choice.js
+  class ChoiceFieldGlue extends base_default2 {
+    get selectedChoice() {
+      return (this.choices || []).find(([value]) => value === this.value);
+    }
+    get selectedLabel() {
+      return this.selectedChoice?.[1] ?? "";
+    }
+  }
+  var choice_default = ChoiceFieldGlue;
+
+  // client_js/src/proxies/fields/relation.js
+  class RelationFieldGlue extends choice_default {
+    static choicesCache = new Map;
+    updateMetadata(metadata = {}) {
+      super.updateMetadata(metadata);
+      this._initializeChoices();
+    }
+    get pk() {
+      const value = this.value;
+      if (value && typeof value === "object") {
+        return value.pk ?? value.id;
+      }
+      return value;
+    }
+    set pk(value) {
+      this.value = value;
+    }
+    get selectedChoice() {
+      const pk = Number(this.pk);
+      return (this.choices || []).find((choice) => Number(choice.pk) === pk);
+    }
+    get selectedLabel() {
+      return this.selectedChoice?.__str__ ?? "";
+    }
+    buildChoices(...choiceFields) {
+      this.ensureChoices(choiceFields, this);
+      return this.choices;
+    }
+    ensureChoices(choiceFields = [], subscriber = this) {
+      const cacheKey = this._getChoicesCacheKey();
+      const cached = this._getOrCreateChoicesCache(cacheKey);
+      cached.fields.add(subscriber);
+      const requiredFields = this._normalizeChoiceFields(choiceFields);
+      const missingFields = requiredFields.filter((choiceField) => !cached.loadedFields.has(choiceField));
+      if (missingFields.length === 0) {
+        subscriber._applyCachedChoices(cached);
+        return cached.promise || Promise.resolve(cached.data);
+      }
+      if (cached.promise) {
+        subscriber.__glue__loadingChoices = true;
+        return cached.promise.then(() => this.ensureChoices(choiceFields, subscriber));
+      }
+      if (typeof this.owner.foreign_key_choices !== "function") {
+        return Promise.resolve(cached.data);
+      }
+      subscriber.__glue__loadingChoices = true;
+      missingFields.forEach((choiceField) => cached.pendingFields.add(choiceField));
+      cached.promise = this.owner.foreign_key_choices({
+        field_name: this.name,
+        choice_fields: missingFields.filter((choiceField) => !["pk", "__str__"].includes(choiceField))
+      }).then((result) => {
+        const choices = Array.isArray(result) ? result : [];
+        this._cacheChoices(choices, missingFields);
+        return cached.data;
+      }).finally(() => {
+        missingFields.forEach((choiceField) => cached.pendingFields.delete(choiceField));
+        cached.promise = null;
+        subscriber.__glue__loadingChoices = false;
+      });
+      return cached.promise;
+    }
+    _initializeChoices() {
+      const cacheKey = this._getChoicesCacheKey();
+      const cached = RelationFieldGlue.choicesCache.get(cacheKey);
+      const initialChoices = Array.isArray(this.__glue__choicesData) ? this.__glue__choicesData : Array.isArray(this.choices) ? this.choices : [];
+      this.__glue__choicesCacheKey = cacheKey;
+      this.__glue__choicesLoaded = Boolean(cached?.loadedFields?.has("__str__"));
+      this.__glue__loadingChoices = Boolean(cached?.promise);
+      this.__glue__choicesData = cached?.data || initialChoices;
+      this.choices = cached?.data || initialChoices;
+    }
+    _getChoicesCacheKey() {
+      return this.choices_cache_key || [
+        this.owner.$policy?.identity?.model_class_path,
+        this.owner.$policy?.identity?.form_class_path,
+        this.choice_model_path,
+        this.name
+      ].filter(Boolean).join(":") || `${this.type}:${this.name}`;
+    }
+    _normalizeChoiceFields(choiceFields = []) {
+      return ["pk", "__str__", ...choiceFields].filter((choiceField, index, fields) => {
+        return choiceField && fields.indexOf(choiceField) === index;
+      });
+    }
+    _getOrCreateChoicesCache(cacheKey) {
+      let cached = RelationFieldGlue.choicesCache.get(cacheKey);
+      if (!cached) {
+        cached = {
+          data: this.__glue__choicesData || [],
+          fields: new Set,
+          loadedFields: new Set,
+          pendingFields: new Set,
+          promise: null
+        };
+        RelationFieldGlue.choicesCache.set(cacheKey, cached);
+      }
+      return cached;
+    }
+    _applyCachedChoices(cached, { force = false } = {}) {
+      const previousChoices = this.__glue__choicesData;
+      this.__glue__choicesLoaded = cached.loadedFields.has("__str__");
+      this.__glue__loadingChoices = Boolean(cached.promise);
+      if (force || previousChoices !== cached.data) {
+        this.choices = cached.data;
+      } else {
+        this.__glue__choicesData = cached.data;
+      }
+    }
+    _cacheChoices(choices, choiceFields = []) {
+      const cached = this._getOrCreateChoicesCache(this._getChoicesCacheKey());
+      const nextChoices = [...cached.data];
+      choices.forEach((choice) => this._mergeChoice(nextChoices, choice));
+      cached.data = nextChoices;
+      this._normalizeChoiceFields(choiceFields).forEach((choiceField) => cached.loadedFields.add(choiceField));
+      cached.fields.forEach((field) => {
+        field._applyCachedChoices(cached, { force: true });
+      });
+    }
+    _mergeChoice(choices, choice) {
+      if (!choice || typeof choice !== "object") {
+        return;
+      }
+      const existing = choices.find((item) => item.pk === choice.pk);
+      if (existing) {
+        Object.assign(existing, choice);
+      } else {
+        choices.push(choice);
+      }
+    }
+  }
+  var relation_default = RelationFieldGlue;
+
+  // client_js/src/proxies/fields/manyRelation.js
+  class ManyRelationFieldGlue extends relation_default {
+    get selectedPks() {
+      return (this.value || []).map((choice) => Number(choice?.pk ?? choice?.id ?? choice));
+    }
+    get selectedChoices() {
+      const selectedPks = new Set(this.selectedPks);
+      return (this.choices || []).filter((choice) => selectedPks.has(Number(choice.pk)));
+    }
+    has(choiceOrPk) {
+      const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk);
+      return this.selectedPks.includes(pk);
+    }
+    add(choiceOrPk) {
+      if (this.has(choiceOrPk)) {
+        return this.value || [];
+      }
+      this.value = [...this.value || [], choiceOrPk];
+      return this.value;
+    }
+    remove(choiceOrPk) {
+      const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk);
+      this.value = (this.value || []).filter((choice) => Number(choice?.pk ?? choice?.id ?? choice) !== pk);
+      return this.value;
+    }
+    toggle(choiceOrPk) {
+      return this.has(choiceOrPk) ? this.remove(choiceOrPk) : this.add(choiceOrPk);
+    }
+  }
+  var manyRelation_default = ManyRelationFieldGlue;
+
+  // client_js/src/proxies/fields/index.js
+  function createFieldGlue({ owner, name, metadata = {}, existingField = null }) {
+    if (existingField?.__glue__isFieldProxy) {
+      existingField.updateMetadata(metadata);
+      existingField.name = name;
+      return existingField;
+    }
+    const options = { owner, name, metadata };
+    if (metadata.choice_model_path && metadata.type === "ManyToManyField") {
+      return new manyRelation_default(options).asProxy();
+    }
+    if (metadata.choice_model_path) {
+      return new relation_default(options).asProxy();
+    }
+    if (Array.isArray(metadata.choices)) {
+      return new choice_default(options).asProxy();
+    }
+    return new base_default2(options).asProxy();
+  }
+
+  // client_js/src/proxies/fieldBacked.js
+  class FieldBackedGlueProxy extends base_default {
+    constructor(options) {
+      super(options);
+      this._ensureFieldState();
+      this._defineFields();
+      this._parseFieldValues();
+    }
+    get $fields() {
+      return this._fields;
+    }
+    get $pk() {
+      const pkField = this._policy?.identity?.pk_field_name || "id";
+      return this._policy?.identity?.target_pk ?? this._state?.instance_data?.[pkField];
+    }
+    get $key() {
+      return this.$pk ?? this.$name;
+    }
+    hasErrors(fieldName = null) {
+      if (fieldName) {
+        return Boolean(this._state?.errors?.[fieldName]?.length);
+      }
+      return Object.keys(this._state?.errors || {}).length > 0;
+    }
+    _ensureFieldState() {
+      if (!this._state) {
+        this._state = {};
+      }
+      if (!this._state.instance_data) {
+        this._state.instance_data = {};
+      }
+      if (!this._state.errors) {
+        this._state.errors = {};
+      }
+    }
+    _getFieldValue(fieldName) {
+      return this._state.instance_data?.[fieldName];
+    }
+    _setFieldValue(fieldName, value) {
+      if (!this._state.instance_data) {
+        this._state.instance_data = {};
+      }
+      this._state.instance_data[fieldName] = value;
+    }
+    _getFieldErrors() {
+      return this._state?.errors || {};
+    }
+    _defineFields() {
+      const nextFields = this._fields || {};
+      Object.keys(nextFields).forEach((fieldName) => {
+        if (!this._metadata?.fields?.[fieldName]) {
+          delete nextFields[fieldName];
+        }
+      });
+      Object.entries(this._metadata?.fields || {}).forEach(([fieldName, field]) => {
+        nextFields[fieldName] = createFieldGlue({
+          owner: this,
+          name: fieldName,
+          metadata: field,
+          existingField: nextFields[fieldName]
+        });
+        if (this[fieldName] === undefined) {
+          this._defineFieldProperty(fieldName);
+        }
+      });
+      this._fields = nextFields;
+      Object.values(this._fields).forEach((field) => {
+        if (!field?.choice_model_path && !Array.isArray(field?.choices)) {
+          field.choices = [];
+        }
+      });
+    }
+    _defineFieldProperty(fieldName) {
+      Object.defineProperty(this, fieldName, {
+        get: () => this._fields[fieldName],
+        set: (value) => {
+          this._fields[fieldName].value = value?.__glue__isFieldProxy ? value.value : value;
+        },
+        enumerable: true,
+        configurable: true
+      });
+    }
+    _parseFieldValues() {
+      Object.keys(this._fields || {}).forEach((fieldName) => {
+        this._fields[fieldName].value = parseFieldValue(this._fields[fieldName], this._getFieldValue(fieldName));
+      });
+    }
+    _applyResponse(data = {}) {
+      super._applyResponse(data);
+      this._ensureFieldState();
+      this._defineFields();
+      this._parseFieldValues();
+    }
+  }
+  var fieldBacked_default = FieldBackedGlueProxy;
+
+  // client_js/src/proxies/form.js
+  class GlueFormProxy extends fieldBacked_default {
+    async validate() {
+      return await this._call("validate");
+    }
+    async save() {
+      return await this._call("save");
+    }
+  }
+  var form_default = GlueFormProxy;
+
+  // client_js/src/proxies/function.js
+  class GlueFunctionProxy extends base_default {
+    static create(options) {
+      const object = new GlueFunctionProxy(options);
+      const callable = async (kwargs = {}) => await object.execute(kwargs);
+      return new Proxy(callable, {
+        get(target, prop) {
+          if (prop in object) {
+            const value = object[prop];
+            return typeof value === "function" ? value.bind(object) : value;
+          }
+          return target[prop];
+        },
+        set(target, prop, value) {
+          object[prop] = value;
+          return true;
+        }
+      });
+    }
+    async execute(kwargs = {}) {
+      const result = await this._call("execute", this._filterKwargs(kwargs));
+      return result?.result ?? result;
+    }
+    _filterKwargs(kwargs) {
+      const params = this._normalizeParams(this._metadata?.params || this._policy?.identity?.params || []);
+      if (!params.length) {
+        return kwargs;
+      }
+      return Object.fromEntries(Object.entries(kwargs).filter(([key]) => params.includes(key)));
+    }
+    _normalizeParams(params) {
+      return params.map((param) => typeof param === "string" ? param : param.name).filter(Boolean);
+    }
+  }
+  var function_default = GlueFunctionProxy;
+
+  // client_js/src/proxies/model.js
+  class GlueModelProxy extends fieldBacked_default {
+    async save() {
+      return await this._call("save");
+    }
+    async validate() {
+      return await this._call("validate");
+    }
+    async delete() {
+      const result = await this._call("delete");
+      this.$collection?._removeRowProxy(this);
+      return result;
+    }
+  }
+  var model_default = GlueModelProxy;
+
+  // client_js/src/proxies/queryset.js
+  class GlueQuerySetProxy extends base_default {
+    constructor(options) {
+      super(options);
+      this._rowProxies = new Map;
+      this._queryParams = options.queryParams || {};
+      this._items = [];
+      this._queryResults = {};
+      this._resultCache = [];
+      this._queryLoadingKeys = new Set;
+      this._queryLoadedKeys = new Set;
+      this._syncItems();
+      this._setQueryResult(this._queryKey({}), this._items);
+    }
+    get _itemPayloads() {
+      return this._state?.items || [];
+    }
+    get items() {
+      return this._items;
+    }
+    get rows() {
+      return this.items;
+    }
+    [Symbol.iterator]() {
+      return this.items[Symbol.iterator]();
+    }
+    queryWithParams(params = {}) {
+      const key = this._queryKey(params);
+      if (this._queryResults[key]) {
+        this._resultCache = this._queryResults[key];
+        return this._resultCache;
+      }
+      this._queryResults[key] = this._resultCache;
+      this._ensureQueryResult(params, key);
+      return this._resultCache;
+    }
+    query_with_params(params = {}) {
+      return this.queryWithParams(params);
+    }
+    async fetchWithParams(params = {}) {
+      const attribute = "query_with_params";
+      const attributeRequest = { attribute, kwargs: params };
+      this._emit("before", attribute, { attributeRequest, object: this });
+      try {
+        const response = await this._http.sendAttributeRequest({
+          name: this._name,
+          policy: this._policy,
+          state: this._state,
+          attribute,
+          kwargs: params
+        });
+        const items = this._itemsFromResponse(response.data);
+        this._processMessages(response.data);
+        this._emit("after", attribute, {
+          attributeRequest,
+          object: this,
+          proxy: this,
+          response: response.data
+        });
+        return items;
+      } catch (error) {
+        this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error });
+        throw error;
+      }
+    }
+    async all() {
+      return await this.fetchWithParams(this._queryParams);
+    }
+    filter(filter = {}) {
+      return this._cloneWithQueryParams({ filter });
+    }
+    orderBy(orderBy) {
+      return this._cloneWithQueryParams({ order_by: orderBy });
+    }
+    slice(start, stop) {
+      return this._cloneWithQueryParams({ slice: { start, stop } });
+    }
+    async new() {
+      return await this._call("new");
+    }
+    _applyResponse(data = {}) {
+      super._applyResponse(data);
+      this._syncItems();
+    }
+    _syncItems() {
+      const items = this._itemPayloads.map((row, index) => this._buildRowObject(row, index));
+      this._items = items;
+      this._setQueryResult(this._queryKey({}), items);
+    }
+    _ensureQueryResult(params = {}, key = this._queryKey(params)) {
+      if (this._queryLoadingKeys.has(key) || this._queryLoadedKeys.has(key)) {
+        return;
+      }
+      this._queryLoadingKeys.add(key);
+      this.fetchWithParams(params).then((items) => {
+        this._setQueryResult(key, items);
+        this._queryLoadedKeys.add(key);
+      }).finally(() => {
+        this._queryLoadingKeys.delete(key);
+      });
+    }
+    _setQueryResult(key, items) {
+      this._queryResults[key] = items;
+      this._resultCache = items;
+    }
+    _cloneWithQueryParams(params = {}) {
+      return new this.constructor({
+        http: this._http,
+        policy: this._policy,
+        state: this._state,
+        metadata: this._metadata,
+        queryParams: this._mergeQueryParams(params)
+      });
+    }
+    _mergeQueryParams(params = {}) {
+      return {
+        ...this._queryParams,
+        ...params,
+        filter: {
+          ...this._queryParams.filter || {},
+          ...params.filter || {}
+        },
+        slice: {
+          ...this._queryParams.slice || {},
+          ...params.slice || {}
+        }
+      };
+    }
+    _queryKey(params = {}) {
+      return JSON.stringify(params || {});
+    }
+    _itemsFromResponse(data = {}) {
+      const itemPayloads = data.result?.items || data.state?.items || [];
+      return itemPayloads.map((row, index) => this._buildRowObject(row, index));
+    }
+    _buildRowObject(row, index) {
+      if (row?.policy) {
+        return this._getOrCreateRowProxy(row, index);
+      }
+      return {
+        $key: row?.id ?? row?.pk ?? index,
+        ...row
+      };
+    }
+    _getOrCreateRowProxy(row, index) {
+      const name = row.policy.name || `${this._name}.${index}`;
+      let proxy = this._rowProxies.get(name);
+      if (!proxy) {
+        proxy = new model_default({
+          http: this._http,
+          policy: row.policy,
+          state: row.state,
+          metadata: row.metadata || this._metadata
+        });
+        proxy.$collection = this;
+        this._rowProxies.set(name, proxy);
+        return proxy;
+      }
+      proxy._applyResponse({
+        policy: row.policy,
+        state: row.state,
+        metadata: row.metadata || this._metadata
+      });
+      proxy.$collection = this;
+      return proxy;
+    }
+    _removeRowProxy(proxy) {
+      const rowIndex = this._itemPayloads.findIndex((row) => {
+        return row?.policy?.name === proxy.$name || row?.policy?.identity?.target_pk === proxy.$pk || row?.id === proxy.$pk || row?.pk === proxy.$pk;
+      });
+      if (rowIndex >= 0) {
+        this._itemPayloads.splice(rowIndex, 1);
+        this._items.splice(rowIndex, 1);
+      }
+      this._rowProxies.delete(proxy.$name);
+    }
+  }
+  var queryset_default = GlueQuerySetProxy;
+
+  // client_js/src/proxies/template.js
+  class GlueTemplateProxy extends base_default {
+    async renderHtml(payload = {}) {
+      const result = await this._call("render_html", payload);
+      return result?.html ?? result;
+    }
+    async renderInnerHtml(selector, payload = {}) {
+      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
+      const html = await this.renderHtml(payload);
+      element.innerHTML = html;
+      return html;
+    }
+    async renderOuterHtml(selector, payload = {}) {
+      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
+      const html = await this.renderHtml(payload);
+      element.outerHTML = html;
+      return html;
+    }
+  }
+  var template_default = GlueTemplateProxy;
+
+  // client_js/src/proxies/index.js
+  var NAMESPACE_TO_PROXY_CLASS = {
+    form: form_default,
+    function: function_default,
+    model: model_default,
+    querySet: queryset_default,
+    template: template_default
+  };
+
+  // client_js/src/client.js
+  class GlueClient {
+    constructor(context) {
+      this.model = {};
+      this.querySet = {};
+      this.form = {};
+      this.template = {};
+      this.function = {};
+      this.proxies = {};
+      this._onMessage = null;
+      this._onError = null;
+      this._config = new config_default({
+        ...context.config || {},
+        urls: context.urls || {}
+      });
+      this.http = new http_default(this._config);
+      this.loadManifests(context.manifest_list);
+    }
+    onMessage(callback) {
+      this._onMessage = callback;
+      return this;
+    }
+    onError(callback) {
+      this._onError = callback;
+      return this;
+    }
+    proxy(name) {
+      return this.proxies[name];
+    }
+    async fetch(url, requestOptions = {}) {
       return await this.http.sendRequest(url, requestOptions);
     }
-    init({ proxies, config = {} }) {
-      this._config = config;
-      this.http = new http_default(this._config);
-      for (const [name, proxy] of Object.entries(proxies)) {
-        this._registerProxyAsProperty(name, proxy);
-      }
+    view(url, sharedPayload = {}) {
+      return new view_default(this.http, url, sharedPayload);
     }
-    view(url, shared_payload = {}) {
-      return new view_default(this.http, url, shared_payload);
+    loadManifests(manifest_list = []) {
+      (manifest_list || []).forEach((glueManifest) => {
+        this._registerManifestAsProxy(glueManifest);
+      });
+    }
+    _registerManifestAsProxy({ policy, state = {}, metadata = {} }) {
+      const name = policy?.name;
+      const namespace = policy?.namespace || metadata?.namespace;
+      const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace];
+      if (!name) {
+        throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
+      }
+      if (!ProxyClass) {
+        throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`);
+      }
+      const proxy = namespace === "function" ? ProxyClass.create({ http: this.http, policy, state, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata });
+      this.proxies[name] = proxy;
+      this[namespace][name] = proxy;
+      return proxy;
     }
   }
   var client_default = GlueClient;
 
-  // client_js/src/config.js
-  class GlueConfig {
-    constructor({
-      requestTimeoutSeconds = 30,
-      attributeEventUrlPath,
-      glueViewUrlPath
-    }) {
-      this.requestTimeoutSeconds = requestTimeoutSeconds;
-      this.attributeEventUrlPath = attributeEventUrlPath;
-      this.glueViewUrlPath = glueViewUrlPath;
-    }
-  }
-  var config_default = GlueConfig;
-
   // client_js/django_glue.js
-  var Glue = new client_default;
-  window.Glue = Glue;
-  window.GlueConfig = config_default;
-  window.GlueHttp = http_default;
-  window.GlueHttpError = GlueHttpError;
+  globalThis.GlueClient = client_default;
+  globalThis.parseJsonScriptById = parseJsonScriptById;
 })();

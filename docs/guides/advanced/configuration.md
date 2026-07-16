@@ -2,7 +2,7 @@
 
 ## Overview
 
-Django Glue provides configuration options on both the backend through Django settings and the frontend through the JavaScript `GlueConfig` class.
+Django Glue provides configuration options through Django settings. The server publishes client configuration in the Glue manifest rendered by `{% django_glue_init %}`.
 
 ## Backend Configuration
 
@@ -17,13 +17,11 @@ DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 600
 
 Each registered proxy policy is signed with a creation timestamp. On every subsequent proxy request, Django Glue verifies the policy signature and rejects policies older than this max age.
 
-## Frontend Configuration
+### Request Timeout
 
-The JavaScript client is configured through the `{% django_glue_init %}` template tag. The configuration options are defined in the `GlueConfig` class:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `requestTimeoutSeconds` | `30` | HTTP request timeout in seconds |
+```python
+DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
+```
 
 ## Request Timeout
 
@@ -47,7 +45,7 @@ The `{% django_glue_init %}` template tag injects the correct URL paths for the 
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/__dg__/bound_attribute_event/<proxy_name>/<attribute_name>/` | Execute a bound proxy attribute |
+| `/__dg__/callable_attribute/<object_name>/` | Execute a Glue attribute request |
 | `/__dg__/glue_view/` | Execute a Django view for HTML rendering |
 
-These are automatically configured by the template tag. You do not need to reference them manually.
+These are sent to the client in the Glue manifest. You do not need to reference them manually.

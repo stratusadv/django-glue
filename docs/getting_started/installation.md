@@ -50,7 +50,7 @@ urlpatterns = [
 ```
 
 This registers the internal endpoints under the `__dg__` namespace:
-- `/__dg__/bound_attribute_event/<proxy_name>/<attribute_name>/` — Execute a bound proxy attribute
+- `/__dg__/callable_attribute/<object_name>/` — Execute a Glue attribute request
 - `/__dg__/glue_view/` — Execute a Django view for HTML rendering
 
 ## Add Template Tag
@@ -76,7 +76,7 @@ In your base template, load the template tags and add `{% django_glue_init %}` j
 The `{% django_glue_init %}` tag injects:
 1. The CSRF token
 2. The JavaScript client library
-3. Proxy registry and context data as JSON
+3. The Glue manifest as JSON
 4. Initialization code that creates the global `Glue` object
 
 ## Optional Configuration
@@ -94,7 +94,6 @@ After installation, you should have access to the global `Glue` object in your b
 
 ```javascript
 console.log(window.Glue)  // GlueClient instance
-console.log(window.GlueConfig)  // GlueConfig class
 ```
 
 ## Quick Example

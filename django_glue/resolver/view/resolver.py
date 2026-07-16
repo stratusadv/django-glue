@@ -1,4 +1,5 @@
 import logging
+from typing import Sequence
 from urllib.parse import urlparse
 
 from django.http import HttpRequest, JsonResponse, HttpResponse, HttpResponseRedirect
@@ -7,8 +8,10 @@ from django.urls import reverse, resolve, NoReverseMatch
 from django.utils.functional import cached_property
 
 from django_glue.conf import settings
-from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
-from django_glue.resolver.attribute_event.encoders import BoundAttributeDataJSONEncoder
+from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
+from django_glue.context import GlueContext
+from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.glue.manifest import GlueManifest, GlueManifestList
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.resolver.resolver import BaseResolver
 from django_glue.resolver.view.request import ViewHttpRequest
@@ -19,6 +22,12 @@ class ViewResolver(BaseResolver):
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
         self.view_body = ViewBodySchema.from_request(request)
+
+    @cached_property
+    def serialized_new_glue_manifests(self) -> list[dict]:
+        return GlueManifestList(getattr(
+            self.glue_view_http_request, DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY, []
+        )).model_dump()
 
     @cached_property
     def glue_view_http_request(self) -> ViewHttpRequest:
@@ -78,21 +87,17 @@ class ViewResolver(BaseResolver):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxies': getattr(
-                                self.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY, {}
-                            ),
+                            'manifest_list': self.serialized_new_glue_manifests,
                         },
                         safe=False,
-                        encoder=BoundAttributeDataJSONEncoder,
+                        encoder=GlueResponseJSONEncoder,
                     )
 
                 if isinstance(response, HttpResponse):
                     return JsonResponse(
                         {
                             'html': response.content.decode('utf-8'),
-                            'proxies': getattr(
-                                self.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY, {}
-                            ),
+                            'manifest_list': self.serialized_new_glue_manifests,
                         }
                     )
 

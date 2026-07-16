@@ -43,22 +43,32 @@
     <div x-data="{
         fights: Glue.querySet.fights,
         search: '',
-        redCornerChoices: [],
-        blueCornerChoices: [],
         fightItems: [],
+        get queryParams() {
+            return {
+                filter: {name__icontains: this.search}
+            };
+        },
         cornerId(corner) {
-            if (corner && typeof corner === 'object') {
-                return Number(corner.id ?? corner.pk);
+            const value = corner?.value ?? corner;
+            if (value && typeof value === 'object') {
+                return Number(value.id ?? value.pk);
             }
-            return Number(corner);
+            return Number(value);
         },
         cornerChoice(corner, choices) {
             const cornerId = this.cornerId(corner);
             return (choices || []).find(choice => Number(choice.pk) === cornerId);
         },
         cornerRank(corner, choices) {
-            return this.cornerChoice(corner, choices)?.rank_points
-                ?? (corner && typeof corner === 'object' ? corner.rank_points : null);
+            const choice = this.cornerChoice(corner, choices);
+            if (choice?.rank_points !== undefined) {
+                return choice.rank_points;
+            }
+            if (corner && typeof corner === 'object') {
+                return corner.value?.rank_points ?? corner.rank_points ?? null;
+            }
+            return null;
         },
         async init() {
             this.fights.addListener('save', () => {
@@ -73,16 +83,10 @@
             this.fights.addListener('delete', () => {
                 $store.notifications.error('Failed to delete fight.');
             }, 'error');
-            await this.refreshFights();
+            this.refreshFights();
         },
-        async refreshFights() {
-            this.fightItems = await this.fights.queryWithParams({
-                filter: {name__icontains: this.search}
-            });
-            if (this.fightItems.length > 0 && this.redCornerChoices.length === 0) {
-                this.redCornerChoices = this.fightItems[0].$fields.red_corner.buildChoices('rank_points');
-                this.blueCornerChoices = this.fightItems[0].$fields.blue_corner.buildChoices('rank_points');
-            }
+        refreshFights() {
+            this.fightItems = this.fights.queryWithParams(this.queryParams);
         }
     }">
         <!-- Search -->
@@ -122,26 +126,26 @@
                             <div class="row align-items-center mb-3">
                                 <div class="col-5">
                                     <span class="corner-label text-danger">Red Corner</span>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner.value">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in redCornerChoices" :key="choice.pk">
+                                        <template x-for="choice in fight.red_corner.choices" :key="choice.pk">
                                             <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.red_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-show="cornerRank(fight.red_corner, redCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.red_corner, redCornerChoices)}`"></span>
+                                    <span x-show="cornerRank(fight.red_corner, fight.red_corner.choices) !== null" x-text="`Rank: ${cornerRank(fight.red_corner, fight.red_corner.choices)}`"></span>
                                 </div>
                                 <div class="col-2 text-center">
                                     <span class="vs-badge">VS</span>
                                 </div>
                                 <div class="col-5">
                                     <span class="corner-label text-primary">Blue Corner</span>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner.value">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in blueCornerChoices" :key="choice.pk">
+                                        <template x-for="choice in fight.blue_corner.choices" :key="choice.pk">
                                             <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.blue_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-show="cornerRank(fight.blue_corner, blueCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.blue_corner, blueCornerChoices)}`"></span>
+                                    <span x-show="cornerRank(fight.blue_corner, fight.blue_corner.choices) !== null" x-text="`Rank: ${cornerRank(fight.blue_corner, fight.blue_corner.choices)}`"></span>
                                 </div>
                             </div>
 
@@ -159,28 +163,28 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Location</label>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.location">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.location.value">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.$fields.location.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.location === value"></option>
+                                        <template x-for="[value, label] in fight.location.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.location.value === value"></option>
                                         </template>
                                     </select>
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Weather</label>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.weather_conditions">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.weather_conditions.value">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.$fields.weather_conditions.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.weather_conditions === value"></option>
+                                        <template x-for="[value, label] in fight.weather_conditions.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.weather_conditions.value === value"></option>
                                         </template>
                                     </select>
                                 </div>
                                 <div class="col-4">
                                     <label class="form-label small text-muted mb-1">Terrain</label>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.terrain_type">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.terrain_type.value">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.$fields.terrain_type.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.terrain_type === value"></option>
+                                        <template x-for="[value, label] in fight.terrain_type.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.terrain_type.value === value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -190,10 +194,10 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label class="form-label small text-muted mb-1">Status</label>
-                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.status">
+                                    <select class="form-select form-select-sm form-select-gorilla" x-model="fight.status.value">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.$fields.status.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.status === value"></option>
+                                        <template x-for="[value, label] in fight.status.choices" :key="value">
+                                            <option :value="value" x-text="label" :selected="fight.status.value === value"></option>
                                         </template>
                                     </select>
                                 </div>

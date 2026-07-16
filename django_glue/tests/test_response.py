@@ -1,5 +1,3 @@
-import json
-
 from django.test import TestCase
 
 from django_glue.message import GlueMessage
@@ -7,64 +5,36 @@ from django_glue.response import GlueResponse
 
 
 class GlueResponseTestCase(TestCase):
-    def test_preserves_list_payload_result(self):
-        response = GlueResponse(
-            result=[[1, 'Chest Pound'], [2, 'Ground Slam']],
-            state={'errors': {}},
-        ).to_json_response()
+    def test_stores_result(self):
+        response = GlueResponse(result=[[1, 'Chest Pound'], [2, 'Ground Slam']])
 
-        data = json.loads(response.content)
+        self.assertEqual(response.result, [[1, 'Chest Pound'], [2, 'Ground Slam']])
 
-        self.assertEqual(data['result'], [[1, 'Chest Pound'], [2, 'Ground Slam']])
-        self.assertEqual(data['state'], {'errors': {}})
+    def test_default_result_is_none(self):
+        response = GlueResponse()
 
-    def test_preserves_dict_payload_result(self):
-        response = GlueResponse(
-            result={'valid': True},
-            state={'errors': {}},
-        ).to_json_response()
+        self.assertIsNone(response.result)
 
-        data = json.loads(response.content)
-
-        self.assertEqual(data['result'], {'valid': True})
-
-    def test_includes_messages_in_dict_result(self):
+    def test_stores_messages_as_list(self):
         message = GlueMessage(level=GlueMessage.Level.SUCCESS, message='Saved!')
-        response = GlueResponse(
-            result={'step': 1},
-            state={'errors': {}},
-            messages=[message],
-        ).to_json_response()
 
-        data = json.loads(response.content)
+        response = GlueResponse(result={'step': 1}, messages=(message,))
 
-        self.assertEqual(data['result']['step'], 1)
-        self.assertEqual(len(data['messages']), 1)
-        self.assertEqual(data['messages'][0]['message'], 'Saved!')
+        self.assertEqual(response.messages, [message])
 
-    def test_includes_messages_in_non_dict_result(self):
-        message = GlueMessage(level=GlueMessage.Level.INFO, message='Done')
-        response = GlueResponse(
-            result=[1, 2, 3],
-            state=None,
-            messages=[message],
-        ).to_json_response()
+    def test_default_messages_is_empty_list(self):
+        response = GlueResponse(result={'valid': True})
 
-        data = json.loads(response.content)
+        self.assertEqual(response.messages, [])
 
-        self.assertEqual(data['result'], [1, 2, 3])
-        self.assertEqual(data['messages'][0]['message'], 'Done')
+    def test_stores_status(self):
+        response = GlueResponse(result={'created': True}, status=201)
+
+        self.assertEqual(response.status, 201)
 
     def test_exposes_message_class(self):
         self.assertIs(GlueResponse.Message, GlueMessage)
 
-    def test_no_messages_includes_empty_messages_list(self):
-        response = GlueResponse(
-            result={'valid': True},
-            state=None,
-        ).to_json_response()
-
-        data = json.loads(response.content)
-
-        self.assertEqual(data['result'], {'valid': True})
-        self.assertEqual(data['messages'], [])
+    def test_constructor_rejects_internal_envelope_fields(self):
+        with self.assertRaises(TypeError):
+            GlueResponse(result={'valid': True}, state={'errors': {}})

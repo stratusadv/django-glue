@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.proxies.model.proxy.GlueModelProxy
+::: django_glue.glue.django.model.object.DjangoModelGlue

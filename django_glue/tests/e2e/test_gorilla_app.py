@@ -10,6 +10,13 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import Page, expect, sync_playwright
 
+from test_project.fight.choices import (
+    FightStatusChoices,
+    LocationChoices,
+    TerrainTypeChoices,
+    WeatherConditionChoices,
+)
+from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -62,6 +69,7 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
 
     @classmethod
     def _seed_data(cls) -> None:
+        Fight.objects.all().delete()
         Skill.objects.all().delete()
         Gorilla.objects.all().delete()
 
@@ -98,13 +106,37 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
         )
         beta.skills.set([chest_pound])
 
-        Gorilla.objects.create(
+        gamma = Gorilla.objects.create(
             name='Gamma Grove',
             description='Fast climber from the canopy.',
             age=8,
             weight=155.5,
             height=1.4,
             rank_points=950,
+        )
+
+        Fight.objects.create(
+            name='Alpha vs Beta',
+            description='A deterministic e2e fight.',
+            red_corner=alpha,
+            blue_corner=beta,
+            location=LocationChoices.THUNDERDOME,
+            weather_conditions=WeatherConditionChoices.OMINOUS_CLOUDS,
+            terrain_type=TerrainTypeChoices.LAVA_FLOOR,
+            status=FightStatusChoices.IN_PROGRESS,
+            spectator_count=1234,
+        )
+
+        Fight.objects.create(
+            name='Gamma Exhibition',
+            description='A second fight for filtering.',
+            red_corner=gamma,
+            blue_corner=alpha,
+            location=LocationChoices.COLOSSEUM,
+            weather_conditions=WeatherConditionChoices.PERFECT_BLUE_SKY,
+            terrain_type=TerrainTypeChoices.STEEL_DEATH_CAGE,
+            status=FightStatusChoices.SCHEDULED,
+            spectator_count=50,
         )
 
     def _capture_console(self, message) -> None:
@@ -116,6 +148,11 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
 
     def _goto_combatants(self) -> None:
         self.page.goto(self.live_server_url)
+        expect(self.page.get_by_role('heading', name='Gorilla Fight Simulator')).to_be_visible()
+        self.page.wait_for_function('window.Glue && window.Alpine')
+
+    def _goto_fights(self) -> None:
+        self.page.goto(f'{self.live_server_url}/fight/')
         expect(self.page.get_by_role('heading', name='Gorilla Fight Simulator')).to_be_visible()
         self.page.wait_for_function('window.Glue && window.Alpine')
 
@@ -192,6 +229,87 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
         self.page.wait_for_function(
             """() => document.querySelectorAll('input[placeholder="Fighter Name"]').length < 3"""
         )
+        self._assert_no_console_errors()
+
+    def test_many_to_many_relation_choices_load_for_each_queryset_item(self) -> None:
+        self._goto_combatants()
+
+        self.page.wait_for_function(
+            """() => {
+                const gorillas = window.Glue?.querySet?.gorillas?.queryWithParams({
+                    filter: {name__icontains: ''},
+                    slice: {start: 0, stop: 100},
+                    order_by: 'name',
+                }) || [];
+                return gorillas.length === 3
+                    && gorillas.every(gorilla => Array.isArray(gorilla.skills.choices))
+                    && gorillas.every(gorilla => gorilla.skills.choices.length === 2);
+            }"""
+        )
+
+        skill_state = self.page.evaluate(
+            """() => window.Glue.querySet.gorillas.queryWithParams({
+                filter: {name__icontains: ''},
+                slice: {start: 0, stop: 100},
+                order_by: 'name',
+            }).map(gorilla => ({
+                name: String(gorilla.name),
+                selected: gorilla.skills.selectedChoices.map(choice => choice.__str__),
+                choiceCount: gorilla.skills.choices.length,
+            }))"""
+        )
+
+        assert skill_state == [
+            {'name': 'Alpha Atlas', 'selected': ['Chest Pound', 'Jungle Roar'], 'choiceCount': 2},
+            {'name': 'Beta Boulder', 'selected': ['Chest Pound'], 'choiceCount': 2},
+            {'name': 'Gamma Grove', 'selected': [], 'choiceCount': 2},
+        ]
+        self._assert_no_console_errors()
+
+    def test_fight_page_hydrates_relation_and_choice_fields(self) -> None:
+        self._goto_fights()
+
+        self.page.wait_for_function(
+            """() => {
+                const fight = window.Glue?.querySet?.fights?.queryWithParams({
+                    filter: {name__icontains: ''}
+                })?.[0];
+                return fight
+                    && fight.red_corner.choices.length === 3
+                    && fight.blue_corner.choices.length === 3
+                    && fight.location.choices.length > 0
+                    && fight.weather_conditions.choices.length > 0
+                    && fight.terrain_type.choices.length > 0
+                    && fight.status.choices.length > 0;
+            }"""
+        )
+
+        fight_state = self.page.evaluate(
+            """() => {
+                const fight = window.Glue.querySet.fights.queryWithParams({
+                    filter: {name__icontains: ''}
+                })[0];
+                return {
+                    name: String(fight.name),
+                    redCorner: fight.red_corner.selectedChoice.__str__,
+                    blueCorner: fight.blue_corner.selectedChoice.__str__,
+                    location: fight.location.selectedLabel,
+                    weather: fight.weather_conditions.selectedLabel,
+                    terrain: fight.terrain_type.selectedLabel,
+                    status: fight.status.selectedLabel,
+                };
+            }"""
+        )
+
+        assert fight_state == {
+            'name': 'Alpha vs Beta',
+            'redCorner': 'Alpha Atlas',
+            'blueCorner': 'Beta Boulder',
+            'location': 'Thunderdome',
+            'weather': 'Ominous Clouds',
+            'terrain': 'Lava Floor',
+            'status': 'In Progress',
+        }
         self._assert_no_console_errors()
 
     def test_model_field_edit_save_persists_to_database(self) -> None:

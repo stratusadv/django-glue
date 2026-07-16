@@ -97,7 +97,7 @@
                     this.completedSteps.push(this.currentStep);
                     this.gorillaId = result.gorilla_id;
                 }
-                // If neither next_step nor gorilla_id, validation failed - errors are on gorilla.$fields
+                // If neither next_step nor gorilla_id, validation failed - errors are on gorilla fields.
             } catch (error) {
                 this.messages = [{level_tag: 'error', message: 'An error occurred. Please try again.'}];
             } finally {
@@ -180,10 +180,10 @@
                                 <h5 class="text-gorilla-green mb-4">Step 1: Basic Information</h5>
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        {% include "components/glue_text_input.html" with glue_field="gorilla.$fields.name" input_class="form-control-gorilla" placeholder="Enter the fighter's name" %}
+                                        {% include "components/glue_text_input.html" with glue_field="gorilla.name" input_class="form-control-gorilla" placeholder="Enter the fighter's name" %}
                                     </div>
                                     <div class="col-md-6">
-                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.age" input_class="form-control-gorilla" placeholder="Enter age" %}
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.age" input_class="form-control-gorilla" placeholder="Enter age" %}
                                     </div>
                                 </div>
                             </div>
@@ -193,10 +193,10 @@
                                 <h5 class="text-gorilla-green mb-4">Step 2: Physical Attributes</h5>
                                 <div class="row g-3">
                                     <div class="col-md-6">
-                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.weight" input_class="form-control-gorilla" placeholder="Enter weight" %}
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.weight" input_class="form-control-gorilla" placeholder="Enter weight" %}
                                     </div>
                                     <div class="col-md-6">
-                                        {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.height" input_class="form-control-gorilla" placeholder="Enter height" %}
+                                        {% include "components/glue_number_input.html" with glue_field="gorilla.height" input_class="form-control-gorilla" placeholder="Enter height" %}
                                     </div>
                                 </div>
                             </div>
@@ -206,7 +206,7 @@
                                 <h5 class="text-gorilla-green mb-4">Step 3: Final Details</h5>
                                 <div class="row g-3">
                                     <div class="col-12">
-                                        {% include "components/glue_textarea.html" with glue_field="gorilla.$fields.description" input_class="form-control-gorilla" rows="4" placeholder="Enter the fighter's backstory, achievements, and fighting spirit..." %}
+                                        {% include "components/glue_textarea.html" with glue_field="gorilla.description" input_class="form-control-gorilla" rows="4" placeholder="Enter the fighter's backstory, achievements, and fighting spirit..." %}
                                     </div>
                                 </div>
                             </div>

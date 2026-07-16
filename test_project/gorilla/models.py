@@ -2,8 +2,8 @@ from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.http import HttpRequest
 
+from django_glue import Glue
 from django_glue.response import GlueResponse
-from django_glue.shortcuts.glue import Glue
 from test_project.gorilla.services import GorillaServiceDescriptor
 
 

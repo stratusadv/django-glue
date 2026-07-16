@@ -53,10 +53,11 @@ nav:
   - API Reference:
       - Python:
           - Glue (Shortcuts): api/glue/shortcuts.md
-          - GlueModelProxy: api/glue/model_object_glue.md
-          - GlueQuerySetProxy: api/glue/query_set_glue.md
-          - GlueFormProxy: api/glue/form_glue.md
-          - GlueFunctionProxy: api/glue/function_glue.md
+          - DjangoModelGlue: api/glue/model_object_glue.md
+          - DjangoQuerySetGlue: api/glue/query_set_glue.md
+          - DjangoFormGlue: api/glue/form_glue.md
+          - DjangoTemplateGlue: api/glue/template_glue.md
+          - PythonFunctionGlue: api/glue/function_glue.md
       - JavaScript:
           - GlueModelProxy: api/javascript/model_object_glue.md
           - GlueQuerySetProxy: api/javascript/query_set_glue.md
