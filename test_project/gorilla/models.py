@@ -54,7 +54,7 @@ class Gorilla(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    services = Glue.Attribute(GorillaServiceDescriptor(), access=Glue.Access.CHANGE)
+    services = Glue.attribute(GorillaServiceDescriptor(), access=Glue.Access.CHANGE)
 
     class Meta:
         db_table = 'gorilla'
@@ -62,7 +62,7 @@ class Gorilla(models.Model):
     def __str__(self) -> str:
         return self.name
 
-    @Glue.Attribute(access=Glue.Access.DELETE)
+    @Glue.attribute(access=Glue.Access.DELETE)
     def battle_cry(self, request: HttpRequest, intensity: str = 'normal') -> GlueResponse:
         """
         Demonstrates a custom Glue action routed from frontend to server.
@@ -99,11 +99,11 @@ class Gorilla(models.Model):
             ],
         )
 
-    @Glue.Attribute(access=Glue.Access.VIEW)
+    @Glue.attribute(access=Glue.Access.VIEW)
     def shout(self, volume: int) -> str:
         return 'A' * volume
 
-    @Glue.Attribute(access=Glue.Access.VIEW)
+    @Glue.attribute(access=Glue.Access.VIEW)
     def something(self) -> None:
         self.age = self.age + 1
         self.save()

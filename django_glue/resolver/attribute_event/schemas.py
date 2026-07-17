@@ -67,10 +67,10 @@ class BoundProxyAttributeEvent(BaseModel):
                 },
             )
 
-        current_session_id = request.session.session_key
-        if policy.session_id != current_session_id:
-            from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
-            raise GlueInvalidPolicyError(policy.name)
+        # current_session_id = request.session.session_key
+        # if policy.session_id != current_session_id:
+        #     from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
+        #     raise GlueInvalidPolicyError(policy.name)
 
         bound_attribute_name = request.resolver_match.kwargs.get('attribute_name')
         if not bound_attribute_name:
