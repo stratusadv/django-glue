@@ -7,9 +7,9 @@ from django.forms import modelform_factory
 from django.utils.datastructures import MultiValueDict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, discover_glue_attributes
+from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.attributes.django.model import DjangoModelFieldGlueAttribute
+from django_glue.glue.attributes.django.model import ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
@@ -43,6 +43,10 @@ class ModelGlue(BaseGlue):
         self.exclude = tuple(exclude)
         self.form_class = form_class
 
+    @property
+    def subjects(self) -> dict[str, Any]:
+        return {'instance': self.instance}
+
     @cached_property
     def identity(self) -> dict[str, Any]:
         instance = self.instance
@@ -54,8 +58,9 @@ class ModelGlue(BaseGlue):
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
-        attributes = {
-            field_name: DjangoModelFieldGlueAttribute(
+        return super().attributes | {
+            field_name: ModelFieldAttribute(
+                owner=self,
                 name=field_name,
                 field=self.instance._meta.get_field(field_name),
                 instance=self.instance,
@@ -63,9 +68,6 @@ class ModelGlue(BaseGlue):
             )
             for field_name in self.get_field_names()
         }
-        attributes.update(discover_glue_attributes(self))
-        attributes.update(discover_glue_attributes(self.instance))
-        return attributes
 
     def get_field_names(self) -> list[str]:
         names = self.fields or tuple(
@@ -79,7 +81,7 @@ class ModelGlue(BaseGlue):
     def state(self) -> dict[str, Any]:
         data: dict[str, Any] = {}
         for field_name in self.get_field_names():
-            data[field_name] = self.attributes[field_name].get_value()
+            data[field_name] = self.attributes[field_name].get()
         return {'instance_data': data, 'errors': {}}
 
     @cached_property
@@ -95,6 +97,10 @@ class ModelGlue(BaseGlue):
                 for name, attribute in self.attributes.items()
                 if name not in fields
             },
+            'initial_state': {
+                'instance_data': {},
+                'errors': {}
+            }
         })
 
     def _field_access(self, field_name: str) -> GlueAccess:

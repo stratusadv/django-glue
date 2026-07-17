@@ -41,10 +41,6 @@ class BaseGlueProxy {
     }
 
     async _call(attribute, kwargs = {}) {
-        return await this._performAttributeRequest(attribute, kwargs)
-    }
-
-    async _performAttributeRequest(attribute, kwargs = {}) {
         const attributeRequest = {attribute, kwargs}
         this._emit('before', attribute, {attributeRequest, object: this})
 

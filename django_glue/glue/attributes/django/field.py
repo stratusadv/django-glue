@@ -1,22 +1,32 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute
+from django_glue.glue.attributes.value import ValueAttribute
+
+if TYPE_CHECKING:
+    from django_glue.glue.base import BaseGlue
 
 
-class BaseDjangoFieldGlueAttribute(BaseGlueAttribute):
-    """Shared metadata behavior for Django field-backed attributes."""
+class BaseDjangoFieldGlueAttribute(ValueAttribute):
+    """
+    Base class for Django field-backed attributes.
+
+    These attributes get their value directly from a Django field rather
+    than using path-based lookup. They provide rich metadata about the
+    field type, validation rules, and choices.
+    """
 
     def __init__(
         self,
         *,
+        owner: BaseGlue,
         name: str,
         field: Any,
         access: GlueAccess,
     ) -> None:
-        super().__init__(name=name, required_access=access, is_callable=False)
+        super().__init__(owner=owner, name=name, access=access)
         self.field = field
 
     @property

@@ -5,9 +5,15 @@ import {createFieldGlue} from "./fields"
 class FieldBackedGlueProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
-        this._ensureFieldState()
-        this._defineFields()
-        this._parseFieldValues()
+        this.loading = false
+
+        this._state === {} && this._initializeState()
+
+        this._initializeFields()
+
+        // this._ensureFieldState()
+        // this._defineFields()
+        // this._parseFieldValues()
     }
 
     get $fields() {
@@ -43,7 +49,13 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
     }
 
     _getFieldValue(fieldName) {
-        // TODO: Re-add deferred state loading
+        if (Object.keys(this._state.instance_data).length == 0 && !this.loading) {
+            this.loading = true
+            this._call('load').then(() => {
+                console.log(fieldName, 'lodaded')
+                this.loading = false
+            })
+        }
         return this._state.instance_data?.[fieldName]
     }
 
@@ -89,8 +101,8 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
 
     _defineFieldProperty(fieldName) {
         Object.defineProperty(this, fieldName, {
-            get: () => this._fields[fieldName],
-            set: value => {
+            get: function () { this._fields[fieldName] },
+            set: function (value) {
                 this._fields[fieldName].value = value?.__glue__isFieldProxy ? value.value : value
             },
             enumerable: true,
@@ -108,10 +120,23 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
     }
 
     _applyResponse(data = {}) {
-        super._applyResponse(data)
+        super._applyResponse.bind(this).call(data)
         this._ensureFieldState()
         this._defineFields()
         this._parseFieldValues()
+    }
+
+    _initializeState() {
+        if (this._state === {}) {
+            this._state.instance_data
+        }
+    }
+
+    _initializeFields() {
+        Object.entries(this._metadata.fields).forEach(([fieldName, fieldDefinition]) => {
+            this._state.instance_data
+        })
+        console.log(this._metadata)
     }
 }
 

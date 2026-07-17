@@ -8,21 +8,24 @@ from django_glue.glue.attributes.django.field import BaseDjangoFieldGlueAttribut
 
 if TYPE_CHECKING:
     from django.db import models
+
     from django_glue.access import GlueAccess
+    from django_glue.glue.base import BaseGlue
 
 
-class DjangoModelFieldGlueAttribute(BaseDjangoFieldGlueAttribute):
+class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
     """GlueAttribute for a Django model field."""
 
     def __init__(
         self,
         *,
+        owner: BaseGlue,
         name: str,
         field: models.Field,
         instance: models.Model,
         access: GlueAccess,
     ) -> None:
-        super().__init__(name=name, field=field, access=access)
+        super().__init__(owner=owner, name=name, field=field, access=access)
         self.instance = instance
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
@@ -40,7 +43,7 @@ class DjangoModelFieldGlueAttribute(BaseDjangoFieldGlueAttribute):
                 f'{self.field.related_model._meta.label_lower}'
             )
 
-    def get_value(self) -> Any:
+    def get(self) -> Any:
         if getattr(self.field, 'many_to_many', False):
             if self.instance.pk is None:
                 return []
@@ -66,6 +69,6 @@ class DjangoModelFieldGlueAttribute(BaseDjangoFieldGlueAttribute):
         except ValueError:
             return None
 
-    def set_value(self, value: Any) -> None:
+    def set(self, value: Any) -> None:
         if self.field.editable:
             self.field.save_form_data(self.instance, value)

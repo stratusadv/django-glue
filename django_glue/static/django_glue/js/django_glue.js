@@ -326,9 +326,6 @@
       return this;
     }
     async _call(attribute, kwargs = {}) {
-      return await this._performAttributeRequest(attribute, kwargs);
-    }
-    async _performAttributeRequest(attribute, kwargs = {}) {
       const attributeRequest = { attribute, kwargs };
       this._emit("before", attribute, { attributeRequest, object: this });
       try {
@@ -779,9 +776,9 @@
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
-      this._ensureFieldState();
-      this._defineFields();
-      this._parseFieldValues();
+      this.loading = false;
+      this._state === {} && this._initializeState();
+      this._initializeFields();
     }
     get $fields() {
       return this._fields;
@@ -811,6 +808,13 @@
       }
     }
     _getFieldValue(fieldName) {
+      if (Object.keys(this._state.instance_data).length == 0 && !this.loading) {
+        this.loading = true;
+        this._call("load").then(() => {
+          console.log(fieldName, "lodaded");
+          this.loading = false;
+        });
+      }
       return this._state.instance_data?.[fieldName];
     }
     _setFieldValue(fieldName, value) {
@@ -849,8 +853,10 @@
     }
     _defineFieldProperty(fieldName) {
       Object.defineProperty(this, fieldName, {
-        get: () => this._fields[fieldName],
-        set: (value) => {
+        get: function() {
+          this._fields[fieldName];
+        },
+        set: function(value) {
           this._fields[fieldName].value = value?.__glue__isFieldProxy ? value.value : value;
         },
         enumerable: true,
@@ -863,22 +869,27 @@
       });
     }
     _applyResponse(data = {}) {
-      super._applyResponse(data);
+      super._applyResponse.bind(this).call(data);
       this._ensureFieldState();
       this._defineFields();
       this._parseFieldValues();
+    }
+    _initializeState() {
+      if (this._state === {}) {
+        this._state.instance_data;
+      }
+    }
+    _initializeFields() {
+      Object.entries(this._metadata.fields).forEach(([fieldName, fieldDefinition]) => {
+        this._state.instance_data;
+      });
+      console.log(this._metadata);
     }
   }
   var fieldBacked_default = FieldBackedGlueProxy;
 
   // client_js/src/proxies/form.js
   class GlueFormProxy extends fieldBacked_default {
-    async validate() {
-      return await this._call("validate");
-    }
-    async save() {
-      return await this._call("save");
-    }
   }
   var form_default = GlueFormProxy;
 
@@ -920,12 +931,6 @@
 
   // client_js/src/proxies/model.js
   class GlueModelProxy extends fieldBacked_default {
-    async save() {
-      return await this._call("save");
-    }
-    async validate() {
-      return await this._call("validate");
-    }
     async delete() {
       const result = await this._call("delete");
       this.$collection?._removeRowProxy(this);
@@ -1146,11 +1151,6 @@
   // client_js/src/client.js
   class GlueClient {
     constructor(context) {
-      this.model = {};
-      this.querySet = {};
-      this.form = {};
-      this.template = {};
-      this.function = {};
       this.proxies = {};
       this._onMessage = null;
       this._onError = null;
@@ -1193,10 +1193,12 @@
       if (!ProxyClass) {
         throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`);
       }
-      const proxy = namespace === "function" ? ProxyClass.create({ http: this.http, policy, state, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata });
-      this.proxies[name] = proxy;
-      this[namespace][name] = proxy;
-      return proxy;
+      if (!(namespace in this)) {
+        this[namespace] = {};
+      }
+      Object.defineProperty(this[namespace], name, {
+        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, state, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata })
+      });
     }
   }
   var client_default = GlueClient;

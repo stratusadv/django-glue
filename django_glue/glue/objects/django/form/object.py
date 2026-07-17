@@ -7,9 +7,9 @@ from django import forms
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, discover_glue_attributes
+from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.attributes.django.form import DjangoFormFieldGlue
+from django_glue.glue.attributes.django.form import FormFieldAttribute
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.attributes import Attribute
@@ -30,7 +30,11 @@ class FormGlue(BaseGlue):
         super().__init__(request=request, name=name, access=access)
         self.form = form
 
-    @cached_property
+    @property
+    def subjects(self) -> dict[str, Any]:
+        return {'form': self.form}
+
+    @property
     def identity(self) -> dict[str, Any]:
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
@@ -39,8 +43,9 @@ class FormGlue(BaseGlue):
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
-        attributes = {
-            name: DjangoFormFieldGlue(
+        return super().attributes | {
+            name: FormFieldAttribute(
+                owner=self,
                 name=name,
                 field=field,
                 form=self.form,
@@ -48,11 +53,30 @@ class FormGlue(BaseGlue):
             )
             for name, field in self.form.fields.items()
         }
-        attributes.update(discover_glue_attributes(self))
-        return attributes
+
+    def _resolve_instance(self) -> None:
+        print(self)
+        if (
+            isinstance(self.form, forms.ModelForm)
+            and getattr(self.form, 'instance', None) is not None
+            and self.form.instance.pk is None
+            and hasattr(self, 'policy')
+            and self.policy.identity.get('target_pk') is not None
+        ):
+            model_class = self.form._meta.model
+            target_pk = self.policy.identity['target_pk']
+            try:
+                model_instance = model_class.objects.get(pk=target_pk)
+                self.form.instance = model_instance
+                from django.forms.models import model_to_dict
+                opts = self.form._meta
+                self.form.initial = model_to_dict(model_instance, opts.fields, opts.exclude)
+            except model_class.DoesNotExist:
+                pass
 
     @property
     def state(self) -> dict[str, Any]:
+        self._resolve_instance()
         return {
             'instance_data': dict(self.form.data) if self.form.is_bound else self.form.initial,
             'errors': dict(self.form.errors),
@@ -129,5 +153,12 @@ class FormGlue(BaseGlue):
         state: dict[str, Any],
         request: HttpRequest,
     ) -> forms.BaseForm:
+        self._resolve_instance()
         form_class = self.form.__class__
-        return form_class(data=state.get('instance_data', {}), files=request.FILES or None)
+        kwargs = {
+            'data': state.get('instance_data', {}),
+            'files': request.FILES or None,
+        }
+        if isinstance(self.form, forms.ModelForm) and getattr(self.form, 'instance', None) is not None:
+            kwargs['instance'] = self.form.instance
+        return form_class(**kwargs)

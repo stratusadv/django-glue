@@ -1,11 +1,17 @@
 from django_glue.glue.attributes.base import BaseGlueAttribute
-from django_glue.glue.attributes.declared import Attribute, DeclaredGlueAttribute
-from django_glue.glue.attributes.utils import build_attribute_kwargs, discover_glue_attributes
+from django_glue.glue.attributes.callable import (
+    CallableAttribute,
+    PreparedAttributeCall,
+)
+from django_glue.glue.attributes.declared import Attribute
+from django_glue.glue.attributes.utils import discover_glue_attributes
+from django_glue.glue.attributes.value import ValueAttribute
 
 __all__ = [
     'Attribute',
-    'DeclaredGlueAttribute',
     'BaseGlueAttribute',
-    'build_attribute_kwargs',
+    'CallableAttribute',
+    'PreparedAttributeCall',
+    'ValueAttribute',
     'discover_glue_attributes',
 ]

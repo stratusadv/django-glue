@@ -1,36 +1,43 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, get_type_hints
-
-# Runtime import required: build_attribute_kwargs injects this into get_type_hints()
-# so Glue.Attribute methods may annotate request parameters as HttpRequest.
-from django.http import HttpRequest
+from typing import Any, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.base import BaseGlueAttribute
 
+if TYPE_CHECKING:
+    from django_glue.glue.base import BaseGlue
 
-def discover_glue_attributes(owner: Any) -> dict[str, BaseGlueAttribute]:
-    return _discover_glue_attributes(owner=owner, instance=owner, path_prefix='', visited=set())
+
+def discover_glue_attributes(owner: BaseGlue) -> dict[str, BaseGlueAttribute]:
+    """
+    Discover all Glue attributes on a GlueObject.
+
+    Walks the owner and its subjects, finding all @Attribute-decorated
+    members and returning them as a flat dict with dotted path names.
+    """
+    return _discover_glue_attributes(owner=owner, target=owner, path_prefix='', visited=set())
 
 
+# TODO: this could be optimized - right now does 2 loops through target attrs
 def _discover_glue_attributes(
     *,
-    owner: Any,
-    instance: Any,
+    owner: BaseGlue,
+    target: Any,
     path_prefix: str,
     visited: set[int],
 ) -> dict[str, BaseGlueAttribute]:
-    from django_glue.glue.attributes.declared import DeclaredGlueAttribute
+    from django_glue.glue.attributes.callable import CallableAttribute
+    from django_glue.glue.attributes.value import ValueAttribute
 
-    instance_id = id(instance)
+    instance_id = id(target)
     if instance_id in visited:
         return {}
     visited.add(instance_id)
 
     attributes: dict[str, BaseGlueAttribute] = {}
-    cls = instance.__class__
+    cls = target.__class__
 
     for attr_name, attr in inspect.getmembers_static(cls):
         access = _get_required_glue_access(cls, attr_name, attr)
@@ -38,12 +45,13 @@ def _discover_glue_attributes(
             continue
 
         name = f'{path_prefix}.{attr_name}' if path_prefix else attr_name
-        attributes[name] = DeclaredGlueAttribute(
-            name=name,
-            owner=owner,
-            access=access,
-            is_callable=getattr(attr, 'is_callable', True),
-        )
+
+        # TODO: this could use a better name - really means requires client invocation
+        is_callable = getattr(attr, 'is_callable', True)
+        if is_callable:
+            attributes[name] = CallableAttribute(owner=owner, name=name, access=access)
+        else:
+            attributes[name] = ValueAttribute(owner=owner, name=name, access=access)
 
     for attr_name, class_attr in inspect.getmembers_static(cls):
         if attr_name.startswith('_') or not hasattr(class_attr, '__get__'):
@@ -53,8 +61,8 @@ def _discover_glue_attributes(
             continue
 
         try:
-            value = getattr(instance, attr_name)
-        except Exception:
+            value = getattr(target, attr_name)
+        except Exception:  # noqa: S112
             continue
 
         if value is None or callable(value):
@@ -66,7 +74,7 @@ def _discover_glue_attributes(
         attributes.update(
             _discover_glue_attributes(
                 owner=owner,
-                instance=value,
+                target=value,
                 path_prefix=nested_prefix,
                 visited=visited,
             )
@@ -96,42 +104,3 @@ def _get_required_glue_access(cls: type, attr_name: str, attr: Any) -> GlueAcces
             return access
 
     return None
-
-
-def build_attribute_kwargs(
-    attribute: Any,
-    *,
-    request_kwargs: dict[str, Any],
-    context: dict[str, Any],
-) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {}
-    unwrapped = inspect.unwrap(attribute)
-    signature = inspect.signature(unwrapped)
-    function_globals = getattr(unwrapped, '__globals__', {})
-    type_hints = get_type_hints(unwrapped, globalns={**function_globals, 'HttpRequest': HttpRequest})
-    accepts_var_kwargs = any(
-        param.kind == inspect.Parameter.VAR_KEYWORD
-        for param in signature.parameters.values()
-    )
-
-    for param_name, param in signature.parameters.items():
-        if param_name == 'self':
-            continue
-        if param_name in context:
-            kwargs[param_name] = context[param_name]
-            continue
-        hint = type_hints.get(param_name)
-        if hint is not None and isinstance(hint, type) and issubclass(hint, HttpRequest):
-            kwargs[param_name] = context['request']
-            continue
-        if param_name in request_kwargs:
-            kwargs[param_name] = request_kwargs[param_name]
-            continue
-        if param_name not in kwargs and param.default is inspect.Parameter.empty:
-            continue
-
-    if accepts_var_kwargs:
-        for key, value in request_kwargs.items():
-            kwargs.setdefault(key, value)
-
-    return kwargs

@@ -4,14 +4,28 @@ from typing import Any
 from typing import Callable
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.base import BaseGlueAttribute
-from django_glue.glue.attributes.utils import build_attribute_kwargs
-from django_glue.utils import get_attr_from_path_string_on_instance
 
 _MISSING = object()
 
 
 class Attribute:
+    """
+    Descriptor for marking methods or values as Glue attributes.
+
+    Use as a decorator on methods or assign directly on classes to expose
+    them through the Glue system. The access level determines what operations
+    are permitted on this attribute.
+
+    Examples:
+        # As a decorator on a method
+        @Attribute(access=GlueAccess.CHANGE)
+        def save(self, data: dict) -> dict:
+            ...
+
+        # As a class attribute for a value
+        services = Attribute(TaskService(), access=GlueAccess.DELETE)
+    """
+
     def __init__(self, value: Any = _MISSING, *, access: GlueAccess) -> None:
         self.__required_glue_access__ = access
         self.default = _MISSING
@@ -91,29 +105,3 @@ class Attribute:
     @staticmethod
     def _is_decoratable(value: Any) -> bool:
         return callable(value) or isinstance(value, property)
-
-
-class DeclaredGlueAttribute(BaseGlueAttribute):
-    def __init__(
-        self,
-        *,
-        name: str,
-        owner: Any,
-        access: GlueAccess,
-        is_callable: bool,
-    ) -> None:
-        super().__init__(name=name, required_access=access, is_callable=is_callable)
-        self.owner = owner
-
-    @property
-    def metadata(self) -> dict[str, Any]:
-        return {'namespace': 'callable' if self.is_callable else 'value'}
-
-    def get_value(self) -> Any:
-        return get_attr_from_path_string_on_instance(self.owner, self.name)
-
-    def call(self, kwargs: dict[str, Any], context: dict[str, Any]) -> Any:
-        value = self.get_value()
-        if not callable(value):
-            return value
-        return value(**build_attribute_kwargs(value, request_kwargs=kwargs, context=context))

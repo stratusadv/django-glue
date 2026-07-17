@@ -1,13 +1,5 @@
 import FieldBackedGlueProxy from "./fieldBacked"
 
-class GlueFormProxy extends FieldBackedGlueProxy {
-    async validate() {
-        return await this._call('validate')
-    }
-
-    async save() {
-        return await this._call('save')
-    }
-}
+class GlueFormProxy extends FieldBackedGlueProxy {}
 
 export default GlueFormProxy

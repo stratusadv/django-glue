@@ -1,3 +1,3 @@
-from django_glue.glue.attributes.django.form.field import DjangoFormFieldGlue
+from django_glue.glue.attributes.django.form.field import FormFieldAttribute
 
-__all__ = ['DjangoFormFieldGlue']
+__all__ = ['FormFieldAttribute']

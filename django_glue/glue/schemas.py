@@ -8,19 +8,30 @@ from django.http import HttpRequest
 from pydantic import BaseModel, Field, model_validator
 
 from django_glue.glue.policy import GluePolicy
-from django_glue.exceptions import GlueInvalidPolicyError, GlueInvalidSessionError, GlueRequestError
+from django_glue.exceptions import GlueInvalidSessionError, GlueRequestError
 
 
-class GlueAttributeRequest(BaseModel):
-    """Parsed adapter attribute request."""
+class AttributeCallResolverContext(BaseModel):
+    """
+    Validated input context for resolving a client-initiated attribute call.
+
+    This object parses and validates an incoming HTTP request into the components
+    needed to resolve an attribute call against a Glue object. It performs
+    request-level validation (content type, required fields, JSON parsing, session
+    matching) but does not resolve the Glue object or execute the attribute.
+
+    All fields represent client-provided data that has been validated for structure
+    but not yet for authorization or business logic. The resolver uses this context
+    to reconstruct the target Glue object and dispatch the attribute call.
+    """
 
     model_config = {'arbitrary_types_allowed': True}
 
     request: HttpRequest
-    policy: GluePolicy
-    state: Any = None
-    attribute: str
-    kwargs: dict[str, Any] = Field(default_factory=dict)
+    target_glue_policy: GluePolicy
+    target_glue_client_state: Any = None
+    target_attribute_name: str
+    target_attribute_call_kwargs: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode='before')
     @classmethod
@@ -49,7 +60,7 @@ class GlueAttributeRequest(BaseModel):
                 message='"attribute" is required.',
             )
 
-        parsed_policy = GluePolicy.model_validate(policy)
+        validated_policy = GluePolicy.model_validate(policy)
 
         if not request.resolver_match:
             raise GlueRequestError(
@@ -58,23 +69,23 @@ class GlueAttributeRequest(BaseModel):
             )
 
         path_name = request.resolver_match.kwargs.get('object_name')
-        if path_name != parsed_policy.name:
+        if path_name != validated_policy.name:
             raise GlueRequestError(
                 code='policy_name_mismatch',
                 message='Object name mismatch between URL path and policy.',
-                details={'path_name': path_name, 'policy_name': parsed_policy.name},
+                details={'path_name': path_name, 'policy_name': validated_policy.name},
             )
 
         current_session_id = request.session.session_key
-        if parsed_policy.session_id != current_session_id:
-            raise GlueInvalidSessionError(parsed_policy.name)
+        if validated_policy.session_id != current_session_id:
+            raise GlueInvalidSessionError(validated_policy.name)
 
         return {
             'request': request,
-            'policy': parsed_policy,
-            'state': state,
-            'attribute': attribute,
-            'kwargs': kwargs,
+            'target_glue_policy': validated_policy,
+            'target_glue_client_state': state,
+            'target_attribute': attribute,
+            'target_attribute_call_kwargs': kwargs,
         }
 
     @staticmethod

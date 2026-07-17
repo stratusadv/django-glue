@@ -1,3 +1,3 @@
-from django_glue.glue.attributes.django.model.field import DjangoModelFieldGlueAttribute
+from django_glue.glue.attributes.django.model.field import ModelFieldAttribute
 
-__all__ = ['DjangoModelFieldGlueAttribute']
+__all__ = ['ModelFieldAttribute']

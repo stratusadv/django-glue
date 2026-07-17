@@ -7,7 +7,7 @@ from typing import Any, Sequence, TYPE_CHECKING
 
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, discover_glue_attributes
+from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.metadata import GlueMetadata

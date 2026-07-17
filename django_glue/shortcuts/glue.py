@@ -6,13 +6,13 @@ from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.context import GlueContextManager
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.attributes import Attribute
-from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 
 
 class Glue:
@@ -24,14 +24,7 @@ class Glue:
         request: HttpRequest,
         glue: BaseGlue,
     ) -> None:
-        # TODO: Encapsulate this in Manifest Helper/Manager
-        if DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY not in request.__dict__:
-            request.__dict__[DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY] = []
-
-        if request.session.session_key is None:
-            request.session.save()
-
-        request.__dict__[DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY].append(glue.manifest)
+        GlueContextManager(request).add_glue(glue)
 
     @staticmethod
     def model(

@@ -1,44 +1,34 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueRequestError
+from django_glue.utils import get_attr_from_path_string_on_instance
+
+if TYPE_CHECKING:
+    from django_glue.glue.base import BaseGlue
 
 
 class BaseGlueAttribute(ABC):
-    def __init__(self, *, name: str, required_access: GlueAccess, is_callable: bool) -> None:
+    """
+    Base class for all Glue attributes.
+
+    Attributes represent named access points on a Glue object - either readable
+    values (ValueAttribute) or callable methods (CallableAttribute). The name
+    is a dotted path from the owner GlueObject to the attribute.
+    """
+
+    def __init__(self, *, owner: BaseGlue, name: str, access: GlueAccess) -> None:
+        self.owner = owner
         self.name = name
-        self.required_access = required_access
-        self.is_callable = is_callable
+        self.required_access = access
 
     @property
     @abstractmethod
     def metadata(self) -> dict[str, Any]:
         raise NotImplementedError
 
-    def get_value(self) -> Any:
-        # TODO: change these to something attribute specific
-        raise GlueRequestError(
-            code='attribute_not_readable',
-            message=f"Attribute '{self.name}' is not readable.",
-            details={'attribute': self.name},
-            status=422,
-        )
-
-    def set_value(self, value: Any) -> None:
-        raise GlueRequestError(
-            code='attribute_not_writable',
-            message=f"Attribute '{self.name}' is not writable.",
-            details={'attribute': self.name},
-            status=422,
-        )
-
-
-    # TODO: context - should not be dict
-    def call(self, kwargs: dict[str, Any], context: dict[str, Any]) -> Any:
-        raise GlueRequestError(
-            code='attribute_not_callable',
-            message=f"Attribute '{self.name}' is not callable.",
-            details={'attribute': self.name},
-            status=422,
-        )
+    def get(self) -> Any:
+        """Get the target at this attribute's path from the owner."""
+        return get_attr_from_path_string_on_instance(self.owner, self.name)

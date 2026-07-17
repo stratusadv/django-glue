@@ -1,9 +1,9 @@
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.objects.django import (
-    DjangoFormFieldGlue,
+    FormFieldAttribute,
     FormGlue,
-    DjangoModelFieldGlueAttribute,
+    ModelFieldAttribute,
     ModelGlue,
     QuerySetGlue,
     TemplateGlue,
@@ -15,9 +15,9 @@ from django_glue.glue.registry import GlueObjectResolverRegistry, glue_object_re
 
 __all__ = [
     'BaseGlue',
-    'DjangoFormFieldGlue',
+    'FormFieldAttribute',
     'FormGlue',
-    'DjangoModelFieldGlueAttribute',
+    'ModelFieldAttribute',
     'ModelGlue',
     'QuerySetGlue',
     'TemplateGlue',

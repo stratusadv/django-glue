@@ -7,9 +7,9 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_POST
 from pydantic import ValidationError
 
-from django_glue.glue.schemas import GlueAttributeRequest
+from django_glue.glue.schemas import AttributeCallResolverContext
 from django_glue.exceptions import GlueError, GlueRequestError
-from django_glue.resolver.callable_attribute import GlueCallableAttributeResolver
+from django_glue.resolver.callable_attribute import AttributeCallResolver
 from django_glue.views.error_response import glue_error_response
 
 logger = logging.getLogger('django.request')
@@ -18,7 +18,7 @@ logger = logging.getLogger('django.request')
 @require_POST
 def glue_attribute_call_view(request: HttpRequest, *, object_name: str, attribute_name: str) -> JsonResponse:
     try:
-        attribute_request = GlueAttributeRequest.model_validate(request)
+        attribute_request = AttributeCallResolverContext.model_validate(request)
     except GlueError as e:
         if e.status >= 500:
             logger.exception(
@@ -37,7 +37,7 @@ def glue_attribute_call_view(request: HttpRequest, *, object_name: str, attribut
         )
 
     try:
-        return GlueCallableAttributeResolver(attribute_request).resolve()
+        return AttributeCallResolver(attribute_request).resolve()
     except GlueError as e:
         if e.status >= 500:
             logger.exception('Django Glue attribute request failed: object=%s', object_name)

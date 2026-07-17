@@ -6,11 +6,11 @@ import {GlueProxyError} from "./errors"
 
 class GlueClient {
     constructor(context) {
-        this.model = {}
-        this.querySet = {}
-        this.form = {}
-        this.template = {}
-        this.function = {}
+        // this.model = {}
+        // this.querySet = {}
+        // this.form = {}
+        // this.template = {}
+        // this.function = {}
         this.proxies = {}
         this._onMessage = null
         this._onError = null
@@ -65,13 +65,15 @@ class GlueClient {
             throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`)
         }
 
-        const proxy = namespace === 'function'
+        if (!(namespace in this)) {
+            this[namespace] = {}
+        }
+
+        Object.defineProperty(this[namespace], name, {
+            get: () => namespace === 'function'
             ? ProxyClass.create({http: this.http, policy, state, metadata})
             : new ProxyClass({http: this.http, policy, state, metadata})
-
-        this.proxies[name] = proxy
-        this[namespace][name] = proxy
-        return proxy
+        })
     }
 }
 

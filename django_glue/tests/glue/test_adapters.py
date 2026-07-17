@@ -9,8 +9,8 @@ from django.test import TestCase
 
 from django_glue.access import GlueAccess
 from django_glue.glue import (
-    DjangoFormFieldGlue,
-    DjangoModelFieldGlueAttribute,
+    FormFieldAttribute,
+    ModelFieldAttribute,
     FormGlue,
     ModelGlue,
     QuerySetGlue,
@@ -91,7 +91,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
     def test_model_field_adapter_marks_non_editable_fields_read_only(self):
         field = Gorilla._meta.get_field('created_at')
-        attribute = DjangoModelFieldGlueAttribute(
+        attribute = ModelFieldAttribute(
             name='created_at',
             field=field,
             instance=self.gorilla,
@@ -261,7 +261,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
     def test_form_field_adapter_builds_metadata(self):
         form = ContactForm()
         field = form.fields['name']
-        attribute = DjangoFormFieldGlue(
+        attribute = FormFieldAttribute(
             name='name',
             field=field,
             form=form,
