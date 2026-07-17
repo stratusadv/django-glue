@@ -6,11 +6,14 @@ from django.http import HttpRequest
 
 from django_glue.access.access import GlueAccess
 from django_glue.bound_attributes.decorators import Attribute
+from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
 class Glue:
     Access = GlueAccess
-    Attribute = Attribute
+    attribute = Attribute
+    Response = GlueResponse
+    RedirectResponse = GlueRedirectResponse
 
     @staticmethod
     def model(
