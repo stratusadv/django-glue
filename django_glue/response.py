@@ -42,7 +42,7 @@ class GlueRedirectResponse:
             result={
                 'redirect': {
                     'url': reverse(
-                        'django_spire:auth:user:page:detail', kwargs=kwargs
+                        view_name, kwargs=kwargs
                     )
                 }
             }
