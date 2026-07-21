@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from django.db.models import Model, QuerySet
-from django.forms import BaseForm, ModelForm
+from django.forms import BaseForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
@@ -13,11 +13,14 @@ from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.attributes import Attribute
+from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
 class Glue:
     Access = GlueAccess
-    Attribute = Attribute
+    attribute = Attribute
+    Response = GlueResponse
+    RedirectResponse = GlueRedirectResponse
 
     @staticmethod
     def object(
@@ -34,18 +37,15 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
-        form_class: type[ModelForm] | None = None,
     ) -> None:
         Glue.object(
             request=request,
             glue=ModelGlue(
                 instance=target,
-                request=request,
                 name=unique_name,
                 access=access,
                 fields=fields,
                 exclude=exclude,
-                form_class=form_class,
             ),
         )
 
@@ -62,7 +62,6 @@ class Glue:
             request=request,
             glue=QuerySetGlue(
                 queryset=target,
-                request=request,
                 name=unique_name,
                 access=access,
                 fields=fields,
@@ -79,9 +78,8 @@ class Glue:
     ) -> None:
         Glue.object(
             request=request,
-            glue=FormGlue( #TODO: remove DJANGO
+            glue=FormGlue(
                 form=target,
-                request=request,
                 name=unique_name,
                 access=access,
             ),
@@ -98,7 +96,6 @@ class Glue:
             request=request,
             glue=TemplateGlue(
                 target,
-                request=request,
                 name=unique_name,
                 access=GlueAccess.VIEW,
                 initial_context_data=initial_context_data,
@@ -115,7 +112,6 @@ class Glue:
             request=request,
             glue=FunctionGlue(
                 target,
-                request=request,
                 name=unique_name,
                 access=GlueAccess.VIEW,
             ),

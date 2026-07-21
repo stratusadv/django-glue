@@ -16,10 +16,8 @@ from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.attributes import Attribute
 from django_glue.exceptions import GlueQuerySetFilterValidationError
-from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
     from django.db import models
 
 
@@ -30,18 +28,17 @@ class QuerySetGlue(BaseGlue):
         self,
         queryset: models.QuerySet,
         *,
-        request: HttpRequest,
         name: str,
         access: GlueAccess,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
     ) -> None:
-        super().__init__(request=request, name=name, access=access)
+        super().__init__(name=name, access=access)
         self.queryset = queryset
         self.fields = tuple(fields)
         self.exclude = tuple(exclude)
 
-    @cached_property
+    @property
     def identity(self) -> dict[str, Any]:
         return {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
@@ -49,10 +46,18 @@ class QuerySetGlue(BaseGlue):
             'pk_field_name': self.queryset.model._meta.pk.name,
         }
 
-    def get_field_names(self) -> list[str]:
+    @property
+    def attribute_providers(self) -> dict[str, Any]:
+        return {}
+
+    @cached_property
+    def _included_fields(self) -> list[str]:
         names = self.fields or tuple(
             field.name
-            for field in [*self.queryset.model._meta.fields, *self.queryset.model._meta.many_to_many]
+            for field in [
+                *self.queryset.model._meta.fields,
+                *self.queryset.model._meta.many_to_many
+            ]
         )
         excluded = set(self.exclude)
         return [name for name in names if name not in excluded]
@@ -62,22 +67,24 @@ class QuerySetGlue(BaseGlue):
         model_instance = self.queryset.model()
         model_object = ModelGlue(
             model_instance,
-            request=self.request,
             name=f'{self.name}.__model__',
             access=self.access,
-            fields=self.get_field_names(),
+            fields=self._included_fields,
         )
-        model_declared_names = set(discover_glue_attributes(model_object))
-        attributes = {
+        # Get field attributes from the model, excluding model's declared attributes
+        field_names = set(self._included_fields)
+        attributes: dict[str, BaseGlueAttribute] = {
             name: attribute
             for name, attribute in model_object.attributes.items()
-            if name in self.get_field_names() or name not in model_declared_names
+            if name in field_names
         }
-        attributes.update(discover_glue_attributes(self))
+        # Add our own declared attributes
+        attributes.update(super().attributes)
         return attributes
 
     @property
     def state(self) -> dict[str, Any]:
+        # QuerySet has no instance-level state - individual items have their own state
         return {}
 
     @cached_property
@@ -85,32 +92,31 @@ class QuerySetGlue(BaseGlue):
         model_instance = self.queryset.model()
         return ModelGlue(
             model_instance,
-            request=self.request,
             name=f'{self.name}.__model__',
             access=self.access,
-            fields=self.get_field_names(),
+            fields=self._included_fields,
         ).metadata
 
     @classmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> QuerySetGlue:
+    def _from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
         queryset = cls._decode_queryset_query(policy.identity['encoded_queryset'])
+        model_field_names = {
+            field.name
+            for field in [*queryset.model._meta.fields, *queryset.model._meta.many_to_many]
+        }
+        fields = [
+            attr_name
+            for attr_name in policy.attributes
+            if attr_name in model_field_names
+        ]
         glue_object = cls(
             queryset,
-            request=request,
             name=policy.name,
             access=policy.access,
-            fields=cls._field_names_from_policy(policy, queryset.model),
+            fields=fields,
         )
         glue_object.policy = policy
         return glue_object
-
-    @classmethod
-    def _field_names_from_policy(
-        cls,
-        policy: GluePolicy,
-        model_class: type[models.Model],
-    ) -> list[str]:
-        return ModelGlue.field_names_from_policy(policy, model_class)
 
     @staticmethod
     def _encode_queryset_query(queryset: models.QuerySet) -> str:
@@ -127,11 +133,9 @@ class QuerySetGlue(BaseGlue):
     def query_with_params(
         self,
         kwargs: dict[str, Any],
-        policy: GluePolicy,
-        request: HttpRequest,
     ) -> dict[str, Any]:
         queryset = self.queryset
-        allowed_fields = set(self._field_names_from_policy(policy, queryset.model))
+        allowed_fields = set(self._included_fields)
 
         for key in (kwargs.get('filter') or {}):
             base_field = key.split('__')[0]
@@ -158,11 +162,11 @@ class QuerySetGlue(BaseGlue):
         child_name = f'{self.policy.name}.{instance.pk}'
         child_object = ModelGlue(
             instance,
-            request=self.request,
             name=child_name,
             access=self.policy.access,
-            fields=self._field_names_from_policy(self.policy, instance.__class__),
+            fields=self._included_fields,
         )
+        child_object.request = self.request
 
         return {
             **child_object.manifest.model_dump(),

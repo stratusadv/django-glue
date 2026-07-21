@@ -92,7 +92,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     async new() {
-        return await this._call('new')
+        return await this._callAttribute('new')
     }
 
     _applyResponse(data = {}) {
@@ -197,7 +197,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     _removeRowProxy(proxy) {
         const rowIndex = this._itemPayloads.findIndex(row => {
-            return row?.policy?.name === proxy.$name
+            return row?.policy?.name === proxy._name
                 || row?.policy?.identity?.target_pk === proxy.$pk
                 || row?.id === proxy.$pk
                 || row?.pk === proxy.$pk
@@ -208,7 +208,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
             this._items.splice(rowIndex, 1)
         }
 
-        this._rowProxies.delete(proxy.$name)
+        this._rowProxies.delete(proxy._name)
     }
 }
 

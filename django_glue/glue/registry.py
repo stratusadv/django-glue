@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from django.http import HttpRequest
+from typing import TYPE_CHECKING
 
-from django_glue.glue.base import BaseGlue
-from django_glue.glue.policy import GluePolicy
+if TYPE_CHECKING:
+    from django_glue.glue.base import BaseGlue
 
 
 class GlueObjectResolverRegistry:
@@ -15,17 +15,12 @@ class GlueObjectResolverRegistry:
     def register_glue_object_class(self, glue_object_class: type[BaseGlue]) -> None:
         self.glue_object_classes[glue_object_class.namespace] = glue_object_class
 
-    def get_object_for_policy(
-        self,
-        policy: GluePolicy,
-        request: HttpRequest,
-    ) -> BaseGlue:
-        glue_object_class = self.glue_object_classes.get(policy.namespace)
+    def get_class_for_namespace(self, namespace: str) -> type[BaseGlue]:
+        glue_object_class = self.glue_object_classes.get(namespace)
         if glue_object_class is None:
-            msg = f"No Glue object registered for namespace '{policy.namespace}'"
+            msg = f"No Glue object registered for namespace '{namespace}'"
             raise KeyError(msg)
-
-        return glue_object_class.from_policy(policy, request)
+        return glue_object_class
 
 
 glue_object_resolver_registry = GlueObjectResolverRegistry()

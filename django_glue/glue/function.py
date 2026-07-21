@@ -4,8 +4,6 @@ import inspect
 from functools import cached_property
 from typing import Any, Callable
 
-from django.http import HttpRequest
-
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import Attribute
 from django_glue.glue.base import BaseGlue
@@ -21,11 +19,10 @@ class FunctionGlue(BaseGlue):
         self,
         target: str | None = None,
         *,
-        request: HttpRequest,
         name: str,
         access: GlueAccess = GlueAccess.VIEW,
     ) -> None:
-        super().__init__(request=request, name=name, access=access)
+        super().__init__(name=name, access=access)
         self.target = target
 
     @property
@@ -52,10 +49,9 @@ class FunctionGlue(BaseGlue):
         })
 
     @classmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> 'FunctionGlue':
+    def _from_policy(cls, policy: GluePolicy) -> 'FunctionGlue':
         glue_object = cls(
             policy.identity['function_path'],
-            request=request,
             name=policy.name,
             access=policy.access,
         )

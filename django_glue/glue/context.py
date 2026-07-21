@@ -22,10 +22,15 @@ class GlueManifest(BaseModel):
 
 class GlueContextManager:
     def __init__(self, request: HttpRequest) -> None:
+        self.request = request
         self.manifests: list[GlueManifest] = \
             request.__dict__.setdefault(DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY, [])
 
     def add_glue(self, glue: BaseGlue) -> None:
+        # Ensure session exists (Django creates sessions lazily)
+        if not self.request.session.session_key:
+            self.request.session.create()
+        glue.request = self.request
         self.manifests.append(glue.manifest)
 
     @property

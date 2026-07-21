@@ -1,11 +1,23 @@
 import ChoiceFieldGlue from "./choice"
 
 class RelationFieldGlue extends ChoiceFieldGlue {
-    static choicesCache = new Map()
+    // Static cache tracks loading state only, not data
+    static loadingCache = new Map()
 
-    updateMetadata(metadata = {}) {
-        super.updateMetadata(metadata)
-        this._initializeChoices()
+    get choices() {
+        const key = this._getChoicesCacheKey()
+        if (!this.owner._relationChoices) {
+            this.owner._relationChoices = {}
+        }
+        return this.owner._relationChoices[key] || []
+    }
+
+    set choices(value) {
+        const key = this._getChoicesCacheKey()
+        if (!this.owner._relationChoices) {
+            this.owner._relationChoices = {}
+        }
+        this.owner._relationChoices[key] = value
     }
 
     get pk() {
@@ -21,139 +33,99 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     }
 
     get selectedChoice() {
-        const pk = Number(this.pk)
-        return (this.choices || []).find(choice => Number(choice.pk) === pk)
+        const pk = this.pk
+        if (pk == null) return undefined
+        return (this.choices || []).find(choice => Number(choice.pk) === Number(pk))
     }
 
     get selectedLabel() {
         return this.selectedChoice?.__str__ ?? ''
     }
 
+    _handlePropertyAccess(prop) {
+        if (prop === 'choices' && this.choice_model_path) {
+            this.ensureChoices([])
+        }
+    }
+
     buildChoices(...choiceFields) {
-        this.ensureChoices(choiceFields, this)
+        this.ensureChoices(choiceFields)
         return this.choices
     }
 
-    ensureChoices(choiceFields = [], subscriber = this) {
+    ensureChoices(choiceFields = []) {
         const cacheKey = this._getChoicesCacheKey()
-        const cached = this._getOrCreateChoicesCache(cacheKey)
-        cached.fields.add(subscriber)
+        const cache = this._getOrCreateCache(cacheKey)
         const requiredFields = this._normalizeChoiceFields(choiceFields)
-        const missingFields = requiredFields.filter(choiceField => !cached.loadedFields.has(choiceField))
+        const missingFields = requiredFields.filter(f => !cache.loadedFields.has(f))
 
         if (missingFields.length === 0) {
-            subscriber._applyCachedChoices(cached)
-            return cached.promise || Promise.resolve(cached.data)
+            return cache.promise || Promise.resolve(this.choices)
         }
 
-        if (cached.promise) {
-            subscriber.__glue__loadingChoices = true
-            return cached.promise.then(() => this.ensureChoices(choiceFields, subscriber))
+        if (cache.promise) {
+            return cache.promise.then(() => this.ensureChoices(choiceFields))
         }
 
         if (typeof this.owner.foreign_key_choices !== 'function') {
-            return Promise.resolve(cached.data)
+            return Promise.resolve(this.choices)
         }
 
-        subscriber.__glue__loadingChoices = true
-        missingFields.forEach(choiceField => cached.pendingFields.add(choiceField))
-
-        cached.promise = this.owner.foreign_key_choices({
+        cache.promise = this.owner.foreign_key_choices({
             field_name: this.name,
-            choice_fields: missingFields.filter(choiceField => !['pk', '__str__'].includes(choiceField)),
+            choice_fields: missingFields.filter(f => !['pk', '__str__'].includes(f)),
         }).then(result => {
-            const choices = Array.isArray(result) ? result : []
-            this._cacheChoices(choices, missingFields)
-            return cached.data
+            const newChoices = Array.isArray(result) ? result : []
+            this._mergeChoices(newChoices)
+            requiredFields.forEach(f => cache.loadedFields.add(f))
+            return this.choices
         }).finally(() => {
-            missingFields.forEach(choiceField => cached.pendingFields.delete(choiceField))
-            cached.promise = null
-            subscriber.__glue__loadingChoices = false
+            cache.promise = null
         })
 
-        return cached.promise
-    }
-
-    _initializeChoices() {
-        const cacheKey = this._getChoicesCacheKey()
-        const cached = RelationFieldGlue.choicesCache.get(cacheKey)
-        const initialChoices = Array.isArray(this.__glue__choicesData)
-            ? this.__glue__choicesData
-            : Array.isArray(this.choices)
-                ? this.choices
-                : []
-
-        this.__glue__choicesCacheKey = cacheKey
-        this.__glue__choicesLoaded = Boolean(cached?.loadedFields?.has('__str__'))
-        this.__glue__loadingChoices = Boolean(cached?.promise)
-        this.__glue__choicesData = cached?.data || initialChoices
-        this.choices = cached?.data || initialChoices
+        return cache.promise
     }
 
     _getChoicesCacheKey() {
-        return this.choices_cache_key
-            || [
-                this.owner.$policy?.identity?.model_class_path,
-                this.owner.$policy?.identity?.form_class_path,
-                this.choice_model_path,
-                this.name,
-            ].filter(Boolean).join(':')
-            || `${this.type}:${this.name}`
+        return this.choices_cache_key || [
+            this.owner._policy.identity.model_class_path,
+            this.owner._policy.identity.form_class_path,
+            this.choice_model_path,
+            this.name,
+        ].filter(Boolean).join(':')
     }
 
     _normalizeChoiceFields(choiceFields = []) {
-        return ['pk', '__str__', ...choiceFields].filter((choiceField, index, fields) => {
-            return choiceField && fields.indexOf(choiceField) === index
-        })
+        return [...new Set(['pk', '__str__', ...choiceFields.filter(Boolean)])]
     }
 
-    _getOrCreateChoicesCache(cacheKey) {
-        let cached = RelationFieldGlue.choicesCache.get(cacheKey)
-        if (!cached) {
-            cached = {
-                data: this.__glue__choicesData || [],
-                fields: new Set(),
+    _getOrCreateCache(cacheKey) {
+        let cache = RelationFieldGlue.loadingCache.get(cacheKey)
+        if (!cache) {
+            cache = {
                 loadedFields: new Set(),
-                pendingFields: new Set(),
                 promise: null,
             }
-            RelationFieldGlue.choicesCache.set(cacheKey, cached)
+            RelationFieldGlue.loadingCache.set(cacheKey, cache)
         }
-        return cached
+        return cache
     }
 
-    _applyCachedChoices(cached, {force = false} = {}) {
-        const previousChoices = this.__glue__choicesData
-        this.__glue__choicesLoaded = cached.loadedFields.has('__str__')
-        this.__glue__loadingChoices = Boolean(cached.promise)
-        if (force || previousChoices !== cached.data) {
-            this.choices = cached.data
-        } else {
-            this.__glue__choicesData = cached.data
-        }
-    }
+    _mergeChoices(newChoices) {
+        const current = this.choices
+        const merged = [...current]
 
-    _cacheChoices(choices, choiceFields = []) {
-        const cached = this._getOrCreateChoicesCache(this._getChoicesCacheKey())
-        const nextChoices = [...cached.data]
-        choices.forEach(choice => this._mergeChoice(nextChoices, choice))
-        cached.data = nextChoices
-        this._normalizeChoiceFields(choiceFields).forEach(choiceField => cached.loadedFields.add(choiceField))
-        cached.fields.forEach(field => {
-            field._applyCachedChoices(cached, {force: true})
+        newChoices.forEach(choice => {
+            if (!choice || typeof choice !== 'object') return
+            const existing = merged.find(item => item.pk === choice.pk)
+            if (existing) {
+                Object.assign(existing, choice)
+            } else {
+                merged.push(choice)
+            }
         })
-    }
 
-    _mergeChoice(choices, choice) {
-        if (!choice || typeof choice !== 'object') {
-            return
-        }
-        const existing = choices.find(item => item.pk === choice.pk)
-        if (existing) {
-            Object.assign(existing, choice)
-        } else {
-            choices.push(choice)
-        }
+        this.choices = merged
     }
 }
 

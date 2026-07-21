@@ -1,32 +1,15 @@
-import {cloneValue} from "../utils"
-
 class BaseGlueProxy {
     constructor({http, policy, state = {}, metadata = {}}) {
         this._http = http
-        this._policy = cloneValue(policy)
-        this._name = this._policy?.name
-        this._state = cloneValue(state || {})
-        this._metadata = cloneValue(metadata || {})
+        this._policy = policy
+        this._name = policy?.name
+        this._state = state || {}
+        this._metadata = metadata || {}
         this._listeners = {before: {}, after: {}, error: {}}
         this._onMessage = null
         this._onError = null
-        this._defineCallableAttributes()
-    }
 
-    get $policy() {
-        return this._policy
-    }
-
-    get $state() {
-        return this._state
-    }
-
-    get $metadata() {
-        return this._metadata
-    }
-
-    get $name() {
-        return this._name
+        this._defineAttributes()
     }
 
     addListener(attribute, callback, when = 'after') {
@@ -40,7 +23,7 @@ class BaseGlueProxy {
         return this
     }
 
-    async _call(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}) {
         const attributeRequest = {attribute, kwargs}
         this._emit('before', attribute, {attributeRequest, object: this})
 
@@ -52,32 +35,38 @@ class BaseGlueProxy {
                 attribute,
                 kwargs,
             })
+
             this._applyResponse(response.data)
+
             this._processMessages(response.data)
+
             this._emit('after', attribute, {
                 attributeRequest,
                 object: this,
                 proxy: this,
                 response: response.data,
             })
+
             return response.data?.result
         } catch (error) {
             this._emit('error', attribute, {attributeRequest, object: this, proxy: this, error})
             const errorHandler = this._onError || window.Glue?._onError
-            errorHandler?.({error, attribute, attributeRequest, proxy: this})
-            throw error
+
+            if (errorHandler) {
+                errorHandler({error, attribute, attributeRequest, proxy: this})
+            }
+            else {
+                throw error
+            }
         }
     }
 
     _applyResponse(data = {}) {
         if (data.policy) {
-            this._policy = cloneValue(data.policy)
+            this._policy = data.policy
         }
         if (data.metadata !== undefined) {
-            this._metadata = cloneValue(data.metadata || {})
-        }
-        if (data.policy || data.metadata !== undefined) {
-            this._defineCallableAttributes()
+            this._metadata = data.metadata || {}
         }
         if (data.state !== undefined) {
             this._applyState(data.state || {})
@@ -85,66 +74,91 @@ class BaseGlueProxy {
     }
 
     _applyState(state) {
-        const nextState = this._parseState(cloneValue(state || {}))
+        const nextState = state || {}
         if (!this._state || typeof this._state !== 'object') {
             this._state = nextState
             return
         }
+        this._mergeState(this._state, nextState)
+    }
 
-        if (this._state.instance_data && nextState.instance_data) {
-            Object.keys(this._state.instance_data).forEach(key => {
-                if (!(key in nextState.instance_data)) {
-                    delete this._state.instance_data[key]
-                }
-            })
-            Object.entries(nextState.instance_data).forEach(([key, value]) => {
-                this._state.instance_data[key] = value
-            })
-            delete nextState.instance_data
-        }
-
-        Object.keys(this._state).forEach(key => {
-            if (!(key in nextState) && key !== 'instance_data') {
-                delete this._state[key]
+    // We merge new state recursively here to trigger Alpine's reactivity.
+    _mergeState(target, source) {
+        // Remove keys not in source
+        Object.keys(target).forEach(key => {
+            if (!(key in source)) {
+                delete target[key]
             }
         })
-        Object.assign(this._state, nextState)
+
+        // Merge source into target
+        Object.keys(source).forEach(key => {
+            if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
+                    target[key] = {}
+                }
+                this._mergeState(target[key], source[key])
+            } else {
+                target[key] = source[key]
+            }
+        })
     }
 
-    _parseState(state) {
-        return state
-    }
+    _defineAttributes() {
+        (this._policy?.attributes || []).forEach(attributeQualName => {
+            const attributeMetadata = this._metadata?.attributes?.[attributeQualName]
 
-    _defineCallableAttributes() {
-        Object.entries(this._metadata?.attributes || {}).forEach(([attributeName, spec]) => {
-            if (spec?.namespace !== 'callable') {
+            if (!attributeMetadata) {
                 return
             }
 
-            this._defineCallableAttribute(attributeName)
+            this._defineAttribute(attributeQualName, attributeMetadata)
         })
     }
 
-    _defineCallableAttribute(attributeName) {
-        const parts = attributeName.split('.')
-        const methodName = parts.pop()
-        const owner = this._callableAttributeOwner(parts)
+    _defineAttribute(attributeQualName, attributeMetadata) {
+        const parts = attributeQualName.split('.')
+        const attributeName = parts.pop()
+        const owner = this._resolveAttributeOwner(parts)
 
-        if (owner[methodName] !== undefined) {
+        if (owner[attributeName] !== undefined) {
             return
         }
 
-        Object.defineProperty(owner, methodName, {
+        if (attributeMetadata.namespace === 'callable') {
+            this._defineCallableAttribute(owner, attributeName, attributeQualName)
+        } else if (attributeMetadata.namespace === 'state') {
+            this._defineStateAttribute(owner, attributeName, attributeQualName)
+        }
+    }
+
+    _defineCallableAttribute(owner, attributeName, attributeQualName) {
+        Object.defineProperty(owner, attributeName, {
             value: async function(kwargs = {}) {
                 const root = this.__glue__owner || this
-                return await root._call(attributeName, kwargs)
+                return await root._callAttribute(attributeQualName, kwargs)
             },
             enumerable: false,
             configurable: true,
         })
     }
 
-    _callableAttributeOwner(parts) {
+    _defineStateAttribute(owner, attributeName, attributeQualName) {
+        const proxy = this
+        Object.defineProperty(owner, attributeName, {
+            get() {
+                return proxy._state?.[attributeQualName]
+            },
+            set(value) {
+                if (!proxy._state) proxy._state = {}
+                proxy._state[attributeQualName] = value
+            },
+            enumerable: true,
+            configurable: true,
+        })
+    }
+
+    _resolveAttributeOwner(parts) {
         return parts.reduce((current, part) => {
             const cacheKey = `__glue__${part}`
             if (current[part] === undefined) {

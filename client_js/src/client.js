@@ -6,12 +6,6 @@ import {GlueProxyError} from "./errors"
 
 class GlueClient {
     constructor(context) {
-        // this.model = {}
-        // this.querySet = {}
-        // this.form = {}
-        // this.template = {}
-        // this.function = {}
-        this.proxies = {}
         this._onMessage = null
         this._onError = null
 
@@ -34,10 +28,6 @@ class GlueClient {
         return this
     }
 
-    proxy(name) {
-        return this.proxies[name]
-    }
-
     async fetch(url, requestOptions = {}) {
         return await this.http.sendRequest(url, requestOptions)
     }
@@ -52,7 +42,7 @@ class GlueClient {
         })
     }
 
-    _registerManifestAsProxy({policy, state = {}, metadata = {}}) {
+    _registerManifestAsProxy({policy, metadata = {}}) {
         const name = policy?.name
         const namespace = policy?.namespace || metadata?.namespace
         const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace]
@@ -71,8 +61,8 @@ class GlueClient {
 
         Object.defineProperty(this[namespace], name, {
             get: () => namespace === 'function'
-            ? ProxyClass.create({http: this.http, policy, state, metadata})
-            : new ProxyClass({http: this.http, policy, state, metadata})
+            ? ProxyClass.create({http: this.http, policy, metadata})
+            : new ProxyClass({http: this.http, policy, metadata})
         })
     }
 }

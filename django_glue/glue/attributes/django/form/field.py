@@ -48,3 +48,10 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
         if self.form.is_bound:
             return self.form.data.get(self.name)
         return self.form.initial.get(self.name)
+
+    @property
+    def state(self) -> dict[str, Any]:
+        return {
+            'value': self.get(),
+            'errors': self.owner._field_errors.get(self.name, []),
+        }

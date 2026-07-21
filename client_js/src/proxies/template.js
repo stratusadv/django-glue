@@ -2,7 +2,7 @@ import BaseGlueProxy from "./base"
 
 class GlueTemplateProxy extends BaseGlueProxy {
     async renderHtml(payload = {}) {
-        const result = await this._call('render_html', payload)
+        const result = await this._callAttribute('render_html', payload)
         return result?.html ?? result
     }
 

@@ -1,22 +1,18 @@
-function isFieldMetadataProperty(prop) {
-    return prop === 'choices'
-        || prop === 'buildChoices'
-        || prop === 'selectedChoice'
-        || prop === 'selectedChoices'
-        || prop === 'selectedPks'
-        || prop === 'selectedLabel'
-        || prop === 'pk'
-        || (typeof prop === 'string' && prop.startsWith('__glue__'))
+function isInternalProperty(prop) {
+    return typeof prop === 'string' && prop.startsWith('__glue__')
 }
 
 class FieldGlue {
-    constructor({owner, name, metadata = {}}) {
+    constructor({owner, name, stateKey, metadata = {}}) {
         this.name = name
+        this.stateKey = stateKey || name
+
         Object.defineProperty(this, 'owner', {
             value: owner,
             enumerable: false,
             configurable: true,
         })
+        
         this.updateMetadata(metadata)
 
         Object.defineProperty(this, '__glue__isFieldProxy', {
@@ -27,15 +23,21 @@ class FieldGlue {
     }
 
     get value() {
-        return this.owner._getFieldValue(this.name)
+        return this.owner._state?.[this.stateKey]?.value
     }
 
     set value(value) {
-        this.owner._setFieldValue(this.name, value)
+        if (!this.owner._state) {
+            this.owner._state = {}
+        }
+        if (!this.owner._state[this.stateKey]) {
+            this.owner._state[this.stateKey] = {}
+        }
+        this.owner._state[this.stateKey].value = value
     }
 
     get errors() {
-        return this.owner._getFieldErrors()[this.name]
+        return this.owner._state?.[this.stateKey]?.errors || []
     }
 
     get hasErrors() {
@@ -43,13 +45,7 @@ class FieldGlue {
     }
 
     updateMetadata(metadata = {}) {
-        Object.entries(metadata).forEach(([key, value]) => {
-            if (['value', 'errors', 'hasErrors'].includes(key)) {
-                return
-            }
-            this[key] = value
-        })
-        this.name = this.name || metadata.name
+        Object.assign(this, metadata)
     }
 
     primitiveValue(hint = 'default') {
@@ -92,14 +88,7 @@ class FieldGlue {
                 if (prop === 'then') {
                     return undefined
                 }
-                if (
-                    prop === 'choices'
-                    && target.choice_model_path
-                    && !target.__glue__choicesLoaded
-                    && !target.__glue__loadingChoices
-                ) {
-                    target.ensureChoices([], receiver)
-                }
+                target._handlePropertyAccess?.(prop, receiver)
                 if (prop in target) {
                     return Reflect.get(target, prop, receiver)
                 }
@@ -113,7 +102,7 @@ class FieldGlue {
                     target.value = value
                     return true
                 }
-                if (prop in target || isFieldMetadataProperty(prop)) {
+                if (prop in target || isInternalProperty(prop)) {
                     return Reflect.set(target, prop, value, receiver)
                 }
 

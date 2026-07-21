@@ -72,3 +72,10 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
     def set(self, value: Any) -> None:
         if self.field.editable:
             self.field.save_form_data(self.instance, value)
+
+    @property
+    def state(self) -> dict[str, Any]:
+        return {
+            'value': self.get(),
+            'errors': self.owner._field_errors.get(self.name, []),
+        }

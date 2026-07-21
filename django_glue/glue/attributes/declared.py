@@ -22,12 +22,24 @@ class Attribute:
         def save(self, data: dict) -> dict:
             ...
 
+        # As a decorator on a method that doesn't need client state
+        @Attribute(access=GlueAccess.VIEW, loads_state=False)
+        def load(self) -> dict:
+            ...
+
         # As a class attribute for a value
         services = Attribute(TaskService(), access=GlueAccess.DELETE)
     """
 
-    def __init__(self, value: Any = _MISSING, *, access: GlueAccess) -> None:
+    def __init__(
+        self,
+        value: Any = _MISSING,
+        *,
+        access: GlueAccess,
+        loads_state: bool = True,
+    ) -> None:
         self.__required_glue_access__ = access
+        self.loads_state = loads_state
         self.default = _MISSING
         self.name: str | None = None
         self.storage_name: str | None = None

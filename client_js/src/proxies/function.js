@@ -21,7 +21,7 @@ class GlueFunctionProxy extends BaseGlueProxy {
     }
 
     async execute(kwargs = {}) {
-        const result = await this._call('execute', this._filterKwargs(kwargs))
+        const result = await this._callAttribute('execute', this._filterKwargs(kwargs))
         return result?.result ?? result
     }
 

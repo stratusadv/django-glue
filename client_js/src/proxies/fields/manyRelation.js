@@ -1,8 +1,16 @@
 import RelationFieldGlue from "./relation"
 
 class ManyRelationFieldGlue extends RelationFieldGlue {
+    _extractPk(choiceOrPk) {
+        if (choiceOrPk == null) return null
+        const pk = choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk
+        return pk == null ? null : Number(pk)
+    }
+
     get selectedPks() {
-        return (this.value || []).map(choice => Number(choice?.pk ?? choice?.id ?? choice))
+        return (this.value || [])
+            .map(choice => this._extractPk(choice))
+            .filter(pk => pk != null)
     }
 
     get selectedChoices() {
@@ -11,22 +19,25 @@ class ManyRelationFieldGlue extends RelationFieldGlue {
     }
 
     has(choiceOrPk) {
-        const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk)
-        return this.selectedPks.includes(pk)
+        const pk = this._extractPk(choiceOrPk)
+        if (pk == null) return false
+        const selectedPks = new Set(this.selectedPks)
+        return selectedPks.has(pk)
     }
 
     add(choiceOrPk) {
         if (this.has(choiceOrPk)) {
-            return this.value || []
+            return this
         }
         this.value = [...(this.value || []), choiceOrPk]
-        return this.value
+        return this
     }
 
     remove(choiceOrPk) {
-        const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk)
-        this.value = (this.value || []).filter(choice => Number(choice?.pk ?? choice?.id ?? choice) !== pk)
-        return this.value
+        const pk = this._extractPk(choiceOrPk)
+        if (pk == null) return this
+        this.value = (this.value || []).filter(choice => this._extractPk(choice) !== pk)
+        return this
     }
 
     toggle(choiceOrPk) {

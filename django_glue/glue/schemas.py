@@ -84,7 +84,7 @@ class AttributeCallResolverContext(BaseModel):
             'request': request,
             'target_glue_policy': validated_policy,
             'target_glue_client_state': state,
-            'target_attribute': attribute,
+            'target_attribute_name': attribute,
             'target_attribute_call_kwargs': kwargs,
         }
 

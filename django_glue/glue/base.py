@@ -5,14 +5,18 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, TYPE_CHECKING
 
-from django.http import HttpRequest
 
-from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute
-from django_glue.exceptions import GlueMissingAttributeError
+from django_glue.exceptions import GlueAccessError, GlueCalledStateAttributeError, GlueMissingAttributeError, GlueRequestError
+from django_glue.glue.attributes.callable import CallableAttribute
+from django_glue.glue.attributes.state import StateAttribute
 from django_glue.glue.context import GlueManifest
+from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
+    from django_glue.glue.schemas import AttributeCallResolverContext
+    from django_glue.glue.attributes import BaseGlueAttribute
+    from django_glue.access import GlueAccess
+    from django.http import HttpRequest
     from django_glue.glue.metadata import GlueMetadata
     from django_glue.glue.policy import GluePolicy
 
@@ -27,13 +31,11 @@ class BaseGlue(ABC):
         *,
         name: str,
         access: GlueAccess,
-        request: HttpRequest,
     ) -> None:
         self.name = name
         self.access = access
-        self.request = request
+        self.request: HttpRequest | None = None
         self._policy: GluePolicy | None = None
-        self._load_state = False
 
     @property
     def policy(self) -> GluePolicy:
@@ -63,7 +65,7 @@ class BaseGlue(ABC):
         # Discover attributes on the GlueObject itself
         attributes.update(self._discover_attributes(target=self, visited=visited))
         # Discover attributes on each subject
-        for subject in self.subjects.values():
+        for subject in self.attribute_providers.values():
             attributes.update(self._discover_attributes(target=subject, visited=visited))
         return attributes
 
@@ -79,8 +81,6 @@ class BaseGlue(ABC):
         Recursively walks nested value attributes that themselves contain
         @Attribute-decorated members.
         """
-        from django_glue.glue.attributes.callable import CallableAttribute
-        from django_glue.glue.attributes.value import ValueAttribute
 
         target_id = id(target)
         if target_id in visited:
@@ -96,11 +96,25 @@ class BaseGlue(ABC):
                 continue
 
             name = f'{path_prefix}.{attr_name}' if path_prefix else attr_name
+            # If discovering on a provider (not self), pass target for resolution
+            resolve_target = target if target is not self else None
             is_callable = getattr(attr, 'is_callable', True)
             if is_callable:
-                attributes[name] = CallableAttribute(owner=self, name=name, access=access)
+                loads_state = getattr(attr, 'loads_state', True)
+                attributes[name] = CallableAttribute(
+                    owner=self,
+                    name=attr_name,
+                    access=access,
+                    loads_state=loads_state,
+                    target=resolve_target,
+                )
             else:
-                attributes[name] = ValueAttribute(owner=self, name=name, access=access)
+                attributes[name] = StateAttribute(
+                    owner=self,
+                    name=attr_name,
+                    access=access,
+                    target=resolve_target,
+                )
 
         # Second pass: recurse into nested value attributes
         for attr_name, class_attr in inspect.getmembers_static(cls):
@@ -136,14 +150,15 @@ class BaseGlue(ABC):
             for attr_name, attr in inspect.getmembers_static(cls)
         )
 
+    # TODO: this method smells
     @staticmethod
-    def _get_required_access(cls: type, attr_name: str, attr: Any) -> GlueAccess | None:
+    def _get_required_access(target_class: type, attr_name: str, attr: Any) -> GlueAccess | None:
         """Get the required GlueAccess for an attribute, if it's a Glue attribute."""
         access = getattr(attr, '__required_glue_access__', None)
         if access is not None:
             return access
 
-        for base_cls in cls.__mro__:
+        for base_cls in target_class.__mro__:
             base_attr = base_cls.__dict__.get(attr_name)
             if base_attr is None:
                 continue
@@ -154,10 +169,9 @@ class BaseGlue(ABC):
         return None
 
     @property
-    @abstractmethod
-    def subjects(self) -> dict[str, Any]:
+    def attribute_providers(self) -> dict[str, Any]:
         """Objects whose @Attribute-decorated members are exposed through this GlueObject."""
-        raise NotImplementedError
+        return {}
 
     @property
     @abstractmethod
@@ -166,10 +180,13 @@ class BaseGlue(ABC):
         raise NotImplementedError
 
     @property
-    @abstractmethod
-    def state(self) -> Any:
-        """Build mutable state for target."""
-        raise NotImplementedError
+    def state(self) -> dict[str, Any]:
+        """Build mutable state from attributes."""
+        return {
+            name: attribute.state
+            for name, attribute in self.attributes.items()
+            if hasattr(attribute, 'state')
+        }
 
     @cached_property
     @abstractmethod
@@ -177,32 +194,82 @@ class BaseGlue(ABC):
         """Build non-authoritative client metadata for target."""
         raise NotImplementedError
 
-    # TODO: evaluate changing to from_glueattributerequest
+    @classmethod
+    def from_attribute_call_resolver_context(
+        cls,
+        context: AttributeCallResolverContext
+    ) -> BaseGlue:
+        glue_object = cls._from_policy(context.target_glue_policy)
+        glue_object.request = context.request
+
+        attribute = glue_object.attributes.get(context.target_attribute_name)
+        if attribute and getattr(attribute, 'loads_state', True):
+            glue_object._load_client_state(context.target_glue_client_state or {})
+
+        return glue_object
+
     @classmethod
     @abstractmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> BaseGlue:
+    def _from_policy(cls, policy: GluePolicy) -> BaseGlue:
         """Reconstruct a GlueObject from a signed policy."""
         raise NotImplementedError
 
-    def call_attribute(
+    def _load_client_state(self, state: dict[str, Any]) -> None:  # noqa: B027
+        """Apply client-provided state to subjects. Override in subclasses."""
+
+    def process_attribute_call(
         self,
-        attribute_name: str,
-        kwargs: dict[str, Any],
-    ) -> Any:
+        call_context: AttributeCallResolverContext
+    ) -> dict[str, Any]:
         """Perform a callable attribute request against a resolved target."""
-        glue_attribute = self.attributes.get(attribute_name, None)
+        glue_attribute = self.attributes.get(call_context.target_attribute_name, None)
         if not glue_attribute:
-            raise GlueMissingAttributeError(attribute_name, self.name)
+            raise GlueMissingAttributeError(call_context.target_attribute_name, self.name)
 
-        self._load_state = True
+        if not isinstance(glue_attribute, CallableAttribute):
+            raise GlueCalledStateAttributeError(call_context.target_attribute_name, self.name)
 
-        return glue_attribute.call(
-            kwargs,
-            context={
+        if not call_context.target_glue_policy.access.has_access(glue_attribute.required_access):
+            raise GlueAccessError(
+                attribute=call_context.target_attribute_name,
+                required_access=glue_attribute.required_access.value,
+                current_access=call_context.target_glue_policy.access.value,
+            )
+
+        if call_context.target_attribute_name not in call_context.target_glue_policy.attributes:
+            raise GlueMissingAttributeError(
+                call_context.target_attribute_name,
+                call_context.target_glue_policy.name
+            )
+
+        if not isinstance(glue_attribute, CallableAttribute):
+            raise GlueRequestError(
+                code='attribute_not_callable',
+                message=f"Attribute '{call_context.target_attribute_name}' is not callable.",
+                details={'attribute': call_context.target_attribute_name},
+                status=422,
+            )
+
+        call_result = glue_attribute.call(call_context)
+
+        call_response_data = {
+            'data': {
                 'state': self.state,
-                'attribute': attribute_name,
-                'kwargs': kwargs,
                 'policy': self.policy,
-                'request': self.request,
+                'metadata': self.metadata,
             },
-        )
+            'status': 200
+        }
+
+        if isinstance(call_result, GlueResponse):
+            call_response_data['data']['result'] = call_result.result
+            call_response_data['data']['messages'] = [
+                message.to_dict() for message in call_result.messages
+            ]
+            call_response_data['status'] = call_result.status
+        else:
+            call_response_data['data']['result'] = call_result
+            call_response_data['data']['messages'] = []
+
+        # TODO: Statically typed dict here -> bad
+        return call_response_data

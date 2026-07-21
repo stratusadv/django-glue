@@ -15,20 +15,31 @@ class BaseGlueAttribute(ABC):
     Base class for all Glue attributes.
 
     Attributes represent named access points on a Glue object - either readable
-    values (ValueAttribute) or callable methods (CallableAttribute). The name
+    state (StateAttribute) or callable methods (CallableAttribute). The name
     is a dotted path from the owner GlueObject to the attribute.
     """
 
-    def __init__(self, *, owner: BaseGlue, name: str, access: GlueAccess) -> None:
+    def __init__(
+        self,
+        *,
+        owner: BaseGlue,
+        name: str,
+        access: GlueAccess,
+        target: Any = None,
+    ) -> None:
         self.owner = owner
         self.name = name
         self.required_access = access
+        self._target = target
 
     @property
     @abstractmethod
     def metadata(self) -> dict[str, Any]:
-        raise NotImplementedError
+        return {
+            'name': self.name,
+        }
 
     def get(self) -> Any:
-        """Get the target at this attribute's path from the owner."""
-        return get_attr_from_path_string_on_instance(self.owner, self.name)
+        """Get the target at this attribute's path from the owner or target."""
+        resolve_from = self._target if self._target is not None else self.owner
+        return get_attr_from_path_string_on_instance(resolve_from, self.name)

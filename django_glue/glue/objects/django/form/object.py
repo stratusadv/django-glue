@@ -4,7 +4,6 @@ from functools import cached_property
 from typing import Any
 
 from django import forms
-from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute
@@ -23,15 +22,16 @@ class FormGlue(BaseGlue):
         self,
         form: forms.BaseForm,
         *,
-        request: HttpRequest,
         name: str,
         access: GlueAccess,
     ) -> None:
-        super().__init__(request=request, name=name, access=access)
+        super().__init__(name=name, access=access)
         self.form = form
+        self._loaded_state: dict[str, Any] | None = None
+        self._field_errors: dict[str, list[str]] = {}
 
     @property
-    def subjects(self) -> dict[str, Any]:
+    def attribute_providers(self) -> dict[str, Any]:
         return {'form': self.form}
 
     @property
@@ -55,7 +55,6 @@ class FormGlue(BaseGlue):
         }
 
     def _resolve_instance(self) -> None:
-        print(self)
         if (
             isinstance(self.form, forms.ModelForm)
             and getattr(self.form, 'instance', None) is not None
@@ -77,10 +76,16 @@ class FormGlue(BaseGlue):
     @property
     def state(self) -> dict[str, Any]:
         self._resolve_instance()
+        self._populate_field_errors()
         return {
-            'instance_data': dict(self.form.data) if self.form.is_bound else self.form.initial,
-            'errors': dict(self.form.errors),
+            name: attribute.state
+            for name, attribute in self.attributes.items()
+            if hasattr(attribute, 'state')
         }
+
+    def _populate_field_errors(self) -> None:
+        """Populate _field_errors from form errors."""
+        self._field_errors = dict(self.form.errors)
 
     @cached_property
     def metadata(self) -> GlueMetadata:
@@ -98,29 +103,32 @@ class FormGlue(BaseGlue):
         })
 
     @classmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> FormGlue:
+    def _from_policy(cls, policy: GluePolicy) -> FormGlue:
         form_class = get_attr_from_path_string(policy.identity['form_class_path'])
         glue_object = cls(
             form_class(),
-            request=request,
             name=policy.name,
             access=policy.access,
         )
         glue_object.policy = policy
         return glue_object
 
-    @Attribute(access=GlueAccess.VIEW)
+    def _load_client_state(self, state: dict[str, Any]) -> None:
+        """Store client-provided state for use by validate/save."""
+        self._loaded_state = state
+
+    @Attribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:
         return {'state': self.state}
 
     @Attribute(access=GlueAccess.CHANGE)
-    def validate(self, state: dict[str, Any], request: HttpRequest) -> dict[str, Any]:
-        bound_form = self._bind_form(state, request)
+    def validate(self) -> dict[str, Any]:
+        bound_form = self._bind_form()
         return {'valid': bound_form.is_valid(), 'errors': dict(bound_form.errors)}
 
     @Attribute(access=GlueAccess.CHANGE)
-    def save(self, state: dict[str, Any], request: HttpRequest) -> dict[str, Any]:
-        bound_form = self._bind_form(state, request)
+    def save(self) -> dict[str, Any]:
+        bound_form = self._bind_form()
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
@@ -148,16 +156,19 @@ class FormGlue(BaseGlue):
 
         return [serialize_choice(obj) for obj in queryset.all()]
 
-    def _bind_form(
-        self,
-        state: dict[str, Any],
-        request: HttpRequest,
-    ) -> forms.BaseForm:
+    def _bind_form(self) -> forms.BaseForm:
         self._resolve_instance()
+        state = self._loaded_state or {}
         form_class = self.form.__class__
+        # Extract values from new state structure: {field_name: {value: ..., errors: ...}}
+        data = {
+            field_name: field_state.get('value') if isinstance(field_state, dict) else field_state
+            for field_name, field_state in state.items()
+            if field_name in self.form.fields
+        }
         kwargs = {
-            'data': state.get('instance_data', {}),
-            'files': request.FILES or None,
+            'data': data,
+            'files': self.request.FILES if self.request else None,
         }
         if isinstance(self.form, forms.ModelForm) and getattr(self.form, 'instance', None) is not None:
             kwargs['instance'] = self.form.instance

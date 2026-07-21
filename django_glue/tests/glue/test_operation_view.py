@@ -50,23 +50,21 @@ class GlueAttributeRequestViewTestCase(TestCase):
     def test_attribute_request_view_saves_model_state(self):
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context(),
             name='gorilla',
             access=GlueAccess.CHANGE,
             fields=['name', 'age', 'weight', 'height'],
         )
+        glue_object.request = self.request_context()
         policy = glue_object.policy
         request = self.attribute_request(
             'gorilla',
             policy,
             'save',
             state={
-                'instance_data': {
-                    'name': 'Updated',
-                    'age': 19,
-                    'weight': 210.0,
-                    'height': 1.9,
-                }
+                'name': {'value': 'Updated'},
+                'age': {'value': 19},
+                'weight': {'value': 210.0},
+                'height': {'value': 1.9},
             },
         )
 
@@ -79,22 +77,22 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.assertIn('policy', data)
         self.assertIn('state', data)
         self.assertIn('metadata', data)
-        self.assertEqual(data['result']['valid'], True)
+        self.assertEqual(data['result']['success'], True)
 
     def test_attribute_request_view_enforces_policy_access(self):
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context(),
             name='gorilla',
             access=GlueAccess.VIEW,
             fields=['name'],
         )
+        glue_object.request = self.request_context()
         policy = glue_object.policy
         request = self.attribute_request(
             'gorilla',
             policy,
             'save',
-            state={'instance_data': {'name': 'Updated'}},
+            state={'name': {'value': 'Updated'}},
         )
 
         response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
@@ -124,11 +122,11 @@ class GlueAttributeRequestViewTestCase(TestCase):
     def test_attribute_request_view_rejects_non_object_kwargs(self):
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context(),
             name='gorilla',
             access=GlueAccess.CHANGE,
             fields=['name'],
         )
+        glue_object.request = self.request_context()
         policy = glue_object.policy
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
@@ -154,16 +152,16 @@ class GlueAttributeRequestViewTestCase(TestCase):
     def test_attribute_request_view_executes_function(self):
         glue_object = FunctionGlue(
             'django_glue.tests.glue.test_operation_view.sample_function',
-            request=self.request_context(),
             name='sample',
             access=GlueAccess.VIEW,
         )
+        glue_object.request = self.request_context()
         policy = glue_object.policy
         request = self.attribute_request(
             'sample',
             policy,
             'execute',
-            {'amount': 5, 'tax': 2},
+            {'kwargs': {'amount': 5, 'tax': 2}},
         )
 
         response = glue_attribute_call_view(request, object_name='sample', attribute_name='execute')
@@ -175,11 +173,11 @@ class GlueAttributeRequestViewTestCase(TestCase):
     def test_attribute_request_view_preserves_consumer_glue_response(self):
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context(),
             name='gorilla',
             access=GlueAccess.DELETE,
             fields=['name'],
         )
+        glue_object.request = self.request_context()
         policy = glue_object.policy
         request = self.attribute_request(
             'gorilla',
@@ -222,11 +220,11 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         """Policy with a different session_id raises GlueInvalidSessionError, not GlueInvalidPolicyError."""
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context('matching-session'),
             name='gorilla',
             access=GlueAccess.CHANGE,
             fields=['name'],
         )
+        glue_object.request = self.request_context('matching-session')
         policy = glue_object.policy
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
@@ -255,11 +253,11 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         """Error details include the proxy name for programmatic access."""
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context('matching-session'),
             name='my_proxy',
             access=GlueAccess.CHANGE,
             fields=['name'],
         )
+        glue_object.request = self.request_context('matching-session')
         policy = glue_object.policy
         request = self.factory.post(
             '/__dg__/callable_attribute/my_proxy/',
@@ -286,11 +284,11 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         session = MockSession(session_key='same-session')
         glue_object = ModelGlue(
             self.gorilla,
-            request=self.request_context('same-session'),
             name='gorilla',
             access=GlueAccess.CHANGE,
             fields=['name'],
         )
+        glue_object.request = self.request_context('same-session')
         policy = glue_object.policy
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',

@@ -3,7 +3,6 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any
 
-from django.http import HttpRequest
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
 
@@ -22,12 +21,11 @@ class TemplateGlue(BaseGlue):
         self,
         target: str | None = None,
         *,
-        request: HttpRequest,
         name: str,
         access: GlueAccess = GlueAccess.VIEW,
         initial_context_data: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(request=request, name=name, access=access)
+        super().__init__(name=name, access=access)
         self.target = target
         self.initial_context_data = initial_context_data or {}
 
@@ -56,10 +54,9 @@ class TemplateGlue(BaseGlue):
         })
 
     @classmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> TemplateGlue:
+    def _from_policy(cls, policy: GluePolicy) -> TemplateGlue:
         glue_object = cls(
             policy.identity['template_path'],
-            request=request,
             name=policy.name,
             access=policy.access,
             initial_context_data=policy.identity.get('initial_context_data', {}),
@@ -68,8 +65,8 @@ class TemplateGlue(BaseGlue):
         return glue_object
 
     @Attribute(access=GlueAccess.VIEW)
-    def render_html(self, kwargs: dict[str, Any], policy: GluePolicy) -> dict[str, str]:
-        context_data = policy.identity.get('initial_context_data', {})
+    def render_html(self, kwargs: dict[str, Any]) -> dict[str, str]:
+        context_data = self.initial_context_data
         merged_context = {**context_data, **kwargs}
         try:
             html = render_to_string(self.target, context=merged_context)

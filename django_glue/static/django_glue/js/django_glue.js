@@ -68,34 +68,6 @@
   function isPlainObject(value) {
     return Object.prototype.toString.call(value) === "[object Object]";
   }
-  function cloneValue(value) {
-    if (value === null || value === undefined) {
-      return value;
-    }
-    if (value instanceof Date) {
-      return new Date(value);
-    }
-    if (Array.isArray(value)) {
-      return value.map((item) => cloneValue(item));
-    }
-    if (isPlainObject(value)) {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
-    }
-    return value;
-  }
-  function parseFieldValue(field, value) {
-    if (value === null || value === undefined || value === "" || value instanceof Date) {
-      return value;
-    }
-    const type = field?.type;
-    if (type === "DateField") {
-      return new Date(`${value}T00:00:00`);
-    }
-    if (["DateTimeField", "SplitDateTimeField"].includes(type)) {
-      return new Date(value);
-    }
-    return value;
-  }
   function serializeValue(value) {
     if (value instanceof Date) {
       return value.toISOString();
@@ -294,26 +266,14 @@
   class BaseGlueProxy {
     constructor({ http, policy, state = {}, metadata = {} }) {
       this._http = http;
-      this._policy = cloneValue(policy);
-      this._name = this._policy?.name;
-      this._state = cloneValue(state || {});
-      this._metadata = cloneValue(metadata || {});
+      this._policy = policy;
+      this._name = policy?.name;
+      this._state = state || {};
+      this._metadata = metadata || {};
       this._listeners = { before: {}, after: {}, error: {} };
       this._onMessage = null;
       this._onError = null;
-      this._defineCallableAttributes();
-    }
-    get $policy() {
-      return this._policy;
-    }
-    get $state() {
-      return this._state;
-    }
-    get $metadata() {
-      return this._metadata;
-    }
-    get $name() {
-      return this._name;
+      this._defineAttributes();
     }
     addListener(attribute, callback, when = "after") {
       if (!this._listeners[when]) {
@@ -325,7 +285,7 @@
       this._listeners[when][attribute].push(callback);
       return this;
     }
-    async _call(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}) {
       const attributeRequest = { attribute, kwargs };
       this._emit("before", attribute, { attributeRequest, object: this });
       try {
@@ -348,76 +308,97 @@
       } catch (error) {
         this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error });
         const errorHandler = this._onError || window.Glue?._onError;
-        errorHandler?.({ error, attribute, attributeRequest, proxy: this });
-        throw error;
+        if (errorHandler) {
+          errorHandler({ error, attribute, attributeRequest, proxy: this });
+        } else {
+          throw error;
+        }
       }
     }
     _applyResponse(data = {}) {
       if (data.policy) {
-        this._policy = cloneValue(data.policy);
+        this._policy = data.policy;
       }
       if (data.metadata !== undefined) {
-        this._metadata = cloneValue(data.metadata || {});
-      }
-      if (data.policy || data.metadata !== undefined) {
-        this._defineCallableAttributes();
+        this._metadata = data.metadata || {};
       }
       if (data.state !== undefined) {
         this._applyState(data.state || {});
       }
     }
     _applyState(state) {
-      const nextState = this._parseState(cloneValue(state || {}));
+      const nextState = state || {};
       if (!this._state || typeof this._state !== "object") {
         this._state = nextState;
         return;
       }
-      if (this._state.instance_data && nextState.instance_data) {
-        Object.keys(this._state.instance_data).forEach((key) => {
-          if (!(key in nextState.instance_data)) {
-            delete this._state.instance_data[key];
-          }
-        });
-        Object.entries(nextState.instance_data).forEach(([key, value]) => {
-          this._state.instance_data[key] = value;
-        });
-        delete nextState.instance_data;
-      }
-      Object.keys(this._state).forEach((key) => {
-        if (!(key in nextState) && key !== "instance_data") {
-          delete this._state[key];
+      this._mergeState(this._state, nextState);
+    }
+    _mergeState(target, source) {
+      Object.keys(target).forEach((key) => {
+        if (!(key in source)) {
+          delete target[key];
         }
       });
-      Object.assign(this._state, nextState);
+      Object.keys(source).forEach((key) => {
+        if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])) {
+          if (!target[key] || typeof target[key] !== "object" || Array.isArray(target[key])) {
+            target[key] = {};
+          }
+          this._mergeState(target[key], source[key]);
+        } else {
+          target[key] = source[key];
+        }
+      });
     }
-    _parseState(state) {
-      return state;
-    }
-    _defineCallableAttributes() {
-      Object.entries(this._metadata?.attributes || {}).forEach(([attributeName, spec]) => {
-        if (spec?.namespace !== "callable") {
+    _defineAttributes() {
+      (this._policy?.attributes || []).forEach((attributeQualName) => {
+        const attributeMetadata = this._metadata?.attributes?.[attributeQualName];
+        if (!attributeMetadata) {
           return;
         }
-        this._defineCallableAttribute(attributeName);
+        this._defineAttribute(attributeQualName, attributeMetadata);
       });
     }
-    _defineCallableAttribute(attributeName) {
-      const parts = attributeName.split(".");
-      const methodName = parts.pop();
-      const owner = this._callableAttributeOwner(parts);
-      if (owner[methodName] !== undefined) {
+    _defineAttribute(attributeQualName, attributeMetadata) {
+      const parts = attributeQualName.split(".");
+      const attributeName = parts.pop();
+      const owner = this._resolveAttributeOwner(parts);
+      if (owner[attributeName] !== undefined) {
         return;
       }
-      Object.defineProperty(owner, methodName, {
+      if (attributeMetadata.namespace === "callable") {
+        this._defineCallableAttribute(owner, attributeName, attributeQualName);
+      } else if (attributeMetadata.namespace === "state") {
+        this._defineStateAttribute(owner, attributeName, attributeQualName);
+      }
+    }
+    _defineCallableAttribute(owner, attributeName, attributeQualName) {
+      Object.defineProperty(owner, attributeName, {
         value: async function(kwargs = {}) {
           const root = this.__glue__owner || this;
-          return await root._call(attributeName, kwargs);
+          return await root._callAttribute(attributeQualName, kwargs);
         },
         enumerable: false,
         configurable: true
       });
     }
-    _callableAttributeOwner(parts) {
+    _defineStateAttribute(owner, attributeName, attributeQualName) {
+      const proxy = this;
+      Object.defineProperty(owner, attributeName, {
+        get() {
+          return proxy._state?.[attributeQualName];
+        },
+        set(value) {
+          if (!proxy._state)
+            proxy._state = {};
+          proxy._state[attributeQualName] = value;
+        },
+        enumerable: true,
+        configurable: true
+      });
+    }
+    _resolveAttributeOwner(parts) {
       return parts.reduce((current, part) => {
         const cacheKey = `__glue__${part}`;
         if (current[part] === undefined) {
@@ -470,13 +451,14 @@
   var base_default = BaseGlueProxy;
 
   // client_js/src/proxies/fields/base.js
-  function isFieldMetadataProperty(prop) {
-    return prop === "choices" || prop === "buildChoices" || prop === "selectedChoice" || prop === "selectedChoices" || prop === "selectedPks" || prop === "selectedLabel" || prop === "pk" || typeof prop === "string" && prop.startsWith("__glue__");
+  function isInternalProperty(prop) {
+    return typeof prop === "string" && prop.startsWith("__glue__");
   }
 
   class FieldGlue {
-    constructor({ owner, name, metadata = {} }) {
+    constructor({ owner, name, stateKey, metadata = {} }) {
       this.name = name;
+      this.stateKey = stateKey || name;
       Object.defineProperty(this, "owner", {
         value: owner,
         enumerable: false,
@@ -490,25 +472,25 @@
       });
     }
     get value() {
-      return this.owner._getFieldValue(this.name);
+      return this.owner._state?.[this.stateKey]?.value;
     }
     set value(value) {
-      this.owner._setFieldValue(this.name, value);
+      if (!this.owner._state) {
+        this.owner._state = {};
+      }
+      if (!this.owner._state[this.stateKey]) {
+        this.owner._state[this.stateKey] = {};
+      }
+      this.owner._state[this.stateKey].value = value;
     }
     get errors() {
-      return this.owner._getFieldErrors()[this.name];
+      return this.owner._state?.[this.stateKey]?.errors || [];
     }
     get hasErrors() {
       return Boolean(this.errors?.length);
     }
     updateMetadata(metadata = {}) {
-      Object.entries(metadata).forEach(([key, value]) => {
-        if (["value", "errors", "hasErrors"].includes(key)) {
-          return;
-        }
-        this[key] = value;
-      });
-      this.name = this.name || metadata.name;
+      Object.assign(this, metadata);
     }
     primitiveValue(hint = "default") {
       const value = this.value;
@@ -545,9 +527,7 @@
           if (prop === "then") {
             return;
           }
-          if (prop === "choices" && target.choice_model_path && !target.__glue__choicesLoaded && !target.__glue__loadingChoices) {
-            target.ensureChoices([], receiver);
-          }
+          target._handlePropertyAccess?.(prop, receiver);
           if (prop in target) {
             return Reflect.get(target, prop, receiver);
           }
@@ -560,7 +540,7 @@
             target.value = value;
             return true;
           }
-          if (prop in target || isFieldMetadataProperty(prop)) {
+          if (prop in target || isInternalProperty(prop)) {
             return Reflect.set(target, prop, value, receiver);
           }
           const current = target.value;
@@ -581,7 +561,7 @@
   // client_js/src/proxies/fields/choice.js
   class ChoiceFieldGlue extends base_default2 {
     get selectedChoice() {
-      return (this.choices || []).find(([value]) => value === this.value);
+      return (this.choices || []).find(([value]) => String(value) === String(this.value));
     }
     get selectedLabel() {
       return this.selectedChoice?.[1] ?? "";
@@ -591,10 +571,20 @@
 
   // client_js/src/proxies/fields/relation.js
   class RelationFieldGlue extends choice_default {
-    static choicesCache = new Map;
-    updateMetadata(metadata = {}) {
-      super.updateMetadata(metadata);
-      this._initializeChoices();
+    static loadingCache = new Map;
+    get choices() {
+      const key = this._getChoicesCacheKey();
+      if (!this.owner._relationChoices) {
+        this.owner._relationChoices = {};
+      }
+      return this.owner._relationChoices[key] || [];
+    }
+    set choices(value) {
+      const key = this._getChoicesCacheKey();
+      if (!this.owner._relationChoices) {
+        this.owner._relationChoices = {};
+      }
+      this.owner._relationChoices[key] = value;
     }
     get pk() {
       const value = this.value;
@@ -607,144 +597,125 @@
       this.value = value;
     }
     get selectedChoice() {
-      const pk = Number(this.pk);
-      return (this.choices || []).find((choice) => Number(choice.pk) === pk);
+      const pk = this.pk;
+      if (pk == null)
+        return;
+      return (this.choices || []).find((choice) => Number(choice.pk) === Number(pk));
     }
     get selectedLabel() {
       return this.selectedChoice?.__str__ ?? "";
     }
+    _handlePropertyAccess(prop) {
+      if (prop === "choices" && this.choice_model_path) {
+        this.ensureChoices([]);
+      }
+    }
     buildChoices(...choiceFields) {
-      this.ensureChoices(choiceFields, this);
+      this.ensureChoices(choiceFields);
       return this.choices;
     }
-    ensureChoices(choiceFields = [], subscriber = this) {
+    ensureChoices(choiceFields = []) {
       const cacheKey = this._getChoicesCacheKey();
-      const cached = this._getOrCreateChoicesCache(cacheKey);
-      cached.fields.add(subscriber);
+      const cache = this._getOrCreateCache(cacheKey);
       const requiredFields = this._normalizeChoiceFields(choiceFields);
-      const missingFields = requiredFields.filter((choiceField) => !cached.loadedFields.has(choiceField));
+      const missingFields = requiredFields.filter((f) => !cache.loadedFields.has(f));
       if (missingFields.length === 0) {
-        subscriber._applyCachedChoices(cached);
-        return cached.promise || Promise.resolve(cached.data);
+        return cache.promise || Promise.resolve(this.choices);
       }
-      if (cached.promise) {
-        subscriber.__glue__loadingChoices = true;
-        return cached.promise.then(() => this.ensureChoices(choiceFields, subscriber));
+      if (cache.promise) {
+        return cache.promise.then(() => this.ensureChoices(choiceFields));
       }
       if (typeof this.owner.foreign_key_choices !== "function") {
-        return Promise.resolve(cached.data);
+        return Promise.resolve(this.choices);
       }
-      subscriber.__glue__loadingChoices = true;
-      missingFields.forEach((choiceField) => cached.pendingFields.add(choiceField));
-      cached.promise = this.owner.foreign_key_choices({
+      cache.promise = this.owner.foreign_key_choices({
         field_name: this.name,
-        choice_fields: missingFields.filter((choiceField) => !["pk", "__str__"].includes(choiceField))
+        choice_fields: missingFields.filter((f) => !["pk", "__str__"].includes(f))
       }).then((result) => {
-        const choices = Array.isArray(result) ? result : [];
-        this._cacheChoices(choices, missingFields);
-        return cached.data;
+        const newChoices = Array.isArray(result) ? result : [];
+        this._mergeChoices(newChoices);
+        requiredFields.forEach((f) => cache.loadedFields.add(f));
+        return this.choices;
       }).finally(() => {
-        missingFields.forEach((choiceField) => cached.pendingFields.delete(choiceField));
-        cached.promise = null;
-        subscriber.__glue__loadingChoices = false;
+        cache.promise = null;
       });
-      return cached.promise;
-    }
-    _initializeChoices() {
-      const cacheKey = this._getChoicesCacheKey();
-      const cached = RelationFieldGlue.choicesCache.get(cacheKey);
-      const initialChoices = Array.isArray(this.__glue__choicesData) ? this.__glue__choicesData : Array.isArray(this.choices) ? this.choices : [];
-      this.__glue__choicesCacheKey = cacheKey;
-      this.__glue__choicesLoaded = Boolean(cached?.loadedFields?.has("__str__"));
-      this.__glue__loadingChoices = Boolean(cached?.promise);
-      this.__glue__choicesData = cached?.data || initialChoices;
-      this.choices = cached?.data || initialChoices;
+      return cache.promise;
     }
     _getChoicesCacheKey() {
       return this.choices_cache_key || [
-        this.owner.$policy?.identity?.model_class_path,
-        this.owner.$policy?.identity?.form_class_path,
+        this.owner._policy.identity.model_class_path,
+        this.owner._policy.identity.form_class_path,
         this.choice_model_path,
         this.name
-      ].filter(Boolean).join(":") || `${this.type}:${this.name}`;
+      ].filter(Boolean).join(":");
     }
     _normalizeChoiceFields(choiceFields = []) {
-      return ["pk", "__str__", ...choiceFields].filter((choiceField, index, fields) => {
-        return choiceField && fields.indexOf(choiceField) === index;
-      });
+      return [...new Set(["pk", "__str__", ...choiceFields.filter(Boolean)])];
     }
-    _getOrCreateChoicesCache(cacheKey) {
-      let cached = RelationFieldGlue.choicesCache.get(cacheKey);
-      if (!cached) {
-        cached = {
-          data: this.__glue__choicesData || [],
-          fields: new Set,
+    _getOrCreateCache(cacheKey) {
+      let cache = RelationFieldGlue.loadingCache.get(cacheKey);
+      if (!cache) {
+        cache = {
           loadedFields: new Set,
-          pendingFields: new Set,
           promise: null
         };
-        RelationFieldGlue.choicesCache.set(cacheKey, cached);
+        RelationFieldGlue.loadingCache.set(cacheKey, cache);
       }
-      return cached;
+      return cache;
     }
-    _applyCachedChoices(cached, { force = false } = {}) {
-      const previousChoices = this.__glue__choicesData;
-      this.__glue__choicesLoaded = cached.loadedFields.has("__str__");
-      this.__glue__loadingChoices = Boolean(cached.promise);
-      if (force || previousChoices !== cached.data) {
-        this.choices = cached.data;
-      } else {
-        this.__glue__choicesData = cached.data;
-      }
-    }
-    _cacheChoices(choices, choiceFields = []) {
-      const cached = this._getOrCreateChoicesCache(this._getChoicesCacheKey());
-      const nextChoices = [...cached.data];
-      choices.forEach((choice) => this._mergeChoice(nextChoices, choice));
-      cached.data = nextChoices;
-      this._normalizeChoiceFields(choiceFields).forEach((choiceField) => cached.loadedFields.add(choiceField));
-      cached.fields.forEach((field) => {
-        field._applyCachedChoices(cached, { force: true });
+    _mergeChoices(newChoices) {
+      const current = this.choices;
+      const merged = [...current];
+      newChoices.forEach((choice) => {
+        if (!choice || typeof choice !== "object")
+          return;
+        const existing = merged.find((item) => item.pk === choice.pk);
+        if (existing) {
+          Object.assign(existing, choice);
+        } else {
+          merged.push(choice);
+        }
       });
-    }
-    _mergeChoice(choices, choice) {
-      if (!choice || typeof choice !== "object") {
-        return;
-      }
-      const existing = choices.find((item) => item.pk === choice.pk);
-      if (existing) {
-        Object.assign(existing, choice);
-      } else {
-        choices.push(choice);
-      }
+      this.choices = merged;
     }
   }
   var relation_default = RelationFieldGlue;
 
   // client_js/src/proxies/fields/manyRelation.js
   class ManyRelationFieldGlue extends relation_default {
+    _extractPk(choiceOrPk) {
+      if (choiceOrPk == null)
+        return null;
+      const pk = choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk;
+      return pk == null ? null : Number(pk);
+    }
     get selectedPks() {
-      return (this.value || []).map((choice) => Number(choice?.pk ?? choice?.id ?? choice));
+      return (this.value || []).map((choice) => this._extractPk(choice)).filter((pk) => pk != null);
     }
     get selectedChoices() {
       const selectedPks = new Set(this.selectedPks);
       return (this.choices || []).filter((choice) => selectedPks.has(Number(choice.pk)));
     }
     has(choiceOrPk) {
-      const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk);
-      return this.selectedPks.includes(pk);
+      const pk = this._extractPk(choiceOrPk);
+      if (pk == null)
+        return false;
+      const selectedPks = new Set(this.selectedPks);
+      return selectedPks.has(pk);
     }
     add(choiceOrPk) {
       if (this.has(choiceOrPk)) {
-        return this.value || [];
+        return this;
       }
       this.value = [...this.value || [], choiceOrPk];
-      return this.value;
+      return this;
     }
     remove(choiceOrPk) {
-      const pk = Number(choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk);
-      this.value = (this.value || []).filter((choice) => Number(choice?.pk ?? choice?.id ?? choice) !== pk);
-      return this.value;
+      const pk = this._extractPk(choiceOrPk);
+      if (pk == null)
+        return this;
+      this.value = (this.value || []).filter((choice) => this._extractPk(choice) !== pk);
+      return this;
     }
     toggle(choiceOrPk) {
       return this.has(choiceOrPk) ? this.remove(choiceOrPk) : this.add(choiceOrPk);
@@ -753,13 +724,14 @@
   var manyRelation_default = ManyRelationFieldGlue;
 
   // client_js/src/proxies/fields/index.js
-  function createFieldGlue({ owner, name, metadata = {}, existingField = null }) {
+  function createFieldGlue({ owner, name, stateKey, metadata = {}, existingField = null }) {
     if (existingField?.__glue__isFieldProxy) {
       existingField.updateMetadata(metadata);
       existingField.name = name;
+      existingField.stateKey = stateKey;
       return existingField;
     }
-    const options = { owner, name, metadata };
+    const options = { owner, name, stateKey, metadata };
     if (metadata.choice_model_path && metadata.type === "ManyToManyField") {
       return new manyRelation_default(options).asProxy();
     }
@@ -776,114 +748,52 @@
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
+      this._loaded = false;
       this.loading = false;
-      this._state === {} && this._initializeState();
-      this._initializeFields();
+      this._fields = {};
     }
     get $fields() {
       return this._fields;
     }
     get $pk() {
       const pkField = this._policy?.identity?.pk_field_name || "id";
-      return this._policy?.identity?.target_pk ?? this._state?.instance_data?.[pkField];
+      return this._policy?.identity?.target_pk ?? this._state?.[pkField]?.value;
     }
     get $key() {
-      return this.$pk ?? this.$name;
+      return this.$pk ?? this._name;
     }
     hasErrors(fieldName = null) {
       if (fieldName) {
-        return Boolean(this._state?.errors?.[fieldName]?.length);
+        return Boolean(this._state?.[fieldName]?.errors?.length);
       }
-      return Object.keys(this._state?.errors || {}).length > 0;
+      return Object.values(this._state || {}).some((fieldState) => fieldState?.errors?.length > 0);
     }
-    _ensureFieldState() {
-      if (!this._state) {
-        this._state = {};
-      }
-      if (!this._state.instance_data) {
-        this._state.instance_data = {};
-      }
-      if (!this._state.errors) {
-        this._state.errors = {};
-      }
-    }
-    _getFieldValue(fieldName) {
-      if (Object.keys(this._state.instance_data).length == 0 && !this.loading) {
-        this.loading = true;
-        this._call("load").then(() => {
-          console.log(fieldName, "lodaded");
-          this.loading = false;
-        });
-      }
-      return this._state.instance_data?.[fieldName];
-    }
-    _setFieldValue(fieldName, value) {
-      if (!this._state.instance_data) {
-        this._state.instance_data = {};
-      }
-      this._state.instance_data[fieldName] = value;
-    }
-    _getFieldErrors() {
-      return this._state?.errors || {};
-    }
-    _defineFields() {
-      const nextFields = this._fields || {};
-      Object.keys(nextFields).forEach((fieldName) => {
-        if (!this._metadata?.fields?.[fieldName]) {
-          delete nextFields[fieldName];
-        }
+    _defineStateAttribute(owner, attributeName, attributeQualName) {
+      const attributeMetadata = this._metadata?.attributes?.[attributeQualName];
+      this._fields[attributeName] = createFieldGlue({
+        owner: this,
+        name: attributeName,
+        stateKey: attributeQualName,
+        metadata: attributeMetadata,
+        existingField: this._fields[attributeName]
       });
-      Object.entries(this._metadata?.fields || {}).forEach(([fieldName, field]) => {
-        nextFields[fieldName] = createFieldGlue({
-          owner: this,
-          name: fieldName,
-          metadata: field,
-          existingField: nextFields[fieldName]
-        });
-        if (this[fieldName] === undefined) {
-          this._defineFieldProperty(fieldName);
-        }
-      });
-      this._fields = nextFields;
-      Object.values(this._fields).forEach((field) => {
-        if (!field?.choice_model_path && !Array.isArray(field?.choices)) {
-          field.choices = [];
-        }
-      });
-    }
-    _defineFieldProperty(fieldName) {
-      Object.defineProperty(this, fieldName, {
-        get: function() {
-          this._fields[fieldName];
+      Object.defineProperty(owner, attributeName, {
+        get: () => {
+          if (!this._loaded && !this.loading) {
+            this.loading = true;
+            this._callAttribute("load").then(() => {
+              this._loaded = true;
+              this.loading = false;
+            });
+          }
+          return this._fields[attributeName];
         },
-        set: function(value) {
-          this._fields[fieldName].value = value?.__glue__isFieldProxy ? value.value : value;
+        set: (value) => {
+          this._fields[attributeName].value = value?.__glue__isFieldProxy ? value.value : value;
         },
         enumerable: true,
         configurable: true
       });
-    }
-    _parseFieldValues() {
-      Object.keys(this._fields || {}).forEach((fieldName) => {
-        this._fields[fieldName].value = parseFieldValue(this._fields[fieldName], this._getFieldValue(fieldName));
-      });
-    }
-    _applyResponse(data = {}) {
-      super._applyResponse.bind(this).call(data);
-      this._ensureFieldState();
-      this._defineFields();
-      this._parseFieldValues();
-    }
-    _initializeState() {
-      if (this._state === {}) {
-        this._state.instance_data;
-      }
-    }
-    _initializeFields() {
-      Object.entries(this._metadata.fields).forEach(([fieldName, fieldDefinition]) => {
-        this._state.instance_data;
-      });
-      console.log(this._metadata);
     }
   }
   var fieldBacked_default = FieldBackedGlueProxy;
@@ -913,7 +823,7 @@
       });
     }
     async execute(kwargs = {}) {
-      const result = await this._call("execute", this._filterKwargs(kwargs));
+      const result = await this._callAttribute("execute", this._filterKwargs(kwargs));
       return result?.result ?? result;
     }
     _filterKwargs(kwargs) {
@@ -932,7 +842,7 @@
   // client_js/src/proxies/model.js
   class GlueModelProxy extends fieldBacked_default {
     async delete() {
-      const result = await this._call("delete");
+      const result = await this._callAttribute("delete");
       this.$collection?._removeRowProxy(this);
       return result;
     }
@@ -1017,7 +927,7 @@
       return this._cloneWithQueryParams({ slice: { start, stop } });
     }
     async new() {
-      return await this._call("new");
+      return await this._callAttribute("new");
     }
     _applyResponse(data = {}) {
       super._applyResponse(data);
@@ -1107,13 +1017,13 @@
     }
     _removeRowProxy(proxy) {
       const rowIndex = this._itemPayloads.findIndex((row) => {
-        return row?.policy?.name === proxy.$name || row?.policy?.identity?.target_pk === proxy.$pk || row?.id === proxy.$pk || row?.pk === proxy.$pk;
+        return row?.policy?.name === proxy._name || row?.policy?.identity?.target_pk === proxy.$pk || row?.id === proxy.$pk || row?.pk === proxy.$pk;
       });
       if (rowIndex >= 0) {
         this._itemPayloads.splice(rowIndex, 1);
         this._items.splice(rowIndex, 1);
       }
-      this._rowProxies.delete(proxy.$name);
+      this._rowProxies.delete(proxy._name);
     }
   }
   var queryset_default = GlueQuerySetProxy;
@@ -1121,7 +1031,7 @@
   // client_js/src/proxies/template.js
   class GlueTemplateProxy extends base_default {
     async renderHtml(payload = {}) {
-      const result = await this._call("render_html", payload);
+      const result = await this._callAttribute("render_html", payload);
       return result?.html ?? result;
     }
     async renderInnerHtml(selector, payload = {}) {
@@ -1151,7 +1061,6 @@
   // client_js/src/client.js
   class GlueClient {
     constructor(context) {
-      this.proxies = {};
       this._onMessage = null;
       this._onError = null;
       this._config = new config_default({
@@ -1169,9 +1078,6 @@
       this._onError = callback;
       return this;
     }
-    proxy(name) {
-      return this.proxies[name];
-    }
     async fetch(url, requestOptions = {}) {
       return await this.http.sendRequest(url, requestOptions);
     }
@@ -1183,7 +1089,7 @@
         this._registerManifestAsProxy(glueManifest);
       });
     }
-    _registerManifestAsProxy({ policy, state = {}, metadata = {} }) {
+    _registerManifestAsProxy({ policy, metadata = {} }) {
       const name = policy?.name;
       const namespace = policy?.namespace || metadata?.namespace;
       const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace];
@@ -1197,7 +1103,7 @@
         this[namespace] = {};
       }
       Object.defineProperty(this[namespace], name, {
-        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, state, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata })
+        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, metadata }) : new ProxyClass({ http: this.http, policy, metadata })
       });
     }
   }

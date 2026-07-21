@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.value import ValueAttribute
+from django_glue.glue.attributes.state import StateAttribute
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
 
 
-class BaseDjangoFieldGlueAttribute(ValueAttribute):
+class BaseDjangoFieldGlueAttribute(StateAttribute):
     """
     Base class for Django field-backed attributes.
 
@@ -40,7 +40,8 @@ class BaseDjangoFieldGlueAttribute(ValueAttribute):
         self.add_length_metadata(metadata)
         self.add_choice_metadata(metadata)
         self.add_extra_metadata(metadata)
-        return metadata
+
+        return super().metadata | metadata
 
     @property
     def label(self) -> str:

@@ -1,59 +1,56 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Sequence, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING, cast
 
-from django.forms import modelform_factory
-from django.utils.datastructures import MultiValueDict
+from django.core.exceptions import ValidationError
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute
+from django_glue.glue.attributes import BaseGlueAttribute, Attribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
-from django_glue.glue.policy import GluePolicy
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.policy import GluePolicy  # noqa: TC001
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
-    from django import forms
+    from django.db.models import Model
     from django.db import models
-    from django.http import HttpRequest
 
 
 class ModelGlue(BaseGlue):
+
     namespace = 'model'
 
     def __init__(
         self,
         instance: models.Model,
         *,
-        request: HttpRequest,
         name: str,
         access: GlueAccess,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
-        form_class: type[forms.ModelForm] | None = None,
     ) -> None:
-        super().__init__(request=request, name=name, access=access)
+        super().__init__(name=name, access=access)
         self.instance = instance
         self.fields = tuple(fields)
         self.exclude = tuple(exclude)
-        self.form_class = form_class
+        self._loaded_state: dict[str, Any] | None = None
+        self._field_errors: dict[str, list[str]] = {}
 
     @property
-    def subjects(self) -> dict[str, Any]:
+    def attribute_providers(self) -> dict[str, Any]:
         return {'instance': self.instance}
 
-    @cached_property
+    @property
     def identity(self) -> dict[str, Any]:
         instance = self.instance
         return {
             'model_class_path': f'{instance.__class__.__module__}.{instance.__class__.__name__}',
             'target_pk': instance.pk,
-            'pk_field_name': instance._meta.pk.name,
+            'pk_field_name': instance._meta.pk.name, # type: ignore  # noqa: PGH003
         }
 
     @cached_property
@@ -66,10 +63,11 @@ class ModelGlue(BaseGlue):
                 instance=self.instance,
                 access=self._field_access(field_name),
             )
-            for field_name in self.get_field_names()
+            for field_name in self._included_fields
         }
 
-    def get_field_names(self) -> list[str]:
+    @cached_property
+    def _included_fields(self) -> list[str]:
         names = self.fields or tuple(
             field.name
             for field in [*self.instance._meta.fields, *self.instance._meta.many_to_many]
@@ -79,151 +77,138 @@ class ModelGlue(BaseGlue):
 
     @property
     def state(self) -> dict[str, Any]:
-        data: dict[str, Any] = {}
-        for field_name in self.get_field_names():
-            data[field_name] = self.attributes[field_name].get()
-        return {'instance_data': data, 'errors': {}}
+        self._validate()
+        return {
+            name: attribute.state
+            for name, attribute in self.attributes.items()
+            if hasattr(attribute, 'state')
+        }
+
+    def _validate(self) -> None:
+        """Run validation and populate _field_errors."""
+        try:
+            self.instance.full_clean()
+            self._field_errors = {}
+        except ValidationError as e:
+            self._field_errors = e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
 
     @cached_property
     def metadata(self) -> GlueMetadata:
-        fields: dict[str, Any] = {}
-        for field_name in self.get_field_names():
-            fields[field_name] = self.attributes[field_name].metadata
         return GlueMetadata.from_payload({
-            'namespace': self.namespace,
-            'fields': fields,
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
-                if name not in fields
             },
-            'initial_state': {
-                'instance_data': {},
-                'errors': {}
-            }
         })
 
     def _field_access(self, field_name: str) -> GlueAccess:
         field = self.instance._meta.get_field(field_name)
         return GlueAccess.CHANGE if field.editable else GlueAccess.VIEW
 
-    @staticmethod
-    def field_names_from_policy(policy: GluePolicy, model_class: type[models.Model]) -> list[str]:
+    @classmethod
+    def _from_policy(cls, policy: GluePolicy) -> ModelGlue:
+        model_class = cast(
+            'type[Model]',
+            get_attr_from_path_string(policy.identity['model_class_path'])
+        )
+
+        target_pk = policy.identity.get('target_pk')
+
+        instance = model_class() if target_pk is None else model_class.objects.get(pk=target_pk)
+
         model_field_names = {
             field.name
             for field in [*model_class._meta.fields, *model_class._meta.many_to_many]
         }
-        return [
+
+        fields = [
             attribute_name
             for attribute_name in policy.attributes
             if attribute_name in model_field_names
         ]
 
-    @classmethod
-    def from_policy(cls, policy: GluePolicy, request: HttpRequest) -> ModelGlue:
-        model_class = get_attr_from_path_string(policy.identity['model_class_path'])
-        target_pk = policy.identity.get('target_pk')
-        instance = model_class() if target_pk is None else model_class.objects.get(pk=target_pk)
-        glue_object = cls(
+        return cls(
             instance,
-            request=request,
             name=policy.name,
             access=policy.access,
-            fields=cls.field_names_from_policy(policy, model_class),
+            fields=fields,
         )
-        glue_object.policy = policy
-        return glue_object
 
-    def apply_state(
-        self,
-        state: dict[str, Any],
-        policy: GluePolicy,
-        request: HttpRequest | None = None,
-    ) -> forms.ModelForm:
-        target = self.instance
-        editable_fields = [
-            name for name in self.field_names_from_policy(policy, target.__class__)
-            if target._meta.get_field(name).editable
-        ]
-        form_class = self.form_class or modelform_factory(target.__class__, fields=editable_fields)
-        form = form_class(
-            data=self._form_data_from_state(state.get('instance_data', {}), editable_fields),
-            files=self._form_files_from_request(request, editable_fields),
-            instance=target,
-        )
-        if form.is_valid():
-            form.save()
-        return form
+    def _load_client_state(self, state: dict[str, Any]) -> None:
+        """Apply client-provided state to the model instance."""
+        self._loaded_state = state
+        self._apply_state(state)
+
+    def _apply_state(self, state: dict[str, Any]) -> None:
+        """Apply state data directly to model fields."""
+        for field_name in self._included_fields:
+            field = self.instance._meta.get_field(field_name)
+            if not field.editable:
+                continue
+
+            # Handle file fields from request.FILES
+            if getattr(field, 'get_internal_type', lambda: '')() in {'FileField', 'ImageField'}:
+                file_value = self._get_file_from_request(field_name)
+                if file_value is not None:
+                    setattr(self.instance, field_name, file_value)
+                continue
+
+            if field_name not in state:
+                continue
+
+            field_state = state[field_name]
+            value = field_state.get('value') if isinstance(field_state, dict) else field_state
+
+            if getattr(field, 'many_to_many', False):
+                # M2M fields need special handling after save
+                continue
+
+            if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
+                value = self._pk_from_related_value(value)
+
+            setattr(self.instance, field_name, value)
+
+    def _get_file_from_request(self, field_name: str) -> Any:
+        """Get a file from request.FILES for a field."""
+        if not self.request or not self.request.FILES:
+            return None
+        for key in (field_name, f'instance_data.{field_name}'):
+            if key in self.request.FILES:
+                return self.request.FILES[key]
+        return None
 
     @Attribute(access=GlueAccess.VIEW)
     def load(self) -> dict[str, Any]:
         return {'state': self.state}
 
     @Attribute(access=GlueAccess.CHANGE)
-    def save(
-        self,
-        state: dict[str, Any],
-        policy: GluePolicy,
-        request: HttpRequest,
-    ) -> dict[str, Any]:
-        form = self.apply_state(state or {}, policy, request)
-        return {'valid': not bool(form.errors), 'errors': dict(form.errors)}
+    def save(self) -> dict[str, Any]:
+        try:
+            self.instance.full_clean()
+            self.instance.save()
+            self._apply_m2m_state(self._loaded_state or {})
+            return {  # noqa: TRY300
+                'success': True,
+                'errors': {}
+            }
+        except ValidationError as e:
+            return {
+                'success': False,
+                'errors': e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
+            }
 
-    @Attribute(access=GlueAccess.CHANGE)
-    def validate(
-        self,
-        state: dict[str, Any],
-        policy: GluePolicy,
-        request: HttpRequest,
-    ) -> dict[str, Any]:
-        form = self.apply_state(state or {}, policy, request)
-        return {'success': not bool(form.errors), 'valid': not bool(form.errors), 'errors': dict(form.errors)}
-
-    def _form_data_from_state(
-        self,
-        instance_data: dict[str, Any],
-        field_names: Sequence[str],
-    ) -> dict[str, Any]:
-        data: dict[str, Any] = {}
-        for field_name in field_names:
+    def _apply_m2m_state(self, state: dict[str, Any]) -> None:
+        """Apply M2M field values after the instance has been saved."""
+        for field_name in self._included_fields:
+            if field_name not in state:
+                continue
             field = self.instance._meta.get_field(field_name)
-            value = instance_data.get(field_name)
-
-            if getattr(field, 'many_to_many', False):
-                data[field_name] = [self._pk_from_related_value(item) for item in value or []]
+            if not getattr(field, 'many_to_many', False):
                 continue
-
-            if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
-                data[field_name] = self._pk_from_related_value(value)
-                continue
-
-            if getattr(field, 'get_internal_type', lambda: '')() in {'FileField', 'ImageField'}:
-                if value in (None, ''):
-                    data[field_name] = value
-                continue
-
-            data[field_name] = value
-        return data
-
-    @staticmethod
-    def _form_files_from_request(
-        request: HttpRequest | None,
-        field_names: Sequence[str],
-    ) -> MultiValueDict | None:
-        if request is None or not request.FILES:
-            return None
-
-        files = MultiValueDict()
-        for field_name in field_names:
-            for request_key in (field_name, f'instance_data.{field_name}'):
-                if request_key not in request.FILES:
-                    continue
-                if hasattr(request.FILES, 'getlist'):
-                    files.setlist(field_name, request.FILES.getlist(request_key))
-                else:
-                    files.setlist(field_name, [request.FILES[request_key]])
-
-        return files or None
+            field_state = state[field_name]
+            value = field_state.get('value') if isinstance(field_state, dict) else field_state
+            pks = [self._pk_from_related_value(item) for item in value or []]
+            getattr(self.instance, field_name).set(pks)
 
     @staticmethod
     def _pk_from_related_value(value: Any) -> Any:
@@ -237,7 +222,7 @@ class ModelGlue(BaseGlue):
         field_name: str | None = None,
         choice_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        if not field_name or field_name not in self.get_field_names():
+        if not field_name or field_name not in self._included_fields:
             return []
 
         field = self.instance._meta.get_field(field_name)

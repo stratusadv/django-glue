@@ -179,7 +179,31 @@ class GlueExpiredPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
-class GlueBoundAttributeCallError(GlueError):
+class GlueCalledStateAttributeError(GlueError):
+    code = 'called_state_attribute'
+    status = 404
+
+    def __init__(self, attribute: str, proxy_name: str, reason: str | None = None) -> None:
+        self.attribute = attribute
+        self.proxy_name = proxy_name
+        self.reason = reason
+        message = (
+            f"Invalid attribute target {attribute}. Only CallableAttributes can be called."
+        )
+        if reason:
+            message += f': {reason}'
+        super().__init__(message)
+
+    def details(self) -> dict:
+        details = {
+            'attribute': self.attribute,
+            'proxy': self.proxy_name,
+        }
+        if self.reason:
+            details['reason'] = self.reason
+        return details
+
+class GlueAttributeCallError(GlueError):
     """Raised when calling a bound attribute fails. Provides detailed context about the failure."""
 
     code = 'bound_attribute_call_error'
