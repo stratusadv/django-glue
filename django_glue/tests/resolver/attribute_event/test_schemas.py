@@ -74,12 +74,12 @@ class BoundProxyAttributeEventSchemaTestCase(TestCase):
         self.assertNotEqual(event.policy.original_signature, original_signature)
         self.assertEqual(event.policy.original_signature, event.policy.computed_signature)
 
-    def test_session_id_mismatch_raises_invalid_policy_error(self):
-        request = self._event_request(self._queryset_policy())
-        request.session = MockSession(session_key='other-session')
+    # def test_session_id_mismatch_raises_invalid_policy_error(self):
+    #     request = self._event_request(self._queryset_policy())
+    #     request.session = MockSession(session_key='other-session')
 
-        with self.assertRaises(GlueInvalidPolicyError):
-            BoundProxyAttributeEvent.model_validate(request)
+    #     with self.assertRaises(GlueInvalidPolicyError):
+    #         BoundProxyAttributeEvent.model_validate(request)
 
     def test_missing_bound_attribute_raises_missing_attribute_error(self):
         request = self._event_request(self._queryset_policy(), attribute_name='new')

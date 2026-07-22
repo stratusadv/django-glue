@@ -174,3 +174,16 @@ class GlueModelInstanceProxyBoundAttributesTestCase(TestCase):
         self.gorilla.refresh_from_db()
         self.assertTrue(self.gorilla.profile_photo)
         self.assertTrue(self.gorilla.profile_photo.name.startswith('gorilla_photos/profile-photo'))
+
+    def test_binary_field_is_excluded_from_proxy(self):
+        self.gorilla.signature = b'test-signature'
+        self.gorilla.save()
+        proxy = make_model_proxy(self.gorilla)
+
+        result = proxy.get(request=None)
+        state_data = proxy.serialize_state()['instance_data']
+        field_metadata = proxy._field_metadata
+
+        self.assertNotIn('signature', result)
+        self.assertNotIn('signature', state_data)
+        self.assertNotIn('signature', field_metadata)

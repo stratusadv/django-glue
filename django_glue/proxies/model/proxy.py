@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Sequence, cast
 from django.core.exceptions import FieldDoesNotExist
 from django.db import transaction
 from django.db.models import Model
+from django.db.models.fields import BinaryField
 from django.forms import modelform_factory
 from django.forms.models import ModelMultipleChoiceField
 from django.forms.models import ModelForm
@@ -32,6 +33,7 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
                 model_class._meta.fields,
                 model_class._meta.many_to_many,
             )
+            if not isinstance(field, BinaryField)
         ]
 
     @staticmethod
@@ -117,6 +119,7 @@ class BaseGlueModelProxy(GlueFormProxy, ABC):
         policy = getattr(self, 'policy', None)
         if policy:
             return list(policy.subject_details.included_fields.keys())
+
         return getattr(self, '_policy_included_field_names', list(self.state.form.fields))
 
     @staticmethod

@@ -82,6 +82,10 @@ class GorillaSeeder:
         name = self.fake.random_element(GORILLA_NAMES)
         suffix = self.fake.random_int(min=1, max=99)
 
+        wins = self.fake.random_int(min=0, max=50)
+        losses = self.fake.random_int(min=0, max=30)
+        knockouts = self.fake.random_int(min=0, max=wins)
+
         gorilla = Gorilla.objects.create(
             name=f'{name} #{suffix}',
             description=self.fake.paragraph(nb_sentences=2),
@@ -89,6 +93,18 @@ class GorillaSeeder:
             weight=round(self.fake.pyfloat(min_value=150, max_value=400), 1),
             height=round(self.fake.pyfloat(min_value=1.2, max_value=2.2), 2),
             rank_points=self.fake.random_int(min=0, max=5000),
+            fighting_stats={
+                'wins': wins,
+                'losses': losses,
+                'knockouts': knockouts,
+                'favorite_moves': self.fake.random_elements(
+                    ['Chest Pound', 'Ground Slam', 'Tree Swing', 'Silverback Charge', 'Primal Rage'],
+                    length=self.fake.random_int(min=1, max=3),
+                    unique=True,
+                ),
+                'weight_class': self.fake.random_element(['Lightweight', 'Middleweight', 'Heavyweight', 'Super Heavyweight']),
+            },
+            signature=self.fake.binary(length=16),
         )
 
         # Assign random skills if available

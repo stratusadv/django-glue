@@ -1,3 +1,5 @@
+import json
+
 from django.core.files.uploadedfile import UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import QuerySet, Model
@@ -24,6 +26,14 @@ class BoundAttributeDataJSONEncoder(DjangoJSONEncoder):
                 return {'name': obj.name, 'size': obj.size}
             except ValueError:
                 return None
+
+        # Handle memoryview objects (returned by PostgreSQL for BinaryField)
+        if isinstance(obj, memoryview):
+            return obj.tobytes().decode('utf-8', errors='replace')
+
+        # Handle bytes objects
+        if isinstance(obj, bytes):
+            return obj.decode('utf-8', errors='replace')
 
         # For other types not handled by the default encoder,
         # delegate to the base class (which handles datetime, date, etc.)

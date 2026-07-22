@@ -51,6 +51,18 @@ class Gorilla(models.Model):
 
     skills = models.ManyToManyField('Skill', related_name='gorillas', blank=True)
 
+    fighting_stats = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Fighting statistics: wins, losses, knockouts, favorite_moves, etc.',
+    )
+
+    signature = models.BinaryField(
+        blank=True,
+        null=True,
+        help_text='Unique battle signature (binary data)',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

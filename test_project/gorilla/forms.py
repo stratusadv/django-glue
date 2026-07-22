@@ -26,6 +26,7 @@ class GorillaForm(forms.ModelForm):
             'rank_points',
             'profile_photo',
             'skills',
+            'fighting_stats',
         ]
 
 

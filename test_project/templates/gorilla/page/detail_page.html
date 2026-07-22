@@ -104,6 +104,54 @@
                             </div>
                         </div>
 
+                        <!-- Fighting Stats (JSONField) -->
+                        <template x-if="gorilla.fighting_stats && Object.keys(gorilla.fighting_stats).length > 0">
+                            <div class="mb-4">
+                                <h5 class="fw-bold mb-3">Fighting Record</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-4 col-6">
+                                        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
+                                            <div class="stat-value" x-text="gorilla.fighting_stats.wins ?? 0"></div>
+                                            <div class="stat-label">Wins</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 col-6">
+                                        <div class="stat-card" style="background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%);">
+                                            <div class="stat-value" x-text="gorilla.fighting_stats.losses ?? 0"></div>
+                                            <div class="stat-label">Losses</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 col-6">
+                                        <div class="stat-card" style="background: linear-gradient(135deg, #fd7e14 0%, #d56a10 100%);">
+                                            <div class="stat-value" x-text="gorilla.fighting_stats.knockouts ?? 0"></div>
+                                            <div class="stat-label">Knockouts</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <template x-if="gorilla.fighting_stats.weight_class">
+                                    <div class="mt-3">
+                                        <span class="badge bg-secondary fs-6" x-text="gorilla.fighting_stats.weight_class"></span>
+                                    </div>
+                                </template>
+                                <template x-if="gorilla.fighting_stats.favorite_moves?.length > 0">
+                                    <div class="mt-3">
+                                        <strong>Favorite Moves:</strong>
+                                        <template x-for="move in gorilla.fighting_stats.favorite_moves" :key="move">
+                                            <span class="badge bg-gorilla-green ms-1" x-text="move"></span>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- Battle Signature (BinaryField) -->
+                        <template x-if="gorilla.signature">
+                            <div class="mb-4">
+                                <h5 class="fw-bold mb-3">Battle Signature</h5>
+                                <code class="bg-dark text-success p-2 rounded d-block" x-text="gorilla.signature"></code>
+                            </div>
+                        </template>
+
                         <!-- Editable Form -->
                         <div class="row g-3">
                             <div class="col-12">
