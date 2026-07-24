@@ -43,11 +43,10 @@
     <div x-data="{
         fights: Glue.querySet.fights,
         search: '',
-        fightItems: [],
-        get queryParams() {
-            return {
-                filter: {name__icontains: this.search}
-            };
+        get fightItems() {
+            return Array.from(
+                this.fights.filter({name__icontains: this.search})
+            )
         },
         cornerId(corner) {
             const value = corner?.value ?? corner;
@@ -83,10 +82,6 @@
             this.fights.addListener('delete', () => {
                 $store.notifications.error('Failed to delete fight.');
             }, 'error');
-            this.refreshFights();
-        },
-        refreshFights() {
-            this.fightItems = this.fights.queryWithParams(this.queryParams);
         }
     }">
         <!-- Search -->
@@ -103,7 +98,7 @@
                         class="form-control"
                         placeholder="Search fights by name..."
                         x-model.debounce="search"
-                        @input.debounce.500ms="refreshFights()">
+                        >
                 </div>
             </div>
         </div>

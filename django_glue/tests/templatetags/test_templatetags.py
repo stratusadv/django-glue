@@ -121,3 +121,38 @@ class GetItemFilterTestCase(TestCase):
 
         rendered = template.render(context).strip()
         self.assertEqual(rendered, 'bar')
+
+
+class GlueFieldPathFilterTestCase(TestCase):
+    """Tests for field path filters used by Glue field components."""
+
+    def test_glue_field_value_path_removes_fields_namespace(self):
+        template = Template(
+            '{% load django_glue %}{{ path|glue_field_value_path }}'
+        )
+
+        rendered = template.render(
+            Context({'path': 'gorilla.$fields.name'})
+        ).strip()
+
+        self.assertEqual(rendered, 'gorilla.name')
+
+    def test_glue_field_metadata_path_adds_fields_namespace(self):
+        template = Template(
+            '{% load django_glue %}{{ path|glue_field_metadata_path }}'
+        )
+
+        rendered = template.render(Context({'path': 'gorilla.name'})).strip()
+
+        self.assertEqual(rendered, 'gorilla.$fields.name')
+
+    def test_glue_field_metadata_path_preserves_existing_namespace(self):
+        template = Template(
+            '{% load django_glue %}{{ path|glue_field_metadata_path }}'
+        )
+
+        rendered = template.render(
+            Context({'path': 'gorilla.$fields.name'})
+        ).strip()
+
+        self.assertEqual(rendered, 'gorilla.$fields.name')

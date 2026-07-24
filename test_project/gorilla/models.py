@@ -54,6 +54,7 @@ class Gorilla(models.Model):
     fighting_stats = models.JSONField(
         default=dict,
         blank=True,
+        null=True,
         help_text='Fighting statistics: wins, losses, knockouts, favorite_moves, etc.',
     )
 

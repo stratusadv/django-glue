@@ -53,7 +53,10 @@ class Fight(models.Model):
         default=TerrainTypeChoices.STEEL_DEATH_CAGE,
     )
     status = models.CharField(
-        max_length=3, choices=FightStatusChoices.choices, default=FightStatusChoices.SCHEDULED
+        max_length=3,
+        choices=FightStatusChoices.choices,
+        default=FightStatusChoices.SCHEDULED,
+        null=True,
     )
 
     date_time = models.DateTimeField(default=timezone.localtime)
