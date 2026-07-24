@@ -4,127 +4,91 @@ import GlueModelProxy from "./model"
 class GlueQuerySetProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
-        this._rowProxies = new Map()
+        this._modelProxies = new Map()
         this._queryParams = options.queryParams || {}
-        this._items = []
-        this._queryResults = {}
-        this._resultCache = []
-        this._queryLoadingKeys = new Set()
-        this._queryLoadedKeys = new Set()
-        this._syncItems()
-        this._setQueryResult(this._queryKey({}), this._items)
-    }
-
-    get _itemPayloads() {
-        return this._state?.items || []
+        this._queryCache = {}
+        this._loaded = false
+        this.loading = false
     }
 
     get items() {
-        return this._items
-    }
-
-    get rows() {
-        return this.items
+        return Array.from(this)
     }
 
     [Symbol.iterator]() {
-        return this.items[Symbol.iterator]()
-    }
-
-    queryWithParams(params = {}) {
-        const key = this._queryKey(params)
-        if (this._queryResults[key]) {
-            this._resultCache = this._queryResults[key]
-            return this._resultCache
+        if (!this._loaded && !this.loading) {
+            this.loading = true
+            this.all().then(() => {
+                this._loaded = true
+                this.loading = false
+            })
         }
 
-        this._queryResults[key] = this._resultCache
-        this._ensureQueryResult(params, key)
-        return this._resultCache
-    }
-
-    query_with_params(params = {}) {
-        return this.queryWithParams(params)
-    }
-
-    async fetchWithParams(params = {}) {
-        const attribute = 'query_with_params'
-        const attributeRequest = {attribute, kwargs: params}
-        this._emit('before', attribute, {attributeRequest, object: this})
-
-        try {
-            const response = await this._http.sendAttributeRequest({
-                name: this._name,
-                policy: this._policy,
-                state: this._state,
-                attribute,
-                kwargs: params,
-            })
-            const items = this._itemsFromResponse(response.data)
-            this._processMessages(response.data)
-            this._emit('after', attribute, {
-                attributeRequest,
-                object: this,
-                proxy: this,
-                response: response.data,
-            })
-            return items
-        } catch (error) {
-            this._emit('error', attribute, {attributeRequest, object: this, proxy: this, error})
-            throw error
-        }
+        return this._modelProxies.values()
     }
 
     async all() {
-        return await this.fetchWithParams(this._queryParams)
+        const result = await this.query_with_params(this._queryParams)
+        this._syncFromResult(result)
+        return this
+    }
+
+    _syncFromResult(result = {}) {
+        const items = result.items || []
+        const oldProxies = this._modelProxies
+        this._modelProxies = new Map()
+
+        items.forEach((row, index) => {
+            const name = row.policy?.name || `${this._name}.${index}`
+            let proxy = oldProxies.get(name)
+
+            if (proxy) {
+                proxy._applyResponse({
+                    policy: row.policy,
+                    state: row.state,
+                    metadata: row.metadata || this._metadata,
+                })
+            } else {
+                proxy = new GlueModelProxy({
+                    http: this._http,
+                    policy: row.policy,
+                    state: row.state,
+                    metadata: row.metadata || this._metadata,
+                })
+            }
+
+            proxy._loaded = true
+            proxy.$collection = this
+            this._modelProxies.set(name, proxy)
+        })
+    }
+
+    query(params = {}) {
+        const key = JSON.stringify(params)
+        if (!this._queryCache[key]) {
+            this._queryCache[key] = this._cloneWithQueryParams(params)
+        }
+        return this._queryCache[key]
     }
 
     filter(filter = {}) {
-        return this._cloneWithQueryParams({filter})
+        return this.query({filter})
     }
 
     orderBy(orderBy) {
-        return this._cloneWithQueryParams({order_by: orderBy})
+        return this.query({order_by: orderBy})
     }
 
     slice(start, stop) {
-        return this._cloneWithQueryParams({slice: {start, stop}})
+        return this.query({slice: {start, stop}})
+    }
+
+    get count() {
+        this._modelProxies.size
     }
 
     async new() {
         return await this._callAttribute('new')
-    }
-
-    _applyResponse(data = {}) {
-        super._applyResponse(data)
-        this._syncItems()
-    }
-
-    _syncItems() {
-        const items = this._itemPayloads.map((row, index) => this._buildRowObject(row, index))
-        this._items = items
-        this._setQueryResult(this._queryKey({}), items)
-    }
-
-    _ensureQueryResult(params = {}, key = this._queryKey(params)) {
-        if (this._queryLoadingKeys.has(key) || this._queryLoadedKeys.has(key)) {
-            return
-        }
-
-        this._queryLoadingKeys.add(key)
-        this.fetchWithParams(params)
-            .then(items => {
-                this._setQueryResult(key, items)
-                this._queryLoadedKeys.add(key)
-            })
-            .finally(() => {
-                this._queryLoadingKeys.delete(key)
-            })
-    }
-
-    _setQueryResult(key, items) {
-        this._queryResults[key] = items
-        this._resultCache = items
     }
 
     _cloneWithQueryParams(params = {}) {
@@ -152,64 +116,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         }
     }
 
-    _queryKey(params = {}) {
-        return JSON.stringify(params || {})
+    _removeModelProxy(proxy) {
+        this._modelProxies.delete(proxy._name)
     }
 
-    _itemsFromResponse(data = {}) {
-        const itemPayloads = data.result?.items || data.state?.items || []
-        return itemPayloads.map((row, index) => this._buildRowObject(row, index))
-    }
-
-    _buildRowObject(row, index) {
-        if (row?.policy) {
-            return this._getOrCreateRowProxy(row, index)
-        }
-        return {
-            $key: row?.id ?? row?.pk ?? index,
-            ...row,
-        }
-    }
-
-    _getOrCreateRowProxy(row, index) {
-        const name = row.policy.name || `${this._name}.${index}`
-        let proxy = this._rowProxies.get(name)
-        if (!proxy) {
-            proxy = new GlueModelProxy({
-                http: this._http,
-                policy: row.policy,
-                state: row.state,
-                metadata: row.metadata || this._metadata,
-            })
-            proxy.$collection = this
-            this._rowProxies.set(name, proxy)
-            return proxy
-        }
-
-        proxy._applyResponse({
-            policy: row.policy,
-            state: row.state,
-            metadata: row.metadata || this._metadata,
-        })
-        proxy.$collection = this
-        return proxy
-    }
-
-    _removeRowProxy(proxy) {
-        const rowIndex = this._itemPayloads.findIndex(row => {
-            return row?.policy?.name === proxy._name
-                || row?.policy?.identity?.target_pk === proxy.$pk
-                || row?.id === proxy.$pk
-                || row?.pk === proxy.$pk
-        })
-
-        if (rowIndex >= 0) {
-            this._itemPayloads.splice(rowIndex, 1)
-            this._items.splice(rowIndex, 1)
-        }
-
-        this._rowProxies.delete(proxy._name)
-    }
 }
 
 export default GlueQuerySetProxy

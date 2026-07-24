@@ -42,6 +42,14 @@ function parseFieldValue(field, value) {
 }
 
 function serializeValue(value) {
+    if (value === null || value === undefined) {
+        return value
+    }
+
+    if (typeof value === 'function') {
+        return undefined
+    }
+
     if (value instanceof Date) {
         return value.toISOString()
     }
@@ -52,7 +60,9 @@ function serializeValue(value) {
 
     if (isPlainObject(value)) {
         return Object.fromEntries(
-            Object.entries(value).map(([key, item]) => [key, serializeValue(item)])
+            Object.entries(value)
+                .filter(([key, item]) => typeof item !== 'function' && !key.startsWith('_'))
+                .map(([key, item]) => [key, serializeValue(item)])
         )
     }
 

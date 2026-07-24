@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 from types import SimpleNamespace
 
 from django.core.files.base import ContentFile
@@ -9,6 +10,7 @@ from django.test import TestCase
 
 from django_glue.access import GlueAccess
 from django_glue.glue import (
+    BaseGlue,
     FormFieldAttribute,
     ModelFieldAttribute,
     FormGlue,
@@ -20,7 +22,9 @@ from django_glue.glue import (
     FunctionGlue,
     GlueObjectResolverRegistry,
 )
-from django_glue.exceptions import GlueInvalidPolicyError
+from django_glue.glue.attributes import Attribute, ContainerAttribute
+from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
+from django_glue.glue.schemas import AttributeCallResolverContext
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.test_forms import ContactForm
 
@@ -40,6 +44,63 @@ def with_request(glue_object, session_key='test-session'):
     """Set a mock request on the glue object and return it."""
     glue_object.request = request_with_session(session_key)
     return glue_object
+
+
+class NestedStatsGlue(BaseGlue):
+    namespace = 'stats'
+
+    def __init__(self):
+        super().__init__(name='stats', access=GlueAccess.VIEW)
+
+    @property
+    def identity(self) -> dict:
+        return {'name': self.name}
+
+    @cached_property
+    def metadata(self) -> GlueMetadata:
+        return GlueMetadata.from_payload({
+            'attributes': {
+                name: attribute.metadata
+                for name, attribute in self.attributes.items()
+            },
+        })
+
+    @classmethod
+    def _from_policy(cls, policy):
+        return cls()
+
+    @Attribute(access=GlueAccess.VIEW)
+    def score(self) -> int:
+        return 42
+
+    @Attribute(access=GlueAccess.CHANGE)
+    def reset(self) -> str:
+        return 'reset'
+
+
+class NestedDashboardGlue(BaseGlue):
+    namespace = 'dashboard'
+    stats = Attribute(NestedStatsGlue(), access=GlueAccess.VIEW)
+
+    def __init__(self):
+        super().__init__(name='dashboard', access=GlueAccess.CHANGE)
+
+    @property
+    def identity(self) -> dict:
+        return {'name': self.name}
+
+    @cached_property
+    def metadata(self) -> GlueMetadata:
+        return GlueMetadata.from_payload({
+            'attributes': {
+                name: attribute.metadata
+                for name, attribute in self.attributes.items()
+            },
+        })
+
+    @classmethod
+    def _from_policy(cls, policy):
+        return cls()
 
 
 class GluePolicyTestCase(TestCase):
@@ -170,7 +231,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
     def test_model_save_persists_nested_state_file_upload(self):
         request = request_with_session()
         request.FILES = {
-            'instance_data.profile_photo': SimpleUploadedFile(
+            'profile_photo': SimpleUploadedFile(
                 'profile-photo.gif',
                 b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
                 content_type='image/gif',
@@ -232,14 +293,48 @@ class DjangoModelGlueObjectTestCase(TestCase):
     def test_model_adapter_transfers_target_glue_attributes_to_policy(self):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
         policy = glue_object.policy
+        metadata = glue_object.metadata.to_payload()
+        state = glue_object.state
 
         self.assertIn('shout', policy.attributes)
         self.assertIn('services.increment_age', policy.attributes)
+        self.assertEqual(metadata['attributes']['services']['namespace'], 'container')
+        self.assertEqual(
+            metadata['attributes']['services.increment_age']['namespace'],
+            'callable',
+        )
+        self.assertNotIn('services', state)
 
         # Call the shout method directly on the instance
         shout_result = self.gorilla.shout(volume=5)
 
         self.assertEqual(shout_result, 'AAAAA')
+
+    def test_nested_base_glue_attributes_build_container_metadata(self):
+        glue_object = with_request(NestedDashboardGlue())
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata.to_payload()
+        state = glue_object.state
+
+        self.assertIn('stats', policy.attributes)
+        self.assertIn('stats.score', policy.attributes)
+        self.assertIn('stats.reset', policy.attributes)
+        self.assertIsInstance(glue_object.attributes['stats'], ContainerAttribute)
+        self.assertEqual(metadata['attributes']['stats']['namespace'], 'container')
+        self.assertEqual(metadata['attributes']['stats.score']['namespace'], 'callable')
+        self.assertEqual(metadata['attributes']['stats.reset']['namespace'], 'callable')
+        self.assertNotIn('stats', state)
+
+        context = AttributeCallResolverContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=policy,
+            target_glue_client_state=None,
+            target_attribute_name='stats',
+            target_attribute_call_kwargs={},
+        )
+        with self.assertRaises(GlueCalledStateAttributeError):
+            glue_object.process_attribute_call(context)
 
 
 class DjangoFormGlueObjectTestCase(TestCase):
@@ -264,7 +359,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertIn('validate', policy.attributes)
         self.assertIn('save', policy.attributes)
         self.assertEqual(state['name']['value'], 'Ada')
-        self.assertEqual(metadata['fields']['email']['type'], 'EmailField')
+        self.assertEqual(metadata['attributes']['email']['type'], 'EmailField')
 
 
 class DjangoQuerySetGlueObjectTestCase(TestCase):

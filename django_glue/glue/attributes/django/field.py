@@ -41,11 +41,12 @@ class BaseDjangoFieldGlueAttribute(StateAttribute):
         self.add_choice_metadata(metadata)
         self.add_extra_metadata(metadata)
 
-        return super().metadata | metadata
+        return super().metadata | metadata | {'namespace': 'field'}
 
     @property
     def label(self) -> str:
-        return str(getattr(self.field, 'label', None) or getattr(self.field, 'verbose_name', '') or '')
+        label = str(getattr(self.field, 'label', None) or getattr(self.field, 'verbose_name', '') or '')
+        return label.capitalize() if label else ''
 
     @property
     def required(self) -> bool:

@@ -44,6 +44,10 @@ class FieldGlue {
         return Boolean(this.errors?.length)
     }
 
+    get errorText() {
+        return this.errors.join(', ')
+    }
+
     updateMetadata(metadata = {}) {
         Object.assign(this, metadata)
     }

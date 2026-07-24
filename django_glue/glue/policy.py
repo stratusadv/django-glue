@@ -33,6 +33,8 @@ class GluePolicy(BaseModel):
         *,
         glue_object: BaseGlue,
     ) -> Self:
+        attributes = list(glue_object.attributes)
+        
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
             'name': glue_object.name,

@@ -62,7 +62,8 @@ class GlueClient {
         Object.defineProperty(this[namespace], name, {
             get: () => namespace === 'function'
             ? ProxyClass.create({http: this.http, policy, metadata})
-            : new ProxyClass({http: this.http, policy, metadata})
+            : new ProxyClass({http: this.http, policy, metadata}),
+            configurable: true,
         })
     }
 }

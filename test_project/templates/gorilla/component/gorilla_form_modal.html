@@ -31,44 +31,44 @@
                     <div class="col-12">
                         <label class="form-label fw-bold">Name</label>
                         <input type="text" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.name?.hasErrors}"
+                               :class="{'is-invalid': gorilla?.$fields?.name?.hasErrors}"
                                x-model="gorilla.name">
-                        <div class="invalid-feedback" x-text="gorilla?.name?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.name?.errorText"></div>
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-bold">Description</label>
                         <textarea class="form-control form-control-gorilla" rows="2"
-                                  :class="{'is-invalid': gorilla?.description?.hasErrors}"
+                                  :class="{'is-invalid': gorilla?.$fields?.description?.hasErrors}"
                                   x-model="gorilla.description"></textarea>
-                        <div class="invalid-feedback" x-text="gorilla?.description?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.description?.errorText"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Age</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.age?.hasErrors}"
+                               :class="{'is-invalid': gorilla?.$fields?.age?.hasErrors}"
                                x-model="gorilla.age" min="1" max="60">
-                        <div class="invalid-feedback" x-text="gorilla?.age?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.age?.errorText"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Weight (kg)</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.weight?.hasErrors}"
+                                  :class="{'is-invalid': gorilla?.$fields?.weight?.hasErrors}"
                                x-model="gorilla.weight" step="0.1" min="50" max="500">
-                        <div class="invalid-feedback" x-text="gorilla?.weight?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.weight?.errorText"></div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Height (m)</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.height?.hasErrors}"
+                               :class="{'is-invalid': gorilla?.$fields?.height?.hasErrors}"
                                x-model="gorilla.height" step="0.01" min="1.0" max="2.5">
-                        <div class="invalid-feedback" x-text="gorilla?.height?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.height?.errorText"></div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label fw-bold">Rank Points</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.rank_points?.hasErrors}"
+                               :class="{'is-invalid': gorilla?.$fields?.rank_points?.hasErrors}"
                                x-model="gorilla.rank_points" min="0" max="10000">
-                        <div class="invalid-feedback" x-text="gorilla?.rank_points?.errorText"></div>
+                        <div class="invalid-feedback" x-text="gorilla?.$fields?.rank_points?.errorText"></div>
                     </div>
                 </div>
             </div>

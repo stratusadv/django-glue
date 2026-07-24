@@ -6,7 +6,7 @@ from typing import Any, Sequence, TYPE_CHECKING, cast
 from django.core.exceptions import ValidationError
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, Attribute
+from django_glue.glue.attributes import BaseGlueAttribute, ReadableAttribute, Attribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
@@ -32,11 +32,13 @@ class ModelGlue(BaseGlue):
         access: GlueAccess,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
+        source_queryset: models.QuerySet | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
         self.fields = tuple(fields)
         self.exclude = tuple(exclude)
+        self.source_queryset = source_queryset
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
 
@@ -55,7 +57,7 @@ class ModelGlue(BaseGlue):
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
-        return super().attributes | {
+        attributes = super().attributes | {
             field_name: ModelFieldAttribute(
                 owner=self,
                 name=field_name,
@@ -65,6 +67,22 @@ class ModelGlue(BaseGlue):
             )
             for field_name in self._included_fields
         }
+        attributes.update({
+            annotation_name: ReadableAttribute(
+                owner=self,
+                name=annotation_name,
+                access=GlueAccess.VIEW,
+                target=self.instance,
+            )
+            for annotation_name in self._annotation_names
+        })
+        return attributes
+
+    @cached_property
+    def _annotation_names(self) -> tuple[str, ...]:
+        if self.source_queryset is None:
+            return ()
+        return tuple(self.source_queryset.query.annotations)
 
     @cached_property
     def _included_fields(self) -> list[str]:
@@ -165,6 +183,8 @@ class ModelGlue(BaseGlue):
 
             if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
                 value = self._pk_from_related_value(value)
+                setattr(self.instance, field.attname, value)
+                continue
 
             setattr(self.instance, field_name, value)
 
@@ -172,9 +192,7 @@ class ModelGlue(BaseGlue):
         """Get a file from request.FILES for a field."""
         if not self.request or not self.request.FILES:
             return None
-        for key in (field_name, f'instance_data.{field_name}'):
-            if key in self.request.FILES:
-                return self.request.FILES[key]
+        return self.request.FILES.get(field_name)
         return None
 
     @Attribute(access=GlueAccess.VIEW)

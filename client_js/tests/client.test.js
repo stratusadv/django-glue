@@ -3,6 +3,24 @@ import GlueClient from "../src/client"
 import {createPolicy, createMetadata, createState} from "./testUtils"
 
 describe('GlueClient', () => {
+    test('exposes client-level callbacks, fetch, and view helpers', async () => {
+        happyDOM.setURL('http://localhost/')
+        const client = new GlueClient({manifest_list: []})
+        const onMessage = () => {}
+        const onError = () => {}
+        let fetchedUrl
+        global.fetch = async url => {
+            fetchedUrl = url
+            return new Response('{}', {status: 200})
+        }
+
+        expect(client.onMessage(onMessage)).toBe(client)
+        expect(client.onError(onError)).toBe(client)
+        expect(await client.fetch('/health')).toMatchObject({ok: true, data: {}})
+        expect(fetchedUrl).toBe('/health')
+        expect(client.view('/partial/').url).toBe('/partial/')
+    })
+
     test('registers proxies by name and policy namespace', () => {
         const client = new GlueClient({
             urls: {
@@ -24,10 +42,7 @@ describe('GlueClient', () => {
         expect(client.http._config.attributeUrlPath).toBe('/custom/attribute/')
         expect(client.http._config.glueViewUrlPath).toBe('/custom/view/')
         expect(client.http._config.requestTimeoutSeconds).toBe(45)
-        expect(client.proxy('gorilla')).toBe(client.model.gorilla)
-        expect(client.model.gorilla.$name).toBe('gorilla')
-        expect(String(client.model.gorilla.name)).toBe('Koko')
-        expect(client.model.gorilla.name.value).toBe('Koko')
+        expect(client.model.gorilla._name).toBe('gorilla')
     })
 
     test('registers function proxies as callables', async () => {

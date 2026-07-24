@@ -90,8 +90,13 @@ class GlueHttp {
         const files = {}
         const data = {}
 
+        const isFileValue = value =>
+            value instanceof File ||
+            value instanceof Blob ||
+            value instanceof FileList
+
         const extractFromValue = (value, key) => {
-            if (value instanceof File || value instanceof Blob || value instanceof FileList) {
+            if (isFileValue(value)) {
                 files[key] = value
                 return undefined
             }
@@ -118,6 +123,11 @@ class GlueHttp {
         }
 
         Object.entries(obj || {}).forEach(([key, value]) => {
+            if (value && typeof value === 'object' && isFileValue(value.value)) {
+                files[key] = value.value
+                return
+            }
+
             const extracted = extractFromValue(value, key)
             if (extracted !== undefined) {
                 data[key] = extracted

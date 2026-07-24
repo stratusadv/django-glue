@@ -70,9 +70,10 @@ class QuerySetGlue(BaseGlue):
             name=f'{self.name}.__model__',
             access=self.access,
             fields=self._included_fields,
+            source_queryset=self.queryset,
         )
         # Get field attributes from the model, excluding model's declared attributes
-        field_names = set(self._included_fields)
+        field_names = {*self._included_fields, *self._annotation_names}
         attributes: dict[str, BaseGlueAttribute] = {
             name: attribute
             for name, attribute in model_object.attributes.items()
@@ -89,13 +90,16 @@ class QuerySetGlue(BaseGlue):
 
     @cached_property
     def metadata(self) -> GlueMetadata:
-        model_instance = self.queryset.model()
-        return ModelGlue(
-            model_instance,
-            name=f'{self.name}.__model__',
-            access=self.access,
-            fields=self._included_fields,
-        ).metadata
+        return GlueMetadata.from_payload({
+            'attributes': {
+                name: attribute.metadata
+                for name, attribute in self.attributes.items()
+            },
+        })
+
+    @cached_property
+    def _annotation_names(self) -> tuple[str, ...]:
+        return tuple(self.queryset.query.annotations)
 
     @classmethod
     def _from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
@@ -165,6 +169,7 @@ class QuerySetGlue(BaseGlue):
             name=child_name,
             access=self.policy.access,
             fields=self._included_fields,
+            source_queryset=self.queryset,
         )
         child_object.request = self.request
 

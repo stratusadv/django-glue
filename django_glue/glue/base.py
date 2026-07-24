@@ -8,6 +8,8 @@ from typing import Any, TYPE_CHECKING
 
 from django_glue.exceptions import GlueAccessError, GlueCalledStateAttributeError, GlueMissingAttributeError, GlueRequestError
 from django_glue.glue.attributes.callable import CallableAttribute
+from django_glue.glue.attributes.container import ContainerAttribute
+from django_glue.glue.attributes.readable import ReadableAttribute
 from django_glue.glue.attributes.state import StateAttribute
 from django_glue.glue.context import GlueManifest
 from django_glue.response import GlueResponse
@@ -89,6 +91,7 @@ class BaseGlue(ABC):
 
         attributes: dict[str, BaseGlueAttribute] = {}
         cls = target.__class__
+        resolved_values: dict[str, Any] = {}
 
         for attr_name, attr in inspect.getmembers_static(cls):
             access = self._get_required_access(cls, attr_name, attr)
@@ -109,12 +112,34 @@ class BaseGlue(ABC):
                     target=resolve_target,
                 )
             else:
-                attributes[name] = StateAttribute(
-                    owner=self,
-                    name=attr_name,
-                    access=access,
-                    target=resolve_target,
-                )
+                try:
+                    value = getattr(target, attr_name)
+                except Exception:  # noqa: S112
+                    value = None
+
+                resolved_values[attr_name] = value
+
+                if isinstance(getattr(attr, 'target', None), property):
+                    attributes[name] = ReadableAttribute(
+                        owner=self,
+                        name=attr_name,
+                        access=access,
+                        target=resolve_target,
+                    )
+                elif value is not None and self._has_glue_attributes(value.__class__):
+                    attributes[name] = ContainerAttribute(
+                        owner=self,
+                        name=attr_name,
+                        access=access,
+                        target=resolve_target,
+                    )
+                else:
+                    attributes[name] = StateAttribute(
+                        owner=self,
+                        name=attr_name,
+                        access=access,
+                        target=resolve_target,
+                    )
 
         # Second pass: recurse into nested value attributes
         for attr_name, class_attr in inspect.getmembers_static(cls):
@@ -124,22 +149,22 @@ class BaseGlue(ABC):
             if access is None or getattr(class_attr, 'is_callable', True):
                 continue
 
-            try:
-                value = getattr(target, attr_name)
-            except Exception:  # noqa: S112
+            if attr_name not in resolved_values:
                 continue
 
+            value = resolved_values[attr_name]
             if value is None or callable(value):
                 continue
             if not self._has_glue_attributes(value.__class__):
                 continue
 
             nested_prefix = f'{path_prefix}.{attr_name}' if path_prefix else attr_name
-            attributes.update(self._discover_attributes(
+            nested_attrs = self._discover_attributes(
                 target=value,
                 visited=visited,
                 path_prefix=nested_prefix,
-            ))
+            )
+            attributes.update(nested_attrs)
 
         return attributes
 
@@ -205,6 +230,7 @@ class BaseGlue(ABC):
         attribute = glue_object.attributes.get(context.target_attribute_name)
         if attribute and getattr(attribute, 'loads_state', True):
             glue_object._load_client_state(context.target_glue_client_state or {})
+            glue_object._invalidate_attributes()
 
         return glue_object
 
@@ -216,6 +242,10 @@ class BaseGlue(ABC):
 
     def _load_client_state(self, state: dict[str, Any]) -> None:  # noqa: B027
         """Apply client-provided state to subjects. Override in subclasses."""
+
+    def _invalidate_attributes(self) -> None:
+        """Discard discovered attributes after target state hydration."""
+        self.__dict__.pop('attributes', None)
 
     def process_attribute_call(
         self,

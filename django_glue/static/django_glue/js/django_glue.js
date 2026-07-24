@@ -69,6 +69,12 @@
     return Object.prototype.toString.call(value) === "[object Object]";
   }
   function serializeValue(value) {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (typeof value === "function") {
+      return;
+    }
     if (value instanceof Date) {
       return value.toISOString();
     }
@@ -76,7 +82,7 @@
       return value.map((item) => serializeValue(item));
     }
     if (isPlainObject(value)) {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, serializeValue(item)]));
+      return Object.fromEntries(Object.entries(value).filter(([key, item]) => typeof item !== "function" && !key.startsWith("_")).map(([key, item]) => [key, serializeValue(item)]));
     }
     return value;
   }
@@ -160,8 +166,9 @@
     _extractFiles(obj) {
       const files = {};
       const data = {};
+      const isFileValue = (value) => value instanceof File || value instanceof Blob || value instanceof FileList;
       const extractFromValue = (value, key) => {
-        if (value instanceof File || value instanceof Blob || value instanceof FileList) {
+        if (isFileValue(value)) {
           files[key] = value;
           return;
         }
@@ -184,6 +191,10 @@
         return value;
       };
       Object.entries(obj || {}).forEach(([key, value]) => {
+        if (value && typeof value === "object" && isFileValue(value.value)) {
+          files[key] = value.value;
+          return;
+        }
         const extracted = extractFromValue(value, key);
         if (extracted !== undefined) {
           data[key] = extracted;
@@ -263,6 +274,14 @@
   var view_default = GlueView;
 
   // client_js/src/proxies/base.js
+  function isPlainObject2(value) {
+    if (value === null || typeof value !== "object") {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
   class BaseGlueProxy {
     constructor({ http, policy, state = {}, metadata = {} }) {
       this._http = http;
@@ -273,7 +292,7 @@
       this._listeners = { before: {}, after: {}, error: {} };
       this._onMessage = null;
       this._onError = null;
-      this._defineAttributes();
+      this._initializeAttributes();
     }
     addListener(attribute, callback, when = "after") {
       if (!this._listeners[when]) {
@@ -341,49 +360,60 @@
         }
       });
       Object.keys(source).forEach((key) => {
-        if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])) {
-          if (!target[key] || typeof target[key] !== "object" || Array.isArray(target[key])) {
+        const sourceValue = source[key];
+        if (isPlainObject2(sourceValue)) {
+          if (!isPlainObject2(target[key])) {
             target[key] = {};
           }
-          this._mergeState(target[key], source[key]);
+          this._mergeState(target[key], sourceValue);
         } else {
-          target[key] = source[key];
+          target[key] = sourceValue;
         }
       });
     }
-    _defineAttributes() {
+    _configureAttributeInitializers() {
+      this._attributeBuilders = {
+        container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
+        callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
+        state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta)
+      };
+    }
+    _initializeAttributes() {
+      this._configureAttributeInitializers();
       (this._policy?.attributes || []).forEach((attributeQualName) => {
         const attributeMetadata = this._metadata?.attributes?.[attributeQualName];
         if (!attributeMetadata) {
           return;
         }
-        this._defineAttribute(attributeQualName, attributeMetadata);
+        this._initializeAttribute(attributeQualName, attributeMetadata);
       });
     }
-    _defineAttribute(attributeQualName, attributeMetadata) {
+    _initializeAttribute(attributeQualName, attributeMetadata) {
       const parts = attributeQualName.split(".");
       const attributeName = parts.pop();
       const owner = this._resolveAttributeOwner(parts);
       if (owner[attributeName] !== undefined) {
         return;
       }
-      if (attributeMetadata.namespace === "callable") {
-        this._defineCallableAttribute(owner, attributeName, attributeQualName);
-      } else if (attributeMetadata.namespace === "state") {
-        this._defineStateAttribute(owner, attributeName, attributeQualName);
+      const initializeAttribute = this._attributeBuilders[attributeMetadata.namespace];
+      if (initializeAttribute) {
+        initializeAttribute(owner, attributeName, attributeQualName, attributeMetadata);
       }
     }
-    _defineCallableAttribute(owner, attributeName, attributeQualName) {
+    _initializeContainerAttribute(owner, attributeName) {
+      this._defineContainerAttribute(owner, attributeName);
+    }
+    _initializeCallableAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
       Object.defineProperty(owner, attributeName, {
         value: async function(kwargs = {}) {
-          const root = this.__glue__owner || this;
+          const root = owner.__glue__root || this;
           return await root._callAttribute(attributeQualName, kwargs);
         },
         enumerable: false,
         configurable: true
       });
     }
-    _defineStateAttribute(owner, attributeName, attributeQualName) {
+    _initializeStateAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
       const proxy = this;
       Object.defineProperty(owner, attributeName, {
         get() {
@@ -400,30 +430,33 @@
     }
     _resolveAttributeOwner(parts) {
       return parts.reduce((current, part) => {
-        const cacheKey = `__glue__${part}`;
         if (current[part] === undefined) {
-          Object.defineProperty(current, part, {
-            get: function() {
-              if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
-                Object.defineProperty(this, cacheKey, {
-                  value: {},
-                  enumerable: false,
-                  configurable: true
-                });
-              }
-              Object.defineProperty(this[cacheKey], "__glue__owner", {
-                value: this,
-                enumerable: false,
-                configurable: true
-              });
-              return this[cacheKey];
-            },
-            enumerable: false,
-            configurable: true
-          });
+          this._defineContainerAttribute(current, part);
         }
         return current[part];
       }, this);
+    }
+    _defineContainerAttribute(owner, attributeName) {
+      const cacheKey = Symbol(`__glue__${attributeName}`);
+      Object.defineProperty(owner, attributeName, {
+        get: function() {
+          if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
+            Object.defineProperty(this, cacheKey, {
+              value: {},
+              enumerable: false,
+              configurable: true
+            });
+          }
+          Object.defineProperty(this[cacheKey], "__glue__root", {
+            value: this.__glue__root || this,
+            enumerable: false,
+            configurable: true
+          });
+          return this[cacheKey];
+        },
+        enumerable: false,
+        configurable: true
+      });
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -488,6 +521,9 @@
     }
     get hasErrors() {
       return Boolean(this.errors?.length);
+    }
+    get errorText() {
+      return this.errors.join(", ");
     }
     updateMetadata(metadata = {}) {
       Object.assign(this, metadata);
@@ -573,18 +609,10 @@
   class RelationFieldGlue extends choice_default {
     static loadingCache = new Map;
     get choices() {
-      const key = this._getChoicesCacheKey();
-      if (!this.owner._relationChoices) {
-        this.owner._relationChoices = {};
-      }
-      return this.owner._relationChoices[key] || [];
+      return this._choices || [];
     }
     set choices(value) {
-      const key = this._getChoicesCacheKey();
-      if (!this.owner._relationChoices) {
-        this.owner._relationChoices = {};
-      }
-      this.owner._relationChoices[key] = value;
+      this._choices = value;
     }
     get pk() {
       const value = this.value;
@@ -605,9 +633,9 @@
     get selectedLabel() {
       return this.selectedChoice?.__str__ ?? "";
     }
-    _handlePropertyAccess(prop) {
+    _handlePropertyAccess(prop, receiver) {
       if (prop === "choices" && this.choice_model_path) {
-        this.ensureChoices([]);
+        receiver.ensureChoices([]);
       }
     }
     buildChoices(...choiceFields) {
@@ -617,16 +645,20 @@
     ensureChoices(choiceFields = []) {
       const cacheKey = this._getChoicesCacheKey();
       const cache = this._getOrCreateCache(cacheKey);
+      cache.fields.add(this);
+      if (this._choices !== cache.choices) {
+        this.choices = cache.choices;
+      }
       const requiredFields = this._normalizeChoiceFields(choiceFields);
       const missingFields = requiredFields.filter((f) => !cache.loadedFields.has(f));
       if (missingFields.length === 0) {
-        return cache.promise || Promise.resolve(this.choices);
+        return cache.promise || Promise.resolve(this._choices || []);
       }
       if (cache.promise) {
         return cache.promise.then(() => this.ensureChoices(choiceFields));
       }
       if (typeof this.owner.foreign_key_choices !== "function") {
-        return Promise.resolve(this.choices);
+        return Promise.resolve(this._choices || []);
       }
       cache.promise = this.owner.foreign_key_choices({
         field_name: this.name,
@@ -635,7 +667,7 @@
         const newChoices = Array.isArray(result) ? result : [];
         this._mergeChoices(newChoices);
         requiredFields.forEach((f) => cache.loadedFields.add(f));
-        return this.choices;
+        return this._choices || [];
       }).finally(() => {
         cache.promise = null;
       });
@@ -657,14 +689,17 @@
       if (!cache) {
         cache = {
           loadedFields: new Set,
-          promise: null
+          promise: null,
+          choices: [],
+          fields: new Set
         };
         RelationFieldGlue.loadingCache.set(cacheKey, cache);
       }
       return cache;
     }
     _mergeChoices(newChoices) {
-      const current = this.choices;
+      const cache = this._getOrCreateCache(this._getChoicesCacheKey());
+      const current = cache.choices;
       const merged = [...current];
       newChoices.forEach((choice) => {
         if (!choice || typeof choice !== "object")
@@ -676,7 +711,10 @@
           merged.push(choice);
         }
       });
-      this.choices = merged;
+      cache.choices = merged;
+      for (const field of cache.fields) {
+        field.choices = cache.choices;
+      }
     }
   }
   var relation_default = RelationFieldGlue;
@@ -750,7 +788,6 @@
       super(options);
       this._loaded = false;
       this.loading = false;
-      this._fields = {};
     }
     get $fields() {
       return this._fields;
@@ -768,8 +805,12 @@
       }
       return Object.values(this._state || {}).some((fieldState) => fieldState?.errors?.length > 0);
     }
-    _defineStateAttribute(owner, attributeName, attributeQualName) {
-      const attributeMetadata = this._metadata?.attributes?.[attributeQualName];
+    _configureAttributeInitializers() {
+      super._configureAttributeInitializers();
+      this._fields = {};
+      this._attributeBuilders.field = (owner, name, qualName, meta) => this._initializeFieldAttribute(owner, name, qualName, meta);
+    }
+    _initializeFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
       this._fields[attributeName] = createFieldGlue({
         owner: this,
         name: attributeName,
@@ -777,8 +818,8 @@
         metadata: attributeMetadata,
         existingField: this._fields[attributeName]
       });
-      Object.defineProperty(owner, attributeName, {
-        get: () => {
+      Object.defineProperty(this, attributeName, {
+        get() {
           if (!this._loaded && !this.loading) {
             this.loading = true;
             this._callAttribute("load").then(() => {
@@ -786,9 +827,9 @@
               this.loading = false;
             });
           }
-          return this._fields[attributeName];
+          return this._state?.[attributeQualName]?.value;
         },
-        set: (value) => {
+        set(value) {
           this._fields[attributeName].value = value?.__glue__isFieldProxy ? value.value : value;
         },
         enumerable: true,
@@ -841,9 +882,25 @@
 
   // client_js/src/proxies/model.js
   class GlueModelProxy extends fieldBacked_default {
+    _configureAttributeInitializers() {
+      super._configureAttributeInitializers();
+      this._attributeBuilders.readable = (owner, name, qualName) => {
+        this._initializeReadableAttribute(owner, name, qualName);
+      };
+    }
+    _initializeReadableAttribute(owner, attributeName, attributeQualName) {
+      const proxy = this;
+      Object.defineProperty(owner, attributeName, {
+        get() {
+          return proxy._state?.[attributeQualName]?.value;
+        },
+        enumerable: true,
+        configurable: true
+      });
+    }
     async delete() {
       const result = await this._callAttribute("delete");
-      this.$collection?._removeRowProxy(this);
+      this.$collection?._removeModelProxy(this);
       return result;
     }
   }
@@ -853,106 +910,77 @@
   class GlueQuerySetProxy extends base_default {
     constructor(options) {
       super(options);
-      this._rowProxies = new Map;
+      this._modelProxies = new Map;
       this._queryParams = options.queryParams || {};
-      this._items = [];
-      this._queryResults = {};
-      this._resultCache = [];
-      this._queryLoadingKeys = new Set;
-      this._queryLoadedKeys = new Set;
-      this._syncItems();
-      this._setQueryResult(this._queryKey({}), this._items);
-    }
-    get _itemPayloads() {
-      return this._state?.items || [];
+      this._queryCache = {};
+      this._loaded = false;
+      this.loading = false;
     }
     get items() {
-      return this._items;
-    }
-    get rows() {
-      return this.items;
+      return Array.from(this);
     }
     [Symbol.iterator]() {
-      return this.items[Symbol.iterator]();
-    }
-    queryWithParams(params = {}) {
-      const key = this._queryKey(params);
-      if (this._queryResults[key]) {
-        this._resultCache = this._queryResults[key];
-        return this._resultCache;
-      }
-      this._queryResults[key] = this._resultCache;
-      this._ensureQueryResult(params, key);
-      return this._resultCache;
-    }
-    query_with_params(params = {}) {
-      return this.queryWithParams(params);
-    }
-    async fetchWithParams(params = {}) {
-      const attribute = "query_with_params";
-      const attributeRequest = { attribute, kwargs: params };
-      this._emit("before", attribute, { attributeRequest, object: this });
-      try {
-        const response = await this._http.sendAttributeRequest({
-          name: this._name,
-          policy: this._policy,
-          state: this._state,
-          attribute,
-          kwargs: params
+      if (!this._loaded && !this.loading) {
+        this.loading = true;
+        this.all().then(() => {
+          this._loaded = true;
+          this.loading = false;
         });
-        const items = this._itemsFromResponse(response.data);
-        this._processMessages(response.data);
-        this._emit("after", attribute, {
-          attributeRequest,
-          object: this,
-          proxy: this,
-          response: response.data
-        });
-        return items;
-      } catch (error) {
-        this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error });
-        throw error;
       }
+      return this._modelProxies.values();
     }
     async all() {
-      return await this.fetchWithParams(this._queryParams);
+      const result = await this.query_with_params(this._queryParams);
+      this._syncFromResult(result);
+      return this;
+    }
+    _syncFromResult(result = {}) {
+      const items = result.items || [];
+      const oldProxies = this._modelProxies;
+      this._modelProxies = new Map;
+      items.forEach((row, index) => {
+        const name = row.policy?.name || `${this._name}.${index}`;
+        let proxy = oldProxies.get(name);
+        if (proxy) {
+          proxy._applyResponse({
+            policy: row.policy,
+            state: row.state,
+            metadata: row.metadata || this._metadata
+          });
+        } else {
+          proxy = new model_default({
+            http: this._http,
+            policy: row.policy,
+            state: row.state,
+            metadata: row.metadata || this._metadata
+          });
+        }
+        proxy._loaded = true;
+        proxy.$collection = this;
+        this._modelProxies.set(name, proxy);
+      });
+    }
+    query(params = {}) {
+      const key = JSON.stringify(params);
+      if (!this._queryCache[key]) {
+        this._queryCache[key] = this._cloneWithQueryParams(params);
+      }
+      return this._queryCache[key];
     }
     filter(filter = {}) {
-      return this._cloneWithQueryParams({ filter });
+      return this.query({ filter });
     }
     orderBy(orderBy) {
-      return this._cloneWithQueryParams({ order_by: orderBy });
+      return this.query({ order_by: orderBy });
     }
     slice(start, stop) {
-      return this._cloneWithQueryParams({ slice: { start, stop } });
+      return this.query({ slice: { start, stop } });
+    }
+    get count() {
+      this._modelProxies.size;
     }
     async new() {
       return await this._callAttribute("new");
-    }
-    _applyResponse(data = {}) {
-      super._applyResponse(data);
-      this._syncItems();
-    }
-    _syncItems() {
-      const items = this._itemPayloads.map((row, index) => this._buildRowObject(row, index));
-      this._items = items;
-      this._setQueryResult(this._queryKey({}), items);
-    }
-    _ensureQueryResult(params = {}, key = this._queryKey(params)) {
-      if (this._queryLoadingKeys.has(key) || this._queryLoadedKeys.has(key)) {
-        return;
-      }
-      this._queryLoadingKeys.add(key);
-      this.fetchWithParams(params).then((items) => {
-        this._setQueryResult(key, items);
-        this._queryLoadedKeys.add(key);
-      }).finally(() => {
-        this._queryLoadingKeys.delete(key);
-      });
-    }
-    _setQueryResult(key, items) {
-      this._queryResults[key] = items;
-      this._resultCache = items;
     }
     _cloneWithQueryParams(params = {}) {
       return new this.constructor({
@@ -977,53 +1005,8 @@
         }
       };
     }
-    _queryKey(params = {}) {
-      return JSON.stringify(params || {});
-    }
-    _itemsFromResponse(data = {}) {
-      const itemPayloads = data.result?.items || data.state?.items || [];
-      return itemPayloads.map((row, index) => this._buildRowObject(row, index));
-    }
-    _buildRowObject(row, index) {
-      if (row?.policy) {
-        return this._getOrCreateRowProxy(row, index);
-      }
-      return {
-        $key: row?.id ?? row?.pk ?? index,
-        ...row
-      };
-    }
-    _getOrCreateRowProxy(row, index) {
-      const name = row.policy.name || `${this._name}.${index}`;
-      let proxy = this._rowProxies.get(name);
-      if (!proxy) {
-        proxy = new model_default({
-          http: this._http,
-          policy: row.policy,
-          state: row.state,
-          metadata: row.metadata || this._metadata
-        });
-        proxy.$collection = this;
-        this._rowProxies.set(name, proxy);
-        return proxy;
-      }
-      proxy._applyResponse({
-        policy: row.policy,
-        state: row.state,
-        metadata: row.metadata || this._metadata
-      });
-      proxy.$collection = this;
-      return proxy;
-    }
-    _removeRowProxy(proxy) {
-      const rowIndex = this._itemPayloads.findIndex((row) => {
-        return row?.policy?.name === proxy._name || row?.policy?.identity?.target_pk === proxy.$pk || row?.id === proxy.$pk || row?.pk === proxy.$pk;
-      });
-      if (rowIndex >= 0) {
-        this._itemPayloads.splice(rowIndex, 1);
-        this._items.splice(rowIndex, 1);
-      }
-      this._rowProxies.delete(proxy._name);
+    _removeModelProxy(proxy) {
+      this._modelProxies.delete(proxy._name);
     }
   }
   var queryset_default = GlueQuerySetProxy;
@@ -1103,7 +1086,8 @@
         this[namespace] = {};
       }
       Object.defineProperty(this[namespace], name, {
-        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, metadata }) : new ProxyClass({ http: this.http, policy, metadata })
+        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, metadata }) : new ProxyClass({ http: this.http, policy, metadata }),
+        configurable: true
       });
     }
   }

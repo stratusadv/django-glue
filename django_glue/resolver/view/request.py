@@ -31,3 +31,7 @@ class ViewHttpRequest:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._base, name)
+
+    @property
+    def glue_context_request(self) -> HttpRequest:
+        return self._base

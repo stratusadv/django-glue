@@ -23,8 +23,14 @@ class GlueManifest(BaseModel):
 class GlueContextManager:
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
-        self.manifests: list[GlueManifest] = \
-            request.__dict__.setdefault(DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY, [])
+
+        # Glue View requests are wrappers; their Glue manifests belong to the
+        # underlying request so the outer ViewResolver can serialize them.
+        context_request = getattr(request, 'glue_context_request', request)
+        self.manifests: list[GlueManifest] = context_request.__dict__.setdefault(
+            DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY,
+            [],
+        )
 
     def add_glue(self, glue: BaseGlue) -> None:
         # Ensure session exists (Django creates sessions lazily)

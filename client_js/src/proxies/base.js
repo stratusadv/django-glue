@@ -1,3 +1,12 @@
+function isPlainObject(value) {
+    if (value === null || typeof value !== 'object') {
+        return false
+    }
+
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === Object.prototype || prototype === null
+}
+
 class BaseGlueProxy {
     constructor({http, policy, state = {}, metadata = {}}) {
         this._http = http
@@ -9,7 +18,7 @@ class BaseGlueProxy {
         this._onMessage = null
         this._onError = null
 
-        this._defineAttributes()
+        this._initializeAttributes()
     }
 
     addListener(attribute, callback, when = 'after') {
@@ -93,18 +102,30 @@ class BaseGlueProxy {
 
         // Merge source into target
         Object.keys(source).forEach(key => {
-            if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-                if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
+            const sourceValue = source[key]
+
+            if (isPlainObject(sourceValue)) {
+                if (!isPlainObject(target[key])) {
                     target[key] = {}
                 }
-                this._mergeState(target[key], source[key])
+                this._mergeState(target[key], sourceValue)
             } else {
-                target[key] = source[key]
+                target[key] = sourceValue
             }
         })
     }
 
-    _defineAttributes() {
+    _configureAttributeInitializers() {
+        this._attributeBuilders = {
+            container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
+            callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
+            state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta),
+        }
+    }
+
+    _initializeAttributes() {
+        this._configureAttributeInitializers();
+
         (this._policy?.attributes || []).forEach(attributeQualName => {
             const attributeMetadata = this._metadata?.attributes?.[attributeQualName]
 
@@ -112,11 +133,11 @@ class BaseGlueProxy {
                 return
             }
 
-            this._defineAttribute(attributeQualName, attributeMetadata)
+            this._initializeAttribute(attributeQualName, attributeMetadata)
         })
     }
 
-    _defineAttribute(attributeQualName, attributeMetadata) {
+    _initializeAttribute(attributeQualName, attributeMetadata) {
         const parts = attributeQualName.split('.')
         const attributeName = parts.pop()
         const owner = this._resolveAttributeOwner(parts)
@@ -125,17 +146,20 @@ class BaseGlueProxy {
             return
         }
 
-        if (attributeMetadata.namespace === 'callable') {
-            this._defineCallableAttribute(owner, attributeName, attributeQualName)
-        } else if (attributeMetadata.namespace === 'state') {
-            this._defineStateAttribute(owner, attributeName, attributeQualName)
+        const initializeAttribute = this._attributeBuilders[attributeMetadata.namespace]
+        if (initializeAttribute) {
+            initializeAttribute(owner, attributeName, attributeQualName, attributeMetadata)
         }
     }
 
-    _defineCallableAttribute(owner, attributeName, attributeQualName) {
+    _initializeContainerAttribute(owner, attributeName) {
+        this._defineContainerAttribute(owner, attributeName)
+    }
+
+    _initializeCallableAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
         Object.defineProperty(owner, attributeName, {
             value: async function(kwargs = {}) {
-                const root = this.__glue__owner || this
+                const root = owner.__glue__root || this
                 return await root._callAttribute(attributeQualName, kwargs)
             },
             enumerable: false,
@@ -143,7 +167,7 @@ class BaseGlueProxy {
         })
     }
 
-    _defineStateAttribute(owner, attributeName, attributeQualName) {
+    _initializeStateAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
         const proxy = this
         Object.defineProperty(owner, attributeName, {
             get() {
@@ -160,30 +184,38 @@ class BaseGlueProxy {
 
     _resolveAttributeOwner(parts) {
         return parts.reduce((current, part) => {
-            const cacheKey = `__glue__${part}`
             if (current[part] === undefined) {
-                Object.defineProperty(current, part, {
-                    get: function() {
-                        if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
-                            Object.defineProperty(this, cacheKey, {
-                                value: {},
-                                enumerable: false,
-                                configurable: true,
-                            })
-                        }
-                        Object.defineProperty(this[cacheKey], '__glue__owner', {
-                            value: this,
-                            enumerable: false,
-                            configurable: true,
-                        })
-                        return this[cacheKey]
-                    },
+                this._defineContainerAttribute(current, part)
+            }
+
+            return current[part]
+        }, this)
+    }
+
+    _defineContainerAttribute(owner, attributeName) {
+        const cacheKey = Symbol(`__glue__${attributeName}`)
+
+        Object.defineProperty(owner, attributeName, {
+            get: function() {
+                if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
+                    Object.defineProperty(this, cacheKey, {
+                        value: {},
+                        enumerable: false,
+                        configurable: true,
+                    })
+                }
+
+                Object.defineProperty(this[cacheKey], '__glue__root', {
+                    value: this.__glue__root || this,
                     enumerable: false,
                     configurable: true,
                 })
-            }
-            return current[part]
-        }, this)
+
+                return this[cacheKey]
+            },
+            enumerable: false,
+            configurable: true,
+        })
     }
 
     onMessage(callback) {

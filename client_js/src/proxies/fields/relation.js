@@ -5,19 +5,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     static loadingCache = new Map()
 
     get choices() {
-        const key = this._getChoicesCacheKey()
-        if (!this.owner._relationChoices) {
-            this.owner._relationChoices = {}
-        }
-        return this.owner._relationChoices[key] || []
+        return this._choices || []
     }
 
     set choices(value) {
-        const key = this._getChoicesCacheKey()
-        if (!this.owner._relationChoices) {
-            this.owner._relationChoices = {}
-        }
-        this.owner._relationChoices[key] = value
+        this._choices = value
     }
 
     get pk() {
@@ -42,9 +34,9 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return this.selectedChoice?.__str__ ?? ''
     }
 
-    _handlePropertyAccess(prop) {
+    _handlePropertyAccess(prop, receiver) {
         if (prop === 'choices' && this.choice_model_path) {
-            this.ensureChoices([])
+            receiver.ensureChoices([])
         }
     }
 
@@ -56,11 +48,17 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     ensureChoices(choiceFields = []) {
         const cacheKey = this._getChoicesCacheKey()
         const cache = this._getOrCreateCache(cacheKey)
+        cache.fields.add(this)
+
+        if (this._choices !== cache.choices) {
+            this.choices = cache.choices
+        }
+
         const requiredFields = this._normalizeChoiceFields(choiceFields)
         const missingFields = requiredFields.filter(f => !cache.loadedFields.has(f))
 
         if (missingFields.length === 0) {
-            return cache.promise || Promise.resolve(this.choices)
+            return cache.promise || Promise.resolve(this._choices || [])
         }
 
         if (cache.promise) {
@@ -68,7 +66,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         }
 
         if (typeof this.owner.foreign_key_choices !== 'function') {
-            return Promise.resolve(this.choices)
+            return Promise.resolve(this._choices || [])
         }
 
         cache.promise = this.owner.foreign_key_choices({
@@ -78,7 +76,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             const newChoices = Array.isArray(result) ? result : []
             this._mergeChoices(newChoices)
             requiredFields.forEach(f => cache.loadedFields.add(f))
-            return this.choices
+            return this._choices || []
         }).finally(() => {
             cache.promise = null
         })
@@ -105,6 +103,8 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             cache = {
                 loadedFields: new Set(),
                 promise: null,
+                choices: [],
+                fields: new Set(),
             }
             RelationFieldGlue.loadingCache.set(cacheKey, cache)
         }
@@ -112,7 +112,8 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     }
 
     _mergeChoices(newChoices) {
-        const current = this.choices
+        const cache = this._getOrCreateCache(this._getChoicesCacheKey())
+        const current = cache.choices
         const merged = [...current]
 
         newChoices.forEach(choice => {
@@ -125,7 +126,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             }
         })
 
-        this.choices = merged
+        cache.choices = merged
+
+        for (const field of cache.fields) {
+            field.choices = cache.choices
+        }
     }
 }
 

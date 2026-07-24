@@ -19,30 +19,40 @@ function createPolicy(overrides = {}) {
 }
 
 function createMetadata(overrides = {}) {
+    const fields = {
+        id: {namespace: 'field', type: 'AutoField', label: 'ID'},
+        name: {namespace: 'field', type: 'CharField', label: 'Name'},
+        birthday: {namespace: 'field', type: 'DateField', label: 'Birthday'},
+        ...(overrides.fields || {}),
+    }
+
+    Object.values(fields).forEach(field => {
+        field.namespace ||= 'field'
+    })
+
     return {
-        namespace: 'model',
-        fields: {
-            id: {type: 'AutoField', label: 'ID'},
-            name: {type: 'CharField', label: 'Name'},
-            birthday: {type: 'DateField', label: 'Birthday'},
-        },
-        attributes: {
-            save: {namespace: 'callable'},
-        },
         ...overrides,
+        namespace: 'model',
+        attributes: {
+            ...fields,
+            save: {namespace: 'callable'},
+            ...(overrides.attributes || {}),
+        },
     }
 }
 
 function createState(overrides = {}) {
-    return {
-        instance_data: {
-            id: 1,
-            name: 'Koko',
-            birthday: '1971-07-04',
-        },
-        errors: {},
+    const instanceData = overrides.instance_data || {}
+    const state = {
+        id: {value: 1},
+        name: {value: 'Koko'},
+        birthday: {value: '1971-07-04'},
+        ...Object.fromEntries(Object.entries(instanceData).map(([key, value]) => [key, {value}])),
         ...overrides,
     }
+    delete state.instance_data
+
+    return state
 }
 
 function mockOperationFetch(payload = {}) {

@@ -6,7 +6,6 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         super(options)
         this._loaded = false
         this.loading = false
-        this._fields = {}
     }
 
     get $fields() {
@@ -31,9 +30,13 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         )
     }
 
-    _defineStateAttribute(owner, attributeName, attributeQualName) {
-        const attributeMetadata = this._metadata?.attributes?.[attributeQualName]
+    _configureAttributeInitializers() {
+        super._configureAttributeInitializers()
+        this._fields = {}
+        this._attributeBuilders.field = (owner, name, qualName, meta) => this._initializeFieldAttribute(owner, name, qualName, meta)
+    }
 
+    _initializeFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
         this._fields[attributeName] = createFieldGlue({
             owner: this,
             name: attributeName,
@@ -42,8 +45,8 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
             existingField: this._fields[attributeName],
         })
 
-        Object.defineProperty(owner, attributeName, {
-            get: () => {
+        Object.defineProperty(this, attributeName, {
+            get() {
                 if (!this._loaded && !this.loading) {
                     this.loading = true
                     this._callAttribute('load').then(() => {
@@ -51,9 +54,9 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
                         this.loading = false
                     })
                 }
-                return this._fields[attributeName]
+                return this._state?.[attributeQualName]?.value
             },
-            set: (value) => {
+            set(value) {
                 this._fields[attributeName].value = value?.__glue__isFieldProxy ? value.value : value
             },
             enumerable: true,

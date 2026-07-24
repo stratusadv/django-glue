@@ -91,14 +91,9 @@ class FormGlue(BaseGlue):
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
             'namespace': self.namespace,
-            'fields': {
-                name: self.attributes[name].metadata
-                for name in self.form.fields
-            },
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
-                if name not in self.form.fields
             },
         })
 
@@ -114,8 +109,9 @@ class FormGlue(BaseGlue):
         return glue_object
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        """Store client-provided state for use by validate/save."""
+        """Bind client-provided state before executing form attributes."""
         self._loaded_state = state
+        self.form = self._bind_form()
 
     @Attribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:

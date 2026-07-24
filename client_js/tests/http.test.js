@@ -22,7 +22,7 @@ describe('GlueHttp', () => {
         expect(calls[0].options.method).toBe('POST')
         expect(calls[0].options.body).toBeInstanceOf(FormData)
         expect(JSON.parse(calls[0].options.body.get('policy'))).toEqual(policy)
-        expect(JSON.parse(calls[0].options.body.get('state')).instance_data.name).toBe('Koko')
+        expect(JSON.parse(calls[0].options.body.get('state')).name.value).toBe('Koko')
         expect(calls[0].options.body.get('attribute')).toBe('save')
         expect(JSON.parse(calls[0].options.body.get('kwargs'))).toEqual({})
     })
