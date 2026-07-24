@@ -19,6 +19,7 @@ class GluePolicy(BaseModel):
     """Signed client-held policy for a glued backend object."""
 
     session_id: str
+    request_user_id: Any
     name: str
     namespace: str
     identity: dict[str, Any]
@@ -37,6 +38,7 @@ class GluePolicy(BaseModel):
         
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
+            'request_user_id': getattr(getattr(glue_object.request, 'user', None), 'id', None),
             'name': glue_object.name,
             'namespace': glue_object.namespace,
             'identity': glue_object.identity,

@@ -8,7 +8,7 @@ from django.http import HttpRequest
 from pydantic import BaseModel, Field, model_validator
 
 from django_glue.glue.policy import GluePolicy
-from django_glue.exceptions import GlueInvalidSessionError, GlueRequestError
+from django_glue.exceptions import GlueInvalidSessionError, GlueInvalidUserError, GlueRequestError
 
 
 class AttributeCallResolverContext(BaseModel):
@@ -79,6 +79,10 @@ class AttributeCallResolverContext(BaseModel):
         current_session_id = request.session.session_key
         if validated_policy.session_id != current_session_id:
             raise GlueInvalidSessionError(validated_policy.name)
+
+        current_user_id = getattr(getattr(request, 'user', None), 'id', None)
+        if validated_policy.request_user_id != current_user_id:
+            raise GlueInvalidUserError(validated_policy.name)
 
         return {
             'request': request,

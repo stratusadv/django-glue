@@ -107,6 +107,7 @@ class GluePolicyTestCase(TestCase):
     def test_signed_policy_validates_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
+            'request_user_id': None,
             'name': 'gorilla',
             'namespace': 'model',
             'identity': {'model_class_path': 'test_project.gorilla.models.Gorilla', 'target_pk': 1},
@@ -126,6 +127,7 @@ class GluePolicyTestCase(TestCase):
     def test_signed_policy_rejects_tampering(self):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
+            'request_user_id': None,
             'name': 'gorilla',
             'namespace': 'model',
             'identity': {'target_pk': 1},
@@ -162,6 +164,27 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertEqual(attribute.required_access, GlueAccess.VIEW)
         self.assertEqual(attribute.metadata['type'], 'DateTimeField')
         self.assertFalse(attribute.metadata['editable'])
+
+    def test_model_adapter_excludes_globally_excluded_fields(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+        )
+
+        self.assertNotIn('signature', glue_object.attributes)
+        self.assertNotIn('signature', glue_object.state)
+        self.assertNotIn(
+            'signature',
+            glue_object.metadata.to_payload()['attributes'],
+        )
+
+    def test_model_adapter_rejects_explicitly_excluded_field_types(self):
+        with self.assertRaisesRegex(ValueError, 'Binary fields'):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(access=GlueAccess.VIEW),
+                fields=['name', 'signature'],
+            )
 
     def test_model_adapter_builds_policy_state_and_metadata(self):
         glue_object = with_request(ModelGlue(
@@ -363,6 +386,18 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
 
 class DjangoQuerySetGlueObjectTestCase(TestCase):
+    def test_queryset_adapter_excludes_globally_excluded_fields(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+        )
+
+        self.assertNotIn('signature', glue_object.attributes)
+        self.assertNotIn(
+            'signature',
+            glue_object.metadata.to_payload()['attributes'],
+        )
+
     def test_queryset_query_encoding_returns_string(self):
         queryset = Gorilla.objects.all()
 

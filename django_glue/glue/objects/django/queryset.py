@@ -60,7 +60,13 @@ class QuerySetGlue(BaseGlue):
             ]
         )
         excluded = set(self.exclude)
-        return [name for name in names if name not in excluded]
+        return [
+            name
+            for name in names
+            if name not in excluded
+            and self.queryset.model._meta.get_field(name).get_internal_type()
+            not in ModelGlue.globally_excluded_field_types
+        ]
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:

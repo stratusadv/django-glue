@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 class ModelGlue(BaseGlue):
 
     namespace = 'model'
+    globally_excluded_field_types = frozenset({'BinaryField'})
 
     def __init__(
         self,
@@ -37,6 +38,19 @@ class ModelGlue(BaseGlue):
         super().__init__(name=name, access=access)
         self.instance = instance
         self.fields = tuple(fields)
+
+        binary_fields = [
+            field_name
+            for field_name in self.fields
+            if self.instance._meta.get_field(field_name).get_internal_type()
+            in self.globally_excluded_field_types
+        ]
+        if binary_fields:
+            raise ValueError(
+                'Binary fields cannot be included in ModelGlue attributes: '
+                f'{binary_fields}'
+            )
+
         self.exclude = tuple(exclude)
         self.source_queryset = source_queryset
         self._loaded_state: dict[str, Any] | None = None
@@ -91,7 +105,13 @@ class ModelGlue(BaseGlue):
             for field in [*self.instance._meta.fields, *self.instance._meta.many_to_many]
         )
         excluded = set(self.exclude)
-        return [name for name in names if name not in excluded]
+        return [
+            name
+            for name in names
+            if name not in excluded
+            and self.instance._meta.get_field(name).get_internal_type()
+            not in self.globally_excluded_field_types
+        ]
 
     @property
     def state(self) -> dict[str, Any]:

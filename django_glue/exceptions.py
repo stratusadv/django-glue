@@ -165,6 +165,22 @@ class GlueInvalidSessionError(GlueError):
         return {'proxy': self.unique_name}
 
 
+class GlueInvalidUserError(GlueError):
+    """Raised when a policy was issued for a different authenticated user."""
+
+    code = 'proxy_invalid_user'
+    status = 403
+
+    def __init__(self, unique_name: str) -> None:
+        self.unique_name = unique_name
+        super().__init__(
+            f"Policy for proxy '{unique_name}' is not valid for the current user."
+        )
+
+    def details(self) -> dict:
+        return {'proxy': self.unique_name}
+
+
 class GlueExpiredPolicyError(GlueError):
     """Raised when a proxy policy is older than the configured max age."""
 

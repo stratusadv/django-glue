@@ -101,6 +101,30 @@ class GlueAttributeRequestViewTestCase(TestCase):
         data = json.loads(response.content)
         self.assertEqual(data['error']['code'], 'proxy_access_denied')
 
+    def test_attribute_request_view_rejects_policy_for_different_user(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        glue_object.request = self.request_context()
+        glue_object.request.user = type('User', (), {'id': 1})()
+        policy = glue_object.policy
+        request = self.attribute_request(
+            'gorilla',
+            policy,
+            'save',
+            state={'name': {'value': 'Updated'}},
+        )
+        request.user = type('User', (), {'id': 2})()
+
+        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+
+        self.assertEqual(response.status_code, 403)
+        data = json.loads(response.content)
+        self.assertEqual(data['error']['code'], 'proxy_invalid_user')
+
     def test_attribute_request_view_missing_policy_returns_400(self):
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
