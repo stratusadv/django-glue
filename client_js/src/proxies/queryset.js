@@ -30,6 +30,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     async all() {
         const result = await this.query_with_params(this._queryParams)
         this._syncFromResult(result)
+        this._loaded = true
         return this
     }
 

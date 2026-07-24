@@ -915,6 +915,7 @@
       this._queryCache = {};
       this._loaded = false;
       this.loading = false;
+      this.hasMore = false;
     }
     get items() {
       return Array.from(this);
@@ -931,7 +932,9 @@
     }
     async all() {
       const result = await this.query_with_params(this._queryParams);
+      this.hasMore = Boolean(result.has_more);
       this._syncFromResult(result);
+      this._loaded = true;
       return this;
     }
     _syncFromResult(result = {}) {

@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import Any
 
 from django import forms
+from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute
@@ -13,7 +14,6 @@ from django_glue.glue.policy import GluePolicy
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.attributes import Attribute
 from django_glue.utils import get_attr_from_path_string
-
 
 class FormGlue(BaseGlue):
     namespace = 'form'
@@ -39,6 +39,7 @@ class FormGlue(BaseGlue):
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
+            'initial': self.form.initial,
         }
 
     @cached_property
@@ -67,9 +68,12 @@ class FormGlue(BaseGlue):
             try:
                 model_instance = model_class.objects.get(pk=target_pk)
                 self.form.instance = model_instance
-                from django.forms.models import model_to_dict
                 opts = self.form._meta
-                self.form.initial = model_to_dict(model_instance, opts.fields, opts.exclude)
+                model_initial = model_to_dict(model_instance, opts.fields, opts.exclude)
+                self.form.initial = {
+                    **model_initial,
+                    **self.form.initial,
+                }
             except model_class.DoesNotExist:
                 pass
 
@@ -101,7 +105,7 @@ class FormGlue(BaseGlue):
     def _from_policy(cls, policy: GluePolicy) -> FormGlue:
         form_class = get_attr_from_path_string(policy.identity['form_class_path'])
         glue_object = cls(
-            form_class(),
+            form_class(initial=policy.identity.get('initial', {})),
             name=policy.name,
             access=policy.access,
         )

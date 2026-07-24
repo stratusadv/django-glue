@@ -159,6 +159,7 @@ class QuerySetGlue(BaseGlue):
             if isinstance(order_by, str):
                 order_by = [order_by]
             queryset = queryset.order_by(*order_by)
+
         if kwargs.get('slice'):
             slice_data = kwargs['slice']
             queryset = queryset[slice(slice_data.get('start'), slice_data.get('stop'))]
