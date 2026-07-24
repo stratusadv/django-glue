@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.proxies.form.proxy.GlueFormProxy
+::: django_glue.glue.django.form.object.DjangoFormGlue

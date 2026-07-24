@@ -58,6 +58,7 @@ class GorillaGlueModelForm(forms.ModelForm):
         Step 3: Final details (description) - saves the model
         """
         Message = GlueResponse.Message
+        self.full_clean()
 
         if step == 1:
             # Validate basic info fields
@@ -122,7 +123,13 @@ class GorillaGlueModelForm(forms.ModelForm):
 
     class Meta:
         model = Gorilla
-        exclude = ['pk']
+        fields = [
+            'name',
+            'description',
+            'age',
+            'weight',
+            'height',
+        ]
 
 
 class SkillForm(forms.ModelForm):

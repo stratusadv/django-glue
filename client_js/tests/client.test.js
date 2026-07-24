@@ -1,128 +1,96 @@
-import {afterEach, beforeEach, describe, expect, it, mock} from 'bun:test';
-import GlueClient from '../src/client';
-import GlueHttp from '../src/http';
-import GlueFormProxy from '../src/proxies/form';
-import GlueModelProxy from '../src/proxies/model';
-import GlueQuerySetProxy from '../src/proxies/queryset';
-import GlueView from '../src/view';
-import {
-    createFormPolicy,
-    createFunctionPolicy,
-    createModelPolicy,
-    createQuerySetPolicy,
-    createState,
-} from './testUtils';
+import {describe, expect, test} from "bun:test"
+import GlueClient from "../src/client"
+import {createPolicy, createMetadata, createState} from "./testUtils"
 
 describe('GlueClient', () => {
-    let client;
-    let originalLocation;
-    const config = {
-        requestTimeoutSeconds: 30,
-        attributeEventUrlPath: '/__dg__/bound_attribute_event/',
-        glueViewUrlPath: '/__dg__/glue_view/',
-    };
+    test('exposes client-level callbacks, fetch, and view helpers', async () => {
+        happyDOM.setURL('http://localhost/')
+        const client = new GlueClient({manifest_list: []})
+        const onMessage = () => {}
+        const onError = () => {}
+        let fetchedUrl
+        global.fetch = async url => {
+            fetchedUrl = url
+            return new Response('{}', {status: 200})
+        }
 
-    beforeEach(() => {
-        client = new GlueClient();
-        originalLocation = window.location;
-        Object.defineProperty(window, 'location', {
-            value: {origin: 'http://localhost:3000', pathname: '/current/page'},
-            writable: true,
-            configurable: true,
-        });
-    });
+        expect(client.onMessage(onMessage)).toBe(client)
+        expect(client.onError(onError)).toBe(client)
+        expect(await client.fetch('/health')).toMatchObject({ok: true, data: {}})
+        expect(fetchedUrl).toBe('/health')
+        expect(client.view('/partial/').url).toBe('/partial/')
+    })
 
-    afterEach(() => {
-        Object.defineProperty(window, 'location', {
-            value: originalLocation,
-            writable: true,
-            configurable: true,
-        });
-    });
-
-    it('initializes an HTTP client with config', () => {
-        client.init({proxies: {}, config});
-
-        expect(client._config).toBe(config);
-        expect(client.http).toBeInstanceOf(GlueHttp);
-    });
-
-    it('stores the global message handler', () => {
-        const onMessage = mock(() => {});
-
-        expect(client.onMessage(onMessage)).toBe(client);
-        expect(client._onMessage).toBe(onMessage);
-    });
-
-    it('stores the global expiry handler', () => {
-        const onExpiry = mock(() => {});
-
-        expect(client.onExpiry(onExpiry)).toBe(client);
-        expect(client._onExpiry).toBe(onExpiry);
-    });
-
-    it('stores the global error handler', () => {
-        const onError = mock(() => {});
-
-        expect(client.onError(onError)).toBe(client);
-        expect(client._onError).toBe(onError);
-    });
-
-    it('registers form, model, and queryset proxies by namespace', () => {
-        client.init({
-            config,
-            proxies: {
-                contact: {
-                    policy: createFormPolicy(),
-                    state: createState({name: 'Ada'}),
-                },
-                gorilla: {
-                    policy: createModelPolicy(),
-                    state: createState({id: 1, name: 'Koko'}),
-                },
-                gorillas: {
-                    policy: createQuerySetPolicy(),
-                    state: {list_data: []},
-                },
+    test('registers proxies by name and policy namespace', () => {
+        const client = new GlueClient({
+            urls: {
+                callable_attribute: '/custom/attribute/',
+                glue_view: '/custom/view/',
             },
-        });
-
-        expect(client.form.contact).toBeInstanceOf(GlueFormProxy);
-        expect(client.model.gorilla).toBeInstanceOf(GlueModelProxy);
-        expect(client.querySet.gorillas).toBeInstanceOf(GlueQuerySetProxy);
-    });
-
-    it('registers function proxies as callable functions', async () => {
-        client.init({
-            config,
-            proxies: {
-                calculate: {
-                    policy: createFunctionPolicy(),
-                    state: null,
-                },
+            config: {
+                requestTimeoutSeconds: 45,
             },
-        });
+            manifest_list: [
+                {
+                    policy: createPolicy(),
+                    state: createState(),
+                    metadata: createMetadata(),
+                },
+            ],
+        })
 
-        expect(typeof client.function.calculate).toBe('function');
-    });
+        expect(client.http._config.attributeUrlPath).toBe('/custom/attribute/')
+        expect(client.http._config.glueViewUrlPath).toBe('/custom/view/')
+        expect(client.http._config.requestTimeoutSeconds).toBe(45)
+        expect(client.model.gorilla._name).toBe('gorilla')
+    })
 
-    it('delegates fetch to GlueHttp', async () => {
-        client.init({proxies: {}, config});
-        client.http.sendRequest = mock(async () => ({data: {ok: true}}));
+    test('registers function proxies as callables', async () => {
+        let capturedAttribute = null
+        let capturedKwargs = null
+        global.fetch = async (_, options) => {
+            capturedAttribute = options.body.get('attribute')
+            capturedKwargs = JSON.parse(options.body.get('kwargs'))
+            return new Response(JSON.stringify({
+                result: {result: 12},
+                state: {},
+                policy: createPolicy({
+                    namespace: 'function',
+                    identity: {params: ['left', 'right']},
+                    attributes: ['execute'],
+                }),
+                metadata: {
+                    namespace: 'function',
+                    params: ['left', 'right'],
+                    attributes: {execute: {namespace: 'callable'}},
+                },
+                messages: [],
+            }))
+        }
 
-        const response = await client.fetch('/url/', {method: 'GET'});
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    policy: createPolicy({
+                        name: 'add',
+                        namespace: 'function',
+                        identity: {params: ['left', 'right']},
+                        attributes: ['execute'],
+                    }),
+                    state: {},
+                    metadata: {
+                        namespace: 'function',
+                        params: ['left', 'right'],
+                        attributes: {execute: {namespace: 'callable'}},
+                    },
+                },
+            ],
+        })
 
-        expect(response.data.ok).toBe(true);
-        expect(client.http.sendRequest).toHaveBeenCalledWith('/url/', {method: 'GET'});
-    });
+        const result = await client.function.add({left: 5, right: 7, ignored: true})
 
-    it('creates GlueView instances with the current HTTP client', () => {
-        client.init({proxies: {}, config});
-
-        const view = client.view('/fragment/', {shared: true});
-
-        expect(view).toBeInstanceOf(GlueView);
-        expect(view.http).toBe(client.http);
-        expect(view.shared_payload).toEqual({shared: true});
-    });
-});
+        expect(result).toBe(12)
+        expect(capturedAttribute).toBe('execute')
+        expect(capturedKwargs).toEqual({left: 5, right: 7})
+    })
+})

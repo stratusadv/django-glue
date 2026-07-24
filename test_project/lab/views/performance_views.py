@@ -1,5 +1,4 @@
 import time
-from typing import Any
 from uuid import uuid4
 
 from django.http import HttpRequest, HttpResponseRedirect, HttpResponse
@@ -7,7 +6,6 @@ from django.shortcuts import render
 from django.contrib import messages
 
 from django_glue import Glue
-from django_glue.proxies import GlueModelInstanceProxy, GlueQuerySetProxy, GlueFormProxy
 from test_project.gorilla.forms import GorillaForm
 from test_project.gorilla.models import Gorilla
 
@@ -37,31 +35,30 @@ def speed_view(request: HttpRequest) -> HttpResponse:
 
     unique_names = [str(uuid4()) for _ in range(max(counts))]
 
-    glue_types_targets = {
-        'model': (Gorilla.objects.first(), GlueModelInstanceProxy),
-        'querySet': (Gorilla.objects.all(), GlueQuerySetProxy),
-        'form': (GorillaForm(), GlueFormProxy),
-    }
+    glue_types = ('model', 'querySet', 'form')
 
     context = {
         'page_title': 'Test Lab',
         'page_heading': 'Speed Test',
         'page_subtitle': 'Load and Measure Speed with many Glue objects in Seconds',
-        'glue_types_results': {glue_type: {} for glue_type in glue_types_targets},
+        'glue_types_results': {glue_type: {} for glue_type in glue_types},
         'unique_names': unique_names,
         'counts': counts,
     }
 
-    def glue_amount(count: int, target: Any, proxy_class: Any) -> None:
+    def glue_amount(glue_type: str, count: int) -> None:
         for unique_name in unique_names[:count]:
-            Glue.glue(
-                request=request, target=target, proxy_class=proxy_class, unique_name=unique_name
-            )
+            if glue_type == 'model':
+                Glue.model(request=request, target=Gorilla.objects.first(), unique_name=unique_name)
+            elif glue_type == 'querySet':
+                Glue.queryset(request=request, target=Gorilla.objects.all(), unique_name=unique_name)
+            elif glue_type == 'form':
+                Glue.form(request=request, target=GorillaForm(), unique_name=unique_name)
 
-    for glue_type, target in glue_types_targets.items():
+    for glue_type in glue_types:
         for count in counts:
             start_time = time.time()
-            glue_amount(count, target[0], target[1])
+            glue_amount(glue_type, count)
             context['glue_types_results'][glue_type][count] = f'{(time.time() - start_time):.4f}'
 
     return render(request, template_name='lab/performance/page/speed_page.html', context=context)

@@ -52,7 +52,11 @@
             }, 'error');
         },
         errorSummary(proxy) {
-            const errors = proxy._state?.errors || {};
+            const errors = Object.fromEntries(
+                Object.entries(proxy._state || {})
+                    .filter(([, fieldState]) => fieldState?.errors?.length)
+                    .map(([field, fieldState]) => [field, fieldState.errors])
+            );
             const messages = Object.entries(errors)
                 .map(([field, fieldErrors]) => {
                     const label = proxy.$fields?.[field]?.label || field;
@@ -71,8 +75,10 @@
                             type="text"
                             class="form-control form-control-lg bg-transparent border-0 text-white fw-bold text-center"
                             style="font-family: 'Jersey 15', sans-serif; font-size: 2rem;"
+                            :class="{'is-invalid': gorilla.$fields.name.hasErrors}"
                             x-model="gorilla.name"
                             placeholder="Fighter Name">
+                        <div class="invalid-feedback" x-show="gorilla.$fields.name.hasErrors" x-text="gorilla.$fields.name.errorText"></div>
                     </div>
 
                     <div class="card-body p-4">
@@ -159,8 +165,10 @@
                                 <textarea
                                     class="form-control form-control-gorilla"
                                     rows="4"
+                                    :class="{'is-invalid': gorilla.$fields.description.hasErrors}"
                                     x-model="gorilla.description"
                                     placeholder="Enter the fighter's backstory, achievements, and fighting spirit..."></textarea>
+                                <div class="invalid-feedback" x-show="gorilla.$fields.description.hasErrors" x-text="gorilla.$fields.description.errorText"></div>
                             </div>
 
                             <div class="col-md-6">
@@ -168,9 +176,11 @@
                                 <input
                                     type="number"
                                     class="form-control form-control-gorilla"
+                                    :class="{'is-invalid': gorilla.$fields.age.hasErrors}"
                                     x-model="gorilla.age"
                                     min="1"
                                     max="60">
+                                <div class="invalid-feedback" x-show="gorilla.$fields.age.hasErrors" x-text="gorilla.$fields.age.errorText"></div>
                             </div>
 
                             <div class="col-md-6">
@@ -178,9 +188,11 @@
                                 <input
                                     type="number"
                                     class="form-control form-control-gorilla"
+                                    :class="{'is-invalid': gorilla.$fields.rank_points.hasErrors}"
                                     x-model="gorilla.rank_points"
                                     min="0"
                                     max="10000">
+                                <div class="invalid-feedback" x-show="gorilla.$fields.rank_points.hasErrors" x-text="gorilla.$fields.rank_points.errorText"></div>
                             </div>
 
                             <div class="col-md-6">
@@ -188,10 +200,12 @@
                                 <input
                                     type="number"
                                     class="form-control form-control-gorilla"
+                                    :class="{'is-invalid': gorilla.$fields.weight.hasErrors}"
                                     x-model="gorilla.weight"
                                     step="0.1"
                                     min="50"
                                     max="500">
+                                <div class="invalid-feedback" x-show="gorilla.$fields.weight.hasErrors" x-text="gorilla.$fields.weight.errorText"></div>
                             </div>
 
                             <div class="col-md-6">
@@ -199,10 +213,12 @@
                                 <input
                                     type="number"
                                     class="form-control form-control-gorilla"
+                                    :class="{'is-invalid': gorilla.$fields.height.hasErrors}"
                                     x-model="gorilla.height"
                                     step="0.01"
                                     min="1.0"
                                     max="2.5">
+                                <div class="invalid-feedback" x-show="gorilla.$fields.height.hasErrors" x-text="gorilla.$fields.height.errorText"></div>
                             </div>
 
                             <div

@@ -1,4 +1,4 @@
-from django_glue.shortcuts.glue import Glue
+from django_glue import Glue
 
 
 class GorillaService:

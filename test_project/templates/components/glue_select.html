@@ -6,7 +6,7 @@
         {% include 'components/glue_base_input_attributes.html' with form_class_type='select' %}
     >
         {% if include_empty %}<option value="">{{ empty_label|default:"Select..." }}</option>{% endif %}
-        <template x-for="choice in {{ glue_field }}?.choices || []" :key="choice.pk ?? choice[0]">
+        <template x-for="choice in {{ glue_field_meta|default:glue_field }}?.choices || []" :key="choice.pk ?? choice[0]">
             <option :value="choice.pk ?? choice[0]" x-text="choice.__str__ ?? choice[1]"></option>
         </template>
     </select>

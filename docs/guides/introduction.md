@@ -114,6 +114,31 @@ Understanding the request lifecycle helps with debugging:
 3. **Actions**: When JS calls `Glue.model.task.save()`, a POST request is sent to `/__dg__/action/task/save/`. The server reconstructs the proxy from session data, validates permissions, executes the action, and returns the result.
 4. **Expiration**: If the keep-alive stops (e.g., user closes the tab), `DjangoGlueMiddleware` purges expired proxies on the next request.
 
+## Nested Glue Attributes
+
+Glue attributes use flat, qualified names for policies and requests. For example,
+a nested service callable is represented as `services.increment_age`.
+
+The frontend metadata distinguishes the attribute kinds:
+
+```json
+{
+  "attributes": {
+    "services": {"namespace": "container"},
+    "services.increment_age": {"namespace": "callable"}
+  }
+}
+```
+
+Containers are structural objects and are not callable or state-bearing
+attributes themselves. They allow custom `BaseGlue` objects to expose nested
+state and callable attributes while the policy continues to use flat qualified
+paths. A nested attribute call still sends its complete qualified name:
+
+```javascript
+await gorilla.services.increment_age()
+```
+
 ## Next Steps
 
 - Follow the [Quick Start Tutorial](quick_start.md) for a hands-on walkthrough

@@ -43,22 +43,32 @@
     <div x-data="{
         fights: Glue.querySet.fights,
         search: '',
-        redCornerChoices: [],
-        blueCornerChoices: [],
         fightItems: [],
+        get queryParams() {
+            return {
+                filter: {name__icontains: this.search}
+            };
+        },
         cornerId(corner) {
-            if (corner && typeof corner === 'object') {
-                return Number(corner.id ?? corner.pk);
+            const value = corner?.value ?? corner;
+            if (value && typeof value === 'object') {
+                return Number(value.id ?? value.pk);
             }
-            return Number(corner);
+            return Number(value);
         },
         cornerChoice(corner, choices) {
             const cornerId = this.cornerId(corner);
             return (choices || []).find(choice => Number(choice.pk) === cornerId);
         },
         cornerRank(corner, choices) {
-            return this.cornerChoice(corner, choices)?.rank_points
-                ?? (corner && typeof corner === 'object' ? corner.rank_points : null);
+            const choice = this.cornerChoice(corner, choices);
+            if (choice?.rank_points !== undefined) {
+                return choice.rank_points;
+            }
+            if (corner && typeof corner === 'object') {
+                return corner.value?.rank_points ?? corner.rank_points ?? null;
+            }
+            return null;
         },
         async init() {
             this.fights.addListener('save', () => {
@@ -73,16 +83,10 @@
             this.fights.addListener('delete', () => {
                 $store.notifications.error('Failed to delete fight.');
             }, 'error');
-            await this.refreshFights();
+            this.refreshFights();
         },
-        async refreshFights() {
-            this.fightItems = await this.fights.queryWithParams({
-                filter: {name__icontains: this.search}
-            });
-            if (this.fightItems.length > 0 && this.redCornerChoices.length === 0) {
-                this.redCornerChoices = this.fightItems[0].$fields.red_corner.buildChoices('rank_points');
-                this.blueCornerChoices = this.fightItems[0].$fields.blue_corner.buildChoices('rank_points');
-            }
+        refreshFights() {
+            this.fightItems = this.fights.queryWithParams(this.queryParams);
         }
     }">
         <!-- Search -->
@@ -124,11 +128,11 @@
                                     <span class="corner-label text-danger">Red Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.red_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in redCornerChoices" :key="choice.pk">
+                                        <template x-for="choice in fight.$fields.red_corner.choices" :key="choice.pk">
                                             <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.red_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-show="cornerRank(fight.red_corner, redCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.red_corner, redCornerChoices)}`"></span>
+                                        <span x-show="cornerRank(fight.red_corner, fight.$fields.red_corner.choices) !== null" x-text="`Rank: ${cornerRank(fight.red_corner, fight.$fields.red_corner.choices)}`"></span>
                                 </div>
                                 <div class="col-2 text-center">
                                     <span class="vs-badge">VS</span>
@@ -137,11 +141,11 @@
                                     <span class="corner-label text-primary">Blue Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.blue_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in blueCornerChoices" :key="choice.pk">
+                                        <template x-for="choice in fight.$fields.blue_corner.choices" :key="choice.pk">
                                             <option :value="choice.pk" x-text="choice.__str__" :selected="cornerId(fight.blue_corner) === Number(choice.pk)"></option>
                                         </template>
                                     </select>
-                                    <span x-show="cornerRank(fight.blue_corner, blueCornerChoices) !== null" x-text="`Rank: ${cornerRank(fight.blue_corner, blueCornerChoices)}`"></span>
+                                        <span x-show="cornerRank(fight.blue_corner, fight.$fields.blue_corner.choices) !== null" x-text="`Rank: ${cornerRank(fight.blue_corner, fight.$fields.blue_corner.choices)}`"></span>
                                 </div>
                             </div>
 

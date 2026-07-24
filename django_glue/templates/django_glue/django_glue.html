@@ -3,27 +3,13 @@
 
 <script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
 
-{{ DJANGO_GLUE_PROXIES|json_script:DJANGO_GLUE_PROXIES_SCRIPT_NAME }}
+{{ DJANGO_GLUE_CONTEXT|json_script:DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}
 
 <script>
-    const glueConfig = new GlueConfig({
-        requestTimeoutSeconds: 30,
-        attributeEventUrlPath: '{{ DJANGO_GLUE_URLS.bound_attribute_event }}',
-        glueViewUrlPath: '{{ DJANGO_GLUE_URLS.glue_view }}',
-    })
+    const context = parseJsonScriptById('{{ DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}')
+    const Glue = new GlueClient(context)
 
-    const proxies = JSON.parse(document.getElementById('{{ DJANGO_GLUE_PROXIES_SCRIPT_NAME }}').textContent)
-
-    Glue.init({
-        proxies: proxies,
-        config: glueConfig
-    })
-
-    // document.addEventListener('alpine:init', () => {
-    //     Object.entries(proxies).forEach(([name, proxy]) => {
-    //         const namespace = proxy.policy.subject_details.namespace
-    //         Glue[namespace][name] = Alpine.reactive(Glue[namespace][name])
-    //     })
-    // })
-
+    if (typeof globalThis !== 'undefined') {
+        globalThis.Glue = Glue
+    }
 </script>

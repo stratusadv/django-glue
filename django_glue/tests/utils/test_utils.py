@@ -8,8 +8,6 @@ from django.test import TestCase, RequestFactory
 from django_glue.utils import (
     get_request_body_data,
     get_attr_from_path_string,
-    serialize_queryset,
-    deserialize_queryset,
 )
 from test_project.gorilla.models import Gorilla
 
@@ -85,55 +83,3 @@ class GetClassFromPathStringTestCase(TestCase):
         with self.assertRaises(AttributeError):
             get_attr_from_path_string('test_project.gorilla.models.NonExistent')
 
-
-class SerializeQuerySetTestCase(TestCase):
-    """Tests for serialize_queryset() and deserialize_queryset()."""
-
-    def setUp(self):
-        self.gorilla1 = Gorilla.objects.create(
-            name='Gorilla 1',
-            description='First',
-            age=18,
-            weight=200.0,
-            height=1.8
-        )
-        self.gorilla2 = Gorilla.objects.create(
-            name='Gorilla 2',
-            description='Second',
-            age=25,
-            weight=250.0,
-            height=2.0
-        )
-
-    def test_serialize_returns_encoded_query_string(self):
-        """serialize_queryset should return a base64 encoded query string."""
-        qs = Gorilla.objects.all()
-        encoded = serialize_queryset(qs)
-
-        self.assertIsInstance(encoded, str)
-        self.assertGreater(len(encoded), 0)
-
-    def test_deserialize_returns_queryset(self):
-        """deserialize_queryset should return a QuerySet."""
-        qs = Gorilla.objects.all()
-        encoded = serialize_queryset(qs)
-        restored = deserialize_queryset(encoded)
-
-        from django.db.models import QuerySet
-        self.assertIsInstance(restored, QuerySet)
-
-    def test_roundtrip_preserves_results(self):
-        """Serialize then deserialize should preserve queryset results."""
-        qs = Gorilla.objects.all()
-        encoded = serialize_queryset(qs)
-        restored = deserialize_queryset(encoded)
-
-        self.assertEqual(list(restored.values_list('pk', flat=True)), list(qs.values_list('pk', flat=True)))
-
-    def test_roundtrip_preserves_ordering(self):
-        """Serialize then deserialize should preserve queryset ordering."""
-        qs = Gorilla.objects.order_by('-age')
-        encoded = serialize_queryset(qs)
-        restored = deserialize_queryset(encoded)
-
-        self.assertEqual(list(restored.values_list('pk', flat=True)), list(qs.values_list('pk', flat=True)))

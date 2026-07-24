@@ -1,14 +1,19 @@
 class GlueHttpError extends Error {
-    constructor({message, status = null, code = null, payload = null, responseBody = ''}) {
-        super(`An error occurred when sending a glue http request: ${message}`);
-        this.name = 'GlueHttpError';
-        this.status = status;
-        this.code = code;
-        this.payload = payload;
-        this.details = payload?.details || {};
-        this.responseBody = responseBody;
-        this.isGlueError = Boolean(code);
+    constructor({message, status, code = null, payload = null, responseBody = null}) {
+        super(message)
+        this.name = 'GlueHttpError'
+        this.status = status
+        this.code = code
+        this.payload = payload
+        this.responseBody = responseBody
     }
 }
 
-export {GlueHttpError};
+class GlueProxyError extends Error {
+    constructor(message) {
+        super(message)
+        this.name = 'GlueProxyError'
+    }
+}
+
+export {GlueHttpError, GlueProxyError}

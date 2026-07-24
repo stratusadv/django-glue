@@ -1,11 +1,18 @@
 from typing import Sequence
 
 from django.db.models import Model, QuerySet
-from django.forms import ModelForm, BaseForm
+from django.forms import BaseForm
 from django.http import HttpRequest
 
-from django_glue.access.access import GlueAccess
-from django_glue.bound_attributes.decorators import Attribute
+from django_glue.access import GlueAccess
+from django_glue.glue.base import BaseGlue
+from django_glue.glue.context import GlueContextManager
+from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.glue.objects.django.queryset import QuerySetGlue
+from django_glue.glue.objects.django.template import TemplateGlue
+from django_glue.glue.function import FunctionGlue
+from django_glue.glue.attributes import Attribute
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
@@ -16,6 +23,13 @@ class Glue:
     RedirectResponse = GlueRedirectResponse
 
     @staticmethod
+    def object(
+        request: HttpRequest,
+        glue: BaseGlue,
+    ) -> None:
+        GlueContextManager(request).add_glue(glue)
+
+    @staticmethod
     def model(
         request: HttpRequest,
         unique_name: str,
@@ -23,18 +37,16 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
-        form_class: type[ModelForm] | None = None,
     ) -> None:
-        from django_glue.proxies.model.instance.proxy import GlueModelInstanceProxy
-
-        GlueModelInstanceProxy.register(
+        Glue.object(
             request=request,
-            target=target,
-            name=unique_name,
-            access=access,
-            fields=fields,
-            exclude=exclude,
-            form_class=form_class,
+            glue=ModelGlue(
+                instance=target,
+                name=unique_name,
+                access=access,
+                fields=fields,
+                exclude=exclude,
+            ),
         )
 
     @staticmethod
@@ -45,18 +57,16 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
-        form_class: type[ModelForm] | None = None,
     ) -> None:
-        from django_glue.proxies.queryset.proxy import GlueQuerySetProxy
-
-        GlueQuerySetProxy.register(
+        Glue.object(
             request=request,
-            target=target,
-            name=unique_name,
-            access=access,
-            fields=fields,
-            exclude=exclude,
-            form_class=form_class,
+            glue=QuerySetGlue(
+                queryset=target,
+                name=unique_name,
+                access=access,
+                fields=fields,
+                exclude=exclude,
+            ),
         )
 
     @staticmethod
@@ -66,13 +76,13 @@ class Glue:
         target: BaseForm,
         access: GlueAccess = GlueAccess.VIEW,
     ) -> None:
-        from django_glue.proxies.form.proxy import GlueFormProxy
-
-        GlueFormProxy.register(
+        Glue.object(
             request=request,
-            target=target,
-            name=unique_name,
-            access=access,
+            glue=FormGlue(
+                form=target,
+                name=unique_name,
+                access=access,
+            ),
         )
 
     @staticmethod
@@ -82,13 +92,14 @@ class Glue:
         target: str,
         initial_context_data: dict | None = None,
     ) -> None:
-        from django_glue.proxies.template.proxy import GlueTemplateProxy
-
-        GlueTemplateProxy.register_policy(
+        Glue.object(
             request=request,
-            target=target,
-            name=unique_name,
-            initial_context_data=initial_context_data,
+            glue=TemplateGlue(
+                target,
+                name=unique_name,
+                access=GlueAccess.VIEW,
+                initial_context_data=initial_context_data,
+            ),
         )
 
     @staticmethod
@@ -96,12 +107,12 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-        **kwargs,
     ) -> None:
-        from django_glue.proxies.function.proxy import GlueFunctionProxy
-
-        GlueFunctionProxy.register_policy(
+        Glue.object(
             request=request,
-            target=target,
-            name=unique_name,
+            glue=FunctionGlue(
+                target,
+                name=unique_name,
+                access=GlueAccess.VIEW,
+            ),
         )

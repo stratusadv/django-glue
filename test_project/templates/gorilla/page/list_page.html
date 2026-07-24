@@ -27,7 +27,15 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
-            get gorillaQuerySet() { return Glue.querySet.gorillas },
+            gorillaQuerySet: Glue.querySet.gorillas,
+            get gorillaArray() {
+                return Array.from(
+                    this.gorillaQuerySet
+                    .filter({name__icontains: this.search})
+                    .orderBy(this.orderBy)
+                    .slice(this.sliceStart, this.sliceStop)
+                )
+            },
             async openProfileModal(gorillaId) {
                 try {
                     const viewGlue = Glue.view(`/${gorillaId}/template/`);
@@ -40,9 +48,9 @@
             },
             async openProfileModalOuter(gorillaId) {
                 try {
-                    const viewGlue = Glue.view(`/${gorillaId}/template/`);
                     const targetEl = document.createElement('div');
                     this.$refs.profileModalOuterBody.replaceChildren(targetEl);
+                    const viewGlue = Glue.view(`/${gorillaId}/template/`);
                     await viewGlue.renderOuterHtml(targetEl);
                     const modal = new bootstrap.Modal(document.getElementById('profileModalOuter'));
                     modal.show();
@@ -55,15 +63,6 @@
             },
             gorillaArenaUrl(id) {
                 return '{% url "gorilla:arena" pk=0 %}'.replace('0', id)
-            },
-            get queryParams() {
-                return {
-                    filter: {name__icontains: this.search},
-                    slice: {start: this.sliceStart, stop: this.sliceStop},
-                    order_by: this.orderBy,
-                };
-            },
-            async init() {
             },
     }">
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_form" glue_type='form' modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
@@ -160,7 +159,7 @@
                 </div>
                 
                 <div class="d-flex gap-2 justify-content-center flex-wrap">
-                    <button class="btn btn-gorilla" type="button" @click="await gorillaQuerySet.prependNew()">
+                    <button class="btn btn-gorilla" type="button" @click="await gorillas.prependNew()">
                         + Add Inline
                     </button>
                     <button class="btn btn-gorilla-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addGorillaFormModal">
@@ -177,9 +176,24 @@
             </div>
         </div>
 
+        <!-- Debug -->
+        <div class="alert alert-info">
+            Loading: <span x-text="gorillaQuerySet.loading"></span>
+        </div>
+
         <!-- Gorilla Cards Grid -->
         <div class="row g-4">
-            <template x-for="gorilla in gorillaQuerySet.queryWithParams(queryParams)" :key="gorilla.$key">
+            <!-- Loading Spinner -->
+            <div x-show="gorillaQuerySet.loading" class="col-12">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-gorilla" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading fighters...</p>
+                </div>
+            </div>
+
+            <template x-for="gorilla in gorillaArray" :key="gorilla.$key">
                 <div class="col-md-6" x-data="{
                     skillDropdownOpen: false,
                     init() {
@@ -234,27 +248,33 @@
                 }">
                     <div class="card card-gorilla h-100">
                         <div class="card-header bg-gorilla-green text-white">
-                            {% include "components/glue_text_input.html" with glue_field="gorilla.$fields.name" size="sm" input_class="bg-transparent border-0 text-white fw-bold fs-5 p-0" placeholder="Fighter Name" hide_label=True %}
+                            {% include "components/glue_text_input.html" with glue_field="gorilla.name" glue_field_meta="gorilla.$fields.name" size="sm" input_class="bg-transparent border-0 text-white fw-bold fs-5 p-0" placeholder="Fighter Name" hide_label=True %}
                         </div>
                         <div class="card-body">
-                            {% include "components/glue_textarea.html" with glue_field="gorilla.$fields.description" size="sm" rows="2" input_class="form-control-gorilla" placeholder="Fighter backstory..." %}
+                            {% include "components/glue_textarea.html" with glue_field="gorilla.description" glue_field_meta="gorilla.$fields.description" size="sm" rows="2" input_class="form-control-gorilla" placeholder="Fighter backstory..." %}
 
                             <div class="row g-2 mb-3">
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.age" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.age" glue_field_meta="gorilla.$fields.age" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.weight" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.weight" glue_field_meta="gorilla.$fields.weight" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                                 <div class="col-4">
-                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.height" size="sm" input_class="form-control-gorilla" %}
+                                    {% include "components/glue_number_input.html" with glue_field="gorilla.height" glue_field_meta="gorilla.$fields.height" size="sm" input_class="form-control-gorilla" %}
                                 </div>
                             </div>
 
                             <div class="row g-2">
                                 <div class="col-6">
-                                    {% include "components/glue_number_input.html" with glue_field="gorilla.$fields.rank_points" size="sm" input_class="form-control-gorilla" %}
+                            {% include "components/glue_number_input.html" with glue_field="gorilla.rank_points" glue_field_meta="gorilla.$fields.rank_points" size="sm" input_class="form-control-gorilla" %}
                                 </div>
+                            </div>
+
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    Created: <span x-text="new Date(gorilla.created_at).toLocaleString()"></span>
+                                </small>
                             </div>
 
                             <div class="mt-3">
@@ -296,18 +316,18 @@
                         </div>
                         <div class="card-footer bg-gorilla-cream">
                             <div class="d-flex gap-2 mb-2">
-                                <a :href="gorillaDetailUrl(gorilla.pk)" class="btn btn-outline-secondary btn-sm flex-grow-1">
+                                <a :href="gorillaDetailUrl(gorilla.$pk)" class="btn btn-outline-secondary btn-sm flex-grow-1">
                                     Profile
                                 </a>
-                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModal(gorilla.pk)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModal(gorilla.$pk)">
                                     Profile (Inner)
                                 </button>
-                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModalOuter(gorilla.pk)">
+                                <button class="btn btn-outline-secondary btn-sm flex-grow-1" @click="openProfileModalOuter(gorilla.$pk)">
                                     Profile (Outer)
                                 </button>
                             </div>
                             <div class="d-flex gap-2">
-                                <a :href="gorillaArenaUrl(gorilla.pk)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
+                                <a :href="gorillaArenaUrl(gorilla.$pk)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
                                     Arena
                                 </a>
                                 <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
@@ -403,7 +423,7 @@
                 </div>
             </template>
 
-            <div x-show="gorillaQuerySet.isEmpty" class="col-12">
+            <div x-show="gorillaQuerySet.count === 0" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

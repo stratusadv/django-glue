@@ -10,7 +10,7 @@ django.setup()
 
 from django.test import TestCase
 
-from django_glue.access.access import GlueAccess
+from django_glue.access import GlueAccess
 
 
 class GlueAccessEnumTestCase(TestCase):

@@ -149,6 +149,22 @@ class GlueInvalidPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
+class GlueInvalidSessionError(GlueError):
+    """Raised when the policy's session_id doesn't match the current request session."""
+
+    code = 'proxy_invalid_session'
+    status = 403
+
+    def __init__(self, unique_name: str) -> None:
+        self.unique_name = unique_name
+        super().__init__(
+            f"Policy for proxy '{unique_name}' is not valid for the current session."
+        )
+
+    def details(self) -> dict:
+        return {'proxy': self.unique_name}
+
+
 class GlueExpiredPolicyError(GlueError):
     """Raised when a proxy policy is older than the configured max age."""
 
@@ -163,7 +179,31 @@ class GlueExpiredPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
-class GlueBoundAttributeCallError(GlueError):
+class GlueCalledStateAttributeError(GlueError):
+    code = 'called_state_attribute'
+    status = 404
+
+    def __init__(self, attribute: str, proxy_name: str, reason: str | None = None) -> None:
+        self.attribute = attribute
+        self.proxy_name = proxy_name
+        self.reason = reason
+        message = (
+            f"Invalid attribute target {attribute}. Only CallableAttributes can be called."
+        )
+        if reason:
+            message += f': {reason}'
+        super().__init__(message)
+
+    def details(self) -> dict:
+        details = {
+            'attribute': self.attribute,
+            'proxy': self.proxy_name,
+        }
+        if self.reason:
+            details['reason'] = self.reason
+        return details
+
+class GlueAttributeCallError(GlueError):
     """Raised when calling a bound attribute fails. Provides detailed context about the failure."""
 
     code = 'bound_attribute_call_error'

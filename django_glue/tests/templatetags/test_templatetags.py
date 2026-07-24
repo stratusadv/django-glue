@@ -1,11 +1,11 @@
 """
 Tests for Django Glue template tags.
 """
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, override_settings
 from django.template import Template, Context
 
 from django_glue.shortcuts.glue import Glue
-from django_glue.access.access import GlueAccess
+from django_glue.access import GlueAccess
 from django_glue import constants
 from test_project.gorilla.models import Gorilla
 from django_glue.tests.conftest import MockSession
@@ -36,15 +36,27 @@ class DjangoGlueInitTagTestCase(TestCase):
         self.assertIn(constants.__VERSION__, rendered)
 
     def test_tag_includes_urls(self):
-        """Tag should include URL mappings."""
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_URLS }}')
+        """Tag should include URL mappings in the manifest."""
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('__dg__', rendered)
+        self.assertIn('callable_attribute', rendered)
+        self.assertIn('/__dg__/callable_attribute/', rendered)
+        self.assertIn('/__dg__/glue_view/', rendered)
 
-    def test_tag_includes_proxy_registry(self):
-        """Tag should include proxy registry data."""
+    @override_settings(DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS=45)
+    def test_tag_includes_server_defined_client_config(self):
+        """Tag should include client config from Django settings in the manifest."""
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
+        context = Context({'request': self.request})
+
+        rendered = template.render(context)
+        self.assertIn('requestTimeoutSeconds', rendered)
+        self.assertIn('45', rendered)
+
+    def test_tag_includes_manifest(self):
+        """Tag should include manifest data."""
         Glue.model(
             request=self.request,
             unique_name='gorilla',
@@ -52,14 +64,14 @@ class DjangoGlueInitTagTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_SESSION_PROXY_REGISTRY }}')
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
         context = Context({'request': self.request})
 
         rendered = template.render(context)
         self.assertIn('gorilla', rendered)
 
-    def test_tag_includes_proxy_definitions(self):
-        """Tag should include proxy context data when proxies are registered."""
+    def test_tag_includes_manifest_payloads(self):
+        """Tag should include manifest payloads when glue objects are registered."""
         Glue.model(
             request=self.request,
             unique_name='gorilla',
@@ -67,19 +79,20 @@ class DjangoGlueInitTagTestCase(TestCase):
             access=GlueAccess.VIEW,
         )
 
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA }}')
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
         context = Context({'request': self.request})
 
         rendered = template.render(context)
         self.assertIn('gorilla', rendered)
 
-    def test_tag_with_no_proxies_registered(self):
-        """Tag should work when no proxies are registered."""
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_PROXIES_CONTEXT_DATA }}')
+    def test_tag_with_no_manifest_registered(self):
+        """Tag should work when no glue objects are registered."""
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('{}', rendered)
+        self.assertIn('manifest_list', rendered)
+        self.assertIn('[]', rendered)
 
 
 class GetItemFilterTestCase(TestCase):

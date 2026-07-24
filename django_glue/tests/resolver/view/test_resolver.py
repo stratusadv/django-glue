@@ -11,7 +11,7 @@ from django.test import TestCase, RequestFactory
 from django_glue.resolver.view.resolver import ViewResolver
 from django_glue.resolver.exceptions import GlueResolverError
 from django_glue.tests.conftest import MockSession
-from django_glue.constants import DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY
+from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 
 
 class GlueViewResolverTestCase(TestCase):
@@ -47,8 +47,8 @@ class GlueViewResolverTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertIn('html', data)
-        self.assertIn('proxies', data)
-        self.assertIsInstance(data['proxies'], dict)
+        self.assertIn('manifest_list', data)
+        self.assertIsInstance(data['manifest_list'], list)
 
     def test_handles_http_response(self):
         """Should handle plain HttpResponse and return JSON."""
@@ -138,14 +138,14 @@ class GlueViewResolverTestCase(TestCase):
         wrapped = resolver.glue_view_http_request
         setattr(
             wrapped,
-            DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY,
-            {'gorilla': {'state': {}, 'policy': {}}},
+            DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY,
+            [{'state': {}, 'policy': {'name': 'gorilla'}}],
         )
 
         self.assertIs(resolver.glue_view_http_request, wrapped)
         self.assertEqual(
-            getattr(resolver.glue_view_http_request, DJANGO_GLUE_PROXIES_REQUEST_ATTR_KEY),
-            {'gorilla': {'state': {}, 'policy': {}}},
+            getattr(resolver.glue_view_http_request, DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY),
+            [{'state': {}, 'policy': {'name': 'gorilla'}}],
         )
 
     def test_handles_template_response(self):

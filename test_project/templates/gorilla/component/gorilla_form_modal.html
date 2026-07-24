@@ -52,7 +52,7 @@
                     <div class="col-md-4">
                         <label class="form-label fw-bold">Weight (kg)</label>
                         <input type="number" class="form-control form-control-gorilla"
-                               :class="{'is-invalid': gorilla?.$fields?.weight?.hasErrors}"
+                                  :class="{'is-invalid': gorilla?.$fields?.weight?.hasErrors}"
                                x-model="gorilla.weight" step="0.1" min="50" max="500">
                         <div class="invalid-feedback" x-text="gorilla?.$fields?.weight?.errorText"></div>
                     </div>
