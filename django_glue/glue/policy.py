@@ -35,7 +35,7 @@ class GluePolicy(BaseModel):
         glue_object: BaseGlue,
     ) -> Self:
         attributes = list(glue_object.attributes)
-        
+
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
             'request_user_id': getattr(getattr(glue_object.request, 'user', None), 'id', None),

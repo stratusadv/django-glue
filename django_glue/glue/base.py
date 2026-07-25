@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, TYPE_CHECKING
 
+from pydantic import BaseModel
+
 
 from django_glue.exceptions import GlueAccessError, GlueCalledStateAttributeError, GlueMissingAttributeError, GlueRequestError
 from django_glue.glue.attributes.callable import CallableAttribute

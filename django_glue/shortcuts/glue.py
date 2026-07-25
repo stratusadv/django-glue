@@ -37,8 +37,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
-        form_class: type[ModelForm] | None = None,
-        form_classes: Mapping[str, type[ModelForm]] | None = None,
+        form: ModelForm | None = None,
+        forms: Mapping[str, ModelForm] | None = None,
     ) -> None:
         Glue.object(
             request=request,
@@ -48,8 +48,8 @@ class Glue:
                 access=access,
                 fields=fields,
                 exclude=exclude,
-                form_class=form_class,
-                form_classes=form_classes,
+                form=form,
+                forms=forms,
             ),
         )
 
@@ -61,8 +61,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
-        form_class: type[ModelForm] | None = None,
-        form_classes: Mapping[str, type[ModelForm]] | None = None,
+        form: ModelForm | None = None,
+        forms: Mapping[str, ModelForm] | None = None,
     ) -> None:
         Glue.object(
             request=request,
@@ -72,8 +72,8 @@ class Glue:
                 access=access,
                 fields=fields,
                 exclude=exclude,
-                form_class=form_class,
-                form_classes=form_classes,
+                form=form,
+                forms=forms,
             ),
         )
 

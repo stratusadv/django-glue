@@ -1,42 +1,71 @@
 from __future__ import annotations
 
-from typing import Mapping
+from typing import Any, Mapping, MutableMapping, cast
 
 from django import forms
+from django.db.models import Model
+from django.forms.models import ModelForm
+from pydantic import BaseModel
 
 from django_glue.utils import get_attr_from_path_string
 
 
-class FormClassConfigMixin:
+class ModelGlueFormConfigMixin:
     @staticmethod
-    def normalize_form_classes(
-        form_class: type[forms.ModelForm] | None,
-        form_classes: Mapping[str, type[forms.ModelForm]] | None,
-    ) -> dict[str, type[forms.ModelForm]]:
-        normalized = dict(form_classes or {})
+    def normalize_forms(
+        form: forms.ModelForm | None,
+        forms: Mapping[str, forms.ModelForm] | None,
+    ) -> dict[str, forms.ModelForm]:
+        normalized = dict(forms or {})
 
-        if form_class is not None and 'default' in normalized:
-            raise ValueError("Use either form_class or form_classes['default'], not both.")
+        if form is not None and 'default' in normalized:
+            msg = "Use either form or forms['default'], not both."
+            raise ValueError(msg)
 
-        if form_class is not None:
-            normalized['default'] = form_class
+        if form is not None:
+            normalized['default'] = form
 
         return normalized
 
-    @staticmethod
-    def serialize_form_class_paths(
-        form_classes: Mapping[str, type[forms.ModelForm]],
-    ) -> dict[str, str]:
+    def serialize_forms(
+        self,
+        forms: Mapping[str, forms.ModelForm],
+    ) -> dict[str, dict]:
         return {
-            name: f'{form_class.__module__}.{form_class.__name__}'
-            for name, form_class in form_classes.items()
+            name: {
+                'form_class_path': f'{form.__class__.__module__}.{form.__class__.__name__}',
+                'initial': form.initial,
+                'target_pk': getattr(getattr(self, 'instance', None), 'pk', None)
+            }
+            for name, form in forms.items()
         }
 
-    @staticmethod
+    @classmethod
     def deserialize_form_classes(
-        form_class_paths: Mapping[str, str],
-    ) -> dict[str, type[forms.ModelForm]]:
-        return {
-            name: get_attr_from_path_string(form_class_path)
-            for name, form_class_path in form_class_paths.items()
-        }
+        cls,
+        form_identities: Mapping[str, dict],
+        instance: Model | None = None
+    ) -> dict[str, ModelForm]:
+        forms = {}
+
+        for name, form_identity in form_identities.items():
+            model_form_class = cast(
+                'type',
+                get_attr_from_path_string(form_identity['form_class_path'])
+            )
+
+            if not issubclass(model_form_class, ModelForm):
+                msg = (
+                    f'Invalid form instance of class {model_form_class.__name__} passed '
+                    f'to Glue of type {cls}. All forms passed to Model '
+                    f'or QuerySet Glue must be ModelForms.'
+                )
+
+                raise TypeError(msg)
+
+            forms[name] = model_form_class(
+                initial=form_identity['initial'],
+                instance=instance
+            )
+
+        return forms

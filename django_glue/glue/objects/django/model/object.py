@@ -5,13 +5,14 @@ from typing import Any, Mapping, Sequence, TYPE_CHECKING, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import Attribute, BaseGlueAttribute, GlueObjectAttribute, ReadableAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
-from django_glue.glue.objects.django.form.mixin import FormClassConfigMixin
+from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from django.db import models
 
 
-class ModelGlue(FormClassConfigMixin, BaseGlue):
+class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     namespace = 'model'
     globally_excluded_field_types = frozenset({'BinaryField'})
@@ -37,8 +38,8 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
         source_queryset: models.QuerySet | None = None,
-        form_class: type[forms.ModelForm] | None = None,
-        form_classes: Mapping[str, type[forms.ModelForm]] | None = None,
+        form: forms.ModelForm | None = None,
+        forms: Mapping[str, forms.ModelForm] | None = None
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
@@ -46,7 +47,8 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
         self.exclude = tuple(exclude)
 
         if not self.fields and not self.exclude:
-            raise ValueError('ModelGlue requires at least one of fields or exclude.')
+            msg = 'ModelGlue requires at least one of fields or exclude.'
+            raise ValueError(msg)
 
         binary_fields = [
             field_name
@@ -55,13 +57,16 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
             in self.globally_excluded_field_types
         ]
         if binary_fields:
-            raise ValueError(
+            msg = (
                 'Binary fields cannot be included in ModelGlue attributes: '
                 f'{binary_fields}'
             )
+            raise ValueError(
+                msg
+            )
 
         self.source_queryset = source_queryset
-        self.form_classes = self.normalize_form_classes(form_class, form_classes)
+        self.forms = self.normalize_forms(form, forms)
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
 
@@ -77,8 +82,8 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
             'target_pk': instance.pk,
             'pk_field_name': instance._meta.pk.name, # type: ignore  # noqa: PGH003
         }
-        if self.form_classes:
-            identity['form_class_paths'] = self.serialize_form_class_paths(self.form_classes)
+        if self.forms:
+            identity['form_identities'] = self.serialize_forms(self.forms)
 
         return identity
 
@@ -110,14 +115,16 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
         attributes: dict[str, BaseGlueAttribute] = {}
         default_attribute = None
 
-        for form_name, form_class in self.form_classes.items():
+        for form_name, form in self.forms.items():
+            form.instance = self.instance
+
             attribute_name = f'forms.{form_name}'
             form_attribute = GlueObjectAttribute(
                 owner=self,
                 name=attribute_name,
                 access=self.access,
                 glue_object=FormGlue(
-                    form_class(instance=self.instance),
+                    form=form,
                     name=f'{self.name}.{attribute_name}',
                     access=self.access,
                 ),
@@ -204,8 +211,10 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
             for attribute_name in policy.attributes
             if attribute_name in model_field_names
         ]
-        form_classes = cls.deserialize_form_classes(
-            policy.identity.get('form_class_paths', {})
+
+        forms = cls.deserialize_form_classes(
+            policy.identity.get('form_identities', {}),
+            instance=instance
         )
 
         return cls(
@@ -213,7 +222,7 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
             name=policy.name,
             access=policy.access,
             fields=fields,
-            form_classes=form_classes,
+            forms=forms,
         )
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
@@ -265,7 +274,7 @@ class ModelGlue(FormClassConfigMixin, BaseGlue):
 
     @Attribute(access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
-        try:
+        try:    
             self.instance.full_clean()
             self.instance.save()
             self._apply_m2m_state(self._loaded_state or {})

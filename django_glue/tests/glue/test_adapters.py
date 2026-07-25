@@ -354,7 +354,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
             self.gorilla,
             **glue_context(),
             fields=['id', 'name'],
-            form_class=TestModelForm,
+            form=TestModelForm(instance=self.gorilla),
         ))
 
         policy = glue_object.policy
@@ -379,7 +379,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
             self.gorilla,
             **glue_context(),
             fields=['id', 'name'],
-            form_classes={'edit': TestModelForm},
+            forms={'edit': TestModelForm(instance=self.gorilla)},
         ))
 
         policy = glue_object.policy
@@ -391,19 +391,19 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertEqual(metadata['attributes']['forms.edit']['policy']['namespace'], 'form')
 
     def test_model_rejects_duplicate_default_form_class(self):
-        with self.assertRaisesRegex(ValueError, 'form_class'):
+        with self.assertRaisesRegex(ValueError, 'form'):
             ModelGlue(
                 self.gorilla,
                 **glue_context(),
                 fields=['id', 'name'],
-                form_class=TestModelForm,
-                form_classes={'default': TestModelForm},
+                form=TestModelForm(instance=self.gorilla),
+                forms={'default': TestModelForm(instance=self.gorilla)},
             )
 
     def test_model_without_forms_keeps_existing_attribute_shape(self):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
 
-        self.assertNotIn('form_class_paths', glue_object.policy.identity)
+        self.assertNotIn('form_identities', glue_object.policy.identity)
         self.assertNotIn('form', glue_object.policy.attributes)
         self.assertNotIn('forms.default', glue_object.policy.attributes)
 
@@ -571,7 +571,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         resolved = QuerySetGlue._from_policy(policy)
 
         self.assertEqual(policy.namespace, 'querySet')
-        self.assertNotIn('form_class_paths', policy.identity)
+        self.assertNotIn('form_identities', policy.identity)
         self.assertIn('query_with_params', policy.attributes)
         self.assertEqual(metadata['attributes']['skills']['type'], 'ManyToManyField')
         self.assertEqual(list(resolved.queryset), [gorilla])
@@ -608,7 +608,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             name='gorillas',
             access=GlueAccess.CHANGE,
             fields=['id', 'name'],
-            form_class=TestModelForm,
+            form=TestModelForm(),
         )
         glue_object.request = request
         policy = glue_object.policy
@@ -636,7 +636,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             name='gorillas',
             access=GlueAccess.CHANGE,
             fields=['id', 'name'],
-            form_class=TestModelForm,
+            form=TestModelForm(),
         )
         glue_object.request = request
         policy = glue_object.policy

@@ -11,7 +11,7 @@ from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.metadata import GlueMetadata
-from django_glue.glue.objects.django.form.mixin import FormClassConfigMixin
+from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ModelGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from django.db import models
 
 
-class QuerySetGlue(FormClassConfigMixin, BaseGlue):
+class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
     namespace = 'querySet'
 
     def __init__(
@@ -34,8 +34,8 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
         access: GlueAccess,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
-        form_class: type[forms.ModelForm] | None = None,
-        form_classes: Mapping[str, type[forms.ModelForm]] | None = None,
+        form: forms.ModelForm | None = None,
+        forms: Mapping[str, forms.ModelForm] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.queryset = queryset
@@ -43,9 +43,10 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
         self.exclude = tuple(exclude)
 
         if not self.fields and not self.exclude:
-            raise ValueError('QuerySetGlue requires at least one of fields or exclude.')
+            msg = 'QuerySetGlue requires at least one of fields or exclude.'
+            raise ValueError(msg)
 
-        self.form_classes = self.normalize_form_classes(form_class, form_classes)
+        self.forms = self.normalize_forms(form, forms)
 
     @property
     def identity(self) -> dict[str, Any]:
@@ -54,8 +55,8 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
             'encoded_queryset': self._encode_queryset_query(self.queryset),
             'pk_field_name': self.queryset.model._meta.pk.name,
         }
-        if self.form_classes:
-            identity['form_class_paths'] = self.serialize_form_class_paths(self.form_classes)
+        if self.forms:
+            identity['form_identities'] = self.serialize_forms(self.forms)
 
         return identity
 
@@ -90,7 +91,7 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
             access=self.access,
             fields=self._included_fields,
             source_queryset=self.queryset,
-            form_classes=self.form_classes,
+            forms=self.forms,
         )
         # Get field attributes from the model, excluding model's declared attributes
         field_names = {*self._included_fields, *self._annotation_names}
@@ -133,15 +134,15 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
             for attr_name in policy.attributes
             if attr_name in model_field_names
         ]
-        form_classes = cls.deserialize_form_classes(
-            policy.identity.get('form_class_paths', {})
+        forms = cls.deserialize_form_classes(
+            policy.identity.get('form_identities', {})
         )
         glue_object = cls(
             queryset,
             name=policy.name,
             access=policy.access,
             fields=fields,
-            form_classes=form_classes,
+            forms=forms,
         )
         glue_object.policy = policy
         return glue_object
@@ -191,13 +192,18 @@ class QuerySetGlue(FormClassConfigMixin, BaseGlue):
 
     def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
         child_name = f'{self.policy.name}.{instance.pk}'
+        # Create fresh form instances bound to this specific instance
+        child_forms = {
+            name: form.__class__(instance=instance)
+            for name, form in self.forms.items()
+        }
         child_object = ModelGlue(
             instance,
             name=child_name,
             access=self.policy.access,
             fields=self._included_fields,
             source_queryset=self.queryset,
-            form_classes=self.form_classes,
+            forms=child_forms,
         )
         child_object.request = self.request
 
