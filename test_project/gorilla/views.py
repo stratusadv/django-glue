@@ -17,6 +17,7 @@ def list_view(request: HttpRequest) -> HttpResponse:
         target=Gorilla.objects.order_by('-updated_at').all(),
         unique_name='gorillas',
         access=Glue.Access.DELETE,
+        exclude=['signature'],
     )
 
     Glue.form(
@@ -24,7 +25,11 @@ def list_view(request: HttpRequest) -> HttpResponse:
     )
 
     Glue.model(
-        request=request, target=Gorilla(), unique_name='new_gorilla_model', access=Glue.Access.CHANGE
+        request=request,
+        target=Gorilla(),
+        unique_name='new_gorilla_model',
+        access=Glue.Access.CHANGE,
+        exclude=['signature'],
     )
 
     return render(request, 'gorilla/page/list_page.html')
@@ -33,14 +38,24 @@ def list_view(request: HttpRequest) -> HttpResponse:
 def detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
-    Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.DELETE,
+        exclude=['signature'],
+    )
 
     return render(request, 'gorilla/page/detail_page.html')
 
 
 def skills_view(request: HttpRequest) -> HttpResponse:
     Glue.queryset(
-        request=request, target=Skill.objects.all(), unique_name='skills', access=Glue.Access.DELETE
+        request=request,
+        target=Skill.objects.all(),
+        unique_name='skills',
+        access=Glue.Access.DELETE,
+        fields=['id', 'name', 'description', 'difficulty', 'level'],
     )
 
     return render(request, 'gorilla/page/skills_page.html')
@@ -49,7 +64,13 @@ def skills_view(request: HttpRequest) -> HttpResponse:
 def detail_template_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
-    Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.DELETE)
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.DELETE,
+        exclude=['signature'],
+    )
 
     return TemplateResponse(request, 'gorilla/page/detail_page_partial.html')
 
@@ -67,7 +88,13 @@ def progressive_form_view(request: HttpRequest) -> HttpResponse:
 def arena_view(request: HttpRequest, pk: int) -> HttpResponse:
     gorilla = get_object_or_404(Gorilla, pk=pk)
 
-    Glue.model(request=request, target=gorilla, unique_name='gorilla', access=Glue.Access.CHANGE)
+    Glue.model(
+        request=request,
+        target=gorilla,
+        unique_name='gorilla',
+        access=Glue.Access.CHANGE,
+        exclude=['signature'],
+    )
 
     Glue.template(
         request=request, target='gorilla/component/fighter_rank_card.html', unique_name='rank_card'

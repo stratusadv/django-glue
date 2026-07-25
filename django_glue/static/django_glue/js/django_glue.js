@@ -273,6 +273,15 @@
   }
   var view_default = GlueView;
 
+  // client_js/src/proxies/registry.js
+  var NAMESPACE_TO_PROXY_CLASS = {};
+  function registerProxyClass(namespace, proxyClass) {
+    NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
+  }
+  function getProxyClass(namespace) {
+    return NAMESPACE_TO_PROXY_CLASS[namespace];
+  }
+
   // client_js/src/proxies/base.js
   function isPlainObject2(value) {
     if (value === null || typeof value !== "object") {
@@ -302,6 +311,14 @@
         this._listeners[when][attribute] = [];
       }
       this._listeners[when][attribute].push(callback);
+      return this;
+    }
+    removeListener(attribute, callback, when = "after") {
+      const listeners = this._listeners[when]?.[attribute];
+      if (!listeners) {
+        return this;
+      }
+      this._listeners[when][attribute] = listeners.filter((listener) => listener !== callback);
       return this;
     }
     async _callAttribute(attribute, kwargs = {}) {
@@ -375,6 +392,7 @@
       this._attributeBuilders = {
         container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
         callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
+        glue: (owner, name, qualName, meta) => this._initializeGlueObjectAttribute(owner, name, qualName, meta),
         state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta)
       };
     }
@@ -410,6 +428,32 @@
           return await root._callAttribute(attributeQualName, kwargs);
         },
         enumerable: false,
+        configurable: true
+      });
+    }
+    _initializeGlueObjectAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
+      const nestedPolicy = attributeMetadata.policy;
+      const nestedMetadata = attributeMetadata.metadata || {};
+      const nestedNamespace = nestedPolicy?.namespace || nestedMetadata?.namespace;
+      const ProxyClass = getProxyClass(nestedNamespace);
+      if (!nestedPolicy?.name || !ProxyClass) {
+        return;
+      }
+      const proxy = this;
+      const cacheKey = `__glue_object__${nestedPolicy.name}`;
+      Object.defineProperty(owner, attributeName, {
+        get() {
+          if (!proxy[cacheKey]) {
+            proxy[cacheKey] = new ProxyClass({
+              http: proxy._http,
+              policy: nestedPolicy,
+              state: proxy._state?.[attributeQualName] || {},
+              metadata: nestedMetadata
+            });
+          }
+          return proxy[cacheKey];
+        },
+        enumerable: true,
         configurable: true
       });
     }
@@ -915,7 +959,6 @@
       this._queryCache = {};
       this._loaded = false;
       this.loading = false;
-      this.hasMore = false;
     }
     get items() {
       return Array.from(this);
@@ -932,10 +975,16 @@
     }
     async all() {
       const result = await this.query_with_params(this._queryParams);
-      this.hasMore = Boolean(result.has_more);
       this._syncFromResult(result);
       this._loaded = true;
       return this;
+    }
+    async get(pk) {
+      const row = await this._callAttribute("get", { pk });
+      const name = row.policy?.name || `${this._name}.${pk}`;
+      const proxy = this._buildModelProxy(row, this._modelProxies.get(name));
+      this._modelProxies.set(name, proxy);
+      return proxy;
     }
     _syncFromResult(result = {}) {
       const items = result.items || [];
@@ -943,25 +992,29 @@
       this._modelProxies = new Map;
       items.forEach((row, index) => {
         const name = row.policy?.name || `${this._name}.${index}`;
-        let proxy = oldProxies.get(name);
-        if (proxy) {
-          proxy._applyResponse({
-            policy: row.policy,
-            state: row.state,
-            metadata: row.metadata || this._metadata
-          });
-        } else {
-          proxy = new model_default({
-            http: this._http,
-            policy: row.policy,
-            state: row.state,
-            metadata: row.metadata || this._metadata
-          });
-        }
-        proxy._loaded = true;
-        proxy.$collection = this;
+        const proxy = this._buildModelProxy(row, oldProxies.get(name));
         this._modelProxies.set(name, proxy);
       });
+    }
+    _buildModelProxy(row, existingProxy = null) {
+      let proxy = existingProxy;
+      if (proxy) {
+        proxy._applyResponse({
+          policy: row.policy,
+          state: row.state,
+          metadata: row.metadata || this._metadata
+        });
+      } else {
+        proxy = new model_default({
+          http: this._http,
+          policy: row.policy,
+          state: row.state,
+          metadata: row.metadata || this._metadata
+        });
+      }
+      proxy._loaded = true;
+      proxy.$collection = this;
+      return proxy;
     }
     query(params = {}) {
       const key = JSON.stringify(params);
@@ -1036,13 +1089,16 @@
   var template_default = GlueTemplateProxy;
 
   // client_js/src/proxies/index.js
-  var NAMESPACE_TO_PROXY_CLASS = {
+  var NAMESPACE_TO_PROXY_CLASS2 = {
     form: form_default,
     function: function_default,
     model: model_default,
     querySet: queryset_default,
     template: template_default
   };
+  Object.entries(NAMESPACE_TO_PROXY_CLASS2).forEach(([namespace, proxyClass]) => {
+    registerProxyClass(namespace, proxyClass);
+  });
 
   // client_js/src/client.js
   class GlueClient {
@@ -1078,7 +1134,7 @@
     _registerManifestAsProxy({ policy, metadata = {} }) {
       const name = policy?.name;
       const namespace = policy?.namespace || metadata?.namespace;
-      const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace];
+      const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[namespace];
       if (!name) {
         throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
       }

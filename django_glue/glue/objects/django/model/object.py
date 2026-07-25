@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Sequence, TYPE_CHECKING, cast
+from typing import Any, Mapping, Sequence, TYPE_CHECKING, cast
 
+from django import forms
 from django.core.exceptions import ValidationError
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, ReadableAttribute, Attribute
+from django_glue.glue.attributes import Attribute, BaseGlueAttribute, GlueObjectAttribute, ReadableAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
+from django_glue.glue.objects.django.form.mixin import FormClassConfigMixin
+from django_glue.glue.objects.django.form.object import FormGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
 from django_glue.glue.policy import GluePolicy  # noqa: TC001
@@ -20,7 +23,7 @@ if TYPE_CHECKING:
     from django.db import models
 
 
-class ModelGlue(BaseGlue):
+class ModelGlue(FormClassConfigMixin, BaseGlue):
 
     namespace = 'model'
     globally_excluded_field_types = frozenset({'BinaryField'})
@@ -34,10 +37,16 @@ class ModelGlue(BaseGlue):
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
         source_queryset: models.QuerySet | None = None,
+        form_class: type[forms.ModelForm] | None = None,
+        form_classes: Mapping[str, type[forms.ModelForm]] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
         self.fields = tuple(fields)
+        self.exclude = tuple(exclude)
+
+        if not self.fields and not self.exclude:
+            raise ValueError('ModelGlue requires at least one of fields or exclude.')
 
         binary_fields = [
             field_name
@@ -51,8 +60,8 @@ class ModelGlue(BaseGlue):
                 f'{binary_fields}'
             )
 
-        self.exclude = tuple(exclude)
         self.source_queryset = source_queryset
+        self.form_classes = self.normalize_form_classes(form_class, form_classes)
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
 
@@ -63,11 +72,15 @@ class ModelGlue(BaseGlue):
     @property
     def identity(self) -> dict[str, Any]:
         instance = self.instance
-        return {
+        identity = {
             'model_class_path': f'{instance.__class__.__module__}.{instance.__class__.__name__}',
             'target_pk': instance.pk,
             'pk_field_name': instance._meta.pk.name, # type: ignore  # noqa: PGH003
         }
+        if self.form_classes:
+            identity['form_class_paths'] = self.serialize_form_class_paths(self.form_classes)
+
+        return identity
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
@@ -90,6 +103,33 @@ class ModelGlue(BaseGlue):
             )
             for annotation_name in self._annotation_names
         })
+        attributes.update(self._form_attributes())
+        return attributes
+
+    def _form_attributes(self) -> dict[str, BaseGlueAttribute]:
+        attributes: dict[str, BaseGlueAttribute] = {}
+        default_attribute = None
+
+        for form_name, form_class in self.form_classes.items():
+            attribute_name = f'forms.{form_name}'
+            form_attribute = GlueObjectAttribute(
+                owner=self,
+                name=attribute_name,
+                access=self.access,
+                glue_object=FormGlue(
+                    form_class(instance=self.instance),
+                    name=f'{self.name}.{attribute_name}',
+                    access=self.access,
+                ),
+            )
+            attributes[attribute_name] = form_attribute
+
+            if form_name == 'default':
+                default_attribute = form_attribute
+
+        if default_attribute is not None:
+            attributes['form'] = default_attribute
+
         return attributes
 
     @cached_property
@@ -164,12 +204,16 @@ class ModelGlue(BaseGlue):
             for attribute_name in policy.attributes
             if attribute_name in model_field_names
         ]
+        form_classes = cls.deserialize_form_classes(
+            policy.identity.get('form_class_paths', {})
+        )
 
         return cls(
             instance,
             name=policy.name,
             access=policy.access,
             fields=fields,
+            form_classes=form_classes,
         )
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
@@ -215,7 +259,7 @@ class ModelGlue(BaseGlue):
         return self.request.FILES.get(field_name)
         return None
 
-    @Attribute(access=GlueAccess.VIEW)
+    @Attribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:
         return {'state': self.state}
 

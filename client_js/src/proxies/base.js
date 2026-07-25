@@ -1,3 +1,5 @@
+import {getProxyClass} from "./registry"
+
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
         return false
@@ -29,6 +31,16 @@ class BaseGlueProxy {
             this._listeners[when][attribute] = []
         }
         this._listeners[when][attribute].push(callback)
+        return this
+    }
+
+    removeListener(attribute, callback, when = 'after') {
+        const listeners = this._listeners[when]?.[attribute]
+        if (!listeners) {
+            return this
+        }
+
+        this._listeners[when][attribute] = listeners.filter(listener => listener !== callback)
         return this
     }
 
@@ -119,6 +131,7 @@ class BaseGlueProxy {
         this._attributeBuilders = {
             container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
             callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
+            glue: (owner, name, qualName, meta) => this._initializeGlueObjectAttribute(owner, name, qualName, meta),
             state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta),
         }
     }
@@ -163,6 +176,37 @@ class BaseGlueProxy {
                 return await root._callAttribute(attributeQualName, kwargs)
             },
             enumerable: false,
+            configurable: true,
+        })
+    }
+
+    _initializeGlueObjectAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
+        const nestedPolicy = attributeMetadata.policy
+        const nestedMetadata = attributeMetadata.metadata || {}
+        const nestedNamespace = nestedPolicy?.namespace || nestedMetadata?.namespace
+        const ProxyClass = getProxyClass(nestedNamespace)
+
+        if (!nestedPolicy?.name || !ProxyClass) {
+            return
+        }
+
+        const proxy = this
+        const cacheKey = `__glue_object__${nestedPolicy.name}`
+
+        Object.defineProperty(owner, attributeName, {
+            get() {
+                if (!proxy[cacheKey]) {
+                    proxy[cacheKey] = new ProxyClass({
+                        http: proxy._http,
+                        policy: nestedPolicy,
+                        state: proxy._state?.[attributeQualName] || {},
+                        metadata: nestedMetadata,
+                    })
+                }
+
+                return proxy[cacheKey]
+            },
+            enumerable: true,
             configurable: true,
         })
     }

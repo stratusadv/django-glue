@@ -6,6 +6,7 @@ from django_glue.glue.attributes.callable import (
 )
 from django_glue.glue.attributes.container import ContainerAttribute
 from django_glue.glue.attributes.declared import Attribute
+from django_glue.glue.attributes.glue_object import GlueObjectAttribute
 from django_glue.glue.attributes.state import StateAttribute
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     'ReadableAttribute',
     'CallableAttribute',
     'ContainerAttribute',
+    'GlueObjectAttribute',
     'LoadedAttributeCall',
     'StateAttribute',
 ]

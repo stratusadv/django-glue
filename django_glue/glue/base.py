@@ -281,6 +281,7 @@ class BaseGlue(ABC):
             )
 
         call_result = glue_attribute.call(call_context)
+        self._policy = None
 
         call_response_data = {
             'data': {

@@ -1,7 +1,7 @@
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from django.db.models import Model, QuerySet
-from django.forms import BaseForm
+from django.forms import BaseForm, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
@@ -37,6 +37,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
+        form_class: type[ModelForm] | None = None,
+        form_classes: Mapping[str, type[ModelForm]] | None = None,
     ) -> None:
         Glue.object(
             request=request,
@@ -46,6 +48,8 @@ class Glue:
                 access=access,
                 fields=fields,
                 exclude=exclude,
+                form_class=form_class,
+                form_classes=form_classes,
             ),
         )
 
@@ -57,6 +61,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence = (),
         exclude: Sequence[str] = (),
+        form_class: type[ModelForm] | None = None,
+        form_classes: Mapping[str, type[ModelForm]] | None = None,
     ) -> None:
         Glue.object(
             request=request,
@@ -66,6 +72,8 @@ class Glue:
                 access=access,
                 fields=fields,
                 exclude=exclude,
+                form_class=form_class,
+                form_classes=form_classes,
             ),
         )
 

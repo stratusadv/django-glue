@@ -49,9 +49,19 @@ def speed_view(request: HttpRequest) -> HttpResponse:
     def glue_amount(glue_type: str, count: int) -> None:
         for unique_name in unique_names[:count]:
             if glue_type == 'model':
-                Glue.model(request=request, target=Gorilla.objects.first(), unique_name=unique_name)
+                Glue.model(
+                    request=request,
+                    target=Gorilla.objects.first(),
+                    unique_name=unique_name,
+                    exclude=['signature'],
+                )
             elif glue_type == 'querySet':
-                Glue.queryset(request=request, target=Gorilla.objects.all(), unique_name=unique_name)
+                Glue.queryset(
+                    request=request,
+                    target=Gorilla.objects.all(),
+                    unique_name=unique_name,
+                    exclude=['signature'],
+                )
             elif glue_type == 'form':
                 Glue.form(request=request, target=GorillaForm(), unique_name=unique_name)
 

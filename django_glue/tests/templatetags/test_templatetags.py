@@ -62,6 +62,7 @@ class DjangoGlueInitTagTestCase(TestCase):
             unique_name='gorilla',
             target=self.gorilla,
             access=GlueAccess.VIEW,
+            fields=['name'],
         )
 
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
@@ -77,6 +78,7 @@ class DjangoGlueInitTagTestCase(TestCase):
             unique_name='gorilla',
             target=self.gorilla,
             access=GlueAccess.VIEW,
+            fields=['name'],
         )
 
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')

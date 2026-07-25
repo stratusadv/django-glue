@@ -22,11 +22,11 @@ from django_glue.glue import (
     FunctionGlue,
     GlueObjectResolverRegistry,
 )
-from django_glue.glue.attributes import Attribute, ContainerAttribute
+from django_glue.glue.attributes import Attribute, ContainerAttribute, GlueObjectAttribute
 from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
 from django_glue.glue.schemas import AttributeCallResolverContext
 from test_project.gorilla.models import Gorilla, Skill
-from test_project.test_forms import ContactForm
+from test_project.test_forms import ContactForm, TestModelForm
 
 
 def request_with_session(session_key='test-session'):
@@ -158,7 +158,11 @@ class DjangoModelGlueObjectTestCase(TestCase):
         )
 
     def test_model_field_adapter_marks_non_editable_fields_read_only(self):
-        glue_object = ModelGlue(self.gorilla, **glue_context(access=GlueAccess.VIEW))
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['created_at'],
+        )
         attribute = glue_object.attributes['created_at']
 
         self.assertEqual(attribute.required_access, GlueAccess.VIEW)
@@ -169,6 +173,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         glue_object = ModelGlue(
             self.gorilla,
             **glue_context(access=GlueAccess.VIEW),
+            exclude=['id'],
         )
 
         self.assertNotIn('signature', glue_object.attributes)
@@ -184,6 +189,13 @@ class DjangoModelGlueObjectTestCase(TestCase):
                 self.gorilla,
                 **glue_context(access=GlueAccess.VIEW),
                 fields=['name', 'signature'],
+            )
+
+    def test_model_adapter_requires_fields_or_exclude(self):
+        with self.assertRaisesRegex(ValueError, 'ModelGlue requires at least one of fields or exclude'):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(access=GlueAccess.VIEW),
             )
 
     def test_model_adapter_builds_policy_state_and_metadata(self):
@@ -306,7 +318,11 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertGreater(state['profile_photo']['value']['size'], 0)
 
     def test_model_adapter_reconstructs_model_from_policy(self):
-        glue_object = with_request(ModelGlue(self.gorilla, **glue_context(access=GlueAccess.VIEW)))
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['id', 'name'],
+        ))
         policy = glue_object.policy
 
         resolved = ModelGlue._from_policy(policy)
@@ -332,6 +348,64 @@ class DjangoModelGlueObjectTestCase(TestCase):
         shout_result = self.gorilla.shout(volume=5)
 
         self.assertEqual(shout_result, 'AAAAA')
+
+    def test_model_form_class_exposes_default_form_glue_attributes(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['id', 'name'],
+            form_class=TestModelForm,
+        ))
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata.to_payload()
+        state = glue_object.state
+
+        self.assertIn('form', policy.attributes)
+        self.assertIn('forms.default', policy.attributes)
+        self.assertIsInstance(glue_object.attributes['form'], GlueObjectAttribute)
+        self.assertIs(glue_object.attributes['form'], glue_object.attributes['forms.default'])
+        self.assertEqual(metadata['attributes']['form']['namespace'], 'glue')
+        self.assertEqual(metadata['attributes']['form']['policy']['namespace'], 'form')
+        self.assertEqual(
+            metadata['attributes']['form']['policy']['name'],
+            f'{glue_object.name}.forms.default',
+        )
+        self.assertEqual(state['form']['name']['value'], 'Koko')
+        self.assertEqual(state['forms.default']['name']['value'], 'Koko')
+
+    def test_model_form_classes_exposes_named_forms(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['id', 'name'],
+            form_classes={'edit': TestModelForm},
+        ))
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata.to_payload()
+
+        self.assertNotIn('form', policy.attributes)
+        self.assertIn('forms.edit', policy.attributes)
+        self.assertEqual(metadata['attributes']['forms.edit']['namespace'], 'glue')
+        self.assertEqual(metadata['attributes']['forms.edit']['policy']['namespace'], 'form')
+
+    def test_model_rejects_duplicate_default_form_class(self):
+        with self.assertRaisesRegex(ValueError, 'form_class'):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(),
+                fields=['id', 'name'],
+                form_class=TestModelForm,
+                form_classes={'default': TestModelForm},
+            )
+
+    def test_model_without_forms_keeps_existing_attribute_shape(self):
+        glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
+
+        self.assertNotIn('form_class_paths', glue_object.policy.identity)
+        self.assertNotIn('form', glue_object.policy.attributes)
+        self.assertNotIn('forms.default', glue_object.policy.attributes)
 
     def test_nested_base_glue_attributes_build_container_metadata(self):
         glue_object = with_request(NestedDashboardGlue())
@@ -384,12 +458,44 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(state['name']['value'], 'Ada')
         self.assertEqual(metadata['attributes']['email']['type'], 'EmailField')
 
+    def test_form_adapter_reconstruction_preserves_initial_data(self):
+        gorilla = Gorilla.objects.create(name='Instance Name', age=12)
+        glue_object = with_request(FormGlue(
+            TestModelForm(
+                instance=gorilla,
+                initial={'name': 'Initial Name', 'age': 7},
+            ),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        resolved = FormGlue._from_policy(glue_object.policy)
+
+        self.assertEqual(resolved.form.initial['name'], 'Initial Name')
+        self.assertEqual(resolved.form.initial['age'], 7)
+
+    def test_form_adapter_reconstruction_prefers_initial_over_instance_values(self):
+        gorilla = Gorilla.objects.create(name='Instance Name', age=12)
+        glue_object = with_request(FormGlue(
+            TestModelForm(
+                instance=gorilla,
+                initial={'name': 'Initial Name', 'age': 7},
+            ),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        resolved = FormGlue._from_policy(glue_object.policy)
+        state = resolved.load()['state']
+
+        self.assertEqual(state['name']['value'], 'Initial Name')
+        self.assertEqual(state['age']['value'], 7)
+
 
 class DjangoQuerySetGlueObjectTestCase(TestCase):
     def test_queryset_adapter_excludes_globally_excluded_fields(self):
         glue_object = QuerySetGlue(
             Gorilla.objects.all(),
             **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            exclude=['id'],
         )
 
         self.assertNotIn('signature', glue_object.attributes)
@@ -397,6 +503,13 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             'signature',
             glue_object.metadata.to_payload()['attributes'],
         )
+
+    def test_queryset_adapter_requires_fields_or_exclude(self):
+        with self.assertRaisesRegex(ValueError, 'QuerySetGlue requires at least one of fields or exclude'):
+            QuerySetGlue(
+                Gorilla.objects.all(),
+                **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            )
 
     def test_queryset_query_encoding_returns_string(self):
         queryset = Gorilla.objects.all()
@@ -458,6 +571,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         resolved = QuerySetGlue._from_policy(policy)
 
         self.assertEqual(policy.namespace, 'querySet')
+        self.assertNotIn('form_class_paths', policy.identity)
         self.assertIn('query_with_params', policy.attributes)
         self.assertEqual(metadata['attributes']['skills']['type'], 'ManyToManyField')
         self.assertEqual(list(resolved.queryset), [gorilla])
@@ -484,6 +598,95 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertEqual(row['metadata']['attributes']['name']['type'], 'CharField')
+
+    def test_queryset_form_class_adds_nested_form_to_child_model_payloads(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        queryset = Gorilla.objects.filter(pk=gorilla.pk)
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            queryset,
+            name='gorillas',
+            access=GlueAccess.CHANGE,
+            fields=['id', 'name'],
+            form_class=TestModelForm,
+        )
+        glue_object.request = request
+        policy = glue_object.policy
+
+        result = glue_object.query_with_params(kwargs={})
+
+        row = result['items'][0]
+        row_policy_attributes = row['policy']['attributes']
+        row_metadata = row['metadata']['attributes']
+        self.assertIn('form', row_policy_attributes)
+        self.assertIn('forms.default', row_policy_attributes)
+        self.assertEqual(row_metadata['form']['namespace'], 'glue')
+        self.assertEqual(row_metadata['form']['policy']['namespace'], 'form')
+        self.assertEqual(
+            row_metadata['form']['policy']['name'],
+            f'gorillas.{gorilla.pk}.forms.default',
+        )
+        self.assertEqual(row['state']['form']['name']['value'], 'Koko')
+
+    def test_queryset_get_returns_child_model_proxy_payload(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.CHANGE,
+            fields=['id', 'name'],
+            form_class=TestModelForm,
+        )
+        glue_object.request = request
+        policy = glue_object.policy
+
+        row = glue_object.get(pk=gorilla.pk)
+
+        self.assertEqual(row['policy']['namespace'], 'model')
+        self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
+        self.assertEqual(row['policy']['identity']['target_pk'], gorilla.pk)
+        self.assertIn('form', row['policy']['attributes'])
+        self.assertEqual(row['state']['name']['value'], 'Koko')
+
+    def test_queryset_policy_remains_unsliced_after_query_with_params(self):
+        Gorilla.objects.create(name='Koko')
+        Gorilla.objects.create(name='Ndume')
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.CHANGE,
+            fields=['id', 'name'],
+        )
+        glue_object.request = request
+
+        context = AttributeCallResolverContext.model_construct(
+            request=request,
+            target_glue_policy=glue_object.policy,
+            target_glue_client_state={},
+            target_attribute_name='query_with_params',
+            target_attribute_call_kwargs={
+                'kwargs': {
+                    'order_by': 'name',
+                    'slice': {'start': 0, 'stop': 1},
+                },
+            },
+        )
+        response = glue_object.process_attribute_call(context)
+        resolved = QuerySetGlue._from_policy(response['data']['policy'])
+        resolved.request = request
+
+        result = resolved.query_with_params(
+            kwargs={
+                'filter': {'name__icontains': 'du'},
+                'order_by': '-name',
+                'slice': {'start': 0, 'stop': 1},
+            },
+        )
+
+        self.assertEqual(len(result['items']), 1)
+        self.assertEqual(result['items'][0]['state']['name']['value'], 'Ndume')
 
 
 class PythonAdaptersTestCase(TestCase):
@@ -556,6 +759,26 @@ class LazyLoadingTestCase(TestCase):
 
         self.assertIn('state', result)
         self.assertEqual(result['state']['name']['value'], 'Koko')
+
+    def test_model_load_does_not_hydrate_stale_client_state(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = with_request(ModelGlue(gorilla, **glue_context(), fields=['name']))
+        policy = glue_object.policy
+        gorilla.name = 'Ndume'
+        gorilla.save()
+
+        context = AttributeCallResolverContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=policy,
+            target_glue_client_state={'name': {'value': 'Koko'}},
+            target_attribute_name='load',
+            target_attribute_call_kwargs={},
+        )
+        resolved = ModelGlue.from_attribute_call_resolver_context(context)
+
+        result = resolved.load()
+
+        self.assertEqual(result['state']['name']['value'], 'Ndume')
 
     def test_form_manifest_does_not_include_state(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})

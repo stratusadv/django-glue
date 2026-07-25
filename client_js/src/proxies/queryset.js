@@ -34,6 +34,14 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this
     }
 
+    async get(pk) {
+        const row = await this._callAttribute('get', {pk})
+        const name = row.policy?.name || `${this._name}.${pk}`
+        const proxy = this._buildModelProxy(row, this._modelProxies.get(name))
+        this._modelProxies.set(name, proxy)
+        return proxy
+    }
+
     _syncFromResult(result = {}) {
         const items = result.items || []
         const oldProxies = this._modelProxies
@@ -41,27 +49,32 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
         items.forEach((row, index) => {
             const name = row.policy?.name || `${this._name}.${index}`
-            let proxy = oldProxies.get(name)
-
-            if (proxy) {
-                proxy._applyResponse({
-                    policy: row.policy,
-                    state: row.state,
-                    metadata: row.metadata || this._metadata,
-                })
-            } else {
-                proxy = new GlueModelProxy({
-                    http: this._http,
-                    policy: row.policy,
-                    state: row.state,
-                    metadata: row.metadata || this._metadata,
-                })
-            }
-
-            proxy._loaded = true
-            proxy.$collection = this
+            const proxy = this._buildModelProxy(row, oldProxies.get(name))
             this._modelProxies.set(name, proxy)
         })
+    }
+
+    _buildModelProxy(row, existingProxy = null) {
+        let proxy = existingProxy
+
+        if (proxy) {
+            proxy._applyResponse({
+                policy: row.policy,
+                state: row.state,
+                metadata: row.metadata || this._metadata,
+            })
+        } else {
+            proxy = new GlueModelProxy({
+                http: this._http,
+                policy: row.policy,
+                state: row.state,
+                metadata: row.metadata || this._metadata,
+            })
+        }
+
+        proxy._loaded = true
+        proxy.$collection = this
+        return proxy
     }
 
     query(params = {}) {

@@ -2,8 +2,10 @@ import {describe, expect, test} from "bun:test"
 import GlueConfig from "../src/config"
 import GlueHttp from "../src/http"
 import {RelationFieldGlue} from "../src/proxies/fields"
+import GlueFormProxy from "../src/proxies/form"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
+import {registerProxyClass} from "../src/proxies/registry"
 import {createPolicy, createMetadata, createState, mockOperationFetch} from "./testUtils"
 
 function http() {
@@ -14,6 +16,7 @@ function queryMetadata() {
     return {
         namespace: 'querySet',
         attributes: {
+            get: {namespace: 'callable'},
             query_with_params: {namespace: 'callable'},
         },
     }
@@ -23,7 +26,7 @@ function queryPolicy(name = 'gorillas') {
     return createPolicy({
         name,
         namespace: 'querySet',
-        attributes: ['query_with_params'],
+        attributes: ['get', 'query_with_params'],
     })
 }
 
@@ -51,6 +54,79 @@ function querySet() {
 }
 
 describe('Glue proxies', () => {
+    test('glue object attributes initialize nested form proxies', () => {
+        registerProxyClass('form', GlueFormProxy)
+        const formPolicy = createPolicy({
+            name: 'gorilla.forms.default',
+            namespace: 'form',
+            attributes: ['name', 'validate'],
+        })
+        const formMetadata = createMetadata({
+            namespace: 'form',
+            attributes: {
+                validate: {namespace: 'callable'},
+            },
+        })
+        const object = new GlueModelProxy({
+            http: http(),
+            policy: createPolicy({attributes: ['id', 'form', 'forms', 'forms.default']}),
+            state: {
+                id: {value: 1},
+                form: createState({instance_data: {name: 'Koko'}}),
+                'forms.default': createState({instance_data: {name: 'Koko'}}),
+            },
+            metadata: createMetadata({
+                attributes: {
+                    form: {
+                        namespace: 'glue',
+                        policy: formPolicy,
+                        metadata: formMetadata,
+                    },
+                    forms: {namespace: 'container'},
+                    'forms.default': {
+                        namespace: 'glue',
+                        policy: formPolicy,
+                        metadata: formMetadata,
+                    },
+                },
+            }),
+        })
+
+        expect(object.form).toBeInstanceOf(GlueFormProxy)
+        expect(object.forms.default).toBeInstanceOf(GlueFormProxy)
+        expect(object.forms.default).toBe(object.form)
+        expect(object.form.name).toBe('Koko')
+    })
+
+    test('glue object attributes initialize named nested form proxies', () => {
+        registerProxyClass('form', GlueFormProxy)
+        const object = new GlueModelProxy({
+            http: http(),
+            policy: createPolicy({attributes: ['id', 'forms', 'forms.edit']}),
+            state: {
+                id: {value: 1},
+                'forms.edit': createState({instance_data: {name: 'Ndume'}}),
+            },
+            metadata: createMetadata({
+                attributes: {
+                    forms: {namespace: 'container'},
+                    'forms.edit': {
+                        namespace: 'glue',
+                        policy: createPolicy({
+                            name: 'gorilla.forms.edit',
+                            namespace: 'form',
+                            attributes: ['name'],
+                        }),
+                        metadata: createMetadata({namespace: 'form'}),
+                    },
+                },
+            }),
+        })
+
+        expect(object.forms.edit).toBeInstanceOf(GlueFormProxy)
+        expect(object.forms.edit.name).toBe('Ndume')
+    })
+
     test('model fields read as primitives and rich fields are exposed through $fields', () => {
         const object = new GlueModelProxy({
             http: http(),
@@ -71,6 +147,26 @@ describe('Glue proxies', () => {
 
         expect(object.name).toBe('Ndume')
         expect(object.$fields.name.value).toBe('Ndume')
+    })
+
+    test('listeners can be removed', async () => {
+        mockOperationFetch()
+        const object = new GlueModelProxy({
+            http: http(),
+            policy: createPolicy(),
+            state: createState(),
+            metadata: createMetadata(),
+        })
+        let callCount = 0
+        const listener = () => {
+            callCount += 1
+        }
+
+        object.addListener('save', listener)
+        object.removeListener('save', listener)
+        await object.save()
+
+        expect(callCount).toBe(0)
     })
 
     test('attribute responses refresh policy, flat state, and field metadata', async () => {
@@ -224,6 +320,55 @@ describe('Glue proxies', () => {
         expect(filtered.items).toHaveLength(2)
         expect(filtered.items[0]).toBeInstanceOf(GlueModelProxy)
         expect(filtered.items[0].name).toBe('gorillas.1')
+    })
+
+    test('querysets get one model proxy by pk', async () => {
+        const object = querySet()
+        let attribute
+        let kwargs
+        global.fetch = async (_url, options) => {
+            attribute = options.body.get('attribute')
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return new Response(JSON.stringify({
+                result: modelRow('gorillas.3', 3),
+                state: {},
+                policy: queryPolicy(),
+                metadata: queryMetadata(),
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const item = await object.get(3)
+
+        expect(attribute).toBe('get')
+        expect(kwargs).toEqual({pk: 3})
+        expect(item).toBeInstanceOf(GlueModelProxy)
+        expect(item.$collection).toBe(object)
+        expect(item.name).toBe('gorillas.3')
+    })
+
+    test('querysets get updates an existing cached model proxy in place', async () => {
+        const object = querySet()
+        const originalRows = [modelRow('gorillas.3', 3, {name: 'Original'})]
+        global.fetch = async () => new Response(JSON.stringify({
+            result: {items: originalRows},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        await object.all()
+        const originalItem = object.items[0]
+
+        global.fetch = async () => new Response(JSON.stringify({
+            result: modelRow('gorillas.3', 3, {name: 'Updated'}),
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+
+        const reloadedItem = await object.get(3)
+
+        expect(reloadedItem).toBe(originalItem)
+        expect(originalItem.name).toBe('Updated')
     })
 
     test('querysets merge chained query parameters before all executes', async () => {
