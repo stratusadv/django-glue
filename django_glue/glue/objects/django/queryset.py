@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import pickle
 from functools import cached_property
-from typing import Any, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
 from django import forms
 
@@ -12,7 +12,7 @@ from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
-from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
 from django_glue.glue.policy import GluePolicy
@@ -32,15 +32,19 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         *,
         name: str,
         access: GlueAccess,
-        fields: Sequence[str] = (),
-        exclude: Sequence[str] = (),
+        fields: Sequence[str] | Literal['__all__'] = (),
+        exclude: Sequence[str] | Literal['__all__'] = (),
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.queryset = queryset
-        self.fields = tuple(fields)
-        self.exclude = tuple(exclude)
+        self.fields = (
+            fields if fields == ALL_FIELDS else tuple(fields)
+        )
+        self.exclude = (
+            exclude if exclude == ALL_FIELDS else tuple(exclude)
+        )
 
         if not self.fields and not self.exclude:
             msg = 'QuerySetGlue requires at least one of fields or exclude.'
@@ -66,14 +70,15 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @cached_property
     def _included_fields(self) -> list[str]:
-        names = self.fields or tuple(
+        all_field_names = tuple(
             field.name
             for field in [
                 *self.queryset.model._meta.fields,
                 *self.queryset.model._meta.many_to_many
             ]
         )
-        excluded = set(self.exclude)
+        names = all_field_names if self.fields == ALL_FIELDS or not self.fields else self.fields
+        excluded = set(all_field_names) if self.exclude == ALL_FIELDS else set(self.exclude)
         return [
             name
             for name in names
@@ -189,6 +194,11 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
     @Attribute(access=GlueAccess.VIEW)
     def get(self, pk: Any) -> dict[str, Any]:
         return self._build_child_model_payload(self.queryset.get(pk=pk))
+
+    @Attribute(access=GlueAccess.VIEW)
+    def new(self, initial: dict | None = None) -> dict[str, Any]:
+        instance = self.queryset.model(**initial) if initial else self.queryset.model()
+        return self._build_child_model_payload(instance=instance)
 
     def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
         child_name = f'{self.policy.name}.{instance.pk}'

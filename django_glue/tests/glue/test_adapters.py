@@ -103,6 +103,186 @@ class NestedDashboardGlue(BaseGlue):
         return cls()
 
 
+class AllFieldsTestCase(TestCase):
+    """Tests for ALL_FIELDS constant behavior in ModelGlue and QuerySetGlue."""
+
+    def setUp(self):
+        self.gorilla = Gorilla.objects.create(
+            name='Koko',
+            description='Leader',
+            age=18,
+            weight=200.0,
+            height=1.8,
+        )
+
+    def test_model_all_fields_includes_all_model_fields(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+        )
+
+        included = glue_object._included_fields
+        # Should include standard fields
+        self.assertIn('name', included)
+        self.assertIn('description', included)
+        self.assertIn('age', included)
+        self.assertIn('weight', included)
+        self.assertIn('height', included)
+        self.assertIn('id', included)
+        # Should NOT include binary fields (globally excluded)
+        self.assertNotIn('signature', included)
+
+    def test_model_all_fields_excludes_binary_fields_silently(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        # Should not raise an error even though the model has a BinaryField
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+        )
+
+        self.assertNotIn('signature', glue_object._included_fields)
+        self.assertNotIn('signature', glue_object.attributes)
+
+    def test_model_all_fields_with_exclude(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+            exclude=['description', 'age'],
+        )
+
+        included = glue_object._included_fields
+        self.assertIn('name', included)
+        self.assertNotIn('description', included)
+        self.assertNotIn('age', included)
+
+    def test_model_exclude_all_fields(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            exclude=ALL_FIELDS,
+        )
+
+        # All model fields should be excluded
+        self.assertEqual(glue_object._included_fields, [])
+
+    def test_model_fields_with_exclude_all_fields(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['name', 'age'],
+            exclude=ALL_FIELDS,
+        )
+
+        # Explicit fields minus all fields = empty
+        self.assertEqual(glue_object._included_fields, [])
+
+    def test_queryset_all_fields_includes_all_model_fields(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+        )
+
+        included = glue_object._included_fields
+        self.assertIn('name', included)
+        self.assertIn('description', included)
+        self.assertIn('age', included)
+        # Should NOT include binary fields
+        self.assertNotIn('signature', included)
+
+    def test_queryset_all_fields_with_exclude(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+            exclude=['description', 'age'],
+        )
+
+        included = glue_object._included_fields
+        self.assertIn('name', included)
+        self.assertNotIn('description', included)
+        self.assertNotIn('age', included)
+
+    def test_queryset_exclude_all_fields(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            exclude=ALL_FIELDS,
+        )
+
+        self.assertEqual(glue_object._included_fields, [])
+
+    def test_all_fields_is_exported_from_main_module(self):
+        from django_glue import ALL_FIELDS
+
+        self.assertEqual(ALL_FIELDS, '__all__')
+
+    def test_model_all_fields_builds_valid_state(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+        ))
+
+        state = glue_object.state
+        self.assertEqual(state['name']['value'], 'Koko')
+        self.assertEqual(state['age']['value'], 18)
+        self.assertNotIn('signature', state)
+
+    def test_model_all_fields_builds_valid_metadata(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=ALL_FIELDS,
+        ))
+
+        metadata = glue_object.metadata.to_payload()
+        self.assertIn('name', metadata['attributes'])
+        self.assertIn('age', metadata['attributes'])
+        self.assertNotIn('signature', metadata['attributes'])
+
+    def test_queryset_all_fields_query_returns_valid_payloads(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=ALL_FIELDS,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy  # Build policy
+
+        result = glue_object.query_with_params(kwargs={})
+
+        self.assertEqual(len(result['items']), 1)
+        row = result['items'][0]
+        self.assertEqual(row['state']['name']['value'], 'Koko')
+        self.assertNotIn('signature', row['state'])
+
+
 class GluePolicyTestCase(TestCase):
     def test_signed_policy_validates_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({

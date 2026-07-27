@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Mapping, Sequence, TYPE_CHECKING, cast
+from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from django.db.models import Model
     from django.db import models
 
+ALL_FIELDS: Literal['__all__'] = '__all__'
+
 
 class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
@@ -35,35 +37,42 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         *,
         name: str,
         access: GlueAccess,
-        fields: Sequence[str] = (),
-        exclude: Sequence[str] = (),
+        fields: Sequence[str] | Literal['__all__'] = (),
+        exclude: Sequence[str] | Literal['__all__'] = (),
         source_queryset: models.QuerySet | None = None,
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
-        self.fields = tuple(fields)
-        self.exclude = tuple(exclude)
+        self.fields = (
+            fields if fields == ALL_FIELDS else tuple(fields)
+        )
+        self.exclude = (
+            exclude if exclude == ALL_FIELDS else tuple(exclude)
+        )
 
         if not self.fields and not self.exclude:
             msg = 'ModelGlue requires at least one of fields or exclude.'
             raise ValueError(msg)
 
-        binary_fields = [
-            field_name
-            for field_name in self.fields
-            if self.instance._meta.get_field(field_name).get_internal_type()
-            in self.globally_excluded_field_types
-        ]
-        if binary_fields:
-            msg = (
-                'Binary fields cannot be included in ModelGlue attributes: '
-                f'{binary_fields}'
-            )
-            raise ValueError(
-                msg
-            )
+        # Only raise error for explicitly specified binary fields
+        # When __all__ is used, binary fields are silently excluded in _included_fields
+        if self.fields != ALL_FIELDS:
+            binary_fields = [
+                field_name
+                for field_name in self.fields
+                if self.instance._meta.get_field(field_name).get_internal_type()
+                in self.globally_excluded_field_types
+            ]
+            if binary_fields:
+                msg = (
+                    'Binary fields cannot be included in ModelGlue attributes: '
+                    f'{binary_fields}'
+                )
+                raise ValueError(
+                    msg
+                )
 
         self.source_queryset = source_queryset
         self.forms = self.normalize_forms(form, forms)
@@ -147,11 +156,12 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @cached_property
     def _included_fields(self) -> list[str]:
-        names = self.fields or tuple(
+        all_field_names = tuple(
             field.name
             for field in [*self.instance._meta.fields, *self.instance._meta.many_to_many]
         )
-        excluded = set(self.exclude)
+        names = all_field_names if self.fields == ALL_FIELDS or not self.fields else self.fields
+        excluded = set(all_field_names) if self.exclude == ALL_FIELDS else set(self.exclude)
         return [
             name
             for name in names
