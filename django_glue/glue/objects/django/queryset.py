@@ -88,6 +88,13 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         ]
 
     @cached_property
+    def _select_related_fields(self) -> set[str]:
+        select_related = self.queryset.query.select_related
+        if isinstance(select_related, dict):
+            return set(select_related.keys())
+        return set()
+
+    @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         model_instance = self.queryset.model()
         model_object = ModelGlue(
@@ -95,8 +102,9 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             name=f'{self.name}.__model__',
             access=self.access,
             fields=self._included_fields,
-            source_queryset=self.queryset,
+            annotations=tuple(self.queryset.query.annotations),
             forms=self.forms,
+            select_related=self._select_related_fields,
         )
         # Get field attributes from the model, excluding model's declared attributes
         field_names = {*self._included_fields, *self._annotation_names}
@@ -135,9 +143,9 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             for field in [*queryset.model._meta.fields, *queryset.model._meta.many_to_many]
         }
         fields = [
-            attr_name
-            for attr_name in policy.attributes
-            if attr_name in model_field_names
+            attr
+            for attr in policy.attributes
+            if isinstance(attr, str) and attr in model_field_names
         ]
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {})
@@ -202,18 +210,24 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
         child_name = f'{self.policy.name}.{instance.pk}'
-        # Create fresh form instances bound to this specific instance
         child_forms = {
+            # Need to rebuild the form here in order to properly bind instance data!
             name: form.__class__(instance=instance)
             for name, form in self.forms.items()
         }
+        if self.queryset.query.select_related:
+            select_related = set(self.queryset.query.select_related)
+        else:
+            select_related = set()
+
         child_object = ModelGlue(
             instance,
             name=child_name,
             access=self.policy.access,
             fields=self._included_fields,
-            source_queryset=self.queryset,
+            annotations=tuple(self.queryset.query.annotations),
             forms=child_forms,
+            select_related=select_related
         )
         child_object.request = self.request
 

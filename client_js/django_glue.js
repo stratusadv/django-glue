@@ -1,7 +1,8 @@
 import GlueClient from "./src/client"
-import { parseJsonScriptById } from "./src/utils"
+import { parseJsonScriptById, resolveUrl } from "./src/utils"
 
 globalThis.GlueClient = GlueClient
 globalThis.parseJsonScriptById = parseJsonScriptById
+globalThis.resolveUrl = resolveUrl
 
-export {GlueClient, parseJsonScriptById}
+export {GlueClient, parseJsonScriptById, resolveUrl}

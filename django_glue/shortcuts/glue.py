@@ -39,6 +39,7 @@ class Glue:
         exclude: Sequence[str] = (),
         form: ModelForm | None = None,
         forms: Mapping[str, ModelForm] | None = None,
+        select_related: Sequence[str] | None = None,
     ) -> None:
         Glue.object(
             request=request,
@@ -50,6 +51,7 @@ class Glue:
                 exclude=exclude,
                 form=form,
                 forms=forms,
+                select_related=select_related,
             ),
         )
 

@@ -73,4 +73,12 @@ function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent)
 }
 
-export {cloneValue, isPlainObject, parseFieldValue, serializeValue, parseJsonScriptById}
+function resolveUrl(urlPathTemplate, kwargs = {}) {
+    let url = urlPathTemplate
+    for (const [key, value] of Object.entries(kwargs)) {
+        url = url.replace(`\${${key}}`, value)
+    }
+    return url
+}
+
+export {cloneValue, isPlainObject, parseFieldValue, serializeValue, parseJsonScriptById, resolveUrl}

@@ -31,7 +31,7 @@ class GlueObjectAttribute(BaseGlueAttribute):
         glue_object = self._prepare_glue_object()
         return super().metadata | {
             'namespace': 'glue',
-            'policy': glue_object.policy.model_dump(),
+            'glue_namespace': glue_object.namespace,
             'metadata': glue_object.metadata.to_payload(),
         }
 

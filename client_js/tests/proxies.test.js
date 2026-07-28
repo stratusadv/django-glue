@@ -61,63 +61,86 @@ describe('Glue proxies', () => {
             namespace: 'form',
             attributes: ['name', 'validate'],
         })
-        const formMetadata = createMetadata({
+        const formMetadata = {
             namespace: 'form',
             attributes: {
+                name: {namespace: 'field', type: 'CharField'},
                 validate: {namespace: 'callable'},
             },
-        })
+        }
+        // Nested policies are now objects in policy.attributes
+        // State keys use relative names (without parent prefix)
         const object = new GlueModelProxy({
             http: http(),
-            policy: createPolicy({attributes: ['id', 'form', 'forms', 'forms.default']}),
+            policy: createPolicy({attributes: [
+                'id',
+                'forms',
+                formPolicy,  // nested policy for forms.default
+            ]}),
             state: {
                 id: {value: 1},
-                form: createState({instance_data: {name: 'Koko'}}),
-                'forms.default': createState({instance_data: {name: 'Koko'}}),
+                'forms.default': {name: {value: 'Koko'}},
             },
             metadata: createMetadata({
                 attributes: {
+                    id: {namespace: 'field', type: 'IntegerField'},
+                    forms: {namespace: 'container'},
+                    // 'form' is an alias - name points to the target
                     form: {
+                        name: 'forms.default',
                         namespace: 'glue',
-                        policy: formPolicy,
+                        glue_namespace: 'form',
                         metadata: formMetadata,
                     },
-                    forms: {namespace: 'container'},
                     'forms.default': {
                         namespace: 'glue',
-                        policy: formPolicy,
+                        glue_namespace: 'form',
                         metadata: formMetadata,
                     },
                 },
             }),
         })
 
-        expect(object.form).toBeInstanceOf(GlueFormProxy)
         expect(object.forms.default).toBeInstanceOf(GlueFormProxy)
+        expect(object.form).toBeInstanceOf(GlueFormProxy)
         expect(object.forms.default).toBe(object.form)
         expect(object.form.name).toBe('Koko')
     })
 
     test('glue object attributes initialize named nested form proxies', () => {
         registerProxyClass('form', GlueFormProxy)
+        const formPolicy = createPolicy({
+            name: 'gorilla.forms.edit',
+            namespace: 'form',
+            attributes: ['name'],
+        })
+        const formMetadata = {
+            namespace: 'form',
+            attributes: {
+                name: {namespace: 'field', type: 'CharField'},
+            },
+        }
+        // Nested policies are now objects in policy.attributes
+        // State keys use relative names (without parent prefix)
         const object = new GlueModelProxy({
             http: http(),
-            policy: createPolicy({attributes: ['id', 'forms', 'forms.edit']}),
+            policy: createPolicy({attributes: [
+                'id',
+                'forms',
+                formPolicy,  // nested policy for forms.edit
+            ]}),
             state: {
                 id: {value: 1},
-                'forms.edit': createState({instance_data: {name: 'Ndume'}}),
+                'forms.edit': {name: {value: 'Ndume'}},
             },
             metadata: createMetadata({
                 attributes: {
+                    id: {namespace: 'field', type: 'IntegerField'},
                     forms: {namespace: 'container'},
                     'forms.edit': {
                         namespace: 'glue',
-                        policy: createPolicy({
-                            name: 'gorilla.forms.edit',
-                            namespace: 'form',
-                            attributes: ['name'],
-                        }),
-                        metadata: createMetadata({namespace: 'form'}),
+                        glue_namespace: 'form',
+                        metadata: formMetadata,
                     },
                 },
             }),
@@ -395,5 +418,215 @@ describe('Glue proxies', () => {
             order_by: 'name',
             slice: {start: 0, stop: 10},
         })
+    })
+})
+
+describe('Foreign key proxy handling', () => {
+    test('eager FK creates nested proxy with loaded state', () => {
+        registerProxyClass('model', GlueModelProxy)
+
+        // Parent model state (nested in the child's state)
+        const parentState = {
+            id: {value: 1, errors: []},
+            name: {value: 'Parent Task', errors: []},
+        }
+
+        // Child model with eager-loaded parent
+        // Note: When FK has a value, the nested policy REPLACES 'parent' string in attributes
+        const childPolicy = createPolicy({
+            name: 'child',
+            namespace: 'model',
+            attributes: [
+                'id',
+                'title',
+                'parent_id',
+                // Nested policy replaces 'parent' string
+                createPolicy({
+                    name: 'child.parent',
+                    namespace: 'model',
+                    attributes: ['id', 'name', 'load'],
+                    identity: {target_pk: 1, pk_field_name: 'id'},
+                }),
+            ],
+            identity: {target_pk: 2, pk_field_name: 'id'},
+        })
+
+        const childMetadata = createMetadata({
+            attributes: {
+                id: {namespace: 'field', type: 'IntegerField'},
+                title: {namespace: 'field', type: 'CharField'},
+                parent_id: {namespace: 'field', type: 'IntegerField'},
+                parent: {
+                    namespace: 'related_field',
+                    lazy: false,
+                    fk_attname: 'parent_id',
+                    pk_field: 'id',
+                    glue_namespace: 'model',
+                    metadata: {
+                        attributes: {
+                            id: {namespace: 'field', type: 'IntegerField'},
+                            name: {namespace: 'field', type: 'CharField'},
+                            load: {namespace: 'callable'},
+                        },
+                    },
+                },
+            },
+        })
+
+        const childState = {
+            id: {value: 2, errors: []},
+            title: {value: 'Child Task', errors: []},
+            parent_id: {value: 1, errors: []},
+            parent: parentState,  // Eager: nested state directly
+        }
+
+        const proxy = new GlueModelProxy({
+            http: http(),
+            policy: childPolicy,
+            state: childState,
+            metadata: childMetadata,
+        })
+        proxy._loaded = true
+
+        // parent should be a nested model proxy
+        expect(proxy.parent).toBeInstanceOf(GlueModelProxy)
+        // Nested proxy should be marked as loaded (has state)
+        expect(proxy.parent._loaded).toBe(true)
+        // Access fields without triggering load
+        expect(proxy.parent.id).toBe(1)
+        expect(proxy.parent.name).toBe('Parent Task')
+        // parent_id should return raw FK value
+        expect(proxy.parent_id).toBe(1)
+    })
+
+    test('lazy FK creates nested proxy that loads on access', async () => {
+        registerProxyClass('model', GlueModelProxy)
+
+        // Child model with lazy parent (no state, will load on access)
+        // Note: When FK has a value, the nested policy REPLACES 'parent' string in attributes
+        const childPolicy = createPolicy({
+            name: 'child',
+            namespace: 'model',
+            attributes: [
+                'id',
+                'title',
+                'parent_id',
+                // Nested policy replaces 'parent' string (needed for lazy loading)
+                createPolicy({
+                    name: 'child.parent',
+                    namespace: 'model',
+                    attributes: ['id', 'name', 'load'],
+                    identity: {target_pk: 1, pk_field_name: 'id'},
+                }),
+            ],
+            identity: {target_pk: 2, pk_field_name: 'id'},
+        })
+
+        const childMetadata = createMetadata({
+            attributes: {
+                id: {namespace: 'field', type: 'IntegerField'},
+                title: {namespace: 'field', type: 'CharField'},
+                parent_id: {namespace: 'field', type: 'IntegerField'},
+                parent: {
+                    namespace: 'related_field',
+                    lazy: true,
+                    fk_attname: 'parent_id',
+                    pk_field: 'id',
+                    glue_namespace: 'model',
+                    metadata: {
+                        attributes: {
+                            id: {namespace: 'field', type: 'IntegerField'},
+                            name: {namespace: 'field', type: 'CharField'},
+                            load: {namespace: 'callable'},
+                        },
+                    },
+                },
+            },
+        })
+
+        const childState = {
+            id: {value: 2, errors: []},
+            title: {value: 'Child Task', errors: []},
+            parent_id: {value: 1, errors: []},
+            parent: {},  // Lazy: empty state
+        }
+
+        // Mock fetch for load call
+        let loadCalled = false
+        global.fetch = async () => {
+            loadCalled = true
+            return new Response(JSON.stringify({
+                state: {
+                    id: {value: 1, errors: []},
+                    name: {value: 'Loaded Parent', errors: []},
+                },
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const proxy = new GlueModelProxy({
+            http: http(),
+            policy: childPolicy,
+            state: childState,
+            metadata: childMetadata,
+        })
+        proxy._loaded = true
+
+        // parent should be a nested proxy
+        expect(proxy.parent).toBeInstanceOf(GlueModelProxy)
+        // Nested proxy should NOT be marked as loaded (empty state)
+        expect(proxy.parent._loaded).toBe(false)
+        // parent_id should still be available
+        expect(proxy.parent_id).toBe(1)
+
+        // Accessing a field should trigger load
+        const _name = proxy.parent.name
+        expect(loadCalled).toBe(true)
+    })
+
+    test('null FK returns null for nested proxy', () => {
+        registerProxyClass('model', GlueModelProxy)
+
+        // Child with no parent (null FK)
+        // Note: When FK is null, there's no nested policy - only the 'parent' string
+        const childPolicy = createPolicy({
+            name: 'child',
+            namespace: 'model',
+            attributes: ['id', 'title', 'parent_id', 'parent'],
+            identity: {target_pk: 2, pk_field_name: 'id'},
+        })
+
+        const childMetadata = createMetadata({
+            attributes: {
+                id: {namespace: 'field', type: 'IntegerField'},
+                title: {namespace: 'field', type: 'CharField'},
+                parent_id: {namespace: 'field', type: 'IntegerField'},
+                parent: {
+                    namespace: 'related_field',
+                    lazy: true,
+                    fk_attname: 'parent_id',
+                    pk_field: 'id',
+                },
+            },
+        })
+
+        const childState = {
+            id: {value: 2, errors: []},
+            title: {value: 'Child Task', errors: []},
+            parent_id: {value: null, errors: []},
+            // No parent state since FK is null
+        }
+
+        const proxy = new GlueModelProxy({
+            http: http(),
+            policy: childPolicy,
+            state: childState,
+            metadata: childMetadata,
+        })
+        proxy._loaded = true
+
+        // No nested policy, so parent should be null
+        expect(proxy.parent).toBe(null)
+        // parent_id should be null
+        expect(proxy.parent_id).toBe(null)
     })
 })

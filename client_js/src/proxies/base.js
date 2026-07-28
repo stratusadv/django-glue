@@ -10,7 +10,7 @@ function isPlainObject(value) {
 }
 
 class BaseGlueProxy {
-    constructor({http, policy, state = {}, metadata = {}}) {
+    constructor({http, policy, state = {}, metadata = {}, owner = null}) {
         this._http = http
         this._policy = policy
         this._name = policy?.name
@@ -20,7 +20,19 @@ class BaseGlueProxy {
         this._onMessage = null
         this._onError = null
 
+        // Non-enumerable to prevent circular reference issues during serialization
+        Object.defineProperty(this, '_owner', {
+            value: owner,
+            writable: true,
+            enumerable: false,
+            configurable: true,
+        })
+
         this._initializeAttributes()
+    }
+
+    get $owner() {
+        return this._owner
     }
 
     addListener(attribute, callback, when = 'after') {
@@ -131,7 +143,6 @@ class BaseGlueProxy {
         this._attributeBuilders = {
             container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
             callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
-            glue: (owner, name, qualName, meta) => this._initializeGlueObjectAttribute(owner, name, qualName, meta),
             state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta),
         }
     }
@@ -139,15 +150,54 @@ class BaseGlueProxy {
     _initializeAttributes() {
         this._configureAttributeInitializers();
 
-        (this._policy?.attributes || []).forEach(attributeQualName => {
-            const attributeMetadata = this._metadata?.attributes?.[attributeQualName]
-
-            if (!attributeMetadata) {
-                return
+        (this._policy?.attributes || []).forEach(attribute => {
+            if (typeof attribute === 'string') {
+                const attributeMetadata = this._metadata?.attributes?.[attribute]
+                if (attributeMetadata) {
+                    this._initializeAttribute(attribute, attributeMetadata)
+                }
+            } else if (attribute?.name) {
+                // Nested policy object - look up metadata by relative name
+                const parentPrefix = this._name ? `${this._name}.` : ''
+                const relativeName = attribute.name.startsWith(parentPrefix)
+                    ? attribute.name.slice(parentPrefix.length)
+                    : attribute.name
+                const attributeMetadata = this._metadata?.attributes?.[relativeName] || {}
+                this._initializeGlueObjectAttribute(attribute, attributeMetadata)
             }
-
-            this._initializeAttribute(attributeQualName, attributeMetadata)
         })
+
+        // Set up aliases for glue object attributes (e.g., 'form' -> 'forms.default')
+        this._initializeGlueObjectAliases()
+    }
+
+    _initializeGlueObjectAliases() {
+        const metadataAttrs = this._metadata?.attributes || {}
+        for (const [attrKey, attrMeta] of Object.entries(metadataAttrs)) {
+            if (attrMeta.namespace !== 'glue') continue
+            // If metadata.name differs from the attribute key, it's an alias
+            const targetName = attrMeta.name
+            if (!targetName || targetName === attrKey) continue
+
+            const parts = attrKey.split('.')
+            const aliasName = parts.pop()
+            const owner = this._resolveAttributeOwner(parts)
+
+            if (owner[aliasName] !== undefined) continue
+
+            const targetParts = targetName.split('.')
+            const targetAttrName = targetParts.pop()
+            const targetOwner = this._resolveAttributeOwner(targetParts)
+
+            // Create alias property that returns the same proxy
+            Object.defineProperty(owner, aliasName, {
+                get() {
+                    return targetOwner[targetAttrName]
+                },
+                enumerable: true,
+                configurable: true,
+            })
+        }
     }
 
     _initializeAttribute(attributeQualName, attributeMetadata) {
@@ -180,28 +230,49 @@ class BaseGlueProxy {
         })
     }
 
-    _initializeGlueObjectAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-        const nestedPolicy = attributeMetadata.policy
+    _initializeGlueObjectAttribute(attributePolicy, attributeMetadata) {
+        const attributeQualName = attributePolicy.name
+        // Strip parent name prefix if present (e.g., 'gorilla.forms.default' -> 'forms.default')
+        const parentPrefix = this._name ? `${this._name}.` : ''
+        const relativeName = attributeQualName.startsWith(parentPrefix)
+            ? attributeQualName.slice(parentPrefix.length)
+            : attributeQualName
+
+        const parts = relativeName.split('.')
+        const attributeName = parts.pop()
+        const owner = this._resolveAttributeOwner(parts)
+
+        if (owner[attributeName] !== undefined) {
+            return
+        }
+
         const nestedMetadata = attributeMetadata.metadata || {}
-        const nestedNamespace = nestedPolicy?.namespace || nestedMetadata?.namespace
+        const nestedNamespace = attributeMetadata.glue_namespace || attributePolicy.namespace
         const ProxyClass = getProxyClass(nestedNamespace)
 
-        if (!nestedPolicy?.name || !ProxyClass) {
+        if (!ProxyClass) {
             return
         }
 
         const proxy = this
-        const cacheKey = `__glue_object__${nestedPolicy.name}`
+        const cacheKey = `__glue_object__${attributePolicy.name}`
 
         Object.defineProperty(owner, attributeName, {
             get() {
                 if (!proxy[cacheKey]) {
-                    proxy[cacheKey] = new ProxyClass({
+                    const nestedState = proxy._state?.[relativeName] || {}
+                    const nestedProxy = new ProxyClass({
                         http: proxy._http,
-                        policy: nestedPolicy,
-                        state: proxy._state?.[attributeQualName] || {},
+                        policy: attributePolicy,
+                        state: nestedState,
                         metadata: nestedMetadata,
+                        owner: proxy,
                     })
+                    // Mark as loaded if state was provided (eager loading)
+                    if (Object.keys(nestedState).length > 0) {
+                        nestedProxy._loaded = true
+                    }
+                    proxy[cacheKey] = nestedProxy
                 }
 
                 return proxy[cacheKey]

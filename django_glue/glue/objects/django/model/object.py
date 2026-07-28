@@ -10,7 +10,7 @@ from django.forms.models import model_to_dict
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import Attribute, BaseGlueAttribute, GlueObjectAttribute, ReadableAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.attributes.django.model import ModelFieldAttribute
+from django_glue.glue.attributes.django.model import ForeignKeyFieldAttribute, ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
@@ -39,9 +39,10 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         access: GlueAccess,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
-        source_queryset: models.QuerySet | None = None,
+        annotations: Sequence[str] = (),
         form: forms.ModelForm | None = None,
-        forms: Mapping[str, forms.ModelForm] | None = None
+        forms: Mapping[str, forms.ModelForm] | None = None,
+        select_related: Sequence[str] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
@@ -74,7 +75,9 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
                     msg
                 )
 
-        self.source_queryset = source_queryset
+        self.annotations = annotations
+        self.select_related = select_related or set()
+
         self.forms = self.normalize_forms(form, forms)
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
@@ -93,21 +96,46 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
+        if self.select_related:
+            identity['select_related'] = list(self.select_related)
 
         return identity
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:
-        attributes = super().attributes | {
-            field_name: ModelFieldAttribute(
-                owner=self,
-                name=field_name,
-                field=self.instance._meta.get_field(field_name),
-                instance=self.instance,
-                access=self._field_access(field_name),
-            )
-            for field_name in self._included_fields
-        }
+        attributes = super().attributes
+
+        for field_name in self._included_fields:
+            field = self.instance._meta.get_field(field_name)
+
+            # Use ForeignKeyFieldAttribute for FK/O2O fields
+            if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
+                # Add the attname (e.g., parent_id) as a regular field for the raw FK value
+                attributes[field.attname] = ModelFieldAttribute(
+                    owner=self,
+                    name=field.attname,
+                    field=field,
+                    instance=self.instance,
+                    access=self._field_access(field_name),
+                )
+                # Add the FK field (e.g., parent) for the nested object
+                attributes[field_name] = ForeignKeyFieldAttribute(
+                    owner=self,
+                    name=field_name,
+                    field=field,
+                    instance=self.instance,
+                    access=self._field_access(field_name),
+                    is_cached=self._is_fk_cached(field_name),
+                )
+            else:
+                attributes[field_name] = ModelFieldAttribute(
+                    owner=self,
+                    name=field_name,
+                    field=field,
+                    instance=self.instance,
+                    access=self._field_access(field_name),
+                )
+
         attributes.update({
             annotation_name: ReadableAttribute(
                 owner=self,
@@ -125,7 +153,8 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         default_attribute = None
 
         for form_name, form in self.forms.items():
-            form.instance = self.instance
+            # Need to rebuild the form here in order to properly bind instance data!
+            form = form.__class__(instance=self.instance)
 
             attribute_name = f'forms.{form_name}'
             form_attribute = GlueObjectAttribute(
@@ -150,9 +179,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @cached_property
     def _annotation_names(self) -> tuple[str, ...]:
-        if self.source_queryset is None:
-            return ()
-        return tuple(self.source_queryset.query.annotations)
+        return tuple(self.annotations)
 
     @cached_property
     def _included_fields(self) -> list[str]:
@@ -173,11 +200,12 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
     @property
     def state(self) -> dict[str, Any]:
         self._validate()
-        return {
-            name: attribute.state
-            for name, attribute in self.attributes.items()
-            if hasattr(attribute, 'state')
-        }
+        state = {}
+        for name, attribute in self.attributes.items():
+            if hasattr(attribute, 'state'):
+                state[name] = attribute.state
+
+        return state
 
     def _validate(self) -> None:
         """Run validation and populate _field_errors."""
@@ -200,6 +228,13 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         field = self.instance._meta.get_field(field_name)
         return GlueAccess.CHANGE if field.editable else GlueAccess.VIEW
 
+    def _is_fk_cached(self, field_name: str) -> bool:
+        """Check if a FK field's related instance is already cached (via select_related)."""
+        if field_name in self.select_related:
+            return True
+        field = self.instance._meta.get_field(field_name)
+        return field.is_cached(self.instance)
+
     @classmethod
     def _from_policy(cls, policy: GluePolicy) -> ModelGlue:
         model_class = cast(
@@ -208,19 +243,34 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         )
 
         target_pk = policy.identity.get('target_pk')
+        select_related = policy.identity.get('select_related', [])
 
-        instance = model_class() if target_pk is None else model_class.objects.get(pk=target_pk)
+        if target_pk is None:
+            instance = model_class()
+        else:
+            queryset = model_class.objects.all()
+            if select_related:
+                queryset = queryset.select_related(*select_related)
+            instance = queryset.get(pk=target_pk)
 
         model_field_names = {
             field.name
             for field in [*model_class._meta.fields, *model_class._meta.many_to_many]
         }
 
-        fields = [
-            attribute_name
-            for attribute_name in policy.attributes
-            if attribute_name in model_field_names
-        ]
+        fields = []
+        for attr in policy.attributes:
+            if isinstance(attr, str):
+                if attr in model_field_names:
+                    fields.append(attr)
+            else:
+                # Nested policy - extract field name from policy name
+                # e.g., "fights.1.red_corner" -> "red_corner"
+                nested_name = attr.name
+                if nested_name.startswith(policy.name + '.'):
+                    field_name = nested_name[len(policy.name) + 1:]
+                    if field_name in model_field_names:
+                        fields.append(field_name)
 
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {}),
@@ -233,6 +283,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
             access=policy.access,
             fields=fields,
             forms=forms,
+            select_related=select_related,
         )
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
@@ -275,8 +326,8 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         """Get a file from request.FILES for a field."""
         if not self.request or not self.request.FILES:
             return None
+
         return self.request.FILES.get(field_name)
-        return None
 
     @Attribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:
@@ -284,7 +335,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @Attribute(access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
-        try:    
+        try:
             self.instance.full_clean()
             self.instance.save()
             self._apply_m2m_state(self._loaded_state or {})
@@ -331,7 +382,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         if related_model is None:
             return []
 
-        def serialize_choice(obj) -> dict[str, Any]:
+        def serialize_choice(obj: Model) -> dict[str, Any]:
             choice = {'pk': obj.pk, '__str__': f'{obj}'}
             for choice_field in choice_fields or []:
                 choice[choice_field] = getattr(obj, choice_field)
@@ -340,6 +391,5 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         return [serialize_choice(obj) for obj in related_model.objects.all()]
 
     @Attribute(access=GlueAccess.DELETE)
-    def delete(self) -> dict[str, Any]:
+    def delete(self) -> None:
         self.instance.delete()
-        return {}

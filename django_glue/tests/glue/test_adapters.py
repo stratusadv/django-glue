@@ -26,6 +26,7 @@ from django_glue.glue.attributes import Attribute, ContainerAttribute, GlueObjec
 from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
 from django_glue.glue.schemas import AttributeCallResolverContext
 from test_project.gorilla.models import Gorilla, Skill
+from test_project.fight.models import Fight
 from test_project.test_forms import ContactForm, TestModelForm
 
 
@@ -44,6 +45,60 @@ def with_request(glue_object, session_key='test-session'):
     """Set a mock request on the glue object and return it."""
     glue_object.request = request_with_session(session_key)
     return glue_object
+
+
+def policy_has_attribute(policy_or_dict, attribute_name):
+    """Check if a policy has an attribute by name (handles nested policies).
+
+    Works with both GluePolicy objects and serialized dicts.
+    Handles 'form' as alias for 'forms.default'.
+    """
+    if hasattr(policy_or_dict, 'attributes'):
+        attributes = policy_or_dict.attributes
+    else:
+        attributes = policy_or_dict.get('attributes', [])
+
+    # 'form' is an alias for 'forms.default'
+    if attribute_name == 'form':
+        attribute_name = 'forms.default'
+
+    for attr in attributes:
+        if isinstance(attr, str):
+            if attr == attribute_name:
+                return True
+        elif isinstance(attr, dict):
+            # Serialized nested policy
+            if attr.get('name', '').endswith(f'.{attribute_name}'):
+                return True
+        elif hasattr(attr, 'name'):
+            # GluePolicy object
+            if attr.name.endswith(f'.{attribute_name}'):
+                return True
+    return False
+
+
+def policy_attribute_names(policy_or_dict):
+    """Get attribute names from policy, extracting names from nested policies.
+
+    Works with both GluePolicy objects and serialized dicts.
+    """
+    if hasattr(policy_or_dict, 'attributes'):
+        attributes = policy_or_dict.attributes
+    else:
+        attributes = policy_or_dict.get('attributes', [])
+
+    names = []
+    for attr in attributes:
+        if isinstance(attr, str):
+            names.append(attr)
+        elif isinstance(attr, dict):
+            # Serialized nested policy - extract last part of name
+            name = attr.get('name', '')
+            names.append(name.split('.')[-1] if '.' in name else name)
+        elif hasattr(attr, 'name'):
+            # GluePolicy object - extract last part of name
+            names.append(attr.name.split('.')[-1] if '.' in attr.name else attr.name)
+    return names
 
 
 class NestedStatsGlue(BaseGlue):
@@ -541,16 +596,13 @@ class DjangoModelGlueObjectTestCase(TestCase):
         metadata = glue_object.metadata.to_payload()
         state = glue_object.state
 
-        self.assertIn('form', policy.attributes)
-        self.assertIn('forms.default', policy.attributes)
+        # 'form' is an alias for 'forms.default', both map to same nested policy
+        self.assertTrue(policy_has_attribute(policy, 'form'))
+        self.assertTrue(policy_has_attribute(policy, 'forms.default'))
         self.assertIsInstance(glue_object.attributes['form'], GlueObjectAttribute)
         self.assertIs(glue_object.attributes['form'], glue_object.attributes['forms.default'])
         self.assertEqual(metadata['attributes']['form']['namespace'], 'glue')
-        self.assertEqual(metadata['attributes']['form']['policy']['namespace'], 'form')
-        self.assertEqual(
-            metadata['attributes']['form']['policy']['name'],
-            f'{glue_object.name}.forms.default',
-        )
+        self.assertEqual(metadata['attributes']['form']['glue_namespace'], 'form')
         self.assertEqual(state['form']['name']['value'], 'Koko')
         self.assertEqual(state['forms.default']['name']['value'], 'Koko')
 
@@ -565,10 +617,10 @@ class DjangoModelGlueObjectTestCase(TestCase):
         policy = glue_object.policy
         metadata = glue_object.metadata.to_payload()
 
-        self.assertNotIn('form', policy.attributes)
-        self.assertIn('forms.edit', policy.attributes)
+        self.assertFalse(policy_has_attribute(policy, 'form'))
+        self.assertTrue(policy_has_attribute(policy, 'forms.edit'))
         self.assertEqual(metadata['attributes']['forms.edit']['namespace'], 'glue')
-        self.assertEqual(metadata['attributes']['forms.edit']['policy']['namespace'], 'form')
+        self.assertEqual(metadata['attributes']['forms.edit']['glue_namespace'], 'form')
 
     def test_model_rejects_duplicate_default_form_class(self):
         with self.assertRaisesRegex(ValueError, 'form'):
@@ -584,8 +636,8 @@ class DjangoModelGlueObjectTestCase(TestCase):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
 
         self.assertNotIn('form_identities', glue_object.policy.identity)
-        self.assertNotIn('form', glue_object.policy.attributes)
-        self.assertNotIn('forms.default', glue_object.policy.attributes)
+        self.assertFalse(policy_has_attribute(glue_object.policy, 'form'))
+        self.assertFalse(policy_has_attribute(glue_object.policy, 'forms.default'))
 
     def test_nested_base_glue_attributes_build_container_metadata(self):
         glue_object = with_request(NestedDashboardGlue())
@@ -796,16 +848,12 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         result = glue_object.query_with_params(kwargs={})
 
         row = result['items'][0]
-        row_policy_attributes = row['policy']['attributes']
+        row_policy = row['policy']
         row_metadata = row['metadata']['attributes']
-        self.assertIn('form', row_policy_attributes)
-        self.assertIn('forms.default', row_policy_attributes)
+        self.assertTrue(policy_has_attribute(row_policy, 'form'))
+        self.assertTrue(policy_has_attribute(row_policy, 'forms.default'))
         self.assertEqual(row_metadata['form']['namespace'], 'glue')
-        self.assertEqual(row_metadata['form']['policy']['namespace'], 'form')
-        self.assertEqual(
-            row_metadata['form']['policy']['name'],
-            f'gorillas.{gorilla.pk}.forms.default',
-        )
+        self.assertEqual(row_metadata['form']['glue_namespace'], 'form')
         self.assertEqual(row['state']['form']['name']['value'], 'Koko')
 
     def test_queryset_get_returns_child_model_proxy_payload(self):
@@ -826,7 +874,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row['policy']['namespace'], 'model')
         self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
         self.assertEqual(row['policy']['identity']['target_pk'], gorilla.pk)
-        self.assertIn('form', row['policy']['attributes'])
+        self.assertTrue(policy_has_attribute(row['policy'], 'form'))
         self.assertEqual(row['state']['name']['value'], 'Koko')
 
     def test_queryset_policy_remains_unsliced_after_query_with_params(self):
@@ -1060,3 +1108,173 @@ class CachedPropertyTestCase(TestCase):
         attrs2 = glue_object.attributes
 
         self.assertIs(attrs1, attrs2)
+
+
+class ForeignKeyFieldTestCase(TestCase):
+    """Tests for ForeignKey field handling in ModelGlue."""
+
+    def setUp(self):
+        self.red_gorilla = Gorilla.objects.create(name='Red Koko', age=25)
+        self.blue_gorilla = Gorilla.objects.create(name='Blue Bobo', age=30)
+        self.fight = Fight.objects.create(
+            name='Championship',
+            red_corner=self.red_gorilla,
+            blue_corner=self.blue_gorilla,
+        )
+
+    def test_fk_attname_included_as_separate_field_attribute(self):
+        """The FK attname (e.g., red_corner_id) should be a separate field attribute."""
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        attributes = glue_object.attributes
+
+        self.assertIn('red_corner_id', attributes)
+        self.assertIn('red_corner', attributes)
+        # Check namespace via metadata
+        self.assertEqual(attributes['red_corner_id'].metadata['namespace'], 'field')
+        self.assertEqual(attributes['red_corner'].metadata['namespace'], 'related_field')
+
+    def test_fk_attname_state_contains_raw_pk_value(self):
+        """The attname field state should contain the raw FK value."""
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        state = glue_object.state
+
+        self.assertIn('red_corner_id', state)
+        self.assertEqual(state['red_corner_id']['value'], self.red_gorilla.pk)
+
+    def test_eager_fk_includes_nested_state(self):
+        """When FK is cached (select_related), state includes nested object state."""
+        fight = Fight.objects.select_related('red_corner').get(pk=self.fight.pk)
+        glue_object = with_request(ModelGlue(
+            fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        state = glue_object.state
+
+        self.assertIn('red_corner', state)
+        self.assertIsInstance(state['red_corner'], dict)
+        self.assertIn('name', state['red_corner'])
+        self.assertEqual(state['red_corner']['name']['value'], 'Red Koko')
+
+    def test_lazy_fk_state_is_none(self):
+        """When FK is not cached (lazy), state is None for the FK field."""
+        # Clear the cached related instance
+        fight = Fight.objects.get(pk=self.fight.pk)
+        glue_object = with_request(ModelGlue(
+            fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        state = glue_object.state
+
+        # Lazy FK returns None for state (attname field has the PK)
+        self.assertIn('red_corner', state)
+        self.assertIsNone(state['red_corner'])
+
+    def test_eager_fk_includes_nested_policy(self):
+        """When FK is cached, policy includes nested policy object."""
+        fight = Fight.objects.select_related('red_corner').get(pk=self.fight.pk)
+        glue_object = with_request(ModelGlue(
+            fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        policy = glue_object.policy
+
+        # Find the nested policy for red_corner
+        nested_policies = [
+            attr for attr in policy.attributes
+            if hasattr(attr, 'name') and 'red_corner' in attr.name
+        ]
+        self.assertEqual(len(nested_policies), 1)
+        self.assertIn('fight.red_corner', nested_policies[0].name)
+
+    def test_lazy_fk_includes_nested_policy(self):
+        """When FK is lazy, policy still includes nested policy for loading."""
+        fight = Fight.objects.get(pk=self.fight.pk)
+        glue_object = with_request(ModelGlue(
+            fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        policy = glue_object.policy
+
+        # Nested policy should still exist for lazy loading
+        nested_policies = [
+            attr for attr in policy.attributes
+            if hasattr(attr, 'name') and 'red_corner' in attr.name
+        ]
+        self.assertEqual(len(nested_policies), 1)
+
+    def test_fk_metadata_includes_lazy_flag(self):
+        """FK metadata should indicate whether it's lazy or eager."""
+        # Lazy case
+        fight_lazy = Fight.objects.get(pk=self.fight.pk)
+        glue_lazy = with_request(ModelGlue(
+            fight_lazy,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        # Eager case
+        fight_eager = Fight.objects.select_related('red_corner').get(pk=self.fight.pk)
+        glue_eager = with_request(ModelGlue(
+            fight_eager,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+        ))
+
+        lazy_meta = glue_lazy.metadata.to_payload()['attributes']['red_corner']
+        eager_meta = glue_eager.metadata.to_payload()['attributes']['red_corner']
+
+        self.assertTrue(lazy_meta['lazy'])
+        self.assertFalse(eager_meta['lazy'])
+
+    def test_null_fk_has_no_nested_policy(self):
+        """When FK value is null, no nested policy should be created."""
+        # winner is null by default
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=['name', 'winner'],
+        ))
+
+        policy = glue_object.policy
+
+        # No nested policy for null FK
+        nested_policies = [
+            attr for attr in policy.attributes
+            if hasattr(attr, 'name') and 'winner' in attr.name
+        ]
+        self.assertEqual(len(nested_policies), 0)
+
+        # But winner should still be in attributes as a string
+        string_attrs = [attr for attr in policy.attributes if isinstance(attr, str)]
+        self.assertIn('winner', string_attrs)
+
+    def test_null_fk_attname_state_is_none(self):
+        """When FK is null, attname field state should be None."""
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=['name', 'winner'],
+        ))
+
+        state = glue_object.state
+
+        self.assertIn('winner_id', state)
+        self.assertIsNone(state['winner_id']['value'])
