@@ -25,25 +25,43 @@
 - [X] Alpha v1 continued
 - [X] Template proxy
 - [X] Function proxy
-- [ ] Additional proxy features
-- [ ] Performance improvements
-- [ ] Staging Level Testing in External Projects
+- [X] Additional proxy features
+- [X] Performance improvements
+- [X] Staging Level Testing in External Projects
 
 ## June
 
-- [ ] Beta v1
-- [ ] Release candidate v1
+- [X] Release candidate v1
+- [X] Policy Based Security
 
 ## July
 
-- [ ] Stable v1.0.0
+- [X] Beta v1
+- [X] Architecture Refactor
+- [X] Glue Attributes
+- [X] Related Object Management
 
 ## August
 
+- [ ] Stable v1
+- [ ] Reverse Foreign Key Support
+- [ ] Documentation
+
 ## September
+
+- [ ] Test Project Refactor
+- [ ] Educational Videos
+- [ ] Robust Testing
 
 ## October
 
+- [ ] Many to Many Support
+- [ ] Glue Class
+
 ## November
 
+- [ ] Fine Attribute Control
+
 ## December
+
+- [ ] Large Performance Review
