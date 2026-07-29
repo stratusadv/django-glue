@@ -21,7 +21,7 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
 
         if isinstance(obj, FieldFile):
             try:
-                return {'name': obj.name}
+                return {'name': obj.name, 'size': obj.size}
                 # return {'name': obj.name, 'size': obj.size, 'url': obj.url, 'path': obj.path}
             except ValueError:
                 return None
