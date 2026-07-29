@@ -24,6 +24,12 @@ class GlueModelProxy extends FieldBackedGlueProxy {
         this.$collection?._removeModelProxy(this)
         return result
     }
+
+    async load() {
+        const result = await this._callAttribute('load')
+        this.$collection?._updateModelProxy(this)
+        return result
+    }
 }
 
 export default GlueModelProxy

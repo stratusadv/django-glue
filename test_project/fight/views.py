@@ -9,10 +9,14 @@ from test_project.fight.forms import FightForm, ContactPromoterForm
 def list_view(request: HttpRequest) -> HttpResponse:
     Glue.queryset(
         request=request,
-        target=Fight.objects.select_related(
-            'red_corner',
-            'blue_corner'
-        ).all(),
+        target=(
+            Fight.objects
+            .select_related(
+                'red_corner',
+                'blue_corner',
+            )
+            .all()
+        ),
         unique_name='fights',
         access=Glue.Access.DELETE,
         fields=[
@@ -26,6 +30,7 @@ def list_view(request: HttpRequest) -> HttpResponse:
             'spectator_count',
             'terrain_type',
         ],
+        form=FightForm(),
     )
 
     return render(request, template_name='fight/page/list_page.html')
@@ -34,7 +39,10 @@ def list_view(request: HttpRequest) -> HttpResponse:
 def schedule_view(request: HttpRequest) -> HttpResponse:
     """Form proxy demo - schedule a new fight and contact the promoter."""
     Glue.form(
-        request=request, unique_name='fight_form', target=FightForm(), access=Glue.Access.CHANGE
+        request=request,
+        unique_name='fight_form',
+        target=FightForm(),
+        access=Glue.Access.CHANGE
     )
 
     Glue.form(

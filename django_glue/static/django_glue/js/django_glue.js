@@ -30,6 +30,7 @@
   // client_js/django_glue.js
   var exports_django_glue = {};
   __export(exports_django_glue, {
+    resolveUrl: () => resolveUrl,
     parseJsonScriptById: () => parseJsonScriptById,
     GlueClient: () => client_default
   });
@@ -88,6 +89,13 @@
   }
   function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent);
+  }
+  function resolveUrl(urlPathTemplate, kwargs = {}) {
+    let url = urlPathTemplate;
+    for (const [key, value] of Object.entries(kwargs)) {
+      url = url.replace(`\${${key}}`, value);
+    }
+    return url;
   }
 
   // client_js/src/http.js
@@ -292,7 +300,7 @@
   }
 
   class BaseGlueProxy {
-    constructor({ http, policy, state = {}, metadata = {} }) {
+    constructor({ http, policy, state = {}, metadata = {}, owner = null }) {
       this._http = http;
       this._policy = policy;
       this._name = policy?.name;
@@ -301,7 +309,16 @@
       this._listeners = { before: {}, after: {}, error: {} };
       this._onMessage = null;
       this._onError = null;
+      Object.defineProperty(this, "_owner", {
+        value: owner,
+        writable: true,
+        enumerable: false,
+        configurable: true
+      });
       this._initializeAttributes();
+    }
+    get $owner() {
+      return this._owner;
     }
     addListener(attribute, callback, when = "after") {
       if (!this._listeners[when]) {
@@ -392,19 +409,50 @@
       this._attributeBuilders = {
         container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
         callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
-        glue: (owner, name, qualName, meta) => this._initializeGlueObjectAttribute(owner, name, qualName, meta),
         state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta)
       };
     }
     _initializeAttributes() {
       this._configureAttributeInitializers();
-      (this._policy?.attributes || []).forEach((attributeQualName) => {
-        const attributeMetadata = this._metadata?.attributes?.[attributeQualName];
-        if (!attributeMetadata) {
-          return;
+      (this._policy?.attributes || []).forEach((attribute) => {
+        if (typeof attribute === "string") {
+          const attributeMetadata = this._metadata?.attributes?.[attribute];
+          if (attributeMetadata) {
+            this._initializeAttribute(attribute, attributeMetadata);
+          }
+        } else if (attribute?.name) {
+          const parentPrefix = this._name ? `${this._name}.` : "";
+          const relativeName = attribute.name.startsWith(parentPrefix) ? attribute.name.slice(parentPrefix.length) : attribute.name;
+          const attributeMetadata = this._metadata?.attributes?.[relativeName] || {};
+          this._initializeGlueObjectAttribute(attribute, attributeMetadata);
         }
-        this._initializeAttribute(attributeQualName, attributeMetadata);
       });
+      this._initializeGlueObjectAliases();
+    }
+    _initializeGlueObjectAliases() {
+      const metadataAttrs = this._metadata?.attributes || {};
+      for (const [attrKey, attrMeta] of Object.entries(metadataAttrs)) {
+        if (attrMeta.namespace !== "glue")
+          continue;
+        const targetName = attrMeta.name;
+        if (!targetName || targetName === attrKey)
+          continue;
+        const parts = attrKey.split(".");
+        const aliasName = parts.pop();
+        const owner = this._resolveAttributeOwner(parts);
+        if (owner[aliasName] !== undefined)
+          continue;
+        const targetParts = targetName.split(".");
+        const targetAttrName = targetParts.pop();
+        const targetOwner = this._resolveAttributeOwner(targetParts);
+        Object.defineProperty(owner, aliasName, {
+          get() {
+            return targetOwner[targetAttrName];
+          },
+          enumerable: true,
+          configurable: true
+        });
+      }
     }
     _initializeAttribute(attributeQualName, attributeMetadata) {
       const parts = attributeQualName.split(".");
@@ -431,25 +479,39 @@
         configurable: true
       });
     }
-    _initializeGlueObjectAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-      const nestedPolicy = attributeMetadata.policy;
+    _initializeGlueObjectAttribute(attributePolicy, attributeMetadata) {
+      const attributeQualName = attributePolicy.name;
+      const parentPrefix = this._name ? `${this._name}.` : "";
+      const relativeName = attributeQualName.startsWith(parentPrefix) ? attributeQualName.slice(parentPrefix.length) : attributeQualName;
+      const parts = relativeName.split(".");
+      const attributeName = parts.pop();
+      const owner = this._resolveAttributeOwner(parts);
+      if (owner[attributeName] !== undefined) {
+        return;
+      }
       const nestedMetadata = attributeMetadata.metadata || {};
-      const nestedNamespace = nestedPolicy?.namespace || nestedMetadata?.namespace;
+      const nestedNamespace = attributeMetadata.glue_namespace || attributePolicy.namespace;
       const ProxyClass = getProxyClass(nestedNamespace);
-      if (!nestedPolicy?.name || !ProxyClass) {
+      if (!ProxyClass) {
         return;
       }
       const proxy = this;
-      const cacheKey = `__glue_object__${nestedPolicy.name}`;
+      const cacheKey = `__glue_object__${attributePolicy.name}`;
       Object.defineProperty(owner, attributeName, {
         get() {
           if (!proxy[cacheKey]) {
-            proxy[cacheKey] = new ProxyClass({
+            const nestedState = proxy._state?.[relativeName] || {};
+            const nestedProxy = new ProxyClass({
               http: proxy._http,
-              policy: nestedPolicy,
-              state: proxy._state?.[attributeQualName] || {},
-              metadata: nestedMetadata
+              policy: attributePolicy,
+              state: nestedState,
+              metadata: nestedMetadata,
+              owner: proxy
             });
+            if (Object.keys(nestedState).length > 0) {
+              nestedProxy._loaded = true;
+            }
+            proxy[cacheKey] = nestedProxy;
           }
           return proxy[cacheKey];
         },
@@ -853,6 +915,7 @@
       super._configureAttributeInitializers();
       this._fields = {};
       this._attributeBuilders.field = (owner, name, qualName, meta) => this._initializeFieldAttribute(owner, name, qualName, meta);
+      this._attributeBuilders.related_field = (owner, name, qualName, meta) => this._initializeRelatedFieldAttribute(owner, name, qualName, meta);
     }
     _initializeFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
       this._fields[attributeName] = createFieldGlue({
@@ -879,6 +942,19 @@
         enumerable: true,
         configurable: true
       });
+    }
+    _initializeRelatedFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
+      const proxy = this;
+      const cacheKey = `__glue_object__${this._name}.${attributeQualName}`;
+      if (!(attributeName in this)) {
+        Object.defineProperty(this, attributeName, {
+          get() {
+            return proxy[cacheKey] || null;
+          },
+          enumerable: true,
+          configurable: true
+        });
+      }
     }
   }
   var fieldBacked_default = FieldBackedGlueProxy;
@@ -947,6 +1023,11 @@
       this.$collection?._removeModelProxy(this);
       return result;
     }
+    async load() {
+      const result = await this._callAttribute("load");
+      this.$collection?._updateModelProxy(this);
+      return result;
+    }
   }
   var model_default = GlueModelProxy;
 
@@ -984,6 +1065,12 @@
       const name = row.policy?.name || `${this._name}.${pk}`;
       const proxy = this._buildModelProxy(row, this._modelProxies.get(name));
       this._modelProxies.set(name, proxy);
+      return proxy;
+    }
+    async new(initial = {}) {
+      const newItem = await this._callAttribute("new", { initial });
+      const name = newItem.policy?.name;
+      const proxy = this._buildModelProxy(newItem);
       return proxy;
     }
     _syncFromResult(result = {}) {
@@ -1035,9 +1122,6 @@
     get count() {
       this._modelProxies.size;
     }
-    async new() {
-      return await this._callAttribute("new");
-    }
     _cloneWithQueryParams(params = {}) {
       return new this.constructor({
         http: this._http,
@@ -1063,6 +1147,9 @@
     }
     _removeModelProxy(proxy) {
       this._modelProxies.delete(proxy._name);
+    }
+    _updateModelProxy(proxy) {
+      this._modelProxies.set(proxy._name, proxy);
     }
   }
   var queryset_default = GlueQuerySetProxy;
@@ -1155,4 +1242,5 @@
   // client_js/django_glue.js
   globalThis.GlueClient = client_default;
   globalThis.parseJsonScriptById = parseJsonScriptById;
+  globalThis.resolveUrl = resolveUrl;
 })();

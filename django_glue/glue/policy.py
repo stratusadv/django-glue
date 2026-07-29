@@ -24,7 +24,7 @@ class GluePolicy(BaseModel):
     namespace: str
     identity: dict[str, Any]
     access: GlueAccess
-    attributes: list[str] = Field(default_factory=list)
+    attributes: list[str | Self] = Field(default_factory=list)
     created_at: float
     original_signature: str
 
@@ -34,7 +34,17 @@ class GluePolicy(BaseModel):
         *,
         glue_object: BaseGlue,
     ) -> Self:
-        attributes = list(glue_object.attributes)
+        attributes: list[str | Self] = []
+
+        for attr_name, attr in glue_object.attributes.items():
+            nested_glue = getattr(attr, 'glue_object', None)
+            if nested_glue is not None:
+                # Attribute is a nested glue object - include its policy
+                nested_glue.request = glue_object.request
+                attributes.append(cls.from_glue_object(glue_object=nested_glue))
+            else:
+                # Simple attribute - just include the name
+                attributes.append(attr_name)
 
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
@@ -43,7 +53,7 @@ class GluePolicy(BaseModel):
             'namespace': glue_object.namespace,
             'identity': glue_object.identity,
             'access': glue_object.access,
-            'attributes': list(glue_object.attributes),
+            'attributes': attributes,
         })
 
     @classmethod

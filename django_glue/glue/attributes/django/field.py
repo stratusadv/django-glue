@@ -41,7 +41,8 @@ class BaseDjangoFieldGlueAttribute(StateAttribute):
         self.add_choice_metadata(metadata)
         self.add_extra_metadata(metadata)
 
-        return super().metadata | metadata | {'namespace': 'field'}
+        namespace = getattr(self, 'namespace', 'field')
+        return super().metadata | metadata | {'namespace': namespace}
 
     @property
     def label(self) -> str:

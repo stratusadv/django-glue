@@ -67,9 +67,14 @@ describe('frontend coverage edges', () => {
         expect(object.$fields.owner.pk).toBe(2)
     })
 
-    test('queryset new delegates to its callable attribute', async () => {
+    test('queryset new returns a model proxy', async () => {
+        // The `new` attribute returns a result containing policy/state/metadata for the new model
         global.fetch = async () => new Response(JSON.stringify({
-            result: {id: 3}, state: {}, policy: {}, metadata: {},
+            result: {
+                policy: {name: 'gorillas.3', namespace: 'model'},
+                state: {id: {value: 3}},
+                metadata: {},
+            },
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const object = new GlueQuerySetProxy({
             http: http(),
@@ -78,7 +83,9 @@ describe('frontend coverage edges', () => {
             metadata: createMetadata({namespace: 'querySet', attributes: {new: {namespace: 'callable'}}}),
         })
 
-        expect(await object.new()).toEqual({id: 3})
+        const newModel = await object.new()
+        expect(newModel).toBeInstanceOf(GlueModelProxy)
+        expect(newModel._loaded).toBe(true)
     })
 
     test('multipart requests append FileList and file arrays', async () => {

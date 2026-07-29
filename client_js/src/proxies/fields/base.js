@@ -82,6 +82,7 @@ class FieldGlue {
         return this.value
     }
 
+    // TODO: this should be deleted
     asProxy() {
         const field = this
         return new Proxy(this, {

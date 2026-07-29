@@ -42,6 +42,13 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return proxy
     }
 
+    async new(initial = {}) {
+        const newItem = await this._callAttribute('new', {initial})
+        const name = newItem.policy?.name
+        const proxy = this._buildModelProxy(newItem)
+        return proxy
+    }
+
     _syncFromResult(result = {}) {
         const items = result.items || []
         const oldProxies = this._modelProxies
@@ -101,10 +108,6 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this._modelProxies.size
     }
 
-    async new() {
-        return await this._callAttribute('new')
-    }
-
     _cloneWithQueryParams(params = {}) {
         return new this.constructor({
             http: this._http,
@@ -134,6 +137,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this._modelProxies.delete(proxy._name)
     }
 
+    _updateModelProxy(proxy) {
+        this._modelProxies.set(proxy._name, proxy)
+    }
 }
 
 export default GlueQuerySetProxy
