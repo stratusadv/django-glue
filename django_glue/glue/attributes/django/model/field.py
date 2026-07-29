@@ -71,7 +71,7 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
                 'name': value.name,
                 'size': value.size,
                 'url': value.url,
-                'path': value.path,
+                # 'path': value.path,
             }
         except ValueError:
             return None
