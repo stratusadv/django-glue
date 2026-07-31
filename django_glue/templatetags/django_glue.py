@@ -54,7 +54,7 @@ def _get_url_pattern_template(name: str) -> str:
 
 
 @register.simple_tag
-def glue_url(name: str, **kwargs) -> str:
+def js_url(name: str, **kwargs) -> str:
     """
     Generate a JavaScript expression that resolves to a URL.
 
@@ -64,12 +64,12 @@ def glue_url(name: str, **kwargs) -> str:
 
     Usage in template:
         {% load django_glue %}
-        <a :href="{% glue_url 'task:page:detail' pk='item.id' %}">View</a>
+        <a :href="{% js_url 'task:page:detail' pk='item.id' %}">View</a>
 
         Outputs: resolveUrl('/task/${pk}/detail/', {pk: item.id})
 
         Or without kwargs:
-        <a href="{% glue_url 'task:page:list' %}">List</a>
+        <a href="{% js_url 'task:page:list' %}">List</a>
 
         Outputs: '/task/list/'
     """
