@@ -1,4 +1,4 @@
-from django_glue.glue.attributes import BaseGlueAttribute, ContainerAttribute
+from django_glue.glue.attributes import BaseGlueAttribute, CompositeStateAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.objects.django import (
     FormFieldAttribute,
@@ -15,17 +15,17 @@ from django_glue.glue.registry import GlueObjectResolverRegistry, glue_object_re
 
 __all__ = [
     'BaseGlue',
+    'BaseGlueAttribute',
+    'CompositeStateAttribute',
     'FormFieldAttribute',
     'FormGlue',
+    'FunctionGlue',
+    'GlueMetadata',
+    'GlueObjectResolverRegistry',
+    'GluePolicy',
     'ModelFieldAttribute',
     'ModelGlue',
     'QuerySetGlue',
     'TemplateGlue',
-    'BaseGlueAttribute',
-    'ContainerAttribute',
-    'GlueMetadata',
-    'GlueObjectResolverRegistry',
-    'GluePolicy',
-    'FunctionGlue',
     'glue_object_resolver_registry',
 ]

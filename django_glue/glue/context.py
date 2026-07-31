@@ -36,6 +36,7 @@ class GlueContextManager:
         # Ensure session exists (Django creates sessions lazily)
         if not self.request.session.session_key:
             self.request.session.create()
+
         glue.request = self.request
         self.manifests.append(glue.manifest)
 

@@ -84,7 +84,7 @@ describe('Glue proxies', () => {
             metadata: createMetadata({
                 attributes: {
                     id: {namespace: 'field', type: 'IntegerField'},
-                    forms: {namespace: 'container'},
+                    forms: {namespace: 'composite'},
                     // 'form' is an alias - name points to the target
                     form: {
                         name: 'forms.default',
@@ -136,7 +136,7 @@ describe('Glue proxies', () => {
             metadata: createMetadata({
                 attributes: {
                     id: {namespace: 'field', type: 'IntegerField'},
-                    forms: {namespace: 'container'},
+                    forms: {namespace: 'composite'},
                     'forms.edit': {
                         namespace: 'glue',
                         glue_namespace: 'form',
@@ -209,7 +209,7 @@ describe('Glue proxies', () => {
         expect(object.$fields.birthday.value).toBe('1973-03-01')
     })
 
-    test('dotted callable attributes resolve through container metadata', async () => {
+    test('dotted callable attributes resolve through composite metadata', async () => {
         let capturedAttribute
         global.fetch = async (_url, options) => {
             capturedAttribute = options.body.get('attribute')
@@ -221,7 +221,7 @@ describe('Glue proxies', () => {
                 }),
                 metadata: createMetadata({
                     attributes: {
-                        services: {namespace: 'container'},
+                        services: {namespace: 'composite'},
                         'services.increment_age': {namespace: 'callable'},
                     },
                 }),
@@ -234,7 +234,7 @@ describe('Glue proxies', () => {
             state: createState(),
             metadata: createMetadata({
                 attributes: {
-                    services: {namespace: 'container'},
+                    services: {namespace: 'composite'},
                     'services.increment_age': {namespace: 'callable'},
                 },
             }),
@@ -253,7 +253,7 @@ describe('Glue proxies', () => {
             metadata: createMetadata({
                 fields: {age: {type: 'IntegerField', label: 'Age'}},
                 attributes: {
-                    services: {namespace: 'container'},
+                    services: {namespace: 'composite'},
                     'services.increment_age': {namespace: 'callable'},
                 },
             }),
@@ -266,7 +266,7 @@ describe('Glue proxies', () => {
             metadata: createMetadata({
                 fields: {age: {type: 'IntegerField', label: 'Age'}},
                 attributes: {
-                    services: {namespace: 'container'},
+                    services: {namespace: 'composite'},
                     'services.increment_age': {namespace: 'callable'},
                 },
             }),

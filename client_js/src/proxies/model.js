@@ -3,12 +3,12 @@ import FieldBackedGlueProxy from "./fieldBacked"
 class GlueModelProxy extends FieldBackedGlueProxy {
     _configureAttributeInitializers() {
         super._configureAttributeInitializers()
-        this._attributeBuilders.readable = (owner, name, qualName) => {
-            this._initializeReadableAttribute(owner, name, qualName)
+        this._attributeBuilders.readonly = (owner, name, qualName) => {
+            this._initializeReadOnlyAttribute(owner, name, qualName)
         }
     }
 
-    _initializeReadableAttribute(owner, attributeName, attributeQualName) {
+    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
         const proxy = this
         Object.defineProperty(owner, attributeName, {
             get() {

@@ -17,9 +17,9 @@ class GlueObjectAttribute(BaseGlueAttribute):
         name: str,
         access: GlueAccess,
         glue_object: BaseGlue,
-        target: Any = None,
+        attr_owner_instance: Any = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access, target=target)
+        super().__init__(owner=owner, name=name, access=access, attr_owner_instance=attr_owner_instance)
         self.glue_object = glue_object
 
     def _prepare_glue_object(self) -> BaseGlue:
@@ -36,5 +36,5 @@ class GlueObjectAttribute(BaseGlueAttribute):
         }
 
     @property
-    def state(self) -> dict[str, Any]:
+    def state(self) -> dict[str, Any] | None:
         return self._prepare_glue_object().state

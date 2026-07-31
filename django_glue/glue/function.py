@@ -5,7 +5,7 @@ from functools import cached_property
 from typing import Any, Callable
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.policy import GluePolicy
@@ -40,7 +40,6 @@ class FunctionGlue(BaseGlue):
     @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
-            'namespace': self.namespace,
             'params': self.identity.get('params', []),
             'attributes': {
                 name: attribute.metadata
@@ -49,16 +48,14 @@ class FunctionGlue(BaseGlue):
         })
 
     @classmethod
-    def _from_policy(cls, policy: GluePolicy) -> 'FunctionGlue':
-        glue_object = cls(
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> 'FunctionGlue':
+        return cls(
             policy.identity['function_path'],
             name=policy.name,
             access=policy.access,
         )
-        glue_object.policy = policy
-        return glue_object
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def execute(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         function = get_attr_from_path_string(self.target)
         result = function(**kwargs)

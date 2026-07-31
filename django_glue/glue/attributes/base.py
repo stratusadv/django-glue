@@ -25,12 +25,12 @@ class BaseGlueAttribute(ABC):
         owner: BaseGlue,
         name: str,
         access: GlueAccess,
-        target: Any = None,
+        attr_owner_instance: Any = None,
     ) -> None:
         self.owner = owner
         self.name = name
         self.required_access = access
-        self._target = target
+        self._attr_owner_instance = attr_owner_instance
 
     @property
     @abstractmethod
@@ -40,6 +40,6 @@ class BaseGlueAttribute(ABC):
         }
 
     def get(self) -> Any:
-        """Get the target at this attribute's path from the owner or target."""
-        resolve_from = self._target if self._target is not None else self.owner
+        """Get the value at this attribute's path from the owner or attr_owner_instance."""
+        resolve_from = self._attr_owner_instance if self._attr_owner_instance is not None else self.owner
         return get_attr_from_path_string_on_instance(resolve_from, self.name)

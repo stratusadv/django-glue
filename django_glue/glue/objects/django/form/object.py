@@ -12,7 +12,7 @@ from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.form import FormFieldAttribute
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.metadata import GlueMetadata
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.utils import get_attr_from_path_string
 
 class FormGlue(BaseGlue):
@@ -55,31 +55,8 @@ class FormGlue(BaseGlue):
             for name, field in self.form.fields.items()
         }
 
-    def _resolve_instance(self) -> None:
-        if (
-            isinstance(self.form, forms.ModelForm)
-            and getattr(self.form, 'instance', None) is not None
-            and self.form.instance.pk is None
-            and hasattr(self, 'policy')
-            and self.policy.identity.get('target_pk') is not None
-        ):
-            model_class = self.form._meta.model
-            target_pk = self.policy.identity['target_pk']
-            try:
-                model_instance = model_class.objects.get(pk=target_pk)
-                self.form.instance = model_instance
-                opts = self.form._meta
-                model_initial = model_to_dict(model_instance, opts.fields, opts.exclude)
-                self.form.initial = {
-                    **model_initial,
-                    **self.form.initial,
-                }
-            except model_class.DoesNotExist:
-                pass
-
     @property
     def state(self) -> dict[str, Any]:
-        self._resolve_instance()
         self._populate_field_errors()
         return {
             name: attribute.state
@@ -94,7 +71,6 @@ class FormGlue(BaseGlue):
     @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
-            'namespace': self.namespace,
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
@@ -102,31 +78,44 @@ class FormGlue(BaseGlue):
         })
 
     @classmethod
-    def _from_policy(cls, policy: GluePolicy) -> FormGlue:
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> FormGlue:
         form_class = get_attr_from_path_string(policy.identity['form_class_path'])
-        glue_object = cls(
-            form_class(initial=policy.identity.get('initial', {})),
-            name=policy.name,
-            access=policy.access,
-        )
-        glue_object.policy = policy
-        return glue_object
+        initial = policy.identity.get('initial', {})
+        target_pk = policy.identity.get('target_pk')
+
+        if target_pk is not None and issubclass(form_class, forms.ModelForm):
+            model_class = form_class._meta.model
+            try:
+                instance = model_class.objects.get(pk=target_pk)
+                model_initial = model_to_dict(
+                    instance,
+                    form_class._meta.fields,
+                    form_class._meta.exclude,
+                )
+                initial = {**model_initial, **initial}
+                form = form_class(instance=instance, initial=initial)
+            except model_class.DoesNotExist:
+                form = form_class(initial=initial)
+        else:
+            form = form_class(initial=initial)
+
+        return cls(form, name=policy.name, access=policy.access)
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         """Bind client-provided state before executing form attributes."""
         self._loaded_state = state
         self.form = self._bind_form()
 
-    @Attribute(access=GlueAccess.VIEW, loads_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:
         return {'state': self.state}
 
-    @Attribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         return {'valid': bound_form.is_valid(), 'errors': dict(bound_form.errors)}
 
-    @Attribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         valid = bound_form.is_valid()
@@ -134,7 +123,7 @@ class FormGlue(BaseGlue):
             bound_form.save()
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -157,7 +146,6 @@ class FormGlue(BaseGlue):
         return [serialize_choice(obj) for obj in queryset.all()]
 
     def _bind_form(self) -> forms.BaseForm:
-        self._resolve_instance()
         state = self._loaded_state or {}
         form_class = self.form.__class__
         # Extract values from new state structure: {field_name: {value: ..., errors: ...}}

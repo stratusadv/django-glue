@@ -13,7 +13,7 @@ describe('state and field edge behavior', () => {
             metadata: {
                 namespace: 'model',
                 attributes: {
-                    settings: {namespace: 'container'},
+                    settings: {namespace: 'composite'},
                     'settings.mode': {namespace: 'state'},
                 },
             },

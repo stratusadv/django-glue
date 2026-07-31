@@ -99,8 +99,5 @@ def glue_field_metadata_path(value: str) -> str:
 @register.inclusion_tag('django_glue/django_glue.html', takes_context=True)
 def django_glue_init(context: dict) -> dict:
     request = cast('HttpRequest', context.get('request'))
-
-    for key, val in GlueContextManager(request).context_data.items():
-        context[key] = val  # noqa: PERF403
-
+    context.update(GlueContextManager(request).context_data)
     return context

@@ -11,13 +11,13 @@ function http() {
 }
 
 describe('frontend coverage edges', () => {
-    test('model readable attributes and named error checks are available', () => {
+    test('model readonly attributes and named error checks are available', () => {
         const object = new GlueModelProxy({
             http: http(),
             policy: createPolicy({attributes: ['id', 'display_name', 'name']}),
             state: {id: {value: 1}, display_name: {value: 'Koko'}, name: {value: 'Koko', errors: ['Required']}},
             metadata: createMetadata({attributes: {
-                display_name: {namespace: 'readable'},
+                display_name: {namespace: 'readonly'},
                 name: {namespace: 'field', type: 'CharField', label: 'Name'},
             }}),
         })

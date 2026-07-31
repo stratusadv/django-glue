@@ -52,6 +52,7 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
                     this.loading = true
                     this._callAttribute('load').then(() => {
                         this._loaded = true
+                    }).finally(() => {
                         this.loading = false
                     })
                 }

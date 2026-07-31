@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import Attribute, BaseGlueAttribute, GlueObjectAttribute, ReadableAttribute
+from django_glue.glue.attributes import DeclaredAttribute, BaseGlueAttribute, GlueObjectAttribute, ReadOnlyAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ForeignKeyFieldAttribute, ModelFieldAttribute
 from django_glue.glue.metadata import GlueMetadata
@@ -137,11 +137,11 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
                 )
 
         attributes.update({
-            annotation_name: ReadableAttribute(
+            annotation_name: ReadOnlyAttribute(
                 owner=self,
                 name=annotation_name,
                 access=GlueAccess.VIEW,
-                target=self.instance,
+                attr_owner_instance=self.instance,
             )
             for annotation_name in self._annotation_names
         })
@@ -236,7 +236,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         return field.is_cached(self.instance)
 
     @classmethod
-    def _from_policy(cls, policy: GluePolicy) -> ModelGlue:
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> ModelGlue:
         model_class = cast(
             'type[Model]',
             get_attr_from_path_string(policy.identity['model_class_path'])
@@ -329,11 +329,11 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
         return self.request.FILES.get(field_name)
 
-    @Attribute(access=GlueAccess.VIEW, loads_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
     def load(self) -> dict[str, Any]:
         return {'state': self.state}
 
-    @Attribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
         try:
             self.instance.full_clean()
@@ -368,7 +368,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
             return value.get('pk', value.get('id'))
         return getattr(value, 'pk', value)
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -390,6 +390,6 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
         return [serialize_choice(obj) for obj in related_model.objects.all()]
 
-    @Attribute(access=GlueAccess.DELETE)
+    @DeclaredAttribute(access=GlueAccess.DELETE)
     def delete(self) -> None:
         self.instance.delete()

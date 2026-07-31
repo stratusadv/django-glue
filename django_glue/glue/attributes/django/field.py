@@ -73,4 +73,4 @@ class BaseDjangoFieldGlueAttribute(StateAttribute):
             ]
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
-        return None
+        """Hook for subclasses to add additional field-specific metadata."""

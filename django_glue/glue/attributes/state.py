@@ -25,14 +25,14 @@ class StateAttribute(BaseGlueAttribute):
         owner: BaseGlue,
         name: str,
         access: GlueAccess,
-        target: Any = None,
+        attr_owner_instance: Any = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access, target=target)
+        super().__init__(owner=owner, name=name, access=access, attr_owner_instance=attr_owner_instance)
 
     @property
     def metadata(self) -> dict[str, Any]:
         return super().metadata | {'namespace': 'state'}
 
     @property
-    def state(self) -> dict[str, Any]:
-        return {}
+    def state(self) -> dict[str, Any] | None:
+        return {'value': self.get()}

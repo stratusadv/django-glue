@@ -12,13 +12,13 @@ from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
 class Glue:
     Access = GlueAccess
-    attribute = Attribute
+    attribute = DeclaredAttribute
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
 
@@ -35,7 +35,7 @@ class Glue:
         unique_name: str,
         target: Model,
         access: GlueAccess = GlueAccess.VIEW,
-        fields: Sequence = (),
+        fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
         form: ModelForm | None = None,
         forms: Mapping[str, ModelForm] | None = None,
@@ -61,7 +61,7 @@ class Glue:
         unique_name: str,
         target: QuerySet,
         access: GlueAccess = GlueAccess.VIEW,
-        fields: Sequence = (),
+        fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
         form: ModelForm | None = None,
         forms: Mapping[str, ModelForm] | None = None,
@@ -84,7 +84,7 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: BaseForm,
-        access: GlueAccess = GlueAccess.VIEW,
+        access: GlueAccess = GlueAccess.CHANGE,
     ) -> None:
         Glue.object(
             request=request,

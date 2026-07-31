@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import builtins
 import pickle
 from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
@@ -16,7 +17,7 @@ from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
 from django_glue.glue.policy import GluePolicy
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.exceptions import GlueQuerySetFilterValidationError
 
 if TYPE_CHECKING:
@@ -136,7 +137,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         return tuple(self.queryset.query.annotations)
 
     @classmethod
-    def _from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
         queryset = cls._decode_queryset_query(policy.identity['encoded_queryset'])
         model_field_names = {
             field.name
@@ -150,15 +151,13 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {})
         )
-        glue_object = cls(
+        return cls(
             queryset,
             name=policy.name,
             access=policy.access,
             fields=fields,
             forms=forms,
         )
-        glue_object.policy = policy
-        return glue_object
 
     @staticmethod
     def _encode_queryset_query(queryset: models.QuerySet) -> str:
@@ -171,39 +170,39 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         queryset.query = query
         return queryset
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def query_with_params(
         self,
-        kwargs: dict[str, Any],
+        filter: dict[str, Any] | None = None,  # noqa: A002
+        order_by: str | list[str] | None = None,
+        slice: dict[str, Any] | None = None,  # noqa: A002
     ) -> dict[str, Any]:
         queryset = self.queryset
         allowed_fields = set(self._included_fields)
 
-        for key in (kwargs.get('filter') or {}):
+        for key in (filter or {}):
             base_field = key.split('__')[0]
             if base_field not in allowed_fields:
                 raise GlueQuerySetFilterValidationError(base_field, list(allowed_fields))
 
-        if kwargs.get('filter'):
-            queryset = queryset.filter(**kwargs['filter'])
-        if kwargs.get('order_by'):
-            order_by = kwargs['order_by']
+        if filter:
+            queryset = queryset.filter(**filter)
+        if order_by:
             if isinstance(order_by, str):
                 order_by = [order_by]
             queryset = queryset.order_by(*order_by)
 
-        if kwargs.get('slice'):
-            slice_data = kwargs['slice']
-            queryset = queryset[slice(slice_data.get('start'), slice_data.get('stop'))]
+        if slice:
+            queryset = queryset[builtins.slice(slice.get('start'), slice.get('stop'))]
 
         items = [self._build_child_model_payload(instance) for instance in queryset]
         return {'items': items, 'query': {}}
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def get(self, pk: Any) -> dict[str, Any]:
         return self._build_child_model_payload(self.queryset.get(pk=pk))
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
         instance = self.queryset.model(**initial) if initial else self.queryset.model()
         return self._build_child_model_payload(instance=instance)

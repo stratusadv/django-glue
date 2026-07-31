@@ -7,9 +7,7 @@ from typing import Any, Callable, get_type_hints, TYPE_CHECKING
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueRequestError
 from django_glue.glue.attributes.base import BaseGlueAttribute
-from django_glue.glue.policy import GluePolicy
 from django_glue.glue.schemas import AttributeCallResolverContext
 
 if TYPE_CHECKING:
@@ -19,18 +17,18 @@ if TYPE_CHECKING:
 @dataclass
 class LoadedAttributeCall:
     """
-    An attribute call with resolved target and kwargs, ready for execution.
+    An attribute call with resolved target and parameters, ready for execution.
 
     This object represents the final stage before invoking an attribute -
     the callable target and its arguments have been resolved and validated.
     Calling execute() performs the invocation.
     """
 
-    target: Callable[..., Any]
-    kwargs: dict[str, Any]
+    attr_owner_instance: Callable[..., Any]
+    parameters: dict[str, Any]
 
     def execute(self) -> Any:
-        return self.target(**self.kwargs)
+        return self.attr_owner_instance(**self.parameters)
 
 
 class CallableAttribute(BaseGlueAttribute):
@@ -48,9 +46,14 @@ class CallableAttribute(BaseGlueAttribute):
         name: str,
         access: GlueAccess,
         loads_state: bool = True,
-        target: Any = None,
+        attr_owner_instance: Any = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access, target=target)
+        super().__init__(
+            owner=owner,
+            name=name,
+            access=access,
+            attr_owner_instance=attr_owner_instance
+        )
         self.loads_state = loads_state
 
     @property
@@ -70,66 +73,118 @@ class CallableAttribute(BaseGlueAttribute):
         """
         target_callable = self.get()
         if not callable(target_callable):
-            # TODO: this is not the thing to raise
-            raise GlueRequestError(
-                code='attribute_not_callable',
-                message=f"Attribute '{self.name}' is not callable.",
-                details={'attribute': self.name},
-                status=422,
+            msg = (
+                f"CallableAttribute '{self.name}' resolved to a non-callable value. "
+                f"This indicates a bug in attribute collection or the underlying target was modified."
             )
+            raise TypeError(msg)
 
-        resolved_kwargs = self._resolve_call_kwargs(
+        resolved_parameters = self._resolve_call_parameters(
             target_callable,
             context
         )
 
-        return LoadedAttributeCall(target=target_callable, kwargs=resolved_kwargs)
+        return LoadedAttributeCall(
+            attr_owner_instance=target_callable, 
+            parameters=resolved_parameters
+        )
 
-    def _resolve_call_kwargs(
+    def _resolve_call_parameters(
         self,
-        target: Callable[..., Any],
+        target_callable: Callable[..., Any],
         context: AttributeCallResolverContext,
     ) -> dict[str, Any]:
         """Map context and request kwargs to the target callable's signature."""
-        resolved_kwargs: dict[str, Any] = {}
-        unwrapped = inspect.unwrap(target)
-        signature = inspect.signature(unwrapped)
-        function_globals = getattr(unwrapped, '__globals__', {})
-        type_hints = get_type_hints(
-            unwrapped,
+        unwrapped_callable = inspect.unwrap(target_callable)
+        signature = inspect.signature(unwrapped_callable)
+        type_hints = self._get_type_hints(unwrapped_callable)
+
+        resolved_parameters: dict[str, Any] = {}
+
+        for param_name, param in signature.parameters.items():
+            if param_name == 'self':
+                continue
+
+            resolved_param_value = self._resolve_call_parameter(
+                param_name, param, type_hints.get(param_name), context
+            )
+
+            if resolved_param_value is not None:
+                resolved_parameters[param_name] = resolved_param_value
+
+        if self._accepts_variadic_parameters(signature):
+            self._apply_variadic_parameters(
+                context.target_attribute_call_kwargs,
+                resolved_parameters
+            )
+
+        return resolved_parameters
+
+    def _get_type_hints(self, func: Callable[..., Any]) -> dict[str, Any]:
+        """Get type hints for a function, with HttpRequest available in the namespace."""
+        function_globals = getattr(func, '__globals__', {})
+        return get_type_hints(
+            func,
             globalns={**function_globals, 'HttpRequest': HttpRequest},
         )
-        accepts_var_kwargs = any(
+
+    def _resolve_call_parameter(
+        self,
+        param_name: str,
+        param: inspect.Parameter,
+        type_hint: type | None,
+        context: AttributeCallResolverContext,
+    ) -> Any | None:
+        """
+        Resolve a single parameter value.
+
+        Returns the resolved value, or None if the parameter has a default.
+        Raises ValueError if a required parameter cannot be resolved.
+        """
+        if param_name == 'self':
+            return None
+
+        call_parameters = context.target_attribute_call_kwargs
+
+        # Client-provided value takes priority
+        if param_name in call_parameters:
+            return call_parameters[param_name]
+
+        # Inject HttpRequest by type hint
+        if (
+            type_hint is not None and
+            isinstance(type_hint, type) and
+            issubclass(type_hint, HttpRequest)
+        ):
+            return context.request
+
+        # Parameter has a default - let Python handle it
+        if param.default is not inspect.Parameter.empty:
+            return None
+
+        # Required parameter with no resolution strategy
+        msg = (
+            f"Attribute '{self.name}' missing required argument: '{param_name}'. "
+            f"Provided: {list(call_parameters.keys())}"
+        )
+        raise ValueError(msg)
+
+    @staticmethod
+    def _accepts_variadic_parameters(signature: inspect.Signature) -> bool:
+        """Check if the signature accepts **kwargs."""
+        return any(
             param.kind == inspect.Parameter.VAR_KEYWORD
             for param in signature.parameters.values()
         )
 
-        call_kwargs = context.target_attribute_call_kwargs
-        for param_name, param in signature.parameters.items():
-            if param_name == 'self':
-                continue
-            if param_name in context.target_attribute_call_kwargs:
-                resolved_kwargs[param_name] = call_kwargs[param_name]
-                continue
-
-            hint = type_hints.get(param_name)
-            if hint is not None and isinstance(hint, type) and issubclass(hint, HttpRequest):
-                resolved_kwargs[param_name] = context.request
-                continue
-
-            # Convention: a parameter named 'kwargs' receives the entire call_kwargs dict
-            if param_name == 'kwargs':
-                resolved_kwargs[param_name] = call_kwargs
-                continue
-
-            if param_name not in resolved_kwargs and param.default is inspect.Parameter.empty:
-                continue
-
-        if accepts_var_kwargs:
-            for key, value in call_kwargs.items():
-                resolved_kwargs.setdefault(key, value)
-
-        return resolved_kwargs
+    @staticmethod
+    def _apply_variadic_parameters(
+        call_parameters: dict[str, Any],
+        resolved_parameters: dict[str, Any],
+    ) -> None:
+        """Pass through any call parameters not already resolved."""
+        for key, value in call_parameters.items():
+            resolved_parameters.setdefault(key, value)
 
     def call(self, context: AttributeCallResolverContext) -> Any:
         return self.load_context(context).execute()

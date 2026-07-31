@@ -22,7 +22,7 @@ from django_glue.glue import (
     FunctionGlue,
     GlueObjectResolverRegistry,
 )
-from django_glue.glue.attributes import Attribute, ContainerAttribute, GlueObjectAttribute
+from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
 from django_glue.glue.schemas import AttributeCallResolverContext
 from test_project.gorilla.models import Gorilla, Skill
@@ -121,21 +121,21 @@ class NestedStatsGlue(BaseGlue):
         })
 
     @classmethod
-    def _from_policy(cls, policy):
+    def _reconstruct_from_policy(cls, policy):
         return cls()
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def score(self) -> int:
         return 42
 
-    @Attribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(access=GlueAccess.CHANGE)
     def reset(self) -> str:
         return 'reset'
 
 
 class NestedDashboardGlue(BaseGlue):
     namespace = 'dashboard'
-    stats = Attribute(NestedStatsGlue(), access=GlueAccess.VIEW)
+    stats = DeclaredAttribute(NestedStatsGlue(), access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='dashboard', access=GlueAccess.CHANGE)
@@ -154,7 +154,7 @@ class NestedDashboardGlue(BaseGlue):
         })
 
     @classmethod
-    def _from_policy(cls, policy):
+    def _reconstruct_from_policy(cls, policy):
         return cls()
 
 
@@ -330,7 +330,7 @@ class AllFieldsTestCase(TestCase):
         glue_object.request = request_with_session()
         glue_object.policy  # Build policy
 
-        result = glue_object.query_with_params(kwargs={})
+        result = glue_object.query_with_params()
 
         self.assertEqual(len(result['items']), 1)
         row = result['items'][0]
@@ -552,7 +552,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         )
         self.assertGreater(state['profile_photo']['value']['size'], 0)
 
-    def test_model_adapter_reconstructs_model_from_policy(self):
+    def test_model_adapter_reconstructs_model_reconstruct_from_policy(self):
         glue_object = with_request(ModelGlue(
             self.gorilla,
             **glue_context(access=GlueAccess.VIEW),
@@ -560,7 +560,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         ))
         policy = glue_object.policy
 
-        resolved = ModelGlue._from_policy(policy)
+        resolved = ModelGlue._reconstruct_from_policy(policy)
 
         self.assertEqual(resolved.instance, self.gorilla)
 
@@ -572,12 +572,12 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
         self.assertIn('shout', policy.attributes)
         self.assertIn('services.increment_age', policy.attributes)
-        self.assertEqual(metadata['attributes']['services']['namespace'], 'container')
+        self.assertEqual(metadata['attributes']['services']['namespace'], 'composite')
         self.assertEqual(
             metadata['attributes']['services.increment_age']['namespace'],
             'callable',
         )
-        self.assertNotIn('services', state)
+        self.assertIn('services', state)
 
         # Call the shout method directly on the instance
         shout_result = self.gorilla.shout(volume=5)
@@ -639,7 +639,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertFalse(policy_has_attribute(glue_object.policy, 'form'))
         self.assertFalse(policy_has_attribute(glue_object.policy, 'forms.default'))
 
-    def test_nested_base_glue_attributes_build_container_metadata(self):
+    def test_nested_base_glue_attributes_build_composite_metadata(self):
         glue_object = with_request(NestedDashboardGlue())
 
         policy = glue_object.policy
@@ -649,11 +649,11 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertIn('stats', policy.attributes)
         self.assertIn('stats.score', policy.attributes)
         self.assertIn('stats.reset', policy.attributes)
-        self.assertIsInstance(glue_object.attributes['stats'], ContainerAttribute)
-        self.assertEqual(metadata['attributes']['stats']['namespace'], 'container')
+        self.assertIsInstance(glue_object.attributes['stats'], CompositeStateAttribute)
+        self.assertEqual(metadata['attributes']['stats']['namespace'], 'composite')
         self.assertEqual(metadata['attributes']['stats.score']['namespace'], 'callable')
         self.assertEqual(metadata['attributes']['stats.reset']['namespace'], 'callable')
-        self.assertNotIn('stats', state)
+        self.assertIn('stats', state)
 
         context = AttributeCallResolverContext.model_construct(
             request=glue_object.request,
@@ -700,7 +700,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
             **glue_context(name='gorilla-form'),
         ))
 
-        resolved = FormGlue._from_policy(glue_object.policy)
+        resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
 
         self.assertEqual(resolved.form.initial['name'], 'Initial Name')
         self.assertEqual(resolved.form.initial['age'], 7)
@@ -715,7 +715,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
             **glue_context(name='gorilla-form'),
         ))
 
-        resolved = FormGlue._from_policy(glue_object.policy)
+        resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
         state = resolved.load()['state']
 
         self.assertEqual(state['name']['value'], 'Initial Name')
@@ -800,7 +800,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         policy = glue_object.policy
         metadata = glue_object.metadata.to_payload()
-        resolved = QuerySetGlue._from_policy(policy)
+        resolved = QuerySetGlue._reconstruct_from_policy(policy)
 
         self.assertEqual(policy.namespace, 'querySet')
         self.assertNotIn('form_identities', policy.identity)
@@ -821,9 +821,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         glue_object.request = request
         policy = glue_object.policy
 
-        result = glue_object.query_with_params(
-            kwargs={'filter': {'name': 'Koko'}},
-        )
+        result = glue_object.query_with_params(filter={'name': 'Koko'})
 
         row = result['items'][0]
         self.assertEqual(row['policy']['namespace'], 'model')
@@ -845,7 +843,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         glue_object.request = request
         policy = glue_object.policy
 
-        result = glue_object.query_with_params(kwargs={})
+        result = glue_object.query_with_params()
 
         row = result['items'][0]
         row_policy = row['policy']
@@ -895,22 +893,18 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             target_glue_client_state={},
             target_attribute_name='query_with_params',
             target_attribute_call_kwargs={
-                'kwargs': {
-                    'order_by': 'name',
-                    'slice': {'start': 0, 'stop': 1},
-                },
+                'order_by': 'name',
+                'slice': {'start': 0, 'stop': 1},
             },
         )
         response = glue_object.process_attribute_call(context)
-        resolved = QuerySetGlue._from_policy(response['data']['policy'])
+        resolved = QuerySetGlue._reconstruct_from_policy(response['data']['policy'])
         resolved.request = request
 
         result = resolved.query_with_params(
-            kwargs={
-                'filter': {'name__icontains': 'du'},
-                'order_by': '-name',
-                'slice': {'start': 0, 'stop': 1},
-            },
+            filter={'name__icontains': 'du'},
+            order_by='-name',
+            slice={'start': 0, 'stop': 1},
         )
 
         self.assertEqual(len(result['items']), 1)
@@ -1050,9 +1044,7 @@ class LazyLoadingTestCase(TestCase):
         glue_object.request = request
         policy = glue_object.policy
 
-        result = glue_object.query_with_params(
-            kwargs={},
-        )
+        result = glue_object.query_with_params()
 
         self.assertIn('items', result)
         self.assertEqual(len(result['items']), 1)

@@ -407,7 +407,7 @@
     }
     _configureAttributeInitializers() {
       this._attributeBuilders = {
-        container: (owner, name, qualName, meta) => this._initializeContainerAttribute(owner, name, qualName, meta),
+        composite: (owner, name, qualName, meta) => this._initializeCompositeAttribute(owner, name, qualName, meta),
         callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
         state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta)
       };
@@ -466,8 +466,8 @@
         initializeAttribute(owner, attributeName, attributeQualName, attributeMetadata);
       }
     }
-    _initializeContainerAttribute(owner, attributeName) {
-      this._defineContainerAttribute(owner, attributeName);
+    _initializeCompositeAttribute(owner, attributeName) {
+      this._defineCompositeAttribute(owner, attributeName);
     }
     _initializeCallableAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
       Object.defineProperty(owner, attributeName, {
@@ -537,12 +537,12 @@
     _resolveAttributeOwner(parts) {
       return parts.reduce((current, part) => {
         if (current[part] === undefined) {
-          this._defineContainerAttribute(current, part);
+          this._defineCompositeAttribute(current, part);
         }
         return current[part];
       }, this);
     }
-    _defineContainerAttribute(owner, attributeName) {
+    _defineCompositeAttribute(owner, attributeName) {
       const cacheKey = Symbol(`__glue__${attributeName}`);
       Object.defineProperty(owner, attributeName, {
         get: function() {
@@ -1004,11 +1004,11 @@
   class GlueModelProxy extends fieldBacked_default {
     _configureAttributeInitializers() {
       super._configureAttributeInitializers();
-      this._attributeBuilders.readable = (owner, name, qualName) => {
-        this._initializeReadableAttribute(owner, name, qualName);
+      this._attributeBuilders.readonly = (owner, name, qualName) => {
+        this._initializeReadOnlyAttribute(owner, name, qualName);
       };
     }
-    _initializeReadableAttribute(owner, attributeName, attributeQualName) {
+    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
       const proxy = this;
       Object.defineProperty(owner, attributeName, {
         get() {

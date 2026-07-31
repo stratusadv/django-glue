@@ -77,6 +77,11 @@ class GluePolicy(BaseModel):
         ).hex()
 
     @property
+    def is_signed(self) -> bool:
+        """True if this policy has been signed."""
+        return bool(self.original_signature)
+
+    @property
     def computed_signature(self) -> str:
         return self._sign_data(self.model_dump(exclude={'original_signature'}, exclude_none=True))
 
@@ -89,7 +94,7 @@ class GluePolicy(BaseModel):
 
     @model_validator(mode='after')
     def validate_original_signature(self) -> Self:
-        if self.original_signature == '':
+        if not self.is_signed:
             return self
 
         if not hmac.compare_digest(self.computed_signature, self.original_signature):
@@ -100,7 +105,7 @@ class GluePolicy(BaseModel):
 
     @model_validator(mode='after')
     def validate_not_expired(self) -> Self:
-        if self.original_signature == '':
+        if not self.is_signed:
             return self
 
         expires_at = self.created_at + glue_settings.DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS

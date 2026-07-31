@@ -20,6 +20,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
             this.loading = true
             this.all().then(() => {
                 this._loaded = true
+            }).finally(() => {
                 this.loading = false
             })
         }
@@ -105,7 +106,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     get count() {
-        this._modelProxies.size
+        return this._modelProxies.size
     }
 
     _cloneWithQueryParams(params = {}) {

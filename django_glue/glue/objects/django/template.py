@@ -7,7 +7,7 @@ from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import Attribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.policy import GluePolicy
@@ -46,7 +46,6 @@ class TemplateGlue(BaseGlue):
     @cached_property
     def metadata(self) -> GlueMetadata:
         return GlueMetadata.from_payload({
-            'namespace': self.namespace,
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
@@ -54,17 +53,15 @@ class TemplateGlue(BaseGlue):
         })
 
     @classmethod
-    def _from_policy(cls, policy: GluePolicy) -> TemplateGlue:
-        glue_object = cls(
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> TemplateGlue:
+        return cls(
             policy.identity['template_path'],
             name=policy.name,
             access=policy.access,
             initial_context_data=policy.identity.get('initial_context_data', {}),
         )
-        glue_object.policy = policy
-        return glue_object
 
-    @Attribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW)
     def render_html(self, kwargs: dict[str, Any]) -> dict[str, str]:
         context_data = self.initial_context_data
         merged_context = {**context_data, **kwargs}

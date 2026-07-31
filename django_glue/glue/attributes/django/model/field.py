@@ -81,7 +81,7 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
             self.field.save_form_data(self.instance, value)
 
     @property
-    def state(self) -> dict[str, Any]:
+    def state(self) -> dict[str, Any] | None:
         return {
             'value': self.get(),
             'errors': self.owner._field_errors.get(self.name, []),

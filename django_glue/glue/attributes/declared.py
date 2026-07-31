@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from functools import update_wrapper
 from types import MethodType
 from typing import Any
@@ -8,7 +9,16 @@ from django_glue.access import GlueAccess
 _MISSING = object()
 
 
-class Attribute:
+@dataclass(frozen=True)
+class DeclaredAttributeOptions:
+    """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
+
+    access: GlueAccess
+    is_callable: bool = True
+    loads_state: bool = True
+
+
+class DeclaredAttribute:
     """
     Descriptor for marking methods or values as Glue attributes.
 
@@ -38,13 +48,14 @@ class Attribute:
         access: GlueAccess,
         loads_state: bool = True,
     ) -> None:
-        self.__required_glue_access__ = access
-        self.loads_state = loads_state
+        self._access = access
+        self._loads_state = loads_state
         self.default = _MISSING
         self.name: str | None = None
         self.storage_name: str | None = None
         self.target: Any = None
-        self.is_callable = False
+        self._is_callable = False
+
         if value is not _MISSING:
             if self._is_decoratable(value):
                 self._bind_target(value)
@@ -52,6 +63,16 @@ class Attribute:
                 self.target = value
             else:
                 self.default = value
+
+        self._update_glue_options()
+
+    def _update_glue_options(self) -> None:
+        """Create and attach the __glue_options__ based on current state."""
+        self.__glue_options__ = DeclaredAttributeOptions(
+            access=self._access,
+            is_callable=self._is_callable,
+            loads_state=self._loads_state,
+        )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if self.target is None and len(args) == 1 and not kwargs and self._is_decoratable(args[0]):
@@ -100,12 +121,13 @@ class Attribute:
             return
         instance.__dict__.pop(self._get_storage_name(), None)
 
-    def _bind_target(self, target: Callable[..., Any] | property) -> 'Attribute':
+    def _bind_target(self, target: Callable[..., Any] | property) -> 'DeclaredAttribute':
         self.target = target
-        self.is_callable = not isinstance(target, property)
+        self._is_callable = not isinstance(target, property)
         wrapped = target.fget if isinstance(target, property) else target
         if wrapped is not None:
             update_wrapper(self, wrapped)
+        self._update_glue_options()
         return self
 
     def _get_storage_name(self) -> str:
