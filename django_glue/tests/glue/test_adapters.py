@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from functools import cached_property
 from types import SimpleNamespace
 
@@ -23,6 +24,7 @@ from django_glue.glue import (
     GlueObjectResolverRegistry,
 )
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
+from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
 from django_glue.glue.schemas import AttributeCallResolverContext
 from test_project.gorilla.models import Gorilla, Skill
@@ -540,17 +542,15 @@ class DjangoModelGlueObjectTestCase(TestCase):
             **glue_context(access=GlueAccess.VIEW),
             fields=['profile_photo'],
         ))
-        policy = glue_object.policy
 
-        state = glue_object.state
+        # Simulate the actual HTTP flow: state is JSON-encoded before being sent to frontend
+        state = json.loads(json.dumps(glue_object.state, cls=GlueResponseJSONEncoder))
 
-        self.assertTrue(
-            state['profile_photo']['value']['name'].startswith('gorilla_photos/profile-photo')
-        )
-        self.assertTrue(
-            state['profile_photo']['value']['url'].startswith('/media/gorilla_photos/profile-photo')
-        )
-        self.assertGreater(state['profile_photo']['value']['size'], 0)
+        file_value = state['profile_photo']['value']
+        self.assertTrue(file_value['name'].startswith('gorilla_photos/profile-photo'))
+        self.assertTrue(file_value['url'].startswith('/media/gorilla_photos/profile-photo'))
+        self.assertIn('path', file_value)  # Local storage supports path
+        self.assertNotIn('size', file_value)  # Size is omitted for performance
 
     def test_model_adapter_reconstructs_model_reconstruct_from_policy(self):
         glue_object = with_request(ModelGlue(

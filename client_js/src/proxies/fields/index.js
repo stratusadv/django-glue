@@ -13,16 +13,16 @@ function createFieldGlue({owner, name, stateKey, metadata = {}, existingField = 
 
     const options = {owner, name, stateKey, metadata}
     if (metadata.choice_model_path && metadata.type === 'ManyToManyField') {
-        return new ManyRelationFieldGlue(options).asProxy()
+        return new ManyRelationFieldGlue(options)
     }
     if (metadata.choice_model_path) {
-        return new RelationFieldGlue(options).asProxy()
+        return new RelationFieldGlue(options)
     }
     if (Array.isArray(metadata.choices)) {
-        return new ChoiceFieldGlue(options).asProxy()
+        return new ChoiceFieldGlue(options)
     }
 
-    return new FieldGlue(options).asProxy()
+    return new FieldGlue(options)
 }
 
 export {

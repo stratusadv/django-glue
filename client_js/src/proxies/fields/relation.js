@@ -5,6 +5,9 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     static loadingCache = new Map()
 
     get choices() {
+        if (this.choice_model_path) {
+            this.ensureChoices([])
+        }
         return this._choices || []
     }
 
@@ -27,17 +30,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get selectedChoice() {
         const pk = this.pk
         if (pk == null) return undefined
-        return (this.choices || []).find(choice => Number(choice.pk) === Number(pk))
+        return (this._choices || []).find(choice => Number(choice.pk) === Number(pk))
     }
 
     get selectedLabel() {
         return this.selectedChoice?.__str__ ?? ''
-    }
-
-    _handlePropertyAccess(prop, receiver) {
-        if (prop === 'choices' && this.choice_model_path) {
-            receiver.ensureChoices([])
-        }
     }
 
     buildChoices(...choiceFields) {
