@@ -1,7 +1,3 @@
-function isInternalProperty(prop) {
-    return typeof prop === 'string' && prop.startsWith('__glue__')
-}
-
 class FieldGlue {
     constructor({owner, name, stateKey, metadata = {}}) {
         this.name = name
@@ -80,48 +76,6 @@ class FieldGlue {
 
     toJSON() {
         return this.value
-    }
-
-    // TODO: this should be deleted
-    asProxy() {
-        const field = this
-        return new Proxy(this, {
-            get(target, prop, receiver) {
-                if (prop === Symbol.iterator) {
-                    return target.value?.[Symbol.iterator]?.bind(target.value)
-                }
-                if (prop === 'then') {
-                    return undefined
-                }
-                target._handlePropertyAccess?.(prop, receiver)
-                if (prop in target) {
-                    return Reflect.get(target, prop, receiver)
-                }
-
-                const value = target.value
-                const member = value?.[prop]
-                return typeof member === 'function' ? member.bind(value) : member
-            },
-            set(target, prop, value, receiver) {
-                if (prop === 'value') {
-                    target.value = value
-                    return true
-                }
-                if (prop in target || isInternalProperty(prop)) {
-                    return Reflect.set(target, prop, value, receiver)
-                }
-
-                const current = target.value
-                if (current && typeof current === 'object') {
-                    current[prop] = value
-                    return true
-                }
-                return Reflect.set(target, prop, value, receiver)
-            },
-            has(target, prop) {
-                return prop in target || prop in Object(field.value ?? {})
-            },
-        })
     }
 }
 

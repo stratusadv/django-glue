@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-from django.db.models.fields.files import FieldFile
-
 from django_glue.glue.attributes.django.field import BaseDjangoFieldGlueAttribute
 
 if TYPE_CHECKING:
@@ -59,22 +57,7 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
                 for obj in self.field.value_from_object(self.instance)
             ]
 
-        value = self.field.value_from_object(self.instance)
-        if isinstance(value, FieldFile):
-            return self._serialize_field_file(value)
-        return value
-
-    @staticmethod
-    def _serialize_field_file(value: FieldFile) -> dict[str, Any] | None:
-        try:
-            return {
-                'name': value.name,
-                # 'size': value.size,
-                # 'url': value.url,
-                # 'path': value.path,
-            }
-        except ValueError:
-            return None
+        return self.field.value_from_object(self.instance)
 
     def set(self, value: Any) -> None:
         if self.field.editable:
