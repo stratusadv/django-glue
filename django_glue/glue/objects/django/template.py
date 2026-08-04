@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
 from django.template.loader import render_to_string
@@ -9,9 +9,10 @@ from django.template.loader import render_to_string
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.metadata import GlueMetadata
-from django_glue.glue.policy import GluePolicy
-from django_glue.resolver.exceptions import GlueResolverError
+from django_glue.exceptions import GlueRequestError
+
+if TYPE_CHECKING:
+    from django_glue.glue.policy import GluePolicy
 
 
 class TemplateGlue(BaseGlue):
@@ -44,13 +45,13 @@ class TemplateGlue(BaseGlue):
         }
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict[str, Any]:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> TemplateGlue:
@@ -68,13 +69,15 @@ class TemplateGlue(BaseGlue):
         try:
             html = render_to_string(self.target, context=merged_context)
         except TemplateDoesNotExist as e:
-            raise GlueResolverError(
-                response_error=f'Template not found: {self.target}',
-                response_status=404,
+            raise GlueRequestError(
+                code='template_not_found',
+                message=f'Template not found: {self.target}',
+                status=404,
             ) from e
         except TemplateSyntaxError as e:
-            raise GlueResolverError(
-                response_error=f'Template syntax error in {self.target}: {e!s}',
-                response_status=500,
+            raise GlueRequestError(
+                code='template_syntax_error',
+                message=f'Template syntax error in {self.target}: {e!s}',
+                status=500,
             ) from e
         return {'html': html}

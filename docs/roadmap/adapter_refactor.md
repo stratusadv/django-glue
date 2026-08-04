@@ -16,7 +16,7 @@ The refactor should make one shared pipeline:
 ```text
 Python target
 -> GlueObject
--> GluePolicy + GlueState + GlueMetadata
+-> GluePolicy + GlueState + metadata payload
 -> frontend proxy
 -> GlueAttributeRequest
 -> server resolves policy, applies state, calls attribute
@@ -44,7 +44,7 @@ Primary responsibilities:
 
 - Build a `GluePolicy`.
 - Build `GlueState`.
-- Build `GlueMetadata`.
+- Build metadata payload.
 - Resolve a target object from a submitted policy.
 - Apply submitted state safely.
 - Execute a requested callable attribute.
@@ -114,9 +114,9 @@ Examples:
 
 The client may submit state, but the server must treat it as untrusted input. It is only valid after being checked against the signed `GluePolicy` and validated by the relevant adapter.
 
-### GlueMetadata
+### Metadata Payload
 
-`GlueMetadata` contains frontend construction and display hints.
+The metadata payload contains frontend construction and display hints.
 
 Examples:
 
@@ -261,7 +261,7 @@ Responsibilities:
 - Use Django model metadata to discover fields.
 - Convert model fields into `DjangoModelFieldGlueAttribute` instances.
 - Serialize model values into `GlueState`.
-- Build field metadata into `GlueMetadata`.
+- Build field metadata into the metadata payload.
 - Validate and apply submitted state through Django `ModelForm` behavior.
 - Resolve a model instance from the submitted policy.
 
@@ -367,7 +367,7 @@ Submitted state must be checked against the policy and validated through the rel
 
 ### Metadata Is Frontend-Only
 
-`GlueMetadata` exists to help the frontend construct useful proxy objects and UI helpers.
+Metadata exists to help the frontend construct useful proxy objects and UI helpers.
 
 The server must not trust metadata submitted by the client.
 
@@ -403,7 +403,7 @@ bound_attributes
 -> policy.attributes
 
 included_fields rich metadata
--> split between policy.attributes and GlueMetadata.fields
+-> split between policy.attributes and metadata.fields
 
 proxy-specific state classes
 -> GlueState
@@ -417,7 +417,7 @@ proxy-specific serialization
 
 ## Suggested Migration Path
 
-1. Introduce `GluePolicy`, `GlueState`, `GlueMetadata`, and `GlueAttributeRequest` alongside current classes.
+1. Introduce `GluePolicy`, `GlueState`, metadata payloads, and `GlueAttributeRequest` alongside current classes.
 2. Introduce the object resolver registry.
 3. Implement standalone `DjangoModelFieldGlueAttribute`, `DjangoFormFieldGlueAttribute`, `DjangoModelGlueObject`, `DjangoFormGlueObject`, and `DjangoQuerySetGlueObject`.
 4. Implement standalone template and function glue objects.

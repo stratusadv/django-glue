@@ -12,7 +12,6 @@ from django.test import TestCase
 
 from django_glue.exceptions import (
     GlueError,
-    GlueProxyNotFoundError,
     GlueRequestError,
     GlueAccessError,
     GlueMissingAttributeError,
@@ -27,7 +26,6 @@ class GlueExceptionsTestCase(TestCase):
     def test_all_exceptions_inherit_from_glue_error(self):
         """All custom exceptions should inherit from GlueError."""
         exception_classes = [
-            GlueProxyNotFoundError,
             GlueRequestError,
             GlueAccessError,
             GlueMissingAttributeError,
@@ -39,16 +37,6 @@ class GlueExceptionsTestCase(TestCase):
                 issubclass(exc_class, GlueError),
                 f'{exc_class.__name__} should inherit from GlueError',
             )
-
-    def test_glue_proxy_not_found_error(self):
-        """GlueProxyNotFoundError should contain unique_name and clear message."""
-        exc = GlueProxyNotFoundError('my_task')
-
-        self.assertEqual(exc.unique_name, 'my_task')
-        self.assertEqual(exc.status, 404)
-        self.assertEqual(exc.details(), {'proxy': 'my_task'})
-        self.assertIn('my_task', str(exc))
-        self.assertIn('not found', str(exc).lower())
 
     def test_glue_request_error(self):
         """GlueRequestError should support precise codes, statuses, and details."""

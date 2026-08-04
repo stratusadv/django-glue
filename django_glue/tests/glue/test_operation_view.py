@@ -11,9 +11,11 @@ django.setup()
 
 from django_glue.access import GlueAccess
 from django_glue.glue import ModelGlue, FunctionGlue
-from django_glue.glue.views import glue_attribute_call_view
+from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 from django_glue.tests.conftest import MockSession
 from test_project.gorilla.models import Gorilla
+
+glue_attribute_call_view = GlueAttributeCallResolver.as_view()
 
 
 class GlueAttributeRequestViewTestCase(TestCase):
@@ -41,7 +43,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': object_name}},
+            {'kwargs': {'object_name': object_name, 'attribute_name': attribute}},
         )()
         request.session = self.session
         request.user = 'TestUser'
@@ -99,7 +101,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 403)
         data = json.loads(response.content)
-        self.assertEqual(data['error']['code'], 'proxy_access_denied')
+        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
 
     def test_attribute_request_view_rejects_policy_for_different_user(self):
         glue_object = ModelGlue(
@@ -123,7 +125,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 403)
         data = json.loads(response.content)
-        self.assertEqual(data['error']['code'], 'proxy_invalid_user')
+        self.assertEqual(data['result']['error']['code'], 'proxy_invalid_user')
 
     def test_attribute_request_view_missing_policy_returns_400(self):
         request = self.factory.post(
@@ -133,7 +135,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': 'gorilla'}},
+            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
         )()
         request.session = self.session
 
@@ -141,7 +143,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertEqual(data['error']['code'], 'missing_policy')
+        self.assertEqual(data['result']['error']['code'], 'missing_field')
 
     def test_attribute_request_view_rejects_non_object_kwargs(self):
         glue_object = ModelGlue(
@@ -163,7 +165,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': 'gorilla'}},
+            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
         )()
         request.session = self.session
 
@@ -171,7 +173,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertEqual(data['error']['code'], 'invalid_kwargs')
+        self.assertEqual(data['result']['error']['code'], 'invalid_kwargs')
 
     def test_attribute_request_view_executes_function(self):
         glue_object = FunctionGlue(
@@ -261,7 +263,7 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': 'gorilla'}},
+            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
         )()
         request.session = MockSession(session_key='different-session')
 
@@ -269,9 +271,9 @@ class GlueInvalidSessionErrorTestCase(TestCase):
 
         self.assertEqual(response.status_code, 403)
         data = json.loads(response.content)
-        self.assertEqual(data['error']['code'], 'proxy_invalid_session')
-        self.assertIn('gorilla', data['error']['message'])
-        self.assertIn('session', data['error']['message'].lower())
+        self.assertEqual(data['result']['error']['code'], 'proxy_invalid_session')
+        self.assertIn('gorilla', data['result']['error']['message'])
+        self.assertIn('session', data['result']['error']['message'].lower())
 
     def test_session_mismatch_details_include_proxy_name(self):
         """Error details include the proxy name for programmatic access."""
@@ -294,14 +296,14 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': 'my_proxy'}},
+            {'kwargs': {'object_name': 'my_proxy', 'attribute_name': 'save'}},
         )()
         request.session = MockSession(session_key='different-session')
 
         response = glue_attribute_call_view(request, object_name='my_proxy', attribute_name='save')
 
         data = json.loads(response.content)
-        self.assertEqual(data['error']['details']['proxy'], 'my_proxy')
+        self.assertEqual(data['result']['error']['details']['proxy'], 'my_proxy')
 
     def test_matching_session_allows_request(self):
         """Requests with matching session_id proceed normally."""
@@ -325,7 +327,7 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request.resolver_match = type(
             'ResolverMatch',
             (),
-            {'kwargs': {'object_name': 'gorilla'}},
+            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
         )()
         request.session = session
 

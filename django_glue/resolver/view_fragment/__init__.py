@@ -1,0 +1,1 @@
+"""View-fragment resolver package."""

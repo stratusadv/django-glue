@@ -6,22 +6,18 @@ import pickle
 from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
-from django import forms
-
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
-# Runtime import required: Glue.Attribute method annotations are resolved with
-# typing.get_type_hints() when building callable kwargs.
-from django_glue.glue.policy import GluePolicy
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.exceptions import GlueQuerySetFilterValidationError
 
 if TYPE_CHECKING:
+    from django import forms
     from django.db import models
+    from django_glue.glue.policy import GluePolicy
 
 
 class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
@@ -124,13 +120,13 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         return {}
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict[str, Any]:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     @cached_property
     def _annotation_names(self) -> tuple[str, ...]:

@@ -19,14 +19,13 @@ from django_glue.glue import (
     QuerySetGlue,
     TemplateGlue,
     GluePolicy,
-    GlueMetadata,
     FunctionGlue,
-    GlueObjectResolverRegistry,
+    GlueClassRegistry,
 )
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
-from django_glue.glue.schemas import AttributeCallResolverContext
+from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.fight.models import Fight
 from test_project.test_forms import ContactForm, TestModelForm
@@ -114,13 +113,13 @@ class NestedStatsGlue(BaseGlue):
         return {'name': self.name}
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     @classmethod
     def _reconstruct_from_policy(cls, policy):
@@ -147,13 +146,13 @@ class NestedDashboardGlue(BaseGlue):
         return {'name': self.name}
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     @classmethod
     def _reconstruct_from_policy(cls, policy):
@@ -315,7 +314,7 @@ class AllFieldsTestCase(TestCase):
             fields=ALL_FIELDS,
         ))
 
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         self.assertIn('name', metadata['attributes'])
         self.assertIn('age', metadata['attributes'])
         self.assertNotIn('signature', metadata['attributes'])
@@ -378,12 +377,6 @@ class GluePolicyTestCase(TestCase):
             GluePolicy.model_validate(payload)
 
 
-class GlueShapelessPayloadTestCase(TestCase):
-    def test_metadata_accepts_arbitrary_payload_shape(self):
-        metadata = GlueMetadata.from_payload({'ui': {'fields': ['name']}})
-
-        self.assertEqual(metadata.to_payload(), {'ui': {'fields': ['name']}})
-
 class DjangoModelGlueObjectTestCase(TestCase):
     def setUp(self):
         self.gorilla = Gorilla.objects.create(
@@ -417,7 +410,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertNotIn('signature', glue_object.state)
         self.assertNotIn(
             'signature',
-            glue_object.metadata.to_payload()['attributes'],
+            glue_object.metadata['attributes'],
         )
 
     def test_model_adapter_rejects_explicitly_excluded_field_types(self):
@@ -443,7 +436,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         ))
         policy = glue_object.policy
         state = glue_object.state
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
 
         self.assertEqual(policy.namespace, 'model')
         self.assertEqual(policy.identity['target_pk'], self.gorilla.pk)
@@ -458,7 +451,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
     def test_model_relation_field_metadata_has_stable_choice_shape(self):
         glue_object = ModelGlue(self.gorilla, **glue_context(), fields=['skills'])
 
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         skills_metadata = metadata['attributes']['skills']
 
         self.assertEqual(skills_metadata['type'], 'ManyToManyField')
@@ -567,7 +560,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
     def test_model_adapter_transfers_target_glue_attributes_to_policy(self):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         state = glue_object.state
 
         self.assertIn('shout', policy.attributes)
@@ -593,7 +586,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         ))
 
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         state = glue_object.state
 
         # 'form' is an alias for 'forms.default', both map to same nested policy
@@ -615,7 +608,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         ))
 
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
 
         self.assertFalse(policy_has_attribute(policy, 'form'))
         self.assertTrue(policy_has_attribute(policy, 'forms.edit'))
@@ -643,7 +636,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         glue_object = with_request(NestedDashboardGlue())
 
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         state = glue_object.state
 
         self.assertIn('stats', policy.attributes)
@@ -655,7 +648,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertEqual(metadata['attributes']['stats.reset']['namespace'], 'callable')
         self.assertIn('stats', state)
 
-        context = AttributeCallResolverContext.model_construct(
+        context = AttributeCallRequestContext.model_construct(
             request=glue_object.request,
             target_glue_policy=policy,
             target_glue_client_state=None,
@@ -682,7 +675,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         policy = glue_object.policy
         state = glue_object.state
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
 
         self.assertEqual(policy.namespace, 'form')
         self.assertIn('validate', policy.attributes)
@@ -733,7 +726,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertNotIn('signature', glue_object.attributes)
         self.assertNotIn(
             'signature',
-            glue_object.metadata.to_payload()['attributes'],
+            glue_object.metadata['attributes'],
         )
 
     def test_queryset_adapter_requires_fields_or_exclude(self):
@@ -799,7 +792,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         ))
 
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
         resolved = QuerySetGlue._reconstruct_from_policy(policy)
 
         self.assertEqual(policy.namespace, 'querySet')
@@ -887,7 +880,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         )
         glue_object.request = request
 
-        context = AttributeCallResolverContext.model_construct(
+        context = AttributeCallRequestContext.model_construct(
             request=request,
             target_glue_policy=glue_object.policy,
             target_glue_client_state={},
@@ -898,7 +891,10 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             },
         )
         response = glue_object.process_attribute_call(context)
-        resolved = QuerySetGlue._reconstruct_from_policy(response['data']['policy'])
+        response_data = json.loads(response.content)
+        resolved = QuerySetGlue._reconstruct_from_policy(
+            GluePolicy.model_validate(response_data['policy'])
+        )
         resolved.request = request
 
         result = resolved.query_with_params(
@@ -933,17 +929,17 @@ class PythonAdaptersTestCase(TestCase):
         ))
 
         policy = glue_object.policy
-        metadata = glue_object.metadata.to_payload()
+        metadata = glue_object.metadata
 
         self.assertEqual(policy.namespace, 'function')
         self.assertIn('execute', policy.attributes)
         self.assertEqual(metadata['params'][0]['name'], 'amount')
 
 
-class GlueObjectResolverRegistryTestCase(TestCase):
+class GlueClassRegistryTestCase(TestCase):
     def test_registry_resolves_glue_object_class_by_policy_namespace(self):
-        registry = GlueObjectResolverRegistry()
-        registry.register_glue_object_class(ModelGlue)
+        registry = GlueClassRegistry()
+        registry.register_glue_class(ModelGlue)
         gorilla = Gorilla.objects.create(name='Koko')
         policy = with_request(ModelGlue(
             gorilla,
@@ -951,7 +947,7 @@ class GlueObjectResolverRegistryTestCase(TestCase):
             fields=['name'],
         )).policy
 
-        resolved_class = registry.get_class_for_namespace(policy.namespace)
+        resolved_class = registry.get_glue_class(policy.namespace)
 
         self.assertIs(resolved_class, ModelGlue)
 
@@ -989,7 +985,7 @@ class LazyLoadingTestCase(TestCase):
         gorilla.name = 'Ndume'
         gorilla.save()
 
-        context = AttributeCallResolverContext.model_construct(
+        context = AttributeCallRequestContext.model_construct(
             request=glue_object.request,
             target_glue_policy=policy,
             target_glue_client_state={'name': {'value': 'Koko'}},
@@ -1230,8 +1226,8 @@ class ForeignKeyFieldTestCase(TestCase):
             fields=['name', 'red_corner'],
         ))
 
-        lazy_meta = glue_lazy.metadata.to_payload()['attributes']['red_corner']
-        eager_meta = glue_eager.metadata.to_payload()['attributes']['red_corner']
+        lazy_meta = glue_lazy.metadata['attributes']['red_corner']
+        eager_meta = glue_eager.metadata['attributes']['red_corner']
 
         self.assertTrue(lazy_meta['lazy'])
         self.assertFalse(eager_meta['lazy'])

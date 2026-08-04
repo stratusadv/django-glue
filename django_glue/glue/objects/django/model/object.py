@@ -3,15 +3,17 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING, cast
 
-from django import forms
 from django.core.exceptions import ValidationError
-from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import DeclaredAttribute, BaseGlueAttribute, GlueObjectAttribute, ReadOnlyAttribute
+from django_glue.glue.attributes import (
+    BaseGlueAttribute,
+    DeclaredAttribute,
+    GlueObjectAttribute,
+    ReadOnlyAttribute,
+)
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ForeignKeyFieldAttribute, ModelFieldAttribute
-from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
@@ -20,8 +22,9 @@ from django_glue.glue.policy import GluePolicy  # noqa: TC001
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
-    from django.db.models import Model
+    from django import forms
     from django.db import models
+    from django.db.models import Model
 
 ALL_FIELDS: Literal['__all__'] = '__all__'
 
@@ -199,9 +202,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @property
     def state(self) -> dict[str, Any]:
-        if self._loaded_state is not None:
-            self._validate()
-
+        self._validate()
         state = {}
         for name, attribute in self.attributes.items():
             if hasattr(attribute, 'state'):
@@ -210,24 +211,23 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         return state
 
     def _validate(self) -> None:
-        """Run validation and populate _field_errors.
-
-        Only called when client state has been loaded, not during initial reads.
-        """
+        """Run validation and populate _field_errors."""
         try:
             self.instance.full_clean()
             self._field_errors = {}
         except ValidationError as e:
-            self._field_errors = e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
+            self._field_errors = (
+                e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
+            )
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict[str, Any]:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     def _field_access(self, field_name: str) -> GlueAccess:
         field = self.instance._meta.get_field(field_name)

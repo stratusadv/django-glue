@@ -1,15 +1,15 @@
 """
-Tests for GlueViewHttpRequest.
+Tests for ViewFragmentHttpRequest.
 """
 import json
 
 from django.test import TestCase, RequestFactory
 
-from django_glue.resolver.view.request import ViewHttpRequest
+from django_glue.resolver.view_fragment.request import ViewFragmentHttpRequest
 
 
-class GlueViewHttpRequestTestCase(TestCase):
-    """Tests for GlueViewHttpRequest wrapper."""
+class ViewFragmentHttpRequestTestCase(TestCase):
+    """Tests for ViewFragmentHttpRequest wrapper."""
 
     def setUp(self):
         self.factory = RequestFactory()
@@ -17,8 +17,8 @@ class GlueViewHttpRequestTestCase(TestCase):
         self.base_request.session = {}
 
     def test_sets_method(self):
-        """Should set the HTTP method from view_body."""
-        req = ViewHttpRequest(
+        """Should set the HTTP method from view request context."""
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='POST',
             url_path='/some/path/',
@@ -29,7 +29,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_sets_body_as_json(self):
         """Should encode view_payload as JSON in body."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='POST',
             url_path='/some/path/',
@@ -41,7 +41,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_sets_content_type(self):
         """Should set content_type to application/json."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='POST',
             url_path='/some/path/',
@@ -52,7 +52,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_sets_path_info(self):
         """Should extract path from url_path."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='GET',
             url_path='/some/path/',
@@ -63,7 +63,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_parses_query_params_single_value(self):
         """Should parse single-value query params into GET."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='GET',
             url_path='/path/?name=test',
@@ -74,7 +74,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_parses_query_params_multiple_values(self):
         """Should parse multi-value query params into GET as list."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='GET',
             url_path='/path/?tags=a&tags=b',
@@ -85,7 +85,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_delegates_unknown_attributes_to_base(self):
         """Unknown attributes should delegate to the base request."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='GET',
             url_path='/path/',
@@ -96,7 +96,7 @@ class GlueViewHttpRequestTestCase(TestCase):
 
     def test_empty_view_payload(self):
         """Should handle empty view_payload dict."""
-        req = ViewHttpRequest(
+        req = ViewFragmentHttpRequest(
             base_request=self.base_request,
             method='GET',
             url_path='/path/',

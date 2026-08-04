@@ -19,7 +19,12 @@ class GlueObjectAttribute(BaseGlueAttribute):
         glue_object: BaseGlue,
         attr_owner_instance: Any = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access, attr_owner_instance=attr_owner_instance)
+        super().__init__(
+            owner=owner,
+            name=name,
+            access=access,
+            attr_owner_instance=attr_owner_instance,
+        )
         self.glue_object = glue_object
 
     def _prepare_glue_object(self) -> BaseGlue:
@@ -32,7 +37,7 @@ class GlueObjectAttribute(BaseGlueAttribute):
         return super().metadata | {
             'namespace': 'glue',
             'glue_namespace': glue_object.namespace,
-            'metadata': glue_object.metadata.to_payload(),
+            'metadata': glue_object.metadata,
         }
 
     @property

@@ -5,7 +5,39 @@ These exceptions provide clear, specific error types for different failure modes
 making it easier to handle errors appropriately in views and client code.
 """
 
+import inspect
+from enum import StrEnum
 from typing import Any
+
+
+class GlueRequestErrorCode(StrEnum):
+    """Error codes for malformed or invalid Glue requests."""
+
+    # Content/format errors
+    INVALID_CONTENT_TYPE = 'invalid_content_type'
+    INVALID_JSON = 'invalid_json'
+    INVALID_KWARGS = 'invalid_kwargs'
+
+    # Missing required fields
+    MISSING_FIELD = 'missing_field'
+
+    # Path/body mismatch errors
+    OBJECT_NAME_MISMATCH = 'object_name_mismatch'
+    ATTRIBUTE_NAME_MISMATCH = 'attribute_name_mismatch'
+    MISSING_PATH_PARAMETERS = 'missing_path_parameters'
+
+    # Pydantic validation
+    MALFORMED_REQUEST = 'malformed_request'
+
+    # View fragment request errors
+    MISSING_VIEW_TARGET = 'missing_view_target'
+    VIEW_URL_NAME_NOT_FOUND = 'view_url_name_not_found'
+    VIEW_URL_PATH_NOT_FOUND = 'view_url_path_not_found'
+    VIEW_REDIRECT_URL_NOT_FOUND = 'view_redirect_url_not_found'
+    EXTERNAL_VIEW_REDIRECT_NOT_SUPPORTED = 'external_view_redirect_not_supported'
+    TOO_MANY_VIEW_REDIRECTS = 'too_many_view_redirects'
+    UNSUPPORTED_VIEW_RESPONSE_TYPE = 'unsupported_view_response_type'
+    VIEW_CALL_FAILED = 'view_call_failed'
 
 
 class GlueError(Exception):
@@ -23,8 +55,14 @@ class GlueRequestError(GlueError):
 
     status = 400
 
-    def __init__(self, code: str, message: str, details: dict | None = None, status: int | None = None) -> None:
-        self.code = code
+    def __init__(
+        self,
+        code: GlueRequestErrorCode | str,
+        message: str,
+        details: dict | None = None,
+        status: int | None = None,
+    ) -> None:
+        self.code = str(code)
         self._details = details or {}
         if status is not None:
             self.status = status
@@ -32,20 +70,6 @@ class GlueRequestError(GlueError):
 
     def details(self) -> dict:
         return self._details
-
-
-class GlueProxyNotFoundError(GlueError):
-    """Raised when a proxy with the given unique_name is not found in the session."""
-
-    code = 'proxy_not_found'
-    status = 404
-
-    def __init__(self, unique_name: str) -> None:
-        self.unique_name = unique_name
-        super().__init__(f"Proxy '{unique_name}' not found in session.")
-
-    def details(self) -> dict:
-        return {'proxy': self.unique_name}
 
 
 class GlueAccessError(GlueError):
@@ -225,8 +249,12 @@ class GlueAttributeCallError(GlueError):
     code = 'bound_attribute_call_error'
     status = 500
 
-    def __init__(self, callable_attr: Any, original_error: Exception, provided_kwargs: list[str]) -> None:
-        import inspect
+    def __init__(
+        self,
+        callable_attr: Any,
+        original_error: Exception,
+        provided_kwargs: list[str],
+    ) -> None:
         self.original_error = original_error
         self.provided_kwargs = provided_kwargs
 

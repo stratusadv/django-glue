@@ -9,9 +9,8 @@ from django_glue.glue.objects.django import (
     TemplateGlue,
 )
 from django_glue.glue.function import FunctionGlue
-from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.policy import GluePolicy
-from django_glue.glue.registry import GlueObjectResolverRegistry, glue_object_resolver_registry
+from django_glue.glue.registry import GlueClassRegistry, glue_class_registry
 
 __all__ = [
     'BaseGlue',
@@ -20,12 +19,11 @@ __all__ = [
     'FormFieldAttribute',
     'FormGlue',
     'FunctionGlue',
-    'GlueMetadata',
-    'GlueObjectResolverRegistry',
+    'GlueClassRegistry',
     'GluePolicy',
     'ModelFieldAttribute',
     'ModelGlue',
     'QuerySetGlue',
     'TemplateGlue',
-    'glue_object_resolver_registry',
+    'glue_class_registry',
 ]

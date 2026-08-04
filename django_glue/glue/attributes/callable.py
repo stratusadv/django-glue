@@ -8,7 +8,7 @@ from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.base import BaseGlueAttribute
-from django_glue.glue.schemas import AttributeCallResolverContext
+from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -62,7 +62,7 @@ class CallableAttribute(BaseGlueAttribute):
 
     def load_context(
         self,
-        context: AttributeCallResolverContext,
+        context: AttributeCallRequestContext,
     ) -> LoadedAttributeCall:
         """
         Resolve kwargs and return a prepared call ready for execution.
@@ -92,7 +92,7 @@ class CallableAttribute(BaseGlueAttribute):
     def _resolve_call_parameters(
         self,
         target_callable: Callable[..., Any],
-        context: AttributeCallResolverContext,
+        context: AttributeCallRequestContext,
     ) -> dict[str, Any]:
         """Map context and request kwargs to the target callable's signature."""
         unwrapped_callable = inspect.unwrap(target_callable)
@@ -133,7 +133,7 @@ class CallableAttribute(BaseGlueAttribute):
         param_name: str,
         param: inspect.Parameter,
         type_hint: type | None,
-        context: AttributeCallResolverContext,
+        context: AttributeCallRequestContext,
     ) -> Any | None:
         """
         Resolve a single parameter value.
@@ -186,5 +186,5 @@ class CallableAttribute(BaseGlueAttribute):
         for key, value in call_parameters.items():
             resolved_parameters.setdefault(key, value)
 
-    def call(self, context: AttributeCallResolverContext) -> Any:
+    def call(self, context: AttributeCallRequestContext) -> Any:
         return self.load_context(context).execute()

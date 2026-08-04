@@ -1,4 +1,5 @@
 from contextlib import suppress
+from typing import Any
 
 from django.core.files.base import File
 from django.core.files.uploadedfile import UploadedFile
@@ -31,33 +32,33 @@ def _serialize_uploaded_file(file: UploadedFile) -> dict:
 
 
 class GlueResponseJSONEncoder(DjangoJSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, BaseModel):
-            return obj.model_dump()
+    def default(self, o: Any) -> Any:  # noqa: PLR0911
+        if isinstance(o, BaseModel):
+            return o.model_dump()
 
-        if isinstance(obj, Model):
-            return model_to_dict(obj)
+        if isinstance(o, Model):
+            return model_to_dict(o)
 
-        if isinstance(obj, QuerySet):
-            return [model_to_dict(item) for item in obj]
+        if isinstance(o, QuerySet):
+            return [model_to_dict(item) for item in o]
 
-        if isinstance(obj, FieldFile):
-            return _serialize_field_file(obj)
+        if isinstance(o, FieldFile):
+            return _serialize_field_file(o)
 
-        if isinstance(obj, UploadedFile):
-            return _serialize_uploaded_file(obj)
+        if isinstance(o, UploadedFile):
+            return _serialize_uploaded_file(o)
 
-        if isinstance(obj, File):
-            return {'name': obj.name}
+        if isinstance(o, File):
+            return {'name': o.name}
 
         # Handle memoryview objects (returned by PostgreSQL for BinaryField)
-        if isinstance(obj, memoryview):
-            return obj.tobytes().decode('utf-8', errors='replace')
+        if isinstance(o, memoryview):
+            return o.tobytes().decode('utf-8', errors='replace')
 
         # Handle bytes objects
-        if isinstance(obj, bytes):
-            return obj.decode('utf-8', errors='replace')
+        if isinstance(o, bytes):
+            return o.decode('utf-8', errors='replace')
 
         # For other types not handled by the default encoder,
         # delegate to the base class (which handles datetime, date, etc.)
-        return super().default(obj)
+        return super().default(o)

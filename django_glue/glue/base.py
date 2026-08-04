@@ -4,18 +4,21 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, TYPE_CHECKING
 
-from django_glue.exceptions import GlueAccessError, GlueCalledStateAttributeError, GlueMissingAttributeError
+from django_glue.exceptions import (
+    GlueAccessError,
+    GlueCalledStateAttributeError,
+    GlueMissingAttributeError,
+)
 from django_glue.glue.attributes.callable import CallableAttribute
 from django_glue.glue.attributes.collector import GlueAttributeCollector
 from django_glue.glue.context import GlueManifest
 from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
-    from django_glue.glue.schemas import AttributeCallResolverContext
+    from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
     from django_glue.glue.attributes import BaseGlueAttribute
     from django_glue.access import GlueAccess
-    from django.http import HttpRequest
-    from django_glue.glue.metadata import GlueMetadata
+    from django.http import HttpRequest, JsonResponse
     from django_glue.glue.policy import GluePolicy
 
 
@@ -45,7 +48,10 @@ class BaseGlue(ABC):
         from django_glue.glue.policy import GluePolicy  # noqa: PLC0415
 
         if not self.is_bound:
-            msg = f"Cannot generate policy for unbound GlueObject '{self.name}'. Bind to a request first."
+            msg = (
+                f"Cannot generate policy for unbound GlueObject '{self.name}'. "
+                'Bind to a request first.'
+            )
             raise RuntimeError(msg)
 
         return GluePolicy.from_glue_object(glue_object=self)
@@ -84,14 +90,14 @@ class BaseGlue(ABC):
 
     @cached_property
     @abstractmethod
-    def metadata(self) -> GlueMetadata:
+    def metadata(self) -> dict[str, Any]:
         """Build non-authoritative client metadata for target."""
         raise NotImplementedError
 
     @classmethod
     def from_attribute_call_resolver_context(
         cls,
-        context: AttributeCallResolverContext
+        context: AttributeCallRequestContext
     ) -> BaseGlue:
         glue_object = cls._reconstruct_from_policy(context.target_glue_policy)
         glue_object.request = context.request
@@ -118,8 +124,8 @@ class BaseGlue(ABC):
 
     def process_attribute_call(
         self,
-        call_context: AttributeCallResolverContext
-    ) -> dict[str, Any]:
+        call_context: AttributeCallRequestContext
+    ) -> JsonResponse:
         """Perform a callable attribute request against a resolved target."""
         glue_attribute = self.attributes.get(call_context.target_attribute_name, None)
         if not glue_attribute:
@@ -143,24 +149,8 @@ class BaseGlue(ABC):
 
         call_result = glue_attribute.call(call_context)
 
-        call_response_data = {
-            'data': {
-                'state': self.state,
-                'policy': self.policy,
-                'metadata': self.metadata,
-            },
-            'status': 200
-        }
-
-        if isinstance(call_result, GlueResponse):
-            call_response_data['data']['result'] = call_result.result
-            call_response_data['data']['messages'] = [
-                message.to_dict() for message in call_result.messages
-            ]
-            call_response_data['status'] = call_result.status
-        else:
-            call_response_data['data']['result'] = call_result
-            call_response_data['data']['messages'] = []
-
-        # TODO: Statically typed dict here -> bad
-        return call_response_data
+        return GlueResponse.from_result(call_result).to_json_response(
+            state=self.state,
+            policy=self.policy,
+            metadata=self.metadata,
+        )

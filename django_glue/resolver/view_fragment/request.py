@@ -1,11 +1,11 @@
 import json
 from typing import Any
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from django.http import HttpRequest, QueryDict
 
 
-class ViewHttpRequest:
+class ViewFragmentHttpRequest:
     """Wraps an HttpRequest, overriding select attributes for a target view call."""
 
     def __init__(

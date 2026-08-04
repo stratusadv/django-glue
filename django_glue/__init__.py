@@ -6,10 +6,10 @@ from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.objects.django.model.object import ALL_FIELDS
 
 __all__ = [
+    'ALL_FIELDS',
+    'DeclaredAttribute',
     'Glue',
-    'django_glue_urls',
     'GlueAccess',
     'GlueResponse',
-    'DeclaredAttribute',
-    'ALL_FIELDS',
+    'django_glue_urls',
 ]

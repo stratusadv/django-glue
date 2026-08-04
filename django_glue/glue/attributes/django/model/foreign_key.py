@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
     from django_glue.access import GlueAccess
     from django_glue.glue.base import BaseGlue
+    from django_glue.glue.objects.django.model.object import ModelGlue
 
 
 class ForeignKeyFieldAttribute(ModelFieldAttribute):
@@ -77,7 +78,7 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         related_glue = self._get_related_glue()
         if related_glue is not None:
             metadata['glue_namespace'] = related_glue.namespace
-            metadata['metadata'] = related_glue.metadata.to_payload()
+            metadata['metadata'] = related_glue.metadata
 
     def _get_related_instance(self) -> models.Model | None:
         """Get the related instance, returning None if not loaded or null."""
@@ -86,7 +87,7 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         except self.field.related_model.DoesNotExist:
             return None
 
-    def _get_related_glue(self):
+    def _get_related_glue(self) -> ModelGlue | None:
         """Get or create the ModelGlue for the related instance."""
         if self._related_glue is not None:
             return self._related_glue
@@ -95,10 +96,10 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         if related_instance is None:
             return None
 
-        from django_glue.glue.objects.django.model.object import ModelGlue
+        from django_glue.glue.objects.django.model.object import ModelGlue  # noqa: PLC0415
 
-        fields = self.related_fields if self.related_fields else '__all__'
-        exclude = self.related_exclude if self.related_exclude else ()
+        fields = self.related_fields or '__all__'
+        exclude = self.related_exclude or ()
 
         self._related_glue = ModelGlue(
             related_instance,
@@ -112,7 +113,7 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         return self._related_glue
 
     @property
-    def glue_object(self):
+    def glue_object(self) -> ModelGlue | None:
         """Return the nested glue object for policy/metadata generation.
 
         Always returns a glue object if the FK has a value, enabling both:

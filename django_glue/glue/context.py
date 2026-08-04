@@ -8,7 +8,6 @@ from django_glue.conf import settings
 from django_glue import constants
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 from django_glue.glue.policy import GluePolicy  # noqa: TC001
-from django_glue.glue.metadata import GlueMetadata  # noqa: TC001
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
 
 class GlueManifest(BaseModel):
     policy: GluePolicy
-    metadata: GlueMetadata
+    metadata: dict[str, Any]
 
 
 class GlueContextManager:
@@ -25,7 +24,7 @@ class GlueContextManager:
         self.request = request
 
         # Glue View requests are wrappers; their Glue manifests belong to the
-        # underlying request so the outer ViewResolver can serialize them.
+        # underlying request so the outer GlueViewFragmentResolver can serialize them.
         context_request = getattr(request, 'glue_context_request', request)
         self.manifests: list[GlueManifest] = context_request.__dict__.setdefault(
             DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY,
@@ -48,7 +47,9 @@ class GlueContextManager:
                 constants.CALLABLE_ATTRIBUTE_URL_NAME: (
                     f'/{constants.BASE_URL_NAME}/{constants.CALLABLE_ATTRIBUTE_URL_NAME}/'
                 ),
-                constants.GLUE_VIEW_URL_NAME: f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}/',
+                constants.GLUE_VIEW_URL_NAME: (
+                    f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}/'
+                ),
             },
             'config': {
                 'requestTimeoutSeconds': settings.DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS,

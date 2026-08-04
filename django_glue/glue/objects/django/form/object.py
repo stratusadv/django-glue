@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.forms.models import model_to_dict
@@ -10,10 +10,12 @@ from django_glue.access import GlueAccess
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.form import FormFieldAttribute
-from django_glue.glue.policy import GluePolicy
-from django_glue.glue.metadata import GlueMetadata
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.utils import get_attr_from_path_string
+
+if TYPE_CHECKING:
+    from django_glue.glue.policy import GluePolicy
+
 
 class FormGlue(BaseGlue):
     namespace = 'form'
@@ -69,13 +71,13 @@ class FormGlue(BaseGlue):
         self._field_errors = dict(self.form.errors)
 
     @cached_property
-    def metadata(self) -> GlueMetadata:
-        return GlueMetadata.from_payload({
+    def metadata(self) -> dict[str, Any]:
+        return {
             'attributes': {
                 name: attribute.metadata
                 for name, attribute in self.attributes.items()
             },
-        })
+        }
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> FormGlue:
@@ -137,7 +139,7 @@ class FormGlue(BaseGlue):
         if queryset is None:
             return []
 
-        def serialize_choice(obj) -> dict[str, Any]:
+        def serialize_choice(obj: Any) -> dict[str, Any]:
             choice = {'pk': obj.pk, '__str__': f'{obj}'}
             for choice_field in choice_fields or []:
                 choice[choice_field] = getattr(obj, choice_field)
@@ -158,6 +160,7 @@ class FormGlue(BaseGlue):
             'data': data,
             'files': self.request.FILES if self.request else None,
         }
-        if isinstance(self.form, forms.ModelForm) and getattr(self.form, 'instance', None) is not None:
+        has_instance = getattr(self.form, 'instance', None) is not None
+        if isinstance(self.form, forms.ModelForm) and has_instance:
             kwargs['instance'] = self.form.instance
         return form_class(**kwargs)

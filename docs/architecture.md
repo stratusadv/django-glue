@@ -10,17 +10,17 @@ This document describes the complete data flow through django-glue, from object 
 
 **File:** `django_glue/glue/registry.py`
 
-The `GlueObjectResolverRegistry` maps namespace strings to BaseGlue subclasses:
+The `GlueClassRegistry` maps namespace strings to BaseGlue subclasses:
 
 ```python
-class GlueObjectResolverRegistry:
+class GlueClassRegistry:
     def __init__(self) -> None:
         self.glue_object_classes: dict[str, type[BaseGlue]] = {}
 
-    def register_glue_object_class(self, glue_object_class: type[BaseGlue]) -> None:
+    def register_glue_class(self, glue_object_class: type[BaseGlue]) -> None:
         self.glue_object_classes[glue_object_class.namespace] = glue_object_class
 
-    def get_class_for_namespace(self, namespace: str) -> type[BaseGlue]:
+    def get_glue_class(self, namespace: str) -> type[BaseGlue]:
         return self.glue_object_classes[namespace]
 ```
 
@@ -57,7 +57,7 @@ class BaseGlue(ABC):
 
     @cached_property
     @abstractmethod
-    def metadata(self) -> GlueMetadata:
+    def metadata(self) -> dict[str, Any]:
         """Frontend schema for this object."""
 
     @classmethod
@@ -89,7 +89,7 @@ GlueContextManager.add_glue(glue)
         ▼
 GlueManifest = {
     policy: GluePolicy (signed),
-    metadata: GlueMetadata
+    metadata: dict
 }
         │
         ▼
@@ -238,12 +238,13 @@ HTTP POST /__dg__/callable_attribute/user/save/
     FormData: policy, state, attribute, kwargs
                                                 │
                                                 ▼
-                                    glue_attribute_call_view()
+                                    GlueAttributeCallResolver.post()
                                                 │
                                                 ▼
-                                    AttributeCallResolverContext.model_validate()
+                                    AttributeCallContextFactory(request).create()
                                         - Validate content-type
-                                        - Parse policy, state, kwargs
+                                        - Parse policy, state, attribute, kwargs
+                                        - Validate URL object/attribute match body
                                         - GluePolicy validates:
                                           * HMAC signature
                                           * Session match
@@ -251,10 +252,15 @@ HTTP POST /__dg__/callable_attribute/user/save/
                                           * Not expired
                                                 │
                                                 ▼
-                                    AttributeCallResolver.resolve()
+                                    AttributeCallContext
+                                        - request
+                                        - target_glue_policy
+                                        - target_glue_client_state
+                                        - target_attribute_name
+                                        - target_attribute_call_kwargs
                                                 │
                                                 ▼
-                                    registry.get_class_for_namespace(policy.namespace)
+                                    registry.get_glue_class(policy.namespace)
                                         → ModelGlue
                                                 │
                                                 ▼
@@ -279,10 +285,12 @@ HTTP POST /__dg__/callable_attribute/user/save/
                                     Execute: save(request=<HttpRequest>)
                                                 │
                                                 ▼
-                                    Response: {
-                                        data: {state, policy, metadata, result, messages},
-                                        status: 200
-                                    }
+                                    GlueResponse.from_result(call_result)
+                                        .to_json_response(
+                                            state=self.state,
+                                            policy=self.policy,
+                                            metadata=self.metadata
+                                        )
     │
     ▼
 _applyResponse(data)
@@ -296,11 +304,11 @@ return result
 
 ### Policy Validation
 
-**File:** `django_glue/glue/schemas.py`
+**File:** `django_glue/resolver/attribute_call/context.py`
 
 1. Verify content-type is `multipart/form-data`
 2. Parse policy, state, kwargs from JSON
-3. Validate policy name matches URL path
+3. Validate policy name and attribute name match URL path
 4. Verify session_id matches current session
 5. Verify request_user_id matches current user
 6. Verify HMAC signature
@@ -541,8 +549,8 @@ user.$fields.profile.value  # Returns nested ModelGlue proxy
 | **Model**       | `glue/objects/django/model/object.py`     | ModelGlue                                       |
 | **Form**        | `glue/objects/django/form/object.py`      | FormGlue                                        |
 | **QuerySet**    | `glue/objects/django/queryset.py`         | QuerySetGlue                                    |
-| **Resolver**    | `resolver/callable_attribute/resolver.py` | AttributeCallResolver                           |
-| **Schemas**     | `glue/schemas.py`                         | AttributeCallResolverContext                    |
-| **View**        | `glue/views.py`                           | glue_attribute_call_view                        |
+| **Attribute Call Context** | `resolver/attribute_call/context.py` | AttributeCallContext                         |
+| **Attribute Call Resolver** | `resolver/attribute_call/resolver.py` | GlueAttributeCallResolver                   |
+| **View Fragment Resolver** | `resolver/view_fragment/resolver.py` | GlueViewFragmentResolver                      |
 | **Templates**   | `templatetags/django_glue.py`             | `{% django_glue_init %}`                      |
 | **JS Client**   | `client_js/src/`                          | GlueClient, proxies, HTTP                       |
