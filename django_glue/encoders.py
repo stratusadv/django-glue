@@ -1,38 +1,33 @@
-import json
+from contextlib import suppress
 
 from django.core.files.base import File
+from django.core.files.uploadedfile import UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model, QuerySet
+from django.db.models.fields.files import FieldFile
 from django.forms import model_to_dict
 from pydantic import BaseModel
 
 
-def _serialize_file(file: File) -> dict | None:
-    """Serialize a Django File object to a dict.
+def _serialize_field_file(file: FieldFile) -> dict | None:
+    """Serialize a FieldFile (model file field) to a dict."""
+    if not file:
+        return None
 
-    Includes name, url, and path when available. Size is intentionally omitted
-    because it requires a HEAD request to remote storage backends like S3,
-    which adds ~70ms latency per file.
-    """
     result = {'name': file.name}
 
-    # url - only FieldFile has this, and only if file exists
-    try:
+    with suppress(ValueError):
         result['url'] = file.url
-    except (AttributeError, ValueError):
-        # AttributeError: UploadedFile doesn't have url
-        # ValueError: No file associated with this field
-        pass
 
-    # path - only local storage backends support this
-    try:
+    with suppress(ValueError, NotImplementedError):
         result['path'] = file.path
-    except (AttributeError, NotImplementedError):
-        # AttributeError: UploadedFile doesn't have path
-        # NotImplementedError: Remote storage (S3, etc.) doesn't support absolute paths
-        pass
 
-    return result or None
+    return result
+
+
+def _serialize_uploaded_file(file: UploadedFile) -> dict:
+    """Serialize an UploadedFile (form submission) to a dict."""
+    return {'name': file.name}
 
 
 class GlueResponseJSONEncoder(DjangoJSONEncoder):
@@ -46,8 +41,14 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
         if isinstance(obj, QuerySet):
             return [model_to_dict(item) for item in obj]
 
+        if isinstance(obj, FieldFile):
+            return _serialize_field_file(obj)
+
+        if isinstance(obj, UploadedFile):
+            return _serialize_uploaded_file(obj)
+
         if isinstance(obj, File):
-            return _serialize_file(obj)
+            return {'name': obj.name}
 
         # Handle memoryview objects (returned by PostgreSQL for BinaryField)
         if isinstance(obj, memoryview):

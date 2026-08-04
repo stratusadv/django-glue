@@ -199,7 +199,9 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @property
     def state(self) -> dict[str, Any]:
-        self._validate()
+        if self._loaded_state is not None:
+            self._validate()
+
         state = {}
         for name, attribute in self.attributes.items():
             if hasattr(attribute, 'state'):
@@ -208,7 +210,10 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         return state
 
     def _validate(self) -> None:
-        """Run validation and populate _field_errors."""
+        """Run validation and populate _field_errors.
+
+        Only called when client state has been loaded, not during initial reads.
+        """
         try:
             self.instance.full_clean()
             self._field_errors = {}
