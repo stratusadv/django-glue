@@ -216,7 +216,7 @@
       try {
         payload = JSON.parse(body);
       } catch (_) {}
-      const errorData = payload?.error;
+      const errorData = payload?.result?.error || payload?.error;
       return new GlueHttpError({
         message: errorData?.message || body,
         status: response.status,
@@ -590,10 +590,6 @@
   var base_default = BaseGlueProxy;
 
   // client_js/src/proxies/fields/base.js
-  function isInternalProperty(prop) {
-    return typeof prop === "string" && prop.startsWith("__glue__");
-  }
-
   class FieldGlue {
     constructor({ owner, name, stateKey, metadata = {} }) {
       this.name = name;
@@ -659,44 +655,6 @@
     toJSON() {
       return this.value;
     }
-    asProxy() {
-      const field = this;
-      return new Proxy(this, {
-        get(target, prop, receiver) {
-          if (prop === Symbol.iterator) {
-            return target.value?.[Symbol.iterator]?.bind(target.value);
-          }
-          if (prop === "then") {
-            return;
-          }
-          target._handlePropertyAccess?.(prop, receiver);
-          if (prop in target) {
-            return Reflect.get(target, prop, receiver);
-          }
-          const value = target.value;
-          const member = value?.[prop];
-          return typeof member === "function" ? member.bind(value) : member;
-        },
-        set(target, prop, value, receiver) {
-          if (prop === "value") {
-            target.value = value;
-            return true;
-          }
-          if (prop in target || isInternalProperty(prop)) {
-            return Reflect.set(target, prop, value, receiver);
-          }
-          const current = target.value;
-          if (current && typeof current === "object") {
-            current[prop] = value;
-            return true;
-          }
-          return Reflect.set(target, prop, value, receiver);
-        },
-        has(target, prop) {
-          return prop in target || prop in Object(field.value ?? {});
-        }
-      });
-    }
   }
   var base_default2 = FieldGlue;
 
@@ -715,6 +673,9 @@
   class RelationFieldGlue extends choice_default {
     static loadingCache = new Map;
     get choices() {
+      if (this.choice_model_path) {
+        this.ensureChoices([]);
+      }
       return this._choices || [];
     }
     set choices(value) {
@@ -734,15 +695,10 @@
       const pk = this.pk;
       if (pk == null)
         return;
-      return (this.choices || []).find((choice) => Number(choice.pk) === Number(pk));
+      return (this._choices || []).find((choice) => Number(choice.pk) === Number(pk));
     }
     get selectedLabel() {
       return this.selectedChoice?.__str__ ?? "";
-    }
-    _handlePropertyAccess(prop, receiver) {
-      if (prop === "choices" && this.choice_model_path) {
-        receiver.ensureChoices([]);
-      }
     }
     buildChoices(...choiceFields) {
       this.ensureChoices(choiceFields);
@@ -877,15 +833,15 @@
     }
     const options = { owner, name, stateKey, metadata };
     if (metadata.choice_model_path && metadata.type === "ManyToManyField") {
-      return new manyRelation_default(options).asProxy();
+      return new manyRelation_default(options);
     }
     if (metadata.choice_model_path) {
-      return new relation_default(options).asProxy();
+      return new relation_default(options);
     }
     if (Array.isArray(metadata.choices)) {
-      return new choice_default(options).asProxy();
+      return new choice_default(options);
     }
-    return new base_default2(options).asProxy();
+    return new base_default2(options);
   }
 
   // client_js/src/proxies/fieldBacked.js
@@ -931,6 +887,7 @@
             this.loading = true;
             this._callAttribute("load").then(() => {
               this._loaded = true;
+            }).finally(() => {
               this.loading = false;
             });
           }
@@ -1049,6 +1006,7 @@
         this.loading = true;
         this.all().then(() => {
           this._loaded = true;
+        }).finally(() => {
           this.loading = false;
         });
       }
@@ -1120,7 +1078,7 @@
       return this.query({ slice: { start, stop } });
     }
     get count() {
-      this._modelProxies.size;
+      return this._modelProxies.size;
     }
     _cloneWithQueryParams(params = {}) {
       return new this.constructor({
@@ -1208,7 +1166,8 @@
       return this;
     }
     async fetch(url, requestOptions = {}) {
-      return await this.http.sendRequest(url, requestOptions);
+      const response = await this.http.sendRequest(url, requestOptions);
+      return response.data;
     }
     view(url, sharedPayload = {}) {
       return new view_default(this.http, url, sharedPayload);

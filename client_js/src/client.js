@@ -29,7 +29,8 @@ class GlueClient {
     }
 
     async fetch(url, requestOptions = {}) {
-        return await this.http.sendRequest(url, requestOptions)
+        const response = await this.http.sendRequest(url, requestOptions)
+        return response.data
     }
 
     view(url, sharedPayload = {}) {

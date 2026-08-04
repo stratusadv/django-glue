@@ -147,7 +147,7 @@ class GlueHttp {
             // Non-Glue failures may still be plain text.
         }
 
-        const errorData = payload?.error
+        const errorData = payload?.result?.error || payload?.error
         return new GlueHttpError({
             message: errorData?.message || body,
             status: response.status,

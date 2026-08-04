@@ -62,6 +62,33 @@ describe('GlueHttp edge cases', () => {
         expect(error.message).toBe('upstream failed')
     })
 
+    test('builds structured GlueHttpErrors from Glue response error envelopes', async () => {
+        global.fetch = async () => new Response(JSON.stringify({
+            result: {
+                error: {
+                    message: 'Policy denied',
+                    code: 'proxy_access_denied',
+                    status: 403,
+                    details: {attribute: 'save'},
+                },
+            },
+            messages: [],
+        }), {status: 403})
+
+        await expect(http().sendRequest('/denied')).rejects.toMatchObject({
+            name: 'GlueHttpError',
+            status: 403,
+            message: 'Policy denied',
+            code: 'proxy_access_denied',
+            payload: {
+                message: 'Policy denied',
+                code: 'proxy_access_denied',
+                status: 403,
+                details: {attribute: 'save'},
+            },
+        })
+    })
+
     test('extracts top-level, nested, and array files from serialized state', () => {
         const file = new File(['contents'], 'photo.txt', {type: 'text/plain'})
         const result = http()._extractFiles({

@@ -11,12 +11,12 @@ describe('GlueClient', () => {
         let fetchedUrl
         global.fetch = async url => {
             fetchedUrl = url
-            return new Response('{}', {status: 200})
+            return new Response(JSON.stringify({type: 'success'}), {status: 200})
         }
 
         expect(client.onMessage(onMessage)).toBe(client)
         expect(client.onError(onError)).toBe(client)
-        expect(await client.fetch('/health')).toMatchObject({ok: true, data: {}})
+        expect(await client.fetch('/health')).toEqual({type: 'success'})
         expect(fetchedUrl).toBe('/health')
         expect(client.view('/partial/').url).toBe('/partial/')
     })
