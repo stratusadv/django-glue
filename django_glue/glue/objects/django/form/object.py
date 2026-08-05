@@ -41,7 +41,15 @@ class FormGlue(BaseGlue):
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
-            'initial': self.form.initial,
+            'initial': self._prepared_initial,
+        }
+
+    @property
+    def _prepared_initial(self) -> dict[str, Any]:
+        return {
+            name: field.prepare_value(value) if field else value
+            for name, value in self.form.initial.items()
+            for field in [self.form.fields.get(name)]
         }
 
     @cached_property

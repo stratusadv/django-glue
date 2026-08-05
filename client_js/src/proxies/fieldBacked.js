@@ -30,6 +30,17 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         )
     }
 
+    _ensureLoaded() {
+        if (!this._loaded && !this.loading) {
+            this.loading = true
+            this._callAttribute('load').then(() => {
+                this._loaded = true
+            }).finally(() => {
+                this.loading = false
+            })
+        }
+    }
+
     _configureAttributeInitializers() {
         super._configureAttributeInitializers()
         this._fields = {}
@@ -48,14 +59,7 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
 
         Object.defineProperty(this, attributeName, {
             get() {
-                if (!this._loaded && !this.loading) {
-                    this.loading = true
-                    this._callAttribute('load').then(() => {
-                        this._loaded = true
-                    }).finally(() => {
-                        this.loading = false
-                    })
-                }
+                this._ensureLoaded()
                 return this._state?.[attributeQualName]?.value
             },
             set(value) {

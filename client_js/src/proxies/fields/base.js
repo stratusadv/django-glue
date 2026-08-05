@@ -19,6 +19,7 @@ class FieldGlue {
     }
 
     get value() {
+        this.owner._ensureLoaded?.()
         return this.owner._state?.[this.stateKey]?.value
     }
 

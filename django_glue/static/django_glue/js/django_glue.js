@@ -645,6 +645,7 @@
       });
     }
     get value() {
+      this.owner._ensureLoaded?.();
       return this.owner._state?.[this.stateKey]?.value;
     }
     set value(value) {
@@ -921,6 +922,16 @@
       }
       return Object.values(this._state || {}).some((fieldState) => fieldState?.errors?.length > 0);
     }
+    _ensureLoaded() {
+      if (!this._loaded && !this.loading) {
+        this.loading = true;
+        this._callAttribute("load").then(() => {
+          this._loaded = true;
+        }).finally(() => {
+          this.loading = false;
+        });
+      }
+    }
     _configureAttributeInitializers() {
       super._configureAttributeInitializers();
       this._fields = {};
@@ -937,14 +948,7 @@
       });
       Object.defineProperty(this, attributeName, {
         get() {
-          if (!this._loaded && !this.loading) {
-            this.loading = true;
-            this._callAttribute("load").then(() => {
-              this._loaded = true;
-            }).finally(() => {
-              this.loading = false;
-            });
-          }
+          this._ensureLoaded();
           return this._state?.[attributeQualName]?.value;
         },
         set(value) {

@@ -725,6 +725,27 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(state['name']['value'], 'Ada')
         self.assertEqual(metadata['attributes']['email']['type'], 'EmailField')
 
+    def test_form_manifest_serializes_model_multiple_choice_initial_values(self):
+        skill = Skill.objects.create(name='Grappling')
+        gorilla = Gorilla.objects.create(name='Koko')
+        gorilla.skills.add(skill)
+
+        from django import forms
+
+        class SkillForm(forms.ModelForm):
+            class Meta:
+                model = Gorilla
+                fields = ['skills']
+
+        glue_object = with_request(FormGlue(
+            SkillForm(instance=gorilla, initial={'skills': [skill]}),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        manifest = json.loads(json.dumps(glue_object.manifest.model_dump(), cls=GlueResponseJSONEncoder))
+
+        self.assertEqual(manifest['policy']['identity']['initial']['skills'], [skill.pk])
+
     def test_form_adapter_reconstruction_preserves_initial_data(self):
         gorilla = Gorilla.objects.create(name='Instance Name', age=12)
         glue_object = with_request(FormGlue(

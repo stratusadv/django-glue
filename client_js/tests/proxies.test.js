@@ -172,6 +172,60 @@ describe('Glue proxies', () => {
         expect(object.$fields.name.value).toBe('Ndume')
     })
 
+    test('field proxy value access triggers lazy loading', async () => {
+        let loadCalled = false
+        global.fetch = async (_url, options) => {
+            loadCalled = options.body.get('attribute') === 'load'
+            return new Response(JSON.stringify({
+                result: {state: {groups: {value: [1], errors: []}}},
+                state: {groups: {value: [1], errors: []}},
+                policy: createPolicy({
+                    name: 'group_form',
+                    namespace: 'form',
+                    attributes: ['groups', 'load'],
+                }),
+                metadata: {
+                    namespace: 'form',
+                    attributes: {
+                        groups: {
+                            namespace: 'field',
+                            type: 'ModelMultipleChoiceField',
+                            choices: [],
+                            choice_model_path: 'django_spire.auth.group.models.AuthGroup',
+                        },
+                        load: {namespace: 'callable'},
+                    },
+                },
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+        const form = new GlueFormProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'group_form',
+                namespace: 'form',
+                attributes: ['groups', 'load'],
+            }),
+            metadata: {
+                namespace: 'form',
+                attributes: {
+                    groups: {
+                        namespace: 'field',
+                        type: 'ModelMultipleChoiceField',
+                        choices: [],
+                        choice_model_path: 'django_spire.auth.group.models.AuthGroup',
+                    },
+                    load: {namespace: 'callable'},
+                },
+            },
+        })
+
+        expect(form.$fields.groups.hasChoiceSelected(1)).toBe(false)
+        expect(loadCalled).toBe(true)
+        await new Promise(resolve => setTimeout(resolve, 0))
+
+        expect(form.$fields.groups.hasChoiceSelected(1)).toBe(true)
+    })
+
     test('listeners can be removed', async () => {
         mockOperationFetch()
         const object = new GlueModelProxy({
