@@ -1,5 +1,6 @@
 import FieldGlue from "./base"
 import ChoiceFieldGlue from "./choice"
+import ManyChoiceFieldGlue from "./manyChoice"
 import RelationFieldGlue from "./relation"
 import ManyRelationFieldGlue from "./manyRelation"
 
@@ -19,6 +20,16 @@ function createFieldGlue({owner, name, stateKey, metadata = {}, existingField = 
         return new RelationFieldGlue(options)
     }
     if (Array.isArray(metadata.choices)) {
+        const stateValue = owner._state?.[stateKey]?.value
+        const multipleChoiceTypes = ['MultipleChoiceField', 'TypedMultipleChoiceField']
+        const multipleChoiceWidgets = ['CheckboxSelectMultiple', 'SelectMultiple']
+        if (
+            Array.isArray(stateValue)
+            || multipleChoiceTypes.includes(metadata.type)
+            || multipleChoiceWidgets.includes(metadata.widget)
+        ) {
+            return new ManyChoiceFieldGlue(options)
+        }
         return new ChoiceFieldGlue(options)
     }
 
@@ -28,6 +39,7 @@ function createFieldGlue({owner, name, stateKey, metadata = {}, existingField = 
 export {
     FieldGlue,
     ChoiceFieldGlue,
+    ManyChoiceFieldGlue,
     RelationFieldGlue,
     ManyRelationFieldGlue,
     createFieldGlue,

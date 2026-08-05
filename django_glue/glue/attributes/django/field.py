@@ -68,7 +68,7 @@ class BaseDjangoFieldGlueAttribute(StateAttribute):
     def add_choice_metadata(self, metadata: dict[str, Any]) -> None:
         if getattr(self.field, 'choices', None):
             metadata['choices'] = [
-                (str(value), str(label))
+                {'value': str(value), 'label': str(label)}
                 for value, label in self.field.choices
             ]
 

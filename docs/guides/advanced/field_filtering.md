@@ -2,11 +2,11 @@
 
 ## Overview
 
-Field filtering controls which model fields are exposed to the frontend. By default, all model fields are available. Use `fields` to whitelist specific fields or `exclude` to blacklist them.
+Field filtering controls which model fields are exposed to the frontend. You must specify either `fields` to whitelist specific fields or `exclude` to blacklist them.
 
 ## Whitelist with `fields`
 
-The `fields` parameter restricts the proxy to only the specified fields:
+The `fields` parameter restricts the glue object to only the specified fields:
 
 ```python
 from django_glue import Glue, GlueAccess
@@ -36,9 +36,35 @@ Glue.model(
 )
 ```
 
+## Using `ALL_FIELDS`
+
+Use the `ALL_FIELDS` constant to explicitly include or exclude all fields:
+
+```python
+from django_glue import Glue, GlueAccess, ALL_FIELDS
+
+# Include all fields
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=ALL_FIELDS,
+)
+
+# Exclude all model fields (useful when you only want form fields)
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    exclude=ALL_FIELDS,
+)
+```
+
 ## Using Both `fields` and `exclude`
 
-When both are provided, `fields` restricts the candidate set, then `exclude` removes fields from it. Both parameters are applied independently to the model fields and the form fields, then the results are merged:
+When both are provided, `fields` restricts the candidate set, then `exclude` removes fields from it:
 
 ```python
 Glue.model(
@@ -53,11 +79,11 @@ Glue.model(
 
 !!! note
 
-    The `fields` and `exclude` parameters are applied to both the model fields (via `_model_field_definitions`) and the form fields (via `modelform_factory`). The final field set is the union of both, so a field excluded from the model definitions could still appear if it's present in the form definitions.
+    Either `fields` or `exclude` must be provided. If you provide neither, a `ValueError` is raised.
 
-## Field Filtering on QuerySet Proxies
+## Field Filtering on QuerySet Glue
 
-Field filtering works the same way on QuerySet proxies:
+Field filtering works the same way on queryset glue:
 
 ```python
 Glue.queryset(
@@ -73,7 +99,7 @@ Only the specified fields will be returned when you call `all()` or `queryWithPa
 
 ## Related Fields
 
-When you include a ForeignKey or ManyToMany field in `fields`, the proxy will serialize the related data:
+When you include a ForeignKey or ManyToMany field in `fields`, the glue object will serialize the related data:
 
 ```python
 Glue.queryset(
@@ -90,7 +116,7 @@ Glue.queryset(
 
 ## Custom ModelForm with Field Filtering
 
-When you provide a `form_class`, the field filtering is derived from the form's fields:
+When you provide a `form` or `forms` parameter, the field filtering is derived from the form's fields combined with the glue `fields`/`exclude` settings:
 
 ```python
 from myapp.forms import TaskSummaryForm
@@ -100,15 +126,16 @@ Glue.model(
     unique_name='task',
     target=task,
     access=GlueAccess.CHANGE,
-    form_class=TaskSummaryForm,  # Only form fields are exposed
+    fields=['id', 'title'],
+    form=TaskSummaryForm,
 )
 ```
 
-The `fields` and `exclude` parameters further restrict the form's fields.
+The `fields` and `exclude` parameters further restrict the exposed fields.
 
 ## Primary Key is Always Included
 
-The primary key (`id`) is always included in the field definitions, even if you don't explicitly list it. This is necessary for the proxy to identify the model instance.
+The primary key (`id`) is always included in the field definitions, even if you don't explicitly list it. This is necessary for the glue object to identify the model instance.
 
 ## Practical Use Cases
 
@@ -142,7 +169,7 @@ Glue.model(
 
 ### Hide Sensitive Data
 
-Exclude sensitive fields while allowing full access to the rest:
+Exclude sensitive fields while allowing access to the rest:
 
 ```python
 Glue.model(

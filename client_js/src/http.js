@@ -1,5 +1,5 @@
 import {GlueHttpError} from "./errors"
-import {serializeValue} from "./utils"
+import {serializeValue, shouldJsonSerializePostData} from "./utils"
 
 class GlueHttp {
     constructor(config) {
@@ -22,20 +22,36 @@ class GlueHttp {
         const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000)
-        const headers = {}
+        const headers = {...(requestOptions.headers || {})}
+        const method = requestOptions.method || 'GET'
+        let contentType = requestOptions.contentType
+        let payload = requestOptions.payload ?? requestOptions.body
+        let csrfProtected = requestOptions.csrfProtected
 
-        if (requestOptions.contentType && requestOptions.contentType !== 'multipart/form-data') {
-            headers['Content-Type'] = requestOptions.contentType
+        if (method === 'GET') {
+            contentType = null
+            payload = null
+            csrfProtected = false
         }
 
-        if (requestOptions.csrfProtected !== false) {
+        if (contentType && contentType !== 'multipart/form-data') {
+            headers['Content-Type'] = contentType
+        }
+
+        if (contentType === 'application/json' && payload) {
+            payload = shouldJsonSerializePostData(payload) ?
+                JSON.stringify(payload) :
+                payload
+        }
+
+        if (csrfProtected !== false) {
             headers['X-CSRFToken'] = this.getCookie('csrftoken')
         }
 
         try {
             const response = await fetch(url, {
-                method: requestOptions.method || 'GET',
-                body: requestOptions.body,
+                method,
+                body: payload,
                 headers,
                 signal: controller.signal,
             })
@@ -46,7 +62,7 @@ class GlueHttp {
 
             return {
                 ok: response.ok,
-                body: await response.clone().text(),
+                payload: await response.clone().text(),
                 httpResponse: response,
                 data: await response.json(),
             }
@@ -55,11 +71,29 @@ class GlueHttp {
         }
     }
 
-    async sendFormPostRequest(url, data, csrfProtected = true) {
+    async get(url, params, headers = {}) {
         return await this.sendRequest(url, {
-            body: data,
+            payload: params,
+            headers: headers,
+        })
+    }
+
+    async postJson(url, data, headers = {}, csrfProtected = true) {
+        return await this.sendRequest(url, {
+            payload: data,
+            method: 'POST',
+            headers: headers,
+            contentType: 'application/json',
+            csrfProtected,
+        })
+    }
+
+    async postForm(url, data, headers = {}, csrfProtected = true) {
+        return await this.sendRequest(url, {
+            payload: data,
             method: 'POST',
             contentType: 'multipart/form-data',
+            headers: headers,
             csrfProtected,
         })
     }
@@ -83,7 +117,7 @@ class GlueHttp {
             }
         })
 
-        return await this.sendFormPostRequest(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData)
+        return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData)
     }
 
     _extractFiles(obj) {

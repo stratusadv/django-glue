@@ -466,7 +466,11 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
         result = glue_object.foreign_key_choices(field_name='skills', choice_fields=['name'])
 
-        self.assertEqual(result, [{'pk': skill.pk, '__str__': 'Grappling', 'name': 'Grappling'}])
+        self.assertEqual(result, [{
+            'value': skill.pk,
+            'label': 'Grappling',
+            'obj': {'pk': skill.pk, '__str__': 'Grappling', 'name': 'Grappling'},
+        }])
 
     def test_model_save_normalizes_rich_relation_and_file_state(self):
         skill = Skill.objects.create(name='Grappling')
@@ -483,7 +487,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
             'weight': {'value': 162.2},
             'height': {'value': 1.5},
             'profile_photo': {'value': {'name': 'existing.png', 'url': '/media/existing.png'}},
-            'skills': {'value': [{'pk': skill.pk, '__str__': 'Grappling'}]},
+            'skills': {'value': [skill.pk]},
         })
 
         result = glue_object.save()
@@ -631,6 +635,44 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertNotIn('form_identities', glue_object.policy.identity)
         self.assertFalse(policy_has_attribute(glue_object.policy, 'form'))
         self.assertFalse(policy_has_attribute(glue_object.policy, 'forms.default'))
+
+    def test_model_form_class_can_be_passed_instead_of_instance(self):
+        """Verify that a form class can be passed instead of a form instance."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['id', 'name'],
+            form=TestModelForm,  # Pass class instead of instance
+        ))
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata
+        state = glue_object.state
+
+        # Should work the same as passing an instance
+        self.assertTrue(policy_has_attribute(policy, 'form'))
+        self.assertTrue(policy_has_attribute(policy, 'forms.default'))
+        self.assertEqual(metadata['attributes']['form']['namespace'], 'glue')
+        self.assertEqual(metadata['attributes']['form']['glue_namespace'], 'form')
+        # State should have form field data from the model instance
+        self.assertEqual(state['form']['name']['value'], 'Koko')
+
+    def test_model_forms_dict_can_contain_classes_instead_of_instances(self):
+        """Verify that form classes can be passed in the forms dict."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['id', 'name'],
+            forms={'edit': TestModelForm},  # Pass class instead of instance
+        ))
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata
+
+        self.assertFalse(policy_has_attribute(policy, 'form'))
+        self.assertTrue(policy_has_attribute(policy, 'forms.edit'))
+        self.assertEqual(metadata['attributes']['forms.edit']['namespace'], 'glue')
+        self.assertEqual(metadata['attributes']['forms.edit']['glue_namespace'], 'form')
 
     def test_nested_base_glue_attributes_build_composite_metadata(self):
         glue_object = with_request(NestedDashboardGlue())

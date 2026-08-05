@@ -81,4 +81,26 @@ function resolveUrl(urlPathTemplate, kwargs = {}) {
     return url
 }
 
-export {cloneValue, isPlainObject, parseFieldValue, serializeValue, parseJsonScriptById, resolveUrl}
+function shouldJsonSerializePostData(value) {
+    if (typeof value !== 'object' || value === null) {
+        return false
+    }
+
+    if (value instanceof FormData || value instanceof Blob || value instanceof URLSearchParams) {
+        return false
+    }
+
+    const tag = Object.prototype.toString.call(value)
+
+    return tag === '[object Object]' || tag === '[object Array]'
+}
+
+export {
+    cloneValue,
+    isPlainObject,
+    parseFieldValue,
+    serializeValue,
+    shouldJsonSerializePostData,
+    parseJsonScriptById,
+    resolveUrl,
+}

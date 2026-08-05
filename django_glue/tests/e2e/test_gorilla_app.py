@@ -254,7 +254,7 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
                 order_by: 'name',
             }).map(gorilla => ({
                 name: String(gorilla.name),
-                selected: gorilla.skills.selectedChoices.map(choice => choice.__str__),
+                selected: gorilla.skills.selectedChoices.map(choice => choice.label),
                 choiceCount: gorilla.skills.choices.length,
             }))"""
         )
@@ -291,12 +291,12 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
                 })[0];
                 return {
                     name: String(fight.name),
-                    redCorner: fight.red_corner.selectedChoice.__str__,
-                    blueCorner: fight.blue_corner.selectedChoice.__str__,
-                    location: fight.location.selectedLabel,
-                    weather: fight.weather_conditions.selectedLabel,
-                    terrain: fight.terrain_type.selectedLabel,
-                    status: fight.status.selectedLabel,
+                    redCorner: fight.red_corner.selectedChoice?.label,
+                    blueCorner: fight.blue_corner.selectedChoice?.label,
+                    location: fight.location.selectedChoice?.label,
+                    weather: fight.weather_conditions.selectedChoice?.label,
+                    terrain: fight.terrain_type.selectedChoice?.label,
+                    status: fight.status.selectedChoice?.label,
                 };
             }"""
         )

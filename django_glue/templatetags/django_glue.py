@@ -86,7 +86,6 @@ def js_url(name: str, **kwargs) -> str:
 def glue_field_value_path(value: str) -> str:
     return value.replace('.$fields.', '.')
 
-
 @register.filter
 def glue_field_metadata_path(value: str) -> str:
     if '.$fields.' in value:

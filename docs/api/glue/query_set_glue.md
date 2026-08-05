@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.glue.django.queryset.DjangoQuerySetGlue
+::: django_glue.glue.objects.django.queryset.QuerySetGlue

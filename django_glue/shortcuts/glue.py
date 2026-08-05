@@ -1,4 +1,4 @@
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, ModelForm
@@ -14,6 +14,9 @@ from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.response import GlueRedirectResponse, GlueResponse
+
+# Type alias for form parameter: can be either an instance or a class
+FormOrClass = Union[ModelForm, type[ModelForm]]
 
 
 class Glue:
@@ -37,8 +40,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
-        form: ModelForm | None = None,
-        forms: Mapping[str, ModelForm] | None = None,
+        form: FormOrClass | None = None,
+        forms: Mapping[str, FormOrClass] | None = None,
         select_related: Sequence[str] | None = None,
     ) -> None:
         Glue.object(
@@ -63,8 +66,8 @@ class Glue:
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] = (),
         exclude: Sequence[str] = (),
-        form: ModelForm | None = None,
-        forms: Mapping[str, ModelForm] | None = None,
+        form: FormOrClass | None = None,
+        forms: Mapping[str, FormOrClass] | None = None,
     ) -> None:
         Glue.object(
             request=request,

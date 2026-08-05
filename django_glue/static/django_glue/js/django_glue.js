@@ -97,6 +97,16 @@
     }
     return url;
   }
+  function shouldJsonSerializePostData(value) {
+    if (typeof value !== "object" || value === null) {
+      return false;
+    }
+    if (value instanceof FormData || value instanceof Blob || value instanceof URLSearchParams) {
+      return false;
+    }
+    const tag = Object.prototype.toString.call(value);
+    return tag === "[object Object]" || tag === "[object Array]";
+  }
 
   // client_js/src/http.js
   class GlueHttp {
@@ -118,17 +128,29 @@
       const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds;
       const controller = new AbortController;
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-      const headers = {};
-      if (requestOptions.contentType && requestOptions.contentType !== "multipart/form-data") {
-        headers["Content-Type"] = requestOptions.contentType;
+      const headers = { ...requestOptions.headers || {} };
+      const method = requestOptions.method || "GET";
+      let contentType = requestOptions.contentType;
+      let payload = requestOptions.payload ?? requestOptions.body;
+      let csrfProtected = requestOptions.csrfProtected;
+      if (method === "GET") {
+        contentType = null;
+        payload = null;
+        csrfProtected = false;
       }
-      if (requestOptions.csrfProtected !== false) {
+      if (contentType && contentType !== "multipart/form-data") {
+        headers["Content-Type"] = contentType;
+      }
+      if (contentType === "application/json" && payload) {
+        payload = shouldJsonSerializePostData(payload) ? JSON.stringify(payload) : payload;
+      }
+      if (csrfProtected !== false) {
         headers["X-CSRFToken"] = this.getCookie("csrftoken");
       }
       try {
         const response = await fetch(url, {
-          method: requestOptions.method || "GET",
-          body: requestOptions.body,
+          method,
+          body: payload,
           headers,
           signal: controller.signal
         });
@@ -137,7 +159,7 @@
         }
         return {
           ok: response.ok,
-          body: await response.clone().text(),
+          payload: await response.clone().text(),
           httpResponse: response,
           data: await response.json()
         };
@@ -145,11 +167,27 @@
         clearTimeout(timeoutId);
       }
     }
-    async sendFormPostRequest(url, data, csrfProtected = true) {
+    async get(url, params, headers = {}) {
       return await this.sendRequest(url, {
-        body: data,
+        payload: params,
+        headers
+      });
+    }
+    async postJson(url, data, headers = {}, csrfProtected = true) {
+      return await this.sendRequest(url, {
+        payload: data,
+        method: "POST",
+        headers,
+        contentType: "application/json",
+        csrfProtected
+      });
+    }
+    async postForm(url, data, headers = {}, csrfProtected = true) {
+      return await this.sendRequest(url, {
+        payload: data,
         method: "POST",
         contentType: "multipart/form-data",
+        headers,
         csrfProtected
       });
     }
@@ -169,7 +207,7 @@
           formData.append(key, value);
         }
       });
-      return await this.sendFormPostRequest(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData);
+      return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData);
     }
     _extractFiles(obj) {
       const files = {};
@@ -661,13 +699,39 @@
   // client_js/src/proxies/fields/choice.js
   class ChoiceFieldGlue extends base_default2 {
     get selectedChoice() {
-      return (this.choices || []).find(([value]) => String(value) === String(this.value));
-    }
-    get selectedLabel() {
-      return this.selectedChoice?.[1] ?? "";
+      return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
     }
   }
   var choice_default = ChoiceFieldGlue;
+
+  // client_js/src/proxies/fields/manyChoice.js
+  class ManyChoiceFieldGlue extends choice_default {
+    get selectedValues() {
+      return this.value || [];
+    }
+    get selectedChoices() {
+      const selectedValues = new Set(this.selectedValues.map((value) => String(value)));
+      return (this.choices || []).filter((choice) => selectedValues.has(String(choice.value)));
+    }
+    hasChoiceSelected(value) {
+      return this.selectedValues.some((item) => String(item) === String(value));
+    }
+    addChoice(value) {
+      if (this.hasChoiceSelected(value)) {
+        return this;
+      }
+      this.value = [...this.selectedValues, value];
+      return this;
+    }
+    removeChoice(value) {
+      this.value = this.selectedValues.filter((item) => String(item) !== String(value));
+      return this;
+    }
+    toggleChoice(value) {
+      return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value);
+    }
+  }
+  var manyChoice_default = ManyChoiceFieldGlue;
 
   // client_js/src/proxies/fields/relation.js
   class RelationFieldGlue extends choice_default {
@@ -684,7 +748,7 @@
     get pk() {
       const value = this.value;
       if (value && typeof value === "object") {
-        return value.pk ?? value.id;
+        return value.value;
       }
       return value;
     }
@@ -695,10 +759,7 @@
       const pk = this.pk;
       if (pk == null)
         return;
-      return (this._choices || []).find((choice) => Number(choice.pk) === Number(pk));
-    }
-    get selectedLabel() {
-      return this.selectedChoice?.__str__ ?? "";
+      return (this._choices || []).find((choice) => String(choice.value) === String(pk));
     }
     buildChoices(...choiceFields) {
       this.ensureChoices(choiceFields);
@@ -711,7 +772,7 @@
       if (this._choices !== cache.choices) {
         this.choices = cache.choices;
       }
-      const requiredFields = this._normalizeChoiceFields(choiceFields);
+      const requiredFields = this._choiceObjectFields(choiceFields);
       const missingFields = requiredFields.filter((f) => !cache.loadedFields.has(f));
       if (missingFields.length === 0) {
         return cache.promise || Promise.resolve(this._choices || []);
@@ -724,7 +785,7 @@
       }
       cache.promise = this.owner.foreign_key_choices({
         field_name: this.name,
-        choice_fields: missingFields.filter((f) => !["pk", "__str__"].includes(f))
+        choice_fields: missingFields.filter((f) => !["value", "label", "pk", "__str__"].includes(f))
       }).then((result) => {
         const newChoices = Array.isArray(result) ? result : [];
         this._mergeChoices(newChoices);
@@ -743,7 +804,7 @@
         this.name
       ].filter(Boolean).join(":");
     }
-    _normalizeChoiceFields(choiceFields = []) {
+    _choiceObjectFields(choiceFields = []) {
       return [...new Set(["pk", "__str__", ...choiceFields.filter(Boolean)])];
     }
     _getOrCreateCache(cacheKey) {
@@ -766,7 +827,7 @@
       newChoices.forEach((choice) => {
         if (!choice || typeof choice !== "object")
           return;
-        const existing = merged.find((item) => item.pk === choice.pk);
+        const existing = merged.find((item) => item.value === choice.value);
         if (existing) {
           Object.assign(existing, choice);
         } else {
@@ -783,42 +844,29 @@
 
   // client_js/src/proxies/fields/manyRelation.js
   class ManyRelationFieldGlue extends relation_default {
-    _extractPk(choiceOrPk) {
-      if (choiceOrPk == null)
-        return null;
-      const pk = choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk;
-      return pk == null ? null : Number(pk);
-    }
     get selectedPks() {
-      return (this.value || []).map((choice) => this._extractPk(choice)).filter((pk) => pk != null);
+      return (this.value || []).filter((value) => value != null);
     }
     get selectedChoices() {
-      const selectedPks = new Set(this.selectedPks);
-      return (this.choices || []).filter((choice) => selectedPks.has(Number(choice.pk)));
+      const selectedPks = new Set(this.selectedPks.map((value) => String(value)));
+      return (this.choices || []).filter((choice) => selectedPks.has(String(choice.value)));
     }
-    has(choiceOrPk) {
-      const pk = this._extractPk(choiceOrPk);
-      if (pk == null)
-        return false;
-      const selectedPks = new Set(this.selectedPks);
-      return selectedPks.has(pk);
+    hasChoiceSelected(value) {
+      return this.selectedPks.some((item) => String(item) === String(value));
     }
-    add(choiceOrPk) {
-      if (this.has(choiceOrPk)) {
+    addChoice(value) {
+      if (this.hasChoiceSelected(value)) {
         return this;
       }
-      this.value = [...this.value || [], choiceOrPk];
+      this.value = [...this.value || [], value];
       return this;
     }
-    remove(choiceOrPk) {
-      const pk = this._extractPk(choiceOrPk);
-      if (pk == null)
-        return this;
-      this.value = (this.value || []).filter((choice) => this._extractPk(choice) !== pk);
+    removeChoice(value) {
+      this.value = (this.value || []).filter((item) => String(item) !== String(value));
       return this;
     }
-    toggle(choiceOrPk) {
-      return this.has(choiceOrPk) ? this.remove(choiceOrPk) : this.add(choiceOrPk);
+    toggleChoice(value) {
+      return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value);
     }
   }
   var manyRelation_default = ManyRelationFieldGlue;
@@ -839,6 +887,12 @@
       return new relation_default(options);
     }
     if (Array.isArray(metadata.choices)) {
+      const stateValue = owner._state?.[stateKey]?.value;
+      const multipleChoiceTypes = ["MultipleChoiceField", "TypedMultipleChoiceField"];
+      const multipleChoiceWidgets = ["CheckboxSelectMultiple", "SelectMultiple"];
+      if (Array.isArray(stateValue) || multipleChoiceTypes.includes(metadata.type) || multipleChoiceWidgets.includes(metadata.widget)) {
+        return new manyChoice_default(options);
+      }
       return new choice_default(options);
     }
     return new base_default2(options);

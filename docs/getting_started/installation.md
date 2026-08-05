@@ -22,19 +22,6 @@ INSTALLED_APPS = [
 ]
 ```
 
-## Add Middleware
-
-Add the `DjangoGlueMiddleware` to your `MIDDLEWARE` setting. It should be placed after Django's session middleware:
-
-```python
-MIDDLEWARE = [
-    # ...
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    # ...
-    'django_glue.middleware.DjangoGlueMiddleware',
-]
-```
-
 ## Add URL Patterns
 
 Include the Django Glue URL patterns in your project's `urls.py`:
@@ -45,11 +32,13 @@ from django_glue import django_glue_urls
 
 urlpatterns = [
     # ...
-    path('', include(django_glue_urls())),
 ]
+
+url_patterns += django_glue_urls()
 ```
 
 This registers the internal endpoints under the `__dg__` namespace:
+
 - `/__dg__/callable_attribute/<object_name>/` — Execute a Glue attribute request
 - `/__dg__/glue_view/` — Execute a Django view for HTML rendering
 
@@ -74,6 +63,7 @@ In your base template, load the template tags and add `{% django_glue_init %}` j
 ```
 
 The `{% django_glue_init %}` tag injects:
+
 1. The CSRF token
 2. The JavaScript client library
 3. The Glue manifest as JSON
@@ -84,7 +74,7 @@ The `{% django_glue_init %}` tag injects:
 Override defaults in your `settings.py`:
 
 ```python
-# Signed proxy policy max age in seconds (default: 600)
+# Signed policy max age in seconds (default: 600)
 DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 600
 ```
 
@@ -101,6 +91,7 @@ console.log(window.Glue)  // GlueClient instance
 Here's a minimal working example:
 
 **views.py**
+
 ```python
 from django.shortcuts import render
 from django_glue import Glue, GlueAccess
@@ -114,12 +105,14 @@ def my_view(request):
         unique_name='task',
         target=task,
         access=GlueAccess.CHANGE,
+        exclude=['internal_notes'],  # Expose all fields except internal_notes
     )
 
     return render(request, 'my_template.html')
 ```
 
 **my_template.html**
+
 ```html
 {% load django_glue %}
 <!DOCTYPE html>

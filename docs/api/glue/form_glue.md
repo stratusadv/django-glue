@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.glue.django.form.object.DjangoFormGlue
+::: django_glue.glue.objects.django.form.object.FormGlue

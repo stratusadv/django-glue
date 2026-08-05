@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.glue.django.model.object.DjangoModelGlue
+::: django_glue.glue.objects.django.model.object.ModelGlue

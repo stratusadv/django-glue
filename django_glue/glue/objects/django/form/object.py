@@ -140,10 +140,14 @@ class FormGlue(BaseGlue):
             return []
 
         def serialize_choice(obj: Any) -> dict[str, Any]:
-            choice = {'pk': obj.pk, '__str__': f'{obj}'}
+            choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
             for choice_field in choice_fields or []:
-                choice[choice_field] = getattr(obj, choice_field)
-            return choice
+                choice_obj[choice_field] = getattr(obj, choice_field)
+            return {
+                'value': obj.pk,
+                'label': f'{obj}',
+                'obj': choice_obj,
+            }
 
         return [serialize_choice(obj) for obj in queryset.all()]
 

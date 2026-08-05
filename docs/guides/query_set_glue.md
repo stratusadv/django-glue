@@ -1,8 +1,8 @@
-# QuerySet Proxy Guide
+# QuerySet Glue Guide
 
 ## Purpose
 
-QuerySet proxies allow you to work with collections of Django model instances from JavaScript. Each item returned from a queryset is a full model proxy with its own `save()` and `delete()` methods.
+QuerySet glue allows you to work with collections of Django model instances from JavaScript. Each item returned from a queryset is a full model glue object with its own `save()` and `delete()` methods.
 
 ### When to Use
 
@@ -13,9 +13,9 @@ QuerySet proxies allow you to work with collections of Django model instances fr
 ### When Not to Use
 
 - When you only need to display a static list. Use regular Django template context instead.
-- When you only need one instance. Use a [Model proxy](model_object_glue.md) instead.
+- When you only need one instance. Use [model glue](model_object_glue.md) instead.
 
-## Backend: Registering a QuerySet Proxy
+## Backend: Registering a QuerySet
 
 Use `Glue.queryset()` in your Django view:
 
@@ -29,6 +29,7 @@ def task_list_view(request):
         unique_name='tasks',
         target=Task.objects.all(),
         access=GlueAccess.CHANGE,
+        exclude=['internal_notes'],
     )
 
     return render(request, 'task_list.html')
@@ -39,16 +40,23 @@ def task_list_view(request):
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `request` | `HttpRequest` | Yes | The current request |
-| `unique_name` | `str` | Yes | Unique identifier for the proxy |
-| `target` | `QuerySet` | Yes | The queryset to proxy |
+| `unique_name` | `str` | Yes | Unique identifier for this glue object |
+| `target` | `QuerySet` | Yes | The queryset to expose |
 | `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
-| `fields` | `Sequence` | No | Fields to include. Empty means all fields |
-| `exclude` | `Sequence[str]` | No | Fields to exclude |
-| `form_class` | `type[ModelForm]` | No | Custom ModelForm for validation |
+| `fields` | `Sequence[str]` | Yes* | Fields to include. Use `ALL_FIELDS` for all fields |
+| `exclude` | `Sequence[str]` | Yes* | Fields to exclude |
+| `form` | `ModelForm` | No | Default ModelForm for validation on child items (class or instance) |
+| `forms` | `Mapping[str, ModelForm]` | No | Named ModelForms for child items (classes or instances) |
+
+*Either `fields` or `exclude` must be provided.
+
+!!! tip
+
+    You can pass either a form class or a form instance for `form` and `forms`. When you pass a class, an instance is created automatically. See the [Model Glue Guide](model_object_glue.md#custom-forms) for details.
 
 ### Using select_related and prefetch_related
 
-For related model fields, use `select_related` (for ForeignKey) or `prefetch_related` (for ManyToMany) on your queryset. The proxy will automatically serialize the related fields:
+For related model fields, use `select_related` (for ForeignKey) or `prefetch_related` (for ManyToMany) on your queryset. The glue object will automatically serialize the related fields:
 
 ```python
 Glue.queryset(
@@ -68,7 +76,7 @@ console.log(tasks[0].assigned_to.name)  // Nested FK object
 console.log(tasks[0].tags)              // M2M as array of PKs
 ```
 
-## Frontend: Using the QuerySet Proxy
+## Frontend: Using the QuerySet
 
 ### Fetching All Items
 
@@ -76,7 +84,7 @@ console.log(tasks[0].tags)              // M2M as array of PKs
 const tasks = await Glue.querySet.tasks.all()
 ```
 
-Each item is a full `GlueModelProxy` instance with its own methods:
+Each item is a full model glue object with its own methods:
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
@@ -177,7 +185,7 @@ await Glue.querySet.tasks.prependNew()
 await Glue.querySet.tasks.appendNew()
 ```
 
-The new item is a full model proxy with default values from the server:
+The new item is a full model glue object with default values from the server:
 
 ```javascript
 await Glue.querySet.tasks.prependNew()
@@ -207,8 +215,6 @@ When a child item is deleted, the parent queryset is automatically refreshed. No
 | `slice(start, stop)` | Chainable: set slice params |
 | `prependNew()` | Create new item at the start; returns updated `_items` |
 | `appendNew()` | Create new item at the end; returns updated `_items` |
-| `save(data)` | Save data via queryset action; auto-refreshes after |
-| `delete(params)` | Delete items via queryset action; auto-refreshes after |
 | `isEmpty` | Returns `true` if loaded and no items |
 | `isLoaded` | Returns `true` if items have been fetched |
 
@@ -226,7 +232,7 @@ if (Glue.querySet.tasks.isLoaded) {
 
 ## Iteration
 
-QuerySet proxies implement `Symbol.iterator`, so you can use `for...of`:
+QuerySet glue objects implement `Symbol.iterator`, so you can use `for...of`:
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
@@ -255,7 +261,7 @@ Glue.querySet.tasks.addListener('delete', (event) => {
 }, 'after')
 ```
 
-Child proxy events bubble up to the parent queryset's listeners automatically.
+Child item events bubble up to the parent queryset's listeners automatically.
 
 ## Full Example: Task List with CRUD
 
@@ -263,7 +269,7 @@ Child proxy events bubble up to the parent queryset's listeners automatically.
 
 ```python
 from django.shortcuts import render
-from django_glue import Glue, GlueAccess
+from django_glue import Glue, GlueAccess, ALL_FIELDS
 from myapp.models import Task
 
 def task_list_view(request):
@@ -272,6 +278,7 @@ def task_list_view(request):
         unique_name='tasks',
         target=Task.objects.all(),
         access=GlueAccess.DELETE,
+        fields=ALL_FIELDS,
     )
 
     return render(request, 'tasks/list.html')
@@ -333,5 +340,5 @@ def task_list_view(request):
 | Access Level | Available Actions |
 |-------------|-------------------|
 | `VIEW` | `query_with_params()`, `get()`, `new()`, `foreign_key_choices()` |
-| `CHANGE` | All VIEW actions + `validate()`, `save()` |
-| `DELETE` | All CHANGE actions + `delete()` |
+| `CHANGE` | All VIEW actions + child item `save()` |
+| `DELETE` | All CHANGE actions + child item `delete()` |

@@ -1,8 +1,8 @@
-# Template Proxy Guide
+# Template Glue Guide
 
 ## Purpose
 
-Template proxies allow you to render Django templates from JavaScript with dynamic context data. You can inject rendered HTML into any DOM element using the same methods provided by `Glue.view`, but without needing a Django view function.
+Template glue allows you to render Django templates from JavaScript with dynamic context data. You can inject rendered HTML into any DOM element using the same methods provided by `Glue.view`, but without needing a Django view function.
 
 ### When to Use
 
@@ -12,24 +12,23 @@ Template proxies allow you to render Django templates from JavaScript with dynam
 
 ### When Not to Use
 
-- When the template needs to register its own Glue proxies. Use [GlueView](view_glue/view_glue.md) instead.
+- When the template needs to register its own glue objects. Use [GlueView](view_glue/view_glue.md) instead.
 - When the content is static and doesn't change. Include it in your template normally.
-- When you only need JSON data. Use proxy actions directly instead.
+- When you only need JSON data. Use model or queryset actions directly instead.
 
-## Backend: Registering a Template Proxy
+## Backend: Registering a Template
 
 Use `Glue.template()` in your Django view to register a template:
 
 ```python
-from django_glue import Glue, GlueAccess
+from django_glue import Glue
 
 def my_view(request):
     Glue.template(
         request=request,
         unique_name='card',
         target='components/card.html',
-        access=GlueAccess.VIEW,
-        context_data={'default_greeting': 'Hello'},
+        initial_context_data={'default_greeting': 'Hello'},
     )
 
     return render(request, 'my_view.html')
@@ -37,17 +36,20 @@ def my_view(request):
 
 ### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `request` | `HttpRequest` | Yes | The current request |
-| `unique_name` | `str` | Yes | Unique identifier for the proxy in the session |
-| `target` | `str` | Yes | Template name (e.g., `'components/card.html'`) |
-| `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
-| `context_data` | `dict` | No | Default context data merged into every render |
+| Parameter              | Type   | Required | Description                                      |
+| ---------------------- | ------ | -------- | ------------------------------------------------ |
+| `request`              | `HttpRequest` | Yes | The current request                              |
+| `unique_name`          | `str`  | Yes      | Unique identifier for this template glue object  |
+| `target`               | `str`  | Yes      | Template name (e.g., `'components/card.html'`)   |
+| `initial_context_data` | `dict` | No       | Default context data merged into every render    |
 
-## Frontend: Using the Template Proxy
+!!! note
 
-Access the proxy as a property of the global `Glue.template` object using the unique name you provided:
+    Template glue always uses `VIEW` access level internally, as rendering is a read-only operation.
+
+## Frontend: Using the Template
+
+Access the template as a property of the global `Glue.template` object using the unique name you provided:
 
 ```javascript
 // If you registered with unique_name='card':
@@ -94,11 +96,10 @@ await Glue.template.card.renderInsertAdjacentHtmlAfterBegin(target, { name: 'Cha
 
 ## Context Data Merging
 
-Context data flows through three layers, with later values overriding earlier ones:
+Context data flows through two layers, with later values overriding earlier ones:
 
-1. **Backend `context_data`** — set when registering the proxy in Python
-2. **Frontend `sharedPayload`** — set when creating the proxy (if using direct instantiation)
-3. **Per-call `payload`** — passed to each render method
+1. **Backend `initial_context_data`** — set when registering the template in Python
+2. **Per-call `payload`** — passed to each render method
 
 ```python
 # Backend default context
@@ -106,7 +107,7 @@ Glue.template(
     request=request,
     unique_name='card',
     target='components/card.html',
-    context_data={
+    initial_context_data={
         'greeting': 'Hello',
         'theme': 'dark',
     },
@@ -121,7 +122,7 @@ await Glue.template.card.renderInnerHtml(target, { greeting: 'Hi' })
 
 ## Event Listeners
 
-Template proxies support the same listener system as other proxies:
+Template glue supports the same listener system as other glue objects:
 
 ```javascript
 // Before render
@@ -146,15 +147,14 @@ Glue.template.card.addListener('render_html', (event) => {
 
 ```python
 from django.shortcuts import render
-from django_glue import Glue, GlueAccess
+from django_glue import Glue
 
 def dashboard_view(request):
     Glue.template(
         request=request,
         unique_name='task_card',
         target='tasks/_card.html',
-        access=GlueAccess.VIEW,
-        context_data={'show_actions': True},
+        initial_context_data={'show_actions': True},
     )
 
     return render(request, 'tasks/dashboard.html')
@@ -217,33 +217,23 @@ def dashboard_view(request):
 
 ## Render Method Comparison
 
-| Method | Behavior | Use When |
-|--------|----------|----------|
-| `renderInnerHtml` | Replaces element's **contents** | Container has bound_attributes you need to keep |
-| `renderOuterHtml` | Replaces the **element entirely** | Response HTML defines the container |
-| `renderInsertAdjacentHtmlBeforeEnd` | Inserts at end of element | Append content |
-| `renderInsertAdjacentHtmlAfterEnd` | Inserts after element | Add sibling after |
-| `renderInsertAdjacentHtmlBeforeBegin` | Inserts before element | Add sibling before |
-| `renderInsertAdjacentHtmlAfterBegin` | Inserts at start of element | Prepend content |
+| Method                                | Behavior                           | Use When                          |
+| ------------------------------------- | ---------------------------------- | --------------------------------- |
+| `renderInnerHtml`                     | Replaces element's **contents**    | Container has bindings to keep    |
+| `renderOuterHtml`                     | Replaces the **element entirely**  | Response HTML defines container   |
+| `renderInsertAdjacentHtmlBeforeEnd`   | Inserts at end of element          | Append content                    |
+| `renderInsertAdjacentHtmlAfterEnd`    | Inserts after element              | Add sibling after                 |
+| `renderInsertAdjacentHtmlBeforeBegin` | Inserts before element             | Add sibling before                |
+| `renderInsertAdjacentHtmlAfterBegin`  | Inserts at start of element        | Prepend content                   |
 
-## Access Levels
+## Template Glue vs GlueView
 
-| Access Level | Available Actions |
-|-------------|-------------------|
-| `VIEW` | `render_html()` |
-| `CHANGE` | All VIEW actions |
-| `DELETE` | All VIEW actions |
+| Feature             | `Glue.template`                                 | `Glue.view`                                             |
+| ------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| Target              | Template name string                            | Django view URL                                         |
+| Registration        | Registered in session                           | Ad-hoc, per-call                                        |
+| Context data        | Backend defaults + per-call merge               | View payload only                                       |
+| Nested glue objects | Not supported                                   | Automatically initializes glue objects from rendered view |
+| Use case            | Render a template with dynamic data             | Load a full view with embedded glue objects             |
 
-Template proxies only require `VIEW` access, as rendering is a read-only operation.
-
-## Template Proxy vs GlueView
-
-| Feature | `Glue.template` | `Glue.view` |
-|---------|----------------|-------------|
-| Target | Template name string | Django view URL |
-| Proxy registration | Registered in session | Ad-hoc, per-call |
-| Context data | Backend defaults + per-call merge | View payload only |
-| Nested proxies | Not supported | Automatically initializes proxies from rendered view |
-| Use case | Render a template with dynamic data | Load a full view with embedded proxies |
-
-Use `Glue.template` for simple template rendering with dynamic context. Use `Glue.view` when the rendered content contains its own Glue proxies that need initialization.
+Use `Glue.template` for simple template rendering with dynamic context. Use `Glue.view` when the rendered content contains its own glue objects that need initialization.

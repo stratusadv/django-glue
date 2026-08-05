@@ -1,8 +1,8 @@
-# Model Proxy Guide
+# Model Glue Guide
 
 ## Purpose
 
-Model proxies allow you to access and modify a single Django model instance from JavaScript. You can read fields, update values, save changes, and delete the instance — all through a transparent proxy object.
+Model glue allows you to access and modify a single Django model instance from JavaScript. You can read fields, update values, save changes, and delete the instance — all through a transparent JavaScript object bound to your Django model.
 
 ### When to Use
 
@@ -12,9 +12,9 @@ Model proxies allow you to access and modify a single Django model instance from
 ### When Not to Use
 
 - When you only need read-only access to a model's fields. Pass the data directly in your view context.
-- When you need to work with multiple instances. Use a [QuerySet proxy](query_set_glue.md) instead.
+- When you need to work with multiple instances. Use [QuerySet glue](query_set_glue.md) instead.
 
-## Backend: Registering a Model Proxy
+## Backend: Registering a Model
 
 Use `Glue.model()` in your Django view to register a model instance:
 
@@ -30,6 +30,7 @@ def task_view(request, pk):
         unique_name='task',
         target=task,
         access=GlueAccess.CHANGE,
+        exclude=['internal_notes'],  # Expose all fields except internal_notes
     )
 
     return render(request, 'task_view.html')
@@ -37,19 +38,35 @@ def task_view(request, pk):
 
 ### Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `request` | `HttpRequest` | Yes | The current request |
-| `unique_name` | `str` | Yes | Unique identifier for the proxy in the session |
-| `target` | `Model` | Yes | The model instance to proxy |
-| `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
-| `fields` | `Sequence` | No | Field names to include. Empty means all fields |
-| `exclude` | `Sequence[str]` | No | Field names to exclude |
-| `form_class` | `type[ModelForm]` | No | Custom ModelForm for validation |
+| Parameter          | Type                        | Required | Description                                              |
+| ------------------ | --------------------------- | -------- | -------------------------------------------------------- |
+| `request`        | `HttpRequest`             | Yes      | The current request                                      |
+| `unique_name`    | `str`                     | Yes      | Unique identifier for this glue object in the session    |
+| `target`         | `Model`                   | Yes      | The model instance to expose                             |
+| `access`         | `GlueAccess`              | No       | Access level (default:`VIEW`)                          |
+| `fields`         | `Sequence[str]`           | Yes*     | Field names to include. Use`ALL_FIELDS` for all fields |
+| `exclude`        | `Sequence[str]`           | Yes*     | Field names to exclude. Use`ALL_FIELDS` to exclude all |
+| `form`           | `ModelForm`               | No       | Default ModelForm for validation                         |
+| `forms`          | `Mapping[str, ModelForm]` | No       | Named ModelForms (e.g.,`{'edit': EditForm}`)           |
+| `select_related` | `Sequence[str]`           | No       | ForeignKey fields to preload with select_related         |
 
-## Frontend: Using the Model Proxy
+*Either `fields` or `exclude` must be provided. You can import `ALL_FIELDS` from `django_glue` (or just enter '__all__'):
 
-Access the proxy as a property of the global `Glue.model` object using the unique name you provided:
+```python
+from django_glue import ALL_FIELDS
+
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=ALL_FIELDS,  # Include all fields
+)
+```
+
+## Frontend: Using the Model
+
+Access the model as a property of the global `Glue.model` object using the unique name you provided:
 
 ```javascript
 // If you registered with unique_name='task':
@@ -58,7 +75,7 @@ Glue.model.task
 
 ### Reading Fields
 
-Access fields as properties. The proxy automatically fetches data on first access if not already loaded:
+Access fields as properties. The glue object automatically fetches data on first access if not already loaded:
 
 ```javascript
 // Lazy loading — fetches from server on first field access
@@ -69,7 +86,7 @@ const done = Glue.model.task.done
 You can also explicitly fetch all field values:
 
 ```javascript
-await Glue.model.task.get()
+await Glue.model.task.load()
 console.log(Glue.model.task.title)
 ```
 
@@ -103,18 +120,26 @@ The save response follows this shape:
 ```javascript
 {
     success: true,
-    errors: null,
-    cleaned_data: { title: 'Updated Title', done: false, priority: 2 }
+    errors: {}
+}
+```
+
+Or on validation failure:
+
+```javascript
+{
+    success: false,
+    errors: { title: ['This field is required.'] }
 }
 ```
 
 ### Deleting the Instance
 
 ```javascript
-const result = await Glue.model.task.delete()
+await Glue.model.task.delete()
 ```
 
-For existing instances, `delete()` returns the server response. For unsaved instances (`_isNew` is `true`) that belong to a parent queryset, it returns `{success: true}` without making a server request.
+For existing instances, `delete()` removes the instance from the database. For unsaved instances (`_isNew` is `true`) that belong to a parent queryset, it removes the item locally without making a server request.
 
 ### Checking if the Instance is New
 
@@ -152,23 +177,57 @@ Glue.model(
 
 Fields that are not exposed cannot be read or written from the frontend.
 
-## Custom Form Class
+## Custom Forms
 
-Provide a custom ModelForm to add field-level validation, custom widgets, or additional fields:
+Provide a custom ModelForm to add field-level validation, custom widgets, or additional fields. You can pass either a form class or a form instance:
 
 ```python
 from myapp.forms import TaskForm
+
+# Pass a form class (simplest)
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=['id', 'title', 'done'],
+    form=TaskForm,
+)
+
+# Or pass a form instance (useful for custom initial data)
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=['id', 'title', 'done'],
+    form=TaskForm(initial={'priority': 'high'}),
+)
+```
+
+You can also provide multiple named forms using the `forms` parameter:
+
+```python
+from myapp.forms import TaskEditForm, TaskQuickUpdateForm
 
 Glue.model(
     request=request,
     unique_name='task',
     target=task,
     access=GlueAccess.CHANGE,
-    form_class=TaskForm,
+    fields=['id', 'title', 'done', 'description'],
+    forms={
+        'default': TaskEditForm,
+        'quick': TaskQuickUpdateForm,
+    },
 )
 ```
 
-The proxy uses your custom ModelForm for all validation during `save()` and `validate()` actions.
+The `default` form is used for validation during `save()`. Named forms are accessible via `forms.<name>` on the frontend.
+
+!!! note
+
+    When you pass a form class, an instance is created automatically. When you pass a form instance, it will be rebound to the model instance internally. You cannot use both `form` and `forms['default']` at the same time.
 
 ## Field Metadata
 
@@ -195,15 +254,15 @@ For fields that reference other models (ForeignKey, ManyToManyField), choices ar
 
 ```javascript
 const brandField = Glue.model.task.$fields.brand
-const choices = await brandField.choices()
-// Returns: [[pk, "display name"], [pk, "display name"], ...]
+const choices = await brandField.choices
+// Returns: [{pk: 1, __str__: "Brand A"}, {pk: 2, __str__: "Brand B"}, ...]
 ```
 
-Choices are cached across all proxy instances to avoid duplicate requests.
+Choices are cached to avoid duplicate requests.
 
 ## Event Listeners
 
-Attach listeners to proxy actions for reactive UI patterns. Each action supports three event types: `'before'`, `'after'`, and `'error'`.
+Attach listeners to actions for reactive UI patterns. Each action supports three event types: `'before'`, `'after'`, and `'error'`.
 
 ```javascript
 // Before save — runs before the request is sent
@@ -249,7 +308,7 @@ Glue.model.task.clearListeners()
 
 ```python
 from django.shortcuts import render
-from django_glue import Glue, GlueAccess
+from django_glue import Glue, GlueAccess, ALL_FIELDS
 from myapp.models import Task
 
 def task_edit_view(request, pk):
@@ -260,6 +319,7 @@ def task_edit_view(request, pk):
         unique_name='task',
         target=task,
         access=GlueAccess.CHANGE,
+        fields=ALL_FIELDS,
     )
 
     return render(request, 'tasks/edit.html')
@@ -281,7 +341,7 @@ def task_edit_view(request, pk):
         saving: false,
 
         async init() {
-            await Glue.model.task.get()
+            await Glue.model.task.load()
             this.loaded = true
         },
 
@@ -320,8 +380,8 @@ def task_edit_view(request, pk):
 
 ## Access Levels
 
-| Access Level | Available Actions |
-|-------------|-------------------|
-| `VIEW` | `get()`, `foreign_key_choices()` |
-| `CHANGE` | All VIEW actions + `validate()`, `save()` |
-| `DELETE` | All CHANGE actions + `delete()` |
+| Access Level | Available Actions                     |
+| ------------ | ------------------------------------- |
+| `VIEW`     | `load()`, `foreign_key_choices()` |
+| `CHANGE`   | All VIEW actions +`save()`          |
+| `DELETE`   | All CHANGE actions +`delete()`      |

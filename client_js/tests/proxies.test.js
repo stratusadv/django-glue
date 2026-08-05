@@ -284,7 +284,7 @@ describe('Glue proxies', () => {
     test('relation fields lazily load and share choices through the field interface', async () => {
         RelationFieldGlue.loadingCache.clear()
         mockOperationFetch({
-            result: [{pk: 1, __str__: 'Grappling'}],
+            result: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}],
             state: createState({instance_data: {id: 1, skills: []}}),
             policy: createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']}),
             metadata: createMetadata({
@@ -322,10 +322,12 @@ describe('Glue proxies', () => {
         expect(object.$fields.skills.choices).toEqual([])
         await new Promise(resolve => setTimeout(resolve, 0))
 
-        expect(object.$fields.skills.choices).toEqual([{pk: 1, __str__: 'Grappling'}])
-        object.$fields.skills.value = [{pk: 1, __str__: 'Grappling'}]
+        expect(object.$fields.skills.choices).toEqual([
+            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+        ])
+        object.$fields.skills.value = [1]
         expect(object.$fields.skills.selectedPks).toEqual([1])
-        expect(object.$fields.skills.has(1)).toBe(true)
+        expect(object.$fields.skills.hasChoiceSelected(1)).toBe(true)
     })
 
     test('querysets build model proxies from returned row manifests', async () => {

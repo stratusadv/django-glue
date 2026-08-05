@@ -370,7 +370,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
     @staticmethod
     def _pk_from_related_value(value: Any) -> Any:
         if isinstance(value, dict):
-            return value.get('pk', value.get('id'))
+            return value.get('value')
         return getattr(value, 'pk', value)
 
     @DeclaredAttribute(access=GlueAccess.VIEW)
@@ -388,10 +388,14 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
             return []
 
         def serialize_choice(obj: Model) -> dict[str, Any]:
-            choice = {'pk': obj.pk, '__str__': f'{obj}'}
+            choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
             for choice_field in choice_fields or []:
-                choice[choice_field] = getattr(obj, choice_field)
-            return choice
+                choice_obj[choice_field] = getattr(obj, choice_field)
+            return {
+                'value': obj.pk,
+                'label': f'{obj}',
+                'obj': choice_obj,
+            }
 
         return [serialize_choice(obj) for obj in related_model.objects.all()]
 

@@ -1,8 +1,8 @@
-# Form Proxy Guide
+# Form Glue Guide
 
 ## Purpose
 
-Form proxies allow you to bind Django Forms (both regular Forms and ModelForms) to JavaScript with full validation support. You can set field values, validate data, and save — all from the frontend.
+Form glue allows you to bind Django Forms (both regular Forms and ModelForms) to JavaScript with full validation support. You can set field values, validate data, and save — all from the frontend.
 
 ### When to Use
 
@@ -13,18 +13,18 @@ Form proxies allow you to bind Django Forms (both regular Forms and ModelForms) 
 ### When Not to Use
 
 - When you only need to display form data without editing. Pass the data in your view context instead.
-- When you need direct model CRUD operations without form validation. Use a [Model proxy](model_object_glue.md) instead.
+- When you need direct model CRUD operations without form validation. Use [model glue](model_object_glue.md) instead.
 
 ## Important: ModelForms vs Regular Forms
 
 The `Glue.form()` shortcut behaves differently depending on the form type:
 
-| Form Type | Creates Proxy | Frontend Namespace | Behavior |
-|-----------|--------------|-------------------|----------|
-| **ModelForm** | `GlueModelProxy` | `Glue.model` | Acts as a model proxy with the ModelForm's validation rules |
-| **Regular Form** | `GlueFormProxy` | `Glue.form` | Provides validation and cleaned data access |
+| Form Type       | Frontend Namespace | Behavior                                              |
+| --------------- | ------------------ | ----------------------------------------------------- |
+| **ModelForm**   | `Glue.model`       | Acts as a model glue object with the ModelForm's validation rules |
+| **Regular Form** | `Glue.form`       | Provides validation and cleaned data access           |
 
-This means when you pass a ModelForm to `Glue.form()`, it creates a model proxy (accessible via `Glue.model`), not a form proxy. This gives you full model proxy behavior (lazy loading, field accessors, `delete()`) with your custom ModelForm's validation.
+This means when you pass a ModelForm to `Glue.form()`, it creates a model glue object (accessible via `Glue.model`), not a form glue object. This gives you full model behavior (lazy loading, field accessors, `delete()`) with your custom ModelForm's validation.
 
 ### ModelForm Example
 
@@ -42,11 +42,11 @@ Glue.form(
 )
 ```
 
-This creates a `GlueModelProxy` accessible as `Glue.model.task_form`:
+This creates a model glue object accessible as `Glue.model.task_form`:
 
 ```javascript
 // Fetch current values
-await Glue.model.task_form.get()
+await Glue.model.task_form.load()
 
 // Modify fields
 Glue.model.task_form.title = 'Updated Task'
@@ -74,7 +74,7 @@ Glue.form(
 )
 ```
 
-This creates a `GlueFormProxy` accessible as `Glue.form.contact_form`:
+This creates a form glue object accessible as `Glue.form.contact_form`:
 
 ```javascript
 // Field values are available from form.initial
@@ -82,7 +82,7 @@ Glue.form.contact_form.name = 'John Doe'
 const result = await Glue.form.contact_form.validate()
 ```
 
-## Backend: Registering a Form Proxy
+## Backend: Registering a Form
 
 ### With a Regular Form
 
@@ -124,11 +124,11 @@ def task_edit_view(request, pk):
     return render(request, 'task_edit.html')
 ```
 
-## Frontend: Using a Regular Form Proxy
+## Frontend: Using a Regular Form
 
 ### Fetching Field Values
 
-Field values are initialized from the form's `initial` data when the proxy is created, so you can access them directly:
+Field values are initialized from the form's `initial` data when the glue object is created, so you can access them directly:
 
 ```javascript
 // Values from form.initial are available immediately
@@ -136,11 +136,11 @@ console.log(Glue.form.contact_form.name)
 console.log(Glue.form.contact_form.email)
 ```
 
-The `get()` action is available and returns field definitions and initial values:
+The `load()` action is available and returns field definitions and initial values:
 
 ```javascript
-const result = await Glue.form.contact_form.get()
-// Returns: { fields: {...}, values: {...}, errors: {} }
+const result = await Glue.form.contact_form.load()
+// Returns: { state: {...} }
 ```
 
 ### Setting Field Values
@@ -157,8 +157,8 @@ Glue.form.contact_form.priority = 'high'
 ```javascript
 const result = await Glue.form.contact_form.validate()
 
-if (result.success) {
-    console.log('Cleaned data:', result.cleaned_data)
+if (result.valid) {
+    console.log('Form is valid!')
 } else {
     console.log('Errors:', result.errors)
 }
@@ -168,9 +168,8 @@ The validation response follows this shape:
 
 ```javascript
 {
-    success: true,
-    errors: null,
-    cleaned_data: { name: 'John Doe', email: 'john@example.com', ... }
+    valid: true,
+    errors: {}
 }
 ```
 
@@ -178,9 +177,8 @@ Or on failure:
 
 ```javascript
 {
-    success: false,
-    errors: { email: ['Enter a valid email address.'] },
-    cleaned_data: {}
+    valid: false,
+    errors: { email: ['Enter a valid email address.'] }
 }
 ```
 
@@ -189,15 +187,14 @@ Or on failure:
 ```javascript
 const result = await Glue.form.contact_form.save()
 
-if (result.success) {
+if (result.valid) {
     console.log('Form saved!')
-    console.log('Cleaned data:', result.cleaned_data)
 } else {
     console.log('Validation errors:', result.errors)
 }
 ```
 
-The `save()` action runs validation first, then processes the cleaned data. For regular forms, the server returns the cleaned data in the response.
+The `save()` action runs validation first, then processes the cleaned data. For regular forms, the server validates and processes the data.
 
 ## Checking for Errors
 
@@ -250,10 +247,10 @@ For fields that reference other models, choices are loaded lazily:
 ```javascript
 const brandField = Glue.form.contact_form.$fields.brand
 const choices = await brandField.choices()
-// Returns: [[pk, "display name"], ...]
+// Returns: [{pk: 1, __str__: "Brand A"}, ...]
 ```
 
-Choices are cached across all proxy instances to avoid duplicate requests.
+Choices are cached to avoid duplicate requests.
 
 ## Full Example: Contact Form
 
@@ -314,9 +311,9 @@ def contact_view(request):
             const result = await Glue.form.contact_form.validate()
             this.submitting = false
 
-            if (result.success) {
+            if (result.valid) {
                 const saveResult = await Glue.form.contact_form.save()
-                if (saveResult.success) {
+                if (saveResult.valid) {
                     this.submitted = true
                 } else {
                     this.errors = saveResult.errors
@@ -381,7 +378,7 @@ Glue.form.contact_form.addListener('save', (event) => {
 
 ## Access Levels
 
-| Access Level | Available Actions |
-|-------------|-------------------|
-| `VIEW` | `get()`, `foreign_key_choices()` |
-| `CHANGE` | All VIEW actions + `validate()`, `save()` |
+| Access Level | Available Actions                        |
+| ------------ | ---------------------------------------- |
+| `VIEW`       | `load()`, `foreign_key_choices()`        |
+| `CHANGE`     | All VIEW actions + `validate()`, `save()` |

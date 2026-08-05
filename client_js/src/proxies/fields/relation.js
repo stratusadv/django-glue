@@ -18,7 +18,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get pk() {
         const value = this.value
         if (value && typeof value === 'object') {
-            return value.pk ?? value.id
+            return value.value
         }
         return value
     }
@@ -30,11 +30,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get selectedChoice() {
         const pk = this.pk
         if (pk == null) return undefined
-        return (this._choices || []).find(choice => Number(choice.pk) === Number(pk))
-    }
-
-    get selectedLabel() {
-        return this.selectedChoice?.__str__ ?? ''
+        return (this._choices || []).find(choice => String(choice.value) === String(pk))
     }
 
     buildChoices(...choiceFields) {
@@ -51,7 +47,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             this.choices = cache.choices
         }
 
-        const requiredFields = this._normalizeChoiceFields(choiceFields)
+        const requiredFields = this._choiceObjectFields(choiceFields)
         const missingFields = requiredFields.filter(f => !cache.loadedFields.has(f))
 
         if (missingFields.length === 0) {
@@ -68,7 +64,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
         cache.promise = this.owner.foreign_key_choices({
             field_name: this.name,
-            choice_fields: missingFields.filter(f => !['pk', '__str__'].includes(f)),
+            choice_fields: missingFields.filter(f => !['value', 'label', 'pk', '__str__'].includes(f)),
         }).then(result => {
             const newChoices = Array.isArray(result) ? result : []
             this._mergeChoices(newChoices)
@@ -90,7 +86,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         ].filter(Boolean).join(':')
     }
 
-    _normalizeChoiceFields(choiceFields = []) {
+    _choiceObjectFields(choiceFields = []) {
         return [...new Set(['pk', '__str__', ...choiceFields.filter(Boolean)])]
     }
 
@@ -115,7 +111,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
         newChoices.forEach(choice => {
             if (!choice || typeof choice !== 'object') return
-            const existing = merged.find(item => item.pk === choice.pk)
+            const existing = merged.find(item => item.value === choice.value)
             if (existing) {
                 Object.assign(existing, choice)
             } else {

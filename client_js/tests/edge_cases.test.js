@@ -59,38 +59,58 @@ describe('frontend edge cases', () => {
         expect(collection._modelProxies.has('gorillas.1')).toBe(false)
     })
 
-    test('choice and many-relation fields expose selection helpers', () => {
+    test('choice fields expose selection helpers', () => {
         const object = new GlueModelProxy({
             http: http(),
-            policy: createPolicy({attributes: ['status', 'skills']}),
+            policy: createPolicy({attributes: ['status', 'temperaments', 'skills']}),
             state: {
                 status: {value: 'done'},
-                skills: {value: [{pk: 1, __str__: 'Grappling'}]},
+                temperaments: {value: ['calm']},
+                skills: {value: [1]},
             },
             metadata: createMetadata({
                 fields: {
-                    status: {type: 'CharField', choices: [['done', 'Done'], ['new', 'New']]},
+                    status: {type: 'CharField', choices: [
+                        {value: 'done', label: 'Done'},
+                        {value: 'new', label: 'New'},
+                    ]},
+                    temperaments: {type: 'MultipleChoiceField', choices: [
+                        {value: 'calm', label: 'Calm'},
+                        {value: 'alert', label: 'Alert'},
+                    ]},
                     skills: {
                         type: 'ManyToManyField',
                         choice_model_path: 'Skill',
-                        choices: [{pk: 1, __str__: 'Grappling'}, {pk: 2, __str__: 'Climbing'}],
+                        choices: [
+                            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+                            {value: 2, label: 'Climbing', obj: {pk: 2, __str__: 'Climbing'}},
+                            {value: 'skill-uuid', label: 'Foraging', obj: {pk: 'skill-uuid', __str__: 'Foraging'}},
+                        ],
                     },
                 },
             }),
         })
         object._loaded = true
-        object.$fields.skills.choices = [
-            {pk: 1, __str__: 'Grappling'},
-            {pk: 2, __str__: 'Climbing'},
-        ]
+        object.$fields.skills._mergeChoices([
+            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+            {value: 2, label: 'Climbing', obj: {pk: 2, __str__: 'Climbing'}},
+            {value: 'skill-uuid', label: 'Foraging', obj: {pk: 'skill-uuid', __str__: 'Foraging'}},
+        ])
 
-        expect(object.$fields.status.selectedChoice).toEqual(['done', 'Done'])
-        expect(object.$fields.status.selectedLabel).toBe('Done')
+        expect(object.$fields.status.selectedChoice).toEqual({value: 'done', label: 'Done'})
+        expect(object.$fields.status.selectedChoice.label).toBe('Done')
+        expect(object.$fields.temperaments.selectedChoices).toEqual([{value: 'calm', label: 'Calm'}])
+        expect(object.$fields.temperaments.addChoice('alert').hasChoiceSelected('alert')).toBe(true)
+        expect(object.$fields.temperaments.removeChoice('calm').hasChoiceSelected('calm')).toBe(false)
+        expect(object.$fields.temperaments.toggleChoice('alert').hasChoiceSelected('alert')).toBe(false)
         expect(object.$fields.skills.selectedPks).toEqual([1])
-        expect(object.$fields.skills.selectedChoices).toEqual([])
-        expect(object.$fields.skills.add(2).has(2)).toBe(true)
-        expect(object.$fields.skills.remove(1).has(1)).toBe(false)
-        expect(object.$fields.skills.toggle(2).has(2)).toBe(false)
+        expect(object.$fields.skills.selectedChoices).toEqual([
+            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+        ])
+        expect(object.$fields.skills.addChoice(2).hasChoiceSelected(2)).toBe(true)
+        expect(object.$fields.skills.removeChoice(1).hasChoiceSelected(1)).toBe(false)
+        expect(object.$fields.skills.toggleChoice(2).hasChoiceSelected(2)).toBe(false)
+        expect(object.$fields.skills.addChoice('skill-uuid').hasChoiceSelected('skill-uuid')).toBe(true)
     })
 
     test('view GET requests preserve the GET method in the view payload', async () => {

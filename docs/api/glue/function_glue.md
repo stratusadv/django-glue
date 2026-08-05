@@ -1,3 +1,3 @@
 ## Source
 
-::: django_glue.glue.function.PythonFunctionGlue
+::: django_glue.glue.function.FunctionGlue

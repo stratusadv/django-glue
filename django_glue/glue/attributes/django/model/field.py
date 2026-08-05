@@ -52,10 +52,7 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
             if self.instance.pk is None:
                 return []
 
-            return [
-                {'pk': obj.pk, '__str__': f'{obj}'}
-                for obj in self.field.value_from_object(self.instance)
-            ]
+            return [obj.pk for obj in self.field.value_from_object(self.instance)]
 
         return self.field.value_from_object(self.instance)
 

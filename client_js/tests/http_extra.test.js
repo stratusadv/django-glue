@@ -27,8 +27,9 @@ describe('GlueHttp edge cases', () => {
             'Content-Type': 'application/json',
             'X-CSRFToken': 'token 1',
         })
+        expect(request.body).toBe('{}')
         expect(result.data).toEqual({ok: true})
-        expect(result.body).toBe('{"ok":true}')
+        expect(result.payload).toBe('{"ok":true}')
     })
 
     test('omits CSRF when explicitly disabled', async () => {
@@ -41,6 +42,31 @@ describe('GlueHttp edge cases', () => {
         await http().sendRequest('/endpoint', {csrfProtected: false})
 
         expect(request.headers).toEqual({})
+    })
+
+    test('serializes JSON payload objects without mutating request options', async () => {
+        document.cookie = 'csrftoken=token%202'
+        let request
+        global.fetch = async (_url, options) => {
+            request = options
+            return new Response('{}', {status: 200})
+        }
+        const options = {
+            method: 'POST',
+            contentType: 'application/json',
+            payload: {name: 'Koko'},
+            headers: {'X-Test': 'yes'},
+        }
+
+        await http().sendRequest('/endpoint', options)
+
+        expect(request.body).toBe('{"name":"Koko"}')
+        expect(request.headers).toEqual({
+            'X-Test': 'yes',
+            'Content-Type': 'application/json',
+            'X-CSRFToken': 'token 2',
+        })
+        expect(options.payload).toEqual({name: 'Koko'})
     })
 
     test('builds structured GlueHttpErrors from JSON and text responses', async () => {

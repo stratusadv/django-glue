@@ -1,47 +1,34 @@
 import RelationFieldGlue from "./relation"
 
 class ManyRelationFieldGlue extends RelationFieldGlue {
-    _extractPk(choiceOrPk) {
-        if (choiceOrPk == null) return null
-        const pk = choiceOrPk?.pk ?? choiceOrPk?.id ?? choiceOrPk
-        return pk == null ? null : Number(pk)
-    }
-
     get selectedPks() {
-        return (this.value || [])
-            .map(choice => this._extractPk(choice))
-            .filter(pk => pk != null)
+        return (this.value || []).filter(value => value != null)
     }
 
     get selectedChoices() {
-        const selectedPks = new Set(this.selectedPks)
-        return (this.choices || []).filter(choice => selectedPks.has(Number(choice.pk)))
+        const selectedPks = new Set(this.selectedPks.map(value => String(value)))
+        return (this.choices || []).filter(choice => selectedPks.has(String(choice.value)))
     }
 
-    has(choiceOrPk) {
-        const pk = this._extractPk(choiceOrPk)
-        if (pk == null) return false
-        const selectedPks = new Set(this.selectedPks)
-        return selectedPks.has(pk)
+    hasChoiceSelected(value) {
+        return this.selectedPks.some(item => String(item) === String(value))
     }
 
-    add(choiceOrPk) {
-        if (this.has(choiceOrPk)) {
+    addChoice(value) {
+        if (this.hasChoiceSelected(value)) {
             return this
         }
-        this.value = [...(this.value || []), choiceOrPk]
+        this.value = [...(this.value || []), value]
         return this
     }
 
-    remove(choiceOrPk) {
-        const pk = this._extractPk(choiceOrPk)
-        if (pk == null) return this
-        this.value = (this.value || []).filter(choice => this._extractPk(choice) !== pk)
+    removeChoice(value) {
+        this.value = (this.value || []).filter(item => String(item) !== String(value))
         return this
     }
 
-    toggle(choiceOrPk) {
-        return this.has(choiceOrPk) ? this.remove(choiceOrPk) : this.add(choiceOrPk)
+    toggleChoice(value) {
+        return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value)
     }
 }
 
