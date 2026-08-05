@@ -880,7 +880,7 @@
       return existingField;
     }
     const options = { owner, name, stateKey, metadata };
-    if (metadata.choice_model_path && metadata.type === "ManyToManyField") {
+    if (metadata.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(metadata.type)) {
       return new manyRelation_default(options);
     }
     if (metadata.choice_model_path) {
