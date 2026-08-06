@@ -6,6 +6,7 @@
 
 - Added `computed_attributes` support to `Glue.model()` and `Glue.queryset()` for exposing readonly Python-computed values on glued model state.
 - Added support for computed attribute callables with keyword arguments, persisted through Glue policy reconstruction.
+- Added `Glue.json()` for exposing serializable dictionaries, lists, and primitive values as Glue-managed frontend state.
 
 ### Fixes
 
