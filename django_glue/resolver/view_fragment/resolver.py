@@ -42,7 +42,7 @@ class GlueViewFragmentResolver(GlueResolver[ViewFragmentRequestContext]):
         return self._raise_too_many_redirects()
 
     def _serialized_new_glue_manifests(self) -> list[dict]:
-        return [manifest.model_dump() for manifest in GlueContextManager(self.request).manifests]
+        return GlueContextManager(self.request).serialized_manifests
 
     def _build_glue_view_http_request(
         self,

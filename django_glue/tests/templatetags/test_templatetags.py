@@ -87,6 +87,22 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('gorilla', rendered)
 
+    def test_tag_includes_json_manifest_payload(self):
+        """Tag should include JsonGlue payloads registered through the shortcut."""
+        Glue.json(
+            request=self.request,
+            unique_name='permission_data',
+            target=[{'group': 'admin', 'permissions': ['auth.add_group']}],
+        )
+
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
+        context = Context({'request': self.request})
+
+        rendered = template.render(context)
+        self.assertIn('permission_data', rendered)
+        self.assertIn('json', rendered)
+        self.assertIn('auth.add_group', rendered)
+
     def test_tag_with_no_manifest_registered(self):
         """Tag should work when no glue objects are registered."""
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
@@ -123,6 +139,36 @@ class GetItemFilterTestCase(TestCase):
 
         rendered = template.render(context).strip()
         self.assertEqual(rendered, 'bar')
+
+
+class JsUrlTagTestCase(TestCase):
+    """Tests for the js_url template tag."""
+
+    def test_js_url_defaults_to_concatenated_expression_with_kwargs(self):
+        template = Template(
+            "{% load django_glue %}{% js_url 'gorilla:detail' pk='item.id' %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/' + item.id + '/'")
+
+    def test_js_url_defaults_to_string_expression_without_kwargs(self):
+        template = Template("{% load django_glue %}{% js_url 'gorilla:list' %}")
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/'")
+
+    def test_js_url_can_output_template_literal_content(self):
+        template = Template(
+            "{% load django_glue %}"
+            "{% js_url 'gorilla:detail' pk='item.id' template_literal=True %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, '/${item.id}/')
 
 
 class GlueFieldPathFilterTestCase(TestCase):

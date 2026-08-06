@@ -3,6 +3,7 @@ from typing import cast, TYPE_CHECKING
 
 from django import template
 from django.urls import get_resolver
+from django.utils.safestring import mark_safe
 
 from django_glue.glue.context import GlueContextManager
 
@@ -28,7 +29,7 @@ def _get_url_pattern_template(name: str) -> str:
             for pattern in resolver.url_patterns:
                 if hasattr(pattern, 'namespace') and pattern.namespace == ns:
                     result = find_pattern(pattern, remaining, url_name)
-                    if result:
+                    if result is not None:
                         prefix = str(pattern.pattern)
                         return prefix + result
             return None
@@ -53,10 +54,33 @@ def _get_url_pattern_template(name: str) -> str:
     return '/' + result
 
 
+def _js_single_quoted_string(value: str) -> str:
+    return "'" + value.replace('\\', '\\\\').replace("'", "\\'") + "'"
+
+
+def _get_url_pattern_concat_expression(pattern: str, kwargs: dict) -> str:
+    parts = []
+    last_end = 0
+    for match in re.finditer(r'\$\{(\w+)}', pattern):
+        literal = pattern[last_end:match.start()]
+        if literal:
+            parts.append(_js_single_quoted_string(literal))
+
+        key = match.group(1)
+        parts.append(str(kwargs.get(key, key)))
+        last_end = match.end()
+
+    literal = pattern[last_end:]
+    if literal:
+        parts.append(_js_single_quoted_string(literal))
+
+    return ' + '.join(parts) if parts else "''"
+
+
 @register.simple_tag
-def js_url(name: str, **kwargs) -> str:
+def js_url(name: str, template_literal: bool = False, **kwargs) -> str:
     """
-    Generate a JavaScript expression that resolves to a URL.
+    Generate a JavaScript URL expression.
 
     Args:
         name: The URL name (e.g., 'task:page:detail').
@@ -66,20 +90,26 @@ def js_url(name: str, **kwargs) -> str:
         {% load django_glue %}
         <a :href="{% js_url 'task:page:detail' pk='item.id' %}">View</a>
 
-        Outputs: resolveUrl('/task/${pk}/detail/', {pk: item.id})
+        Outputs: "/task/" + item.id + "/detail/"
+
+        To output content for a JavaScript template literal:
+        <a :href="`{% js_url 'task:page:detail' pk='item.id' template_literal=True %}`">View</a>
+
+        Outputs: /task/${item.id}/detail/
 
         Or without kwargs:
-        <a href="{% js_url 'task:page:list' %}">List</a>
+        <a :href="{% js_url 'task:page:list' %}">List</a>
 
-        Outputs: '/task/list/'
+        Outputs: "/task/list/"
     """
     pattern = _get_url_pattern_template(name)
 
-    if not kwargs:
-        return f"'{pattern}'"
+    if template_literal:
+        for key, value in kwargs.items():
+            pattern = pattern.replace(f'${{{key}}}', f'${{{value}}}')
+        return mark_safe(pattern)
 
-    js_kwargs = ', '.join(f'{k}: {v}' for k, v in kwargs.items())
-    return f"resolveUrl('{pattern}', {{{js_kwargs}}})"
+    return mark_safe(_get_url_pattern_concat_expression(pattern, kwargs))
 
 
 @register.filter

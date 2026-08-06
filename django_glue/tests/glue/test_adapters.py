@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import QuerySet
 from django.test import TestCase
 
+from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.glue import (
     BaseGlue,
@@ -20,6 +21,7 @@ from django_glue.glue import (
     TemplateGlue,
     GluePolicy,
     FunctionGlue,
+    JsonGlue,
     GlueClassRegistry,
 )
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
@@ -885,6 +887,94 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertEqual(row['metadata']['attributes']['name']['type'], 'CharField')
 
+    def test_queryset_annotate_adds_computed_annotation_to_child_payloads(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            Gorilla.objects.filter(pk=gorilla.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+        )
+        glue_object.request = request
+
+        result = glue_object.annotate(badge_data=gorilla_badge_data).query_with_params()
+
+        row = result['items'][0]
+        self.assertIn('badge_data', row['policy']['attributes'])
+        self.assertEqual(row['metadata']['attributes']['badge_data']['namespace'], 'readonly')
+        self.assertEqual(row['state']['badge_data']['value'], {'label': 'KOKO'})
+        self.assertTrue(
+            glue_object.policy.identity['computed_annotations']['badge_data']['path'].endswith(
+                'test_adapters.gorilla_badge_data'
+            )
+        )
+        self.assertEqual(glue_object.policy.identity['computed_annotations']['badge_data']['kwargs'], {})
+
+    def test_queryset_annotate_supports_computed_annotation_kwargs(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            Gorilla.objects.filter(pk=gorilla.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+        )
+        glue_object.request = request
+
+        result = glue_object.annotate(
+            badge_data=(gorilla_badge_data_with_suffix, {'suffix': '!'})
+        ).query_with_params()
+
+        self.assertEqual(result['items'][0]['state']['badge_data']['value'], {'label': 'KOKO!'})
+        self.assertEqual(
+            glue_object.policy.identity['computed_annotations']['badge_data']['kwargs'],
+            {'suffix': '!'},
+        )
+
+    def test_queryset_computed_annotations_survive_policy_reconstruction(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        glue_object = with_request(QuerySetGlue(
+            Gorilla.objects.filter(pk=gorilla.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+        ).annotate(badge_data=gorilla_badge_data))
+
+        resolved = QuerySetGlue._reconstruct_from_policy(glue_object.policy)
+        resolved.request = glue_object.request
+        result = resolved.query_with_params()
+
+        self.assertEqual(result['items'][0]['state']['badge_data']['value'], {'label': 'KOKO'})
+
+    def test_queryset_annotate_rejects_non_importable_callables(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+        )
+
+        with self.assertRaisesRegex(ValueError, 'importable top-level callables'):
+            glue_object.annotate(badge_data=lambda gorilla: gorilla.name)
+
+    def test_queryset_shortcut_returns_chainable_queryset_glue(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        request = request_with_session()
+
+        glue_object = Glue.queryset(
+            request,
+            'gorillas',
+            Gorilla.objects.filter(pk=gorilla.pk),
+            Glue.Access.VIEW,
+            fields=['id', 'name'],
+        ).annotate(badge_data=gorilla_badge_data)
+
+        manifest = glue_object.manifest.model_dump()
+
+        self.assertEqual(manifest['policy']['namespace'], 'querySet')
+        self.assertIn('badge_data', manifest['policy']['attributes'])
+
     def test_queryset_form_class_adds_nested_form_to_child_model_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
         queryset = Gorilla.objects.filter(pk=gorilla.pk)
@@ -971,6 +1061,31 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
 
 class PythonAdaptersTestCase(TestCase):
+    def test_json_adapter_builds_signed_policy_with_normalized_value(self):
+        glue_object = with_request(JsonGlue(
+            [{'skill': {'name': 'Grappling'}, 'enabled': True}],
+            **glue_context(name='permission_data', access=GlueAccess.VIEW),
+        ))
+
+        policy = glue_object.policy
+        manifest = json.loads(json.dumps(glue_object.manifest.model_dump(), cls=GlueResponseJSONEncoder))
+
+        self.assertEqual(policy.namespace, 'json')
+        self.assertEqual(policy.identity['value'][0]['skill']['name'], 'Grappling')
+        self.assertEqual(manifest['policy']['identity']['value'][0]['skill']['name'], 'Grappling')
+        self.assertEqual(glue_object.metadata['type'], 'array')
+
+    def test_json_adapter_reconstructs_from_policy(self):
+        glue_object = with_request(JsonGlue(
+            {'permissions': [{'name': 'auth.add_group'}]},
+            **glue_context(name='permission_data', access=GlueAccess.VIEW),
+        ))
+
+        resolved = JsonGlue._reconstruct_from_policy(glue_object.policy)
+
+        self.assertEqual(resolved.name, 'permission_data')
+        self.assertEqual(resolved.target, {'permissions': [{'name': 'auth.add_group'}]})
+
     def test_template_adapter_builds_render_policy(self):
         glue_object = with_request(TemplateGlue(
             'template.html',
@@ -1017,6 +1132,14 @@ class GlueClassRegistryTestCase(TestCase):
 
 def sample_function(amount: int, tax: float = 0.0):
     return amount + tax
+
+
+def gorilla_badge_data(gorilla: Gorilla) -> dict[str, str]:
+    return {'label': gorilla.name.upper()}
+
+
+def gorilla_badge_data_with_suffix(gorilla: Gorilla, suffix: str = '') -> dict[str, str]:
+    return {'label': f'{gorilla.name.upper()}{suffix}'}
 
 
 class LazyLoadingTestCase(TestCase):
