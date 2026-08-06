@@ -3,6 +3,7 @@ import GlueConfig from "../src/config"
 import GlueHttp from "../src/http"
 import {RelationFieldGlue} from "../src/proxies/fields"
 import GlueFormProxy from "../src/proxies/form"
+import GlueJsonProxy from "../src/proxies/json"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
 import {registerProxyClass} from "../src/proxies/registry"
@@ -54,6 +55,30 @@ function querySet() {
 }
 
 describe('Glue proxies', () => {
+    test('json proxy exposes policy identity value', () => {
+        const object = new GlueJsonProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'permission_data',
+                namespace: 'json',
+                identity: {
+                    value: [
+                        {group: 'admin', permissions: ['auth.add_group']},
+                    ],
+                },
+                attributes: [],
+            }),
+            metadata: {namespace: 'json', type: 'array', attributes: {}},
+        })
+
+        expect(object.value).toEqual([
+            {group: 'admin', permissions: ['auth.add_group']},
+        ])
+        expect(object.length).toBe(1)
+        expect(object.at(0).group).toBe('admin')
+        expect([...object]).toEqual(object.value)
+    })
+
     test('glue object attributes initialize nested form proxies', () => {
         registerProxyClass('form', GlueFormProxy)
         const formPolicy = createPolicy({
@@ -399,6 +424,39 @@ describe('Glue proxies', () => {
         expect(filtered.items).toHaveLength(2)
         expect(filtered.items[0]).toBeInstanceOf(GlueModelProxy)
         expect(filtered.items[0].name).toBe('gorillas.1')
+    })
+
+    test('querysets expose computed attributes on returned model proxies', async () => {
+        const object = querySet()
+        const rows = [{
+            policy: createPolicy({
+                name: 'gorillas.1',
+                attributes: ['id', 'name', 'badge_data'],
+                identity: {target_pk: 1, pk_field_name: 'id'},
+            }),
+            state: createState({
+                instance_data: {
+                    id: 1,
+                    name: 'Koko',
+                    badge_data: {label: 'KOKO'},
+                },
+            }),
+            metadata: createMetadata({
+                attributes: {
+                    badge_data: {namespace: 'readonly'},
+                },
+            }),
+        }]
+        global.fetch = async () => new Response(JSON.stringify({
+            result: {items: rows},
+            state: {items: []},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+
+        const filtered = await object.all()
+
+        expect(filtered.items[0].badge_data).toEqual({label: 'KOKO'})
     })
 
     test('querysets get one model proxy by pk', async () => {

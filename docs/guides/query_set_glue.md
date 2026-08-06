@@ -76,6 +76,56 @@ console.log(tasks[0].assigned_to.name)  // Nested FK object
 console.log(tasks[0].tags)              // M2M as array of PKs
 ```
 
+### Adding Computed Attributes
+
+Use `computed_attributes` when each returned item needs extra frontend data that is calculated in Python after the queryset is loaded.
+
+```python
+from django_glue import Glue, GlueAccess
+from myapp.models import Group
+from myapp.permissions import generate_group_perm_data
+
+def group_list_view(request):
+    Glue.queryset(
+        request=request,
+        unique_name='groups',
+        target=Group.objects.prefetch_related('permissions').order_by('name'),
+        access=GlueAccess.VIEW,
+        fields='__all__',
+        computed_attributes={
+            'permission_data': generate_group_perm_data,
+        },
+    )
+
+    return render(request, 'groups/list.html')
+```
+
+The callable receives the model instance and its return value is exposed as a readonly attribute on each frontend item:
+
+```javascript
+const groups = await Glue.querySet.groups.all()
+console.log(groups[0].permission_data)
+```
+
+Computed attributes also support keyword arguments by passing a `(callable, kwargs)` tuple:
+
+```python
+Glue.queryset(
+    request=request,
+    unique_name='groups',
+    target=Group.objects.all(),
+    access=GlueAccess.VIEW,
+    fields='__all__',
+    computed_attributes={
+        'permission_data': (generate_group_perm_data, {'with_special_role': True}),
+    },
+)
+```
+
+!!! note
+
+    Computed attributes are not Django ORM annotations. They are evaluated after the queryset rows are loaded, so they cannot be used for queryset filtering or ordering. Use Django's `QuerySet.annotate()` on the queryset itself when you need database-level annotations.
+
 ## Frontend: Using the QuerySet
 
 ### Fetching All Items

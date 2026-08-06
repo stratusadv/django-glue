@@ -28,6 +28,9 @@ shell:
 run-worker:
 	{{PYTHON}} ./worker.py
 
+docs:
+	{{PYTHON}} -m mkdocs build --strict
+
 test-app *PATTERN:
 	{{PYTHON}} -m pytest {{PATTERN}}
 

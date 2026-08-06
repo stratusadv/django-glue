@@ -23,26 +23,35 @@ class GlueContextManager:
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
 
-        # Glue View requests are wrappers; their Glue manifests belong to the
+        # Glue View requests are wrappers; their Glue objects belong to the
         # underlying request so the outer GlueViewFragmentResolver can serialize them.
         context_request = getattr(request, 'glue_context_request', request)
-        self.manifests: list[GlueManifest] = context_request.__dict__.setdefault(
+        self.glue_objects: list[BaseGlue] = context_request.__dict__.setdefault(
             DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY,
             [],
         )
 
-    def add_glue(self, glue: BaseGlue) -> None:
+    @property
+    def manifests(self) -> list[BaseGlue]:
+        return self.glue_objects
+
+    @property
+    def serialized_manifests(self) -> list[dict[str, Any]]:
+        return [glue.manifest.model_dump() for glue in self.glue_objects]
+
+    def add_glue(self, glue: BaseGlue) -> BaseGlue:
         # Ensure session exists (Django creates sessions lazily)
         if not self.request.session.session_key:
             self.request.session.create()
 
         glue.request = self.request
-        self.manifests.append(glue.manifest)
+        self.glue_objects.append(glue)
+        return glue
 
     @property
     def _glue_client_context(self) -> dict[str, Any]:
         return {
-            'manifest_list': [manifest.model_dump() for manifest in self.manifests],
+            'manifest_list': self.serialized_manifests,
             'urls': {
                 constants.CALLABLE_ATTRIBUTE_URL_NAME: (
                     f'/{constants.BASE_URL_NAME}/{constants.CALLABLE_ATTRIBUTE_URL_NAME}/'

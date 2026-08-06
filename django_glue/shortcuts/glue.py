@@ -1,4 +1,4 @@
-from typing import Mapping, Sequence, Union
+from typing import Literal, Mapping, Sequence, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, ModelForm
@@ -8,10 +8,12 @@ from django_glue.access import GlueAccess
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
+from django_glue.glue.json import JsonGlue, JsonValue
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
@@ -29,8 +31,8 @@ class Glue:
     def object(
         request: HttpRequest,
         glue: BaseGlue,
-    ) -> None:
-        GlueContextManager(request).add_glue(glue)
+    ) -> BaseGlue:
+        return GlueContextManager(request).add_glue(glue)
 
     @staticmethod
     def model(
@@ -38,13 +40,14 @@ class Glue:
         unique_name: str,
         target: Model,
         access: GlueAccess = GlueAccess.VIEW,
-        fields: Sequence[str] = (),
-        exclude: Sequence[str] = (),
+        fields: Sequence[str] | Literal['__all__'] = (),
+        exclude: Sequence[str] | Literal['__all__'] = (),
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         select_related: Sequence[str] | None = None,
-    ) -> None:
-        Glue.object(
+        computed_attributes: Mapping[str, ComputedAttribute] | None = None,
+    ) -> ModelGlue:
+        return Glue.object(
             request=request,
             glue=ModelGlue(
                 instance=target,
@@ -55,6 +58,7 @@ class Glue:
                 form=form,
                 forms=forms,
                 select_related=select_related,
+                computed_attributes=computed_attributes,
             ),
         )
 
@@ -64,12 +68,13 @@ class Glue:
         unique_name: str,
         target: QuerySet,
         access: GlueAccess = GlueAccess.VIEW,
-        fields: Sequence[str] = (),
-        exclude: Sequence[str] = (),
+        fields: Sequence[str] | Literal['__all__'] = (),
+        exclude: Sequence[str] | Literal['__all__'] = (),
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
-    ) -> None:
-        Glue.object(
+        computed_attributes: Mapping[str, ComputedAttribute] | None = None,
+    ) -> QuerySetGlue:
+        return Glue.object(
             request=request,
             glue=QuerySetGlue(
                 queryset=target,
@@ -79,6 +84,7 @@ class Glue:
                 exclude=exclude,
                 form=form,
                 forms=forms,
+                computed_attributes=computed_attributes,
             ),
         )
 
@@ -88,8 +94,8 @@ class Glue:
         unique_name: str,
         target: BaseForm,
         access: GlueAccess = GlueAccess.CHANGE,
-    ) -> None:
-        Glue.object(
+    ) -> FormGlue:
+        return Glue.object(
             request=request,
             glue=FormGlue(
                 form=target,
@@ -104,8 +110,8 @@ class Glue:
         unique_name: str,
         target: str,
         initial_context_data: dict | None = None,
-    ) -> None:
-        Glue.object(
+    ) -> TemplateGlue:
+        return Glue.object(
             request=request,
             glue=TemplateGlue(
                 target,
@@ -120,12 +126,28 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-    ) -> None:
-        Glue.object(
+    ) -> FunctionGlue:
+        return Glue.object(
             request=request,
             glue=FunctionGlue(
                 target,
                 name=unique_name,
                 access=GlueAccess.VIEW,
+            ),
+        )
+
+    @staticmethod
+    def json(
+        request: HttpRequest,
+        unique_name: str,
+        target: JsonValue,
+        access: GlueAccess = GlueAccess.VIEW,
+    ) -> JsonGlue:
+        return Glue.object(
+            request=request,
+            glue=JsonGlue(
+                target,
+                name=unique_name,
+                access=access,
             ),
         )

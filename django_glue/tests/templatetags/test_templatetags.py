@@ -3,12 +3,31 @@ Tests for Django Glue template tags.
 """
 from django.test import TestCase, RequestFactory, override_settings
 from django.template import Template, Context
+from django.urls import include, path
 
 from django_glue.shortcuts.glue import Glue
 from django_glue.access import GlueAccess
 from django_glue import constants
 from test_project.gorilla.models import Gorilla
 from django_glue.tests.conftest import MockSession
+
+
+def placeholder_view(request, pk=None):
+    pass
+
+
+app_name = 'mounted_app'
+
+mounted_patterns = (
+    [
+        path('item/<int:pk>/detail/', placeholder_view, name='detail'),
+    ],
+    app_name,
+)
+
+urlpatterns = [
+    path('__mounted__/', include(mounted_patterns, namespace='instance_name')),
+]
 
 
 class DjangoGlueInitTagTestCase(TestCase):
@@ -87,6 +106,22 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('gorilla', rendered)
 
+    def test_tag_includes_json_manifest_payload(self):
+        """Tag should include JsonGlue payloads registered through the shortcut."""
+        Glue.json(
+            request=self.request,
+            unique_name='permission_data',
+            target=[{'group': 'admin', 'permissions': ['auth.add_group']}],
+        )
+
+        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
+        context = Context({'request': self.request})
+
+        rendered = template.render(context)
+        self.assertIn('permission_data', rendered)
+        self.assertIn('json', rendered)
+        self.assertIn('auth.add_group', rendered)
+
     def test_tag_with_no_manifest_registered(self):
         """Tag should work when no glue objects are registered."""
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
@@ -123,6 +158,47 @@ class GetItemFilterTestCase(TestCase):
 
         rendered = template.render(context).strip()
         self.assertEqual(rendered, 'bar')
+
+
+class JsUrlTagTestCase(TestCase):
+    """Tests for the js_url template tag."""
+
+    def test_js_url_defaults_to_concatenated_expression_with_kwargs(self):
+        template = Template(
+            "{% load django_glue %}{% js_url 'gorilla:detail' pk='item.id' %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/' + item.id + '/'")
+
+    def test_js_url_defaults_to_string_expression_without_kwargs(self):
+        template = Template("{% load django_glue %}{% js_url 'gorilla:list' %}")
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/'")
+
+    def test_js_url_can_output_template_literal_content(self):
+        template = Template(
+            "{% load django_glue %}"
+            "{% js_url 'gorilla:detail' pk='item.id' template_literal=True %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, '/${item.id}/')
+
+    @override_settings(ROOT_URLCONF=__name__)
+    def test_js_url_resolves_app_namespace_mounted_with_different_instance_namespace(self):
+        template = Template(
+            "{% load django_glue %}"
+            "{% js_url 'mounted_app:detail' pk='item.id' %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/__mounted__/item/' + item.id + '/detail/'")
 
 
 class GlueFieldPathFilterTestCase(TestCase):

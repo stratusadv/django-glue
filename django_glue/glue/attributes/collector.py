@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import inspect
+import json
 from typing import Any, TYPE_CHECKING
 
+from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.exceptions import GlueInvalidAttributeError
 from django_glue.glue.attributes.callable import CallableAttribute
 from django_glue.glue.attributes.composite import CompositeStateAttribute
 from django_glue.glue.attributes.declared import DeclaredAttributeOptions
@@ -98,12 +101,22 @@ class GlueAttributeCollector:
             return
 
         value = getattr(glue_attr_owner, attr_name)
+        has_nested_glue_attributes = (
+            value is not None and self._has_glue_attributes(value.__class__)
+        )
+        if not has_nested_glue_attributes and not self._can_serialize_as_state(value):
+            raise GlueInvalidAttributeError(
+                attribute=qualified_name,
+                owner=f'{glue_attr_owner.__class__.__module__}.{glue_attr_owner.__class__.__qualname__}',
+                value_type=f'{value.__class__.__module__}.{value.__class__.__qualname__}',
+            )
+
         self.glue_attributes[qualified_name] = self._create_state_attribute(
-            attr_name, options, attr_owner_instance, value
+            attr_name, options, attr_owner_instance, has_nested_glue_attributes
         )
 
         # Depth-first: recurse immediately into containers
-        if value is not None and self._has_glue_attributes(value.__class__):
+        if has_nested_glue_attributes:
             self._collect_attrs_from_glue_attr_owner(
                 glue_attr_owner=value,
                 discovery_path_prefix=qualified_name
@@ -137,11 +150,11 @@ class GlueAttributeCollector:
         attr_name: str,
         options: DeclaredAttributeOptions,
         attr_owner_instance: Any | None,
-        value: Any,
+        has_nested_glue_attributes: bool,
     ) -> BaseGlueAttribute:
         # These are the only potential state attribute types right now.
         # More likely to be added in the future.
-        if value is not None and self._has_glue_attributes(value.__class__):
+        if has_nested_glue_attributes:
             return CompositeStateAttribute(
                 owner=self.root_glue_owner,
                 name=attr_name,
@@ -163,6 +176,14 @@ class GlueAttributeCollector:
             self._get_glue_options(cls, attr_name, attr) is not None
             for attr_name, attr in inspect.getmembers_static(cls)
         )
+
+    @staticmethod
+    def _can_serialize_as_state(value: Any) -> bool:
+        try:
+            json.dumps(value, cls=GlueResponseJSONEncoder)
+        except TypeError:
+            return False
+        return True
 
     @staticmethod
     def _get_glue_options(

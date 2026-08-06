@@ -7,12 +7,16 @@ from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
+from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.objects.django.computed_attributes import (
+    ComputedAttribute,
+    GlueComputedAttributesMixin,
+)
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
-from django_glue.glue.attributes import DeclaredAttribute
-from django_glue.exceptions import GlueQuerySetFilterValidationError
 
 if TYPE_CHECKING:
     from django import forms
@@ -20,7 +24,7 @@ if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
 
 
-class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
+class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue):
     namespace = 'querySet'
 
     def __init__(
@@ -33,6 +37,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         exclude: Sequence[str] | Literal['__all__'] = (),
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
+        computed_attributes: Mapping[str, ComputedAttribute] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.queryset = queryset
@@ -48,6 +53,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             raise ValueError(msg)
 
         self.forms = self.normalize_forms(form, forms)
+        self.initialize_computed_attributes(computed_attributes)
 
     @property
     def identity(self) -> dict[str, Any]:
@@ -58,6 +64,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
+        identity |= self.computed_attributes_identity()
 
         return identity
 
@@ -99,12 +106,17 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             name=f'{self.name}.__model__',
             access=self.access,
             fields=self._included_fields,
-            annotations=tuple(self.queryset.query.annotations),
+            annotations=self._orm_annotation_names,
             forms=self.forms,
             select_related=self._select_related_fields,
+            computed_attributes=self.computed_attributes,
         )
         # Get field attributes from the model, excluding model's declared attributes
-        field_names = {*self._included_fields, *self._annotation_names}
+        field_names = {
+            *self._included_fields,
+            *self._orm_annotation_names,
+            *self._computed_attribute_names,
+        }
         attributes: dict[str, BaseGlueAttribute] = {
             name: attribute
             for name, attribute in model_object.attributes.items()
@@ -129,7 +141,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         }
 
     @cached_property
-    def _annotation_names(self) -> tuple[str, ...]:
+    def _orm_annotation_names(self) -> tuple[str, ...]:
         return tuple(self.queryset.query.annotations)
 
     @classmethod
@@ -153,6 +165,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             access=policy.access,
             fields=fields,
             forms=forms,
+            computed_attributes=policy.identity.get('computed_attributes', {}),
         )
 
     @staticmethod
@@ -220,9 +233,10 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             name=child_name,
             access=self.policy.access,
             fields=self._included_fields,
-            annotations=tuple(self.queryset.query.annotations),
+            annotations=self._orm_annotation_names,
             forms=child_forms,
-            select_related=select_related
+            select_related=select_related,
+            computed_attributes=self.computed_attributes,
         )
         child_object.request = self.request
 
