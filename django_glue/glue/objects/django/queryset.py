@@ -2,34 +2,29 @@ from __future__ import annotations
 
 import base64
 import builtins
-import inspect
 import pickle
 from functools import cached_property
-from typing import Any, Callable, Literal, Mapping, Sequence, TYPE_CHECKING
+from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.objects.django.computed_attributes import (
+    ComputedAttribute,
+    GlueComputedAttributesMixin,
+)
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
-from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
     from django import forms
     from django.db import models
     from django_glue.glue.policy import GluePolicy
 
-ComputedAnnotation = (
-    str
-    | Callable[['models.Model'], Any]
-    | tuple[str | Callable[['models.Model'], Any], Mapping[str, Any]]
-    | dict[str, Any]
-)
 
-
-class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
+class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue):
     namespace = 'querySet'
 
     def __init__(
@@ -42,7 +37,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         exclude: Sequence[str] | Literal['__all__'] = (),
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
-        computed_annotations: Mapping[str, ComputedAnnotation] | None = None,
+        computed_attributes: Mapping[str, ComputedAttribute] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.queryset = queryset
@@ -58,10 +53,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             raise ValueError(msg)
 
         self.forms = self.normalize_forms(form, forms)
-        self.computed_annotations = {
-            name: self._normalize_computed_annotation(annotation)
-            for name, annotation in (computed_annotations or {}).items()
-        }
+        self.initialize_computed_attributes(computed_attributes)
 
     @property
     def identity(self) -> dict[str, Any]:
@@ -72,8 +64,7 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
-        if self.computed_annotations:
-            identity['computed_annotations'] = self.computed_annotations
+        identity |= self.computed_attributes_identity()
 
         return identity
 
@@ -115,15 +106,16 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             name=f'{self.name}.__model__',
             access=self.access,
             fields=self._included_fields,
-            annotations=(*self._orm_annotation_names, *self._computed_annotation_names),
+            annotations=self._orm_annotation_names,
             forms=self.forms,
             select_related=self._select_related_fields,
+            computed_attributes=self.computed_attributes,
         )
         # Get field attributes from the model, excluding model's declared attributes
         field_names = {
             *self._included_fields,
             *self._orm_annotation_names,
-            *self._computed_annotation_names,
+            *self._computed_attribute_names,
         }
         attributes: dict[str, BaseGlueAttribute] = {
             name: attribute
@@ -152,10 +144,6 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
     def _orm_annotation_names(self) -> tuple[str, ...]:
         return tuple(self.queryset.query.annotations)
 
-    @cached_property
-    def _computed_annotation_names(self) -> tuple[str, ...]:
-        return tuple(self.computed_annotations)
-
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
         queryset = cls._decode_queryset_query(policy.identity['encoded_queryset'])
@@ -177,16 +165,8 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             access=policy.access,
             fields=fields,
             forms=forms,
-            computed_annotations=policy.identity.get('computed_annotations', {}),
+            computed_attributes=policy.identity.get('computed_attributes', {}),
         )
-
-    def annotate(self, **annotations: ComputedAnnotation) -> QuerySetGlue:
-        self.computed_annotations.update({
-            name: self._normalize_computed_annotation(annotation)
-            for name, annotation in annotations.items()
-        })
-        self._invalidate_cached_manifest_data()
-        return self
 
     @staticmethod
     def _encode_queryset_query(queryset: models.QuerySet) -> str:
@@ -198,43 +178,6 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
         queryset = query.model.objects.all()
         queryset.query = query
         return queryset
-
-    @staticmethod
-    def _normalize_computed_annotation(annotation: ComputedAnnotation) -> dict[str, Any]:
-        if isinstance(annotation, dict):
-            return {
-                'path': annotation['path'],
-                'kwargs': annotation.get('kwargs', {}),
-            }
-
-        kwargs = {}
-        callable_or_path = annotation
-        if isinstance(annotation, tuple):
-            callable_or_path, kwargs = annotation
-
-        if isinstance(callable_or_path, str):
-            return {'path': callable_or_path, 'kwargs': dict(kwargs)}
-
-        unwrapped = inspect.unwrap(callable_or_path)
-        if '<locals>' in unwrapped.__qualname__ or unwrapped.__qualname__ != unwrapped.__name__:
-            msg = 'QuerySetGlue computed annotations must be importable top-level callables.'
-            raise ValueError(msg)
-        return {
-            'path': f'{unwrapped.__module__}.{unwrapped.__qualname__}',
-            'kwargs': dict(kwargs),
-        }
-
-    def _computed_annotation_values(self, instance: models.Model) -> dict[str, Any]:
-        values = {}
-        for name, annotation in self.computed_annotations.items():
-            annotation_path = annotation['path']
-            kwargs = annotation.get('kwargs', {})
-            values[name] = get_attr_from_path_string(annotation_path)(instance, **kwargs)
-        return values
-
-    def _invalidate_cached_manifest_data(self) -> None:
-        for key in ('policy', 'attributes', 'metadata'):
-            self.__dict__.pop(key, None)
 
     @DeclaredAttribute(access=GlueAccess.VIEW)
     def query_with_params(
@@ -290,12 +233,11 @@ class QuerySetGlue(ModelGlueFormConfigMixin, BaseGlue):
             name=child_name,
             access=self.policy.access,
             fields=self._included_fields,
-            annotations=(*self._orm_annotation_names, *self._computed_annotation_names),
+            annotations=self._orm_annotation_names,
             forms=child_forms,
-            select_related=select_related
+            select_related=select_related,
+            computed_attributes=self.computed_attributes,
         )
-        for name, value in self._computed_annotation_values(instance).items():
-            setattr(instance, name, value)
         child_object.request = self.request
 
         return {

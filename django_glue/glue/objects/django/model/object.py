@@ -14,6 +14,10 @@ from django_glue.glue.attributes import (
 )
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import ForeignKeyFieldAttribute, ModelFieldAttribute
+from django_glue.glue.objects.django.computed_attributes import (
+    ComputedAttribute,
+    GlueComputedAttributesMixin,
+)
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 # Runtime import required: Glue.Attribute method annotations are resolved with
@@ -29,7 +33,7 @@ if TYPE_CHECKING:
 ALL_FIELDS: Literal['__all__'] = '__all__'
 
 
-class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
+class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue):
 
     namespace = 'model'
     globally_excluded_field_types = frozenset({'BinaryField'})
@@ -46,6 +50,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
         select_related: Sequence[str] | None = None,
+        computed_attributes: Mapping[str, ComputedAttribute] | None = None,
     ) -> None:
         super().__init__(name=name, access=access)
         self.instance = instance
@@ -80,6 +85,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
         self.annotations = annotations
         self.select_related = select_related or set()
+        self.initialize_computed_attributes(computed_attributes)
 
         self.forms = self.normalize_forms(form, forms)
         self._loaded_state: dict[str, Any] | None = None
@@ -101,6 +107,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
             identity['form_identities'] = self.serialize_forms(self.forms)
         if self.select_related:
             identity['select_related'] = list(self.select_related)
+        identity |= self.computed_attributes_identity()
 
         return identity
 
@@ -146,7 +153,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
                 access=GlueAccess.VIEW,
                 attr_owner_instance=self.instance,
             )
-            for annotation_name in self._annotation_names
+            for annotation_name in (*self._annotation_names, *self._computed_attribute_names)
         })
         attributes.update(self._form_attributes())
         return attributes
@@ -202,6 +209,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
 
     @property
     def state(self) -> dict[str, Any]:
+        self.hydrate_computed_attributes(self.instance)
         self._validate()
         state = {}
         for name, attribute in self.attributes.items():
@@ -289,6 +297,7 @@ class ModelGlue(ModelGlueFormConfigMixin, BaseGlue):
             fields=fields,
             forms=forms,
             select_related=select_related,
+            computed_attributes=policy.identity.get('computed_attributes', {}),
         )
 
     def _load_client_state(self, state: dict[str, Any]) -> None:

@@ -120,6 +120,37 @@ class GlueMissingAttributeError(GlueError):
         return details
 
 
+class GlueInvalidAttributeError(GlueError):
+    """Raised when a declared Glue attribute cannot be exposed safely."""
+
+    code = 'invalid_attribute_configuration'
+    status = 500
+
+    def __init__(
+        self,
+        attribute: str,
+        owner: str,
+        value_type: str,
+    ) -> None:
+        self.attribute = attribute
+        self.owner = owner
+        self.value_type = value_type
+        super().__init__(
+            f"Attribute '{attribute}' on '{owner}' was declared with Glue.attribute(...), "
+            f"but its value '{value_type}' is neither JSON-serializable state nor a "
+            'container with nested Glue attributes. '
+            f"To expose nested attributes inside '{owner}.{attribute}', wrap/decorate "
+            'the nested attributes with Glue.attribute(...).'
+        )
+
+    def details(self) -> dict:
+        return {
+            'attribute': self.attribute,
+            'owner': self.owner,
+            'value_type': self.value_type,
+        }
+
+
 class GlueModelInstanceNotFoundError(GlueError):
     """Raised when a model instance is not found during proxy operations (get, save, delete)."""
 

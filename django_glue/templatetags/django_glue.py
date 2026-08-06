@@ -27,7 +27,9 @@ def _get_url_pattern_template(name: str) -> str:
             ns = namespace_parts[0]
             remaining = namespace_parts[1:]
             for pattern in resolver.url_patterns:
-                if hasattr(pattern, 'namespace') and pattern.namespace == ns:
+                pattern_namespace = getattr(pattern, 'namespace', None)
+                pattern_app_name = getattr(pattern, 'app_name', None)
+                if ns in {pattern_namespace, pattern_app_name}:
                     result = find_pattern(pattern, remaining, url_name)
                     if result is not None:
                         prefix = str(pattern.pattern)

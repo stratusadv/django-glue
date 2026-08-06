@@ -3,12 +3,31 @@ Tests for Django Glue template tags.
 """
 from django.test import TestCase, RequestFactory, override_settings
 from django.template import Template, Context
+from django.urls import include, path
 
 from django_glue.shortcuts.glue import Glue
 from django_glue.access import GlueAccess
 from django_glue import constants
 from test_project.gorilla.models import Gorilla
 from django_glue.tests.conftest import MockSession
+
+
+def placeholder_view(request, pk=None):
+    pass
+
+
+app_name = 'mounted_app'
+
+mounted_patterns = (
+    [
+        path('item/<int:pk>/detail/', placeholder_view, name='detail'),
+    ],
+    app_name,
+)
+
+urlpatterns = [
+    path('__mounted__/', include(mounted_patterns, namespace='instance_name')),
+]
 
 
 class DjangoGlueInitTagTestCase(TestCase):
@@ -169,6 +188,17 @@ class JsUrlTagTestCase(TestCase):
         rendered = template.render(Context()).strip()
 
         self.assertEqual(rendered, '/${item.id}/')
+
+    @override_settings(ROOT_URLCONF=__name__)
+    def test_js_url_resolves_app_namespace_mounted_with_different_instance_namespace(self):
+        template = Template(
+            "{% load django_glue %}"
+            "{% js_url 'mounted_app:detail' pk='item.id' %}"
+        )
+
+        rendered = template.render(Context()).strip()
+
+        self.assertEqual(rendered, "'/__mounted__/item/' + item.id + '/detail/'")
 
 
 class GlueFieldPathFilterTestCase(TestCase):

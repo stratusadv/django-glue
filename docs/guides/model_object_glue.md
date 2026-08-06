@@ -177,6 +177,37 @@ Glue.model(
 
 Fields that are not exposed cannot be read or written from the frontend.
 
+## Computed Attributes
+
+Use `computed_attributes` when the frontend needs readonly data calculated from the model instance.
+
+```python
+from django_glue import Glue, GlueAccess
+from myapp.permissions import generate_permission_data
+
+Glue.model(
+    request=request,
+    unique_name='group',
+    target=group,
+    access=GlueAccess.VIEW,
+    fields=['id', 'name'],
+    computed_attributes={
+        'permission_data': (generate_permission_data, {'with_special_role': True}),
+    },
+)
+```
+
+The callable receives the model instance. Its return value is exposed as a readonly attribute:
+
+```javascript
+await Glue.model.group.load()
+console.log(Glue.model.group.permission_data)
+```
+
+!!! note
+
+    Computed attributes are not model fields and are not persisted by `save()`.
+
 ## Custom Forms
 
 Provide a custom ModelForm to add field-level validation, custom widgets, or additional fields. You can pass either a form class or a form instance:

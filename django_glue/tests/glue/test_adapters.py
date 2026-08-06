@@ -26,7 +26,11 @@ from django_glue.glue import (
 )
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.exceptions import GlueCalledStateAttributeError, GlueInvalidPolicyError
+from django_glue.exceptions import (
+    GlueCalledStateAttributeError,
+    GlueInvalidAttributeError,
+    GlueInvalidPolicyError,
+)
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.fight.models import Fight
@@ -159,6 +163,39 @@ class NestedDashboardGlue(BaseGlue):
     @classmethod
     def _reconstruct_from_policy(cls, policy):
         return cls()
+
+
+class PlainService:
+    pass
+
+
+class DeclaredStateGlue(BaseGlue):
+    namespace = 'declared_state'
+    count = DeclaredAttribute(3, access=GlueAccess.VIEW)
+
+    def __init__(self):
+        super().__init__(name='declared_state', access=GlueAccess.CHANGE)
+
+    @property
+    def identity(self) -> dict:
+        return {'name': self.name}
+
+    @cached_property
+    def metadata(self) -> dict:
+        return {
+            'attributes': {
+                name: attribute.metadata
+                for name, attribute in self.attributes.items()
+            },
+        }
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
+
+
+class InvalidServiceGlue(DeclaredStateGlue):
+    service = DeclaredAttribute(PlainService(), access=GlueAccess.DELETE)
 
 
 class AllFieldsTestCase(TestCase):
@@ -563,6 +600,84 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
         self.assertEqual(resolved.instance, self.gorilla)
 
+    def test_model_with_computed_attributes_adds_attribute_to_payload(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['id', 'name'],
+            computed_attributes={'badge_data': gorilla_badge_data},
+        ))
+
+        policy = glue_object.policy
+        metadata = glue_object.metadata
+        state = glue_object.state
+
+        self.assertIn('badge_data', policy.attributes)
+        self.assertEqual(metadata['attributes']['badge_data']['namespace'], 'readonly')
+        self.assertEqual(state['badge_data']['value'], {'label': 'KOKO'})
+        self.assertTrue(
+            policy.identity['computed_attributes']['badge_data']['path'].endswith(
+                'test_adapters.gorilla_badge_data'
+            )
+        )
+
+    def test_model_with_computed_attributes_supports_kwargs(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['id', 'name'],
+            computed_attributes={
+                'badge_data': (gorilla_badge_data_with_suffix, {'suffix': '!'}),
+            },
+        ))
+
+        state = glue_object.state
+
+        self.assertEqual(state['badge_data']['value'], {'label': 'KOKO!'})
+        self.assertEqual(
+            glue_object.policy.identity['computed_attributes']['badge_data']['kwargs'],
+            {'suffix': '!'},
+        )
+
+    def test_model_computed_attributes_survive_policy_reconstruction(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(access=GlueAccess.VIEW),
+            fields=['id', 'name'],
+            computed_attributes={'badge_data': gorilla_badge_data},
+        ))
+
+        resolved = ModelGlue._reconstruct_from_policy(glue_object.policy)
+        resolved.request = glue_object.request
+
+        self.assertEqual(resolved.state['badge_data']['value'], {'label': 'KOKO'})
+
+    def test_model_with_computed_attributes_rejects_non_importable_callables(self):
+        with self.assertRaisesRegex(ValueError, 'importable top-level callables'):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(access=GlueAccess.VIEW),
+                fields=['id', 'name'],
+                computed_attributes={'badge_data': lambda gorilla: gorilla.name},
+            )
+
+    def test_model_shortcut_accepts_computed_attributes(self):
+        request = request_with_session()
+
+        glue_object = Glue.model(
+            request,
+            'gorilla',
+            self.gorilla,
+            Glue.Access.VIEW,
+            fields=['id', 'name'],
+            computed_attributes={'badge_data': gorilla_badge_data},
+        )
+
+        manifest = glue_object.manifest.model_dump()
+
+        self.assertEqual(manifest['policy']['namespace'], 'model')
+        self.assertIn('badge_data', manifest['policy']['attributes'])
+
     def test_model_adapter_transfers_target_glue_attributes_to_policy(self):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
         policy = glue_object.policy
@@ -701,6 +816,23 @@ class DjangoModelGlueObjectTestCase(TestCase):
         )
         with self.assertRaises(GlueCalledStateAttributeError):
             glue_object.process_attribute_call(context)
+
+    def test_declared_serializable_state_attribute_is_included(self):
+        glue_object = with_request(DeclaredStateGlue())
+
+        self.assertIn('count', glue_object.policy.attributes)
+        self.assertEqual(glue_object.state['count']['value'], 3)
+        self.assertEqual(glue_object.metadata['attributes']['count']['namespace'], 'readonly')
+
+    def test_declared_nonserializable_value_without_nested_glue_attributes_raises(self):
+        glue_object = with_request(InvalidServiceGlue())
+
+        with self.assertRaises(GlueInvalidAttributeError) as context:
+            _ = glue_object.policy
+
+        self.assertEqual(context.exception.attribute, 'service')
+        self.assertIn('PlainService', context.exception.value_type)
+        self.assertIn('Glue.attribute', str(context.exception))
 
 
 class DjangoFormGlueObjectTestCase(TestCase):
@@ -887,59 +1019,66 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertEqual(row['metadata']['attributes']['name']['type'], 'CharField')
 
-    def test_queryset_annotate_adds_computed_annotation_to_child_payloads(self):
+    def test_queryset_with_computed_attributes_adds_attribute_to_child_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
+        queryset = Gorilla.objects.filter(pk=gorilla.pk)
         request = request_with_session()
+
         glue_object = QuerySetGlue(
-            Gorilla.objects.filter(pk=gorilla.pk),
+            queryset,
             name='gorillas',
             access=GlueAccess.VIEW,
             fields=['id', 'name'],
+            computed_attributes={'badge_data': gorilla_badge_data},
         )
         glue_object.request = request
 
-        result = glue_object.annotate(badge_data=gorilla_badge_data).query_with_params()
+        result = glue_object.query_with_params()
 
         row = result['items'][0]
         self.assertIn('badge_data', row['policy']['attributes'])
         self.assertEqual(row['metadata']['attributes']['badge_data']['namespace'], 'readonly')
         self.assertEqual(row['state']['badge_data']['value'], {'label': 'KOKO'})
         self.assertTrue(
-            glue_object.policy.identity['computed_annotations']['badge_data']['path'].endswith(
+            glue_object.policy.identity['computed_attributes']['badge_data']['path'].endswith(
                 'test_adapters.gorilla_badge_data'
             )
         )
-        self.assertEqual(glue_object.policy.identity['computed_annotations']['badge_data']['kwargs'], {})
+        self.assertEqual(glue_object.policy.identity['computed_attributes']['badge_data']['kwargs'], {})
 
-    def test_queryset_annotate_supports_computed_annotation_kwargs(self):
+    def test_queryset_with_computed_attributes_supports_kwargs(self):
         gorilla = Gorilla.objects.create(name='Koko')
+        queryset = Gorilla.objects.filter(pk=gorilla.pk)
         request = request_with_session()
+
         glue_object = QuerySetGlue(
-            Gorilla.objects.filter(pk=gorilla.pk),
+            queryset,
             name='gorillas',
             access=GlueAccess.VIEW,
             fields=['id', 'name'],
+            computed_attributes={
+                'badge_data': (gorilla_badge_data_with_suffix, {'suffix': '!'}),
+            },
         )
         glue_object.request = request
 
-        result = glue_object.annotate(
-            badge_data=(gorilla_badge_data_with_suffix, {'suffix': '!'})
-        ).query_with_params()
+        result = glue_object.query_with_params()
 
         self.assertEqual(result['items'][0]['state']['badge_data']['value'], {'label': 'KOKO!'})
         self.assertEqual(
-            glue_object.policy.identity['computed_annotations']['badge_data']['kwargs'],
+            glue_object.policy.identity['computed_attributes']['badge_data']['kwargs'],
             {'suffix': '!'},
         )
 
-    def test_queryset_computed_annotations_survive_policy_reconstruction(self):
+    def test_queryset_computed_attributes_survive_policy_reconstruction(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = with_request(QuerySetGlue(
             Gorilla.objects.filter(pk=gorilla.pk),
             name='gorillas',
             access=GlueAccess.VIEW,
             fields=['id', 'name'],
-        ).annotate(badge_data=gorilla_badge_data))
+            computed_attributes={'badge_data': gorilla_badge_data},
+        ))
 
         resolved = QuerySetGlue._reconstruct_from_policy(glue_object.policy)
         resolved.request = glue_object.request
@@ -947,18 +1086,17 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         self.assertEqual(result['items'][0]['state']['badge_data']['value'], {'label': 'KOKO'})
 
-    def test_queryset_annotate_rejects_non_importable_callables(self):
-        glue_object = QuerySetGlue(
-            Gorilla.objects.all(),
-            name='gorillas',
-            access=GlueAccess.VIEW,
-            fields=['id', 'name'],
-        )
-
+    def test_queryset_with_computed_attributes_rejects_non_importable_callables(self):
         with self.assertRaisesRegex(ValueError, 'importable top-level callables'):
-            glue_object.annotate(badge_data=lambda gorilla: gorilla.name)
+            QuerySetGlue(
+                Gorilla.objects.all(),
+                name='gorillas',
+                access=GlueAccess.VIEW,
+                fields=['id', 'name'],
+                computed_attributes={'badge_data': lambda gorilla: gorilla.name},
+            )
 
-    def test_queryset_shortcut_returns_chainable_queryset_glue(self):
+    def test_queryset_shortcut_accepts_computed_attributes(self):
         gorilla = Gorilla.objects.create(name='Koko')
         request = request_with_session()
 
@@ -968,7 +1106,8 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             Gorilla.objects.filter(pk=gorilla.pk),
             Glue.Access.VIEW,
             fields=['id', 'name'],
-        ).annotate(badge_data=gorilla_badge_data)
+            computed_attributes={'badge_data': gorilla_badge_data},
+        )
 
         manifest = glue_object.manifest.model_dump()
 

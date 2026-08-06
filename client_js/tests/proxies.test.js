@@ -426,7 +426,7 @@ describe('Glue proxies', () => {
         expect(filtered.items[0].name).toBe('gorillas.1')
     })
 
-    test('querysets expose computed annotations on returned model proxies', async () => {
+    test('querysets expose computed attributes on returned model proxies', async () => {
         const object = querySet()
         const rows = [{
             policy: createPolicy({

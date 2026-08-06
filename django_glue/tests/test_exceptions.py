@@ -14,6 +14,7 @@ from django_glue.exceptions import (
     GlueError,
     GlueRequestError,
     GlueAccessError,
+    GlueInvalidAttributeError,
     GlueMissingAttributeError,
     GlueModelInstanceNotFoundError,
     GlueQuerySetFilterValidationError,
@@ -28,6 +29,7 @@ class GlueExceptionsTestCase(TestCase):
         exception_classes = [
             GlueRequestError,
             GlueAccessError,
+            GlueInvalidAttributeError,
             GlueMissingAttributeError,
             GlueModelInstanceNotFoundError,
             GlueQuerySetFilterValidationError,
@@ -76,6 +78,21 @@ class GlueExceptionsTestCase(TestCase):
         self.assertEqual(exc.details()['reason'], 'Method does not exist')
         self.assertIn('unknown_attribute', str(exc))
         self.assertIn('my_proxy', str(exc))
+
+    def test_glue_invalid_attribute_configuration_error(self):
+        exc = GlueInvalidAttributeError(
+            attribute='services',
+            owner='app.models.Domain',
+            value_type='app.services.DomainService',
+        )
+
+        self.assertEqual(exc.attribute, 'services')
+        self.assertEqual(exc.owner, 'app.models.Domain')
+        self.assertEqual(exc.value_type, 'app.services.DomainService')
+        self.assertEqual(exc.status, 500)
+        self.assertEqual(exc.details()['attribute'], 'services')
+        self.assertIn('Glue.attribute', str(exc))
+        self.assertIn('nested Glue attributes', str(exc))
 
     def test_glue_missing_attribute_error_without_reason(self):
         """GlueMissingAttributeError should work without a reason."""
