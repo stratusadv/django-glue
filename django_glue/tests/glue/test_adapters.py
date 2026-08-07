@@ -493,11 +493,14 @@ class DjangoModelGlueObjectTestCase(TestCase):
         metadata = glue_object.metadata
         skills_metadata = metadata['attributes']['skills']
 
+        # M2M fields are now exposed as nested QuerySetGlue proxies
         self.assertEqual(skills_metadata['type'], 'ManyToManyField')
-        self.assertEqual(skills_metadata['choices'], [])
-        self.assertEqual(skills_metadata['pk_field'], Skill._meta.pk.name)
-        self.assertEqual(skills_metadata['choice_model_path'], 'test_project.gorilla.models.Skill')
-        self.assertIn('choices_cache_key', skills_metadata)
+        self.assertEqual(skills_metadata['namespace'], 'related_set')
+        self.assertEqual(skills_metadata['relation_type'], 'm2m')
+        self.assertEqual(skills_metadata['related_model'], 'test_project.gorilla.models.Skill')
+        self.assertIn('lazy', skills_metadata)
+        self.assertIn('glue_namespace', skills_metadata)
+        self.assertEqual(skills_metadata['glue_namespace'], 'querySet')
 
     def test_model_foreign_key_choices_returns_related_choices(self):
         skill = Skill.objects.create(name='Grappling')
@@ -1591,3 +1594,215 @@ class ForeignKeyFieldTestCase(TestCase):
 
         self.assertIn('winner_id', state)
         self.assertIsNone(state['winner_id']['value'])
+
+
+class RelatedSetFieldTestCase(TestCase):
+    """Tests for reverse FK and M2M fields as QuerySetGlue proxies."""
+
+    def setUp(self):
+        self.gorilla = Gorilla.objects.create(name='Koko', age=25)
+        self.skill1 = Skill.objects.create(name='Climbing')
+        self.skill2 = Skill.objects.create(name='Swimming')
+        self.gorilla.skills.add(self.skill1, self.skill2)
+
+        # For reverse FK tests
+        self.opponent = Gorilla.objects.create(name='Bobo', age=20)
+        self.fight = Fight.objects.create(
+            name='Fight 1',
+            red_corner=self.gorilla,
+            blue_corner=self.opponent,
+        )
+
+    # M2M Tests
+
+    def test_m2m_field_creates_related_set_attribute(self):
+        """M2M field should create RelatedSetFieldAttribute."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        self.assertIn('skills', glue_object.attributes)
+        self.assertEqual(
+            glue_object.attributes['skills'].metadata['namespace'],
+            'related_set'
+        )
+        self.assertEqual(
+            glue_object.attributes['skills'].metadata['relation_type'],
+            'm2m'
+        )
+
+    def test_m2m_lazy_state_is_none(self):
+        """When M2M is not prefetched, state should be None."""
+        gorilla = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        state = glue_object.state
+        self.assertIsNone(state['skills'])
+
+    def test_m2m_eager_state_includes_items(self):
+        """When M2M is prefetched, state should include items."""
+        gorilla = Gorilla.objects.prefetch_related('skills').get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        state = glue_object.state
+        self.assertIn('skills', state)
+        self.assertIn('items', state['skills'])
+        self.assertEqual(len(state['skills']['items']), 2)
+
+    def test_m2m_includes_nested_queryset_policy(self):
+        """M2M should include nested QuerySetGlue policy."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'skills' in a.name
+        ]
+
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0].namespace, 'querySet')
+
+    def test_m2m_metadata_includes_lazy_flag(self):
+        """M2M metadata should indicate lazy vs eager."""
+        # Lazy
+        gorilla_lazy = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_lazy = with_request(ModelGlue(
+            gorilla_lazy,
+            **glue_context(name='gorilla'),
+            fields=['skills'],
+        ))
+
+        # Eager
+        gorilla_eager = Gorilla.objects.prefetch_related('skills').get(pk=self.gorilla.pk)
+        glue_eager = with_request(ModelGlue(
+            gorilla_eager,
+            **glue_context(name='gorilla'),
+            fields=['skills'],
+        ))
+
+        self.assertTrue(glue_lazy.metadata['attributes']['skills']['lazy'])
+        self.assertFalse(glue_eager.metadata['attributes']['skills']['lazy'])
+
+    # Reverse FK Tests
+
+    def test_reverse_fk_creates_related_set_attribute(self):
+        """Reverse FK should create RelatedSetFieldAttribute."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        self.assertIn('fights_as_red_corner', glue_object.attributes)
+        self.assertEqual(
+            glue_object.attributes['fights_as_red_corner'].metadata['namespace'],
+            'related_set'
+        )
+        self.assertEqual(
+            glue_object.attributes['fights_as_red_corner'].metadata['relation_type'],
+            'reverse_fk'
+        )
+
+    def test_reverse_fk_lazy_state_is_none(self):
+        """When reverse FK is not prefetched, state should be None."""
+        gorilla = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        state = glue_object.state
+        self.assertIsNone(state['fights_as_red_corner'])
+
+    def test_reverse_fk_eager_state_includes_items(self):
+        """When reverse FK is prefetched, state should include items."""
+        gorilla = Gorilla.objects.prefetch_related('fights_as_red_corner').get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        state = glue_object.state
+        self.assertIn('fights_as_red_corner', state)
+        self.assertIn('items', state['fights_as_red_corner'])
+        self.assertEqual(len(state['fights_as_red_corner']['items']), 1)
+
+    def test_reverse_fk_includes_nested_queryset_policy(self):
+        """Reverse FK should include nested QuerySetGlue policy."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'fights_as_red_corner' in a.name
+        ]
+
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0].namespace, 'querySet')
+
+    # Edge Cases
+
+    def test_unsaved_instance_m2m_has_no_nested_glue(self):
+        """Unsaved instance should not have nested QuerySetGlue for M2M."""
+        gorilla = Gorilla(name='New')  # Not saved
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        # No nested policy for unsaved instance
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'skills' in a.name
+        ]
+        self.assertEqual(len(nested), 0)
+
+    def test_all_fields_includes_reverse_relations(self):
+        """ALL_FIELDS should include reverse relation names."""
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=ALL_FIELDS,
+        ))
+
+        # Should include reverse FK relations
+        self.assertIn('fights_as_red_corner', glue_object.attributes)
+        self.assertIn('fights_as_blue_corner', glue_object.attributes)
+
+    def test_reverse_relation_can_be_excluded(self):
+        """Reverse relations should be excludable."""
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=ALL_FIELDS,
+            exclude=['fights_as_red_corner', 'fights_as_blue_corner'],
+        ))
+
+        self.assertNotIn('fights_as_red_corner', glue_object.attributes)
+        self.assertNotIn('fights_as_blue_corner', glue_object.attributes)

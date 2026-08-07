@@ -13,7 +13,11 @@ from django_glue.glue.attributes import (
     ReadOnlyAttribute,
 )
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.attributes.django.model import ForeignKeyFieldAttribute, ModelFieldAttribute
+from django_glue.glue.attributes.django.model import (
+    ForeignKeyFieldAttribute,
+    ModelFieldAttribute,
+    RelatedSetFieldAttribute,
+)
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
@@ -68,16 +72,15 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
         # Only raise error for explicitly specified binary fields
         # When __all__ is used, binary fields are silently excluded in _included_fields
         if self.fields != ALL_FIELDS:
-            binary_fields = [
+            non_includable_fields = [
                 field_name
                 for field_name in self.fields
-                if self.instance._meta.get_field(field_name).get_internal_type()
-                in self.globally_excluded_field_types
+                if not self._is_field_includable(field_name)
             ]
-            if binary_fields:
+            if non_includable_fields:
                 msg = (
-                    'Binary fields cannot be included in ModelGlue attributes: '
-                    f'{binary_fields}'
+                    f'Non-includable fields were found in in the ModelGlue field initialization list: '
+                    f'{non_includable_fields}'
                 )
                 raise ValueError(
                     msg
@@ -116,6 +119,13 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
         attributes = super().attributes
 
         for field_name in self._included_fields:
+            # Handle reverse relations (no field object in _meta.get_field for these)
+            if self._is_reverse_relation(field_name):
+                attributes[field_name] = self._build_related_set_attribute(
+                    field_name, 'reverse_fk',
+                )
+                continue
+
             field = self.instance._meta.get_field(field_name)
 
             # Use ForeignKeyFieldAttribute for FK/O2O fields
@@ -137,6 +147,13 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
                     access=self._field_access(field_name),
                     is_cached=self._is_fk_cached(field_name),
                 )
+
+            # Use RelatedSetFieldAttribute for M2M fields
+            elif getattr(field, 'many_to_many', False):
+                attributes[field_name] = self._build_related_set_attribute(
+                    field_name, 'm2m',
+                )
+
             else:
                 attributes[field_name] = ModelFieldAttribute(
                     owner=self,
@@ -193,19 +210,40 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
 
     @cached_property
     def _included_fields(self) -> list[str]:
-        all_field_names = tuple(
+        # Forward fields (regular fields + M2M)
+        forward_field_names = tuple(
             field.name
             for field in [*self.instance._meta.fields, *self.instance._meta.many_to_many]
         )
-        names = all_field_names if self.fields == ALL_FIELDS or not self.fields else self.fields
-        excluded = set(all_field_names) if self.exclude == ALL_FIELDS else set(self.exclude)
+
+        # Reverse relation names (reverse FK + reverse M2M)
+        reverse_relation_names = tuple(
+            rel.get_accessor_name()
+            for rel in self.instance._meta.related_objects
+            if not rel.hidden and rel.get_accessor_name()
+        )
+
+        all_available_names = forward_field_names + reverse_relation_names
+
+        names = all_available_names if self.fields == ALL_FIELDS or not self.fields else self.fields
+        excluded = set(all_available_names) if self.exclude == ALL_FIELDS else set(self.exclude)
         return [
             name
             for name in names
             if name not in excluded
-            and self.instance._meta.get_field(name).get_internal_type()
-            not in self.globally_excluded_field_types
+            and self._is_field_includable(name)
         ]
+
+    def _is_field_includable(self, name: str) -> bool:
+        """Check if a field name can be included (not a globally excluded type).
+
+        Reverse relations are always includable since they have no field type.
+        Forward fields are checked against globally_excluded_field_types.
+        """
+        if self._is_reverse_relation(name):
+            return True
+        field = self.instance._meta.get_field(name)
+        return field.get_internal_type() not in self.globally_excluded_field_types
 
     @property
     def state(self) -> dict[str, Any]:
@@ -248,6 +286,45 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
         field = self.instance._meta.get_field(field_name)
         return field.is_cached(self.instance)
 
+    def _get_reverse_relation(self, name: str) -> Any:
+        """Get the reverse relation object by accessor name, or None if not found."""
+        for rel in self.instance._meta.related_objects:
+            if rel.get_accessor_name() == name:
+                return rel
+        return None
+
+    def _is_reverse_relation(self, name: str) -> bool:
+        """Check if name is a reverse relation accessor."""
+        return self._get_reverse_relation(name) is not None
+
+    def _is_prefetched(self, relation_name: str) -> bool:
+        """Check if a relation was prefetched (via prefetch_related)."""
+        cache = getattr(self.instance, '_prefetched_objects_cache', {})
+        return relation_name in cache
+
+    def _build_related_set_attribute(
+        self,
+        field_name: str,
+        relation_type: str,
+    ) -> RelatedSetFieldAttribute:
+        """Build RelatedSetFieldAttribute for reverse FK or M2M."""
+        if relation_type == 'reverse_fk':
+            rel = self._get_reverse_relation(field_name)
+            related_model = rel.related_model
+        else:  # m2m
+            field = self.instance._meta.get_field(field_name)
+            related_model = field.related_model
+
+        return RelatedSetFieldAttribute(
+            owner=self,
+            name=field_name,
+            instance=self.instance,
+            related_model=related_model,
+            access=GlueAccess.VIEW,  # Read-only for v1
+            is_prefetched=self._is_prefetched(field_name),
+            relation_type=relation_type,
+        )
+
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> ModelGlue:
         model_class = cast(
@@ -266,15 +343,25 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
                 queryset = queryset.select_related(*select_related)
             instance = queryset.get(pk=target_pk)
 
+        # Forward field names (regular fields + M2M)
         model_field_names = {
             field.name
             for field in [*model_class._meta.fields, *model_class._meta.many_to_many]
         }
 
+        # Reverse relation names
+        reverse_relation_names = {
+            rel.get_accessor_name()
+            for rel in model_class._meta.related_objects
+            if not rel.hidden and rel.get_accessor_name()
+        }
+
+        all_valid_names = model_field_names | reverse_relation_names
+
         fields = []
         for attr in policy.attributes:
             if isinstance(attr, str):
-                if attr in model_field_names:
+                if attr in all_valid_names:
                     fields.append(attr)
             else:
                 # Nested policy - extract field name from policy name
@@ -282,7 +369,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue)
                 nested_name = attr.name
                 if nested_name.startswith(policy.name + '.'):
                     field_name = nested_name[len(policy.name) + 1:]
-                    if field_name in model_field_names:
+                    if field_name in all_valid_names:
                         fields.append(field_name)
 
         forms = cls.deserialize_form_classes(

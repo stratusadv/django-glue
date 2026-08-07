@@ -240,6 +240,10 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         )
         child_object.request = self.request
 
+        # Propagate visited relations for cycle detection in nested objects
+        if hasattr(self, '_visited_relations'):
+            child_object._visited_relations = self._visited_relations
+
         return {
             **child_object.manifest.model_dump(),
             'state': child_object.state,
