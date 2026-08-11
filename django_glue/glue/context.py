@@ -62,6 +62,7 @@ class GlueContextManager:
             },
             'config': {
                 'requestTimeoutSeconds': settings.DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS,
+                'csrfCookieName': settings.CSRF_COOKIE_NAME,
             },
         }
 

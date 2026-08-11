@@ -9,10 +9,10 @@ class GlueModelProxy extends FieldBackedGlueProxy {
     }
 
     _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
-        const proxy = this
         Object.defineProperty(owner, attributeName, {
             get() {
-                return proxy._state?.[attributeQualName]?.value
+                const root = this.__glue__root || this
+                return root._state?.[attributeQualName]?.value
             },
             enumerable: true,
             configurable: true,

@@ -153,11 +153,19 @@ class AttributeCallContextFactory:
 
         current_session_id = self.request.session.session_key
         if policy.session_id != current_session_id:
-            raise GlueInvalidSessionError(policy.name)
+            raise GlueInvalidSessionError(
+                policy.name,
+                policy_session_id=policy.session_id,
+                current_session_id=current_session_id,
+            )
 
         current_user_id = getattr(getattr(self.request, 'user', None), 'id', None)
         if policy.request_user_id != current_user_id:
-            raise GlueInvalidUserError(policy.name)
+            raise GlueInvalidUserError(
+                policy.name,
+                policy_user_id=policy.request_user_id,
+                current_user_id=current_user_id,
+            )
 
     def _load_json_field(self, field_name: str, *, required: bool) -> Any:
         raw_value = self.request.POST.get(field_name)

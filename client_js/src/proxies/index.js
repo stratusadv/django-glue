@@ -1,3 +1,5 @@
+import BaseGlueProxy from "./base"
+import GlueCollectionProxy from "./collection"
 import GlueFormProxy from "./form"
 import GlueFunctionProxy from "./function"
 import GlueJsonProxy from "./json"
@@ -7,6 +9,7 @@ import GlueTemplateProxy from "./template"
 import {getProxyClass, registerProxyClass} from "./registry"
 
 const NAMESPACE_TO_PROXY_CLASS = {
+    collection: GlueCollectionProxy,
     form: GlueFormProxy,
     function: GlueFunctionProxy,
     json: GlueJsonProxy,
@@ -20,6 +23,8 @@ Object.entries(NAMESPACE_TO_PROXY_CLASS).forEach(([namespace, proxyClass]) => {
 })
 
 export {
+    BaseGlueProxy,
+    GlueCollectionProxy,
     getProxyClass,
     GlueFormProxy,
     GlueFunctionProxy,

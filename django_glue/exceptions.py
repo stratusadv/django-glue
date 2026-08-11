@@ -210,14 +210,26 @@ class GlueInvalidSessionError(GlueError):
     code = 'proxy_invalid_session'
     status = 403
 
-    def __init__(self, unique_name: str) -> None:
+    def __init__(
+        self,
+        unique_name: str,
+        *,
+        policy_session_id: str | None = None,
+        current_session_id: str | None = None,
+    ) -> None:
         self.unique_name = unique_name
+        self.policy_session_id = policy_session_id
+        self.current_session_id = current_session_id
         super().__init__(
             f"Policy for proxy '{unique_name}' is not valid for the current session."
         )
 
     def details(self) -> dict:
-        return {'proxy': self.unique_name}
+        return {
+            'proxy': self.unique_name,
+            'policy_session_id': self.policy_session_id,
+            'current_session_id': self.current_session_id,
+        }
 
 
 class GlueInvalidUserError(GlueError):
@@ -226,14 +238,26 @@ class GlueInvalidUserError(GlueError):
     code = 'proxy_invalid_user'
     status = 403
 
-    def __init__(self, unique_name: str) -> None:
+    def __init__(
+        self,
+        unique_name: str,
+        *,
+        policy_user_id: Any = None,
+        current_user_id: Any = None,
+    ) -> None:
         self.unique_name = unique_name
+        self.policy_user_id = policy_user_id
+        self.current_user_id = current_user_id
         super().__init__(
             f"Policy for proxy '{unique_name}' is not valid for the current user."
         )
 
     def details(self) -> dict:
-        return {'proxy': self.unique_name}
+        return {
+            'proxy': self.unique_name,
+            'policy_user_id': self.policy_user_id,
+            'current_user_id': self.current_user_id,
+        }
 
 
 class GlueExpiredPolicyError(GlueError):

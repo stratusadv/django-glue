@@ -7,6 +7,10 @@ function http() {
     return new GlueHttp(new GlueConfig())
 }
 
+function httpWithConfig(config) {
+    return new GlueHttp(new GlueConfig(config))
+}
+
 describe('GlueHttp edge cases', () => {
     test('sends method, JSON content type, CSRF token, and returns response data', async () => {
         document.cookie = 'csrftoken=token%201'
@@ -42,6 +46,23 @@ describe('GlueHttp edge cases', () => {
         await http().sendRequest('/endpoint', {csrfProtected: false})
 
         expect(request.headers).toEqual({})
+    })
+
+    test('uses configured CSRF cookie name', async () => {
+        document.cookie = 'custom_csrftoken=token%203'
+        let request
+        global.fetch = async (_url, options) => {
+            request = options
+            return new Response('{}', {status: 200})
+        }
+
+        await httpWithConfig({csrfCookieName: 'custom_csrftoken'}).sendRequest('/endpoint', {
+            method: 'POST',
+        })
+
+        expect(request.headers).toEqual({
+            'X-CSRFToken': 'token 3',
+        })
     })
 
     test('serializes JSON payload objects without mutating request options', async () => {

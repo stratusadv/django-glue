@@ -1,13 +1,14 @@
 import GlueConfig from "./config"
 import GlueHttp from "./http"
 import GlueView from "./view"
-import {NAMESPACE_TO_PROXY_CLASS} from "./proxies"
+import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
 
 class GlueClient {
     constructor(context) {
         this._onMessage = null
         this._onError = null
+        this._directNamespaces = new Set()
 
         this._config = new GlueConfig({
             ...(context.config || {}),
@@ -43,17 +44,75 @@ class GlueClient {
         })
     }
 
-    _registerManifestAsProxy({policy, metadata = {}}) {
+    hydrateGluePayloads(value) {
+        if (Array.isArray(value)) {
+            return value.map(item => this.hydrateGluePayloads(item))
+        }
+
+        if (!value || typeof value !== 'object') {
+            return value
+        }
+
+        if (this._isGluePayload(value)) {
+            return this._registerPayloadAsProxy(value)
+        }
+
+        Object.keys(value).forEach(key => {
+            value[key] = this.hydrateGluePayloads(value[key])
+        })
+        return value
+    }
+
+    _isGluePayload(value) {
+        return Boolean(
+            value?.policy?.name
+            && value?.policy?.namespace
+            && value?.metadata !== undefined
+        )
+    }
+
+    _registerPayloadAsProxy(payload) {
+        const name = payload.policy.name
+        const namespace = payload.policy.namespace
+        this._registerManifestAsProxy(payload)
+
+        if (name === namespace) {
+            return this[namespace]
+        }
+
+        return this[namespace][name]
+    }
+
+    _registerManifestAsProxy({policy, metadata = {}, state = {}}) {
         const name = policy?.name
         const namespace = policy?.namespace || metadata?.namespace
-        const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace]
+        const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace] || BaseGlueProxy
 
         if (!name) {
             throw new GlueProxyError('Cannot register a Glue proxy without policy.name.')
         }
 
-        if (!ProxyClass) {
+        if (!namespace) {
             throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`)
+        }
+
+        if (name === namespace) {
+            if (namespace in this && !this._directNamespaces.has(namespace)) {
+                throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`)
+            }
+
+            this._directNamespaces.add(namespace)
+            Object.defineProperty(this, namespace, {
+                get: () => namespace === 'function'
+                ? ProxyClass.create({http: this.http, policy, metadata})
+                : new ProxyClass({http: this.http, policy, state, metadata, client: this}),
+                configurable: true,
+            })
+            return
+        }
+
+        if (this._directNamespaces.has(namespace)) {
+            throw new GlueProxyError(`Cannot register named Glue proxy "${namespace}.${name}" because that namespace is already registered directly.`)
         }
 
         if (!(namespace in this)) {
@@ -63,7 +122,7 @@ class GlueClient {
         Object.defineProperty(this[namespace], name, {
             get: () => namespace === 'function'
             ? ProxyClass.create({http: this.http, policy, metadata})
-            : new ProxyClass({http: this.http, policy, metadata}),
+            : new ProxyClass({http: this.http, policy, state, metadata, client: this}),
             configurable: true,
         })
     }

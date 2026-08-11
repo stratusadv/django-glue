@@ -45,6 +45,72 @@ describe('GlueClient', () => {
         expect(client.model.gorilla._name).toBe('gorilla')
     })
 
+    test('registers namespace-named proxies directly on the namespace', () => {
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    policy: createPolicy({
+                        name: 'timeEntryDashboard',
+                        namespace: 'timeEntryDashboard',
+                        attributes: [],
+                    }),
+                    state: {},
+                    metadata: {attributes: {}},
+                },
+            ],
+        })
+
+        expect(client.timeEntryDashboard._name).toBe('timeEntryDashboard')
+    })
+
+    test('rejects direct and named proxies sharing a namespace', () => {
+        const directManifest = {
+            policy: createPolicy({
+                name: 'timeEntryDashboard',
+                namespace: 'timeEntryDashboard',
+                attributes: [],
+            }),
+            state: {},
+            metadata: {attributes: {}},
+        }
+        const namedManifest = {
+            policy: createPolicy({
+                name: 'dashboard',
+                namespace: 'timeEntryDashboard',
+                attributes: [],
+            }),
+            state: {},
+            metadata: {attributes: {}},
+        }
+
+        expect(() => new GlueClient({
+            manifest_list: [directManifest, namedManifest],
+        })).toThrow('already registered directly')
+
+        expect(() => new GlueClient({
+            manifest_list: [namedManifest, directManifest],
+        })).toThrow('already registered')
+    })
+
+    test('hydrates glue payloads into proxies', () => {
+        const client = new GlueClient({manifest_list: []})
+        const result = client.hydrateGluePayloads({
+            day_collection: {
+                policy: createPolicy({
+                    name: 'time_entry_days',
+                    namespace: 'collection',
+                    identity: {},
+                    attributes: [],
+                }),
+                state: {},
+                metadata: {attributes: {}},
+            },
+        })
+
+        expect(result.day_collection._name).toBe('time_entry_days')
+        expect(client.collection.time_entry_days._name).toBe('time_entry_days')
+    })
+
     test('registers function proxies as callables', async () => {
         let capturedAttribute = null
         let capturedKwargs = null

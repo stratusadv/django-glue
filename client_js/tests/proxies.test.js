@@ -1,7 +1,10 @@
 import {describe, expect, test} from "bun:test"
 import GlueConfig from "../src/config"
+import GlueClient from "../src/client"
 import GlueHttp from "../src/http"
 import {RelationFieldGlue} from "../src/proxies/fields"
+import BaseGlueProxy from "../src/proxies/base"
+import GlueCollectionProxy from "../src/proxies/collection"
 import GlueFormProxy from "../src/proxies/form"
 import GlueJsonProxy from "../src/proxies/json"
 import GlueModelProxy from "../src/proxies/model"
@@ -55,6 +58,230 @@ function querySet() {
 }
 
 describe('Glue proxies', () => {
+    test('collections expose grouped item proxies by ref', () => {
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    policy: createPolicy({
+                        name: 'day_1',
+                        namespace: 'timeEntryDay',
+                        attributes: ['date'],
+                    }),
+                    metadata: {
+                        attributes: {
+                            date: {namespace: 'readonly'},
+                        },
+                    },
+                },
+                {
+                    policy: createPolicy({
+                        name: 'time_entry_days',
+                        namespace: 'collection',
+                        identity: {},
+                        attributes: [
+                            createPolicy({
+                                name: 'day_1',
+                                namespace: 'timeEntryDay',
+                                attributes: ['date'],
+                            }),
+                        ],
+                    }),
+                    metadata: {
+                        attributes: {
+                            'items.0': {
+                                namespace: 'glue',
+                                glue_namespace: 'timeEntryDay',
+                                metadata: {
+                                    attributes: {
+                                        date: {namespace: 'readonly'},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ],
+        })
+
+        const collection = client.collection.time_entry_days
+
+        expect(collection).toBeInstanceOf(GlueCollectionProxy)
+        expect(collection.items).toHaveLength(1)
+        expect(collection.at(0)).toBeInstanceOf(BaseGlueProxy)
+        expect(collection.at(0)._name).toBe('day_1')
+        expect([...collection][0]._policy.namespace).toBe('timeEntryDay')
+    })
+
+    test('collections reuse item proxies across repeated access', () => {
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    policy: createPolicy({
+                        name: 'day_1',
+                        namespace: 'timeEntryDay',
+                        attributes: ['date'],
+                    }),
+                    state: {
+                        date: {value: '2026-08-10'},
+                    },
+                    metadata: {
+                        attributes: {
+                            date: {namespace: 'readonly'},
+                        },
+                    },
+                },
+                {
+                    policy: createPolicy({
+                        name: 'time_entry_days',
+                        namespace: 'collection',
+                        identity: {},
+                        attributes: [
+                            createPolicy({
+                                name: 'day_1',
+                                namespace: 'timeEntryDay',
+                                attributes: ['date'],
+                            }),
+                        ],
+                    }),
+                    state: {
+                        'items.0': {
+                            date: {value: '2026-08-10'},
+                        },
+                    },
+                    metadata: {
+                        attributes: {
+                            'items.0': {
+                                namespace: 'glue',
+                                glue_namespace: 'timeEntryDay',
+                                metadata: {
+                                    attributes: {
+                                        date: {namespace: 'readonly'},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            ],
+        })
+
+        const collection = client.collection.time_entry_days
+        const firstAccess = collection.items[0]
+        const secondAccess = collection.items[0]
+
+        expect(secondAccess).toBe(firstAccess)
+        expect(collection.at(0)).toBe(firstAccess)
+    })
+
+    test('collections update cached item proxies when response data changes', () => {
+        const collection = new GlueCollectionProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'time_entry_days',
+                namespace: 'collection',
+                identity: {},
+                attributes: [
+                    createPolicy({
+                        name: 'day_1',
+                        namespace: 'timeEntryDay',
+                        attributes: ['date'],
+                    }),
+                ],
+            }),
+            state: {
+                'items.0': {
+                    date: {value: '2026-08-10'},
+                },
+            },
+            metadata: {
+                attributes: {
+                    'items.0': {
+                        namespace: 'glue',
+                        glue_namespace: 'timeEntryDay',
+                        metadata: {
+                            attributes: {
+                                date: {namespace: 'readonly'},
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        const item = collection.items[0]
+        collection._applyResponse({
+            policy: createPolicy({
+                name: 'time_entry_days',
+                namespace: 'collection',
+                identity: {},
+                attributes: [
+                    createPolicy({
+                        name: 'day_1',
+                        namespace: 'timeEntryDay',
+                        attributes: ['date'],
+                    }),
+                ],
+            }),
+            state: {
+                'items.0': {
+                    date: {value: '2026-08-11'},
+                },
+            },
+            metadata: collection._metadata,
+        })
+
+        const updatedItem = collection.items[0]
+
+        expect(updatedItem).toBe(item)
+        expect(updatedItem.date).toBe('2026-08-11')
+    })
+
+    test('collections mark state-backed model item proxies as loaded', async () => {
+        let fetchCalled = false
+        global.fetch = async () => {
+            fetchCalled = true
+            return new Response(JSON.stringify({}), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+        const collection = new GlueCollectionProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'entries',
+                namespace: 'collection',
+                identity: {},
+                attributes: [
+                    createPolicy({
+                        name: 'entries.1',
+                        namespace: 'model',
+                        attributes: ['id', 'name', 'load'],
+                        identity: {target_pk: 1, pk_field_name: 'id'},
+                    }),
+                ],
+            }),
+            state: {
+                'items.0': createState({instance_data: {id: 1, name: 'Koko'}}),
+            },
+            metadata: {
+                attributes: {
+                    'items.0': {
+                        namespace: 'glue',
+                        glue_namespace: 'model',
+                        metadata: createMetadata({
+                            attributes: {
+                                load: {namespace: 'callable'},
+                            },
+                        }),
+                    },
+                },
+            },
+        })
+
+        const item = collection.items[0]
+
+        expect(item.name).toBe('Koko')
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(fetchCalled).toBe(false)
+    })
+
     test('json proxy exposes policy identity value', () => {
         const object = new GlueJsonProxy({
             http: http(),
@@ -130,6 +357,89 @@ describe('Glue proxies', () => {
         expect(object.form).toBeInstanceOf(GlueFormProxy)
         expect(object.forms.default).toBe(object.form)
         expect(object.form.name).toBe('Koko')
+    })
+
+    test('glue object attributes refresh nested proxy policy after response updates', () => {
+        registerProxyClass('collection', GlueCollectionProxy)
+        const object = new BaseGlueProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'dashboard',
+                namespace: 'timeEntryDashboard',
+                attributes: [
+                    createPolicy({
+                        name: 'dashboard.day_collection',
+                        namespace: 'collection',
+                        attributes: [],
+                    }),
+                ],
+            }),
+            state: {
+                day_collection: {},
+            },
+            metadata: {
+                attributes: {
+                    day_collection: {
+                        namespace: 'glue',
+                        glue_namespace: 'collection',
+                        metadata: {attributes: {}},
+                    },
+                },
+            },
+        })
+
+        expect(object.day_collection.items).toHaveLength(0)
+
+        object._applyResponse({
+            policy: createPolicy({
+                name: 'dashboard',
+                namespace: 'timeEntryDashboard',
+                attributes: [
+                    createPolicy({
+                        name: 'dashboard.day_collection',
+                        namespace: 'collection',
+                        attributes: [
+                            createPolicy({
+                                name: 'day_1',
+                                namespace: 'timeEntryDay',
+                                attributes: ['date'],
+                            }),
+                        ],
+                    }),
+                ],
+            }),
+            state: {
+                day_collection: {
+                    'items.0': {
+                        date: {value: '2026-08-10'},
+                    },
+                },
+            },
+            metadata: {
+                attributes: {
+                    day_collection: {
+                        namespace: 'glue',
+                        glue_namespace: 'collection',
+                        metadata: {
+                            attributes: {
+                                'items.0': {
+                                    namespace: 'glue',
+                                    glue_namespace: 'timeEntryDay',
+                                    metadata: {
+                                        attributes: {
+                                            date: {namespace: 'readonly'},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        expect(object.day_collection.items).toHaveLength(1)
+        expect(object.day_collection.items[0].date).toBe('2026-08-10')
     })
 
     test('glue object attributes initialize named nested form proxies', () => {
@@ -424,6 +734,65 @@ describe('Glue proxies', () => {
         expect(filtered.items).toHaveLength(2)
         expect(filtered.items[0]).toBeInstanceOf(GlueModelProxy)
         expect(filtered.items[0].name).toBe('gorillas.1')
+    })
+
+    test('eager querysets build model proxies from initial state', async () => {
+        const rows = [modelRow('gorillas.1', 1), modelRow('gorillas.2', 2)]
+        let fetchCalled = false
+        global.fetch = async () => {
+            fetchCalled = true
+            return new Response('{}', {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+        const object = new GlueQuerySetProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'gorillas',
+                namespace: 'querySet',
+                attributes: ['get', 'query_with_params'],
+                identity: {eager: true},
+            }),
+            state: {items: rows},
+            metadata: queryMetadata(),
+        })
+
+        const result = await object.all()
+
+        expect(result).toBe(object)
+        expect(fetchCalled).toBe(false)
+        expect(object.items).toHaveLength(2)
+        expect(object.items[0]).toBeInstanceOf(GlueModelProxy)
+        expect(object.items[0].name).toBe('gorillas.1')
+    })
+
+    test('eager queryset filtered clones still query the backend', async () => {
+        const rows = [modelRow('gorillas.1', 1)]
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return new Response(JSON.stringify({
+                result: {items: [modelRow('gorillas.2', 2)]},
+                state: {},
+                policy: queryPolicy(),
+                metadata: queryMetadata(),
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+        const object = new GlueQuerySetProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'gorillas',
+                namespace: 'querySet',
+                attributes: ['get', 'query_with_params'],
+                identity: {eager: true},
+            }),
+            state: {items: rows},
+            metadata: queryMetadata(),
+        })
+
+        const filtered = await object.filter({name__icontains: 'ndume'}).all()
+
+        expect(kwargs).toEqual({filter: {name__icontains: 'ndume'}})
+        expect(filtered.items).toHaveLength(1)
+        expect(filtered.items[0].name).toBe('gorillas.2')
     })
 
     test('querysets expose computed attributes on returned model proxies', async () => {

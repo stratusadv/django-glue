@@ -4,6 +4,7 @@ import GlueHttp from "../src/http"
 import GlueClient from "../src/client"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
+import BaseGlueProxy from "../src/proxies/base"
 import GlueView from "../src/view"
 import {GlueProxyError} from "../src/errors"
 import {createMetadata, createPolicy, createState} from "./testUtils"
@@ -15,7 +16,18 @@ function http() {
 describe('frontend edge cases', () => {
     test('client rejects invalid manifests', () => {
         expect(() => new GlueClient({manifest_list: [{policy: {namespace: 'model'}}]})).toThrow(GlueProxyError)
-        expect(() => new GlueClient({manifest_list: [{policy: {name: 'bad', namespace: 'unknown'}}]})).toThrow(GlueProxyError)
+    })
+
+    test('client registers custom namespaces as base proxies', () => {
+        const client = new GlueClient({
+            manifest_list: [{
+                policy: {name: 'dashboard', namespace: 'timeEntryDashboard', attributes: []},
+                metadata: {},
+                state: {},
+            }],
+        })
+
+        expect(client.timeEntryDashboard.dashboard).toBeInstanceOf(BaseGlueProxy)
     })
 
     test('proxy error listeners receive failed attribute requests', async () => {
