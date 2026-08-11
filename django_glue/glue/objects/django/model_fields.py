@@ -22,6 +22,7 @@ class ModelFieldResolutionMixin:
 
     fields: tuple[str, ...] | str
     exclude: tuple[str, ...] | str
+    _select_related: set[str]
     globally_excluded_field_types: frozenset[str]
 
     @property
@@ -55,6 +56,14 @@ class ModelFieldResolutionMixin:
             )
             else field.name
             for field in self._model_meta.fields
+        )
+
+    @cached_property
+    def _selected_related_field_names(self) -> tuple[str, ...]:
+        return tuple(
+            field_name
+            for field_name in self._select_related
+            if field_name in self._forward_field_names
         )
 
     @cached_property
@@ -130,11 +139,21 @@ class ModelFieldResolutionMixin:
     @cached_property
     def _included_fields(self) -> list[str]:
         all_names = self._all_available_field_names
-        names = self._default_field_names if self.fields == '__all__' or not self.fields else self.fields
+        names = (
+            self._default_field_names + self._selected_related_field_names
+            if self.fields == '__all__' or not self.fields
+            else self.fields
+        )
         excluded = set(all_names) if self.exclude == '__all__' else set(self.exclude)
-        return [
-            name
-            for name in names
-            if name not in excluded
-            and self._is_field_includable(name)
-        ]
+        included = []
+        seen = set()
+        for name in names:
+            if (
+                name in seen
+                or name in excluded
+                or not self._is_field_includable(name)
+            ):
+                continue
+            included.append(name)
+            seen.add(name)
+        return included

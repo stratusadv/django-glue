@@ -58,6 +58,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
 
         self.forms = self.normalize_forms(form, forms)
         self.related_field_config = ModelGlue._normalize_related_field_config(related_field_config)
+        self._select_related = self._get_select_related_fields()
         self.eager = eager
         self.initialize_computed_attributes(computed_attributes)
 
@@ -87,10 +88,10 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         """Return the Django model's _meta options."""
         return self.queryset.model._meta
 
-    @cached_property
-    def _select_related_fields(self) -> set[str]:
+    def _get_select_related_fields(self) -> set[str]:
         select_related = self.queryset.query.select_related
         if isinstance(select_related, dict):
+            # TODO: Preserve nested select_related paths instead of only top-level fields.
             return set(select_related.keys())
         return set()
 
@@ -104,7 +105,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             fields=self._included_fields,
             annotations=self._orm_annotation_names,
             forms=self.forms,
-            select_related=self._select_related_fields,
+            select_related=self._select_related,
             computed_attributes=self.computed_attributes,
             related_field_config=self.related_field_config,
         )
@@ -227,11 +228,6 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             name: form.__class__(instance=instance)
             for name, form in self.forms.items()
         }
-        if self.queryset.query.select_related:
-            select_related = set(self.queryset.query.select_related)
-        else:
-            select_related = set()
-
         child_object = ModelGlue(
             instance,
             name=child_name,
@@ -239,7 +235,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             fields=self._included_fields,
             annotations=self._orm_annotation_names,
             forms=child_forms,
-            select_related=select_related,
+            select_related=self._select_related,
             computed_attributes=self.computed_attributes,
             related_field_config=self.related_field_config,
         )

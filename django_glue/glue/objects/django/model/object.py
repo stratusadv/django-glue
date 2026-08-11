@@ -89,7 +89,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 )
 
         self.annotations = annotations
-        self.select_related = select_related or set()
+        self._select_related = set(select_related or ())
         self.related_field_config = self._normalize_related_field_config(related_field_config)
         self.initialize_computed_attributes(computed_attributes)
 
@@ -111,8 +111,8 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
-        if self.select_related:
-            identity['select_related'] = list(self.select_related)
+        if self._select_related:
+            identity['select_related'] = list(self._select_related)
         if self.related_field_config:
             identity['related_field_config'] = self.related_field_config
         identity |= self.computed_attributes_identity()
@@ -278,7 +278,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
     def _is_fk_cached(self, field_name: str) -> bool:
         """Check if a FK field's related instance is already cached (via select_related)."""
-        if field_name in self.select_related:
+        if field_name in self._select_related:
             return True
         field = self._get_model_field(field_name)
         return field.is_cached(self.instance)

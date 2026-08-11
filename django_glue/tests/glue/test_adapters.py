@@ -443,6 +443,40 @@ class AllFieldsTestCase(TestCase):
         self.assertIn('red_corner_id', row['state'])
         self.assertNotIn('red_corner', row['state'])
 
+    def test_queryset_all_fields_includes_select_related_forward_relations(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        red_gorilla = Gorilla.objects.create(name='Red Koko')
+        blue_gorilla = Gorilla.objects.create(name='Blue Bobo')
+        Fight.objects.create(
+            name='Championship',
+            red_corner=red_gorilla,
+            blue_corner=blue_gorilla,
+        )
+        glue_object = QuerySetGlue(
+            Fight.objects.select_related('red_corner'),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=ALL_FIELDS,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        self.assertIn('red_corner_id', glue_object._included_fields)
+        self.assertIn('red_corner', glue_object._included_fields)
+        self.assertIn('blue_corner_id', glue_object._included_fields)
+        self.assertNotIn('blue_corner', glue_object._included_fields)
+
+        result = glue_object.query_with_params()
+
+        row = result['items'][0]
+        self.assertIn('red_corner_id', row['state'])
+        self.assertIn('red_corner', row['state'])
+        self.assertIn('name', row['state']['red_corner'])
+        self.assertEqual(row['state']['red_corner']['name']['value'], 'Red Koko')
+        self.assertIn('blue_corner_id', row['state'])
+        self.assertNotIn('blue_corner', row['state'])
+
 
 class GluePolicyTestCase(TestCase):
     def test_base_glue_defaults_name_to_namespace(self):
