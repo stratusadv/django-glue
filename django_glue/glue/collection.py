@@ -56,7 +56,7 @@ class CollectionGlue(BaseGlue):
             for index, item in enumerate(self.items)
         }
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, takes_client_state=False)
     def load_state(self) -> dict[str, Any]:
         """Return collection state, or raise if lazily reconstructed.
 

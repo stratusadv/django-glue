@@ -174,7 +174,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         queryset.query = query
         return queryset
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def query_with_params(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -202,11 +202,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         items = [self._build_child_model_payload(instance) for instance in queryset]
         return {'items': items, 'query': {}}
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:
         return self._build_child_model_payload(self.queryset.get(pk=pk))
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
         instance = self.queryset.model(**initial) if initial else self.queryset.model()
         return self._build_child_model_payload(instance=instance)

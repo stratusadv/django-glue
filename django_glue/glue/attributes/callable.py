@@ -45,8 +45,8 @@ class CallableAttribute(BaseGlueAttribute):
         owner: BaseGlue,
         name: str,
         access: GlueAccess,
-        loads_state: bool | list[str] | tuple[str, ...] = True,
-        updates_state: bool = True,
+        takes_client_state: bool | list[str] | tuple[str, ...] = True,
+        updates_client_state: bool = True,
         attr_owner_instance: Any = None,
     ) -> None:
         super().__init__(
@@ -55,14 +55,14 @@ class CallableAttribute(BaseGlueAttribute):
             access=access,
             attr_owner_instance=attr_owner_instance
         )
-        self.loads_state = loads_state
-        self.updates_state = updates_state
+        self.takes_client_state = takes_client_state
+        self.updates_client_state = updates_client_state
 
     @property
     def metadata(self) -> dict[str, Any]:
         return {
             'namespace': 'callable',
-            'loads_state': self.loads_state,
+            'takes_client_state': self.takes_client_state,
         }
 
     def load_context(

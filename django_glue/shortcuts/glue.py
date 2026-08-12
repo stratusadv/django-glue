@@ -55,8 +55,8 @@ class _GluePropertyDescriptor:
         self.__glue_options__ = DeclaredAttributeOptions(
             access=GlueAccess.VIEW,
             is_callable=False,
-            loads_state=True,
-            updates_state=True,
+            takes_client_state=True,
+            updates_client_state=True,
             is_identity=self._identity,
         )
         return self

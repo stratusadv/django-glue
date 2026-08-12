@@ -16,8 +16,8 @@ class DeclaredAttributeOptions:
 
     access: GlueAccess
     is_callable: bool = True
-    loads_state: bool | list[str] | tuple[str, ...] = True
-    updates_state: bool = True
+    takes_client_state: bool | list[str] | tuple[str, ...] = True
+    updates_client_state: bool = True
     is_identity: bool = False
 
 
@@ -36,7 +36,7 @@ class DeclaredAttribute:
             ...
 
         # As a decorator on a method that doesn't need client state
-        @Attribute(access=GlueAccess.VIEW, loads_state=False)
+        @Attribute(access=GlueAccess.VIEW, takes_client_state=False)
         def load(self) -> dict:
             ...
 
@@ -49,8 +49,8 @@ class DeclaredAttribute:
         value: Any = _MISSING,
         *,
         access: GlueAccess,
-        loads_state: bool | list[str] | tuple[str, ...] = True,
-        updates_state: bool = True,
+        takes_client_state: bool | list[str] | tuple[str, ...] = True,
+        updates_client_state: bool = True,
         identity: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
@@ -61,8 +61,8 @@ class DeclaredAttribute:
             raise TypeError('DeclaredAttribute received both default and default_factory.')
 
         self._access = access
-        self._loads_state = loads_state
-        self._updates_state = updates_state
+        self._takes_client_state = takes_client_state
+        self._updates_client_state = updates_client_state
         self._identity = identity
         self.default = default
         self.default_factory = default_factory
@@ -86,8 +86,8 @@ class DeclaredAttribute:
         self.__glue_options__ = DeclaredAttributeOptions(
             access=self._access,
             is_callable=self._is_callable,
-            loads_state=self._loads_state,
-            updates_state=self._updates_state,
+            takes_client_state=self._takes_client_state,
+            updates_client_state=self._updates_client_state,
             is_identity=self._identity,
         )
 

@@ -173,13 +173,13 @@ class BaseGlue(ABC):
         glue_object.request = context.request
 
         attribute = glue_object.attributes.get(context.target_attribute_name)
-        loads_state = getattr(attribute, 'loads_state', True) if attribute else True
-        if attribute and loads_state:
+        takes_client_state = getattr(attribute, 'takes_client_state', True) if attribute else True
+        if attribute and takes_client_state:
             state = context.target_glue_client_state or {}
-            if isinstance(loads_state, list | tuple):
+            if isinstance(takes_client_state, list | tuple):
                 state = {
                     key: state[key]
-                    for key in loads_state
+                    for key in takes_client_state
                     if key in state
                 }
             glue_object._load_client_state(state)
@@ -220,7 +220,7 @@ class BaseGlue(ABC):
     def _invalidate_state(self) -> None:
         self.__dict__.pop('state', None)
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
+    @DeclaredAttribute(access=GlueAccess.VIEW, takes_client_state=False)
     def load_state(self) -> dict[str, Any]:
         return self.state
 
@@ -253,7 +253,7 @@ class BaseGlue(ABC):
         self._invalidate_attributes()
 
         response_extra = {}
-        if getattr(glue_attribute, 'updates_state', True):
+        if getattr(glue_attribute, 'updates_client_state', True):
             response_extra = {
                 'state': self.state,
                 'policy': self.policy,

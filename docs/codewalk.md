@@ -43,9 +43,10 @@ def has_access(self, access_required: GlueAccess) -> bool:
    class DeclaredAttributeOptions:
        access: GlueAccess
        is_callable: bool = True
-       loads_state: bool = True
+       takes_client_state: bool = True
+       updates_client_state: bool = True
    ```
-   Replaces scattered dunders (`__required_glue_access__`, `is_callable`, `loads_state`). Now exposed as single `__glue_options__` attribute.
+   Replaces scattered dunders (`__required_glue_access__`, `is_callable`, `takes_client_state`). Now exposed as single `__glue_options__` attribute.
 
 3. **Renamed `Attribute` to `DeclaredAttribute`** - Distinguishes the decorator/descriptor from runtime `BaseGlueAttribute` instances.
 

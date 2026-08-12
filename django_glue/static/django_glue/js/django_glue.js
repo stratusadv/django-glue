@@ -396,7 +396,7 @@
         const response = await this._http.sendAttributeRequest({
           name: this._name,
           policy: this._policy,
-          state: this._stateForAttribute(attributeMetadata.loads_state),
+          state: this._stateForAttribute(attributeMetadata.takes_client_state),
           attribute,
           kwargs
         });
@@ -423,12 +423,12 @@
         }
       }
     }
-    _stateForAttribute(loadsState) {
-      if (loadsState === false) {
+    _stateForAttribute(takesClientState) {
+      if (takesClientState === false) {
         return null;
       }
-      if (Array.isArray(loadsState)) {
-        return Object.fromEntries(loadsState.filter((key) => Object.prototype.hasOwnProperty.call(this._state || {}, key)).map((key) => [key, this._state[key]]));
+      if (Array.isArray(takesClientState)) {
+        return Object.fromEntries(takesClientState.filter((key) => Object.prototype.hasOwnProperty.call(this._state || {}, key)).map((key) => [key, this._state[key]]));
       }
       return this._state;
     }

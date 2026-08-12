@@ -162,8 +162,8 @@ class GlueAttributeCollector:
             owner=self.root_glue_owner,
             name=attr_name,
             access=options.access,
-            loads_state=options.loads_state,
-            updates_state=options.updates_state,
+            takes_client_state=options.takes_client_state,
+            updates_client_state=options.updates_client_state,
             attr_owner_instance=attr_owner_instance,
         )
 

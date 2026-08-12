@@ -76,7 +76,7 @@ class BaseGlueProxy {
             const response = await this._http.sendAttributeRequest({
                 name: this._name,
                 policy: this._policy,
-                state: this._stateForAttribute(attributeMetadata.loads_state),
+                state: this._stateForAttribute(attributeMetadata.takes_client_state),
                 attribute,
                 kwargs,
             })
@@ -111,14 +111,14 @@ class BaseGlueProxy {
         }
     }
 
-    _stateForAttribute(loadsState) {
-        if (loadsState === false) {
+    _stateForAttribute(takesClientState) {
+        if (takesClientState === false) {
             return null
         }
 
-        if (Array.isArray(loadsState)) {
+        if (Array.isArray(takesClientState)) {
             return Object.fromEntries(
-                loadsState
+                takesClientState
                     .filter(key => Object.prototype.hasOwnProperty.call(this._state || {}, key))
                     .map(key => [key, this._state[key]])
             )
