@@ -18,6 +18,7 @@ from django_glue.glue.attributes.django.model import (
     ModelFieldAttribute,
     RelatedSetFieldAttribute,
 )
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
@@ -57,8 +58,9 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
         related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.instance = instance
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
@@ -97,12 +99,10 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
 
-    @property
-    def attribute_providers(self) -> dict[str, Any]:
+    def get_attribute_providers(self) -> dict[str, Any]:
         return {'instance': self.instance}
 
-    @property
-    def identity(self) -> dict[str, Any]:
+    def get_identity(self) -> dict[str, Any]:
         instance = self.instance
         identity = {
             'model_class_path': f'{instance.__class__.__module__}.{instance.__class__.__name__}',
@@ -202,6 +202,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                     form=form,
                     name=f'{self.name}.{attribute_name}',
                     access=self.access,
+                    loading_strategy=self.resolved_loading_strategy,
                 ),
             )
             attributes[attribute_name] = form_attribute
@@ -236,8 +237,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         """Return the Django model's _meta options."""
         return self.instance._meta
 
-    @cached_property
-    def state(self) -> dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         self.hydrate_computed_attributes(self.instance)
         self._validate()
         state = {}
@@ -263,8 +263,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
             )
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attribute.metadata
@@ -408,10 +407,6 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             return None
 
         return self.request.FILES.get(field_name)
-
-    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
-    def load(self) -> dict[str, Any]:
-        return {'state': self.state}
 
     @DeclaredAttribute(access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:

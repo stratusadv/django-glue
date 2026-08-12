@@ -49,6 +49,9 @@ def task_view(request, pk):
 | `form`           | `ModelForm`               | No       | Default ModelForm for validation                         |
 | `forms`          | `Mapping[str, ModelForm]` | No       | Named ModelForms (e.g.,`{'edit': EditForm}`)           |
 | `select_related` | `Sequence[str]`           | No       | ForeignKey fields to preload with select_related         |
+| `computed_attributes` | `Mapping[str, ComputedAttribute]` | No | Readonly computed values (see [Computed Attributes](#computed-attributes)) |
+| `related_field_config` | `Mapping[str, dict]` | No | Field configuration for related objects (see [Related Field Config](#related-field-configuration)) |
+| `loading_strategy` | `LoadingStrategy` | No | `LAZY` (default), `EAGER`, or `INHERIT`. See [Loading Strategy](../api/glue/shortcuts.md#loading-strategy) |
 
 *Either `fields` or `exclude` must be provided. You can import `ALL_FIELDS` from `django_glue` (or just enter '__all__'):
 
@@ -207,6 +210,49 @@ console.log(Glue.model.group.permission_data)
 !!! note
 
     Computed attributes are not model fields and are not persisted by `save()`.
+
+## Related Field Configuration
+
+Use `related_field_config` to control which fields are exposed on related objects (ForeignKey, OneToOne, reverse FK, and ManyToMany relationships).
+
+```python
+Glue.model(
+    request=request,
+    unique_name='time_entry',
+    target=time_entry,
+    access=GlueAccess.CHANGE,
+    fields=['id', 'description', 'hours', 'project', 'user'],
+    related_field_config={
+        'project': {
+            'fields': ['id', 'name', 'code'],
+        },
+        'user': {
+            'fields': ['id', 'first_name', 'last_name'],
+        },
+    },
+)
+```
+
+Each related field name maps to a config dict with either `fields` or `exclude`:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `fields` | `Sequence[str]` or `'__all__'` | Fields to include on the related object |
+| `exclude` | `Sequence[str]` or `'__all__'` | Fields to exclude from the related object |
+
+Access related object fields on the frontend as nested properties:
+
+```javascript
+const entry = Glue.model.time_entry
+console.log(entry.project.name)       // 'Website Redesign'
+console.log(entry.user.first_name)    // 'Alice'
+```
+
+This is useful for:
+
+- Exposing display names alongside foreign key IDs
+- Limiting data exposed on sensitive models (e.g., hiding user email/password)
+- Accessing nested data without registering separate Glue objects
 
 ## Custom Forms
 
@@ -408,6 +454,35 @@ def task_edit_view(request, pk):
 </body>
 </html>
 ```
+
+## Loading Strategy
+
+Control when model state is sent to the frontend with the `loading_strategy` parameter:
+
+```python
+from django_glue.glue.loading import LoadingStrategy
+
+Glue.model(
+    request=request,
+    unique_name='task',
+    target=task,
+    access=GlueAccess.CHANGE,
+    fields=['id', 'title', 'done'],
+    loading_strategy=LoadingStrategy.EAGER,  # Include state in initial manifest
+)
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| `LAZY` | State is fetched on first access (default) |
+| `EAGER` | State is included in the initial page manifest |
+| `INHERIT` | Inherit strategy from parent (for nested objects) |
+
+Use `EAGER` when:
+
+- Data is needed immediately on page load
+- You want to avoid a loading spinner or fetch latency
+- The model is part of a collection that should load together
 
 ## Access Levels
 

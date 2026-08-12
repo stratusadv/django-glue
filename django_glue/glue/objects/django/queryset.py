@@ -11,6 +11,7 @@ from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
@@ -41,9 +42,9 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         forms: Mapping[str, forms.ModelForm] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
         related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
-        eager: bool = False,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.queryset = queryset
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
@@ -59,11 +60,9 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         self.forms = self.normalize_forms(form, forms)
         self.related_field_config = ModelGlue._normalize_related_field_config(related_field_config)
         self._select_related = self._get_select_related_fields()
-        self.eager = eager
         self.initialize_computed_attributes(computed_attributes)
 
-    @property
-    def identity(self) -> dict[str, Any]:
+    def get_identity(self) -> dict[str, Any]:
         identity = {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
             'encoded_queryset': self._encode_queryset_query(self.queryset),
@@ -73,14 +72,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             identity['form_identities'] = self.serialize_forms(self.forms)
         if self.related_field_config:
             identity['related_field_config'] = self.related_field_config
-        if self.eager:
-            identity['eager'] = True
         identity |= self.computed_attributes_identity()
 
         return identity
 
-    @property
-    def attribute_providers(self) -> dict[str, Any]:
+    def get_attribute_providers(self) -> dict[str, Any]:
         return {}
 
     @property
@@ -124,11 +120,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         attributes.update(super().attributes)
         return attributes
 
-    @property
-    def state(self) -> dict[str, Any]:
-        if not self.eager:
-            return {}
-
+    def get_state(self) -> dict[str, Any]:
         return {
             'items': [
                 self._build_child_model_payload(instance)
@@ -136,8 +128,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             ],
         }
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attribute.metadata
@@ -170,7 +161,6 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
             related_field_config=related_field_config,
-            eager=policy.identity.get('eager', False),
         )
 
     @staticmethod
@@ -184,7 +174,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         queryset.query = query
         return queryset
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
     def query_with_params(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -212,11 +202,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         items = [self._build_child_model_payload(instance) for instance in queryset]
         return {'items': items, 'query': {}}
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
     def get(self, pk: Any) -> dict[str, Any]:
         return self._build_child_model_payload(self.queryset.get(pk=pk))
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_state=False)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
         instance = self.queryset.model(**initial) if initial else self.queryset.model()
         return self._build_child_model_payload(instance=instance)
@@ -228,6 +218,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             name: form.__class__(instance=instance)
             for name, form in self.forms.items()
         }
+        # Child models in query results are always eager - they contain the fetched data
         child_object = ModelGlue(
             instance,
             name=child_name,
@@ -238,6 +229,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             select_related=self._select_related,
             computed_attributes=self.computed_attributes,
             related_field_config=self.related_field_config,
+            loading_strategy=LoadingStrategy.EAGER,
         )
         child_object.request = self.request
 
@@ -245,7 +237,4 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         if hasattr(self, '_visited_relations'):
             child_object._visited_relations = self._visited_relations
 
-        return {
-            **child_object.manifest.model_dump(),
-            'state': child_object.state,
-        }
+        return child_object.manifest.model_dump()

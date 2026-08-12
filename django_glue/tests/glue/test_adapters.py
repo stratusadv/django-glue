@@ -25,6 +25,7 @@ from django_glue.glue import (
     CollectionGlue,
     GlueClassRegistry,
 )
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
@@ -1024,7 +1025,8 @@ class DjangoModelGlueObjectTestCase(TestCase):
         metadata = glue_object.metadata
         state = glue_object.state
 
-        nested_policy = policy.attributes[0]
+        # Find the nested policy (not a string attribute like 'load_state')
+        nested_policy = next(attr for attr in policy.attributes if hasattr(attr, 'name'))
         self.assertEqual(nested_policy.name, 'dashboard.stats')
         self.assertEqual(nested_policy.namespace, 'stats')
         self.assertIn('score', nested_policy.attributes)
@@ -1134,7 +1136,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         ))
 
         resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
-        state = resolved.load()['state']
+        state = resolved.load_state()
 
         self.assertEqual(state['name']['value'], 'Initial Name')
         self.assertEqual(state['age']['value'], 7)
@@ -1255,30 +1257,33 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             name='gorillas',
             access=GlueAccess.VIEW,
             fields=['id', 'name'],
-            eager=True,
+            loading_strategy=LoadingStrategy.EAGER,
         )
         glue_object.request = request
 
-        state = glue_object.state
+        manifest = glue_object.manifest.model_dump()
+        state = manifest['state']
         row = state['items'][0]
 
-        self.assertTrue(glue_object.policy.identity['eager'])
+        self.assertEqual(manifest['loading_strategy'], 'eager')
         self.assertEqual(row['policy']['namespace'], 'model')
         self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
         self.assertEqual(row['state']['name']['value'], 'Koko')
 
-    def test_queryset_eager_survives_policy_reconstruction(self):
+    def test_queryset_loading_strategy_not_in_policy_identity(self):
         glue_object = with_request(QuerySetGlue(
             Gorilla.objects.all(),
             name='gorillas',
             access=GlueAccess.VIEW,
             fields=['id', 'name'],
-            eager=True,
+            loading_strategy=LoadingStrategy.EAGER,
         ))
 
-        resolved = QuerySetGlue._reconstruct_from_policy(glue_object.policy)
-
-        self.assertTrue(resolved.eager)
+        # loading_strategy should NOT be in policy identity - it's transport behavior, not capability
+        self.assertNotIn('eager', glue_object.policy.identity)
+        self.assertNotIn('loading_strategy', glue_object.policy.identity)
+        # But it should be in the manifest
+        self.assertEqual(glue_object.manifest.loading_strategy, LoadingStrategy.EAGER)
 
     def test_queryset_with_computed_attributes_adds_attribute_to_child_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
@@ -1432,10 +1437,12 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             fields=['id', 'name'],
         )
         glue_object.request = request
+        original_policy = glue_object.policy
 
+        # First query with slice - should not affect the original policy
         context = AttributeCallRequestContext.model_construct(
             request=request,
-            target_glue_policy=glue_object.policy,
+            target_glue_policy=original_policy,
             target_glue_client_state={},
             target_attribute_name='query_with_params',
             target_attribute_call_kwargs={
@@ -1443,11 +1450,10 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
                 'slice': {'start': 0, 'stop': 1},
             },
         )
-        response = glue_object.process_attribute_call(context)
-        response_data = json.loads(response.content)
-        resolved = QuerySetGlue._reconstruct_from_policy(
-            GluePolicy.model_validate(response_data['policy'])
-        )
+        glue_object.process_attribute_call(context)
+
+        # Reconstruct from original policy (not response) and query again
+        resolved = QuerySetGlue._reconstruct_from_policy(original_policy)
         resolved.request = request
 
         result = resolved.query_with_params(
@@ -1543,9 +1549,9 @@ def gorilla_badge_data_with_suffix(gorilla: Gorilla, suffix: str = '') -> dict[s
 
 
 class LazyLoadingTestCase(TestCase):
-    """Tests for lazy loading behavior - state is not included in manifests."""
+    """Tests for lazy loading behavior - state is empty in lazy manifests."""
 
-    def test_model_manifest_does_not_include_state(self):
+    def test_model_lazy_manifest_has_empty_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = with_request(ModelGlue(gorilla, **glue_context(), fields=['name']))
 
@@ -1553,18 +1559,20 @@ class LazyLoadingTestCase(TestCase):
 
         self.assertIn('policy', manifest)
         self.assertIn('metadata', manifest)
-        self.assertNotIn('state', manifest)
+        self.assertIn('state', manifest)
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
-    def test_model_load_attribute_returns_state(self):
+    def test_model_load_state_attribute_returns_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
 
-        result = glue_object.load()
+        result = glue_object.load_state()
 
-        self.assertIn('state', result)
-        self.assertEqual(result['state']['name']['value'], 'Koko')
+        self.assertIn('name', result)
+        self.assertEqual(result['name']['value'], 'Koko')
 
-    def test_model_load_does_not_hydrate_stale_client_state(self):
+    def test_model_load_state_does_not_hydrate_stale_client_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = with_request(ModelGlue(gorilla, **glue_context(), fields=['name']))
         policy = glue_object.policy
@@ -1575,16 +1583,16 @@ class LazyLoadingTestCase(TestCase):
             request=glue_object.request,
             target_glue_policy=policy,
             target_glue_client_state={'name': {'value': 'Koko'}},
-            target_attribute_name='load',
+            target_attribute_name='load_state',
             target_attribute_call_kwargs={},
         )
         resolved = ModelGlue.from_attribute_call_resolver_context(context)
 
-        result = resolved.load()
+        result = resolved.load_state()
 
-        self.assertEqual(result['state']['name']['value'], 'Ndume')
+        self.assertEqual(result['name']['value'], 'Ndume')
 
-    def test_form_manifest_does_not_include_state(self):
+    def test_form_lazy_manifest_has_empty_state(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
         glue_object = with_request(FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE)))
 
@@ -1592,29 +1600,31 @@ class LazyLoadingTestCase(TestCase):
 
         self.assertIn('policy', manifest)
         self.assertIn('metadata', manifest)
-        self.assertNotIn('state', manifest)
+        self.assertIn('state', manifest)
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
-    def test_form_load_attribute_returns_state(self):
+    def test_form_load_state_attribute_returns_state(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
         glue_object = FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE))
 
-        result = glue_object.load()
+        result = glue_object.load_state()
 
-        self.assertIn('state', result)
-        self.assertIn('name', result['state'])
-        self.assertEqual(result['state']['name']['value'], 'Ada')
+        self.assertIn('name', result)
+        self.assertEqual(result['name']['value'], 'Ada')
 
-    def test_queryset_state_returns_empty_dict(self):
+    def test_lazy_queryset_manifest_has_empty_state(self):
         Gorilla.objects.create(name='Koko')
         queryset = Gorilla.objects.all()
-        glue_object = QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name'])
+        glue_object = with_request(QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name']))
 
-        state = glue_object.state
+        manifest = glue_object.manifest.model_dump()
 
-        self.assertEqual(state, {})
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
     def test_queryset_query_with_params_returns_items_with_state(self):
-        gorilla = Gorilla.objects.create(name='Koko')
+        Gorilla.objects.create(name='Koko')
         queryset = Gorilla.objects.all()
         request = request_with_session()
         glue_object = QuerySetGlue(
@@ -1624,7 +1634,6 @@ class LazyLoadingTestCase(TestCase):
             fields=['name'],
         )
         glue_object.request = request
-        policy = glue_object.policy
 
         result = glue_object.query_with_params()
 

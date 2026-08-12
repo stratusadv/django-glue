@@ -4,6 +4,7 @@ from typing import Any, Literal, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.base import BaseGlueAttribute
+from django_glue.glue.loading import LoadingStrategy
 
 if TYPE_CHECKING:
     from django.db import models
@@ -103,6 +104,7 @@ class RelatedSetFieldAttribute(BaseGlueAttribute):
             access=GlueAccess.VIEW,  # Read-only for v1
             fields=ALL_FIELDS,
             exclude=(),
+            loading_strategy=LoadingStrategy.EAGER if self.is_prefetched else LoadingStrategy.LAZY,
         )
         self._related_glue.request = self.owner.request
 

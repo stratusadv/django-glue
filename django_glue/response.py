@@ -72,10 +72,7 @@ class GlueResponse:
         if isinstance(value, BaseGlue):
             if glue_object is not None:
                 value.request = glue_object.request
-            return {
-                **value.manifest.model_dump(),
-                'state': value.state,
-            }
+            return value.manifest.model_dump()
 
         if isinstance(value, dict):
             return {

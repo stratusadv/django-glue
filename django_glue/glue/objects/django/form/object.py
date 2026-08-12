@@ -11,6 +11,7 @@ from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.form import FormFieldAttribute
 from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
@@ -26,18 +27,17 @@ class FormGlue(BaseGlue):
         *,
         name: str,
         access: GlueAccess,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.form = form
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
 
-    @property
-    def attribute_providers(self) -> dict[str, Any]:
+    def get_attribute_providers(self) -> dict[str, Any]:
         return {'form': self.form}
 
-    @property
-    def identity(self) -> dict[str, Any]:
+    def get_identity(self) -> dict[str, Any]:
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
@@ -65,8 +65,7 @@ class FormGlue(BaseGlue):
             for name, field in self.form.fields.items()
         }
 
-    @property
-    def state(self) -> dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         self._populate_field_errors()
         return {
             name: attribute.state
@@ -78,8 +77,7 @@ class FormGlue(BaseGlue):
         """Populate _field_errors from form errors."""
         self._field_errors = dict(self.form.errors)
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attribute.metadata
@@ -115,10 +113,6 @@ class FormGlue(BaseGlue):
         """Bind client-provided state before executing form attributes."""
         self._loaded_state = state
         self.form = self._bind_form()
-
-    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
-    def load(self) -> dict[str, Any]:
-        return {'state': self.state}
 
     @DeclaredAttribute(access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:

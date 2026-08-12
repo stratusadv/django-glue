@@ -339,7 +339,15 @@
   }
 
   class BaseGlueProxy {
-    constructor({ http, policy, state = {}, metadata = {}, owner = null, client = null }) {
+    constructor({
+      http,
+      policy,
+      state = {},
+      metadata = {},
+      owner = null,
+      client = null,
+      loadingStrategy = "lazy"
+    }) {
       this._http = http;
       this._policy = policy;
       this._name = policy?.name;
@@ -349,6 +357,8 @@
       this._listeners = { before: {}, after: {}, error: {} };
       this._onMessage = null;
       this._onError = null;
+      this._loadingStrategy = loadingStrategy;
+      this._loaded = loadingStrategy === "eager" || this._hasPopulatedState;
       Object.defineProperty(this, "_owner", {
         value: owner,
         writable: true,
@@ -391,7 +401,7 @@
           kwargs
         });
         this._applyResponse(response.data);
-        const result = this._client ? this._client.hydrateGluePayloads(response.data?.result) : response.data?.result;
+        const result = this._convertResultManifestsToProxies(response.data?.result);
         if (response.data) {
           response.data.result = result;
         }
@@ -432,6 +442,11 @@
       }
       if (data.state !== undefined) {
         this._applyState(data.state || {});
+        this._loaded = true;
+      }
+      if (data.loading_strategy !== undefined) {
+        this._loadingStrategy = data.loading_strategy;
+        this._loaded = data.loading_strategy === "eager" || this._hasPopulatedState;
       }
       if (shouldRefreshGlueObjectAttributes) {
         this._refreshGlueObjectAttributes();
@@ -469,6 +484,9 @@
           target[key] = sourceValue;
         }
       });
+    }
+    get _hasPopulatedState() {
+      return this._state && typeof this._state === "object" && Object.keys(this._state).length > 0;
     }
     _configureAttributeInitializers() {
       this._attributeBuilders = {
@@ -573,9 +591,6 @@
           state: nestedState,
           metadata: nestedMetadata
         });
-        if (Object.keys(nestedState).length > 0) {
-          proxy[cacheKey]._loaded = true;
-        }
       }
       Object.defineProperty(owner, attributeName, {
         get() {
@@ -586,11 +601,9 @@
               state: nestedState,
               metadata: nestedMetadata,
               owner: proxy,
-              client: proxy._client
+              client: proxy._client,
+              loadingStrategy: proxy._loadingStrategy
             });
-            if (Object.keys(nestedState).length > 0) {
-              nestedProxy._loaded = true;
-            }
             proxy[cacheKey] = nestedProxy;
           }
           return proxy[cacheKey];
@@ -688,6 +701,27 @@
       ];
       listeners.forEach((listener) => listener(payload));
     }
+    _convertResultManifestsToProxies(result) {
+      if (!this._client) {
+        return result;
+      }
+      if (Array.isArray(result)) {
+        return result.map((item) => this._convertResultManifestsToProxies(item));
+      }
+      if (!result || typeof result !== "object") {
+        return result;
+      }
+      if (this._resultIsManifest(result)) {
+        return this._client._createProxy(result);
+      }
+      Object.keys(result).forEach((key) => {
+        result[key] = this._convertResultManifestsToProxies(result[key]);
+      });
+      return result;
+    }
+    _resultIsManifest(result) {
+      return Boolean(result?.policy?.name && result?.policy?.namespace && result?.metadata !== undefined);
+    }
   }
   var base_default = BaseGlueProxy;
 
@@ -732,8 +766,7 @@
       const cachedItem = this._itemProxyCache.get(cacheKey);
       if (cachedItem) {
         if (cachedItem.policy !== policy || cachedItem.state !== state || cachedItem.metadata !== metadata) {
-          cachedItem.proxy._applyResponse({ policy, state, metadata });
-          this._markLoadedFromState(cachedItem.proxy, state);
+          cachedItem.proxy._applyResponse({ policy, state, metadata, loading_strategy: this._loadingStrategy });
           cachedItem.policy = policy;
           cachedItem.state = state;
           cachedItem.metadata = metadata;
@@ -746,9 +779,9 @@
         state,
         metadata,
         owner: this,
-        client: this._client
+        client: this._client,
+        loadingStrategy: this._loadingStrategy
       });
-      this._markLoadedFromState(proxy, state);
       this._itemProxyCache.set(cacheKey, {
         proxy,
         policy,
@@ -756,11 +789,6 @@
         metadata
       });
       return proxy;
-    }
-    _markLoadedFromState(proxy, state) {
-      if (Object.keys(state || {}).length > 0) {
-        proxy._loaded = true;
-      }
     }
   }
   var collection_default = GlueCollectionProxy;
@@ -1041,7 +1069,6 @@
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
-      this._loaded = false;
       this.loading = false;
     }
     get $fields() {
@@ -1063,9 +1090,7 @@
     _ensureLoaded() {
       if (!this._loaded && !this.loading) {
         this.loading = true;
-        this._callAttribute("load").then(() => {
-          this._loaded = true;
-        }).finally(() => {
+        this._callAttribute("load_state").finally(() => {
           this.loading = false;
         });
       }
@@ -1192,16 +1217,6 @@
         configurable: true
       });
     }
-    async delete() {
-      const result = await this._callAttribute("delete");
-      this.$collection?._removeModelProxy(this);
-      return result;
-    }
-    async load() {
-      const result = await this._callAttribute("load");
-      this.$collection?._updateModelProxy(this);
-      return result;
-    }
   }
   var model_default = GlueModelProxy;
 
@@ -1212,11 +1227,9 @@
       this._modelProxies = new Map;
       this._queryParams = options.queryParams || {};
       this._queryCache = {};
-      this._loaded = false;
       this.loading = false;
       if (this._canHydrateFromState()) {
         this._syncFromResult(this._state);
-        this._loaded = true;
       }
     }
     get items() {
@@ -1267,15 +1280,16 @@
     _buildModelProxy(row, existingProxy = null) {
       if (row instanceof model_default) {
         row._loaded = true;
-        row.$collection = this;
         return row;
       }
+      const rowLoadingStrategy = row.loading_strategy || this._loadingStrategy;
       let proxy = existingProxy;
       if (proxy) {
         proxy._applyResponse({
           policy: row.policy,
           state: row.state,
-          metadata: row.metadata || this._metadata
+          metadata: row.metadata || this._metadata,
+          loading_strategy: rowLoadingStrategy
         });
       } else {
         proxy = new model_default({
@@ -1284,11 +1298,11 @@
           state: row.state,
           metadata: row.metadata || this._metadata,
           client: this._client,
-          owner: this
+          owner: this,
+          loadingStrategy: rowLoadingStrategy
         });
       }
       proxy._loaded = true;
-      proxy.$collection = this;
       return proxy;
     }
     query(params = {}) {
@@ -1314,15 +1328,16 @@
       return new this.constructor({
         http: this._http,
         policy: this._policy,
-        state: this._state,
+        state: {},
         metadata: this._metadata,
         client: this._client,
         owner: this._owner,
-        queryParams: this._mergeQueryParams(params)
+        queryParams: this._mergeQueryParams(params),
+        loadingStrategy: "lazy"
       });
     }
     _canHydrateFromState() {
-      return Boolean(this._policy?.identity?.eager && Array.isArray(this._state?.items) && !this._hasQueryParams());
+      return Boolean(this._loaded && Array.isArray(this._state?.items) && !this._hasQueryParams());
     }
     _hasQueryParams() {
       return Boolean(Object.keys(this._queryParams.filter || {}).length || Object.keys(this._queryParams.slice || {}).length || this._queryParams.order_by);
@@ -1425,54 +1440,42 @@
       return new view_default(this.http, url, sharedPayload);
     }
     loadManifests(manifest_list = []) {
-      (manifest_list || []).forEach((glueManifest) => {
-        this._registerManifestAsProxy(glueManifest);
+      (manifest_list || []).forEach((manifest) => {
+        this._registerManifest(manifest);
       });
     }
-    hydrateGluePayloads(value) {
-      if (Array.isArray(value)) {
-        return value.map((item) => this.hydrateGluePayloads(item));
-      }
-      if (!value || typeof value !== "object") {
-        return value;
-      }
-      if (this._isGluePayload(value)) {
-        return this._registerPayloadAsProxy(value);
-      }
-      Object.keys(value).forEach((key) => {
-        value[key] = this.hydrateGluePayloads(value[key]);
-      });
-      return value;
-    }
-    _isGluePayload(value) {
-      return Boolean(value?.policy?.name && value?.policy?.namespace && value?.metadata !== undefined);
-    }
-    _registerPayloadAsProxy(payload) {
-      const name = payload.policy.name;
-      const namespace = payload.policy.namespace;
-      this._registerManifestAsProxy(payload);
-      if (name === namespace) {
-        return this[namespace];
-      }
-      return this[namespace][name];
-    }
-    _registerManifestAsProxy({ policy, metadata = {}, state = {} }) {
-      const name = policy?.name;
+    _createProxy({ policy, metadata = {}, state = {}, loading_strategy = "lazy" }) {
       const namespace = policy?.namespace || metadata?.namespace;
       const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[namespace] || base_default;
+      if (namespace === "function") {
+        return ProxyClass.create({ http: this.http, policy, metadata });
+      }
+      return new ProxyClass({
+        http: this.http,
+        policy,
+        state,
+        metadata,
+        client: this,
+        loadingStrategy: loading_strategy
+      });
+    }
+    _registerManifest({ policy, metadata = {}, state = {}, loading_strategy = "lazy" }) {
+      const name = policy?.name;
+      const namespace = policy?.namespace || metadata?.namespace;
       if (!name) {
         throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
       }
       if (!namespace) {
         throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`);
       }
+      const manifest = { policy, metadata, state, loading_strategy };
       if (name === namespace) {
         if (namespace in this && !this._directNamespaces.has(namespace)) {
           throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`);
         }
         this._directNamespaces.add(namespace);
         Object.defineProperty(this, namespace, {
-          get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata, client: this }),
+          get: () => this._createProxy(manifest),
           configurable: true
         });
         return;
@@ -1484,7 +1487,7 @@
         this[namespace] = {};
       }
       Object.defineProperty(this[namespace], name, {
-        get: () => namespace === "function" ? ProxyClass.create({ http: this.http, policy, metadata }) : new ProxyClass({ http: this.http, policy, state, metadata, client: this }),
+        get: () => this._createProxy(manifest),
         configurable: true
       });
     }

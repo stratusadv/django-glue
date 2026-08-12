@@ -58,8 +58,7 @@ class GlueCollectionProxy extends BaseGlueProxy {
                 || cachedItem.state !== state
                 || cachedItem.metadata !== metadata
             ) {
-                cachedItem.proxy._applyResponse({policy, state, metadata})
-                this._markLoadedFromState(cachedItem.proxy, state)
+                cachedItem.proxy._applyResponse({policy, state, metadata, loading_strategy: this._loadingStrategy})
                 cachedItem.policy = policy
                 cachedItem.state = state
                 cachedItem.metadata = metadata
@@ -75,8 +74,8 @@ class GlueCollectionProxy extends BaseGlueProxy {
             metadata,
             owner: this,
             client: this._client,
+            loadingStrategy: this._loadingStrategy,
         })
-        this._markLoadedFromState(proxy, state)
         this._itemProxyCache.set(cacheKey, {
             proxy,
             policy,
@@ -85,12 +84,6 @@ class GlueCollectionProxy extends BaseGlueProxy {
         })
 
         return proxy
-    }
-
-    _markLoadedFromState(proxy, state) {
-        if (Object.keys(state || {}).length > 0) {
-            proxy._loaded = true
-        }
     }
 }
 

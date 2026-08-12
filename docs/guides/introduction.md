@@ -44,9 +44,11 @@ from django_glue import Glue, GlueAccess
 |--------|------------|-------|
 | `Glue.model()` | `GlueModelProxy` | Single Django model instance |
 | `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
+| `Glue.collection()` | `GlueCollectionProxy` | Group of Glue objects |
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
 | `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
+| `Glue.json()` | `GlueJsonProxy` | Serializable dict, list, or primitive |
 
 On the frontend, proxies are accessed through the global `Glue` object:
 
@@ -54,9 +56,11 @@ On the frontend, proxies are accessed through the global `Glue` object:
 |-----------|------------|---------|
 | `Glue.model` | Model proxies | `Glue.model.task` |
 | `Glue.querySet` | QuerySet proxies | `Glue.querySet.tasks` |
+| `Glue.collection` | Collection proxies | `Glue.collection.days` |
 | `Glue.form` | Form proxies | `Glue.form.contact_form` |
 | `Glue.template` | Template proxies | `Glue.template.card` |
 | `Glue.function` | Function proxies | `await Glue.function.calculate(10, 20)` |
+| `Glue.json` | JSON proxies | `Glue.json.config` |
 
 ### Access Control
 

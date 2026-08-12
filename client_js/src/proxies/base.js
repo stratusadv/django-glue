@@ -10,7 +10,15 @@ function isPlainObject(value) {
 }
 
 class BaseGlueProxy {
-    constructor({http, policy, state = {}, metadata = {}, owner = null, client = null}) {
+    constructor({
+        http,
+        policy,
+        state = {},
+        metadata = {},
+        owner = null,
+        client = null,
+        loadingStrategy = 'lazy'
+    }) {
         this._http = http
         this._policy = policy
         this._name = policy?.name
@@ -20,6 +28,8 @@ class BaseGlueProxy {
         this._listeners = {before: {}, after: {}, error: {}}
         this._onMessage = null
         this._onError = null
+        this._loadingStrategy = loadingStrategy
+        this._loaded = loadingStrategy === 'eager' || this._hasPopulatedState
 
         // Non-enumerable to prevent circular reference issues during serialization
         Object.defineProperty(this, '_owner', {
@@ -73,9 +83,7 @@ class BaseGlueProxy {
 
             this._applyResponse(response.data)
 
-            const result = this._client
-                ? this._client.hydrateGluePayloads(response.data?.result)
-                : response.data?.result
+            const result = this._convertResultManifestsToProxies(response.data?.result)
             if (response.data) {
                 response.data.result = result
             }
@@ -129,6 +137,11 @@ class BaseGlueProxy {
         }
         if (data.state !== undefined) {
             this._applyState(data.state || {})
+            this._loaded = true
+        }
+        if (data.loading_strategy !== undefined) {
+            this._loadingStrategy = data.loading_strategy
+            this._loaded = data.loading_strategy === 'eager' || this._hasPopulatedState
         }
         if (shouldRefreshGlueObjectAttributes) {
             this._refreshGlueObjectAttributes()
@@ -174,6 +187,10 @@ class BaseGlueProxy {
                 target[key] = sourceValue
             }
         })
+    }
+
+    get _hasPopulatedState() {
+        return this._state && typeof this._state === 'object' && Object.keys(this._state).length > 0
     }
 
     _configureAttributeInitializers() {
@@ -305,9 +322,6 @@ class BaseGlueProxy {
                 state: nestedState,
                 metadata: nestedMetadata,
             })
-            if (Object.keys(nestedState).length > 0) {
-                proxy[cacheKey]._loaded = true
-            }
         }
 
         Object.defineProperty(owner, attributeName, {
@@ -320,11 +334,8 @@ class BaseGlueProxy {
                         metadata: nestedMetadata,
                         owner: proxy,
                         client: proxy._client,
+                        loadingStrategy: proxy._loadingStrategy,
                     })
-                    // Mark as loaded if state was provided (eager loading)
-                    if (Object.keys(nestedState).length > 0) {
-                        nestedProxy._loaded = true
-                    }
                     proxy[cacheKey] = nestedProxy
                 }
 
@@ -437,6 +448,37 @@ class BaseGlueProxy {
             ...(this._listeners[when]?.['*'] || []),
         ]
         listeners.forEach(listener => listener(payload))
+    }
+
+    _convertResultManifestsToProxies(result) {
+        if (!this._client) {
+            return result
+        }
+
+        if (Array.isArray(result)) {
+            return result.map(item => this._convertResultManifestsToProxies(item))
+        }
+
+        if (!result || typeof result !== 'object') {
+            return result
+        }
+
+        if (this._resultIsManifest(result)) {
+            return this._client._createProxy(result)
+        }
+
+        Object.keys(result).forEach(key => {
+            result[key] = this._convertResultManifestsToProxies(result[key])
+        })
+        return result
+    }
+
+    _resultIsManifest(result) {
+        return Boolean(
+            result?.policy?.name
+            && result?.policy?.namespace
+            && result?.metadata !== undefined
+        )
     }
 }
 

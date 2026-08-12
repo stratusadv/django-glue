@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Any, TYPE_CHECKING
 
+from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
@@ -13,9 +14,11 @@ from django_glue.exceptions import (
 )
 from django_glue.glue.attributes.callable import CallableAttribute
 from django_glue.glue.attributes.collector import GlueAttributeCollector
+from django_glue.glue.attributes.declared import DeclaredAttribute
 from django_glue.glue.attributes.glue_object import GlueObjectAttribute
 from django_glue.glue.attributes.state import StateAttribute
 from django_glue.glue.context import GlueManifest
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
@@ -36,10 +39,18 @@ class BaseGlue(ABC):
         *,
         name: str | None = None,
         access: GlueAccess,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
         self.name = name or self.namespace
         self.access = access
+        self.loading_strategy = LoadingStrategy(loading_strategy)
         self.request: HttpRequest | None = None
+
+    @property
+    def resolved_loading_strategy(self) -> LoadingStrategy:
+        if self.loading_strategy == LoadingStrategy.INHERIT:
+            return LoadingStrategy.LAZY
+        return self.loading_strategy
 
     @property
     def is_bound(self) -> bool:
@@ -65,6 +76,8 @@ class BaseGlue(ABC):
         return GlueManifest(
             policy=self.policy,
             metadata=self.metadata,
+            state=self.state if self.resolved_loading_strategy == LoadingStrategy.EAGER else {},
+            loading_strategy=self.resolved_loading_strategy,
         )
 
     @cached_property
@@ -82,6 +95,9 @@ class BaseGlue(ABC):
     @property
     def attribute_providers(self) -> dict[str, Any]:
         """Objects whose @Attribute-decorated members are exposed through this GlueObject."""
+        return self.get_attribute_providers()
+
+    def get_attribute_providers(self) -> dict[str, Any]:
         return {}
 
     @property
@@ -95,6 +111,9 @@ class BaseGlue(ABC):
 
         Override in subclasses for custom behavior.
         """
+        return self.get_identity()
+
+    def get_identity(self) -> dict[str, Any]:
         return self._build_identity_from_attributes()
 
     def _build_identity_from_attributes(self) -> dict[str, Any]:
@@ -123,6 +142,9 @@ class BaseGlue(ABC):
     @cached_property
     def state(self) -> dict[str, Any]:
         """Build mutable state from attributes."""
+        return self.get_state()
+
+    def get_state(self) -> dict[str, Any]:
         return {
             name: attribute.state
             for name, attribute in self.attributes.items()
@@ -132,6 +154,9 @@ class BaseGlue(ABC):
     @cached_property
     def metadata(self) -> dict[str, Any]:
         """Build non-authoritative client metadata for target."""
+        return self.get_metadata()
+
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attr.metadata
@@ -194,6 +219,10 @@ class BaseGlue(ABC):
 
     def _invalidate_state(self) -> None:
         self.__dict__.pop('state', None)
+
+    @DeclaredAttribute(access=GlueAccess.VIEW, loads_state=False)
+    def load_state(self) -> dict[str, Any]:
+        return self.state
 
     def process_attribute_call(
         self,

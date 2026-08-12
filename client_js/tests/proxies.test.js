@@ -52,7 +52,7 @@ function querySet() {
     return new GlueQuerySetProxy({
         http: http(),
         policy: queryPolicy(),
-        state: {items: []},
+        state: {},
         metadata: queryMetadata(),
     })
 }
@@ -236,7 +236,7 @@ describe('Glue proxies', () => {
         expect(updatedItem.date).toBe('2026-08-11')
     })
 
-    test('collections mark state-backed model item proxies as loaded', async () => {
+    test('eager collections mark item proxies as loaded', async () => {
         let fetchCalled = false
         global.fetch = async () => {
             fetchCalled = true
@@ -273,10 +273,12 @@ describe('Glue proxies', () => {
                     },
                 },
             },
+            loadingStrategy: 'eager',
         })
 
         const item = collection.items[0]
 
+        expect(item._loaded).toBe(true)
         expect(item.name).toBe('Koko')
         await new Promise(resolve => setTimeout(resolve, 0))
         expect(fetchCalled).toBe(false)
@@ -507,17 +509,17 @@ describe('Glue proxies', () => {
         expect(object.$fields.name.value).toBe('Ndume')
     })
 
-    test('field proxy value access triggers lazy loading', async () => {
-        let loadCalled = false
+    test('field proxy value access triggers lazy loading via load_state', async () => {
+        let loadStateCalled = false
         global.fetch = async (_url, options) => {
-            loadCalled = options.body.get('attribute') === 'load'
+            loadStateCalled = options.body.get('attribute') === 'load_state'
             return new Response(JSON.stringify({
-                result: {state: {groups: {value: [1], errors: []}}},
+                result: {groups: {value: [1], errors: []}},
                 state: {groups: {value: [1], errors: []}},
                 policy: createPolicy({
                     name: 'group_form',
                     namespace: 'form',
-                    attributes: ['groups', 'load'],
+                    attributes: ['groups', 'load_state'],
                 }),
                 metadata: {
                     namespace: 'form',
@@ -528,7 +530,7 @@ describe('Glue proxies', () => {
                             choices: [],
                             choice_model_path: 'django_spire.auth.group.models.AuthGroup',
                         },
-                        load: {namespace: 'callable'},
+                        load_state: {namespace: 'callable'},
                     },
                 },
             }), {status: 200, headers: {'Content-Type': 'application/json'}})
@@ -538,7 +540,7 @@ describe('Glue proxies', () => {
             policy: createPolicy({
                 name: 'group_form',
                 namespace: 'form',
-                attributes: ['groups', 'load'],
+                attributes: ['groups', 'load_state'],
             }),
             metadata: {
                 namespace: 'form',
@@ -549,13 +551,13 @@ describe('Glue proxies', () => {
                         choices: [],
                         choice_model_path: 'django_spire.auth.group.models.AuthGroup',
                     },
-                    load: {namespace: 'callable'},
+                    load_state: {namespace: 'callable'},
                 },
             },
         })
 
         expect(form.$fields.groups.hasChoiceSelected(1)).toBe(false)
-        expect(loadCalled).toBe(true)
+        expect(loadStateCalled).toBe(true)
         await new Promise(resolve => setTimeout(resolve, 0))
 
         expect(form.$fields.groups.hasChoiceSelected(1)).toBe(true)
@@ -724,7 +726,7 @@ describe('Glue proxies', () => {
         const rows = [modelRow('gorillas.1', 1), modelRow('gorillas.2', 2)]
         global.fetch = async () => new Response(JSON.stringify({
             result: {items: rows},
-            state: {items: []},
+            state: {},
             policy: queryPolicy(),
             metadata: queryMetadata(),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
@@ -749,10 +751,10 @@ describe('Glue proxies', () => {
                 name: 'gorillas',
                 namespace: 'querySet',
                 attributes: ['get', 'query_with_params'],
-                identity: {eager: true},
             }),
             state: {items: rows},
             metadata: queryMetadata(),
+            loadingStrategy: 'eager',
         })
 
         const result = await object.all()
@@ -782,10 +784,10 @@ describe('Glue proxies', () => {
                 name: 'gorillas',
                 namespace: 'querySet',
                 attributes: ['get', 'query_with_params'],
-                identity: {eager: true},
             }),
             state: {items: rows},
             metadata: queryMetadata(),
+            loadingStrategy: 'eager',
         })
 
         const filtered = await object.filter({name__icontains: 'ndume'}).all()
@@ -818,7 +820,7 @@ describe('Glue proxies', () => {
         }]
         global.fetch = async () => new Response(JSON.stringify({
             result: {items: rows},
-            state: {items: []},
+            state: {},
             policy: queryPolicy(),
             metadata: queryMetadata(),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
@@ -848,7 +850,7 @@ describe('Glue proxies', () => {
         expect(attribute).toBe('get')
         expect(kwargs).toEqual({pk: 3})
         expect(item).toBeInstanceOf(GlueModelProxy)
-        expect(item.$collection).toBe(object)
+        expect(item.$owner).toBe(object)
         expect(item.name).toBe('gorillas.3')
     })
 
@@ -884,7 +886,7 @@ describe('Glue proxies', () => {
             kwargs = JSON.parse(options.body.get('kwargs'))
             return new Response(JSON.stringify({
                 result: {items: []},
-                state: {items: []},
+                state: {},
                 policy: queryPolicy(),
                 metadata: queryMetadata(),
             }), {status: 200, headers: {'Content-Type': 'application/json'}})
@@ -968,12 +970,13 @@ describe('Foreign key proxy handling', () => {
             policy: childPolicy,
             state: childState,
             metadata: childMetadata,
+            loadingStrategy: 'eager',
         })
-        proxy._loaded = true
 
         // parent should be a nested model proxy
         expect(proxy.parent).toBeInstanceOf(GlueModelProxy)
-        // Nested proxy should be marked as loaded (has state)
+        // Nested proxy inherits parent's loading strategy
+        expect(proxy.parent._loadingStrategy).toBe('eager')
         expect(proxy.parent._loaded).toBe(true)
         // Access fields without triggering load
         expect(proxy.parent.id).toBe(1)

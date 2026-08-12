@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, TypeAlias
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.loading import LoadingStrategy
 
 if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
@@ -23,16 +24,15 @@ class JsonGlue(BaseGlue):
         *,
         name: str,
         access: GlueAccess = GlueAccess.VIEW,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.target: JsonValue = self._normalize_json_value(target)
 
-    @property
-    def identity(self) -> dict[str, JsonValue]:
+    def get_identity(self) -> dict[str, JsonValue]:
         return {'value': self.target}
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'type': self._type_name(self.target),
             'attributes': {},

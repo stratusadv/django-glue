@@ -7,12 +7,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this._modelProxies = new Map()
         this._queryParams = options.queryParams || {}
         this._queryCache = {}
-        this._loaded = false
         this.loading = false
 
         if (this._canHydrateFromState()) {
             this._syncFromResult(this._state)
-            this._loaded = true
         }
     }
 
@@ -73,10 +71,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     _buildModelProxy(row, existingProxy = null) {
         if (row instanceof GlueModelProxy) {
             row._loaded = true
-            row.$collection = this
             return row
         }
 
+        const rowLoadingStrategy = row.loading_strategy || this._loadingStrategy
         let proxy = existingProxy
 
         if (proxy) {
@@ -84,6 +82,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
                 policy: row.policy,
                 state: row.state,
                 metadata: row.metadata || this._metadata,
+                loading_strategy: rowLoadingStrategy,
             })
         } else {
             proxy = new GlueModelProxy({
@@ -93,11 +92,11 @@ class GlueQuerySetProxy extends BaseGlueProxy {
                 metadata: row.metadata || this._metadata,
                 client: this._client,
                 owner: this,
+                loadingStrategy: rowLoadingStrategy,
             })
         }
 
         proxy._loaded = true
-        proxy.$collection = this
         return proxy
     }
 
@@ -129,17 +128,18 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return new this.constructor({
             http: this._http,
             policy: this._policy,
-            state: this._state,
+            state: {},
             metadata: this._metadata,
             client: this._client,
             owner: this._owner,
             queryParams: this._mergeQueryParams(params),
+            loadingStrategy: 'lazy',
         })
     }
 
     _canHydrateFromState() {
         return Boolean(
-            this._policy?.identity?.eager
+            this._loaded
             && Array.isArray(this._state?.items)
             && !this._hasQueryParams()
         )

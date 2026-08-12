@@ -92,23 +92,22 @@ describe('GlueClient', () => {
         })).toThrow('already registered')
     })
 
-    test('hydrates glue payloads into proxies', () => {
+    test('creates proxy from manifest without registering', () => {
         const client = new GlueClient({manifest_list: []})
-        const result = client.hydrateGluePayloads({
-            day_collection: {
-                policy: createPolicy({
-                    name: 'time_entry_days',
-                    namespace: 'collection',
-                    identity: {},
-                    attributes: [],
-                }),
-                state: {},
-                metadata: {attributes: {}},
-            },
+        const proxy = client._createProxy({
+            policy: createPolicy({
+                name: 'time_entry_days',
+                namespace: 'collection',
+                identity: {},
+                attributes: [],
+            }),
+            state: {},
+            metadata: {attributes: {}},
         })
 
-        expect(result.day_collection._name).toBe('time_entry_days')
-        expect(client.collection.time_entry_days._name).toBe('time_entry_days')
+        expect(proxy._name).toBe('time_entry_days')
+        // Should NOT be registered on the client namespace
+        expect(client.collection).toBeUndefined()
     })
 
     test('registers function proxies as callables', async () => {

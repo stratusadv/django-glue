@@ -8,6 +8,7 @@ from django_glue.access import GlueAccess
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.collection import CollectionGlue
 from django_glue.glue.context import GlueContextManager
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
@@ -80,6 +81,7 @@ FormOrClass = Union[ModelForm, type[ModelForm]]
 
 class Glue:
     Access = GlueAccess
+    LoadingStrategy = LoadingStrategy
     attribute = DeclaredAttribute
     property = _GluePropertyDescriptor
     Response = GlueResponse
@@ -98,11 +100,13 @@ class Glue:
         unique_name: str,
         items: Iterable[BaseGlue],
         access: GlueAccess = GlueAccess.VIEW,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> CollectionGlue:
         return Glue.object(request, CollectionGlue(
             list(items),
             name=unique_name,
             access=access,
+            loading_strategy=loading_strategy,
         ))
 
     @staticmethod
@@ -117,6 +121,8 @@ class Glue:
         forms: Mapping[str, FormOrClass] | None = None,
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
+        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> ModelGlue:
         return Glue.object(
             request=request,
@@ -130,6 +136,8 @@ class Glue:
                 forms=forms,
                 select_related=select_related,
                 computed_attributes=computed_attributes,
+                related_field_config=related_field_config,
+                loading_strategy=loading_strategy,
             ),
         )
 
@@ -144,6 +152,8 @@ class Glue:
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
+        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> QuerySetGlue:
         return Glue.object(
             request=request,
@@ -156,6 +166,8 @@ class Glue:
                 form=form,
                 forms=forms,
                 computed_attributes=computed_attributes,
+                related_field_config=related_field_config,
+                loading_strategy=loading_strategy,
             ),
         )
 
@@ -165,6 +177,7 @@ class Glue:
         unique_name: str,
         target: BaseForm,
         access: GlueAccess = GlueAccess.CHANGE,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> FormGlue:
         return Glue.object(
             request=request,
@@ -172,6 +185,7 @@ class Glue:
                 form=target,
                 name=unique_name,
                 access=access,
+                loading_strategy=loading_strategy,
             ),
         )
 
@@ -181,6 +195,7 @@ class Glue:
         unique_name: str,
         target: str,
         initial_context_data: dict | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> TemplateGlue:
         return Glue.object(
             request=request,
@@ -189,6 +204,7 @@ class Glue:
                 name=unique_name,
                 access=GlueAccess.VIEW,
                 initial_context_data=initial_context_data,
+                loading_strategy=loading_strategy,
             ),
         )
 
@@ -197,6 +213,7 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> FunctionGlue:
         return Glue.object(
             request=request,
@@ -204,6 +221,7 @@ class Glue:
                 target,
                 name=unique_name,
                 access=GlueAccess.VIEW,
+                loading_strategy=loading_strategy,
             ),
         )
 
@@ -213,6 +231,7 @@ class Glue:
         unique_name: str,
         target: JsonValue,
         access: GlueAccess = GlueAccess.VIEW,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> JsonGlue:
         return Glue.object(
             request=request,
@@ -220,5 +239,6 @@ class Glue:
                 target,
                 name=unique_name,
                 access=access,
+                loading_strategy=loading_strategy,
             ),
         )
