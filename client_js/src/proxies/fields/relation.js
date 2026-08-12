@@ -30,7 +30,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get selectedChoice() {
         const pk = this.pk
         if (pk == null) return undefined
-        return (this._choices || []).find(choice => String(choice.value) === String(pk))
+        return (this.choices || []).find(choice => String(choice.value) === String(pk))
     }
 
     buildChoices(...choiceFields) {

@@ -39,11 +39,12 @@ class GluePolicy(BaseModel):
         for attr_name, attr in glue_object.attributes.items():
             nested_glue = getattr(attr, 'glue_object', None)
             if nested_glue is not None:
-                # Attribute is a nested glue object - include its policy
-                nested_glue.request = glue_object.request
+                if hasattr(attr, '_prepare_glue_object'):
+                    nested_glue = attr._prepare_glue_object()
+                else:
+                    nested_glue.request = glue_object.request
                 attributes.append(cls.from_glue_object(glue_object=nested_glue))
             else:
-                # Simple attribute - just include the name
                 attributes.append(attr_name)
 
         return cls.new_signed_policy({

@@ -22,8 +22,10 @@ from django_glue.glue import (
     GluePolicy,
     FunctionGlue,
     JsonGlue,
+    CollectionGlue,
     GlueClassRegistry,
 )
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
@@ -31,6 +33,7 @@ from django_glue.exceptions import (
     GlueInvalidAttributeError,
     GlueInvalidPolicyError,
 )
+from django_glue.response import GlueResponse
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.fight.models import Fight
@@ -159,6 +162,45 @@ class NestedDashboardGlue(BaseGlue):
                 for name, attribute in self.attributes.items()
             },
         }
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
+
+
+class NamespaceDefaultGlue(BaseGlue):
+    namespace = 'namespaceDefault'
+
+    def __init__(self):
+        super().__init__(access=GlueAccess.VIEW)
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
+
+
+class CollectionDashboardGlue(BaseGlue):
+    namespace = 'collectionDashboard'
+    day_collection = DeclaredAttribute(
+        CollectionGlue([NestedStatsGlue()], name='internal_days'),
+        access=GlueAccess.VIEW,
+    )
+
+    def __init__(self):
+        super().__init__(name='collectionDashboard', access=GlueAccess.VIEW)
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
+
+
+class DescriptorDefaultGlue(BaseGlue):
+    namespace = 'descriptorDefault'
+    count = DeclaredAttribute(0, access=GlueAccess.VIEW)
+    values = DeclaredAttribute(access=GlueAccess.VIEW, default_factory=list)
+
+    def __init__(self):
+        super().__init__(name='descriptorDefault', access=GlueAccess.VIEW)
 
     @classmethod
     def _reconstruct_from_policy(cls, policy):
@@ -377,8 +419,190 @@ class AllFieldsTestCase(TestCase):
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertNotIn('signature', row['state'])
 
+    def test_queryset_all_fields_uses_fk_attnames(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        red_gorilla = Gorilla.objects.create(name='Red Koko')
+        blue_gorilla = Gorilla.objects.create(name='Blue Bobo')
+        Fight.objects.create(
+            name='Championship',
+            red_corner=red_gorilla,
+            blue_corner=blue_gorilla,
+        )
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=ALL_FIELDS,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        result = glue_object.query_with_params()
+
+        row = result['items'][0]
+        self.assertIn('red_corner_id', row['state'])
+        self.assertNotIn('red_corner', row['state'])
+
+    def test_queryset_all_fields_includes_select_related_forward_relations(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        red_gorilla = Gorilla.objects.create(name='Red Koko')
+        blue_gorilla = Gorilla.objects.create(name='Blue Bobo')
+        Fight.objects.create(
+            name='Championship',
+            red_corner=red_gorilla,
+            blue_corner=blue_gorilla,
+        )
+        glue_object = QuerySetGlue(
+            Fight.objects.select_related('red_corner'),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=ALL_FIELDS,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        self.assertIn('red_corner_id', glue_object._included_fields)
+        self.assertIn('red_corner', glue_object._included_fields)
+        self.assertIn('blue_corner_id', glue_object._included_fields)
+        self.assertNotIn('blue_corner', glue_object._included_fields)
+
+        result = glue_object.query_with_params()
+
+        row = result['items'][0]
+        self.assertIn('red_corner_id', row['state'])
+        self.assertIn('red_corner', row['state'])
+        self.assertIn('name', row['state']['red_corner'])
+        self.assertEqual(row['state']['red_corner']['name']['value'], 'Red Koko')
+        self.assertIn('blue_corner_id', row['state'])
+        self.assertNotIn('blue_corner', row['state'])
+
 
 class GluePolicyTestCase(TestCase):
+    def test_base_glue_defaults_name_to_namespace(self):
+        glue_object = with_request(NamespaceDefaultGlue())
+
+        policy = glue_object.policy
+
+        self.assertEqual(policy.name, 'namespaceDefault')
+        self.assertEqual(policy.namespace, 'namespaceDefault')
+
+    def test_declared_attribute_defaults_are_instance_values(self):
+        first = DescriptorDefaultGlue()
+        second = DescriptorDefaultGlue()
+
+        first.values.append('first')
+        first.count = 2
+
+        self.assertEqual(first.values, ['first'])
+        self.assertEqual(second.values, [])
+        self.assertEqual(first.count, 2)
+        self.assertEqual(second.count, 0)
+
+    def test_declared_glue_object_default_is_copied_per_instance(self):
+        first = CollectionDashboardGlue()
+        second = CollectionDashboardGlue()
+
+        first.day_collection.items.append(DeclaredStateGlue())
+
+        self.assertIsNot(first.day_collection, second.day_collection)
+        self.assertIsNot(first.day_collection.items[0], second.day_collection.items[0])
+        self.assertEqual(len(first.day_collection.items), 2)
+        self.assertEqual(len(second.day_collection.items), 1)
+
+    def test_state_reads_nested_glue_attribute_state_once(self):
+        glue_object = with_request(NestedDashboardGlue())
+        original_state = GlueObjectAttribute.state.fget
+        call_count = 0
+
+        def counted_state(attribute):
+            nonlocal call_count
+            call_count += 1
+            return original_state(attribute)
+
+        GlueObjectAttribute.state = property(counted_state)
+        try:
+            glue_object.state
+        finally:
+            GlueObjectAttribute.state = property(original_state)
+
+        self.assertEqual(call_count, 1)
+
+    def test_nested_glue_object_name_comes_from_attribute_path(self):
+        glue_object = with_request(CollectionDashboardGlue())
+
+        nested_policy = next(
+            attribute
+            for attribute in glue_object.policy.attributes
+            if hasattr(attribute, 'namespace') and attribute.namespace == 'collection'
+        )
+
+        self.assertIn('day_collection', glue_object.state)
+        self.assertNotIn('internal_days', glue_object.state)
+        self.assertEqual(nested_policy.name, 'collectionDashboard.day_collection')
+        self.assertEqual(nested_policy.attributes[0].name, 'collectionDashboard.day_collection.items.0')
+
+    def test_collection_policy_contains_ordered_item_refs(self):
+        glue_object = with_request(CollectionGlue(
+            [
+                NestedStatsGlue(),
+                DeclaredStateGlue(),
+            ],
+            name='dashboard_items',
+            access=GlueAccess.VIEW,
+        ))
+
+        policy = glue_object.policy
+
+        self.assertEqual(policy.namespace, 'collection')
+        self.assertEqual(policy.identity, {})
+        self.assertEqual([
+            attribute.namespace
+            for attribute in policy.attributes
+        ], ['stats', 'declared_state'])
+        self.assertEqual([
+            attribute.name
+            for attribute in policy.attributes
+        ], ['dashboard_items.items.0', 'dashboard_items.items.1'])
+        self.assertEqual(glue_object.state['items.0'], {})
+        self.assertEqual(glue_object.state['items.1']['count']['value'], 3)
+
+    def test_collection_shortcut_registers_collection_only(self):
+        request = request_with_session()
+
+        collection = Glue.collection(request, 'dashboard_items', [
+            NestedStatsGlue(),
+            DeclaredStateGlue(),
+        ])
+
+        manifests = request.__dict__['__glue_manifest__']
+
+        self.assertIsInstance(collection, CollectionGlue)
+        self.assertEqual([manifest.name for manifest in manifests], ['dashboard_items'])
+        self.assertEqual([
+            attribute.name
+            for attribute in collection.policy.attributes
+        ], ['dashboard_items.items.0', 'dashboard_items.items.1'])
+
+    def test_response_serializes_returned_glue_objects(self):
+        glue_object = with_request(NestedDashboardGlue())
+        collection = CollectionGlue(
+            [NestedStatsGlue()],
+            name='dashboard_items',
+            access=GlueAccess.VIEW,
+        )
+
+        response = GlueResponse.from_result({
+            'day_collection': collection,
+        }).to_payload()
+        serialized = GlueResponse._serialize_glue_values(response, glue_object)
+
+        payload = serialized['result']['day_collection']
+        self.assertEqual(payload['policy']['namespace'], 'collection')
+        self.assertEqual(payload['policy']['name'], 'dashboard_items')
+        self.assertIn('state', payload)
+
     def test_signed_policy_validates_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
@@ -493,11 +717,14 @@ class DjangoModelGlueObjectTestCase(TestCase):
         metadata = glue_object.metadata
         skills_metadata = metadata['attributes']['skills']
 
+        # M2M fields are now exposed as nested QuerySetGlue proxies
         self.assertEqual(skills_metadata['type'], 'ManyToManyField')
-        self.assertEqual(skills_metadata['choices'], [])
-        self.assertEqual(skills_metadata['pk_field'], Skill._meta.pk.name)
-        self.assertEqual(skills_metadata['choice_model_path'], 'test_project.gorilla.models.Skill')
-        self.assertIn('choices_cache_key', skills_metadata)
+        self.assertEqual(skills_metadata['namespace'], 'related_set')
+        self.assertEqual(skills_metadata['relation_type'], 'm2m')
+        self.assertEqual(skills_metadata['related_model'], 'test_project.gorilla.models.Skill')
+        self.assertIn('lazy', skills_metadata)
+        self.assertIn('glue_namespace', skills_metadata)
+        self.assertEqual(skills_metadata['glue_namespace'], 'querySet')
 
     def test_model_foreign_key_choices_returns_related_choices(self):
         skill = Skill.objects.create(name='Grappling')
@@ -798,13 +1025,16 @@ class DjangoModelGlueObjectTestCase(TestCase):
         metadata = glue_object.metadata
         state = glue_object.state
 
-        self.assertIn('stats', policy.attributes)
-        self.assertIn('stats.score', policy.attributes)
-        self.assertIn('stats.reset', policy.attributes)
-        self.assertIsInstance(glue_object.attributes['stats'], CompositeStateAttribute)
-        self.assertEqual(metadata['attributes']['stats']['namespace'], 'composite')
-        self.assertEqual(metadata['attributes']['stats.score']['namespace'], 'callable')
-        self.assertEqual(metadata['attributes']['stats.reset']['namespace'], 'callable')
+        # Find the nested policy (not a string attribute like 'load_state')
+        nested_policy = next(attr for attr in policy.attributes if hasattr(attr, 'name'))
+        self.assertEqual(nested_policy.name, 'dashboard.stats')
+        self.assertEqual(nested_policy.namespace, 'stats')
+        self.assertIn('score', nested_policy.attributes)
+        self.assertIn('reset', nested_policy.attributes)
+        self.assertEqual(metadata['attributes']['stats']['namespace'], 'glue')
+        self.assertEqual(metadata['attributes']['stats']['glue_namespace'], 'stats')
+        self.assertEqual(metadata['attributes']['stats']['metadata']['attributes']['score']['namespace'], 'callable')
+        self.assertEqual(metadata['attributes']['stats']['metadata']['attributes']['reset']['namespace'], 'callable')
         self.assertIn('stats', state)
 
         context = AttributeCallRequestContext.model_construct(
@@ -906,7 +1136,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         ))
 
         resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
-        state = resolved.load()['state']
+        state = resolved.load_state()
 
         self.assertEqual(state['name']['value'], 'Initial Name')
         self.assertEqual(state['age']['value'], 7)
@@ -1018,6 +1248,42 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertEqual(row['metadata']['attributes']['name']['type'], 'CharField')
+
+    def test_queryset_eager_state_contains_child_model_proxy_payloads(self):
+        gorilla = Gorilla.objects.create(name='Koko')
+        request = request_with_session()
+        glue_object = QuerySetGlue(
+            Gorilla.objects.filter(pk=gorilla.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+            loading_strategy=LoadingStrategy.EAGER,
+        )
+        glue_object.request = request
+
+        manifest = glue_object.manifest.model_dump()
+        state = manifest['state']
+        row = state['items'][0]
+
+        self.assertEqual(manifest['loading_strategy'], 'eager')
+        self.assertEqual(row['policy']['namespace'], 'model')
+        self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
+        self.assertEqual(row['state']['name']['value'], 'Koko')
+
+    def test_queryset_loading_strategy_not_in_policy_identity(self):
+        glue_object = with_request(QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+            loading_strategy=LoadingStrategy.EAGER,
+        ))
+
+        # loading_strategy should NOT be in policy identity - it's transport behavior, not capability
+        self.assertNotIn('eager', glue_object.policy.identity)
+        self.assertNotIn('loading_strategy', glue_object.policy.identity)
+        # But it should be in the manifest
+        self.assertEqual(glue_object.manifest.loading_strategy, LoadingStrategy.EAGER)
 
     def test_queryset_with_computed_attributes_adds_attribute_to_child_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
@@ -1171,10 +1437,12 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             fields=['id', 'name'],
         )
         glue_object.request = request
+        original_policy = glue_object.policy
 
+        # First query with slice - should not affect the original policy
         context = AttributeCallRequestContext.model_construct(
             request=request,
-            target_glue_policy=glue_object.policy,
+            target_glue_policy=original_policy,
             target_glue_client_state={},
             target_attribute_name='query_with_params',
             target_attribute_call_kwargs={
@@ -1182,11 +1450,10 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
                 'slice': {'start': 0, 'stop': 1},
             },
         )
-        response = glue_object.process_attribute_call(context)
-        response_data = json.loads(response.content)
-        resolved = QuerySetGlue._reconstruct_from_policy(
-            GluePolicy.model_validate(response_data['policy'])
-        )
+        glue_object.process_attribute_call(context)
+
+        # Reconstruct from original policy (not response) and query again
+        resolved = QuerySetGlue._reconstruct_from_policy(original_policy)
         resolved.request = request
 
         result = resolved.query_with_params(
@@ -1282,9 +1549,9 @@ def gorilla_badge_data_with_suffix(gorilla: Gorilla, suffix: str = '') -> dict[s
 
 
 class LazyLoadingTestCase(TestCase):
-    """Tests for lazy loading behavior - state is not included in manifests."""
+    """Tests for lazy loading behavior - state is empty in lazy manifests."""
 
-    def test_model_manifest_does_not_include_state(self):
+    def test_model_lazy_manifest_has_empty_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = with_request(ModelGlue(gorilla, **glue_context(), fields=['name']))
 
@@ -1292,18 +1559,20 @@ class LazyLoadingTestCase(TestCase):
 
         self.assertIn('policy', manifest)
         self.assertIn('metadata', manifest)
-        self.assertNotIn('state', manifest)
+        self.assertIn('state', manifest)
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
-    def test_model_load_attribute_returns_state(self):
+    def test_model_load_state_attribute_returns_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = ModelGlue(gorilla, **glue_context(), fields=['name'])
 
-        result = glue_object.load()
+        result = glue_object.load_state()
 
-        self.assertIn('state', result)
-        self.assertEqual(result['state']['name']['value'], 'Koko')
+        self.assertIn('name', result)
+        self.assertEqual(result['name']['value'], 'Koko')
 
-    def test_model_load_does_not_hydrate_stale_client_state(self):
+    def test_model_load_state_does_not_hydrate_stale_client_state(self):
         gorilla = Gorilla.objects.create(name='Koko')
         glue_object = with_request(ModelGlue(gorilla, **glue_context(), fields=['name']))
         policy = glue_object.policy
@@ -1314,16 +1583,16 @@ class LazyLoadingTestCase(TestCase):
             request=glue_object.request,
             target_glue_policy=policy,
             target_glue_client_state={'name': {'value': 'Koko'}},
-            target_attribute_name='load',
+            target_attribute_name='load_state',
             target_attribute_call_kwargs={},
         )
         resolved = ModelGlue.from_attribute_call_resolver_context(context)
 
-        result = resolved.load()
+        result = resolved.load_state()
 
-        self.assertEqual(result['state']['name']['value'], 'Ndume')
+        self.assertEqual(result['name']['value'], 'Ndume')
 
-    def test_form_manifest_does_not_include_state(self):
+    def test_form_lazy_manifest_has_empty_state(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
         glue_object = with_request(FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE)))
 
@@ -1331,29 +1600,31 @@ class LazyLoadingTestCase(TestCase):
 
         self.assertIn('policy', manifest)
         self.assertIn('metadata', manifest)
-        self.assertNotIn('state', manifest)
+        self.assertIn('state', manifest)
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
-    def test_form_load_attribute_returns_state(self):
+    def test_form_load_state_attribute_returns_state(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
         glue_object = FormGlue(form, **glue_context(name='contact', access=GlueAccess.CHANGE))
 
-        result = glue_object.load()
+        result = glue_object.load_state()
 
-        self.assertIn('state', result)
-        self.assertIn('name', result['state'])
-        self.assertEqual(result['state']['name']['value'], 'Ada')
+        self.assertIn('name', result)
+        self.assertEqual(result['name']['value'], 'Ada')
 
-    def test_queryset_state_returns_empty_dict(self):
+    def test_lazy_queryset_manifest_has_empty_state(self):
         Gorilla.objects.create(name='Koko')
         queryset = Gorilla.objects.all()
-        glue_object = QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name'])
+        glue_object = with_request(QuerySetGlue(queryset, **glue_context(name='gorillas'), fields=['name']))
 
-        state = glue_object.state
+        manifest = glue_object.manifest.model_dump()
 
-        self.assertEqual(state, {})
+        self.assertEqual(manifest['state'], {})
+        self.assertEqual(manifest['loading_strategy'], 'lazy')
 
     def test_queryset_query_with_params_returns_items_with_state(self):
-        gorilla = Gorilla.objects.create(name='Koko')
+        Gorilla.objects.create(name='Koko')
         queryset = Gorilla.objects.all()
         request = request_with_session()
         glue_object = QuerySetGlue(
@@ -1363,7 +1634,6 @@ class LazyLoadingTestCase(TestCase):
             fields=['name'],
         )
         glue_object.request = request
-        policy = glue_object.policy
 
         result = glue_object.query_with_params()
 
@@ -1480,6 +1750,47 @@ class ForeignKeyFieldTestCase(TestCase):
         self.assertIn('name', state['red_corner'])
         self.assertEqual(state['red_corner']['name']['value'], 'Red Koko')
 
+    def test_fk_related_field_config_limits_nested_state(self):
+        fight = Fight.objects.select_related('red_corner').get(pk=self.fight.pk)
+        glue_object = with_request(ModelGlue(
+            fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+            related_field_config={
+                'red_corner': {
+                    'fields': ['name'],
+                },
+            },
+        ))
+
+        state = glue_object.state
+
+        self.assertIn('red_corner', state)
+        self.assertIn('name', state['red_corner'])
+        self.assertNotIn('age', state['red_corner'])
+
+    def test_queryset_fk_related_field_config_limits_child_nested_state(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.select_related('red_corner'),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=['name', 'red_corner'],
+            related_field_config={
+                'red_corner': {
+                    'fields': ['name'],
+                },
+            },
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        result = glue_object.query_with_params()
+        state = result['items'][0]['state']
+
+        self.assertIn('red_corner', state)
+        self.assertIn('name', state['red_corner'])
+        self.assertNotIn('age', state['red_corner'])
+
     def test_lazy_fk_state_is_none(self):
         """When FK is not cached (lazy), state is None for the FK field."""
         # Clear the cached related instance
@@ -1591,3 +1902,226 @@ class ForeignKeyFieldTestCase(TestCase):
 
         self.assertIn('winner_id', state)
         self.assertIsNone(state['winner_id']['value'])
+
+    def test_all_fields_uses_fk_attname_without_nested_proxy(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=ALL_FIELDS,
+        ))
+
+        self.assertIn('red_corner_id', glue_object._included_fields)
+        self.assertNotIn('red_corner', glue_object._included_fields)
+        self.assertIn('red_corner_id', glue_object.attributes)
+        self.assertNotIn('red_corner', glue_object.attributes)
+        self.assertEqual(glue_object.state['red_corner_id']['value'], self.red_gorilla.pk)
+
+
+class RelatedSetFieldTestCase(TestCase):
+    """Tests for reverse FK and M2M fields as QuerySetGlue proxies."""
+
+    def setUp(self):
+        self.gorilla = Gorilla.objects.create(name='Koko', age=25)
+        self.skill1 = Skill.objects.create(name='Climbing')
+        self.skill2 = Skill.objects.create(name='Swimming')
+        self.gorilla.skills.add(self.skill1, self.skill2)
+
+        # For reverse FK tests
+        self.opponent = Gorilla.objects.create(name='Bobo', age=20)
+        self.fight = Fight.objects.create(
+            name='Fight 1',
+            red_corner=self.gorilla,
+            blue_corner=self.opponent,
+        )
+
+    # M2M Tests
+
+    def test_m2m_field_creates_related_set_attribute(self):
+        """M2M field should create RelatedSetFieldAttribute."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        self.assertIn('skills', glue_object.attributes)
+        self.assertEqual(
+            glue_object.attributes['skills'].metadata['namespace'],
+            'related_set'
+        )
+        self.assertEqual(
+            glue_object.attributes['skills'].metadata['relation_type'],
+            'm2m'
+        )
+
+    def test_m2m_lazy_state_is_none(self):
+        """When M2M is not prefetched, state should be None."""
+        gorilla = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        state = glue_object.state
+        self.assertIsNone(state['skills'])
+
+    def test_m2m_eager_state_includes_items(self):
+        """When M2M is prefetched, state should include items."""
+        gorilla = Gorilla.objects.prefetch_related('skills').get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        state = glue_object.state
+        self.assertIn('skills', state)
+        self.assertIn('items', state['skills'])
+        self.assertEqual(len(state['skills']['items']), 2)
+
+    def test_m2m_includes_nested_queryset_policy(self):
+        """M2M should include nested QuerySetGlue policy."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'skills' in a.name
+        ]
+
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0].namespace, 'querySet')
+
+    def test_m2m_metadata_includes_lazy_flag(self):
+        """M2M metadata should indicate lazy vs eager."""
+        # Lazy
+        gorilla_lazy = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_lazy = with_request(ModelGlue(
+            gorilla_lazy,
+            **glue_context(name='gorilla'),
+            fields=['skills'],
+        ))
+
+        # Eager
+        gorilla_eager = Gorilla.objects.prefetch_related('skills').get(pk=self.gorilla.pk)
+        glue_eager = with_request(ModelGlue(
+            gorilla_eager,
+            **glue_context(name='gorilla'),
+            fields=['skills'],
+        ))
+
+        self.assertTrue(glue_lazy.metadata['attributes']['skills']['lazy'])
+        self.assertFalse(glue_eager.metadata['attributes']['skills']['lazy'])
+
+    # Reverse FK Tests
+
+    def test_reverse_fk_creates_related_set_attribute(self):
+        """Reverse FK should create RelatedSetFieldAttribute."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        self.assertIn('fights_as_red_corner', glue_object.attributes)
+        self.assertEqual(
+            glue_object.attributes['fights_as_red_corner'].metadata['namespace'],
+            'related_set'
+        )
+        self.assertEqual(
+            glue_object.attributes['fights_as_red_corner'].metadata['relation_type'],
+            'reverse_fk'
+        )
+
+    def test_reverse_fk_lazy_state_is_none(self):
+        """When reverse FK is not prefetched, state should be None."""
+        gorilla = Gorilla.objects.get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        state = glue_object.state
+        self.assertIsNone(state['fights_as_red_corner'])
+
+    def test_reverse_fk_eager_state_includes_items(self):
+        """When reverse FK is prefetched, state should include items."""
+        gorilla = Gorilla.objects.prefetch_related('fights_as_red_corner').get(pk=self.gorilla.pk)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        state = glue_object.state
+        self.assertIn('fights_as_red_corner', state)
+        self.assertIn('items', state['fights_as_red_corner'])
+        self.assertEqual(len(state['fights_as_red_corner']['items']), 1)
+
+    def test_reverse_fk_includes_nested_queryset_policy(self):
+        """Reverse FK should include nested QuerySetGlue policy."""
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner'],
+        ))
+
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'fights_as_red_corner' in a.name
+        ]
+
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(nested[0].namespace, 'querySet')
+
+    # Edge Cases
+
+    def test_unsaved_instance_m2m_has_no_nested_glue(self):
+        """Unsaved instance should not have nested QuerySetGlue for M2M."""
+        gorilla = Gorilla(name='New')  # Not saved
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'skills'],
+        ))
+
+        # No nested policy for unsaved instance
+        policy = glue_object.policy
+        nested = [
+            a for a in policy.attributes
+            if hasattr(a, 'name') and 'skills' in a.name
+        ]
+        self.assertEqual(len(nested), 0)
+
+    def test_all_fields_excludes_relationship_proxies_by_default(self):
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=ALL_FIELDS,
+        ))
+
+        self.assertNotIn('skills', glue_object.attributes)
+        self.assertNotIn('fights_as_red_corner', glue_object.attributes)
+        self.assertNotIn('fights_as_blue_corner', glue_object.attributes)
+
+    def test_explicit_reverse_relation_can_be_excluded(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(name='gorilla'),
+            fields=['name', 'fights_as_red_corner', 'fights_as_blue_corner'],
+            exclude=['fights_as_red_corner', 'fights_as_blue_corner'],
+        ))
+
+        self.assertNotIn('fights_as_red_corner', glue_object.attributes)
+        self.assertNotIn('fights_as_blue_corner', glue_object.attributes)

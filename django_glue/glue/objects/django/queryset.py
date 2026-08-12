@@ -11,12 +11,14 @@ from django_glue.exceptions import GlueQuerySetFilterValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
+from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
 
 if TYPE_CHECKING:
     from django import forms
@@ -24,8 +26,9 @@ if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
 
 
-class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGlue):
+class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFieldResolutionMixin, BaseGlue):
     namespace = 'querySet'
+    globally_excluded_field_types = ModelGlue.globally_excluded_field_types
 
     def __init__(
         self,
@@ -38,8 +41,10 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
+        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.queryset = queryset
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
@@ -53,10 +58,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
             raise ValueError(msg)
 
         self.forms = self.normalize_forms(form, forms)
+        self.related_field_config = ModelGlue._normalize_related_field_config(related_field_config)
+        self._select_related = self._get_select_related_fields()
         self.initialize_computed_attributes(computed_attributes)
 
-    @property
-    def identity(self) -> dict[str, Any]:
+    def get_identity(self) -> dict[str, Any]:
         identity = {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
             'encoded_queryset': self._encode_queryset_query(self.queryset),
@@ -64,37 +70,24 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
+        if self.related_field_config:
+            identity['related_field_config'] = self.related_field_config
         identity |= self.computed_attributes_identity()
 
         return identity
 
-    @property
-    def attribute_providers(self) -> dict[str, Any]:
+    def get_attribute_providers(self) -> dict[str, Any]:
         return {}
 
-    @cached_property
-    def _included_fields(self) -> list[str]:
-        all_field_names = tuple(
-            field.name
-            for field in [
-                *self.queryset.model._meta.fields,
-                *self.queryset.model._meta.many_to_many
-            ]
-        )
-        names = all_field_names if self.fields == ALL_FIELDS or not self.fields else self.fields
-        excluded = set(all_field_names) if self.exclude == ALL_FIELDS else set(self.exclude)
-        return [
-            name
-            for name in names
-            if name not in excluded
-            and self.queryset.model._meta.get_field(name).get_internal_type()
-            not in ModelGlue.globally_excluded_field_types
-        ]
+    @property
+    def _model_meta(self) -> Any:
+        """Return the Django model's _meta options."""
+        return self.queryset.model._meta
 
-    @cached_property
-    def _select_related_fields(self) -> set[str]:
+    def _get_select_related_fields(self) -> set[str]:
         select_related = self.queryset.query.select_related
         if isinstance(select_related, dict):
+            # TODO: Preserve nested select_related paths instead of only top-level fields.
             return set(select_related.keys())
         return set()
 
@@ -108,8 +101,9 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
             fields=self._included_fields,
             annotations=self._orm_annotation_names,
             forms=self.forms,
-            select_related=self._select_related_fields,
+            select_related=self._select_related,
             computed_attributes=self.computed_attributes,
+            related_field_config=self.related_field_config,
         )
         # Get field attributes from the model, excluding model's declared attributes
         field_names = {
@@ -126,13 +120,15 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         attributes.update(super().attributes)
         return attributes
 
-    @property
-    def state(self) -> dict[str, Any]:
-        # QuerySet has no instance-level state - individual items have their own state
-        return {}
+    def get_state(self) -> dict[str, Any]:
+        return {
+            'items': [
+                self._build_child_model_payload(instance)
+                for instance in self.queryset
+            ],
+        }
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attribute.metadata
@@ -147,18 +143,16 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
         queryset = cls._decode_queryset_query(policy.identity['encoded_queryset'])
-        model_field_names = {
-            field.name
-            for field in [*queryset.model._meta.fields, *queryset.model._meta.many_to_many]
-        }
+        all_field_names = set(cls._all_available_field_names_for_meta(queryset.model._meta))
         fields = [
             attr
             for attr in policy.attributes
-            if isinstance(attr, str) and attr in model_field_names
+            if isinstance(attr, str) and attr in all_field_names
         ]
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {})
         )
+        related_field_config = policy.identity.get('related_field_config', {})
         return cls(
             queryset,
             name=policy.name,
@@ -166,6 +160,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
             fields=fields,
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
+            related_field_config=related_field_config,
         )
 
     @staticmethod
@@ -179,7 +174,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         queryset.query = query
         return queryset
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def query_with_params(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -207,11 +202,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
         items = [self._build_child_model_payload(instance) for instance in queryset]
         return {'items': items, 'query': {}}
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:
         return self._build_child_model_payload(self.queryset.get(pk=pk))
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(access=GlueAccess.VIEW, updates_client_state=False)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
         instance = self.queryset.model(**initial) if initial else self.queryset.model()
         return self._build_child_model_payload(instance=instance)
@@ -223,11 +218,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
             name: form.__class__(instance=instance)
             for name, form in self.forms.items()
         }
-        if self.queryset.query.select_related:
-            select_related = set(self.queryset.query.select_related)
-        else:
-            select_related = set()
-
+        # Child models in query results are always eager - they contain the fetched data
         child_object = ModelGlue(
             instance,
             name=child_name,
@@ -235,12 +226,15 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, BaseGl
             fields=self._included_fields,
             annotations=self._orm_annotation_names,
             forms=child_forms,
-            select_related=select_related,
+            select_related=self._select_related,
             computed_attributes=self.computed_attributes,
+            related_field_config=self.related_field_config,
+            loading_strategy=LoadingStrategy.EAGER,
         )
         child_object.request = self.request
 
-        return {
-            **child_object.manifest.model_dump(),
-            'state': child_object.state,
-        }
+        # Propagate visited relations for cycle detection in nested objects
+        if hasattr(self, '_visited_relations'):
+            child_object._visited_relations = self._visited_relations
+
+        return child_object.manifest.model_dump()

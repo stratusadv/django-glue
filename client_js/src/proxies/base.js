@@ -10,15 +10,26 @@ function isPlainObject(value) {
 }
 
 class BaseGlueProxy {
-    constructor({http, policy, state = {}, metadata = {}, owner = null}) {
+    constructor({
+        http,
+        policy,
+        state = {},
+        metadata = {},
+        owner = null,
+        client = null,
+        loadingStrategy = 'lazy'
+    }) {
         this._http = http
         this._policy = policy
         this._name = policy?.name
         this._state = state || {}
         this._metadata = metadata || {}
+        this._client = client
         this._listeners = {before: {}, after: {}, error: {}}
         this._onMessage = null
         this._onError = null
+        this._loadingStrategy = loadingStrategy
+        this._loaded = loadingStrategy === 'eager' || this._hasPopulatedState
 
         // Non-enumerable to prevent circular reference issues during serialization
         Object.defineProperty(this, '_owner', {
@@ -58,18 +69,24 @@ class BaseGlueProxy {
 
     async _callAttribute(attribute, kwargs = {}) {
         const attributeRequest = {attribute, kwargs}
+        const attributeMetadata = this._metadata?.attributes?.[attribute] || {}
         this._emit('before', attribute, {attributeRequest, object: this})
 
         try {
             const response = await this._http.sendAttributeRequest({
                 name: this._name,
                 policy: this._policy,
-                state: this._state,
+                state: this._stateForAttribute(attributeMetadata.takes_client_state),
                 attribute,
                 kwargs,
             })
 
             this._applyResponse(response.data)
+
+            const result = this._convertResultManifestsToProxies(response.data?.result)
+            if (response.data) {
+                response.data.result = result
+            }
 
             this._processMessages(response.data)
 
@@ -80,7 +97,7 @@ class BaseGlueProxy {
                 response: response.data,
             })
 
-            return response.data?.result
+            return result
         } catch (error) {
             this._emit('error', attribute, {attributeRequest, object: this, proxy: this, error})
             const errorHandler = this._onError || window.Glue?._onError
@@ -94,7 +111,24 @@ class BaseGlueProxy {
         }
     }
 
+    _stateForAttribute(takesClientState) {
+        if (takesClientState === false) {
+            return null
+        }
+
+        if (Array.isArray(takesClientState)) {
+            return Object.fromEntries(
+                takesClientState
+                    .filter(key => Object.prototype.hasOwnProperty.call(this._state || {}, key))
+                    .map(key => [key, this._state[key]])
+            )
+        }
+
+        return this._state
+    }
+
     _applyResponse(data = {}) {
+        const shouldRefreshGlueObjectAttributes = Boolean(data.policy || data.metadata)
         if (data.policy) {
             this._policy = data.policy
         }
@@ -103,7 +137,23 @@ class BaseGlueProxy {
         }
         if (data.state !== undefined) {
             this._applyState(data.state || {})
+            this._loaded = true
         }
+        if (data.loading_strategy !== undefined) {
+            this._loadingStrategy = data.loading_strategy
+            this._loaded = data.loading_strategy === 'eager' || this._hasPopulatedState
+        }
+        if (shouldRefreshGlueObjectAttributes) {
+            this._refreshGlueObjectAttributes()
+        }
+    }
+
+    _invalidateGlueObjectCache() {
+        Object.keys(this).forEach(key => {
+            if (key.startsWith('__glue_object__')) {
+                delete this[key]
+            }
+        })
     }
 
     _applyState(state) {
@@ -139,10 +189,15 @@ class BaseGlueProxy {
         })
     }
 
+    get _hasPopulatedState() {
+        return this._state && typeof this._state === 'object' && Object.keys(this._state).length > 0
+    }
+
     _configureAttributeInitializers() {
         this._attributeBuilders = {
             composite: (owner, name, qualName, meta) => this._initializeCompositeAttribute(owner, name, qualName, meta),
             callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
+            readonly: (owner, name, qualName, meta) => this._initializeReadOnlyAttribute(owner, name, qualName, meta),
             state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta),
         }
     }
@@ -242,7 +297,10 @@ class BaseGlueProxy {
         const attributeName = parts.pop()
         const owner = this._resolveAttributeOwner(parts)
 
-        if (owner[attributeName] !== undefined) {
+        const existingDescriptor = Object.getOwnPropertyDescriptor(owner, attributeName)
+        if (existingDescriptor?.configurable) {
+            delete owner[attributeName]
+        } else if (existingDescriptor) {
             return
         }
 
@@ -256,22 +314,28 @@ class BaseGlueProxy {
 
         const proxy = this
         const cacheKey = `__glue_object__${attributePolicy.name}`
+        const nestedState = proxy._state?.[relativeName] || {}
+
+        if (proxy[cacheKey]) {
+            proxy[cacheKey]._applyResponse({
+                policy: attributePolicy,
+                state: nestedState,
+                metadata: nestedMetadata,
+            })
+        }
 
         Object.defineProperty(owner, attributeName, {
             get() {
                 if (!proxy[cacheKey]) {
-                    const nestedState = proxy._state?.[relativeName] || {}
                     const nestedProxy = new ProxyClass({
                         http: proxy._http,
                         policy: attributePolicy,
                         state: nestedState,
                         metadata: nestedMetadata,
                         owner: proxy,
+                        client: proxy._client,
+                        loadingStrategy: proxy._loadingStrategy,
                     })
-                    // Mark as loaded if state was provided (eager loading)
-                    if (Object.keys(nestedState).length > 0) {
-                        nestedProxy._loaded = true
-                    }
                     proxy[cacheKey] = nestedProxy
                 }
 
@@ -283,14 +347,26 @@ class BaseGlueProxy {
     }
 
     _initializeStateAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-        const proxy = this
         Object.defineProperty(owner, attributeName, {
             get() {
-                return proxy._state?.[attributeQualName]
+                const root = this.__glue__root || this
+                return root._state?.[attributeQualName]
             },
             set(value) {
-                if (!proxy._state) proxy._state = {}
-                proxy._state[attributeQualName] = value
+                const root = this.__glue__root || this
+                if (!root._state) root._state = {}
+                root._state[attributeQualName] = value
+            },
+            enumerable: true,
+            configurable: true,
+        })
+    }
+
+    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
+        Object.defineProperty(owner, attributeName, {
+            get() {
+                const root = this.__glue__root || this
+                return root._state?.[attributeQualName]?.value
             },
             enumerable: true,
             configurable: true,
@@ -333,6 +409,21 @@ class BaseGlueProxy {
         })
     }
 
+    _refreshGlueObjectAttributes() {
+        (this._policy?.attributes || []).forEach(attribute => {
+            if (!attribute?.name || typeof attribute === 'string') {
+                return
+            }
+
+            const parentPrefix = this._name ? `${this._name}.` : ''
+            const relativeName = attribute.name.startsWith(parentPrefix)
+                ? attribute.name.slice(parentPrefix.length)
+                : attribute.name
+            const attributeMetadata = this._metadata?.attributes?.[relativeName] || {}
+            this._initializeGlueObjectAttribute(attribute, attributeMetadata)
+        })
+    }
+
     onMessage(callback) {
         this._onMessage = callback
         return this
@@ -357,6 +448,37 @@ class BaseGlueProxy {
             ...(this._listeners[when]?.['*'] || []),
         ]
         listeners.forEach(listener => listener(payload))
+    }
+
+    _convertResultManifestsToProxies(result) {
+        if (!this._client) {
+            return result
+        }
+
+        if (Array.isArray(result)) {
+            return result.map(item => this._convertResultManifestsToProxies(item))
+        }
+
+        if (!result || typeof result !== 'object') {
+            return result
+        }
+
+        if (this._resultIsManifest(result)) {
+            return this._client._createProxy(result)
+        }
+
+        Object.keys(result).forEach(key => {
+            result[key] = this._convertResultManifestsToProxies(result[key])
+        })
+        return result
+    }
+
+    _resultIsManifest(result) {
+        return Boolean(
+            result?.policy?.name
+            && result?.policy?.namespace
+            && result?.metadata !== undefined
+        )
     }
 }
 

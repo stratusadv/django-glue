@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from django_glue.conf import settings
 
 from django_glue import constants
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.policy import GluePolicy  # noqa: TC001
 
 if TYPE_CHECKING:
@@ -15,8 +16,12 @@ if TYPE_CHECKING:
 
 
 class GlueManifest(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
     policy: GluePolicy
     metadata: dict[str, Any]
+    state: dict[str, Any] = {}
+    loading_strategy: LoadingStrategy = LoadingStrategy.LAZY
 
 
 class GlueContextManager:
@@ -62,6 +67,7 @@ class GlueContextManager:
             },
             'config': {
                 'requestTimeoutSeconds': settings.DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS,
+                'csrfCookieName': settings.CSRF_COOKIE_NAME,
             },
         }
 

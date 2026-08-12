@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
+from django.conf import settings
 from django.views import View
 from pydantic import BaseModel
 
@@ -54,6 +55,15 @@ class GlueResolver(View, Generic[GlueRequestContext]):
     def _error_response(self, message: str, error: GlueError) -> JsonResponse:
         if error.status >= 500:
             logger.exception('%s: %s', message, self._glue_error_context)
+        elif settings.DEBUG:
+            logger.warning(
+                '%s: %s, code=%s, status=%s, details=%s',
+                message,
+                self._glue_error_context,
+                error.code,
+                error.status,
+                error.details(),
+            )
 
         return GlueResponse.from_error(error).to_json_response()
 

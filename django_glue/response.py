@@ -57,13 +57,36 @@ class GlueResponse:
             ],
         }
 
-    def to_json_response(self, **extra: Any) -> JsonResponse:
+    def to_json_response(self, *, glue_object: Any = None, **extra: Any) -> JsonResponse:
         return JsonResponse(
-            self.to_payload(**extra),
+            self._serialize_glue_values(self.to_payload(**extra), glue_object),
             status=self.status,
             safe=True,
             encoder=GlueResponseJSONEncoder,
         )
+
+    @classmethod
+    def _serialize_glue_values(cls, value: Any, glue_object: Any = None) -> Any:
+        from django_glue.glue.base import BaseGlue
+
+        if isinstance(value, BaseGlue):
+            if glue_object is not None:
+                value.request = glue_object.request
+            return value.manifest.model_dump()
+
+        if isinstance(value, dict):
+            return {
+                key: cls._serialize_glue_values(item, glue_object)
+                for key, item in value.items()
+            }
+
+        if isinstance(value, list | tuple):
+            return [
+                cls._serialize_glue_values(item, glue_object)
+                for item in value
+            ]
+
+        return value
 
 
 class GlueRedirectResponse:

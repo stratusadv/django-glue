@@ -9,6 +9,7 @@ from django.template.loader import render_to_string
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.loading import LoadingStrategy
 from django_glue.exceptions import GlueRequestError
 
 if TYPE_CHECKING:
@@ -25,27 +26,24 @@ class TemplateGlue(BaseGlue):
         name: str,
         access: GlueAccess = GlueAccess.VIEW,
         initial_context_data: dict[str, Any] | None = None,
+        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access)
+        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.target = target
         self.initial_context_data = initial_context_data or {}
 
-    @property
-    def identity(self) -> dict[str, Any]:
+    def get_identity(self) -> dict[str, Any]:
         return {
             'template_path': self.target,
             'initial_context_data': self.initial_context_data,
         }
 
-    @property
-    def state(self) -> dict[str, Any]:
+    def get_state(self) -> dict[str, Any]:
         return {
-            'template_path': self.target,
             'context_data': self.initial_context_data,
         }
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
                 name: attribute.metadata

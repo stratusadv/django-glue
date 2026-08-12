@@ -47,6 +47,9 @@ def task_list_view(request):
 | `exclude` | `Sequence[str]` | Yes* | Fields to exclude |
 | `form` | `ModelForm` | No | Default ModelForm for validation on child items (class or instance) |
 | `forms` | `Mapping[str, ModelForm]` | No | Named ModelForms for child items (classes or instances) |
+| `computed_attributes` | `Mapping[str, ComputedAttribute]` | No | Readonly computed values for each item |
+| `related_field_config` | `Mapping[str, dict]` | No | Field configuration for related objects (see [Model Glue: Related Field Config](model_object_glue.md#related-field-configuration)) |
+| `loading_strategy` | `LoadingStrategy` | No | `LAZY` (default), `EAGER`, or `INHERIT`. See [Loading Strategy](../api/glue/shortcuts.md#loading-strategy) |
 
 *Either `fields` or `exclude` must be provided.
 

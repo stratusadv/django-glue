@@ -28,6 +28,12 @@ class GlueObjectAttribute(BaseGlueAttribute):
         self.glue_object = glue_object
 
     def _prepare_glue_object(self) -> BaseGlue:
+        glue_name = f'{self.owner.name}.{self.name}' if self.owner.name else self.name
+        if self.glue_object.name != glue_name:
+            self.glue_object.name = glue_name
+            self.glue_object.__dict__.pop('policy', None)
+            self.glue_object.__dict__.pop('metadata', None)
+            self.glue_object.__dict__.pop('state', None)
         self.glue_object.request = self.owner.request
         return self.glue_object
 

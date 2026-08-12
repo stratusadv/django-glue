@@ -96,6 +96,17 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         if related_instance is None:
             return None
 
+        # Cycle detection: track (model_class, relation_name) pairs to detect
+        # when we're about to traverse the same relationship from the same model
+        # type again. This allows multiple FKs to the same model (e.g., rival and
+        # mentor both pointing to Gorilla) while preventing cycles like:
+        # Gorilla.fights → Fight.red_corner → Gorilla.fights (same pair seen)
+        visited_relations = getattr(self.owner, '_visited_relations', set())
+        owner_model = type(self.instance)
+        relation_key = (owner_model, self.name)
+        if relation_key in visited_relations:
+            return None
+
         from django_glue.glue.objects.django.model.object import ModelGlue  # noqa: PLC0415
 
         fields = self.related_fields or '__all__'
@@ -109,6 +120,9 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
             exclude=exclude,
         )
         self._related_glue.request = self.owner.request
+
+        # Propagate visited relations to prevent cycles in nested objects
+        self._related_glue._visited_relations = visited_relations | {relation_key}
 
         return self._related_glue
 

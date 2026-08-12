@@ -45,7 +45,7 @@ class GlueHttp {
         }
 
         if (csrfProtected !== false) {
-            headers['X-CSRFToken'] = this.getCookie('csrftoken')
+            headers['X-CSRFToken'] = this.getCookie(this._config.csrfCookieName)
         }
 
         try {

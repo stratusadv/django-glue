@@ -4,6 +4,7 @@ import GlueHttp from "../src/http"
 import GlueClient from "../src/client"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
+import BaseGlueProxy from "../src/proxies/base"
 import GlueView from "../src/view"
 import {GlueProxyError} from "../src/errors"
 import {createMetadata, createPolicy, createState} from "./testUtils"
@@ -15,7 +16,18 @@ function http() {
 describe('frontend edge cases', () => {
     test('client rejects invalid manifests', () => {
         expect(() => new GlueClient({manifest_list: [{policy: {namespace: 'model'}}]})).toThrow(GlueProxyError)
-        expect(() => new GlueClient({manifest_list: [{policy: {name: 'bad', namespace: 'unknown'}}]})).toThrow(GlueProxyError)
+    })
+
+    test('client registers custom namespaces as base proxies', () => {
+        const client = new GlueClient({
+            manifest_list: [{
+                policy: {name: 'dashboard', namespace: 'timeEntryDashboard', attributes: []},
+                metadata: {},
+                state: {},
+            }],
+        })
+
+        expect(client.timeEntryDashboard.dashboard).toBeInstanceOf(BaseGlueProxy)
     })
 
     test('proxy error listeners receive failed attribute requests', async () => {
@@ -35,28 +47,21 @@ describe('frontend edge cases', () => {
         expect(received.error.status).toBe(500)
     })
 
-    test('model deletion removes the proxy from its collection', async () => {
+    test('model delete callable exists when exposed by policy', async () => {
         global.fetch = async () => new Response(JSON.stringify({
             result: null, state: {}, policy: {}, metadata: {},
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
-        const collection = new GlueQuerySetProxy({
-            http: http(),
-            policy: createPolicy({name: 'gorillas', namespace: 'querySet', attributes: []}),
-            state: {items: []},
-            metadata: {},
-        })
         const row = new GlueModelProxy({
             http: http(),
             policy: createPolicy({name: 'gorillas.1', attributes: ['id', 'delete']}),
             state: createState({instance_data: {id: 1}}),
             metadata: createMetadata({attributes: {delete: {namespace: 'callable'}}}),
         })
-        row.$collection = collection
-        collection._modelProxies.set(row._name, row)
 
+        // delete is exposed as a callable attribute, not as a special wrapper
+        expect(typeof row.delete).toBe('function')
         await row.delete()
-
-        expect(collection._modelProxies.has('gorillas.1')).toBe(false)
+        // model proxies do not implicitly mutate parent collections on delete
     })
 
     test('choice fields expose selection helpers', () => {

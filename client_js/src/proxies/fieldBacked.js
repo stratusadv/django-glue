@@ -4,7 +4,6 @@ import {createFieldGlue} from "./fields"
 class FieldBackedGlueProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
-        this._loaded = false
         this.loading = false
     }
 
@@ -33,9 +32,7 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
     _ensureLoaded() {
         if (!this._loaded && !this.loading) {
             this.loading = true
-            this._callAttribute('load').then(() => {
-                this._loaded = true
-            }).finally(() => {
+            this._callAttribute('load_state').finally(() => {
                 this.loading = false
             })
         }

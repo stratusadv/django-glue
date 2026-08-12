@@ -9,27 +9,16 @@ class GlueModelProxy extends FieldBackedGlueProxy {
     }
 
     _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
-        const proxy = this
         Object.defineProperty(owner, attributeName, {
             get() {
-                return proxy._state?.[attributeQualName]?.value
+                const root = this.__glue__root || this
+                return root._state?.[attributeQualName]?.value
             },
             enumerable: true,
             configurable: true,
         })
     }
 
-    async delete() {
-        const result = await this._callAttribute('delete')
-        this.$collection?._removeModelProxy(this)
-        return result
-    }
-
-    async load() {
-        const result = await this._callAttribute('load')
-        this.$collection?._updateModelProxy(this)
-        return result
-    }
 }
 
 export default GlueModelProxy

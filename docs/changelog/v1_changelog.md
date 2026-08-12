@@ -1,5 +1,22 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc2
+
+### Features
+
+- **Loading Strategy**: Added `loading_strategy` parameter to all Glue shortcuts (`Glue.model()`, `Glue.queryset()`, `Glue.collection()`, etc.) for controlling when state is sent to the frontend:
+  - `LoadingStrategy.LAZY` (default): State is fetched on first access from the frontend
+  - `LoadingStrategy.EAGER`: State is included in the initial page manifest
+  - `LoadingStrategy.INHERIT`: Inherit strategy from parent Glue object
+- **Collection Glue**: Added `Glue.collection()` for grouping multiple Glue objects together. Collections require `LoadingStrategy.EAGER` — lazy loading is not yet supported.
+- **Related Field Configuration**: Added `related_field_config` parameter to `Glue.model()` and `Glue.queryset()` for controlling which fields are exposed on related objects (ForeignKey, OneToOne, reverse FK, ManyToMany).
+
+### Fixes
+
+- Fixed eager loading detection on the frontend: proxies now correctly detect when state is already populated and skip redundant fetch requests.
+- Fixed queryset clone behavior: filtered/sorted clones now correctly trigger backend queries instead of reusing parent state.
+- Collections reconstructed from policy now raise `CollectionLazyLoadNotSupportedError` with a clear message instead of silently returning empty data.
+
 ## v1.0.1-rc1
 
 ### Features

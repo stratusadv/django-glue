@@ -9,6 +9,7 @@ from django_glue.exceptions import GlueInvalidAttributeError
 from django_glue.glue.attributes.callable import CallableAttribute
 from django_glue.glue.attributes.composite import CompositeStateAttribute
 from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+from django_glue.glue.attributes.glue_object import GlueObjectAttribute
 from django_glue.glue.attributes.readonly import ReadOnlyAttribute
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ class GlueAttributeCollector:
         self.root_glue_owner = root_glue_owner
         self.visited_attribute_owners: set[int] = set()
         self.glue_attributes: dict[str, BaseGlueAttribute] = {}
+        self.identity_attributes: list[BaseGlueAttribute] = []
 
     def collect(self) -> dict[str, BaseGlueAttribute]:
         """Collect all attributes from the owner and its providers."""
@@ -95,12 +97,28 @@ class GlueAttributeCollector:
         that are detected to have nested glue attributes.
         """
         if options.is_callable:
-            self.glue_attributes[qualified_name] = self._create_callable_attribute(
+            glue_attribute = self._create_callable_attribute(
                 attr_name, options, attr_owner_instance
             )
+            self.glue_attributes[qualified_name] = glue_attribute
             return
 
         value = getattr(glue_attr_owner, attr_name)
+
+        # Check if the value is a BaseGlue instance - wrap it in GlueObjectAttribute
+        if self._is_glue_object(value):
+            glue_attribute = GlueObjectAttribute(
+                owner=self.root_glue_owner,
+                name=attr_name,
+                access=options.access,
+                glue_object=value,
+                attr_owner_instance=attr_owner_instance,
+            )
+            self.glue_attributes[qualified_name] = glue_attribute
+            if options.is_identity:
+                self.identity_attributes.append(glue_attribute)
+            return
+
         has_nested_glue_attributes = (
             value is not None and self._has_glue_attributes(value.__class__)
         )
@@ -111,9 +129,12 @@ class GlueAttributeCollector:
                 value_type=f'{value.__class__.__module__}.{value.__class__.__qualname__}',
             )
 
-        self.glue_attributes[qualified_name] = self._create_state_attribute(
+        glue_attribute = self._create_state_attribute(
             attr_name, options, attr_owner_instance, has_nested_glue_attributes
         )
+        self.glue_attributes[qualified_name] = glue_attribute
+        if options.is_identity:
+            self.identity_attributes.append(glue_attribute)
 
         # Depth-first: recurse immediately into containers
         if has_nested_glue_attributes:
@@ -141,7 +162,8 @@ class GlueAttributeCollector:
             owner=self.root_glue_owner,
             name=attr_name,
             access=options.access,
-            loads_state=options.loads_state,
+            takes_client_state=options.takes_client_state,
+            updates_client_state=options.updates_client_state,
             attr_owner_instance=attr_owner_instance,
         )
 
@@ -176,6 +198,13 @@ class GlueAttributeCollector:
             self._get_glue_options(cls, attr_name, attr) is not None
             for attr_name, attr in inspect.getmembers_static(cls)
         )
+
+    @staticmethod
+    def _is_glue_object(value: Any) -> bool:
+        """Check if a value is a BaseGlue instance."""
+        # Import here to avoid circular imports
+        from django_glue.glue.base import BaseGlue
+        return isinstance(value, BaseGlue)
 
     @staticmethod
     def _can_serialize_as_state(value: Any) -> bool:
