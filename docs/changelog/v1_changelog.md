@@ -10,12 +10,15 @@
   - `LoadingStrategy.INHERIT`: Inherit strategy from parent Glue object
 - **Collection Glue**: Added `Glue.collection()` for grouping multiple Glue objects together. Collections require `LoadingStrategy.EAGER` — lazy loading is not yet supported.
 - **Related Field Configuration**: Added `related_field_config` parameter to `Glue.model()` and `Glue.queryset()` for controlling which fields are exposed on related objects (ForeignKey, OneToOne, reverse FK, ManyToMany).
+- **Related Set Proxies**: Reverse foreign-key and many-to-many relationships are now exposed as nested, read-only queryset proxies. Prefetched relations are included eagerly, while non-prefetched relations load on demand, with cycle detection for nested relationships.
+- **Custom Glue Objects**: Custom `BaseGlue` subclasses now receive default identity, state, and metadata handling, plus declared-attribute defaults and default factories, reducing the boilerplate required for reconstructable custom Glue objects.
+- **Glue Properties**: Added `Glue.property` for exposing read-only properties on custom Glue objects, with optional `identity=True` support for including property values in automatically generated reconstruction identities.
+- **Attribute State Controls**: Declared attributes can now control whether all, selected, or no client state is sent to the server and whether an attribute call refreshes client state. Glue manifests returned from calls are automatically converted into frontend proxies.
 
 ### Fixes
 
-- Fixed eager loading detection on the frontend: proxies now correctly detect when state is already populated and skip redundant fetch requests.
-- Fixed queryset clone behavior: filtered/sorted clones now correctly trigger backend queries instead of reusing parent state.
-- Collections reconstructed from policy now raise `CollectionLazyLoadNotSupportedError` with a clear message instead of silently returning empty data.
+- Fixed queryset clone behavior so filtered and sorted clones trigger backend queries instead of reusing parent state.
+- Fixed queryset caching so filtered, ordered, and sliced queries do not incorrectly reuse an eagerly loaded unfiltered result.
 
 ## v1.0.1-rc1
 
