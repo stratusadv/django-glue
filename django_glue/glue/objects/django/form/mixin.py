@@ -47,7 +47,27 @@ class ModelGlueFormConfigMixin:
         return {
             name: {
                 'form_class_path': f'{form.__class__.__module__}.{form.__class__.__name__}',
-                'initial': form.initial,
+                # Raw form.initial can hold model instances/querysets for
+                # Model(Multiple)ChoiceField (e.g. instance=obj populates
+                # initial from model_to_dict). This identity gets embedded in
+                # the signed policy sent to the client (see GluePolicy in
+                # policy.py, which signs via json.dumps(..., default=str)).
+                # A single model instance stringifies deterministically via
+                # __str__(), but a ModelMultipleChoiceField's initial is a
+                # QuerySet, and str(queryset) re-executes the query -- if the
+                # underlying rows change between two requests (e.g. a save in
+                # between), the string differs and signature verification
+                # fails with "the data may have been tampered with" even
+                # though nothing was. prepare_value() reduces these to plain,
+                # deterministic PKs instead, same as FormGlue._prepared_initial
+                # and FormFieldAttribute.get().
+                'initial': {
+                    field_name: (
+                        form.fields[field_name].prepare_value(value)
+                        if field_name in form.fields else value
+                    )
+                    for field_name, value in form.initial.items()
+                },
                 'target_pk': getattr(getattr(self, 'instance', None), 'pk', None)
             }
             for name, form in forms.items()
