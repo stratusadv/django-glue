@@ -4,6 +4,7 @@ from django_glue.glue.collection import CollectionGlue
 from django_glue.glue.objects.django import (
     FormFieldAttribute,
     FormGlue,
+    FormSetGlue,
     ModelFieldAttribute,
     ModelGlue,
     QuerySetGlue,
@@ -21,6 +22,7 @@ __all__ = [
     'CompositeStateAttribute',
     'FormFieldAttribute',
     'FormGlue',
+    'FormSetGlue',
     'FunctionGlue',
     'GlueClassRegistry',
     'GluePolicy',

@@ -1,7 +1,7 @@
 from typing import Callable, Iterable, Literal, Mapping, Sequence, Union
 
 from django.db.models import Model, QuerySet
-from django.forms import BaseForm, ModelForm
+from django.forms import BaseForm, BaseFormSet, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
@@ -10,6 +10,7 @@ from django_glue.glue.collection import CollectionGlue
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
@@ -183,6 +184,24 @@ class Glue:
             request=request,
             glue=FormGlue(
                 form=target,
+                name=unique_name,
+                access=access,
+                loading_strategy=loading_strategy,
+            ),
+        )
+
+    @staticmethod
+    def formset(
+        request: HttpRequest,
+        unique_name: str,
+        target: BaseFormSet,
+        access: GlueAccess = GlueAccess.CHANGE,
+        loading_strategy: LoadingStrategy = LoadingStrategy.EAGER,
+    ) -> FormSetGlue:
+        return Glue.object(
+            request=request,
+            glue=FormSetGlue(
+                formset=target,
                 name=unique_name,
                 access=access,
                 loading_strategy=loading_strategy,
