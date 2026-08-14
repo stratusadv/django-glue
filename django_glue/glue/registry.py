@@ -29,6 +29,7 @@ glue_class_registry = GlueClassRegistry()
 def _register_builtins() -> None:
     from django_glue.glue.collection import CollectionGlue  # noqa: PLC0415
     from django_glue.glue.objects.django.form.object import FormGlue  # noqa: PLC0415
+    from django_glue.glue.objects.django.formset import FormSetGlue  # noqa: PLC0415
     from django_glue.glue.objects.django.model.object import ModelGlue  # noqa: PLC0415
     from django_glue.glue.objects.django.queryset import QuerySetGlue  # noqa: PLC0415
     from django_glue.glue.objects.django.template import TemplateGlue  # noqa: PLC0415
@@ -38,6 +39,7 @@ def _register_builtins() -> None:
     glue_class_registry.register_glue_class(CollectionGlue)
     glue_class_registry.register_glue_class(ModelGlue)
     glue_class_registry.register_glue_class(FormGlue)
+    glue_class_registry.register_glue_class(FormSetGlue)
     glue_class_registry.register_glue_class(QuerySetGlue)
     glue_class_registry.register_glue_class(FunctionGlue)
     glue_class_registry.register_glue_class(TemplateGlue)

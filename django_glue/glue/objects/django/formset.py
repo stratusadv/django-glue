@@ -47,7 +47,7 @@ class FormSetGlue(BaseGlue):
     def get_attribute_providers(self) -> dict[str, Any]:
         return {'formset': self.formset}
 
-    # Nested forms are declared under '_forms.{index}' rather than
+    # Nested forms are declared under 'form_list.{index}' rather than
     # 'forms.{index}': the frontend GlueFormSetProxy exposes a public
     # `forms` getter for its current list of form proxies, and
     # BaseGlueProxy's generic nested-attribute resolution walks a
@@ -59,9 +59,9 @@ class FormSetGlue(BaseGlue):
     def attributes(self) -> dict[str, BaseGlueAttribute]:
         attributes = dict(super().attributes)
         attributes.update({
-            f'_forms.{index}': GlueObjectAttribute(
+            f'form_list.{index}': GlueObjectAttribute(
                 owner=self,
-                name=f'_forms.{index}',
+                name=f'form_list.{index}',
                 access=self.access,
                 glue_object=self._build_form_glue(form, str(index)),
             )
@@ -86,7 +86,7 @@ class FormSetGlue(BaseGlue):
         valid = self.formset.is_valid()
         return {
             'valid': valid,
-            '_forms': [
+            'form_list': [
                 self._build_form_glue(form, str(index))
                 for index, form in enumerate(self.formset.forms)
             ],
@@ -94,7 +94,7 @@ class FormSetGlue(BaseGlue):
         }
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        self.formset = self._bind_formset(state.get('_forms', []))
+        self.formset = self._bind_formset(state.get('form_list', []))
 
     def _formset_base_class_path(self) -> str:
         base_class = self.formset.__class__.__mro__[1]
@@ -117,7 +117,7 @@ class FormSetGlue(BaseGlue):
     def _build_form_glue(self, form: forms.BaseForm, key: str) -> FormGlue:
         return FormGlue(
             form,
-            name=f'{self.name}._forms.{key}',
+            name=f'{self.name}.form_list.{key}',
             access=self.access,
             loading_strategy=LoadingStrategy.EAGER,
         )

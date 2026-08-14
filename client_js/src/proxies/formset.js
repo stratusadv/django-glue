@@ -57,7 +57,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
     async validate() {
         const result = await this._callAttribute('validate')
         this._formProxies = new Map(
-            (result?._forms || []).map((form, index) => [String(index), form])
+            (result?.form_list || []).map((form, index) => [String(index), form])
         )
         this._hasPendingLocalEdit = false
         this.nonFormErrors = result?.non_form_errors || []
@@ -68,7 +68,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
         if (takesClientState === false) {
             return null
         }
-        return {_forms: this.forms.map(form => form._state)}
+        return {form_list: this.forms.map(form => form._state)}
     }
 
     _applyResponse(data = {}) {
@@ -80,7 +80,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
 
     // Mirrors GlueCollectionProxy's inline item-derivation (collection.js)
     // -- same policy/state/metadata-keyed cache-and-rebuild shape, keyed
-    // under '_forms.{index}' and filtered to nested `form` policies instead
+    // under 'form_list.{index}' and filtered to nested `form` policies instead
     // of the unfiltered item list a collection uses.
     _initialForms() {
         if (!this._formProxyCache) {
@@ -105,7 +105,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
     }
 
     _buildFormProxy(policy, index) {
-        const attributeKey = `_forms.${index}`
+        const attributeKey = `form_list.${index}`
         const metadata = this._metadata?.attributes?.[attributeKey]?.metadata || {}
         const state = this._state?.[attributeKey] || {}
         const ProxyClass = getProxyClass(policy.namespace) || BaseGlueProxy

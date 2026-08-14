@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from django_glue import Glue
 from django_glue.glue.objects.django.formset import FormSetGlue
+from django_glue.glue.registry import glue_class_registry
 from test_project.test_forms import ContactForm
 
 from django_glue.tests.glue.test_adapters import glue_context, with_request
@@ -31,7 +32,7 @@ class FormSetGlueTestCase(TestCase):
         self.assertIn('append', glue_object.attributes)
         self.assertIn('validate', glue_object.attributes)
         self.assertIn('load_state', glue_object.attributes)
-        self.assertIn('_forms.0', glue_object.attributes)
+        self.assertIn('form_list.0', glue_object.attributes)
 
     def test_identity_captures_formset_configuration(self):
         glue_object = FormSetGlue(build_formset(), **glue_context(name='contacts'))
@@ -56,7 +57,20 @@ class FormSetGlueTestCase(TestCase):
         result = glue_object.validate()
 
         self.assertFalse(result['valid'])
-        self.assertEqual(len(result['_forms']), 1)
+        self.assertEqual(len(result['form_list']), 1)
+
+    def test_load_client_state_binds_form_list(self):
+        glue_object = with_request(FormSetGlue(build_formset(), **glue_context(name='contacts')))
+
+        glue_object._load_client_state({'form_list': [{
+            'name': {'value': 'Ada'},
+            'email': {'value': 'ada@example.com'},
+            'message': {'value': 'Hello'},
+            'priority': {'value': 'low'},
+        }]})
+
+        self.assertEqual(len(glue_object.formset.forms), 1)
+        self.assertTrue(glue_object.formset.is_valid())
 
     def test_validate_reports_valid_when_data_is_bound_and_complete(self):
         data = {
@@ -92,3 +106,11 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertIsInstance(glue_object, FormSetGlue)
         self.assertEqual(glue_object.name, 'contacts')
+
+    def test_formset_namespace_is_registered_in_glue_class_registry(self):
+        # The registry is what GlueAttributeCallResolver uses to
+        # reconstruct a glue object from an incoming request's policy
+        # namespace (django_glue/resolver/attribute_call/resolver.py) --
+        # a class that works standalone but isn't registered here still
+        # 500s on every real callable-attribute request against it.
+        self.assertIs(glue_class_registry.get_glue_class('formSet'), FormSetGlue)

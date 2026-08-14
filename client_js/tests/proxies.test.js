@@ -6,6 +6,7 @@ import {RelationFieldGlue} from "../src/proxies/fields"
 import BaseGlueProxy from "../src/proxies/base"
 import GlueCollectionProxy from "../src/proxies/collection"
 import GlueFormProxy from "../src/proxies/form"
+import GlueFormSetProxy from "../src/proxies/formset"
 import GlueJsonProxy from "../src/proxies/json"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
@@ -58,6 +59,42 @@ function querySet() {
 }
 
 describe('Glue proxies', () => {
+    test('formsets send form_list state for callable attributes', async () => {
+        const calls = mockOperationFetch({result: {success: true}})
+        const formPolicy = createPolicy({
+            name: 'contacts.form_list.0',
+            namespace: 'form',
+            attributes: ['name'],
+        })
+        const client = new GlueClient({
+            manifest_list: [{
+                policy: createPolicy({
+                    name: 'contacts',
+                    namespace: 'formSet',
+                    attributes: [formPolicy, 'save'],
+                }),
+                state: {'form_list.0': {name: {value: 'Ada'}}},
+                metadata: {
+                    attributes: {
+                        'form_list.0': {
+                            namespace: 'glue',
+                            metadata: {attributes: {name: {namespace: 'field'}}},
+                        },
+                        save: {namespace: 'callable', takes_client_state: true},
+                    },
+                },
+            }],
+        })
+
+        const formset = client.formSet.contacts
+        await formset.save()
+
+        expect(formset).toBeInstanceOf(GlueFormSetProxy)
+        expect(JSON.parse(calls[0].options.body.get('state'))).toEqual({
+            form_list: [{name: {value: 'Ada'}}],
+        })
+    })
+
     test('collections expose grouped item proxies by ref', () => {
         const client = new GlueClient({
             manifest_list: [
@@ -719,6 +756,70 @@ describe('Glue proxies', () => {
         object.$fields.skills.value = [1]
         expect(object.$fields.skills.selectedPks).toEqual([1])
         expect(object.$fields.skills.hasChoiceSelected(1)).toBe(true)
+    })
+
+    test('overrideChoices() survives incidental reads that would otherwise re-trigger ensureChoices()', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        mockOperationFetch({
+            result: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}],
+            state: createState({instance_data: {id: 1, skills: []}}),
+            policy: createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']}),
+            metadata: createMetadata({
+                fields: {
+                    skills: {
+                        type: 'ManyToManyField',
+                        label: 'Skills',
+                        choices: [],
+                        choice_model_path: 'test_project.gorilla.models.Skill',
+                        choices_cache_key: 'gorilla.skills.override',
+                    },
+                },
+                attributes: {foreign_key_choices: {namespace: 'callable'}},
+            }),
+        })
+        const object = new GlueModelProxy({
+            http: http(),
+            policy: createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']}),
+            state: createState({instance_data: {id: 1, skills: []}}),
+            metadata: createMetadata({
+                fields: {
+                    skills: {
+                        type: 'ManyToManyField',
+                        label: 'Skills',
+                        choices: [],
+                        choice_model_path: 'test_project.gorilla.models.Skill',
+                        choices_cache_key: 'gorilla.skills.override',
+                    },
+                },
+                attributes: {foreign_key_choices: {namespace: 'callable'}},
+            }),
+        })
+        object._loaded = true
+
+        // Let the field's default (cache-backed) choices load first, same
+        // as a widget's own template read would trigger.
+        expect(object.$fields.skills.choices).toEqual([])
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(object.$fields.skills.choices).toEqual([
+            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+        ])
+
+        // A caller supplies its own choices (e.g. a dependent-choices
+        // glue-callable workaround) -- this must stick even though
+        // reading `.choices` again would otherwise call ensureChoices()
+        // and reset it back to the shared cache's value.
+        const overridden = [{value: 99, label: 'Manually supplied'}]
+        object.$fields.skills.overrideChoices(overridden)
+
+        expect(object.$fields.skills.choices).toEqual(overridden)
+        // Reading again (as a template re-render would) must not clobber it.
+        expect(object.$fields.skills.choices).toEqual(overridden)
+
+        // Reverting restores the normal cache-backed behavior.
+        object.$fields.skills.clearChoicesOverride()
+        expect(object.$fields.skills.choices).toEqual([
+            {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
+        ])
     })
 
     test('querysets build model proxies from returned row manifests', async () => {

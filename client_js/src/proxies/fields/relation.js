@@ -5,7 +5,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     static loadingCache = new Map()
 
     get choices() {
-        if (this.choice_model_path) {
+        if (this.choice_model_path && !this._choicesOverridden) {
             this.ensureChoices([])
         }
         return this._choices || []
@@ -13,6 +13,26 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
     set choices(value) {
         this._choices = value
+    }
+
+    // Explicitly assigns this field's choices and keeps them from being
+    // clobbered by ensureChoices() -- the choices getter otherwise
+    // self-heals from a shared, cache-key-scoped cache on every read
+    // (including incidental reads from template re-renders), which
+    // silently overwrites anything assigned outside that cache. Use this
+    // when a caller (e.g. a glue-callable-backed dependent-choices reload)
+    // is the authoritative source for this field's choices right now,
+    // instead of the field's own default foreign_key_choices() lookup.
+    overrideChoices(choices) {
+        this._choices = Array.isArray(choices) ? choices : []
+        this._choicesOverridden = true
+        return this._choices
+    }
+
+    // Reverts to the default cache-backed behavior -- the next read of
+    // `choices` calls ensureChoices() again as normal.
+    clearChoicesOverride() {
+        this._choicesOverridden = false
     }
 
     get pk() {
