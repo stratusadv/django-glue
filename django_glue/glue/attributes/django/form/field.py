@@ -47,7 +47,17 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
     def get(self) -> Any:
         if self.form.is_bound:
             return self.form.data.get(self.name)
-        return self.form.initial.get(self.name)
+
+        # Unlike bound form.data (already plain submitted values), an unbound
+        # ModelForm's initial can hold raw model instances/querysets for
+        # Model(Multiple)ChoiceField (e.g. instance=obj populates initial from
+        # model_to_dict, which passes M2M/FK values through as model
+        # instances, not PKs). prepare_value() is what Django's own rendering
+        # path uses to reduce those to serializable values -- without it the
+        # client receives full nested objects instead of PKs, which then fail
+        # Model(Multiple)ChoiceField.clean() as "Enter a list of values."
+        # (or an invalid choice) on save. Mirrors FormGlue._prepared_initial.
+        return self.field.prepare_value(self.form.initial.get(self.name))
 
     @property
     def state(self) -> dict[str, Any] | None:

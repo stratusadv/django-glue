@@ -1066,6 +1066,39 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
 
 class DjangoFormGlueObjectTestCase(TestCase):
+    def test_foreign_key_choices_does_not_return_validated_form_state(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            name = forms.CharField()
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        skill = Skill.objects.create(name='Grappling')
+        glue_object = with_request(FormGlue(SkillForm(), **glue_context(name='skill-form')))
+        context = AttributeCallRequestContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=glue_object.policy,
+            target_glue_client_state={
+                'name': {'value': ''},
+                'skill': {'value': None},
+            },
+            target_attribute_name='foreign_key_choices',
+            target_attribute_call_kwargs={'field_name': 'skill'},
+        )
+        glue_object._load_client_state(context.target_glue_client_state)
+
+        response = glue_object.process_attribute_call(context)
+        payload = json.loads(response.content)
+
+        self.assertEqual(payload['result'], [{
+            'value': skill.pk,
+            'label': 'Grappling',
+            'obj': {'pk': skill.pk, '__str__': 'Grappling'},
+        }])
+        self.assertNotIn('state', payload)
+        self.assertNotIn('policy', payload)
+        self.assertNotIn('metadata', payload)
+
     def test_form_field_adapter_builds_metadata(self):
         form = ContactForm()
         glue_object = FormGlue(form, **glue_context(name='contact'))

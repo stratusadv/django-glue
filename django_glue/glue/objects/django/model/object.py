@@ -472,6 +472,18 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         return [serialize_choice(obj) for obj in related_model.objects.all()]
 
-    @DeclaredAttribute(access=GlueAccess.DELETE)
+    # delete() only needs self.instance's pk (already resolved from the signed
+    # policy identity) -- it never reads client-submitted field values. The
+    # default takes_client_state=True re-hydrates every StateAttribute from
+    # the client's echoed state via setattr(), including raw JS strings for
+    # numeric fields (e.g. a DecimalField's <input> value). That silently
+    # replaces the freshly-loaded instance's real field values with strings,
+    # which then breaks any VIEW-access computed property that does
+    # arithmetic on those fields once attribute collection runs for this
+    # call (e.g. TypeError: unsupported operand type(s) for +: 'int' and
+    # 'str' from a median_price-style property) -- a bug entirely unrelated
+    # to deleting the row. takes_client_state=False skips that hydration
+    # since delete has no legitimate use for it.
+    @DeclaredAttribute(access=GlueAccess.DELETE, takes_client_state=False)
     def delete(self) -> None:
         self.instance.delete()
