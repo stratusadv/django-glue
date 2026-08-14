@@ -1,5 +1,16 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc3
+
+### Features
+
+- **Formset Glue**: Added `Glue.formset()` / `FormSetGlue` for exposing a Django `BaseFormSet` over glue, with a matching `GlueFormSetProxy` on the frontend. Supports `append()`, `pop()`, and `validate()` for managing forms client-side, with per-form state sent to the server under `form_list` on save.
+- **Choices Override**: Added `overrideChoices()` / `clearChoicesOverride()` to relation fields, letting a caller explicitly set a field's choices (e.g. for dependent/cascading choice fields) without the default cache-backed getter overwriting them on the next read.
+
+### Fixes
+
+- Registered `FormSetGlue` in the server-side glue class registry so `formSet`-namespaced callable attribute requests resolve correctly instead of failing with a missing-class error.
+
 ## v1.0.1-rc2
 
 ### Features
