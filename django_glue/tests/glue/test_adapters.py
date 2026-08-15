@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from functools import cached_property
 from types import SimpleNamespace
 
@@ -622,6 +623,26 @@ class GluePolicyTestCase(TestCase):
         self.assertIn('attributes', payload)
         self.assertNotIn('subject_details', payload)
         self.assertNotIn('bound_attributes', payload)
+
+    def test_signed_policy_with_datetime_validates_after_json_transport(self):
+        policy = GluePolicy.new_signed_policy({
+            'session_id': 'test-session',
+            'request_user_id': None,
+            'name': 'agreement_form',
+            'namespace': 'form',
+            'identity': {
+                'initial': {
+                    'sent_datetime': datetime(2026, 8, 14, 12, 30, tzinfo=timezone.utc),
+                },
+            },
+            'access': GlueAccess.CHANGE,
+            'attributes': ['sent_datetime'],
+        })
+
+        payload = json.loads(json.dumps(policy.model_dump(), cls=GlueResponseJSONEncoder))
+        restored = GluePolicy.model_validate(payload)
+
+        self.assertEqual(restored.identity['initial']['sent_datetime'], '2026-08-14T12:30:00Z')
 
     def test_signed_policy_rejects_tampering(self):
         policy = GluePolicy.new_signed_policy({
