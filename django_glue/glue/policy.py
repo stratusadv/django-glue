@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
+from django_glue.encoders import GlueResponseJSONEncoder
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -73,7 +74,7 @@ class GluePolicy(BaseModel):
     def _sign_data(data: dict) -> str:
         return hmac.digest(
             settings.SECRET_KEY.encode(),
-            json.dumps(data, default=str, sort_keys=True).encode(),
+            json.dumps(data, cls=GlueResponseJSONEncoder, sort_keys=True).encode(),
             'sha256',
         ).hex()
 
