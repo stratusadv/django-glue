@@ -30,7 +30,7 @@ describe('frontend edge cases', () => {
         expect(client.timeEntryDashboard.dashboard).toBeInstanceOf(BaseGlueProxy)
     })
 
-    test('proxy error listeners receive failed attribute requests', async () => {
+    test('proxy error listeners receive failed attribute requests, and the call still rejects', async () => {
         global.fetch = async () => new Response(JSON.stringify({error: {message: 'Failed'}}), {status: 500})
         const proxy = new GlueModelProxy({
             http: http(),
@@ -41,10 +41,33 @@ describe('frontend edge cases', () => {
         let received
         proxy.onError(payload => { received = payload })
 
-        expect(await proxy.save()).toBeUndefined()
+        // onError is an observation hook (logging, toasts), not a way to
+        // swallow the failure -- the call must still reject so a caller's
+        // own await/try-catch can tell success from failure.
+        await expect(proxy.save()).rejects.toBeDefined()
         expect(received.attribute).toBe('save')
         expect(received.proxy).toBe(proxy)
         expect(received.error.status).toBe(500)
+    })
+
+    test('a global window.Glue._onError handler also does not swallow the rejection', async () => {
+        global.fetch = async () => new Response(JSON.stringify({error: {message: 'Failed'}}), {status: 500})
+        const proxy = new GlueModelProxy({
+            http: http(),
+            policy: createPolicy({attributes: ['save']}),
+            state: {},
+            metadata: createMetadata({attributes: {save: {namespace: 'callable'}}}),
+        })
+        let received
+        global.window.Glue = {_onError: payload => { received = payload }}
+
+        try {
+            await expect(proxy.save()).rejects.toBeDefined()
+            expect(received.attribute).toBe('save')
+            expect(received.error.status).toBe(500)
+        } finally {
+            delete global.window.Glue
+        }
     })
 
     test('model delete callable exists when exposed by policy', async () => {
