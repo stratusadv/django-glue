@@ -105,9 +105,14 @@ class BaseGlueProxy {
             if (errorHandler) {
                 errorHandler({error, attribute, attributeRequest, proxy: this})
             }
-            else {
-                throw error
-            }
+
+            // Always rethrow, even when an onError handler ran: onError is an
+            // observation hook (logging, toasts), not a way to swallow the
+            // failure. Callers rely on await/try-catch to know whether the
+            // call actually succeeded -- silently resolving to undefined here
+            // would make a failed call indistinguishable from one that
+            // legitimately returned nothing.
+            throw error
         }
     }
 
