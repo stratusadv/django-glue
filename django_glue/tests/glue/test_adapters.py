@@ -1187,6 +1187,35 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         self.assertEqual(manifest['policy']['identity']['initial']['skills'], [skill.pk])
 
+    def test_form_field_get_reduces_model_choice_initial_to_pk(self):
+        """FormFieldAttribute.get()/.state must not leak raw model instances/querysets.
+
+        An unbound ModelForm's initial can hold model instances/querysets for
+        Model(Multiple)ChoiceField (e.g. instance=obj populates initial from
+        model_to_dict). Regression test for a rename that accidentally
+        dropped the field.prepare_value() call in FormFieldAttribute.get().
+        """
+        skill = Skill.objects.create(name='Grappling')
+        gorilla = Gorilla.objects.create(name='Koko')
+        gorilla.skills.add(skill)
+
+        from django import forms
+
+        class SkillForm(forms.ModelForm):
+            class Meta:
+                model = Gorilla
+                fields = ['skills']
+
+        glue_object = with_request(FormGlue(
+            SkillForm(instance=gorilla),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        attribute = glue_object.attributes['skills']
+
+        self.assertEqual(attribute.get(), [skill.pk])
+        self.assertEqual(attribute.state['value'], [skill.pk])
+
     def test_form_adapter_reconstruction_preserves_initial_data(self):
         gorilla = Gorilla.objects.create(name='Instance Name', age=12)
         glue_object = with_request(FormGlue(
