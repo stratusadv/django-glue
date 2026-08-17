@@ -14,7 +14,7 @@ _MISSING = object()
 class DeclaredAttributeOptions:
     """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
 
-    required_access: GlueAccess
+    required_access: GlueAccess = GlueAccess.VIEW
     is_callable: bool = True
     takes_client_state: bool | list[str] | tuple[str, ...] = True
     updates_client_state: bool = True
@@ -27,7 +27,7 @@ class DeclaredAttribute:
 
     Use as a decorator on methods or assign directly on classes to expose
     them through the Glue system. The required access level determines what
-    operations are permitted on this attribute.
+    operations are permitted on this attribute, and defaults to VIEW.
 
     Examples:
         # As a decorator on a method
@@ -36,7 +36,8 @@ class DeclaredAttribute:
             ...
 
         # As a decorator on a method that doesn't need client state
-        @Attribute(required_access=GlueAccess.VIEW, takes_client_state=False)
+        # (required_access defaults to VIEW, so it can be omitted)
+        @Attribute(takes_client_state=False)
         def load(self) -> dict:
             ...
 
@@ -48,7 +49,7 @@ class DeclaredAttribute:
         self,
         value: Any = _MISSING,
         *,
-        required_access: GlueAccess,
+        required_access: GlueAccess = GlueAccess.VIEW,
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         identity: bool = False,

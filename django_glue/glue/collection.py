@@ -50,7 +50,7 @@ class CollectionGlue(BaseGlue):
             f'items.{index}': GlueObjectAttribute(
                 owner=self,
                 name=f'items.{index}',
-                access=self.access,
+                required_access=self.access,
                 glue_object=item,
             )
             for index, item in enumerate(self.items)

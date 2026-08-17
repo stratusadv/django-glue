@@ -661,6 +661,29 @@ class GluePolicyTestCase(TestCase):
             GluePolicy.model_validate(payload)
 
 
+class DeclaredAttributeDefaultAccessTestCase(TestCase):
+    def test_required_access_defaults_to_view_when_omitted(self):
+        @DeclaredAttribute
+        def load(self):
+            return 'loaded'
+
+        self.assertEqual(load.__glue_options__.required_access, GlueAccess.VIEW)
+
+    def test_required_access_defaults_to_view_with_other_kwargs(self):
+        @DeclaredAttribute(takes_client_state=False)
+        def load(self):
+            return 'loaded'
+
+        self.assertEqual(load.__glue_options__.required_access, GlueAccess.VIEW)
+
+    def test_required_access_can_still_be_overridden(self):
+        @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+        def save(self):
+            return 'saved'
+
+        self.assertEqual(save.__glue_options__.required_access, GlueAccess.CHANGE)
+
+
 class DjangoModelGlueObjectTestCase(TestCase):
     def setUp(self):
         self.gorilla = Gorilla.objects.create(

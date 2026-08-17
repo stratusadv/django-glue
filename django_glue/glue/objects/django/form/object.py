@@ -60,7 +60,7 @@ class FormGlue(BaseGlue):
                 name=name,
                 field=field,
                 form=self.form,
-                access=GlueAccess.VIEW if field.disabled else GlueAccess.CHANGE,
+                required_access=GlueAccess.VIEW if field.disabled else GlueAccess.CHANGE,
             )
             for name, field in self.form.fields.items()
         }
