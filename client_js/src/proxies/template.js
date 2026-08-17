@@ -19,6 +19,29 @@ class GlueTemplateProxy extends BaseGlueProxy {
         element.outerHTML = html
         return html
     }
+
+    async _renderInsertAdjacentHtml(selector, position, payload = {}) {
+        const element = typeof selector === 'string' ? document.querySelector(selector) : selector
+        const html = await this.renderHtml(payload)
+        element.insertAdjacentHTML(position, html)
+        return html
+    }
+
+    async renderInsertAdjacentHtmlBeforeBegin(selector, payload = {}) {
+        return await this._renderInsertAdjacentHtml(selector, 'beforebegin', payload)
+    }
+
+    async renderInsertAdjacentHtmlAfterBegin(selector, payload = {}) {
+        return await this._renderInsertAdjacentHtml(selector, 'afterbegin', payload)
+    }
+
+    async renderInsertAdjacentHtmlBeforeEnd(selector, payload = {}) {
+        return await this._renderInsertAdjacentHtml(selector, 'beforeend', payload)
+    }
+
+    async renderInsertAdjacentHtmlAfterEnd(selector, payload = {}) {
+        return await this._renderInsertAdjacentHtml(selector, 'afterend', payload)
+    }
 }
 
 export default GlueTemplateProxy

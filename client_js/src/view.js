@@ -27,6 +27,42 @@ class GlueView {
         return html
     }
 
+    async _renderInsertAdjacentHtml(target, position, payload = {}) {
+        const element = this._resolveElement(target)
+        const html = await this.post(payload)
+        const fragment = this._htmlToFragment(html)
+
+        if (position === 'beforebegin') {
+            element.before(fragment)
+        } else if (position === 'afterbegin') {
+            element.prepend(fragment)
+        } else if (position === 'beforeend') {
+            element.append(fragment)
+        } else if (position === 'afterend') {
+            element.after(fragment)
+        } else {
+            throw new Error(`Invalid insert position: ${position}`)
+        }
+
+        return html
+    }
+
+    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
+        return await this._renderInsertAdjacentHtml(target, 'beforebegin', payload)
+    }
+
+    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
+        return await this._renderInsertAdjacentHtml(target, 'afterbegin', payload)
+    }
+
+    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
+        return await this._renderInsertAdjacentHtml(target, 'beforeend', payload)
+    }
+
+    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
+        return await this._renderInsertAdjacentHtml(target, 'afterend', payload)
+    }
+
     async _fetchView(payload = {}, method = 'POST') {
         const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
             method: 'POST',

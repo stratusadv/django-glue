@@ -292,6 +292,35 @@
       element.replaceWith(this._htmlToFragment(html));
       return html;
     }
+    async _renderInsertAdjacentHtml(target, position, payload = {}) {
+      const element = this._resolveElement(target);
+      const html = await this.post(payload);
+      const fragment = this._htmlToFragment(html);
+      if (position === "beforebegin") {
+        element.before(fragment);
+      } else if (position === "afterbegin") {
+        element.prepend(fragment);
+      } else if (position === "beforeend") {
+        element.append(fragment);
+      } else if (position === "afterend") {
+        element.after(fragment);
+      } else {
+        throw new Error(`Invalid insert position: ${position}`);
+      }
+      return html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "afterbegin", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "afterend", payload);
+    }
     async _fetchView(payload = {}, method = "POST") {
       const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
         method: "POST",
@@ -418,9 +447,8 @@
         const errorHandler = this._onError || window.Glue?._onError;
         if (errorHandler) {
           errorHandler({ error, attribute, attributeRequest, proxy: this });
-        } else {
-          throw error;
         }
+        throw error;
       }
     }
     _stateForAttribute(takesClientState) {
@@ -1502,6 +1530,24 @@
       const html = await this.renderHtml(payload);
       element.outerHTML = html;
       return html;
+    }
+    async _renderInsertAdjacentHtml(selector, position, payload = {}) {
+      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
+      const html = await this.renderHtml(payload);
+      element.insertAdjacentHTML(position, html);
+      return html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(selector, payload = {}) {
+      return await this._renderInsertAdjacentHtml(selector, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(selector, payload = {}) {
+      return await this._renderInsertAdjacentHtml(selector, "afterbegin", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(selector, payload = {}) {
+      return await this._renderInsertAdjacentHtml(selector, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(selector, payload = {}) {
+      return await this._renderInsertAdjacentHtml(selector, "afterend", payload);
     }
   }
   var template_default = GlueTemplateProxy;
