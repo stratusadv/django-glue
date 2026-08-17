@@ -5,7 +5,7 @@ class GorillaService:
     def __init__(self, gorilla):
         self.gorilla = gorilla
 
-    @Glue.attribute(access=Glue.Access.CHANGE)
+    @Glue.attribute(required_access=Glue.Access.CHANGE)
     def increment_age(self):
         self.gorilla.age += 1
         self.gorilla.save()

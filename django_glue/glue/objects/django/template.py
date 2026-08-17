@@ -60,7 +60,7 @@ class TemplateGlue(BaseGlue):
             initial_context_data=policy.identity.get('initial_context_data', {}),
         )
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def render_html(self, kwargs: dict[str, Any]) -> dict[str, str]:
         context_data = self.initial_context_data
         merged_context = {**context_data, **kwargs}

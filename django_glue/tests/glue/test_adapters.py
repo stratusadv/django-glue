@@ -135,18 +135,18 @@ class NestedStatsGlue(BaseGlue):
     def _reconstruct_from_policy(cls, policy):
         return cls()
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def score(self) -> int:
         return 42
 
-    @DeclaredAttribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def reset(self) -> str:
         return 'reset'
 
 
 class NestedDashboardGlue(BaseGlue):
     namespace = 'dashboard'
-    stats = DeclaredAttribute(NestedStatsGlue(), access=GlueAccess.VIEW)
+    stats = DeclaredAttribute(NestedStatsGlue(), required_access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='dashboard', access=GlueAccess.CHANGE)
@@ -184,7 +184,7 @@ class CollectionDashboardGlue(BaseGlue):
     namespace = 'collectionDashboard'
     day_collection = DeclaredAttribute(
         CollectionGlue([NestedStatsGlue()], name='internal_days'),
-        access=GlueAccess.VIEW,
+        required_access=GlueAccess.VIEW,
     )
 
     def __init__(self):
@@ -197,8 +197,8 @@ class CollectionDashboardGlue(BaseGlue):
 
 class DescriptorDefaultGlue(BaseGlue):
     namespace = 'descriptorDefault'
-    count = DeclaredAttribute(0, access=GlueAccess.VIEW)
-    values = DeclaredAttribute(access=GlueAccess.VIEW, default_factory=list)
+    count = DeclaredAttribute(0, required_access=GlueAccess.VIEW)
+    values = DeclaredAttribute(required_access=GlueAccess.VIEW, default_factory=list)
 
     def __init__(self):
         super().__init__(name='descriptorDefault', access=GlueAccess.VIEW)
@@ -214,7 +214,7 @@ class PlainService:
 
 class DeclaredStateGlue(BaseGlue):
     namespace = 'declared_state'
-    count = DeclaredAttribute(3, access=GlueAccess.VIEW)
+    count = DeclaredAttribute(3, required_access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='declared_state', access=GlueAccess.CHANGE)
@@ -238,7 +238,7 @@ class DeclaredStateGlue(BaseGlue):
 
 
 class InvalidServiceGlue(DeclaredStateGlue):
-    service = DeclaredAttribute(PlainService(), access=GlueAccess.DELETE)
+    service = DeclaredAttribute(PlainService(), required_access=GlueAccess.DELETE)
 
 
 class AllFieldsTestCase(TestCase):
@@ -659,6 +659,29 @@ class GluePolicyTestCase(TestCase):
 
         with self.assertRaises(GlueInvalidPolicyError):
             GluePolicy.model_validate(payload)
+
+
+class DeclaredAttributeDefaultAccessTestCase(TestCase):
+    def test_required_access_defaults_to_view_when_omitted(self):
+        @DeclaredAttribute
+        def load(self):
+            return 'loaded'
+
+        self.assertEqual(load.__glue_options__.required_access, GlueAccess.VIEW)
+
+    def test_required_access_defaults_to_view_with_other_kwargs(self):
+        @DeclaredAttribute(takes_client_state=False)
+        def load(self):
+            return 'loaded'
+
+        self.assertEqual(load.__glue_options__.required_access, GlueAccess.VIEW)
+
+    def test_required_access_can_still_be_overridden(self):
+        @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+        def save(self):
+            return 'saved'
+
+        self.assertEqual(save.__glue_options__.required_access, GlueAccess.CHANGE)
 
 
 class DjangoModelGlueObjectTestCase(TestCase):
@@ -1163,6 +1186,35 @@ class DjangoFormGlueObjectTestCase(TestCase):
         manifest = json.loads(json.dumps(glue_object.manifest.model_dump(), cls=GlueResponseJSONEncoder))
 
         self.assertEqual(manifest['policy']['identity']['initial']['skills'], [skill.pk])
+
+    def test_form_field_get_reduces_model_choice_initial_to_pk(self):
+        """FormFieldAttribute.get()/.state must not leak raw model instances/querysets.
+
+        An unbound ModelForm's initial can hold model instances/querysets for
+        Model(Multiple)ChoiceField (e.g. instance=obj populates initial from
+        model_to_dict). Regression test for a rename that accidentally
+        dropped the field.prepare_value() call in FormFieldAttribute.get().
+        """
+        skill = Skill.objects.create(name='Grappling')
+        gorilla = Gorilla.objects.create(name='Koko')
+        gorilla.skills.add(skill)
+
+        from django import forms
+
+        class SkillForm(forms.ModelForm):
+            class Meta:
+                model = Gorilla
+                fields = ['skills']
+
+        glue_object = with_request(FormGlue(
+            SkillForm(instance=gorilla),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        attribute = glue_object.attributes['skills']
+
+        self.assertEqual(attribute.get(), [skill.pk])
+        self.assertEqual(attribute.state['value'], [skill.pk])
 
     def test_form_adapter_reconstruction_preserves_initial_data(self):
         gorilla = Gorilla.objects.create(name='Instance Name', age=12)

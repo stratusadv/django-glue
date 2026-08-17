@@ -56,7 +56,7 @@ class FunctionGlue(BaseGlue):
             access=policy.access,
         )
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def execute(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         function = get_attr_from_path_string(self.target)
         result = function(**kwargs)

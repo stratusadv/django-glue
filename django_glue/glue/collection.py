@@ -50,13 +50,13 @@ class CollectionGlue(BaseGlue):
             f'items.{index}': GlueObjectAttribute(
                 owner=self,
                 name=f'items.{index}',
-                access=self.access,
+                required_access=self.access,
                 glue_object=item,
             )
             for index, item in enumerate(self.items)
         }
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False)
     def load_state(self) -> dict[str, Any]:
         """Return collection state, or raise if lazily reconstructed.
 

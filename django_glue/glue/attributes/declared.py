@@ -14,7 +14,7 @@ _MISSING = object()
 class DeclaredAttributeOptions:
     """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
 
-    access: GlueAccess
+    required_access: GlueAccess = GlueAccess.VIEW
     is_callable: bool = True
     takes_client_state: bool | list[str] | tuple[str, ...] = True
     updates_client_state: bool = True
@@ -26,29 +26,30 @@ class DeclaredAttribute:
     Descriptor for marking methods or values as Glue attributes.
 
     Use as a decorator on methods or assign directly on classes to expose
-    them through the Glue system. The access level determines what operations
-    are permitted on this attribute.
+    them through the Glue system. The required access level determines what
+    operations are permitted on this attribute, and defaults to VIEW.
 
     Examples:
         # As a decorator on a method
-        @Attribute(access=GlueAccess.CHANGE)
+        @Attribute(required_access=GlueAccess.CHANGE)
         def save(self, data: dict) -> dict:
             ...
 
         # As a decorator on a method that doesn't need client state
-        @Attribute(access=GlueAccess.VIEW, takes_client_state=False)
+        # (required_access defaults to VIEW, so it can be omitted)
+        @Attribute(takes_client_state=False)
         def load(self) -> dict:
             ...
 
         # As a class attribute for a value
-        services = Attribute(TaskService(), access=GlueAccess.DELETE)
+        services = Attribute(TaskService(), required_access=GlueAccess.DELETE)
     """
 
     def __init__(
         self,
         value: Any = _MISSING,
         *,
-        access: GlueAccess,
+        required_access: GlueAccess = GlueAccess.VIEW,
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         identity: bool = False,
@@ -60,7 +61,7 @@ class DeclaredAttribute:
         if default is not _MISSING and default_factory is not _MISSING:
             raise TypeError('DeclaredAttribute received both default and default_factory.')
 
-        self._access = access
+        self._required_access = required_access
         self._takes_client_state = takes_client_state
         self._updates_client_state = updates_client_state
         self._identity = identity
@@ -84,7 +85,7 @@ class DeclaredAttribute:
     def _update_glue_options(self) -> None:
         """Create and attach the __glue_options__ based on current state."""
         self.__glue_options__ = DeclaredAttributeOptions(
-            access=self._access,
+            required_access=self._required_access,
             is_callable=self._is_callable,
             takes_client_state=self._takes_client_state,
             updates_client_state=self._updates_client_state,

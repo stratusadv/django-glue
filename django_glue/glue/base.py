@@ -107,7 +107,7 @@ class BaseGlue(ABC):
 
         By default, auto-generates identity from attributes marked with
         identity=True (e.g., @Glue.property(identity=True) or
-        @Glue.attribute(access=..., identity=True)).
+        @Glue.attr(required_access=..., identity=True)).
 
         Override in subclasses for custom behavior.
         """
@@ -220,7 +220,7 @@ class BaseGlue(ABC):
     def _invalidate_state(self) -> None:
         self.__dict__.pop('state', None)
 
-    @DeclaredAttribute(access=GlueAccess.VIEW, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False)
     def load_state(self) -> dict[str, Any]:
         return self.state
 

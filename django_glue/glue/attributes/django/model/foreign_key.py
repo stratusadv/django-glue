@@ -36,7 +36,7 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
         name: str,
         field: models.Field,
         instance: models.Model,
-        access: GlueAccess,
+        required_access: GlueAccess,
         options: dict | None = None,
         is_cached: bool = False,
         related_fields: Sequence[str] | None = None,
@@ -47,7 +47,7 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
             name=name,
             field=field,
             instance=instance,
-            access=access,
+            required_access=required_access,
             options=options,
         )
         self.is_cached = is_cached

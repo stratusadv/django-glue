@@ -24,9 +24,9 @@ class BaseDjangoFieldGlueAttribute(StateAttribute):
         owner: BaseGlue,
         name: str,
         field: Any,
-        access: GlueAccess,
+        required_access: GlueAccess,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access)
+        super().__init__(owner=owner, name=name, required_access=required_access)
         self.field = field
 
     @property

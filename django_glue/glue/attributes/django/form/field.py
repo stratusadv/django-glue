@@ -21,9 +21,9 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
         name: str,
         field: forms.Field,
         form: forms.BaseForm,
-        access: GlueAccess,
+        required_access: GlueAccess,
     ) -> None:
-        super().__init__(owner=owner, name=name, field=field, access=access)
+        super().__init__(owner=owner, name=name, field=field, required_access=required_access)
         self.form = form
 
     def add_choice_metadata(self, metadata: dict[str, Any]) -> None:

@@ -62,7 +62,7 @@ class FormSetGlue(BaseGlue):
             f'form_list.{index}': GlueObjectAttribute(
                 owner=self,
                 name=f'form_list.{index}',
-                access=self.access,
+                required_access=self.access,
                 glue_object=self._build_form_glue(form, str(index)),
             )
             for index, form in enumerate(self.formset.forms)
@@ -70,7 +70,7 @@ class FormSetGlue(BaseGlue):
         return attributes
 
     @DeclaredAttribute(
-        access=GlueAccess.CHANGE,
+        required_access=GlueAccess.CHANGE,
         takes_client_state=False,
         updates_client_state=False,
     )
@@ -79,7 +79,7 @@ class FormSetGlue(BaseGlue):
         return self._build_form_glue(form, key)
 
     @DeclaredAttribute(
-        access=GlueAccess.CHANGE,
+        required_access=GlueAccess.CHANGE,
         updates_client_state=False,
     )
     def validate(self) -> dict[str, Any]:
