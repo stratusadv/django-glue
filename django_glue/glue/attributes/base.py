@@ -24,12 +24,12 @@ class BaseGlueAttribute(ABC):
         *,
         owner: BaseGlue,
         name: str,
-        access: GlueAccess,
+        required_access: GlueAccess,
         attr_owner_instance: Any = None,
     ) -> None:
         self.owner = owner
         self.name = name
-        self.required_access = access
+        self.required_access = required_access
         self._attr_owner_instance = attr_owner_instance
 
     @property

@@ -110,7 +110,7 @@ class GlueAttributeCollector:
             glue_attribute = GlueObjectAttribute(
                 owner=self.root_glue_owner,
                 name=attr_name,
-                access=options.access,
+                required_access=options.required_access,
                 glue_object=value,
                 attr_owner_instance=attr_owner_instance,
             )
@@ -161,7 +161,7 @@ class GlueAttributeCollector:
         return CallableAttribute(
             owner=self.root_glue_owner,
             name=attr_name,
-            access=options.access,
+            required_access=options.required_access,
             takes_client_state=options.takes_client_state,
             updates_client_state=options.updates_client_state,
             attr_owner_instance=attr_owner_instance,
@@ -180,7 +180,7 @@ class GlueAttributeCollector:
             return CompositeStateAttribute(
                 owner=self.root_glue_owner,
                 name=attr_name,
-                access=options.access,
+                required_access=options.required_access,
                 attr_owner_instance=attr_owner_instance,
             )
 
@@ -188,7 +188,7 @@ class GlueAttributeCollector:
         return ReadOnlyAttribute(
             owner=self.root_glue_owner,
             name=attr_name,
-            access=options.access,
+            required_access=options.required_access,
             attr_owner_instance=attr_owner_instance,
         )
 

@@ -38,11 +38,11 @@ class RelatedSetFieldAttribute(BaseGlueAttribute):
         name: str,
         instance: models.Model,
         related_model: type[models.Model],
-        access: GlueAccess,
+        required_access: GlueAccess,
         is_prefetched: bool = False,
         relation_type: Literal['reverse_fk', 'm2m'],
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access)
+        super().__init__(owner=owner, name=name, required_access=required_access)
         self.instance = instance
         self.related_model = related_model
         self.is_prefetched = is_prefetched

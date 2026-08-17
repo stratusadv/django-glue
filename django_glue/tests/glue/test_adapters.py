@@ -135,18 +135,18 @@ class NestedStatsGlue(BaseGlue):
     def _reconstruct_from_policy(cls, policy):
         return cls()
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def score(self) -> int:
         return 42
 
-    @DeclaredAttribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def reset(self) -> str:
         return 'reset'
 
 
 class NestedDashboardGlue(BaseGlue):
     namespace = 'dashboard'
-    stats = DeclaredAttribute(NestedStatsGlue(), access=GlueAccess.VIEW)
+    stats = DeclaredAttribute(NestedStatsGlue(), required_access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='dashboard', access=GlueAccess.CHANGE)
@@ -184,7 +184,7 @@ class CollectionDashboardGlue(BaseGlue):
     namespace = 'collectionDashboard'
     day_collection = DeclaredAttribute(
         CollectionGlue([NestedStatsGlue()], name='internal_days'),
-        access=GlueAccess.VIEW,
+        required_access=GlueAccess.VIEW,
     )
 
     def __init__(self):
@@ -197,8 +197,8 @@ class CollectionDashboardGlue(BaseGlue):
 
 class DescriptorDefaultGlue(BaseGlue):
     namespace = 'descriptorDefault'
-    count = DeclaredAttribute(0, access=GlueAccess.VIEW)
-    values = DeclaredAttribute(access=GlueAccess.VIEW, default_factory=list)
+    count = DeclaredAttribute(0, required_access=GlueAccess.VIEW)
+    values = DeclaredAttribute(required_access=GlueAccess.VIEW, default_factory=list)
 
     def __init__(self):
         super().__init__(name='descriptorDefault', access=GlueAccess.VIEW)
@@ -214,7 +214,7 @@ class PlainService:
 
 class DeclaredStateGlue(BaseGlue):
     namespace = 'declared_state'
-    count = DeclaredAttribute(3, access=GlueAccess.VIEW)
+    count = DeclaredAttribute(3, required_access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='declared_state', access=GlueAccess.CHANGE)
@@ -238,7 +238,7 @@ class DeclaredStateGlue(BaseGlue):
 
 
 class InvalidServiceGlue(DeclaredStateGlue):
-    service = DeclaredAttribute(PlainService(), access=GlueAccess.DELETE)
+    service = DeclaredAttribute(PlainService(), required_access=GlueAccess.DELETE)
 
 
 class AllFieldsTestCase(TestCase):

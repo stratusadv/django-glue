@@ -44,7 +44,7 @@ class CallableAttribute(BaseGlueAttribute):
         *,
         owner: BaseGlue,
         name: str,
-        access: GlueAccess,
+        required_access: GlueAccess,
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         attr_owner_instance: Any = None,
@@ -52,7 +52,7 @@ class CallableAttribute(BaseGlueAttribute):
         super().__init__(
             owner=owner,
             name=name,
-            access=access,
+            required_access=required_access,
             attr_owner_instance=attr_owner_instance
         )
         self.takes_client_state = takes_client_state

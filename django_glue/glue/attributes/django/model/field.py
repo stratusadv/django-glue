@@ -21,10 +21,10 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
         name: str,
         field: models.Field,
         instance: models.Model,
-        access: GlueAccess,
+        required_access: GlueAccess,
         options: dict | None = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, field=field, access=access)
+        super().__init__(owner=owner, name=name, field=field, required_access=required_access)
         self.instance = instance
 
         options = options or {}

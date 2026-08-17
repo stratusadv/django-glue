@@ -24,10 +24,15 @@ class StateAttribute(BaseGlueAttribute):
         *,
         owner: BaseGlue,
         name: str,
-        access: GlueAccess,
+        required_access: GlueAccess,
         attr_owner_instance: Any = None,
     ) -> None:
-        super().__init__(owner=owner, name=name, access=access, attr_owner_instance=attr_owner_instance)
+        super().__init__(
+            owner=owner,
+            name=name,
+            required_access=required_access,
+            attr_owner_instance=attr_owner_instance,
+        )
 
     @property
     def metadata(self) -> dict[str, Any]:

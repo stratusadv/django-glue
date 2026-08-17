@@ -15,14 +15,14 @@ class GlueObjectAttribute(BaseGlueAttribute):
         *,
         owner: BaseGlue,
         name: str,
-        access: GlueAccess,
+        required_access: GlueAccess,
         glue_object: BaseGlue,
         attr_owner_instance: Any = None,
     ) -> None:
         super().__init__(
             owner=owner,
             name=name,
-            access=access,
+            required_access=required_access,
             attr_owner_instance=attr_owner_instance,
         )
         self.glue_object = glue_object

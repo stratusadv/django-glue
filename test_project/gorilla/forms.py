@@ -44,7 +44,7 @@ class GorillaGlueModelForm(forms.ModelForm):
         for field in self.fields.values():
             field.required = False
 
-    @Glue.attribute(access=Glue.Access.DELETE)
+    @Glue.attribute(required_access=Glue.Access.DELETE)
     def process(self, request: WSGIRequest, step: int = 1, **kwargs) -> GlueResponse:
         """
         Handle progressive form steps.

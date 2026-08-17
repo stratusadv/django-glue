@@ -23,7 +23,7 @@ from django_glue.response import GlueRedirectResponse, GlueResponse
 
 class _GluePropertyDescriptor:
     """
-    A descriptor that combines @property with @Glue.attribute(access=VIEW).
+    A descriptor that combines @property with @Glue.attr(required_access=VIEW).
 
     Usage:
         @Glue.property
@@ -54,7 +54,7 @@ class _GluePropertyDescriptor:
         # Attach glue options for GlueAttributeCollector to discover
         from django_glue.glue.attributes.declared import DeclaredAttributeOptions
         self.__glue_options__ = DeclaredAttributeOptions(
-            access=GlueAccess.VIEW,
+            required_access=GlueAccess.VIEW,
             is_callable=False,
             takes_client_state=True,
             updates_client_state=True,
@@ -84,6 +84,7 @@ class Glue:
     Access = GlueAccess
     LoadingStrategy = LoadingStrategy
     attribute = DeclaredAttribute
+    attr = DeclaredAttribute
     property = _GluePropertyDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse

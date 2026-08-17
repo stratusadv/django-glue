@@ -141,7 +141,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                     name=field.attname,
                     field=field,
                     instance=self.instance,
-                    access=self._field_access(field_name),
+                    required_access=self._field_access(field_name),
                 )
                 if field_name == field.attname and field.name != field_name:
                     continue
@@ -152,7 +152,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                     name=field_name,
                     field=field,
                     instance=self.instance,
-                    access=self._field_access(field_name),
+                    required_access=self._field_access(field_name),
                     is_cached=self._is_fk_cached(field_name),
                     related_fields=self.related_field_config.get(field_name, {}).get('fields'),
                     related_exclude=self.related_field_config.get(field_name, {}).get('exclude'),
@@ -170,14 +170,14 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                     name=field_name,
                     field=field,
                     instance=self.instance,
-                    access=self._field_access(field_name),
+                    required_access=self._field_access(field_name),
                 )
 
         attributes.update({
             annotation_name: ReadOnlyAttribute(
                 owner=self,
                 name=annotation_name,
-                access=GlueAccess.VIEW,
+                required_access=GlueAccess.VIEW,
                 attr_owner_instance=self.instance,
             )
             for annotation_name in (*self._annotation_names, *self._computed_attribute_names)
@@ -197,7 +197,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             form_attribute = GlueObjectAttribute(
                 owner=self,
                 name=attribute_name,
-                access=self.access,
+                required_access=self.access,
                 glue_object=FormGlue(
                     form=form,
                     name=f'{self.name}.{attribute_name}',
@@ -305,7 +305,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             name=field_name,
             instance=self.instance,
             related_model=related_model,
-            access=GlueAccess.VIEW,  # Read-only for v1
+            required_access=GlueAccess.VIEW,  # Read-only for v1
             is_prefetched=self._is_prefetched(field_name),
             relation_type=relation_type,
         )
@@ -408,7 +408,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         return self.request.FILES.get(field_name)
 
-    @DeclaredAttribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
         try:
             self.instance.full_clean()
@@ -446,7 +446,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             return value.get('value')
         return getattr(value, 'pk', value)
 
-    @DeclaredAttribute(access=GlueAccess.VIEW)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -484,6 +484,6 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
     # 'str' from a median_price-style property) -- a bug entirely unrelated
     # to deleting the row. takes_client_state=False skips that hydration
     # since delete has no legitimate use for it.
-    @DeclaredAttribute(access=GlueAccess.DELETE, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.DELETE, takes_client_state=False)
     def delete(self) -> None:
         self.instance.delete()

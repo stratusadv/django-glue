@@ -114,12 +114,12 @@ class FormGlue(BaseGlue):
         self._loaded_state = state
         self.form = self._bind_form()
 
-    @DeclaredAttribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         return {'valid': bound_form.is_valid(), 'errors': dict(bound_form.errors)}
 
-    @DeclaredAttribute(access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         valid = bound_form.is_valid()
@@ -128,7 +128,7 @@ class FormGlue(BaseGlue):
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     # Choice loading is read-only; returning form state would trigger validation during serialization.
-    @DeclaredAttribute(access=GlueAccess.VIEW, takes_client_state=False, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False, updates_client_state=False)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
