@@ -1216,6 +1216,46 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(attribute.get(), [skill.pk])
         self.assertEqual(attribute.state['value'], [skill.pk])
 
+    def test_form_field_get_falls_back_to_field_initial(self):
+        """FormFieldAttribute.get() must match Django's own BoundField.value()
+        semantics: prefer form.initial, fall back to field.initial when the
+        form-level initial dict has no entry for the field.
+
+        A field declared directly on a form (not backed by a model column,
+        e.g. an extra ModelForm field populated in __init__ via
+        `self.fields[name].initial = ...` rather than `self.initial[name] =
+        ...`) renders fine in a classically-rendered Django form because
+        BoundField.value() -> Form.get_initial_for_field() has this same
+        fallback. Without it here, such a field silently serializes as None
+        to the client even though Django's own rendering would show it.
+        """
+        from django import forms
+
+        class ExtraFieldForm(forms.Form):
+            name = forms.CharField()
+
+        form = ExtraFieldForm()
+        form.fields['name'].initial = 'Set via field.initial'
+
+        glue_object = FormGlue(form, **glue_context(name='extra-field-form'))
+        attribute = glue_object.attributes['name']
+
+        self.assertEqual(attribute.get(), 'Set via field.initial')
+
+    def test_form_field_get_prefers_form_initial_over_field_initial(self):
+        from django import forms
+
+        class ExtraFieldForm(forms.Form):
+            name = forms.CharField()
+
+        form = ExtraFieldForm(initial={'name': 'Set via form.initial'})
+        form.fields['name'].initial = 'Set via field.initial'
+
+        glue_object = FormGlue(form, **glue_context(name='extra-field-form'))
+        attribute = glue_object.attributes['name']
+
+        self.assertEqual(attribute.get(), 'Set via form.initial')
+
     def test_form_adapter_reconstruction_preserves_initial_data(self):
         gorilla = Gorilla.objects.create(name='Instance Name', age=12)
         glue_object = with_request(FormGlue(

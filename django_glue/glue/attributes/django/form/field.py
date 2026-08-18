@@ -57,7 +57,17 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
         # client receives full nested objects instead of PKs, which then fail
         # Model(Multiple)ChoiceField.clean() as "Enter a list of values."
         # (or an invalid choice) on save. Mirrors FormGlue._prepared_initial.
-        return self.field.prepare_value(self.form.initial.get(self.name))
+        #
+        # get_initial_for_field() (not form.initial.get(self.name) alone) is
+        # what actually matches Django's own BoundField.value(): it falls
+        # back to field.initial when the form-level initial dict has nothing
+        # for this field, same as a classically-rendered <input> would. Without
+        # that fallback, a field.initial set post-construction (e.g. in a
+        # ModelForm.__init__ override for a non-model field) is silently
+        # ignored here even though it renders fine in a normal Django form.
+        return self.field.prepare_value(
+            self.form.get_initial_for_field(self.field, self.name)
+        )
 
     @property
     def state(self) -> dict[str, Any] | None:
