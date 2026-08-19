@@ -111,42 +111,23 @@ describe('Glue proxies', () => {
                 {
                     is_glue_manifest: true,
                     policy_token: createPolicyToken({
-                        name: 'day_1',
-                        namespace: 'timeEntryDay',
-                        attributes: ['date'],
-                    }),
-                    metadata: {
-                        attributes: {
-                            date: {namespace: 'readonly'},
-                        },
-                    },
-                },
-                {
-                    is_glue_manifest: true,
-                    policy_token: createPolicyToken({
                         name: 'time_entry_days',
                         namespace: 'collection',
                         identity: {},
-                        attributes: [
-                            createPolicy({
-                                name: 'day_1',
-                                namespace: 'timeEntryDay',
-                                attributes: ['date'],
-                            }),
-                        ],
+                        attributes: [],
                     }),
-                    metadata: {
-                        attributes: {
-                            'items.0': {
-                                namespace: 'glue',
-                                glue_namespace: 'timeEntryDay',
-                                metadata: {
-                                    attributes: {
-                                        date: {namespace: 'readonly'},
-                                    },
-                                },
+                    state: {
+                        items: [
+                            {
+                                policy_token: createPolicyToken({
+                                    name: 'day_1',
+                                    namespace: 'timeEntryDay',
+                                    attributes: ['date'],
+                                }),
+                                state: {date: {value: '2026-08-10'}},
+                                metadata: {attributes: {date: {namespace: 'readonly'}}},
                             },
-                        },
+                        ],
                     },
                 },
             ],
@@ -167,50 +148,23 @@ describe('Glue proxies', () => {
                 {
                     is_glue_manifest: true,
                     policy_token: createPolicyToken({
-                        name: 'day_1',
-                        namespace: 'timeEntryDay',
-                        attributes: ['date'],
-                    }),
-                    state: {
-                        date: {value: '2026-08-10'},
-                    },
-                    metadata: {
-                        attributes: {
-                            date: {namespace: 'readonly'},
-                        },
-                    },
-                },
-                {
-                    is_glue_manifest: true,
-                    policy_token: createPolicyToken({
                         name: 'time_entry_days',
                         namespace: 'collection',
                         identity: {},
-                        attributes: [
-                            createPolicy({
-                                name: 'day_1',
-                                namespace: 'timeEntryDay',
-                                attributes: ['date'],
-                            }),
-                        ],
+                        attributes: [],
                     }),
                     state: {
-                        'items.0': {
-                            date: {value: '2026-08-10'},
-                        },
-                    },
-                    metadata: {
-                        attributes: {
-                            'items.0': {
-                                namespace: 'glue',
-                                glue_namespace: 'timeEntryDay',
-                                metadata: {
-                                    attributes: {
-                                        date: {namespace: 'readonly'},
-                                    },
-                                },
+                        items: [
+                            {
+                                policy_token: createPolicyToken({
+                                    name: 'day_1',
+                                    namespace: 'timeEntryDay',
+                                    attributes: ['date'],
+                                }),
+                                state: {date: {value: '2026-08-10'}},
+                                metadata: {attributes: {date: {namespace: 'readonly'}}},
                             },
-                        },
+                        ],
                     },
                 },
             ],
@@ -231,54 +185,38 @@ describe('Glue proxies', () => {
                 name: 'time_entry_days',
                 namespace: 'collection',
                 identity: {},
-                attributes: [
-                    createPolicy({
-                        name: 'day_1',
-                        namespace: 'timeEntryDay',
-                        attributes: ['date'],
-                    }),
-                ],
+                attributes: [],
             }),
             state: {
-                'items.0': {
-                    date: {value: '2026-08-10'},
-                },
-            },
-            metadata: {
-                attributes: {
-                    'items.0': {
-                        namespace: 'glue',
-                        glue_namespace: 'timeEntryDay',
-                        metadata: {
-                            attributes: {
-                                date: {namespace: 'readonly'},
-                            },
-                        },
+                items: [
+                    {
+                        policy_token: createPolicyToken({
+                            name: 'day_1',
+                            namespace: 'timeEntryDay',
+                            attributes: ['date'],
+                        }),
+                        state: {date: {value: '2026-08-10'}},
+                        metadata: {attributes: {date: {namespace: 'readonly'}}},
                     },
-                },
+                ],
             },
         })
 
         const item = collection.items[0]
         collection._applyResponse({
-            policy_token: createPolicyToken({
-                name: 'time_entry_days',
-                namespace: 'collection',
-                identity: {},
-                attributes: [
-                    createPolicy({
-                        name: 'day_1',
-                        namespace: 'timeEntryDay',
-                        attributes: ['date', 'label'],
-                    }),
-                ],
-            }),
             state: {
-                'items.0': {
-                    date: {value: '2026-08-11'},
-                },
+                items: [
+                    {
+                        policy_token: createPolicyToken({
+                            name: 'day_1',
+                            namespace: 'timeEntryDay',
+                            attributes: ['date', 'label'],
+                        }),
+                        state: {date: {value: '2026-08-11'}},
+                        metadata: {attributes: {date: {namespace: 'readonly'}}},
+                    },
+                ],
             },
-            metadata: collection._metadata,
         })
 
         const updatedItem = collection.items[0]
@@ -336,30 +274,21 @@ describe('Glue proxies', () => {
                 name: 'entries',
                 namespace: 'collection',
                 identity: {},
-                attributes: [
-                    createPolicy({
-                        name: 'entries.1',
-                        namespace: 'model',
-                        attributes: ['id', 'name', 'load'],
-                        identity: {target_pk: 1, pk_field_name: 'id'},
-                    }),
-                ],
+                attributes: [],
             }),
             state: {
-                'items.0': createState({instance_data: {id: 1, name: 'Koko'}}),
-            },
-            metadata: {
-                attributes: {
-                    'items.0': {
-                        namespace: 'glue',
-                        glue_namespace: 'model',
-                        metadata: createMetadata({
-                            attributes: {
-                                load: {namespace: 'callable'},
-                            },
+                items: [
+                    {
+                        policy_token: createPolicyToken({
+                            name: 'entries.1',
+                            namespace: 'model',
+                            attributes: ['id', 'name', 'load'],
+                            identity: {target_pk: 1, pk_field_name: 'id'},
                         }),
+                        state: createState({instance_data: {id: 1, name: 'Koko'}}),
+                        metadata: createMetadata({attributes: {load: {namespace: 'callable'}}}),
                     },
-                },
+                ],
             },
             loadingStrategy: 'eager',
         })
@@ -465,7 +394,7 @@ describe('Glue proxies', () => {
                 ],
             }),
             state: {
-                day_collection: {},
+                day_collection: {items: []},
             },
             metadata: {
                 attributes: {
@@ -488,21 +417,23 @@ describe('Glue proxies', () => {
                     createPolicy({
                         name: 'dashboard.day_collection',
                         namespace: 'collection',
-                        attributes: [
-                            createPolicy({
-                                name: 'day_1',
-                                namespace: 'timeEntryDay',
-                                attributes: ['date'],
-                            }),
-                        ],
+                        attributes: [],
                     }),
                 ],
             }),
             state: {
                 day_collection: {
-                    'items.0': {
-                        date: {value: '2026-08-10'},
-                    },
+                    items: [
+                        {
+                            policy_token: createPolicyToken({
+                                name: 'day_1',
+                                namespace: 'timeEntryDay',
+                                attributes: ['date'],
+                            }),
+                            state: {date: {value: '2026-08-10'}},
+                            metadata: {attributes: {date: {namespace: 'readonly'}}},
+                        },
+                    ],
                 },
             },
             metadata: {
@@ -510,19 +441,7 @@ describe('Glue proxies', () => {
                     day_collection: {
                         namespace: 'glue',
                         glue_namespace: 'collection',
-                        metadata: {
-                            attributes: {
-                                'items.0': {
-                                    namespace: 'glue',
-                                    glue_namespace: 'timeEntryDay',
-                                    metadata: {
-                                        attributes: {
-                                            date: {namespace: 'readonly'},
-                                        },
-                                    },
-                                },
-                            },
-                        },
+                        metadata: {attributes: {}},
                     },
                 },
             },

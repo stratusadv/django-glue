@@ -547,13 +547,16 @@ class GluePolicyTestCase(TestCase):
         self.assertIn('day_collection', glue_object.state)
         self.assertNotIn('internal_days', glue_object.state)
         self.assertEqual(nested_policy.name, 'collectionDashboard.day_collection')
-        self.assertEqual(nested_policy.attributes[0].name, 'collectionDashboard.day_collection.items.0')
+        item_policy_tokens = [item['policy_token'] for item in glue_object.state['day_collection']['items']]
+        self.assertEqual(len(item_policy_tokens), 1)
 
     def test_collection_policy_contains_ordered_item_refs(self):
+        second_item = DeclaredStateGlue()
+        second_item.loading_strategy = LoadingStrategy.EAGER
         glue_object = with_request(CollectionGlue(
             [
                 NestedStatsGlue(),
-                DeclaredStateGlue(),
+                second_item,
             ],
             name='dashboard_items',
             access=GlueAccess.VIEW,
@@ -563,16 +566,19 @@ class GluePolicyTestCase(TestCase):
 
         self.assertEqual(policy.namespace, 'collection')
         self.assertEqual(policy.identity, {})
-        self.assertEqual([
-            attribute.namespace
-            for attribute in policy.attributes
-        ], ['stats', 'declared_state'])
-        self.assertEqual([
-            attribute.name
-            for attribute in policy.attributes
-        ], ['dashboard_items.items.0', 'dashboard_items.items.1'])
-        self.assertEqual(glue_object.state['items.0'], {})
-        self.assertEqual(glue_object.state['items.1']['count']['value'], 3)
+
+        items = glue_object.state['items']
+        item_policies = [GluePolicy.from_token(item['policy_token']) for item in items]
+        self.assertEqual(
+            [item_policy.namespace for item_policy in item_policies],
+            ['stats', 'declared_state'],
+        )
+        self.assertEqual(
+            [item_policy.name for item_policy in item_policies],
+            ['stats', 'declared_state'],
+        )
+        self.assertEqual(items[0]['state'], {})
+        self.assertEqual(items[1]['state']['count']['value'], 3)
 
     def test_collection_shortcut_registers_collection_only(self):
         request = request_with_session()
@@ -586,10 +592,11 @@ class GluePolicyTestCase(TestCase):
 
         self.assertIsInstance(collection, CollectionGlue)
         self.assertEqual([manifest.name for manifest in manifests], ['dashboard_items'])
-        self.assertEqual([
-            attribute.name
-            for attribute in collection.policy.attributes
-        ], ['dashboard_items.items.0', 'dashboard_items.items.1'])
+        item_policies = [
+            GluePolicy.from_token(item['policy_token'])
+            for item in collection.state['items']
+        ]
+        self.assertEqual([item_policy.name for item_policy in item_policies], ['stats', 'declared_state'])
 
     def test_response_serializes_returned_glue_objects(self):
         glue_object = with_request(NestedDashboardGlue())

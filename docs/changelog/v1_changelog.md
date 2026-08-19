@@ -1,5 +1,15 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc5
+
+### Changes
+
+- **Collection Glue item representation rewritten**: `Glue.collection()` items are no longer represented as individually named nested attributes (`items.0`, `items.1`, ...) walked through the same attribute-path system used for a single object's fixed fields. Items are now carried as a plain array of self-contained manifests under a `state.items` key — the same shape `Glue.queryset()` rows already used — with each item's proxy identity keyed by the item's own name/pk instead of its position in the list.
+
+### Fixes
+
+- Fixed collection items intermittently appearing overwritten, duplicated, or missing on the frontend after adding an item to a collection that reorders on refresh (e.g. sorted by a field other than insertion order). The previous positional attribute naming let an unrelated item's cached proxy get silently reassigned to a different item's identity and data when the collection re-sorted, desyncing what was rendered from the actual (correct) state.
+
 ## v1.0.1-rc4
 
 ### Changes

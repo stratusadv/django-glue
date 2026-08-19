@@ -1,20 +1,24 @@
 import BaseGlueProxy from "./base"
 import {getProxyClass} from "./registry"
+import GluePolicy from "../policy"
 
+// A list of independent Glue objects. Items are carried in `_state.items`
+// as complete manifests (policy token, state, metadata), each with its own
+// identity -- not as individually named nested attributes the way a single
+// object's fixed fields are (see CollectionGlue on the server for why).
 class GlueCollectionProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
-        if (!this._itemProxyCache) {
-            this._itemProxyCache = new Map()
-        }
+        this._itemProxies = new Map()
+        this._syncItemsFromState()
     }
 
     get items() {
-        return this._itemProxies()
+        return Array.from(this._itemProxies.values())
     }
 
     get length() {
-        return this.items.length
+        return this._itemProxies.size
     }
 
     at(index) {
@@ -22,69 +26,50 @@ class GlueCollectionProxy extends BaseGlueProxy {
     }
 
     [Symbol.iterator]() {
-        return this.items[Symbol.iterator]()
+        return this._itemProxies.values()
     }
 
-    _itemProxies() {
-        if (!this._itemProxyCache) {
-            this._itemProxyCache = new Map()
+    _applyResponse(data = {}) {
+        super._applyResponse(data)
+        if (data.state !== undefined) {
+            this._syncItemsFromState()
         }
-
-        const itemPolicies = (this._policy?.attributes || [])
-            .filter(attribute => typeof attribute !== 'string')
-        const currentKeys = new Set(
-            itemPolicies.map((policy, index) => policy.name || `${this._name}.${index}`)
-        )
-
-        Array.from(this._itemProxyCache.keys()).forEach(key => {
-            if (!currentKeys.has(key)) {
-                this._itemProxyCache.delete(key)
-            }
-        })
-
-        return itemPolicies.map((policy, index) => this._buildItemProxy(policy, index))
     }
 
-    _buildItemProxy(policy, index) {
-        const metadata = this._metadata?.attributes?.[`items.${index}`]?.metadata || {}
-        const state = this._state?.[`items.${index}`] || {}
-        const ProxyClass = getProxyClass(policy.namespace) || BaseGlueProxy
-        const cacheKey = policy.name || `${this._name}.${index}`
-        const cachedItem = this._itemProxyCache.get(cacheKey)
+    _syncItemsFromState() {
+        const manifests = this._state?.items || []
+        const oldProxies = this._itemProxies
+        const nextProxies = new Map()
 
-        if (cachedItem) {
-            if (
-                cachedItem.policy !== policy
-                || cachedItem.state !== state
-                || cachedItem.metadata !== metadata
-            ) {
-                cachedItem.proxy._policy = policy
-                cachedItem.proxy._applyResponse({state, metadata, loading_strategy: this._loadingStrategy})
-                cachedItem.policy = policy
-                cachedItem.state = state
-                cachedItem.metadata = metadata
+        manifests.forEach((manifest, index) => {
+            const policy = GluePolicy.fromSignedPolicyToken(manifest.policy_token)
+            const key = policy.name || `${this._name}.${index}`
+            const existing = oldProxies.get(key)
+
+            if (existing) {
+                existing._policy = policy
+                existing._applyResponse({
+                    state: manifest.state,
+                    metadata: manifest.metadata,
+                    loading_strategy: manifest.loading_strategy,
+                })
+                nextProxies.set(key, existing)
+                return
             }
 
-            return cachedItem.proxy
-        }
-
-        const proxy = new ProxyClass({
-            http: this._http,
-            policy,
-            state,
-            metadata,
-            owner: this,
-            client: this._client,
-            loadingStrategy: this._loadingStrategy,
-        })
-        this._itemProxyCache.set(cacheKey, {
-            proxy,
-            policy,
-            state,
-            metadata,
+            const ProxyClass = getProxyClass(policy.namespace) || BaseGlueProxy
+            nextProxies.set(key, new ProxyClass({
+                http: this._http,
+                policy,
+                state: manifest.state,
+                metadata: manifest.metadata,
+                owner: this,
+                client: this._client,
+                loadingStrategy: manifest.loading_strategy || this._loadingStrategy,
+            }))
         })
 
-        return proxy
+        this._itemProxies = nextProxies
     }
 }
 

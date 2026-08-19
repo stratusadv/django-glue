@@ -791,67 +791,57 @@
   class GlueCollectionProxy extends base_default {
     constructor(options) {
       super(options);
-      if (!this._itemProxyCache) {
-        this._itemProxyCache = new Map;
-      }
+      this._itemProxies = new Map;
+      this._syncItemsFromState();
     }
     get items() {
-      return this._itemProxies();
+      return Array.from(this._itemProxies.values());
     }
     get length() {
-      return this.items.length;
+      return this._itemProxies.size;
     }
     at(index) {
       return this.items.at(index);
     }
     [Symbol.iterator]() {
-      return this.items[Symbol.iterator]();
+      return this._itemProxies.values();
     }
-    _itemProxies() {
-      if (!this._itemProxyCache) {
-        this._itemProxyCache = new Map;
+    _applyResponse(data = {}) {
+      super._applyResponse(data);
+      if (data.state !== undefined) {
+        this._syncItemsFromState();
       }
-      const itemPolicies = (this._policy?.attributes || []).filter((attribute) => typeof attribute !== "string");
-      const currentKeys = new Set(itemPolicies.map((policy, index) => policy.name || `${this._name}.${index}`));
-      Array.from(this._itemProxyCache.keys()).forEach((key) => {
-        if (!currentKeys.has(key)) {
-          this._itemProxyCache.delete(key);
-        }
-      });
-      return itemPolicies.map((policy, index) => this._buildItemProxy(policy, index));
     }
-    _buildItemProxy(policy, index) {
-      const metadata = this._metadata?.attributes?.[`items.${index}`]?.metadata || {};
-      const state = this._state?.[`items.${index}`] || {};
-      const ProxyClass = getProxyClass(policy.namespace) || base_default;
-      const cacheKey = policy.name || `${this._name}.${index}`;
-      const cachedItem = this._itemProxyCache.get(cacheKey);
-      if (cachedItem) {
-        if (cachedItem.policy !== policy || cachedItem.state !== state || cachedItem.metadata !== metadata) {
-          cachedItem.proxy._policy = policy;
-          cachedItem.proxy._applyResponse({ state, metadata, loading_strategy: this._loadingStrategy });
-          cachedItem.policy = policy;
-          cachedItem.state = state;
-          cachedItem.metadata = metadata;
+    _syncItemsFromState() {
+      const manifests = this._state?.items || [];
+      const oldProxies = this._itemProxies;
+      const nextProxies = new Map;
+      manifests.forEach((manifest, index) => {
+        const policy = policy_default.fromSignedPolicyToken(manifest.policy_token);
+        const key = policy.name || `${this._name}.${index}`;
+        const existing = oldProxies.get(key);
+        if (existing) {
+          existing._policy = policy;
+          existing._applyResponse({
+            state: manifest.state,
+            metadata: manifest.metadata,
+            loading_strategy: manifest.loading_strategy
+          });
+          nextProxies.set(key, existing);
+          return;
         }
-        return cachedItem.proxy;
-      }
-      const proxy = new ProxyClass({
-        http: this._http,
-        policy,
-        state,
-        metadata,
-        owner: this,
-        client: this._client,
-        loadingStrategy: this._loadingStrategy
+        const ProxyClass = getProxyClass(policy.namespace) || base_default;
+        nextProxies.set(key, new ProxyClass({
+          http: this._http,
+          policy,
+          state: manifest.state,
+          metadata: manifest.metadata,
+          owner: this,
+          client: this._client,
+          loadingStrategy: manifest.loading_strategy || this._loadingStrategy
+        }));
       });
-      this._itemProxyCache.set(cacheKey, {
-        proxy,
-        policy,
-        state,
-        metadata
-      });
-      return proxy;
+      this._itemProxies = nextProxies;
     }
   }
   var collection_default = GlueCollectionProxy;
