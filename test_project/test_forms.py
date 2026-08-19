@@ -1,4 +1,5 @@
 from django import forms
+from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla
 
 
@@ -19,3 +20,11 @@ class TestModelForm(forms.ModelForm):
     class Meta:
         model = Gorilla
         fields = ['name', 'description', 'age', 'weight', 'height']
+
+
+class FightForm(forms.ModelForm):
+    """ModelForm for Fight model (has required FK fields), used in form proxy tests."""
+
+    class Meta:
+        model = Fight
+        fields = ['name', 'red_corner', 'blue_corner']

@@ -12,6 +12,7 @@ from django_glue.conf import settings
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
 from django_glue.glue.context import GlueContextManager
+from django_glue.response import render_template_response_html
 from django_glue.resolver.base import GlueResolver
 from django_glue.resolver.view_fragment.context import ViewFragmentRequestContext
 from django_glue.resolver.view_fragment.request import ViewFragmentHttpRequest
@@ -107,7 +108,12 @@ class GlueViewFragmentResolver(GlueResolver[ViewFragmentRequestContext]):
 
     def _render_response(self, response: HttpResponse) -> JsonResponse:
         if isinstance(response, TemplateResponse):
-            response.render()
+            html, manifest_list = render_template_response_html(response, self.request)
+            return JsonResponse(
+                {'html': html, 'manifest_list': manifest_list},
+                safe=False,
+                encoder=GlueResponseJSONEncoder,
+            )
 
         if isinstance(response, HttpResponse):
             return JsonResponse(

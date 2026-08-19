@@ -78,10 +78,10 @@ class GlueFormSetProxy extends BaseGlueProxy {
         this._formProxies = this._initialForms()
     }
 
-    // Mirrors GlueCollectionProxy's inline item-derivation (collection.js)
+    // Mirrors GlueSequenceProxy's inline item-derivation (sequence.js)
     // -- same policy/state/metadata-keyed cache-and-rebuild shape, keyed
     // under 'form_list.{index}' and filtered to nested `form` policies instead
-    // of the unfiltered item list a collection uses.
+    // of the unfiltered item list a sequence uses.
     _initialForms() {
         if (!this._formProxyCache) {
             this._formProxyCache = new Map()

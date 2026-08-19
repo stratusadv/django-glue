@@ -1,9 +1,11 @@
 import {describe, expect, test} from "bun:test"
 import GlueConfig from "../src/config"
+import GlueClient from "../src/client"
 import GlueHttp from "../src/http"
 import GlueView from "../src/view"
+import GlueHtmlResult from "../src/htmlResult"
 import GlueTemplateProxy from "../src/proxies/template"
-import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState, mockOperationFetch} from "./testUtils"
 
 describe('Glue views and template proxies', () => {
     test('GlueView merges payloads, loads manifests, and returns HTML', async () => {
@@ -140,5 +142,47 @@ describe('Glue views and template proxies', () => {
         const result = await proxy.renderInsertAdjacentHtmlAfterEnd('#target')
         expect(result).toBe('<em>After</em>')
         expect(document.body.innerHTML).toContain('<div id="target"><i>First</i><b>Old</b><i>Last</i></div><em>After</em>')
+    })
+
+    test('a @Glue.attr call returning a GlueTemplateResponse resolves to a GlueHtmlResult', async () => {
+        happyDOM.setURL('http://localhost/')
+        const calls = mockOperationFetch({
+            result: {
+                is_glue_template_response: true,
+                html: '<p>Row list</p>',
+                manifest_list: [{
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({name: 'new_row', namespace: 'model', attributes: ['id']}),
+                    state: {id: {value: 7}},
+                    metadata: createMetadata(),
+                }],
+            },
+            policy_token: createPolicyToken({name: 'gorillas', namespace: 'querySet', attributes: ['some_custom_thing']}),
+            metadata: createMetadata({namespace: 'querySet', attributes: {some_custom_thing: {namespace: 'callable'}}}),
+        })
+        const client = new GlueClient({
+            manifest_list: [{
+                is_glue_manifest: true,
+                policy_token: createPolicyToken({name: 'gorillas', namespace: 'querySet', attributes: ['some_custom_thing']}),
+                state: {},
+                metadata: createMetadata({namespace: 'querySet', attributes: {some_custom_thing: {namespace: 'callable'}}}),
+            }],
+        })
+        document.body.innerHTML = '<div id="target"><b>Old</b></div>'
+
+        const result = await client.querySet.gorillas.some_custom_thing()
+
+        expect(calls).toHaveLength(1)
+        expect(result).toBeInstanceOf(GlueHtmlResult)
+        expect(result.html).toBe('<p>Row list</p>')
+        expect(result.toString()).toBe('<p>Row list</p>')
+
+        await result.renderInnerHtml('#target')
+        expect(document.querySelector('#target').innerHTML).toBe('<p>Row list</p>')
+
+        // The manifest riding along in the result loaded onto the client,
+        // same as Glue.view's manifest_list -- a proxy for it is reachable
+        // without a separate round trip.
+        expect(client.model.new_row).toBeInstanceOf(Object)
     })
 })

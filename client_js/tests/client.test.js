@@ -101,7 +101,7 @@ describe('GlueClient', () => {
         const proxy = client._createProxy({
             policy: createPolicy({
                 name: 'time_entry_days',
-                namespace: 'collection',
+                namespace: 'sequence',
                 identity: {},
                 attributes: [],
             }),
@@ -111,7 +111,7 @@ describe('GlueClient', () => {
 
         expect(proxy._name).toBe('time_entry_days')
         // Should NOT be registered on the client namespace
-        expect(client.collection).toBeUndefined()
+        expect(client.sequence).toBeUndefined()
     })
 
     test('registers function proxies as callables', async () => {

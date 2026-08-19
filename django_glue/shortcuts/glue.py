@@ -6,7 +6,7 @@ from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.collection import CollectionGlue
+from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.form.object import FormGlue
@@ -97,14 +97,14 @@ class Glue:
         return GlueContextManager(request).add_glue(glue)
 
     @staticmethod
-    def collection(
+    def sequence(
         request: HttpRequest,
         unique_name: str,
         items: Iterable[BaseGlue],
         access: GlueAccess = GlueAccess.VIEW,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
-    ) -> CollectionGlue:
-        return Glue.object(request, CollectionGlue(
+    ) -> SequenceGlue:
+        return Glue.object(request, SequenceGlue(
             list(items),
             name=unique_name,
             access=access,

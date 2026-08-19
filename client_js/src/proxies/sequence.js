@@ -5,8 +5,8 @@ import GluePolicy from "../policy"
 // A list of independent Glue objects. Items are carried in `_state.items`
 // as complete manifests (policy token, state, metadata), each with its own
 // identity -- not as individually named nested attributes the way a single
-// object's fixed fields are (see CollectionGlue on the server for why).
-class GlueCollectionProxy extends BaseGlueProxy {
+// object's fixed fields are (see SequenceGlue on the server for why).
+class GlueSequenceProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
         this._itemProxies = new Map()
@@ -73,4 +73,4 @@ class GlueCollectionProxy extends BaseGlueProxy {
     }
 }
 
-export default GlueCollectionProxy
+export default GlueSequenceProxy

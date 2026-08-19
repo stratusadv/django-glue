@@ -73,6 +73,16 @@ function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent)
 }
 
+function resolveElement(target) {
+    return typeof target === 'string' ? document.querySelector(target) : target
+}
+
+function htmlToFragment(html) {
+    const template = document.createElement('template')
+    template.innerHTML = html
+    return template.content
+}
+
 function resolveUrl(urlPathTemplate, kwargs = {}) {
     let url = urlPathTemplate
     for (const [key, value] of Object.entries(kwargs)) {
@@ -103,4 +113,6 @@ export {
     shouldJsonSerializePostData,
     parseJsonScriptById,
     resolveUrl,
+    resolveElement,
+    htmlToFragment,
 }

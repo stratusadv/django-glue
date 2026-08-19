@@ -4,7 +4,7 @@ import GlueClient from "../src/client"
 import GlueHttp from "../src/http"
 import {RelationFieldGlue} from "../src/proxies/fields"
 import BaseGlueProxy from "../src/proxies/base"
-import GlueCollectionProxy from "../src/proxies/collection"
+import GlueSequenceProxy from "../src/proxies/sequence"
 import GlueFormProxy from "../src/proxies/form"
 import GlueFormSetProxy from "../src/proxies/formset"
 import GlueJsonProxy from "../src/proxies/json"
@@ -112,7 +112,7 @@ describe('Glue proxies', () => {
                     is_glue_manifest: true,
                     policy_token: createPolicyToken({
                         name: 'time_entry_days',
-                        namespace: 'collection',
+                        namespace: 'sequence',
                         identity: {},
                         attributes: [],
                     }),
@@ -133,9 +133,9 @@ describe('Glue proxies', () => {
             ],
         })
 
-        const collection = client.collection.time_entry_days
+        const collection = client.sequence.time_entry_days
 
-        expect(collection).toBeInstanceOf(GlueCollectionProxy)
+        expect(collection).toBeInstanceOf(GlueSequenceProxy)
         expect(collection.items).toHaveLength(1)
         expect(collection.at(0)).toBeInstanceOf(BaseGlueProxy)
         expect(collection.at(0)._name).toBe('day_1')
@@ -149,7 +149,7 @@ describe('Glue proxies', () => {
                     is_glue_manifest: true,
                     policy_token: createPolicyToken({
                         name: 'time_entry_days',
-                        namespace: 'collection',
+                        namespace: 'sequence',
                         identity: {},
                         attributes: [],
                     }),
@@ -170,7 +170,7 @@ describe('Glue proxies', () => {
             ],
         })
 
-        const collection = client.collection.time_entry_days
+        const collection = client.sequence.time_entry_days
         const firstAccess = collection.items[0]
         const secondAccess = collection.items[0]
 
@@ -179,11 +179,11 @@ describe('Glue proxies', () => {
     })
 
     test('collections update cached item proxies when response data changes', () => {
-        const collection = new GlueCollectionProxy({
+        const collection = new GlueSequenceProxy({
             http: http(),
             policy: createPolicy({
                 name: 'time_entry_days',
-                namespace: 'collection',
+                namespace: 'sequence',
                 identity: {},
                 attributes: [],
             }),
@@ -268,11 +268,11 @@ describe('Glue proxies', () => {
             fetchCalled = true
             return new Response(JSON.stringify({}), {status: 200, headers: {'Content-Type': 'application/json'}})
         }
-        const collection = new GlueCollectionProxy({
+        const collection = new GlueSequenceProxy({
             http: http(),
             policy: createPolicy({
                 name: 'entries',
-                namespace: 'collection',
+                namespace: 'sequence',
                 identity: {},
                 attributes: [],
             }),
@@ -379,7 +379,7 @@ describe('Glue proxies', () => {
     })
 
     test('glue object attributes refresh nested proxy policy after response updates', () => {
-        registerProxyClass('collection', GlueCollectionProxy)
+        registerProxyClass('sequence', GlueSequenceProxy)
         const object = new BaseGlueProxy({
             http: http(),
             policy: createPolicy({
@@ -388,7 +388,7 @@ describe('Glue proxies', () => {
                 attributes: [
                     createPolicy({
                         name: 'dashboard.day_collection',
-                        namespace: 'collection',
+                        namespace: 'sequence',
                         attributes: [],
                     }),
                 ],
@@ -400,7 +400,7 @@ describe('Glue proxies', () => {
                 attributes: {
                     day_collection: {
                         namespace: 'glue',
-                        glue_namespace: 'collection',
+                        glue_namespace: 'sequence',
                         metadata: {attributes: {}},
                     },
                 },
@@ -416,7 +416,7 @@ describe('Glue proxies', () => {
                 attributes: [
                     createPolicy({
                         name: 'dashboard.day_collection',
-                        namespace: 'collection',
+                        namespace: 'sequence',
                         attributes: [],
                     }),
                 ],
@@ -440,7 +440,7 @@ describe('Glue proxies', () => {
                 attributes: {
                     day_collection: {
                         namespace: 'glue',
-                        glue_namespace: 'collection',
+                        glue_namespace: 'sequence',
                         metadata: {attributes: {}},
                     },
                 },

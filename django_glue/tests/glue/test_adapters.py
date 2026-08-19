@@ -23,7 +23,7 @@ from django_glue.glue import (
     GluePolicy,
     FunctionGlue,
     JsonGlue,
-    CollectionGlue,
+    SequenceGlue,
     GlueClassRegistry,
 )
 from django_glue.glue.loading import LoadingStrategy
@@ -35,9 +35,9 @@ from django_glue.exceptions import (
 )
 from django_glue.response import GlueResponse
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
-from test_project.gorilla.models import Gorilla, Skill
 from test_project.fight.models import Fight
-from test_project.test_forms import ContactForm, TestModelForm
+from test_project.gorilla.models import Gorilla, Skill
+from test_project.test_forms import ContactForm, FightForm, TestModelForm
 
 
 def request_with_session(session_key='test-session'):
@@ -188,7 +188,7 @@ class NamespaceDefaultGlue(BaseGlue):
 class CollectionDashboardGlue(BaseGlue):
     namespace = 'collectionDashboard'
     day_collection = DeclaredAttribute(
-        CollectionGlue([NestedStatsGlue()], name='internal_days'),
+        SequenceGlue([NestedStatsGlue()], name='internal_days'),
         required_access=GlueAccess.VIEW,
     )
 
@@ -244,6 +244,47 @@ class DeclaredStateGlue(BaseGlue):
 
 class InvalidServiceGlue(DeclaredStateGlue):
     service = DeclaredAttribute(PlainService(), required_access=GlueAccess.DELETE)
+
+
+class GorillaCountingQuerySet(QuerySet):
+    """QuerySet subclass with a @Glue.attr method, for QuerySetGlue.get_attribute_providers."""
+
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    def count_names_starting_with(self, letter: str) -> int:
+        # `self` here must be this exact (already-filtered) queryset
+        # instance, not Gorilla.objects.all() -- proves the method was
+        # bound through QuerySetGlue's attribute_providers, not called
+        # against a fresh, unfiltered manager.
+        return self.filter(name__istartswith=letter).count()
+
+
+class RawScore:
+    def __init__(self, points: int):
+        self.points = points
+
+
+def _build_score_glue(raw_score: RawScore, *, name: str, access: GlueAccess) -> DeclaredStateGlue:
+    glue_score = DeclaredStateGlue()
+    glue_score.name = name
+    glue_score.access = access
+    glue_score.count = raw_score.points
+    return glue_score
+
+
+class SequenceAttributeGlue(BaseGlue):
+    """Fixture for Glue.attr([])'s auto-SequenceGlue behavior."""
+
+    namespace = 'sequenceAttribute'
+
+    scores: list[RawScore] = DeclaredAttribute([], glue_factory=_build_score_glue)
+    already_glued: list[DeclaredStateGlue] = DeclaredAttribute([])
+
+    def __init__(self):
+        super().__init__(name='sequenceAttribute', access=GlueAccess.VIEW)
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
 
 
 class AllFieldsTestCase(TestCase):
@@ -517,6 +558,49 @@ class GluePolicyTestCase(TestCase):
         self.assertEqual(len(first.day_collection.items), 2)
         self.assertEqual(len(second.day_collection.items), 1)
 
+    def test_list_assignment_of_already_glued_items_becomes_collection(self):
+        glue_object = SequenceAttributeGlue()
+
+        glue_object.already_glued = [DeclaredStateGlue(), DeclaredStateGlue()]
+
+        self.assertIsInstance(glue_object.already_glued, SequenceGlue)
+        self.assertEqual(len(glue_object.already_glued.items), 2)
+
+    def test_list_assignment_of_raw_items_uses_glue_factory(self):
+        glue_object = SequenceAttributeGlue()
+
+        glue_object.scores = [RawScore(10), RawScore(20)]
+
+        self.assertIsInstance(glue_object.scores, SequenceGlue)
+        self.assertEqual([item.count for item in glue_object.scores.items], [10, 20])
+        self.assertTrue(all(isinstance(item, DeclaredStateGlue) for item in glue_object.scores.items))
+
+    def test_empty_list_assignment_is_not_wrapped(self):
+        glue_object = SequenceAttributeGlue()
+
+        glue_object.scores = []
+
+        self.assertEqual(glue_object.scores, [])
+
+    def test_list_assignment_of_raw_items_without_glue_factory_raises(self):
+        glue_object = SequenceAttributeGlue()
+
+        with self.assertRaises(TypeError):
+            glue_object.already_glued = [RawScore(10)]
+
+    def test_auto_wrapped_collection_and_items_inherit_instance_access(self):
+        """Regression test: items built by glue_factory must carry the owning
+        instance's runtime access (e.g. CHANGE/DELETE for a permitted user),
+        not the Glue.attr(...) descriptor's own declared required_access
+        (which defaults to VIEW and only gates the attribute itself)."""
+        glue_object = SequenceAttributeGlue()
+        glue_object.access = GlueAccess.DELETE
+
+        glue_object.scores = [RawScore(10)]
+
+        self.assertEqual(glue_object.scores.access, GlueAccess.DELETE)
+        self.assertEqual(glue_object.scores.items[0].access, GlueAccess.DELETE)
+
     def test_state_reads_nested_glue_attribute_state_once(self):
         glue_object = with_request(NestedDashboardGlue())
         original_state = GlueObjectAttribute.state.fget
@@ -541,7 +625,7 @@ class GluePolicyTestCase(TestCase):
         nested_policy = next(
             attribute
             for attribute in glue_object.policy.attributes
-            if hasattr(attribute, 'namespace') and attribute.namespace == 'collection'
+            if hasattr(attribute, 'namespace') and attribute.namespace == 'sequence'
         )
 
         self.assertIn('day_collection', glue_object.state)
@@ -553,7 +637,7 @@ class GluePolicyTestCase(TestCase):
     def test_collection_policy_contains_ordered_item_refs(self):
         second_item = DeclaredStateGlue()
         second_item.loading_strategy = LoadingStrategy.EAGER
-        glue_object = with_request(CollectionGlue(
+        glue_object = with_request(SequenceGlue(
             [
                 NestedStatsGlue(),
                 second_item,
@@ -564,7 +648,7 @@ class GluePolicyTestCase(TestCase):
 
         policy = glue_object.policy
 
-        self.assertEqual(policy.namespace, 'collection')
+        self.assertEqual(policy.namespace, 'sequence')
         self.assertEqual(policy.identity, {})
 
         items = glue_object.state['items']
@@ -583,14 +667,14 @@ class GluePolicyTestCase(TestCase):
     def test_collection_shortcut_registers_collection_only(self):
         request = request_with_session()
 
-        collection = Glue.collection(request, 'dashboard_items', [
+        collection = Glue.sequence(request, 'dashboard_items', [
             NestedStatsGlue(),
             DeclaredStateGlue(),
         ])
 
         manifests = request.__dict__['__glue_manifest__']
 
-        self.assertIsInstance(collection, CollectionGlue)
+        self.assertIsInstance(collection, SequenceGlue)
         self.assertEqual([manifest.name for manifest in manifests], ['dashboard_items'])
         item_policies = [
             GluePolicy.from_token(item['policy_token'])
@@ -600,7 +684,7 @@ class GluePolicyTestCase(TestCase):
 
     def test_response_serializes_returned_glue_objects(self):
         glue_object = with_request(NestedDashboardGlue())
-        collection = CollectionGlue(
+        collection = SequenceGlue(
             [NestedStatsGlue()],
             name='dashboard_items',
             access=GlueAccess.VIEW,
@@ -613,7 +697,7 @@ class GluePolicyTestCase(TestCase):
 
         payload = serialized['result']['day_collection']
         payload_policy = policy_from_manifest(payload)
-        self.assertEqual(payload_policy.namespace, 'collection')
+        self.assertEqual(payload_policy.namespace, 'sequence')
         self.assertEqual(payload_policy.name, 'dashboard_items')
         self.assertIn('state', payload)
 
@@ -1322,8 +1406,71 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(state['name']['value'], 'Initial Name')
         self.assertEqual(state['age']['value'], 7)
 
+    def test_form_adapter_reconstruction_of_unsaved_instance_preserves_fk_initial(self):
+        """A form built for a never-saved instance (no target_pk, e.g. via
+        QuerySetGlue.new()) must still have those foreign keys on
+        self.instance after reconstruction -- not just in form.initial --
+        so a form method that reads self.instance.<field> (the same way it
+        would for an already-saved, bound instance) sees the same value the
+        client is about to submit, instead of an empty instance.
+        """
+        red = Gorilla.objects.create(name='Red Corner')
+        blue = Gorilla.objects.create(name='Blue Corner')
+
+        unsaved_fight = Fight(red_corner=red, blue_corner=blue)
+        glue_object = with_request(FormGlue(
+            FightForm(instance=unsaved_fight),
+            **glue_context(name='fight-form'),
+        ))
+        self.assertIsNone(glue_object.form.instance.pk)
+
+        resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
+
+        self.assertIsNone(resolved.form.instance.pk)
+        self.assertEqual(resolved.form.instance.red_corner_id, red.pk)
+        self.assertEqual(resolved.form.instance.blue_corner_id, blue.pk)
+
+    def test_form_adapter_reconstruction_of_unsaved_instance_with_no_initial_still_works(self):
+        """A brand-new form with nothing pre-filled (no instance= at all when
+        constructed, target_pk None, initial {}) must still reconstruct
+        cleanly -- _unsaved_instance_from_initial({}) should just build a
+        plain empty instance, not raise.
+
+        Reuses the module-level FightForm import rather than a form class
+        defined here -- _reconstruct_from_policy resolves the form class via
+        getattr(import_module(cls.__module__), cls.__name__), which only
+        ever finds classes that are true module-level attributes; a class
+        defined inside this method body would never be found this way (it's
+        local to the function's scope, not the module's), regardless of name.
+        """
+        glue_object = with_request(FormGlue(FightForm(), **glue_context(name='fight-form')))
+
+        resolved = FormGlue._reconstruct_from_policy(glue_object.policy)
+
+        self.assertIsNone(resolved.form.instance.pk)
+        self.assertIsNone(resolved.form.instance.red_corner_id)
+
 
 class DjangoQuerySetGlueObjectTestCase(TestCase):
+    def test_queryset_attr_declared_on_custom_queryset_class_is_bound_to_that_queryset(self):
+        Gorilla.objects.create(name='Koko', age=18)
+        Gorilla.objects.create(name='Kimba', age=5)
+        Gorilla.objects.create(name='Bobo', age=12)
+
+        filtered = GorillaCountingQuerySet(model=Gorilla).filter(age__gte=10)
+        glue_object = QuerySetGlue(
+            filtered,
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            fields=['name'],
+        )
+
+        self.assertIn('count_names_starting_with', glue_object.attributes)
+        result = glue_object.attributes['count_names_starting_with'].get()(letter='k')
+
+        # Only Koko matches: Kimba is excluded by the age>=10 filter already
+        # applied on `filtered` before it reached QuerySetGlue.
+        self.assertEqual(result, 1)
+
     def test_queryset_adapter_excludes_globally_excluded_fields(self):
         glue_object = QuerySetGlue(
             Gorilla.objects.all(),

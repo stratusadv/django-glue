@@ -77,7 +77,12 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         return identity
 
     def get_attribute_providers(self) -> dict[str, Any]:
-        return {}
+        # Mirrors ModelGlue's {'instance': self.instance} -- a `@Glue.attr`
+        # declared directly on the queryset's class (e.g. a custom
+        # QuerySet subclass passed to `objects = MyQuerySet.as_manager()`)
+        # is picked up automatically, bound to this exact, already-filtered
+        # queryset instance as `self` inside the method.
+        return {'queryset': self.queryset}
 
     @property
     def _model_meta(self) -> Any:

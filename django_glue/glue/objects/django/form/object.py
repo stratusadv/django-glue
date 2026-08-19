@@ -15,6 +15,8 @@ from django_glue.glue.loading import LoadingStrategy
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
+    from django.db.models import Model
+
     from django_glue.glue.policy import GluePolicy
 
 
@@ -110,23 +112,62 @@ class FormGlue(BaseGlue):
         initial = policy.identity.get('initial', {})
         target_pk = policy.identity.get('target_pk')
 
-        if target_pk is not None and issubclass(form_class, forms.ModelForm):
+        if issubclass(form_class, forms.ModelForm):
             model_class = form_class._meta.model
-            try:
-                instance = model_class.objects.get(pk=target_pk)
-                model_initial = model_to_dict(
-                    instance,
-                    form_class._meta.fields,
-                    form_class._meta.exclude,
-                )
-                initial = {**model_initial, **initial}
-                form = form_class(instance=instance, initial=initial)
-            except model_class.DoesNotExist:
-                form = form_class(initial=initial)
+
+            if target_pk is not None:
+                try:
+                    instance = model_class.objects.get(pk=target_pk)
+                    model_initial = model_to_dict(
+                        instance,
+                        form_class._meta.fields,
+                        form_class._meta.exclude,
+                    )
+                    initial = {**model_initial, **initial}
+                    form = form_class(instance=instance, initial=initial)
+                except model_class.DoesNotExist:
+                    form = form_class(initial=initial)
+            else:
+                # No target_pk means this form was never saved (e.g. built
+                # via QuerySetGlue.new()/ModelGlue on an unsaved instance).
+                # `initial` only pre-fills displayed widget values though --
+                # it never touches self.instance -- so without this, a form
+                # method that reads self.instance.<field> (e.g. to narrow a
+                # dependent queryset the same way a bound instance would)
+                # silently sees an empty instance instead of what the
+                # client is about to submit. Rebuild the same unsaved
+                # instance QuerySetGlue.new() would have built, so
+                # self.instance stays consistent across every place a form
+                # for this same not-yet-saved row gets reconstructed.
+                form = form_class(instance=cls._unsaved_instance_from_initial(model_class, initial), initial=initial)
         else:
             form = form_class(initial=initial)
 
         return cls(form, name=policy.name, access=policy.access)
+
+    @staticmethod
+    def _unsaved_instance_from_initial(model_class: type[Model], initial: dict[str, Any]) -> Model:
+        model_fields = {field.name: field for field in model_class._meta.get_fields()}
+        field_kwargs = {}
+
+        for name, value in initial.items():
+            model_field = model_fields.get(name)
+            # Skip anything that isn't a concrete, single-valued model field
+            # (reverse relations, generic FKs) and many-to-many fields --
+            # M2M can't be set via the model constructor at all (it needs a
+            # saved pk first), and initial's prepared value for one is a
+            # list of pks anyway, not a single scalar.
+            if (
+                model_field is None
+                or value is None
+                or getattr(model_field, 'many_to_many', False)
+                or not getattr(model_field, 'concrete', False)
+            ):
+                continue
+            attname = getattr(model_field, 'attname', name)
+            field_kwargs[attname] = value
+
+        return model_class(**field_kwargs)
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         """Bind client-provided state before executing form attributes."""

@@ -1,5 +1,17 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc6
+
+### Features
+
+- **Sequence attribute inference**: A `Glue.attr([])` declaration now infers a sequence automatically -- assigning a plain `list` of already-glued (`BaseGlue`) items wraps it in a `SequenceGlue` on the spot, using the attribute's own name and the owning instance's runtime `access`. Pass `glue_factory=` to `Glue.attr(...)` to also convert raw (non-Glue) items on assignment, e.g. `entries: list[TimeEntry] = Glue.attr([], glue_factory=build_time_entry_glue)`. Removes the need to hand-construct a `SequenceGlue` (previously `CollectionGlue`) with a manually kept-in-sync `name=` argument for this common case.
+- **Queryset custom attributes**: `Glue.queryset()` now discovers `@Glue.attr`-decorated methods declared directly on a custom `QuerySet` subclass, mirroring how `Glue.model()` already exposes methods declared on the model instance. The method is bound to the exact, already-filtered queryset passed to `Glue.queryset()`, not a fresh unfiltered manager.
+- **Glue template responses**: A `@Glue.attr` method can now return a `GlueTemplateResponse` (or a plain Django `TemplateResponse`, coerced automatically) to render a template inline against the current request and return the HTML directly, instead of JSON data. Any `Glue.queryset()`/`Glue.model()`/etc. calls made earlier in the same request -- including by the rendered template itself -- ride along as `manifest_list`, the same way `Glue.view(...)` already does. On the client, the call resolves to a `GlueHtmlResult` with the same `renderInnerHtml()`/`renderOuterHtml()`/`renderInsertAdjacentHtml*()` API as `GlueView`/`GlueTemplateProxy`.
+
+### Changes
+
+- **`CollectionGlue` renamed to `SequenceGlue`**: `Glue.collection()` is now `Glue.sequence()`, and the wire namespace changed from `collection` to `sequence` (client and server must be updated together). `CollectionLazyLoadNotSupportedError` is now `SequenceLazyLoadNotSupportedError`.
+
 ## v1.0.1-rc5
 
 ### Changes

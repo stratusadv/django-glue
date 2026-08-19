@@ -1,3 +1,5 @@
+import {resolveElement, htmlToFragment} from "./utils"
+
 class GlueView {
     constructor(http, url, sharedPayload = {}) {
         this.http = http
@@ -14,23 +16,23 @@ class GlueView {
     }
 
     async renderInnerHtml(target, payload = {}) {
-        const element = this._resolveElement(target)
+        const element = resolveElement(target)
         const html = await this.post(payload)
-        element.replaceChildren(this._htmlToFragment(html))
+        element.replaceChildren(htmlToFragment(html))
         return html
     }
 
     async renderOuterHtml(target, payload = {}) {
-        const element = this._resolveElement(target)
+        const element = resolveElement(target)
         const html = await this.post(payload)
-        element.replaceWith(this._htmlToFragment(html))
+        element.replaceWith(htmlToFragment(html))
         return html
     }
 
     async _renderInsertAdjacentHtml(target, position, payload = {}) {
-        const element = this._resolveElement(target)
+        const element = resolveElement(target)
         const html = await this.post(payload)
-        const fragment = this._htmlToFragment(html)
+        const fragment = htmlToFragment(html)
 
         if (position === 'beforebegin') {
             element.before(fragment)
@@ -81,16 +83,6 @@ class GlueView {
         globalThis.Glue.loadManifests(response.data?.manifest_list || [])
 
         return response.data?.html || ''
-    }
-
-    _resolveElement(target) {
-        return typeof target === 'string' ? document.querySelector(target) : target
-    }
-
-    _htmlToFragment(html) {
-        const template = document.createElement('template')
-        template.innerHTML = html
-        return template.content
     }
 }
 

@@ -1,5 +1,6 @@
 import {getProxyClass} from "./registry"
 import GluePolicy from "../policy"
+import GlueHtmlResult from "../htmlResult"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -476,6 +477,11 @@ class BaseGlueProxy {
             return this._client._createProxyFromManifest(result)
         }
 
+        if (this._resultIsTemplateResponse(result)) {
+            this._client.loadManifests(result.manifest_list)
+            return new GlueHtmlResult(result.html)
+        }
+
         Object.keys(result).forEach(key => {
             result[key] = this._convertResultManifestsToProxies(result[key])
         })
@@ -484,6 +490,10 @@ class BaseGlueProxy {
 
     _resultIsManifest(result) {
         return result?.is_glue_manifest === true
+    }
+
+    _resultIsTemplateResponse(result) {
+        return result?.is_glue_template_response === true
     }
 }
 

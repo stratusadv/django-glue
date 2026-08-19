@@ -91,6 +91,14 @@
   function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent);
   }
+  function resolveElement(target) {
+    return typeof target === "string" ? document.querySelector(target) : target;
+  }
+  function htmlToFragment(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    return template.content;
+  }
   function resolveUrl(urlPathTemplate, kwargs = {}) {
     let url = urlPathTemplate;
     for (const [key, value] of Object.entries(kwargs)) {
@@ -281,21 +289,21 @@
       return await this._fetchView(payload, "POST");
     }
     async renderInnerHtml(target, payload = {}) {
-      const element = this._resolveElement(target);
+      const element = resolveElement(target);
       const html = await this.post(payload);
-      element.replaceChildren(this._htmlToFragment(html));
+      element.replaceChildren(htmlToFragment(html));
       return html;
     }
     async renderOuterHtml(target, payload = {}) {
-      const element = this._resolveElement(target);
+      const element = resolveElement(target);
       const html = await this.post(payload);
-      element.replaceWith(this._htmlToFragment(html));
+      element.replaceWith(htmlToFragment(html));
       return html;
     }
     async _renderInsertAdjacentHtml(target, position, payload = {}) {
-      const element = this._resolveElement(target);
+      const element = resolveElement(target);
       const html = await this.post(payload);
-      const fragment = this._htmlToFragment(html);
+      const fragment = htmlToFragment(html);
       if (position === "beforebegin") {
         element.before(fragment);
       } else if (position === "afterbegin") {
@@ -337,14 +345,6 @@
       });
       globalThis.Glue.loadManifests(response.data?.manifest_list || []);
       return response.data?.html || "";
-    }
-    _resolveElement(target) {
-      return typeof target === "string" ? document.querySelector(target) : target;
-    }
-    _htmlToFragment(html) {
-      const template = document.createElement("template");
-      template.innerHTML = html;
-      return template.content;
     }
   }
   var view_default = GlueView;
@@ -388,6 +388,53 @@
     }
   }
   var policy_default = GluePolicy;
+
+  // client_js/src/htmlResult.js
+  class GlueHtmlResult {
+    constructor(html) {
+      this.html = html;
+    }
+    toString() {
+      return this.html;
+    }
+    async renderInnerHtml(target) {
+      resolveElement(target).replaceChildren(htmlToFragment(this.html));
+      return this.html;
+    }
+    async renderOuterHtml(target) {
+      resolveElement(target).replaceWith(htmlToFragment(this.html));
+      return this.html;
+    }
+    async _renderInsertAdjacentHtml(target, position) {
+      const element = resolveElement(target);
+      const fragment = htmlToFragment(this.html);
+      if (position === "beforebegin") {
+        element.before(fragment);
+      } else if (position === "afterbegin") {
+        element.prepend(fragment);
+      } else if (position === "beforeend") {
+        element.append(fragment);
+      } else if (position === "afterend") {
+        element.after(fragment);
+      } else {
+        throw new Error(`Invalid insert position: ${position}`);
+      }
+      return this.html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target) {
+      return await this._renderInsertAdjacentHtml(target, "beforebegin");
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target) {
+      return await this._renderInsertAdjacentHtml(target, "afterbegin");
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target) {
+      return await this._renderInsertAdjacentHtml(target, "beforeend");
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target) {
+      return await this._renderInsertAdjacentHtml(target, "afterend");
+    }
+  }
+  var htmlResult_default = GlueHtmlResult;
 
   // client_js/src/proxies/base.js
   function isPlainObject2(value) {
@@ -776,6 +823,10 @@
       if (this._resultIsManifest(result)) {
         return this._client._createProxyFromManifest(result);
       }
+      if (this._resultIsTemplateResponse(result)) {
+        this._client.loadManifests(result.manifest_list);
+        return new htmlResult_default(result.html);
+      }
       Object.keys(result).forEach((key) => {
         result[key] = this._convertResultManifestsToProxies(result[key]);
       });
@@ -784,11 +835,14 @@
     _resultIsManifest(result) {
       return result?.is_glue_manifest === true;
     }
+    _resultIsTemplateResponse(result) {
+      return result?.is_glue_template_response === true;
+    }
   }
   var base_default = BaseGlueProxy;
 
-  // client_js/src/proxies/collection.js
-  class GlueCollectionProxy extends base_default {
+  // client_js/src/proxies/sequence.js
+  class GlueSequenceProxy extends base_default {
     constructor(options) {
       super(options);
       this._itemProxies = new Map;
@@ -844,7 +898,7 @@
       this._itemProxies = nextProxies;
     }
   }
-  var collection_default = GlueCollectionProxy;
+  var sequence_default = GlueSequenceProxy;
 
   // client_js/src/proxies/fields/base.js
   class FieldGlue {
@@ -1601,7 +1655,7 @@
 
   // client_js/src/proxies/index.js
   var NAMESPACE_TO_PROXY_CLASS2 = {
-    collection: collection_default,
+    sequence: sequence_default,
     form: form_default,
     formSet: formset_default,
     function: function_default,

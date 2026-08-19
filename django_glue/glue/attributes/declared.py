@@ -6,6 +6,7 @@ from typing import Any
 from typing import Callable
 
 from django_glue.access import GlueAccess
+from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
 
 _MISSING = object()
 
@@ -55,18 +56,22 @@ class DeclaredAttribute:
         identity: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
+        glue_factory: Callable[..., Any] | None = None,
+        value_adapters: list[GlueValueAdapter] | None = None,
     ) -> None:
         if value is not _MISSING and default is not _MISSING:
             raise TypeError('DeclaredAttribute received both value and default.')
         if default is not _MISSING and default_factory is not _MISSING:
             raise TypeError('DeclaredAttribute received both default and default_factory.')
 
-        self._required_access = required_access
+        self.required_access = required_access
         self._takes_client_state = takes_client_state
         self._updates_client_state = updates_client_state
         self._identity = identity
         self.default = default
         self.default_factory = default_factory
+        self.glue_factory = glue_factory
+        self.value_adapters = value_adapters if value_adapters is not None else DEFAULT_VALUE_ADAPTERS
         self.name: str | None = None
         self.storage_name: str | None = None
         self.target: Any = None
@@ -85,7 +90,7 @@ class DeclaredAttribute:
     def _update_glue_options(self) -> None:
         """Create and attach the __glue_options__ based on current state."""
         self.__glue_options__ = DeclaredAttributeOptions(
-            required_access=self._required_access,
+            required_access=self.required_access,
             is_callable=self._is_callable,
             takes_client_state=self._takes_client_state,
             updates_client_state=self._updates_client_state,
@@ -134,7 +139,15 @@ class DeclaredAttribute:
         if hasattr(self.target, '__set__'):
             self.target.__set__(instance, value)
             return
+        value = self._adapt_value(value, instance)
         instance.__dict__[self._get_storage_name()] = value
+
+    def _adapt_value(self, value: Any, instance: Any) -> Any:
+        """Run value through the first matching GlueValueAdapter, if any."""
+        for adapter in self.value_adapters:
+            if adapter.applies_to(value):
+                return adapter.adapt(value, attribute=self, instance=instance)
+        return value
 
     def __delete__(self, instance: Any) -> None:
         if isinstance(self.target, property) and self.target.fdel is not None:

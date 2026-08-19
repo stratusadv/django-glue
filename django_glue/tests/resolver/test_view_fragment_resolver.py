@@ -158,6 +158,10 @@ class GlueViewFragmentResolverTestCase(TestCase):
 
         mock_template_response = MagicMock(spec=TemplateResponse)
         mock_template_response.content = b'<html><body>Hello</body></html>'
+        # Real TemplateResponse.charset defaults to the string 'utf-8', never
+        # None -- match that so decode() gets a real encoding name instead of
+        # an auto-mocked MagicMock attribute.
+        mock_template_response.charset = 'utf-8'
 
         with patch.object(view, '_call_resolved_view', return_value=mock_template_response):
             response = view.post(request)

@@ -12,7 +12,7 @@ from django_glue import Glue, GlueAccess
 |--------|------------|-------|
 | `Glue.model()` | `GlueModelProxy` | Single Django model instance |
 | `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
-| `Glue.collection()` | `GlueCollectionProxy` | Group of Glue objects |
+| `Glue.sequence()` | `GlueSequenceProxy` | Group of Glue objects |
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
 | `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
@@ -20,9 +20,9 @@ from django_glue import Glue, GlueAccess
 
 ---
 
-## `Glue.collection()`
+## `Glue.sequence()`
 
-Register a collection of Glue objects that should be grouped together.
+Register a sequence of Glue objects that should be grouped together.
 
 ```python
 from django_glue import Glue, GlueAccess
@@ -33,7 +33,7 @@ day_glues = [
     for i, day in enumerate(days)
 ]
 
-Glue.collection(
+Glue.sequence(
     request=request,
     unique_name='days',
     items=day_glues,
@@ -42,18 +42,20 @@ Glue.collection(
 )
 ```
 
+Class-level attributes typed as a plain list (`Glue.attr([])`) are wrapped into a `SequenceGlue` automatically when assigned a list of Glue objects; pass `glue_factory=...` to `Glue.attr()` to also convert raw (non-Glue) items on assignment. `Glue.sequence()` remains available for building one outside of an attribute declaration.
+
 ### Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `request` | `HttpRequest` | Yes | The current request |
-| `unique_name` | `str` | Yes | Unique identifier for this collection |
-| `items` | `Iterable[BaseGlue]` | Yes | The Glue objects to include in the collection |
+| `unique_name` | `str` | Yes | Unique identifier for this sequence |
+| `items` | `Iterable[BaseGlue]` | Yes | The Glue objects to include in the sequence |
 | `access` | `GlueAccess` | No | Access level (default: `VIEW`) |
 | `loading_strategy` | `LoadingStrategy` | No | Loading behavior (default: `LAZY`) |
 
 !!! warning "Lazy loading not supported"
-    Collections do not yet support lazy loading. If you use `LoadingStrategy.LAZY` (the default), attempting to load the collection's state from the frontend will raise `CollectionLazyLoadNotSupportedError`. Use `LoadingStrategy.EAGER` to include the collection's state in the initial page manifest.
+    Sequences do not yet support lazy loading. If you use `LoadingStrategy.LAZY` (the default), attempting to load the sequence's state from the frontend will raise `SequenceLazyLoadNotSupportedError`. Use `LoadingStrategy.EAGER` to include the sequence's state in the initial page manifest.
 
 ---
 
