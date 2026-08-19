@@ -4,7 +4,7 @@ import GlueHttp from "../src/http"
 import GlueFormProxy from "../src/proxies/form"
 import GlueFunctionProxy from "../src/proxies/function"
 import GlueModelProxy from "../src/proxies/model"
-import {createMetadata, createPolicy, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
 
 describe('fields, forms, and functions', () => {
     test('field proxies expose errors, primitive conversion, and object members', () => {
@@ -43,7 +43,7 @@ describe('fields, forms, and functions', () => {
         let kwargs
         global.fetch = async (_url, options) => {
             kwargs = JSON.parse(options.body.get('kwargs'))
-            return new Response(JSON.stringify({result: {result: 12}, state: {}, policy: {}, metadata: {}}), {
+            return new Response(JSON.stringify({result: {result: 12}, state: {}, policy_token: createPolicyToken(), metadata: {}}), {
                 status: 200,
                 headers: {'Content-Type': 'application/json'},
             })

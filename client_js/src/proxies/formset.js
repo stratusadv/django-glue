@@ -73,7 +73,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
 
     _applyResponse(data = {}) {
         super._applyResponse(data)
-        if (this._hasPendingLocalEdit || !(data.policy || data.metadata || data.state)) return
+        if (this._hasPendingLocalEdit || !(data.policy_token || data.metadata || data.state)) return
 
         this._formProxies = this._initialForms()
     }
@@ -118,7 +118,8 @@ class GlueFormSetProxy extends BaseGlueProxy {
                 || cachedForm.state !== state
                 || cachedForm.metadata !== metadata
             ) {
-                cachedForm.proxy._applyResponse({policy, state, metadata, loading_strategy: this._loadingStrategy})
+                cachedForm.proxy._policy = policy
+                cachedForm.proxy._applyResponse({state, metadata, loading_strategy: this._loadingStrategy})
                 cachedForm.policy = policy
                 cachedForm.state = state
                 cachedForm.metadata = metadata

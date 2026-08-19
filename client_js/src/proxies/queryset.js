@@ -1,5 +1,6 @@
 import BaseGlueProxy from "./base"
 import GlueModelProxy from "./model"
+import GluePolicy from "../policy"
 
 class GlueQuerySetProxy extends BaseGlueProxy {
     constructor(options) {
@@ -44,8 +45,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     async get(pk) {
         const row = await this._callAttribute('get', {pk})
-        const name = row._name || row.policy?.name || `${this._name}.${pk}`
-        const proxy = this._buildModelProxy(row, this._modelProxies.get(name))
+        const policy = this._policyForRow(row)
+        const name = row._name || policy.name || `${this._name}.${pk}`
+        const proxy = this._buildModelProxy(row, this._modelProxies.get(name), policy)
         this._modelProxies.set(name, proxy)
         return proxy
     }
@@ -62,13 +64,21 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this._modelProxies = new Map()
 
         items.forEach((row, index) => {
-            const name = row._name || row.policy?.name || `${this._name}.${index}`
-            const proxy = this._buildModelProxy(row, oldProxies.get(name))
+            const policy = this._policyForRow(row)
+            const name = row._name || policy.name || `${this._name}.${index}`
+            const proxy = this._buildModelProxy(row, oldProxies.get(name), policy)
             this._modelProxies.set(name, proxy)
         })
     }
 
-    _buildModelProxy(row, existingProxy = null) {
+    _policyForRow(row) {
+        if (row instanceof GlueModelProxy) {
+            return row._policy
+        }
+        return GluePolicy.fromSignedPolicyToken(row.policy_token)
+    }
+
+    _buildModelProxy(row, existingProxy = null, policy = this._policyForRow(row)) {
         if (row instanceof GlueModelProxy) {
             row._loaded = true
             return row
@@ -79,7 +89,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
         if (proxy) {
             proxy._applyResponse({
-                policy: row.policy,
+                policy_token: row.policy_token,
                 state: row.state,
                 metadata: row.metadata || this._metadata,
                 loading_strategy: rowLoadingStrategy,
@@ -87,7 +97,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         } else {
             proxy = new GlueModelProxy({
                 http: this._http,
-                policy: row.policy,
+                policy,
                 state: row.state,
                 metadata: row.metadata || this._metadata,
                 client: this._client,

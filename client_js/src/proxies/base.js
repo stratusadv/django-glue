@@ -1,4 +1,5 @@
 import {getProxyClass} from "./registry"
+import GluePolicy from "../policy"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -20,6 +21,9 @@ class BaseGlueProxy {
         loadingStrategy = 'lazy'
     }) {
         this._http = http
+        if (!(policy instanceof GluePolicy)) {
+            throw new TypeError('Glue proxies require a decoded GluePolicy instance.')
+        }
         this._policy = policy
         this._name = policy?.name
         this._state = state || {}
@@ -75,7 +79,7 @@ class BaseGlueProxy {
         try {
             const response = await this._http.sendAttributeRequest({
                 name: this._name,
-                policy: this._policy,
+                policyToken: this._policy.token,
                 state: this._stateForAttribute(attributeMetadata.takes_client_state),
                 attribute,
                 kwargs,
@@ -133,9 +137,9 @@ class BaseGlueProxy {
     }
 
     _applyResponse(data = {}) {
-        const shouldRefreshGlueObjectAttributes = Boolean(data.policy || data.metadata)
-        if (data.policy) {
-            this._policy = data.policy
+        const shouldRefreshGlueObjectAttributes = Boolean(data.policy_token || data.metadata)
+        if (data.policy_token) {
+            this._policy = GluePolicy.fromSignedPolicyToken(data.policy_token)
         }
         if (data.metadata !== undefined) {
             this._metadata = data.metadata || {}
@@ -322,8 +326,8 @@ class BaseGlueProxy {
         const nestedState = proxy._state?.[relativeName] || {}
 
         if (proxy[cacheKey]) {
+            proxy[cacheKey]._policy = attributePolicy
             proxy[cacheKey]._applyResponse({
-                policy: attributePolicy,
                 state: nestedState,
                 metadata: nestedMetadata,
             })
@@ -469,7 +473,7 @@ class BaseGlueProxy {
         }
 
         if (this._resultIsManifest(result)) {
-            return this._client._createProxy(result)
+            return this._client._createProxyFromManifest(result)
         }
 
         Object.keys(result).forEach(key => {
@@ -479,11 +483,7 @@ class BaseGlueProxy {
     }
 
     _resultIsManifest(result) {
-        return Boolean(
-            result?.policy?.name
-            && result?.policy?.namespace
-            && result?.metadata !== undefined
-        )
+        return result?.is_glue_manifest === true
     }
 }
 

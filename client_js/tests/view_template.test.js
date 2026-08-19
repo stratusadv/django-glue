@@ -3,7 +3,7 @@ import GlueConfig from "../src/config"
 import GlueHttp from "../src/http"
 import GlueView from "../src/view"
 import GlueTemplateProxy from "../src/proxies/template"
-import {createMetadata, createPolicy, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
 
 describe('Glue views and template proxies', () => {
     test('GlueView merges payloads, loads manifests, and returns HTML', async () => {
@@ -15,7 +15,10 @@ describe('Glue views and template proxies', () => {
             _config: {glueViewUrlPath: '/__dg__/glue_view/'},
             sendRequest: async (_url, options) => {
                 request = JSON.parse(options.body)
-                return {data: {html: '<p>Loaded</p>', manifest_list: [{policy: {name: 'new'}}]}}
+                return {data: {html: '<p>Loaded</p>', manifest_list: [{
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({name: 'new'}),
+                }]}}
             },
         }
         const view = new GlueView(http, 'http://example.com/task/detail/', {shared: true})
@@ -88,7 +91,7 @@ describe('Glue views and template proxies', () => {
         global.fetch = async () => new Response(JSON.stringify({
             result: {html: '<p>Rendered</p>'},
             state: createState(),
-            policy: createPolicy({attributes: ['render_html']}),
+            policy_token: createPolicyToken({attributes: ['render_html']}),
             metadata: createMetadata({attributes: {render_html: {namespace: 'callable'}}}),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const proxy = new GlueTemplateProxy({
@@ -111,7 +114,7 @@ describe('Glue views and template proxies', () => {
         global.fetch = async () => new Response(JSON.stringify({
             result: {html},
             state: createState(),
-            policy: createPolicy({attributes: ['render_html']}),
+            policy_token: createPolicyToken({attributes: ['render_html']}),
             metadata: createMetadata({attributes: {render_html: {namespace: 'callable'}}}),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const proxy = new GlueTemplateProxy({

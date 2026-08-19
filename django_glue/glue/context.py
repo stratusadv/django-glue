@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Literal, TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 from django_glue.conf import settings
@@ -8,7 +8,6 @@ from django_glue.conf import settings
 from django_glue import constants
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 from django_glue.glue.loading import LoadingStrategy
-from django_glue.glue.policy import GluePolicy  # noqa: TC001
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -18,7 +17,8 @@ if TYPE_CHECKING:
 class GlueManifest(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
-    policy: GluePolicy
+    is_glue_manifest: Literal[True] = True
+    policy_token: str
     metadata: dict[str, Any]
     state: dict[str, Any] = {}
     loading_strategy: LoadingStrategy = LoadingStrategy.LAZY

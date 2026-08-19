@@ -1,5 +1,17 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc4
+
+### Changes
+
+- **Signed Policy Tokens**: Glue manifests and callable attribute responses now transport policies as signed tokens. This keeps the signed token as the single source of truth, so harmless browser serialization changes cannot invalidate a policy while the backend still verifies its integrity before authorization. The JavaScript client decodes the token to construct proxies, and the Django backend verifies it and reconstructs the authoritative policy for every request.
+- Glue callable results are now converted to proxies only when explicitly marked with `is_glue_manifest: true`, preventing ordinary objects with manifest-like fields from being misclassified.
+
+### Fixes
+
+- Fixed valid Glue policies being rejected after browser-side value normalization changed their visible representation, such as decimal `0.0` values becoming `0`.
+- Failed lazy `load_state` requests no longer retry continuously on subsequent field reads; the error is retained on the proxy and can be retried explicitly with `retryLoad()`.
+
 ## v1.0.1-rc3
 
 ### Features

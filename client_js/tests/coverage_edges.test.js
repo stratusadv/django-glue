@@ -4,7 +4,7 @@ import GlueHttp from "../src/http"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
 import {RelationFieldGlue} from "../src/proxies/fields"
-import {createMetadata, createPolicy, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
 
 function http() {
     return new GlueHttp(new GlueConfig())
@@ -71,7 +71,8 @@ describe('frontend coverage edges', () => {
         // The `new` attribute returns a result containing policy/state/metadata for the new model
         global.fetch = async () => new Response(JSON.stringify({
             result: {
-                policy: {name: 'gorillas.3', namespace: 'model'},
+                is_glue_manifest: true,
+                policy_token: createPolicyToken({name: 'gorillas.3', namespace: 'model', attributes: []}),
                 state: {id: {value: 3}},
                 metadata: {},
             },

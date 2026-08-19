@@ -5,6 +5,9 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
         this.loading = false
+        this._loadAttempted = false
+        this._loadError = null
+        this._loadPromise = null
     }
 
     get $fields() {
@@ -30,12 +33,28 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
     }
 
     _ensureLoaded() {
-        if (!this._loaded && !this.loading) {
-            this.loading = true
-            this._callAttribute('load_state').finally(() => {
+        if (this._loaded || this._loadAttempted) {
+            return this._loadPromise
+        }
+
+        this._loadAttempted = true
+        this.loading = true
+        this._loadPromise = this._callAttribute('load_state')
+            .catch(error => {
+                // Property getters cannot await or handle this failure. Retain it
+                // for inspection and suppress automatic retries on every render.
+                this._loadError = error
+            })
+            .finally(() => {
                 this.loading = false
             })
-        }
+        return this._loadPromise
+    }
+
+    retryLoad() {
+        this._loadAttempted = false
+        this._loadError = null
+        return this._ensureLoaded()
     }
 
     _configureAttributeInitializers() {

@@ -2,12 +2,12 @@ import {describe, expect, test} from "bun:test"
 import GlueConfig from "../src/config"
 import GlueHttp from "../src/http"
 import GlueModelProxy from "../src/proxies/model"
-import {createMetadata, createPolicy, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
 
 describe('proxy lifecycle behavior', () => {
     test('emits before and after listeners with the active proxy', async () => {
         global.fetch = async () => new Response(JSON.stringify({
-            result: {ok: true}, state: createState(), policy: createPolicy(), metadata: createMetadata(), messages: [],
+            result: {ok: true}, state: createState(), policy_token: createPolicyToken(), metadata: createMetadata(), messages: [],
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const proxy = new GlueModelProxy({
             http: new GlueHttp(new GlueConfig()),
@@ -28,7 +28,7 @@ describe('proxy lifecycle behavior', () => {
 
     test('handles messages through the proxy message callback', async () => {
         global.fetch = async () => new Response(JSON.stringify({
-            result: null, state: {}, policy: {}, metadata: {}, messages: [{level: 'success', message: 'Saved'}],
+            result: null, state: {}, policy_token: createPolicyToken(), metadata: {}, messages: [{level: 'success', message: 'Saved'}],
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const proxy = new GlueModelProxy({
             http: new GlueHttp(new GlueConfig()),

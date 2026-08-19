@@ -47,10 +47,29 @@ class FormGlue(BaseGlue):
     @property
     def _prepared_initial(self) -> dict[str, Any]:
         return {
-            name: field.prepare_value(value) if field else value
+            name: field.prepare_value(self._ordered(value)) if field else value
             for name, value in self.form.initial.items()
             for field in [self.form.fields.get(name)]
         }
+
+    @staticmethod
+    def _ordered(value: Any) -> Any:
+        """Return `value` with a deterministic iteration order.
+
+        A ManyToMany (or other unordered) queryset has no guaranteed row order, so two
+        evaluations of the "same" relation can iterate in a different order even though
+        the underlying data hasn't changed. That's fatal here: this value feeds a signed
+        GluePolicy, and a reordering alone would change the serialized bytes and therefore
+        the signature, producing a spurious "policy has been tampered with" error. Sorting
+        by pk before `field.prepare_value()` sees it removes that nondeterminism regardless
+        of what prepare_value does with the value (return model instances, pks, etc).
+        """
+        if hasattr(value, '__iter__') and not isinstance(value, str) and not hasattr(value, '_meta'):
+            try:
+                return sorted(value, key=lambda item: getattr(item, 'pk', item))
+            except TypeError:
+                return value
+        return value
 
     @cached_property
     def attributes(self) -> dict[str, BaseGlueAttribute]:

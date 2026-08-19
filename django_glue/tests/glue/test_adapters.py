@@ -32,7 +32,6 @@ from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueCalledStateAttributeError,
     GlueInvalidAttributeError,
-    GlueInvalidPolicyError,
 )
 from django_glue.response import GlueResponse
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
@@ -56,6 +55,12 @@ def with_request(glue_object, session_key='test-session'):
     """Set a mock request on the glue object and return it."""
     glue_object.request = request_with_session(session_key)
     return glue_object
+
+
+def policy_from_manifest(manifest):
+    """Verify and decode the authoritative policy carried by a manifest."""
+    assert manifest['is_glue_manifest'] is True
+    return GluePolicy.from_token(manifest['policy_token'])
 
 
 def policy_has_attribute(policy_or_dict, attribute_name):
@@ -600,11 +605,12 @@ class GluePolicyTestCase(TestCase):
         serialized = GlueResponse._serialize_glue_values(response, glue_object)
 
         payload = serialized['result']['day_collection']
-        self.assertEqual(payload['policy']['namespace'], 'collection')
-        self.assertEqual(payload['policy']['name'], 'dashboard_items')
+        payload_policy = policy_from_manifest(payload)
+        self.assertEqual(payload_policy.namespace, 'collection')
+        self.assertEqual(payload_policy.name, 'dashboard_items')
         self.assertIn('state', payload)
 
-    def test_signed_policy_validates_without_preserving_proxy_policy_shape(self):
+    def test_policy_token_restores_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
             'request_user_id': None,
@@ -616,7 +622,7 @@ class GluePolicyTestCase(TestCase):
         })
 
         payload = policy.model_dump()
-        restored = GluePolicy.model_validate(payload)
+        restored = GluePolicy.from_token(policy.token)
 
         self.assertEqual(restored.namespace, 'model')
         self.assertIn('identity', payload)
@@ -624,7 +630,7 @@ class GluePolicyTestCase(TestCase):
         self.assertNotIn('subject_details', payload)
         self.assertNotIn('bound_attributes', payload)
 
-    def test_signed_policy_with_datetime_validates_after_json_transport(self):
+    def test_policy_token_serializes_datetime_identity(self):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
             'request_user_id': None,
@@ -639,26 +645,9 @@ class GluePolicyTestCase(TestCase):
             'attributes': ['sent_datetime'],
         })
 
-        payload = json.loads(json.dumps(policy.model_dump(), cls=GlueResponseJSONEncoder))
-        restored = GluePolicy.model_validate(payload)
+        restored = GluePolicy.from_token(policy.token)
 
         self.assertEqual(restored.identity['initial']['sent_datetime'], '2026-08-14T12:30:00Z')
-
-    def test_signed_policy_rejects_tampering(self):
-        policy = GluePolicy.new_signed_policy({
-            'session_id': 'test-session',
-            'request_user_id': None,
-            'name': 'gorilla',
-            'namespace': 'model',
-            'identity': {'target_pk': 1},
-            'access': GlueAccess.VIEW,
-            'attributes': [],
-        })
-        payload = policy.model_dump()
-        payload['identity']['target_pk'] = 2
-
-        with self.assertRaises(GlueInvalidPolicyError):
-            GluePolicy.model_validate(payload)
 
 
 class DeclaredAttributeDefaultAccessTestCase(TestCase):
@@ -946,8 +935,9 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
         manifest = glue_object.manifest.model_dump()
 
-        self.assertEqual(manifest['policy']['namespace'], 'model')
-        self.assertIn('badge_data', manifest['policy']['attributes'])
+        manifest_policy = policy_from_manifest(manifest)
+        self.assertEqual(manifest_policy.namespace, 'model')
+        self.assertIn('badge_data', manifest_policy.attributes)
 
     def test_model_adapter_transfers_target_glue_attributes_to_policy(self):
         glue_object = with_request(ModelGlue(self.gorilla, **glue_context(), fields=['id', 'name']))
@@ -1185,7 +1175,45 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         manifest = json.loads(json.dumps(glue_object.manifest.model_dump(), cls=GlueResponseJSONEncoder))
 
-        self.assertEqual(manifest['policy']['identity']['initial']['skills'], [skill.pk])
+        self.assertEqual(
+            policy_from_manifest(manifest).identity['initial']['skills'],
+            [skill.pk],
+        )
+
+    def test_form_policy_signature_is_stable_regardless_of_m2m_queryset_order(self):
+        """An unordered ManyToMany queryset can iterate in a different row order on
+
+        two evaluations of the "same" relation, even though nothing about the data
+        changed. If that order leaked into the policy identity, equivalent forms would
+        produce different authorization targets. Build the identity from two inputs
+        holding the same rows in reversed order and assert both normalize identically.
+        """
+        skill_a = Skill.objects.create(name='Grappling')
+        skill_b = Skill.objects.create(name='Striking')
+        gorilla = Gorilla.objects.create(name='Koko')
+        gorilla.skills.add(skill_a, skill_b)
+
+        from django import forms
+
+        class SkillForm(forms.ModelForm):
+            class Meta:
+                model = Gorilla
+                fields = ['skills']
+
+        forward = with_request(FormGlue(
+            SkillForm(instance=gorilla, initial={'skills': [skill_a, skill_b]}),
+            **glue_context(name='gorilla-form'),
+        ))
+        reversed_order = with_request(FormGlue(
+            SkillForm(instance=gorilla, initial={'skills': [skill_b, skill_a]}),
+            **glue_context(name='gorilla-form'),
+        ))
+
+        self.assertEqual(forward.identity, reversed_order.identity)
+        self.assertEqual(
+            reversed_order.identity['initial']['skills'],
+            [skill_a.pk, skill_b.pk],
+        )
 
     def test_form_field_get_reduces_model_choice_initial_to_pk(self):
         """FormFieldAttribute.get()/.state must not leak raw model instances/querysets.
@@ -1390,8 +1418,9 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         result = glue_object.query_with_params(filter={'name': 'Koko'})
 
         row = result['items'][0]
-        self.assertEqual(row['policy']['namespace'], 'model')
-        self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
+        row_policy = policy_from_manifest(row)
+        self.assertEqual(row_policy.namespace, 'model')
+        self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
         self.assertEqual(row['state']['name']['value'], 'Koko')
         self.assertEqual(row['metadata']['attributes']['name']['type'], 'CharField')
 
@@ -1412,8 +1441,9 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         row = state['items'][0]
 
         self.assertEqual(manifest['loading_strategy'], 'eager')
-        self.assertEqual(row['policy']['namespace'], 'model')
-        self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
+        row_policy = policy_from_manifest(row)
+        self.assertEqual(row_policy.namespace, 'model')
+        self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
         self.assertEqual(row['state']['name']['value'], 'Koko')
 
     def test_queryset_loading_strategy_not_in_policy_identity(self):
@@ -1448,7 +1478,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         result = glue_object.query_with_params()
 
         row = result['items'][0]
-        self.assertIn('badge_data', row['policy']['attributes'])
+        self.assertIn('badge_data', policy_from_manifest(row).attributes)
         self.assertEqual(row['metadata']['attributes']['badge_data']['namespace'], 'readonly')
         self.assertEqual(row['state']['badge_data']['value'], {'label': 'KOKO'})
         self.assertTrue(
@@ -1523,8 +1553,9 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         manifest = glue_object.manifest.model_dump()
 
-        self.assertEqual(manifest['policy']['namespace'], 'querySet')
-        self.assertIn('badge_data', manifest['policy']['attributes'])
+        manifest_policy = policy_from_manifest(manifest)
+        self.assertEqual(manifest_policy.namespace, 'querySet')
+        self.assertIn('badge_data', manifest_policy.attributes)
 
     def test_queryset_form_class_adds_nested_form_to_child_model_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
@@ -1543,7 +1574,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         result = glue_object.query_with_params()
 
         row = result['items'][0]
-        row_policy = row['policy']
+        row_policy = policy_from_manifest(row)
         row_metadata = row['metadata']['attributes']
         self.assertTrue(policy_has_attribute(row_policy, 'form'))
         self.assertTrue(policy_has_attribute(row_policy, 'forms.default'))
@@ -1566,10 +1597,11 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         row = glue_object.get(pk=gorilla.pk)
 
-        self.assertEqual(row['policy']['namespace'], 'model')
-        self.assertEqual(row['policy']['name'], f'gorillas.{gorilla.pk}')
-        self.assertEqual(row['policy']['identity']['target_pk'], gorilla.pk)
-        self.assertTrue(policy_has_attribute(row['policy'], 'form'))
+        row_policy = policy_from_manifest(row)
+        self.assertEqual(row_policy.namespace, 'model')
+        self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
+        self.assertEqual(row_policy.identity['target_pk'], gorilla.pk)
+        self.assertTrue(policy_has_attribute(row_policy, 'form'))
         self.assertEqual(row['state']['name']['value'], 'Koko')
 
     def test_queryset_policy_remains_unsliced_after_query_with_params(self):
@@ -1624,7 +1656,10 @@ class PythonAdaptersTestCase(TestCase):
 
         self.assertEqual(policy.namespace, 'json')
         self.assertEqual(policy.identity['value'][0]['skill']['name'], 'Grappling')
-        self.assertEqual(manifest['policy']['identity']['value'][0]['skill']['name'], 'Grappling')
+        self.assertEqual(
+            policy_from_manifest(manifest).identity['value'][0]['skill']['name'],
+            'Grappling',
+        )
         self.assertEqual(glue_object.metadata['type'], 'array')
 
     def test_json_adapter_reconstructs_from_policy(self):
@@ -1703,7 +1738,8 @@ class LazyLoadingTestCase(TestCase):
 
         manifest = glue_object.manifest.model_dump()
 
-        self.assertIn('policy', manifest)
+        self.assertIn('policy_token', manifest)
+        self.assertTrue(manifest['is_glue_manifest'])
         self.assertIn('metadata', manifest)
         self.assertIn('state', manifest)
         self.assertEqual(manifest['state'], {})
@@ -1744,7 +1780,8 @@ class LazyLoadingTestCase(TestCase):
 
         manifest = glue_object.manifest.model_dump()
 
-        self.assertIn('policy', manifest)
+        self.assertIn('policy_token', manifest)
+        self.assertTrue(manifest['is_glue_manifest'])
         self.assertIn('metadata', manifest)
         self.assertIn('state', manifest)
         self.assertEqual(manifest['state'], {})

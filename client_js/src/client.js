@@ -3,6 +3,7 @@ import GlueHttp from "./http"
 import GlueView from "./view"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
+import GluePolicy from "./policy"
 
 class GlueClient {
     constructor(context) {
@@ -62,7 +63,17 @@ class GlueClient {
         })
     }
 
-    _registerManifest({policy, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
+    _createProxyFromManifest({policy_token, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
+        return this._createProxy({
+            policy: GluePolicy.fromSignedPolicyToken(policy_token),
+            metadata,
+            state,
+            loading_strategy,
+        })
+    }
+
+    _registerManifest({policy_token, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
+        const policy = GluePolicy.fromSignedPolicyToken(policy_token)
         const name = policy?.name
         const namespace = policy?.namespace || metadata?.namespace
 

@@ -7,21 +7,35 @@ import GlueQuerySetProxy from "../src/proxies/queryset"
 import BaseGlueProxy from "../src/proxies/base"
 import GlueView from "../src/view"
 import {GlueProxyError} from "../src/errors"
-import {createMetadata, createPolicy, createState} from "./testUtils"
+import {createMetadata, createPolicy, createPolicyToken, createState} from "./testUtils"
 
 function http() {
     return new GlueHttp(new GlueConfig())
 }
 
 describe('frontend edge cases', () => {
+    test('only explicitly tagged results are treated as Glue manifests', () => {
+        const proxy = new BaseGlueProxy({
+            http: http(),
+            policy: createPolicy({attributes: []}),
+            state: {},
+            metadata: {},
+        })
+        const ordinaryResult = {policy_token: createPolicyToken(), state: {}, metadata: {}}
+
+        expect(proxy._resultIsManifest(ordinaryResult)).toBe(false)
+        expect(proxy._resultIsManifest({...ordinaryResult, is_glue_manifest: true})).toBe(true)
+    })
+
     test('client rejects invalid manifests', () => {
-        expect(() => new GlueClient({manifest_list: [{policy: {namespace: 'model'}}]})).toThrow(GlueProxyError)
+        expect(() => new GlueClient({manifest_list: [{policy_token: 'invalid'}]})).toThrow()
     })
 
     test('client registers custom namespaces as base proxies', () => {
         const client = new GlueClient({
             manifest_list: [{
-                policy: {name: 'dashboard', namespace: 'timeEntryDashboard', attributes: []},
+                is_glue_manifest: true,
+                policy_token: createPolicyToken({name: 'dashboard', namespace: 'timeEntryDashboard', attributes: []}),
                 metadata: {},
                 state: {},
             }],
@@ -72,7 +86,7 @@ describe('frontend edge cases', () => {
 
     test('model delete callable exists when exposed by policy', async () => {
         global.fetch = async () => new Response(JSON.stringify({
-            result: null, state: {}, policy: {}, metadata: {},
+            result: null, state: {}, policy_token: createPolicyToken(), metadata: {},
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
         const row = new GlueModelProxy({
             http: http(),

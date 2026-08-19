@@ -1,6 +1,13 @@
 import "../../client_js/tests/setup"
+import GluePolicy from "../src/policy"
 
-function createPolicy(overrides = {}) {
+function policyData(overrides = {}) {
+    const attributes = (overrides.attributes || ['id', 'name', 'birthday', 'save']).map(attribute => {
+        if (!(attribute instanceof GluePolicy)) return attribute
+        const {token, ...nestedPolicy} = attribute
+        return nestedPolicy
+    })
+
     return {
         session_id: 'session-1',
         name: overrides.name || 'gorilla',
@@ -11,9 +18,31 @@ function createPolicy(overrides = {}) {
             pk_field_name: 'id',
             ...overrides.identity,
         },
-        attributes: overrides.attributes || ['id', 'name', 'birthday', 'save'],
+        attributes,
         created_at: 1,
-        original_signature: 'signature',
+        ...overrides,
+        attributes,
+    }
+}
+
+function createPolicyToken(overrides = {}) {
+    const bytes = new TextEncoder().encode(JSON.stringify(policyData(overrides)))
+    const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('')
+    const payload = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    return `${payload}:test-timestamp:test-signature`
+}
+
+function createPolicy(overrides = {}) {
+    return GluePolicy.fromSignedPolicyToken(createPolicyToken(overrides))
+}
+
+function createManifest({policy = {}, ...overrides} = {}) {
+    return {
+        is_glue_manifest: true,
+        policy_token: createPolicyToken(policy),
+        state: createState(),
+        metadata: createMetadata(),
+        loading_strategy: 'lazy',
         ...overrides,
     }
 }
@@ -62,7 +91,7 @@ function mockOperationFetch(payload = {}) {
         return new Response(JSON.stringify({
             result: {},
             state: createState({instance_data: {id: 1, name: 'Michael', birthday: '1973-03-01'}}),
-            policy: createPolicy({original_signature: 'next-signature'}),
+            policy_token: createPolicyToken(),
             metadata: createMetadata(),
             messages: [],
             ...payload,
@@ -74,4 +103,4 @@ function mockOperationFetch(payload = {}) {
     return calls
 }
 
-export {createPolicy, createMetadata, createState, mockOperationFetch}
+export {createManifest, createPolicy, createPolicyToken, createMetadata, createState, mockOperationFetch}

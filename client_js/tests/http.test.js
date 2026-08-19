@@ -12,7 +12,7 @@ describe('GlueHttp', () => {
 
         await http.sendAttributeRequest({
             name: 'gorilla',
-            policy,
+            policyToken: policy.token,
             state,
             attribute: 'save',
             kwargs: {},
@@ -21,7 +21,8 @@ describe('GlueHttp', () => {
         expect(calls[0].url).toBe('/__dg__/callable_attribute/gorilla/save/')
         expect(calls[0].options.method).toBe('POST')
         expect(calls[0].options.body).toBeInstanceOf(FormData)
-        expect(JSON.parse(calls[0].options.body.get('policy'))).toEqual(policy)
+        expect(calls[0].options.body.get('policy_token')).toBe(policy.token)
+        expect(calls[0].options.body.has('policy')).toBeFalse()
         expect(JSON.parse(calls[0].options.body.get('state')).name.value).toBe('Koko')
         expect(calls[0].options.body.get('attribute')).toBe('save')
         expect(JSON.parse(calls[0].options.body.get('kwargs'))).toEqual({})

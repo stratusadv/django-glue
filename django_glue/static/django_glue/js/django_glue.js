@@ -192,10 +192,10 @@
         csrfProtected
       });
     }
-    async sendAttributeRequest({ name, policy, state = null, attribute, kwargs = {} }) {
+    async sendAttributeRequest({ name, policyToken, state = null, attribute, kwargs = {} }) {
       const formData = new FormData;
       const { files, data } = this._extractFiles(serializeValue(state || {}));
-      formData.append("policy", JSON.stringify(policy));
+      formData.append("policy_token", policyToken);
       formData.append("state", JSON.stringify(data));
       formData.append("attribute", attribute);
       formData.append("kwargs", JSON.stringify(kwargs));
@@ -358,6 +358,37 @@
     return NAMESPACE_TO_PROXY_CLASS[namespace];
   }
 
+  // client_js/src/policy.js
+  class GluePolicy {
+    static fromSignedPolicyToken(token) {
+      if (typeof token !== "string") {
+        throw new TypeError("Glue policy token must be a string.");
+      }
+      const encodedPayload = token.split(":", 1)[0];
+      if (!encodedPayload || encodedPayload.startsWith(".")) {
+        throw new Error("Glue policy token must contain uncompressed Django signed JSON.");
+      }
+      const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encodedPayload.length / 4) * 4, "=");
+      const binary = atob(base64);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+      return this._fromDecodedPayload(payload, token);
+    }
+    static _fromDecodedPayload(payload, token = payload.token) {
+      const attributes = (payload.attributes || []).map((attribute) => {
+        if (typeof attribute !== "object" || attribute === null) {
+          return attribute;
+        }
+        return this._fromDecodedPayload(attribute);
+      });
+      return new this({ ...payload, attributes, token });
+    }
+    constructor(data) {
+      Object.assign(this, data);
+    }
+  }
+  var policy_default = GluePolicy;
+
   // client_js/src/proxies/base.js
   function isPlainObject2(value) {
     if (value === null || typeof value !== "object") {
@@ -378,6 +409,9 @@
       loadingStrategy = "lazy"
     }) {
       this._http = http;
+      if (!(policy instanceof policy_default)) {
+        throw new TypeError("Glue proxies require a decoded GluePolicy instance.");
+      }
       this._policy = policy;
       this._name = policy?.name;
       this._state = state || {};
@@ -424,7 +458,7 @@
       try {
         const response = await this._http.sendAttributeRequest({
           name: this._name,
-          policy: this._policy,
+          policyToken: this._policy.token,
           state: this._stateForAttribute(attributeMetadata.takes_client_state),
           attribute,
           kwargs
@@ -461,9 +495,9 @@
       return this._state;
     }
     _applyResponse(data = {}) {
-      const shouldRefreshGlueObjectAttributes = Boolean(data.policy || data.metadata);
-      if (data.policy) {
-        this._policy = data.policy;
+      const shouldRefreshGlueObjectAttributes = Boolean(data.policy_token || data.metadata);
+      if (data.policy_token) {
+        this._policy = policy_default.fromSignedPolicyToken(data.policy_token);
       }
       if (data.metadata !== undefined) {
         this._metadata = data.metadata || {};
@@ -614,8 +648,8 @@
       const cacheKey = `__glue_object__${attributePolicy.name}`;
       const nestedState = proxy._state?.[relativeName] || {};
       if (proxy[cacheKey]) {
+        proxy[cacheKey]._policy = attributePolicy;
         proxy[cacheKey]._applyResponse({
-          policy: attributePolicy,
           state: nestedState,
           metadata: nestedMetadata
         });
@@ -740,7 +774,7 @@
         return result;
       }
       if (this._resultIsManifest(result)) {
-        return this._client._createProxy(result);
+        return this._client._createProxyFromManifest(result);
       }
       Object.keys(result).forEach((key) => {
         result[key] = this._convertResultManifestsToProxies(result[key]);
@@ -748,7 +782,7 @@
       return result;
     }
     _resultIsManifest(result) {
-      return Boolean(result?.policy?.name && result?.policy?.namespace && result?.metadata !== undefined);
+      return result?.is_glue_manifest === true;
     }
   }
   var base_default = BaseGlueProxy;
@@ -794,7 +828,8 @@
       const cachedItem = this._itemProxyCache.get(cacheKey);
       if (cachedItem) {
         if (cachedItem.policy !== policy || cachedItem.state !== state || cachedItem.metadata !== metadata) {
-          cachedItem.proxy._applyResponse({ policy, state, metadata, loading_strategy: this._loadingStrategy });
+          cachedItem.proxy._policy = policy;
+          cachedItem.proxy._applyResponse({ state, metadata, loading_strategy: this._loadingStrategy });
           cachedItem.policy = policy;
           cachedItem.state = state;
           cachedItem.metadata = metadata;
@@ -1106,6 +1141,9 @@
     constructor(options) {
       super(options);
       this.loading = false;
+      this._loadAttempted = false;
+      this._loadError = null;
+      this._loadPromise = null;
     }
     get $fields() {
       return this._fields;
@@ -1124,12 +1162,22 @@
       return Object.values(this._state || {}).some((fieldState) => fieldState?.errors?.length > 0);
     }
     _ensureLoaded() {
-      if (!this._loaded && !this.loading) {
-        this.loading = true;
-        this._callAttribute("load_state").finally(() => {
-          this.loading = false;
-        });
+      if (this._loaded || this._loadAttempted) {
+        return this._loadPromise;
       }
+      this._loadAttempted = true;
+      this.loading = true;
+      this._loadPromise = this._callAttribute("load_state").catch((error) => {
+        this._loadError = error;
+      }).finally(() => {
+        this.loading = false;
+      });
+      return this._loadPromise;
+    }
+    retryLoad() {
+      this._loadAttempted = false;
+      this._loadError = null;
+      return this._ensureLoaded();
     }
     _configureAttributeInitializers() {
       super._configureAttributeInitializers();
@@ -1226,7 +1274,7 @@
     }
     _applyResponse(data = {}) {
       super._applyResponse(data);
-      if (this._hasPendingLocalEdit || !(data.policy || data.metadata || data.state))
+      if (this._hasPendingLocalEdit || !(data.policy_token || data.metadata || data.state))
         return;
       this._formProxies = this._initialForms();
     }
@@ -1252,7 +1300,8 @@
       const cachedForm = this._formProxyCache.get(cacheKey);
       if (cachedForm) {
         if (cachedForm.policy !== policy || cachedForm.state !== state || cachedForm.metadata !== metadata) {
-          cachedForm.proxy._applyResponse({ policy, state, metadata, loading_strategy: this._loadingStrategy });
+          cachedForm.proxy._policy = policy;
+          cachedForm.proxy._applyResponse({ state, metadata, loading_strategy: this._loadingStrategy });
           cachedForm.policy = policy;
           cachedForm.state = state;
           cachedForm.metadata = metadata;
@@ -1394,8 +1443,9 @@
     }
     async get(pk) {
       const row = await this._callAttribute("get", { pk });
-      const name = row._name || row.policy?.name || `${this._name}.${pk}`;
-      const proxy = this._buildModelProxy(row, this._modelProxies.get(name));
+      const policy = this._policyForRow(row);
+      const name = row._name || policy.name || `${this._name}.${pk}`;
+      const proxy = this._buildModelProxy(row, this._modelProxies.get(name), policy);
       this._modelProxies.set(name, proxy);
       return proxy;
     }
@@ -1409,12 +1459,19 @@
       const oldProxies = this._modelProxies;
       this._modelProxies = new Map;
       items.forEach((row, index) => {
-        const name = row._name || row.policy?.name || `${this._name}.${index}`;
-        const proxy = this._buildModelProxy(row, oldProxies.get(name));
+        const policy = this._policyForRow(row);
+        const name = row._name || policy.name || `${this._name}.${index}`;
+        const proxy = this._buildModelProxy(row, oldProxies.get(name), policy);
         this._modelProxies.set(name, proxy);
       });
     }
-    _buildModelProxy(row, existingProxy = null) {
+    _policyForRow(row) {
+      if (row instanceof model_default) {
+        return row._policy;
+      }
+      return policy_default.fromSignedPolicyToken(row.policy_token);
+    }
+    _buildModelProxy(row, existingProxy = null, policy = this._policyForRow(row)) {
       if (row instanceof model_default) {
         row._loaded = true;
         return row;
@@ -1423,7 +1480,7 @@
       let proxy = existingProxy;
       if (proxy) {
         proxy._applyResponse({
-          policy: row.policy,
+          policy_token: row.policy_token,
           state: row.state,
           metadata: row.metadata || this._metadata,
           loading_strategy: rowLoadingStrategy
@@ -1431,7 +1488,7 @@
       } else {
         proxy = new model_default({
           http: this._http,
-          policy: row.policy,
+          policy,
           state: row.state,
           metadata: row.metadata || this._metadata,
           client: this._client,
@@ -1615,7 +1672,16 @@
         loadingStrategy: loading_strategy
       });
     }
-    _registerManifest({ policy, metadata = {}, state = {}, loading_strategy = "lazy" }) {
+    _createProxyFromManifest({ policy_token, metadata = {}, state = {}, loading_strategy = "lazy" }) {
+      return this._createProxy({
+        policy: policy_default.fromSignedPolicyToken(policy_token),
+        metadata,
+        state,
+        loading_strategy
+      });
+    }
+    _registerManifest({ policy_token, metadata = {}, state = {}, loading_strategy = "lazy" }) {
+      const policy = policy_default.fromSignedPolicyToken(policy_token);
       const name = policy?.name;
       const namespace = policy?.namespace || metadata?.namespace;
       if (!name) {

@@ -58,7 +58,8 @@ class GlueCollectionProxy extends BaseGlueProxy {
                 || cachedItem.state !== state
                 || cachedItem.metadata !== metadata
             ) {
-                cachedItem.proxy._applyResponse({policy, state, metadata, loading_strategy: this._loadingStrategy})
+                cachedItem.proxy._policy = policy
+                cachedItem.proxy._applyResponse({state, metadata, loading_strategy: this._loadingStrategy})
                 cachedItem.policy = policy
                 cachedItem.state = state
                 cachedItem.metadata = metadata

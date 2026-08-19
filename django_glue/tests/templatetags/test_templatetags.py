@@ -8,6 +8,8 @@ from django.urls import include, path
 from django_glue.shortcuts.glue import Glue
 from django_glue.access import GlueAccess
 from django_glue import constants
+from django_glue.glue.context import GlueContextManager
+from django_glue.glue.policy import GluePolicy
 from test_project.gorilla.models import Gorilla
 from django_glue.tests.conftest import MockSession
 
@@ -44,6 +46,11 @@ class DjangoGlueInitTagTestCase(TestCase):
         )
         self.request = self.factory.get('/')
         self.request.session = MockSession()
+
+    def registered_policy(self):
+        manifest = GlueContextManager(self.request).serialized_manifests[0]
+        self.assertTrue(manifest['is_glue_manifest'])
+        return GluePolicy.from_token(manifest['policy_token'])
 
     def test_tag_includes_version(self):
         """Tag should include the Django Glue version."""
@@ -88,7 +95,8 @@ class DjangoGlueInitTagTestCase(TestCase):
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('gorilla', rendered)
+        self.assertIn('policy_token', rendered)
+        self.assertEqual(self.registered_policy().name, 'gorilla')
 
     def test_tag_includes_manifest_payloads(self):
         """Tag should include manifest payloads when glue objects are registered."""
@@ -104,7 +112,8 @@ class DjangoGlueInitTagTestCase(TestCase):
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('gorilla', rendered)
+        self.assertIn('is_glue_manifest', rendered)
+        self.assertEqual(self.registered_policy().name, 'gorilla')
 
     def test_tag_includes_json_manifest_payload(self):
         """Tag should include JsonGlue payloads registered through the shortcut."""
@@ -118,9 +127,14 @@ class DjangoGlueInitTagTestCase(TestCase):
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('permission_data', rendered)
-        self.assertIn('json', rendered)
-        self.assertIn('auth.add_group', rendered)
+        self.assertIn('policy_token', rendered)
+        policy = self.registered_policy()
+        self.assertEqual(policy.name, 'permission_data')
+        self.assertEqual(policy.namespace, 'json')
+        self.assertEqual(
+            policy.identity['value'][0]['permissions'],
+            ['auth.add_group'],
+        )
 
     def test_tag_with_no_manifest_registered(self):
         """Tag should work when no glue objects are registered."""

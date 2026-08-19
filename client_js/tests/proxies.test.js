@@ -11,7 +11,7 @@ import GlueJsonProxy from "../src/proxies/json"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
 import {registerProxyClass} from "../src/proxies/registry"
-import {createPolicy, createMetadata, createState, mockOperationFetch} from "./testUtils"
+import {createPolicy, createPolicyToken, createMetadata, createState, mockOperationFetch} from "./testUtils"
 
 function http() {
     return new GlueHttp(new GlueConfig())
@@ -35,9 +35,18 @@ function queryPolicy(name = 'gorillas') {
     })
 }
 
+function queryPolicyToken(name = 'gorillas') {
+    return createPolicyToken({
+        name,
+        namespace: 'querySet',
+        attributes: ['get', 'query_with_params'],
+    })
+}
+
 function modelRow(name, id, values = {}) {
     return {
-        policy: createPolicy({
+        is_glue_manifest: true,
+        policy_token: createPolicyToken({
             name,
             attributes: ['id', 'name', 'delete'],
             identity: {target_pk: id, pk_field_name: 'id'},
@@ -68,7 +77,8 @@ describe('Glue proxies', () => {
         })
         const client = new GlueClient({
             manifest_list: [{
-                policy: createPolicy({
+                is_glue_manifest: true,
+                policy_token: createPolicyToken({
                     name: 'contacts',
                     namespace: 'formSet',
                     attributes: [formPolicy, 'save'],
@@ -99,7 +109,8 @@ describe('Glue proxies', () => {
         const client = new GlueClient({
             manifest_list: [
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'day_1',
                         namespace: 'timeEntryDay',
                         attributes: ['date'],
@@ -111,7 +122,8 @@ describe('Glue proxies', () => {
                     },
                 },
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'time_entry_days',
                         namespace: 'collection',
                         identity: {},
@@ -153,7 +165,8 @@ describe('Glue proxies', () => {
         const client = new GlueClient({
             manifest_list: [
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'day_1',
                         namespace: 'timeEntryDay',
                         attributes: ['date'],
@@ -168,7 +181,8 @@ describe('Glue proxies', () => {
                     },
                 },
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'time_entry_days',
                         namespace: 'collection',
                         identity: {},
@@ -247,7 +261,7 @@ describe('Glue proxies', () => {
 
         const item = collection.items[0]
         collection._applyResponse({
-            policy: createPolicy({
+            policy_token: createPolicyToken({
                 name: 'time_entry_days',
                 namespace: 'collection',
                 identity: {},
@@ -255,7 +269,7 @@ describe('Glue proxies', () => {
                     createPolicy({
                         name: 'day_1',
                         namespace: 'timeEntryDay',
-                        attributes: ['date'],
+                        attributes: ['date', 'label'],
                     }),
                 ],
             }),
@@ -271,6 +285,43 @@ describe('Glue proxies', () => {
 
         expect(updatedItem).toBe(item)
         expect(updatedItem.date).toBe('2026-08-11')
+        expect(updatedItem._policy.attributes).toEqual(['date', 'label'])
+    })
+
+    test('formsets refresh cached form policies from policy tokens', () => {
+        const initialFormPolicy = createPolicy({
+            name: 'contacts.form_list.0',
+            namespace: 'form',
+            attributes: ['name'],
+        })
+        const formset = new GlueFormSetProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'contacts',
+                namespace: 'formSet',
+                attributes: [initialFormPolicy],
+            }),
+            state: {'form_list.0': {name: {value: 'Ada'}}},
+            metadata: {attributes: {'form_list.0': {metadata: createMetadata({namespace: 'form'})}}},
+        })
+        const originalForm = formset.forms[0]
+
+        formset._applyResponse({
+            policy_token: createPolicyToken({
+                name: 'contacts',
+                namespace: 'formSet',
+                attributes: [createPolicy({
+                    name: 'contacts.form_list.0',
+                    namespace: 'form',
+                    attributes: ['name', 'email'],
+                })],
+            }),
+            state: {'form_list.0': {name: {value: 'Ada'}, email: {value: 'ada@example.com'}}},
+        })
+
+        expect(formset.forms[0]).toBe(originalForm)
+        expect(originalForm._policy.attributes).toEqual(['name', 'email'])
+        expect(originalForm._state.email.value).toBe('ada@example.com')
     })
 
     test('eager collections mark item proxies as loaded', async () => {
@@ -430,7 +481,7 @@ describe('Glue proxies', () => {
         expect(object.day_collection.items).toHaveLength(0)
 
         object._applyResponse({
-            policy: createPolicy({
+            policy_token: createPolicyToken({
                 name: 'dashboard',
                 namespace: 'timeEntryDashboard',
                 attributes: [
@@ -553,7 +604,7 @@ describe('Glue proxies', () => {
             return new Response(JSON.stringify({
                 result: {groups: {value: [1], errors: []}},
                 state: {groups: {value: [1], errors: []}},
-                policy: createPolicy({
+                policy_token: createPolicyToken({
                     name: 'group_form',
                     namespace: 'form',
                     attributes: ['groups', 'load_state'],
@@ -600,6 +651,42 @@ describe('Glue proxies', () => {
         expect(form.$fields.groups.hasChoiceSelected(1)).toBe(true)
     })
 
+    test('failed lazy loading does not retry on repeated field reads', async () => {
+        let requestCount = 0
+        global.fetch = async () => {
+            requestCount += 1
+            return new Response(JSON.stringify({error: {message: 'Forbidden'}}), {
+                status: 403,
+                headers: {'Content-Type': 'application/json'},
+            })
+        }
+        const form = new GlueFormProxy({
+            http: http(),
+            policy: createPolicy({
+                name: 'group_form',
+                namespace: 'form',
+                attributes: ['groups', 'load_state'],
+            }),
+            state: {},
+            metadata: createMetadata({
+                namespace: 'form',
+                fields: {groups: {type: 'ModelMultipleChoiceField'}},
+                attributes: {load_state: {namespace: 'callable'}},
+            }),
+        })
+
+        void form.groups
+        void form.groups
+        await form._loadPromise
+        void form.groups
+
+        expect(requestCount).toBe(1)
+        expect(form._loadError?.status).toBe(403)
+
+        await form.retryLoad()
+        expect(requestCount).toBe(2)
+    })
+
     test('listeners can be removed', async () => {
         mockOperationFetch()
         const object = new GlueModelProxy({
@@ -632,7 +719,7 @@ describe('Glue proxies', () => {
 
         await object.save()
 
-        expect(object._policy.original_signature).toBe('next-signature')
+        expect(object._policy.token).toBe(createPolicyToken())
         expect(object.name).toBe('Michael')
         expect(object.$fields.birthday.value).toBe('1973-03-01')
     })
@@ -901,7 +988,8 @@ describe('Glue proxies', () => {
     test('querysets expose computed attributes on returned model proxies', async () => {
         const object = querySet()
         const rows = [{
-            policy: createPolicy({
+            is_glue_manifest: true,
+            policy_token: createPolicyToken({
                 name: 'gorillas.1',
                 attributes: ['id', 'name', 'badge_data'],
                 identity: {target_pk: 1, pk_field_name: 'id'},

@@ -74,7 +74,7 @@ class BaseGlue(ABC):
     @property
     def manifest(self) -> GlueManifest:
         return GlueManifest(
-            policy=self.policy,
+            policy_token=self.policy.token,
             metadata=self.metadata,
             state=self.state if self.resolved_loading_strategy == LoadingStrategy.EAGER else {},
             loading_strategy=self.resolved_loading_strategy,
@@ -256,7 +256,7 @@ class BaseGlue(ABC):
         if getattr(glue_attribute, 'updates_client_state', True):
             response_extra = {
                 'state': self.state,
-                'policy': self.policy,
+                'policy_token': self.policy.token,
                 'metadata': self.metadata,
             }
 

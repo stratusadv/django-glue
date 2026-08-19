@@ -51,7 +51,7 @@ class AttributeCallContextFactory:
         self.request = request
 
         # Accumulated during parsing
-        self._policy_dict: dict[str, Any] | None = None
+        self._policy_token: str | None = None
         self._validated_policy: GluePolicy | None = None
         self._state: Any = None
         self._kwargs: dict[str, Any] = {}
@@ -96,7 +96,14 @@ class AttributeCallContextFactory:
             )
 
     def _parse_json_fields(self) -> None:
-        self._policy_dict = self._load_json_field('policy', required=True)
+        self._policy_token = self.request.POST.get('policy_token')
+        if not self._policy_token:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.MISSING_FIELD,
+                message='"policy_token" is required.',
+                details={'field': 'policy_token'},
+            )
+
         self._state = self._load_json_field('state', required=False)
 
         kwargs = self._load_json_field('kwargs', required=False) or {}
@@ -119,7 +126,8 @@ class AttributeCallContextFactory:
         self._attribute = attribute
 
     def _validate_policy(self) -> None:
-        self._validated_policy = GluePolicy.model_validate(self._policy_dict)
+        assert self._policy_token is not None
+        self._validated_policy = GluePolicy.from_token(self._policy_token)
 
     def _validate_path_params_match_policy(self) -> None:
         if not self.request.resolver_match:

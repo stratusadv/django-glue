@@ -34,7 +34,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         request = self.factory.post(
             f'/__dg__/callable_attribute/{object_name}/',
             data={
-                'policy': json.dumps(policy.model_dump(), default=str),
+                'policy_token': policy.token,
                 'attribute': attribute,
                 'kwargs': json.dumps(kwargs or {}, default=str),
                 **({'state': json.dumps(state, default=str)} if state is not None else {}),
@@ -76,7 +76,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Updated')
         data = json.loads(response.content)
-        self.assertIn('policy', data)
+        self.assertIn('policy_token', data)
         self.assertIn('state', data)
         self.assertIn('metadata', data)
         self.assertEqual(data['result']['success'], True)
@@ -157,7 +157,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
             data={
-                'policy': json.dumps(policy.model_dump(), default=str),
+                'policy_token': policy.token,
                 'attribute': 'save',
                 'kwargs': json.dumps(['not', 'an', 'object']),
             },
@@ -219,7 +219,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.assertEqual(data['result']['gorilla'], 'Koko')
         self.assertEqual(len(data['messages']), 1)
         self.assertIn('Koko beats their chest!', data['messages'][0]['message'])
-        self.assertIn('policy', data)
+        self.assertIn('policy_token', data)
         self.assertIn('state', data)
         self.assertIn('metadata', data)
 
@@ -255,7 +255,7 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
             data={
-                'policy': json.dumps(policy.model_dump(), default=str),
+                'policy_token': policy.token,
                 'attribute': 'save',
                 'kwargs': json.dumps({}),
             },
@@ -288,7 +288,7 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request = self.factory.post(
             '/__dg__/callable_attribute/my_proxy/',
             data={
-                'policy': json.dumps(policy.model_dump(), default=str),
+                'policy_token': policy.token,
                 'attribute': 'save',
                 'kwargs': json.dumps({}),
             },
@@ -319,7 +319,7 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         request = self.factory.post(
             '/__dg__/callable_attribute/gorilla/',
             data={
-                'policy': json.dumps(policy.model_dump(), default=str),
+                'policy_token': policy.token,
                 'attribute': 'save',
                 'kwargs': json.dumps({}),
             },

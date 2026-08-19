@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createPolicy, createMetadata, createState} from "./testUtils"
+import {createManifest, createPolicy, createPolicyToken, createMetadata, createState} from "./testUtils"
 
 describe('GlueClient', () => {
     test('exposes client-level callbacks, fetch, and view helpers', async () => {
@@ -32,7 +32,8 @@ describe('GlueClient', () => {
             },
             manifest_list: [
                 {
-                    policy: createPolicy(),
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken(),
                     state: createState(),
                     metadata: createMetadata(),
                 },
@@ -49,7 +50,8 @@ describe('GlueClient', () => {
         const client = new GlueClient({
             manifest_list: [
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'timeEntryDashboard',
                         namespace: 'timeEntryDashboard',
                         attributes: [],
@@ -65,7 +67,8 @@ describe('GlueClient', () => {
 
     test('rejects direct and named proxies sharing a namespace', () => {
         const directManifest = {
-            policy: createPolicy({
+            is_glue_manifest: true,
+            policy_token: createPolicyToken({
                 name: 'timeEntryDashboard',
                 namespace: 'timeEntryDashboard',
                 attributes: [],
@@ -74,7 +77,8 @@ describe('GlueClient', () => {
             metadata: {attributes: {}},
         }
         const namedManifest = {
-            policy: createPolicy({
+            is_glue_manifest: true,
+            policy_token: createPolicyToken({
                 name: 'dashboard',
                 namespace: 'timeEntryDashboard',
                 attributes: [],
@@ -119,7 +123,7 @@ describe('GlueClient', () => {
             return new Response(JSON.stringify({
                 result: {result: 12},
                 state: {},
-                policy: createPolicy({
+                policy_token: createPolicyToken({
                     namespace: 'function',
                     identity: {params: ['left', 'right']},
                     attributes: ['execute'],
@@ -136,7 +140,8 @@ describe('GlueClient', () => {
         const client = new GlueClient({
             manifest_list: [
                 {
-                    policy: createPolicy({
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({
                         name: 'add',
                         namespace: 'function',
                         identity: {params: ['left', 'right']},
