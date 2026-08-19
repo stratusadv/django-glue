@@ -48,7 +48,6 @@ from django_glue import Glue, GlueAccess
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
 | `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
-| `Glue.json()` | `GlueJsonProxy` | Serializable dict, list, or primitive |
 
 On the frontend, proxies are accessed through the global `Glue` object:
 
@@ -60,7 +59,6 @@ On the frontend, proxies are accessed through the global `Glue` object:
 | `Glue.form` | Form proxies | `Glue.form.contact_form` |
 | `Glue.template` | Template proxies | `Glue.template.card` |
 | `Glue.function` | Function proxies | `await Glue.function.calculate(10, 20)` |
-| `Glue.json` | JSON proxies | `Glue.json.config` |
 
 ### Access Control
 

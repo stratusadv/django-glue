@@ -3,7 +3,6 @@ import GlueSequenceProxy from "./sequence"
 import GlueFormProxy from "./form"
 import GlueFormSetProxy from "./formset"
 import GlueFunctionProxy from "./function"
-import GlueJsonProxy from "./json"
 import GlueModelProxy from "./model"
 import GlueQuerySetProxy from "./queryset"
 import GlueTemplateProxy from "./template"
@@ -14,7 +13,6 @@ const NAMESPACE_TO_PROXY_CLASS = {
     form: GlueFormProxy,
     formSet: GlueFormSetProxy,
     function: GlueFunctionProxy,
-    json: GlueJsonProxy,
     model: GlueModelProxy,
     querySet: GlueQuerySetProxy,
     template: GlueTemplateProxy,
@@ -31,7 +29,6 @@ export {
     GlueFormProxy,
     GlueFormSetProxy,
     GlueFunctionProxy,
-    GlueJsonProxy,
     GlueModelProxy,
     GlueQuerySetProxy,
     GlueTemplateProxy,

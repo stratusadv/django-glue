@@ -7,7 +7,6 @@ import BaseGlueProxy from "../src/proxies/base"
 import GlueSequenceProxy from "../src/proxies/sequence"
 import GlueFormProxy from "../src/proxies/form"
 import GlueFormSetProxy from "../src/proxies/formset"
-import GlueJsonProxy from "../src/proxies/json"
 import GlueModelProxy from "../src/proxies/model"
 import GlueQuerySetProxy from "../src/proxies/queryset"
 import {registerProxyClass} from "../src/proxies/registry"
@@ -299,30 +298,6 @@ describe('Glue proxies', () => {
         expect(item.name).toBe('Koko')
         await new Promise(resolve => setTimeout(resolve, 0))
         expect(fetchCalled).toBe(false)
-    })
-
-    test('json proxy exposes policy identity value', () => {
-        const object = new GlueJsonProxy({
-            http: http(),
-            policy: createPolicy({
-                name: 'permission_data',
-                namespace: 'json',
-                identity: {
-                    value: [
-                        {group: 'admin', permissions: ['auth.add_group']},
-                    ],
-                },
-                attributes: [],
-            }),
-            metadata: {namespace: 'json', type: 'array', attributes: {}},
-        })
-
-        expect(object.value).toEqual([
-            {group: 'admin', permissions: ['auth.add_group']},
-        ])
-        expect(object.length).toBe(1)
-        expect(object.at(0).group).toBe('admin')
-        expect([...object]).toEqual(object.value)
     })
 
     test('glue object attributes initialize nested form proxies', () => {

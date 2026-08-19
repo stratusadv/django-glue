@@ -47,6 +47,7 @@ class CallableAttribute(BaseGlueAttribute):
         required_access: GlueAccess,
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
+        render_as_html: bool = False,
         attr_owner_instance: Any = None,
     ) -> None:
         super().__init__(
@@ -57,6 +58,7 @@ class CallableAttribute(BaseGlueAttribute):
         )
         self.takes_client_state = takes_client_state
         self.updates_client_state = updates_client_state
+        self.render_as_html = render_as_html
 
     @property
     def metadata(self) -> dict[str, Any]:

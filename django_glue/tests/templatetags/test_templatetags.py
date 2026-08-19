@@ -115,27 +115,6 @@ class DjangoGlueInitTagTestCase(TestCase):
         self.assertIn('is_glue_manifest', rendered)
         self.assertEqual(self.registered_policy().name, 'gorilla')
 
-    def test_tag_includes_json_manifest_payload(self):
-        """Tag should include JsonGlue payloads registered through the shortcut."""
-        Glue.json(
-            request=self.request,
-            unique_name='permission_data',
-            target=[{'group': 'admin', 'permissions': ['auth.add_group']}],
-        )
-
-        template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
-        context = Context({'request': self.request})
-
-        rendered = template.render(context)
-        self.assertIn('policy_token', rendered)
-        policy = self.registered_policy()
-        self.assertEqual(policy.name, 'permission_data')
-        self.assertEqual(policy.namespace, 'json')
-        self.assertEqual(
-            policy.identity['value'][0]['permissions'],
-            ['auth.add_group'],
-        )
-
     def test_tag_with_no_manifest_registered(self):
         """Tag should work when no glue objects are registered."""
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')

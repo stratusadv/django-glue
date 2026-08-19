@@ -20,6 +20,7 @@ class DeclaredAttributeOptions:
     takes_client_state: bool | list[str] | tuple[str, ...] = True
     updates_client_state: bool = True
     is_identity: bool = False
+    render_as_html: bool = False
 
 
 class DeclaredAttribute:
@@ -44,6 +45,13 @@ class DeclaredAttribute:
 
         # As a class attribute for a value
         services = Attribute(TaskService(), required_access=GlueAccess.DELETE)
+
+        # As a decorator on a method that returns a TemplateResponse and
+        # should be rendered to HTML on the client instead of sent as raw
+        # text (see Glue.html_attr for a shortcut that sets this for you)
+        @Attribute(render_as_html=True)
+        def render_panel(self, request: HttpRequest) -> TemplateResponse:
+            ...
     """
 
     def __init__(
@@ -54,6 +62,7 @@ class DeclaredAttribute:
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         identity: bool = False,
+        render_as_html: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
         glue_factory: Callable[..., Any] | None = None,
@@ -68,6 +77,7 @@ class DeclaredAttribute:
         self._takes_client_state = takes_client_state
         self._updates_client_state = updates_client_state
         self._identity = identity
+        self._render_as_html = render_as_html
         self.default = default
         self.default_factory = default_factory
         self.glue_factory = glue_factory
@@ -95,6 +105,7 @@ class DeclaredAttribute:
             takes_client_state=self._takes_client_state,
             updates_client_state=self._updates_client_state,
             is_identity=self._identity,
+            render_as_html=self._render_as_html,
         )
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:

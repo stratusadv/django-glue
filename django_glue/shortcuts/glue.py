@@ -16,7 +16,6 @@ from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
-from django_glue.glue.json import JsonGlue, JsonValue
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
@@ -76,6 +75,28 @@ class _GluePropertyDescriptor:
             raise RuntimeError('GluePropertyDescriptor not properly initialized')
         return self._property.__get__(instance, owner)
 
+def _html_attr(*args, **kwargs) -> DeclaredAttribute:
+    """
+    Shortcut for @Glue.attr(render_as_html=True).
+
+    Use on a `@Glue.attr`-style method that returns a TemplateResponse when
+    it should be coerced to a GlueTemplateResponse (rendered HTML, chainable
+    on the client via .renderInnerHtml(...)) instead of the default of
+    sending the TemplateResponse's rendered text as plain result data.
+
+    Usage:
+        @Glue.html_attr
+        def render_panel(self, request: HttpRequest) -> TemplateResponse:
+            ...
+
+        @Glue.html_attr(required_access=GlueAccess.CHANGE)
+        def render_editable_panel(self, request: HttpRequest) -> TemplateResponse:
+            ...
+    """
+    kwargs.setdefault('render_as_html', True)
+    return DeclaredAttribute(*args, **kwargs)
+
+
 # Type alias for form parameter: can be either an instance or a class
 FormOrClass = Union[ModelForm, type[ModelForm]]
 
@@ -85,6 +106,7 @@ class Glue:
     LoadingStrategy = LoadingStrategy
     attribute = DeclaredAttribute
     attr = DeclaredAttribute
+    html_attr = _html_attr
     property = _GluePropertyDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
@@ -241,24 +263,6 @@ class Glue:
                 target,
                 name=unique_name,
                 access=GlueAccess.VIEW,
-                loading_strategy=loading_strategy,
-            ),
-        )
-
-    @staticmethod
-    def json(
-        request: HttpRequest,
-        unique_name: str,
-        target: JsonValue,
-        access: GlueAccess = GlueAccess.VIEW,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
-    ) -> JsonGlue:
-        return Glue.object(
-            request=request,
-            glue=JsonGlue(
-                target,
-                name=unique_name,
-                access=access,
                 loading_strategy=loading_strategy,
             ),
         )

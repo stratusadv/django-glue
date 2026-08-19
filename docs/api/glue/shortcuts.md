@@ -16,7 +16,6 @@ from django_glue import Glue, GlueAccess
 | `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
 | `Glue.template()` | `GlueTemplateProxy` | Django template by name |
 | `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
-| `Glue.json()` | `GlueJsonProxy` | Serializable dict, list, or primitive |
 
 ---
 
@@ -56,27 +55,6 @@ Class-level attributes typed as a plain list (`Glue.attr([])`) are wrapped into 
 
 !!! warning "Lazy loading not supported"
     Sequences do not yet support lazy loading. If you use `LoadingStrategy.LAZY` (the default), attempting to load the sequence's state from the frontend will raise `SequenceLazyLoadNotSupportedError`. Use `LoadingStrategy.EAGER` to include the sequence's state in the initial page manifest.
-
----
-
-## `Glue.json()`
-
-Register a serializable Python value (dict, list, or primitive) as frontend state.
-
-```python
-Glue.json(
-    request=request,
-    unique_name='config',
-    target={'theme': 'dark', 'pageSize': 25},
-    access=GlueAccess.VIEW,
-)
-```
-
-Access on the frontend:
-
-```javascript
-console.log(Glue.json.config.theme)  // 'dark'
-```
 
 ---
 

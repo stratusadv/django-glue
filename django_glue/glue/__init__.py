@@ -11,7 +11,6 @@ from django_glue.glue.objects.django import (
     TemplateGlue,
 )
 from django_glue.glue.function import FunctionGlue
-from django_glue.glue.json import JsonGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import GlueClassRegistry, glue_class_registry
 
@@ -25,7 +24,6 @@ __all__ = [
     'FunctionGlue',
     'GlueClassRegistry',
     'GluePolicy',
-    'JsonGlue',
     'ModelFieldAttribute',
     'ModelGlue',
     'QuerySetGlue',

@@ -1,8 +1,6 @@
 from django.template.response import TemplateResponse
 from django.test import RequestFactory, TestCase
 
-from django_glue.glue.context import GlueContextManager
-from django_glue.glue.json import JsonGlue
 from django_glue.message import GlueMessage
 from django_glue.response import GlueResponse, GlueTemplateResponse
 from django_glue.tests.conftest import MockSession
@@ -94,22 +92,6 @@ class GlueTemplateResponseTestCase(TestCase):
         self.assertEqual(rendered_without_request, '')
         self.assertIn('csrfmiddlewaretoken', rendered_with_request)
 
-    def test_result_carries_manifests_registered_earlier_in_the_request(self):
-        glue_object = JsonGlue(42, name='answer')
-        GlueContextManager(self.request).add_glue(glue_object)
-
-        response = GlueTemplateResponse(
-            self.request,
-            'glue_template_test.html',
-            {'greeting': 'Hi'},
-        )
-
-        manifest_types = [
-            manifest['metadata'].get('type')
-            for manifest in response.result['manifest_list']
-        ]
-        self.assertIn('number', manifest_types)
-
     def test_from_template_response_renders_and_marks_result(self):
         template_response = TemplateResponse(
             self.request,
@@ -123,14 +105,26 @@ class GlueTemplateResponseTestCase(TestCase):
         self.assertTrue(response.result['is_glue_template_response'])
         self.assertIn('From a view', response.result['html'])
 
-    def test_from_result_coerces_template_response(self):
+    def test_from_result_sends_template_response_as_raw_text_by_default(self):
+        template_response = TemplateResponse(
+            self.request,
+            'glue_template_test.html',
+            {'greeting': 'Plain text'},
+        )
+
+        response = GlueResponse.from_result(template_response)
+
+        self.assertIsInstance(response.result, str)
+        self.assertIn('Plain text', response.result)
+
+    def test_from_result_coerces_template_response_when_render_as_html(self):
         template_response = TemplateResponse(
             self.request,
             'glue_template_test.html',
             {'greeting': 'Coerced'},
         )
 
-        response = GlueResponse.from_result(template_response)
+        response = GlueResponse.from_result(template_response, render_as_html=True)
 
         self.assertTrue(response.result['is_glue_template_response'])
         self.assertIn('Coerced', response.result['html'])

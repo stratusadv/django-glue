@@ -1,5 +1,15 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc7
+
+### Changes
+
+- **`@Glue.attr` no longer auto-coerces a `TemplateResponse` to a `GlueTemplateResponse`**: previously, any plain Django `TemplateResponse` returned from a `@Glue.attr` method was automatically wrapped as a `GlueTemplateResponse` (rendered HTML with a ride-along `manifest_list`). By default it's now just rendered and sent as raw text in the `result` field, like any other plain value. Opt in to the old HTML-coercion behavior with `@Glue.attr(render_as_html=True)`, or the new shortcut `@Glue.html_attr` (same as `@Glue.attr(render_as_html=True)`, accepts the same kwargs). Returning a `GlueTemplateResponse` directly, or calling `GlueTemplateResponse.from_template_response(...)` yourself, is unaffected -- this only changes the implicit coercion of a bare `TemplateResponse`.
+
+### Removed
+
+- **`Glue.json()` removed**: The `Glue.json()` shortcut, the backend `JsonGlue`/`JsonValue`, and the frontend `GlueJsonProxy` (the `json` namespace) have been removed. Serializable dict/list/primitive values should instead be exposed through declared attributes on a custom glue object, or through the type-specific proxies.
+
 ## v1.0.1-rc6
 
 ### Features
@@ -71,7 +81,6 @@
 
 - Added `computed_attributes` support to `Glue.model()` and `Glue.queryset()` for exposing readonly Python-computed values on glued model state.
 - Added support for computed attribute callables with keyword arguments, persisted through Glue policy reconstruction.
-- Added `Glue.json()` for exposing serializable dictionaries, lists, and primitive values as Glue-managed frontend state.
 
 ### Fixes
 

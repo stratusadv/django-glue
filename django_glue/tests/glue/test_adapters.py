@@ -22,7 +22,6 @@ from django_glue.glue import (
     TemplateGlue,
     GluePolicy,
     FunctionGlue,
-    JsonGlue,
     SequenceGlue,
     GlueClassRegistry,
 )
@@ -762,6 +761,92 @@ class DeclaredAttributeDefaultAccessTestCase(TestCase):
             return 'saved'
 
         self.assertEqual(save.__glue_options__.required_access, GlueAccess.CHANGE)
+
+    def test_render_as_html_defaults_to_false(self):
+        @DeclaredAttribute
+        def load(self):
+            return 'loaded'
+
+        self.assertFalse(load.__glue_options__.render_as_html)
+
+    def test_render_as_html_can_be_set(self):
+        @DeclaredAttribute(render_as_html=True)
+        def render_panel(self):
+            return 'rendered'
+
+        self.assertTrue(render_panel.__glue_options__.render_as_html)
+
+    def test_html_attr_shortcut_sets_render_as_html(self):
+        @Glue.html_attr
+        def render_panel(self):
+            return 'rendered'
+
+        self.assertTrue(render_panel.__glue_options__.render_as_html)
+        self.assertEqual(render_panel.__glue_options__.required_access, GlueAccess.VIEW)
+
+    def test_html_attr_shortcut_accepts_other_kwargs(self):
+        @Glue.html_attr(required_access=GlueAccess.CHANGE)
+        def render_editable_panel(self):
+            return 'rendered'
+
+        self.assertTrue(render_editable_panel.__glue_options__.render_as_html)
+        self.assertEqual(render_editable_panel.__glue_options__.required_access, GlueAccess.CHANGE)
+
+
+class TemplateResponseAttributeGlue(BaseGlue):
+    """Fixture: a callable attribute returning a TemplateResponse, with and without render_as_html."""
+
+    namespace = 'templateResponseAttribute'
+
+    def __init__(self):
+        super().__init__(name='templateResponseAttribute', access=GlueAccess.VIEW)
+
+    @DeclaredAttribute(takes_client_state=False, updates_client_state=False)
+    def render_plain(self, request: 'HttpRequest'):
+        from django.template.response import TemplateResponse
+        return TemplateResponse(request, 'glue_template_test.html', {'greeting': 'Plain text'})
+
+    @Glue.html_attr(takes_client_state=False, updates_client_state=False)
+    def render_html(self, request: 'HttpRequest'):
+        from django.template.response import TemplateResponse
+        return TemplateResponse(request, 'glue_template_test.html', {'greeting': 'Coerced'})
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy):
+        return cls()
+
+
+class TemplateResponseAttributeTestCase(TestCase):
+    """Attribute-call-level coverage for the render_as_html opt-in (see also test_response.py)."""
+
+    def _call(self, glue_object, attribute_name):
+        from django.test import RequestFactory
+
+        request = RequestFactory().get('/')
+        request.session = SimpleNamespace(session_key='test-session')
+        glue_object.request = request
+
+        context = AttributeCallRequestContext.model_construct(
+            request=request,
+            target_glue_policy=glue_object.policy,
+            target_glue_client_state={},
+            target_attribute_name=attribute_name,
+            target_attribute_call_kwargs={},
+        )
+        response = glue_object.process_attribute_call(context)
+        return json.loads(response.content)
+
+    def test_template_response_sent_as_raw_text_without_render_as_html(self):
+        payload = self._call(TemplateResponseAttributeGlue(), 'render_plain')
+
+        self.assertIsInstance(payload['result'], str)
+        self.assertIn('Plain text', payload['result'])
+
+    def test_template_response_coerced_to_glue_template_response_with_html_attr(self):
+        payload = self._call(TemplateResponseAttributeGlue(), 'render_html')
+
+        self.assertTrue(payload['result']['is_glue_template_response'])
+        self.assertIn('Coerced', payload['result']['html'])
 
 
 class DjangoModelGlueObjectTestCase(TestCase):
@@ -1799,34 +1884,6 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
 
 class PythonAdaptersTestCase(TestCase):
-    def test_json_adapter_builds_signed_policy_with_normalized_value(self):
-        glue_object = with_request(JsonGlue(
-            [{'skill': {'name': 'Grappling'}, 'enabled': True}],
-            **glue_context(name='permission_data', access=GlueAccess.VIEW),
-        ))
-
-        policy = glue_object.policy
-        manifest = json.loads(json.dumps(glue_object.manifest.model_dump(), cls=GlueResponseJSONEncoder))
-
-        self.assertEqual(policy.namespace, 'json')
-        self.assertEqual(policy.identity['value'][0]['skill']['name'], 'Grappling')
-        self.assertEqual(
-            policy_from_manifest(manifest).identity['value'][0]['skill']['name'],
-            'Grappling',
-        )
-        self.assertEqual(glue_object.metadata['type'], 'array')
-
-    def test_json_adapter_reconstructs_from_policy(self):
-        glue_object = with_request(JsonGlue(
-            {'permissions': [{'name': 'auth.add_group'}]},
-            **glue_context(name='permission_data', access=GlueAccess.VIEW),
-        ))
-
-        resolved = JsonGlue._reconstruct_from_policy(glue_object.policy)
-
-        self.assertEqual(resolved.name, 'permission_data')
-        self.assertEqual(resolved.target, {'permissions': [{'name': 'auth.add_group'}]})
-
     def test_template_adapter_builds_render_policy(self):
         glue_object = with_request(TemplateGlue(
             'template.html',

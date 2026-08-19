@@ -34,7 +34,6 @@ def _register_builtins() -> None:
     from django_glue.glue.objects.django.queryset import QuerySetGlue  # noqa: PLC0415
     from django_glue.glue.objects.django.template import TemplateGlue  # noqa: PLC0415
     from django_glue.glue.function import FunctionGlue  # noqa: PLC0415
-    from django_glue.glue.json import JsonGlue  # noqa: PLC0415
 
     glue_class_registry.register_glue_class(SequenceGlue)
     glue_class_registry.register_glue_class(ModelGlue)
@@ -43,7 +42,6 @@ def _register_builtins() -> None:
     glue_class_registry.register_glue_class(QuerySetGlue)
     glue_class_registry.register_glue_class(FunctionGlue)
     glue_class_registry.register_glue_class(TemplateGlue)
-    glue_class_registry.register_glue_class(JsonGlue)
 
 
 _register_builtins()

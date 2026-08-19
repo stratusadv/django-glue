@@ -260,7 +260,10 @@ class BaseGlue(ABC):
                 'metadata': self.metadata,
             }
 
-        return GlueResponse.from_result(call_result).to_json_response(
+        return GlueResponse.from_result(
+            call_result,
+            render_as_html=getattr(glue_attribute, 'render_as_html', False),
+        ).to_json_response(
             glue_object=self,
             **response_extra,
         )

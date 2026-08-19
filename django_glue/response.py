@@ -23,18 +23,27 @@ class GlueResponse:
         self.messages = list(self.messages or [])
 
     @classmethod
-    def from_result(cls, result: Any) -> Self:
+    def from_result(cls, result: Any, *, render_as_html: bool = False) -> Self:
         if isinstance(result, cls):
             return result
 
         if isinstance(result, TemplateResponse):
-            # GlueTemplateResponse.from_template_response always returns a
-            # plain GlueResponse, not cls -- correct here since from_result
-            # is only ever actually called as GlueResponse.from_result (see
-            # BaseGlue.process_attribute_call), never on a GlueResponse
-            # subclass, so cls is always GlueResponse in practice. Cast
-            # rather than widen the return type for every other caller.
-            return GlueTemplateResponse.from_template_response(result)  # type: ignore[return-value]
+            if render_as_html:
+                # GlueTemplateResponse.from_template_response always returns
+                # a plain GlueResponse, not cls -- correct here since
+                # from_result is only ever actually called as
+                # GlueResponse.from_result (see BaseGlue.process_attribute_call),
+                # never on a GlueResponse subclass, so cls is always
+                # GlueResponse in practice. Cast rather than widen the return
+                # type for every other caller.
+                return GlueTemplateResponse.from_template_response(result)  # type: ignore[return-value]
+
+            # Without render_as_html=True (set via @Glue.attr(render_as_html=True)
+            # or the Glue.html_attr shortcut), a TemplateResponse is just
+            # rendered to text and sent as plain result data -- no implicit
+            # GlueTemplateResponse envelope.
+            html, _ = render_template_response_html(result)
+            return cls(result=html)
 
         if isinstance(result, HttpResponse):
             msg = (

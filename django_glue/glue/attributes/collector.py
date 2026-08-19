@@ -164,6 +164,7 @@ class GlueAttributeCollector:
             required_access=options.required_access,
             takes_client_state=options.takes_client_state,
             updates_client_state=options.updates_client_state,
+            render_as_html=options.render_as_html,
             attr_owner_instance=attr_owner_instance,
         )
 

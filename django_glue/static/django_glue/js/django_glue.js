@@ -1408,27 +1408,6 @@
   }
   var function_default = GlueFunctionProxy;
 
-  // client_js/src/proxies/json.js
-  class GlueJsonProxy extends base_default {
-    constructor({ http, policy, state = {}, metadata = {}, owner = null }) {
-      super({ http, policy, state, metadata, owner });
-      this._value = policy?.identity?.value;
-    }
-    get value() {
-      return this._value;
-    }
-    get length() {
-      return this._value?.length;
-    }
-    at(index) {
-      return this._value?.at?.(index);
-    }
-    [Symbol.iterator]() {
-      return this._value?.[Symbol.iterator]?.() || [][Symbol.iterator]();
-    }
-  }
-  var json_default = GlueJsonProxy;
-
   // client_js/src/proxies/model.js
   class GlueModelProxy extends fieldBacked_default {
     _configureAttributeInitializers() {
@@ -1659,7 +1638,6 @@
     form: form_default,
     formSet: formset_default,
     function: function_default,
-    json: json_default,
     model: model_default,
     querySet: queryset_default,
     template: template_default
