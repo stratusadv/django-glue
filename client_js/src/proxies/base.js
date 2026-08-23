@@ -325,6 +325,9 @@ class BaseGlueProxy {
         const proxy = this
         const cacheKey = `__glue_object__${attributePolicy.name}`
         const nestedState = proxy._state?.[relativeName] || {}
+        const nestedLoadingStrategy = typeof attributeMetadata.lazy === 'boolean'
+            ? (attributeMetadata.lazy ? 'lazy' : 'eager')
+            : proxy._loadingStrategy
 
         if (proxy[cacheKey]) {
             proxy[cacheKey]._policy = attributePolicy
@@ -344,7 +347,7 @@ class BaseGlueProxy {
                         metadata: nestedMetadata,
                         owner: proxy,
                         client: proxy._client,
-                        loadingStrategy: proxy._loadingStrategy,
+                        loadingStrategy: nestedLoadingStrategy,
                     })
                     proxy[cacheKey] = nestedProxy
                 }

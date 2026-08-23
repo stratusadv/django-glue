@@ -102,6 +102,7 @@ class GlueClient {
             this._directNamespaces.add(namespace)
             Object.defineProperty(this, namespace, {
                 get: () => this._resolveProxy(key, manifest),
+                enumerable: true,
                 configurable: true,
             })
             return
@@ -117,6 +118,7 @@ class GlueClient {
 
         Object.defineProperty(this[namespace], name, {
             get: () => this._resolveProxy(key, manifest),
+            enumerable: true,
             configurable: true,
         })
     }
@@ -132,6 +134,11 @@ class GlueClient {
     _updateProxy(proxy, {policy, metadata, state, loading_strategy}) {
         proxy._policy = policy
         proxy._applyResponse({state, metadata, loading_strategy})
+
+        if ('_loadAttempted' in proxy) {
+            proxy._loadAttempted = false
+            proxy._loadError = null
+        }
     }
 }
 

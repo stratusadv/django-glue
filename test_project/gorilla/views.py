@@ -17,7 +17,20 @@ def list_view(request: HttpRequest) -> HttpResponse:
         target=Gorilla.objects.order_by('-updated_at').all(),
         unique_name='gorillas',
         access=Glue.Access.DELETE,
-        exclude=['signature'],
+        fields=[
+            'id',
+            'name',
+            'description',
+            'age',
+            'weight',
+            'height',
+            'rank_points',
+            'profile_photo',
+            'fighting_stats',
+            'created_at',
+            'updated_at',
+            'skills',
+        ],
     )
 
     Glue.form(

@@ -126,6 +126,9 @@
     const tag = Object.prototype.toString.call(value);
     return tag === "[object Object]" || tag === "[object Array]";
   }
+  function reactiveSelf(object) {
+    return globalThis.Alpine?.reactive?.(object) ?? object;
+  }
 
   // client_js/src/http.js
   class GlueHttp {
@@ -704,6 +707,7 @@
       const proxy = this;
       const cacheKey = `__glue_object__${attributePolicy.name}`;
       const nestedState = proxy._state?.[relativeName] || {};
+      const nestedLoadingStrategy = typeof attributeMetadata.lazy === "boolean" ? attributeMetadata.lazy ? "lazy" : "eager" : proxy._loadingStrategy;
       if (proxy[cacheKey]) {
         proxy[cacheKey]._policy = attributePolicy;
         proxy[cacheKey]._applyResponse({
@@ -721,7 +725,7 @@
               metadata: nestedMetadata,
               owner: proxy,
               client: proxy._client,
-              loadingStrategy: proxy._loadingStrategy
+              loadingStrategy: nestedLoadingStrategy
             });
             proxy[cacheKey] = nestedProxy;
           }
@@ -1501,6 +1505,12 @@
       this._loaded = true;
       return this;
     }
+    async refresh() {
+      for (const proxy of this._queryCache.values()) {
+        reactiveSelf(proxy)._loaded = false;
+      }
+      return this.all();
+    }
     async loadMore() {
       if (this.loading) {
         return this;
@@ -1819,6 +1829,7 @@
         this._directNamespaces.add(namespace);
         Object.defineProperty(this, namespace, {
           get: () => this._resolveProxy(key, manifest),
+          enumerable: true,
           configurable: true
         });
         return;
@@ -1831,6 +1842,7 @@
       }
       Object.defineProperty(this[namespace], name, {
         get: () => this._resolveProxy(key, manifest),
+        enumerable: true,
         configurable: true
       });
     }
@@ -1843,6 +1855,10 @@
     _updateProxy(proxy, { policy, metadata, state, loading_strategy }) {
       proxy._policy = policy;
       proxy._applyResponse({ state, metadata, loading_strategy });
+      if ("_loadAttempted" in proxy) {
+        proxy._loadAttempted = false;
+        proxy._loadError = null;
+      }
     }
   }
   var client_default = GlueClient;

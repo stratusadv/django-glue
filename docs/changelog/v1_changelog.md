@@ -9,6 +9,11 @@
 ### Fixes
 
 - **`Glue.<namespace>.<name>` is one shared instance**: the client registry used to build a brand-new proxy on every property access, so `Glue.querySet.tasks.filter(...)` inside an Alpine getter created a fresh, unloaded proxy per render and refetched forever. Each registered name now resolves to a single proxy; a later `manifest_list` carrying the same name (for example from a `Glue.view` render) updates that instance in place instead of replacing it.
+- **`Glue.<namespace>` is enumerable**: `Object.keys(Glue.querySet)` lists the registered names; the registry properties were defined non-enumerable.
+- **`QuerySetProxy.refresh()`**: marks every proxy in the chain unloaded and reloads this one, so a list re-fetches after a create or delete from another component.
+- **`**kwargs` on `@Glue.attr` methods**: the call resolver treated a `*args` / `**kwargs` parameter as a required argument named `args` / `kwargs` and rejected every call.
+- **Foreign key state round trip**: a model with a glued forward relation (`red_corner` as a nested object plus `red_corner_id`) lost the key when the client echoed state back, because the nested object's manifest was read as a `{value: ...}` pair. The attname state wins, and a nested manifest is read by its pk field.
+- **Nested lazy related sets**: a `related_set` (M2M / reverse FK) on an eager row was created as an eager proxy with no state, so `gorilla.skills.all()` resolved to nothing. Nested proxies now follow their own `lazy` metadata.
 - **Form identity with an empty file field**: `FormGlue` sorted every iterable initial value to keep the signed policy stable, which also tried to iterate an unsaved `FieldFile` and raised `The 'profile_photo' attribute has no file associated with it`. Only querysets, lists, tuples, and sets are sorted now.
 
 ### Changes

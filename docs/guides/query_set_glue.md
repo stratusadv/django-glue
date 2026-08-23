@@ -296,6 +296,7 @@ await task.save()
 | `page(number)` | Chain: select a page |
 | `next()` / `previous()` | Chain: select the adjacent page |
 | `loadMore()` | Append the next page to this proxy; resolves to the queryset |
+| `refresh()` | Mark the whole chain stale and reload this proxy |
 | `items` | Loaded rows as an array; iterating an unloaded queryset starts the load |
 | `count` | Rows matching the query on the server, across every page |
 | `pageNumber` / `pageSize` / `pageCount` | Position and size of the loaded page |

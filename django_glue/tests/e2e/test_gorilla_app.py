@@ -161,7 +161,15 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
             """() => !document.querySelector('.modal.show') && !document.querySelector('.modal-backdrop')"""
         )
 
+    def _wait_for_fighter(self, name: str) -> None:
+        self.page.wait_for_function(
+            """name => Array.from(document.querySelectorAll('input[placeholder="Fighter Name"]'))
+                .some(input => input.value === name)""",
+            arg=name,
+        )
+
     def _fighter_card(self, name: str):
+        self._wait_for_fighter(name)
         card_id = self.page.evaluate(
             """name => {
                 const input = Array.from(document.querySelectorAll('input[placeholder="Fighter Name"]'))
@@ -184,6 +192,7 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
         return self.page.locator('input[placeholder="Fighter Name"]').nth(index)
 
     def _fighter_index(self, name: str) -> int:
+        self._wait_for_fighter(name)
         index = self.page.evaluate(
             """name => Array.from(document.querySelectorAll('input[placeholder="Fighter Name"]'))
                 .findIndex(input => input.value === name)""",
@@ -209,7 +218,7 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
 
         assert glue_state['querySets'] == ['gorillas']
         assert glue_state['hasGlobalMessageHandler'] is True
-        assert any(name.startswith('gorillas__') for name in glue_state['models'])
+        assert glue_state['models'] == ['new_gorilla_model']
         self._assert_no_console_errors()
 
     def test_queryset_controls_update_visible_cards(self) -> None:
@@ -234,29 +243,23 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
     def test_many_to_many_relation_choices_load_for_each_queryset_item(self) -> None:
         self._goto_combatants()
 
-        self.page.wait_for_function(
-            """() => {
-                const gorillas = window.Glue?.querySet?.gorillas?.queryWithParams({
-                    filter: {name__icontains: ''},
-                    slice: {start: 0, stop: 100},
-                    order_by: 'name',
-                }) || [];
-                return gorillas.length === 3
-                    && gorillas.every(gorilla => Array.isArray(gorilla.skills.choices))
-                    && gorillas.every(gorilla => gorilla.skills.choices.length === 2);
-            }"""
-        )
-
         skill_state = self.page.evaluate(
-            """() => window.Glue.querySet.gorillas.queryWithParams({
-                filter: {name__icontains: ''},
-                slice: {start: 0, stop: 100},
-                order_by: 'name',
-            }).map(gorilla => ({
-                name: String(gorilla.name),
-                selected: gorilla.skills.selectedChoices.map(choice => choice.label),
-                choiceCount: gorilla.skills.choices.length,
-            }))"""
+            """async () => {
+                const gorillas = await window.Glue.querySet.gorillas
+                    .filter({name__icontains: ''})
+                    .orderBy('name')
+                    .slice(0, 100)
+                    .all();
+                return Promise.all(gorillas.items.map(async gorilla => {
+                    const skills = await gorilla.skills.all();
+                    const choices = await gorilla.foreign_key_choices({field_name: 'skills'});
+                    return {
+                        name: String(gorilla.name),
+                        selected: skills.items.map(skill => String(skill.name)),
+                        choiceCount: choices.length,
+                    };
+                }));
+            }"""
         )
 
         assert skill_state == [
@@ -269,40 +272,38 @@ class GorillaAppE2ETestCase(StaticLiveServerTestCase):
     def test_fight_page_hydrates_relation_and_choice_fields(self) -> None:
         self._goto_fights()
 
-        self.page.wait_for_function(
-            """() => {
-                const fight = window.Glue?.querySet?.fights?.queryWithParams({
-                    filter: {name__icontains: ''}
-                })?.[0];
-                return fight
-                    && fight.red_corner.choices.length === 3
-                    && fight.blue_corner.choices.length === 3
-                    && fight.location.choices.length > 0
-                    && fight.weather_conditions.choices.length > 0
-                    && fight.terrain_type.choices.length > 0
-                    && fight.status.choices.length > 0;
-            }"""
-        )
-
         fight_state = self.page.evaluate(
-            """() => {
-                const fight = window.Glue.querySet.fights.queryWithParams({
-                    filter: {name__icontains: ''}
-                })[0];
+            """async () => {
+                const fights = await window.Glue.querySet.fights
+                    .filter({name__icontains: ''})
+                    .orderBy('name')
+                    .all();
+                const fight = fights.items[0];
+                const fields = fight.$fields;
+                await Promise.all([fields.red_corner_id.ensureChoices(), fields.blue_corner_id.ensureChoices()]);
                 return {
                     name: String(fight.name),
-                    redCorner: fight.red_corner.selectedChoice?.label,
-                    blueCorner: fight.blue_corner.selectedChoice?.label,
-                    location: fight.location.selectedChoice?.label,
-                    weather: fight.weather_conditions.selectedChoice?.label,
-                    terrain: fight.terrain_type.selectedChoice?.label,
-                    status: fight.status.selectedChoice?.label,
+                    cornerChoices: [fields.red_corner_id.choices.length, fields.blue_corner_id.choices.length],
+                    choiceCounts: [
+                        fields.location.choices.length > 0,
+                        fields.weather_conditions.choices.length > 0,
+                        fields.terrain_type.choices.length > 0,
+                        fields.status.choices.length > 0,
+                    ],
+                    redCorner: fields.red_corner_id.selectedChoice?.label,
+                    blueCorner: fields.blue_corner_id.selectedChoice?.label,
+                    location: fields.location.selectedChoice?.label,
+                    weather: fields.weather_conditions.selectedChoice?.label,
+                    terrain: fields.terrain_type.selectedChoice?.label,
+                    status: fields.status.selectedChoice?.label,
                 };
             }"""
         )
 
         assert fight_state == {
             'name': 'Alpha vs Beta',
+            'cornerChoices': [3, 3],
+            'choiceCounts': [True, True, True, True],
             'redCorner': 'Alpha Atlas',
             'blueCorner': 'Beta Boulder',
             'location': 'Thunderdome',
