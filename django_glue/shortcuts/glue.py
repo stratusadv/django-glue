@@ -13,7 +13,7 @@ from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
-from django_glue.glue.objects.django.queryset import QuerySetGlue
+from django_glue.glue.objects.django.queryset import DEFAULT_PAGE_SIZE, QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.attributes import DeclaredAttribute
@@ -178,6 +178,7 @@ class Glue:
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
         related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        page_size: int | None | Literal['__default__'] = DEFAULT_PAGE_SIZE,
     ) -> QuerySetGlue:
         return Glue.object(
             request=request,
@@ -192,6 +193,7 @@ class Glue:
                 computed_attributes=computed_attributes,
                 related_field_config=related_field_config,
                 loading_strategy=loading_strategy,
+                page_size=page_size,
             ),
         )
 

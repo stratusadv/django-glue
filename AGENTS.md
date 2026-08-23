@@ -108,7 +108,7 @@ django-glue/
 │   ├── gorilla/                      # Primary test app (Gorilla, Skill models)
 │   ├── fight/                        # Secondary test app
 │   ├── comments/                     # Secondary test app
-│   ├── lab/                          # Views and URLs only
+│   ├── lab/                          # Performance, connection, and volume (Specimen, 100k-row paging) test pages
 │   └── core/                         # Custom template tags
 │
 ├── django_glue/tests/                # Python test suite
@@ -443,8 +443,11 @@ request.session['django_glue_keep_live'] = {
 ### Settings (in Django settings.py)
 
 ```python
-DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS = 600  # Default: 600
-DJANGO_GLUE_SESSION_EXPIRY_MESSAGE = 'Session expired. Do you want to reload the page?'
+DJANGO_GLUE_SESSION_PROXY_KEY = 'django_glue_proxies'
+DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400
+DJANGO_GLUE_VIEW_MAX_REDIRECTS = 10
+DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
+DJANGO_GLUE_QUERYSET_PAGE_SIZE = 100  # Rows per page for Glue.queryset(); None disables pagination
 ```
 
 Any `django_glue.settings` constant can be overridden by defining the same name in your Django project's `settings.py`. The `Settings` class in `conf.py` checks Django settings first, then falls back to defaults.

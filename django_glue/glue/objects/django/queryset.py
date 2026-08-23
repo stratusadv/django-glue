@@ -6,8 +6,11 @@ import pickle
 from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
+from django.core.paginator import Paginator
+
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueQuerySetFilterValidationError
+from django_glue.conf import settings
+from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueQuerySetPageValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
@@ -24,6 +27,8 @@ if TYPE_CHECKING:
     from django import forms
     from django.db import models
     from django_glue.glue.policy import GluePolicy
+
+DEFAULT_PAGE_SIZE = '__default__'
 
 
 class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFieldResolutionMixin, BaseGlue):
@@ -43,9 +48,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
         related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        page_size: int | None | Literal['__default__'] = DEFAULT_PAGE_SIZE,
     ) -> None:
         super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.queryset = queryset
+        self.page_size = self._resolve_page_size(page_size)
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
         )
@@ -62,11 +69,26 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         self._select_related = self._get_select_related_fields()
         self.initialize_computed_attributes(computed_attributes)
 
+    @staticmethod
+    def _resolve_page_size(page_size: int | None | Literal['__default__']) -> int | None:
+        if page_size == DEFAULT_PAGE_SIZE:
+            page_size = settings.DJANGO_GLUE_QUERYSET_PAGE_SIZE
+
+        if page_size is None:
+            return None
+
+        if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size < 1:
+            msg = f'QuerySetGlue page_size must be a positive integer or None, got {page_size!r}.'
+            raise ValueError(msg)
+
+        return page_size
+
     def get_identity(self) -> dict[str, Any]:
         identity = {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
             'encoded_queryset': self._encode_queryset_query(self.queryset),
             'pk_field_name': self.queryset.model._meta.pk.name,
+            'page_size': self.page_size,
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
@@ -126,12 +148,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         return attributes
 
     def get_state(self) -> dict[str, Any]:
-        return {
-            'items': [
-                self._build_child_model_payload(instance)
-                for instance in self.queryset
-            ],
-        }
+        return self._query()
 
     def get_metadata(self) -> dict[str, Any]:
         return {
@@ -166,6 +183,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
             related_field_config=related_field_config,
+            page_size=policy.identity.get('page_size'),
         )
 
     @staticmethod
@@ -185,6 +203,16 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         filter: dict[str, Any] | None = None,  # noqa: A002
         order_by: str | list[str] | None = None,
         slice: dict[str, Any] | None = None,  # noqa: A002
+        page: int = 1,
+    ) -> dict[str, Any]:
+        return self._query(filter=filter, order_by=order_by, slice=slice, page=page)
+
+    def _query(
+        self,
+        filter: dict[str, Any] | None = None,  # noqa: A002
+        order_by: str | list[str] | None = None,
+        slice: dict[str, Any] | None = None,  # noqa: A002
+        page: int = 1,
     ) -> dict[str, Any]:
         queryset = self.queryset
         allowed_fields = set(self._included_fields)
@@ -196,16 +224,53 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
 
         if filter:
             queryset = queryset.filter(**filter)
+
         if order_by:
             if isinstance(order_by, str):
                 order_by = [order_by]
+
             queryset = queryset.order_by(*order_by)
+
+        if slice or self.page_size is not None:
+            queryset = self._ensure_ordered(queryset)
 
         if slice:
             queryset = queryset[builtins.slice(slice.get('start'), slice.get('stop'))]
 
-        items = [self._build_child_model_payload(instance) for instance in queryset]
-        return {'items': items, 'query': {}}
+        return self.paginate(queryset, page)
+
+    def paginate(self, objects: models.QuerySet | Sequence[models.Model], page: int = 1) -> dict[str, Any]:
+        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+            raise GlueQuerySetPageValidationError(page)
+
+        if self.page_size is None:
+            items = [self._build_child_model_payload(instance) for instance in objects]
+
+            return {
+                'items': items if page == 1 else [],
+                'total': len(items),
+                'page': page,
+                'page_size': None,
+                'page_count': 1,
+            }
+
+        paginator = Paginator(objects, self.page_size)
+        instances = paginator.page(page).object_list if page <= paginator.num_pages else []
+
+        return {
+            'items': [self._build_child_model_payload(instance) for instance in instances],
+            'total': paginator.count,
+            'page': page,
+            'page_size': self.page_size,
+            'page_count': paginator.num_pages,
+        }
+
+    @staticmethod
+    def _ensure_ordered(queryset: models.QuerySet) -> models.QuerySet:
+        if queryset.ordered:
+            return queryset
+
+        return queryset.order_by('pk')
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:

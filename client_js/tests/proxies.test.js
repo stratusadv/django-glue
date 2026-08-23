@@ -1199,3 +1199,197 @@ describe('Foreign key proxy handling', () => {
         expect(proxy.parent_id).toBe(null)
     })
 })
+
+describe('QuerySet pagination', () => {
+    function pageResponse(rows, {total, page, page_size, page_count}) {
+        return new Response(JSON.stringify({
+            result: {items: rows, total, page, page_size, page_count},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('loaded results expose server totals and page position', async () => {
+        const object = querySet()
+        global.fetch = async () => pageResponse(
+            [modelRow('gorillas.3', 3), modelRow('gorillas.4', 4)],
+            {total: 7, page: 2, page_size: 2, page_count: 4},
+        )
+
+        const page = await object.page(2).all()
+
+        expect(page.items).toHaveLength(2)
+        expect(page.count).toBe(7)
+        expect(page.pageNumber).toBe(2)
+        expect(page.pageSize).toBe(2)
+        expect(page.pageCount).toBe(4)
+        expect(page.hasNext).toBe(true)
+        expect(page.hasPrevious).toBe(true)
+    })
+
+    test('unpaginated results fall back to item count', async () => {
+        const object = querySet()
+        global.fetch = async () => new Response(JSON.stringify({
+            result: {items: [modelRow('gorillas.1', 1)]},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+
+        await object.all()
+
+        expect(object.count).toBe(1)
+        expect(object.pageNumber).toBe(1)
+        expect(object.pageSize).toBeNull()
+        expect(object.pageCount).toBe(1)
+        expect(object.hasNext).toBe(false)
+        expect(object.hasPrevious).toBe(false)
+    })
+
+    test('page sends the page number and page one is the base query', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return pageResponse([], {total: 0, page: 3, page_size: 10, page_count: 1})
+        }
+
+        expect(object.page(1)).toBe(object)
+        expect(object.page(3).pageNumber).toBe(3)
+
+        await object.page(3).all()
+
+        expect(kwargs).toEqual({page: 3})
+    })
+
+    test('filter, orderBy and slice reset to the first page', () => {
+        const object = querySet()
+        const third = object.page(3)
+
+        expect(third.filter({name: 'Koko'})._queryParams).toEqual({filter: {name: 'Koko'}})
+        expect(third.orderBy('name')._queryParams).toEqual({order_by: 'name'})
+        expect(third.slice(0, 5)._queryParams).toEqual({slice: {start: 0, stop: 5}})
+        expect(third.filter({name: 'Koko'}).page(2)._queryParams).toEqual({filter: {name: 'Koko'}, page: 2})
+    })
+
+    test('next and previous walk from the loaded page', async () => {
+        const object = querySet()
+        global.fetch = async () => pageResponse([], {total: 30, page: 2, page_size: 10, page_count: 3})
+
+        expect(object.previous()).toBe(object)
+        expect(object.next()._queryParams).toEqual({page: 2})
+
+        const second = await object.next().all()
+
+        expect(second.next()._queryParams).toEqual({page: 3})
+        expect(second.previous()).toBe(object)
+    })
+
+    test('query cache is keyed on canonical merged params', () => {
+        const object = querySet()
+
+        expect(object.filter({a: 1}).orderBy('n')).toBe(object.orderBy('n').filter({a: 1}))
+        expect(object.filter({a: 1}).filter({a: 1})).toBe(object.filter({a: 1}))
+        expect(object.page(2).page(1)).toBe(object)
+    })
+
+    test('query cache is bounded', () => {
+        const object = querySet()
+        const first = object.page(2)
+
+        for (let number = 3; number < 70; number += 1) {
+            object.page(number)
+        }
+
+        expect(object._queryCache.size).toBe(64)
+        expect(object.page(2)).not.toBe(first)
+    })
+})
+
+describe('QuerySet infinite scroll and seeding', () => {
+    function pageResponse(rows, {total, page, page_size, page_count}) {
+        return new Response(JSON.stringify({
+            result: {items: rows, total, page, page_size, page_count},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('loadMore appends the next page into the same proxy', async () => {
+        const object = querySet()
+        const requests = []
+        global.fetch = async (_url, options) => {
+            const kwargs = JSON.parse(options.body.get('kwargs'))
+            requests.push(kwargs)
+            const page = kwargs.page || 1
+            return pageResponse(
+                [modelRow(`gorillas.${page * 2 - 1}`, page * 2 - 1), modelRow(`gorillas.${page * 2}`, page * 2)],
+                {total: 6, page, page_size: 2, page_count: 3},
+            )
+        }
+
+        await object.all()
+        expect(object.items).toHaveLength(2)
+        expect(object.hasNext).toBe(true)
+
+        const same = await object.loadMore()
+        expect(same).toBe(object)
+        expect(object.items.map(item => item.name)).toEqual(['gorillas.1', 'gorillas.2', 'gorillas.3', 'gorillas.4'])
+        expect(object.pageNumber).toBe(2)
+        expect(object.hasNext).toBe(true)
+
+        await object.loadMore()
+        expect(object.items).toHaveLength(6)
+        expect(object.hasNext).toBe(false)
+
+        await object.loadMore()
+        expect(requests.map(request => request.page ?? 1)).toEqual([1, 2, 3])
+    })
+
+    test('loadMore on an unloaded proxy loads the first page', async () => {
+        const object = querySet()
+        global.fetch = async () => pageResponse([modelRow('gorillas.1', 1)], {total: 1, page: 1, page_size: 10, page_count: 1})
+
+        await object.loadMore()
+
+        expect(object.items).toHaveLength(1)
+        expect(object.loading).toBe(false)
+    })
+
+    test('loadMore does not double fetch while a request is in flight', async () => {
+        const object = querySet()
+        let fetches = 0
+        global.fetch = async () => {
+            fetches += 1
+            await new Promise(resolve => setTimeout(resolve, 10))
+            return pageResponse([modelRow('gorillas.1', 1)], {total: 3, page: 1, page_size: 1, page_count: 3})
+        }
+
+        await object.all()
+        const first = object.loadMore()
+        const second = object.loadMore()
+        await Promise.all([first, second])
+
+        expect(fetches).toBe(2)
+    })
+
+    test('chained proxies keep the source rows and totals until they load', async () => {
+        const object = querySet()
+        global.fetch = async () => pageResponse(
+            [modelRow('gorillas.1', 1), modelRow('gorillas.2', 2)],
+            {total: 50, page: 1, page_size: 2, page_count: 25},
+        )
+        await object.all()
+
+        const second = object.next()
+
+        expect(second._loaded).toBe(false)
+        expect(second.items.map(item => item.name)).toEqual(['gorillas.1', 'gorillas.2'])
+        expect(second.count).toBe(50)
+        expect(second.pageCount).toBe(25)
+        expect(second.pageNumber).toBe(2)
+        expect(second.hasNext).toBe(true)
+    })
+})

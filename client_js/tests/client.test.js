@@ -164,3 +164,63 @@ describe('GlueClient', () => {
         expect(capturedKwargs).toEqual({left: 5, right: 7})
     })
 })
+
+describe('GlueClient proxy identity', () => {
+    function manifest(overrides = {}) {
+        return {
+            is_glue_manifest: true,
+            policy_token: createPolicyToken(),
+            state: createState(),
+            metadata: createMetadata(),
+            ...overrides,
+        }
+    }
+
+    test('named proxies are one shared instance per name', () => {
+        const client = new GlueClient({manifest_list: [manifest()]})
+
+        expect(client.model.gorilla).toBe(client.model.gorilla)
+    })
+
+    test('direct namespace proxies are one shared instance', () => {
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({name: 'dashboard', namespace: 'dashboard', attributes: []}),
+                    state: {},
+                    metadata: {attributes: {}},
+                },
+            ],
+        })
+
+        expect(client.dashboard).toBe(client.dashboard)
+    })
+
+    test('function proxies are one shared instance', () => {
+        const client = new GlueClient({
+            manifest_list: [
+                {
+                    is_glue_manifest: true,
+                    policy_token: createPolicyToken({name: 'compute', namespace: 'function', attributes: ['execute']}),
+                    state: {},
+                    metadata: {attributes: {execute: {namespace: 'callable'}}},
+                },
+            ],
+        })
+
+        expect(client.function.compute).toBe(client.function.compute)
+    })
+
+    test('re-registering a name updates the existing instance in place', () => {
+        const client = new GlueClient({manifest_list: [manifest()]})
+        const gorilla = client.model.gorilla
+        const before = gorilla.name
+
+        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
+
+        expect(client.model.gorilla).toBe(gorilla)
+        expect(before).not.toBe('Renamed')
+        expect(gorilla.name).toBe('Renamed')
+    })
+})

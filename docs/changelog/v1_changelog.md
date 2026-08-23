@@ -1,5 +1,22 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc8
+
+### Features
+
+- **QuerySet pagination**: `Glue.queryset()` now pages its rows on the server. Every query (`all()`, `filter()`, `orderBy()`, `slice()`, and the initial `EAGER` state) returns one page, `DJANGO_GLUE_QUERYSET_PAGE_SIZE` rows long (default 100), so a queryset of 100,000 rows can never be pulled into the browser by a bare `for...of` or `x-for`. Pass `page_size=` to `Glue.queryset()` to size the page per queryset, or `page_size=None` to disable paging for that queryset. The page size is signed into the policy token, so the client cannot widen it. Unordered querysets are ordered by `pk` before slicing so pages are stable. On the client, `page(n)`, `next()`, and `previous()` chain like `filter()`, and `count`, `pageNumber`, `pageSize`, `pageCount`, `hasNext`, and `hasPrevious` describe the loaded page. Prefetched related sets are paged in memory with the same shape. `loadMore()` appends the next page to the same proxy for infinite scroll, and a chained proxy (`page(n)`, `filter()`, ...) shows its source's rows and totals until its own page arrives, so paging swaps rows in place instead of emptying the list.
+
+### Fixes
+
+- **`Glue.<namespace>.<name>` is one shared instance**: the client registry used to build a brand-new proxy on every property access, so `Glue.querySet.tasks.filter(...)` inside an Alpine getter created a fresh, unloaded proxy per render and refetched forever. Each registered name now resolves to a single proxy; a later `manifest_list` carrying the same name (for example from a `Glue.view` render) updates that instance in place instead of replacing it.
+- **Form identity with an empty file field**: `FormGlue` sorted every iterable initial value to keep the signed policy stable, which also tried to iterate an unsaved `FieldFile` and raised `The 'profile_photo' attribute has no file associated with it`. Only querysets, lists, tuples, and sets are sorted now.
+
+### Changes
+
+- **`count` is the server total**: `GlueQuerySetProxy.count` is now the number of rows matching the query on the server, not the number of rows loaded into the current page. Use `items.length` for the loaded count.
+- **Query result shape**: `query_with_params()` returns `{items, total, page, page_size, page_count}` instead of `{items, query}`.
+- **Chained queries share one cache**: `filter()` / `orderBy()` / `slice()` / `page()` proxies are cached by their merged parameters across the whole chain, so `qs.filter(a).orderBy(b)` and `qs.orderBy(b).filter(a)` are the same proxy and `page(1)` is the base query. The cache is bounded to 64 entries. `filter()`, `orderBy()`, and `slice()` reset to the first page.
+
 ## v1.0.1-rc7
 
 ### Changes

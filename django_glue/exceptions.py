@@ -187,6 +187,20 @@ class GlueQuerySetFilterValidationError(GlueError):
         }
 
 
+class GlueQuerySetPageValidationError(GlueError):
+    """Raised when a page number is not a positive integer."""
+
+    code = 'queryset_page_validation_error'
+    status = 422
+
+    def __init__(self, page: Any) -> None:
+        self.page = page
+        super().__init__(f'Page must be a positive integer, got {page!r}.')
+
+    def details(self) -> dict:
+        return {'page': self.page}
+
+
 class GlueInvalidPolicyError(GlueError):
     """Raised when proxy policy signature doesn't match, indicating tampering."""
 

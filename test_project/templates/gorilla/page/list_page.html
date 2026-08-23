@@ -27,14 +27,14 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
-            gorillaQuerySet: Glue.querySet.gorillas,
-            get gorillaArray() {
-                return Array.from(
-                    this.gorillaQuerySet
+            get gorillaQuerySet() {
+                return Glue.querySet.gorillas
                     .filter({name__icontains: this.search})
                     .orderBy(this.orderBy)
                     .slice(this.sliceStart, this.sliceStop)
-                )
+            },
+            get gorillaArray() {
+                return Array.from(this.gorillaQuerySet)
             },
             async openProfileModal(gorillaId) {
                 try {
@@ -423,7 +423,7 @@
                 </div>
             </template>
 
-            <div x-show="gorillaQuerySet.count === 0" class="col-12">
+            <div x-show="!gorillaQuerySet.loading && gorillaQuerySet.count === 0" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

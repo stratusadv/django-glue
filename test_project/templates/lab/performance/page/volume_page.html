@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla">
+                <div class="card-header bg-gorilla-green text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Specimens in the database: {{ specimen_count }}</h5>
+                    <div class="d-flex gap-2">
+                        <form method="post" action="{% url 'lab:performance:volume_seed' %}" class="d-flex gap-2">
+                            {% csrf_token %}
+                            <input type="number" name="count" class="form-control form-control-sm" style="width: 8rem"
+                                   value="{{ default_seed_count }}" min="1" max="1000000">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Seed</button>
+                        </form>
+                        <form method="post" action="{% url 'lab:performance:volume_clear' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-light">Clear</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-0">
+                        The queryset is registered with <code>page_size={{ page_size }}</code>. Every query below returns one page
+                        and the server total, so the browser never holds more than 25 rows at a time.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4" x-cloak>
+        <div class="col-lg-5">
+            <div class="card card-gorilla h-100"
+                 x-data="{
+                     search: '',
+                     open: false,
+                     selected: null,
+                     get options() {
+                         const filter = this.search ? {name__icontains: this.search} : {}
+                         return Glue.querySet.specimens.filter(filter)
+                     },
+                     choose(specimen) {
+                         this.selected = specimen
+                         this.search = specimen.name
+                         this.open = false
+                     },
+                 }"
+                 @click.outside="open = false">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Select field with infinite scroll</h5>
+                </div>
+                <div class="card-body">
+                    <label class="form-label fw-bold">Specimen</label>
+                    <div class="position-relative">
+                        <input type="text" class="form-control" placeholder="Search 100,000 specimens" autocomplete="off"
+                               x-model.debounce.300ms="search" @focus="open = true" @keydown.escape="open = false">
+                        <div x-cloak x-show="open" x-transition.opacity
+                             class="dropdown-menu show w-100 mt-1 shadow overflow-auto"
+                             style="max-height: 16rem; scrollbar-gutter: stable">
+                            <template x-for="specimen in options.items" :key="specimen.$key">
+                                <button type="button" class="dropdown-item d-flex justify-content-between align-items-center gap-3 py-2 px-3"
+                                        :class="{'active': selected?.id === specimen.id}"
+                                        @click="choose(specimen)">
+                                    <span x-text="specimen.name"></span>
+                                    <small class="text-muted" x-text="`#${specimen.catalogue_number}`"></small>
+                                </button>
+                            </template>
+                            <div x-intersect:enter="options.loadMore()" class="px-3 py-2 small text-muted border-top">
+                                <span x-show="options.loading">Loading...</span>
+                                <span x-show="!options.loading && options.hasNext"
+                                      x-text="`${options.items.length.toLocaleString()} of ${options.count.toLocaleString()} loaded, scroll for more`"></span>
+                                <span x-show="!options.loading && !options.hasNext && options.count > 0"
+                                      x-text="`All ${options.count.toLocaleString()} shown`"></span>
+                                <span x-show="!options.loading && options.count === 0">No specimens match</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3" x-cloak x-show="selected">
+                        Selected: <strong x-text="selected?.name"></strong>
+                        <span class="text-muted" x-text="`(id ${selected?.id}, ${selected?.species}, ${selected?.weight} mg)`"></span>
+                    </div>
+                    <p class="text-muted small mt-3 mb-0">
+                        Each keystroke queries the server for one page of matches. Scrolling to the bottom of the list calls
+                        <code>loadMore()</code>, which appends the next page to the same proxy. The whole table is never loaded.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card card-gorilla h-100"
+                 x-data="{
+                     search: '',
+                     species: '',
+                     orderBy: 'catalogue_number',
+                     page: 1,
+                     pageSize: {{ page_size }},
+                     get fillerCount() {
+                         return Math.max(0, this.pageSize - this.specimens.items.length)
+                     },
+                     get filter() {
+                         const filter = {}
+                         if (this.search) filter.name__icontains = this.search
+                         if (this.species) filter.species = this.species
+                         return filter
+                     },
+                     get specimens() {
+                         return Glue.querySet.specimens
+                             .filter(this.filter)
+                             .orderBy(this.orderBy)
+                             .page(this.page)
+                     },
+                 }"
+                 x-init="$watch('search', () => page = 1); $watch('species', () => page = 1); $watch('orderBy', () => page = 1)">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Paged table</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col">
+                            <input type="text" class="form-control" placeholder="Search name"
+                                   x-model.debounce.300ms="search">
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" x-model="species">
+                                <option value="">All species</option>
+                                {% for species in species_choices %}
+                                    <option value="{{ species }}">{{ species }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" x-model="orderBy">
+                                <option value="catalogue_number">Catalogue</option>
+                                <option value="name">Name</option>
+                                <option value="-weight">Heaviest</option>
+                                <option value="weight">Lightest</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <table class="table table-sm table-striped mb-2" style="table-layout: fixed">
+                        <colgroup>
+                            <col style="width: 16%">
+                            <col style="width: 34%">
+                            <col style="width: 30%">
+                            <col style="width: 20%">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Species</th>
+                                <th class="text-end">Weight</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="specimen in specimens.items" :key="specimen.$key">
+                                <tr>
+                                    <td x-text="specimen.catalogue_number"></td>
+                                    <td class="text-truncate" x-text="specimen.name"></td>
+                                    <td class="text-truncate" x-text="specimen.species"></td>
+                                    <td class="text-end" x-text="`${specimen.weight} mg`"></td>
+                                </tr>
+                            </template>
+                            <template x-for="blank in fillerCount" :key="`blank-${blank}`">
+                                <tr>
+                                    <td colspan="4">&nbsp;</td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+
+                    <div x-cloak x-show="!specimens.loading && specimens.count === 0" class="text-muted text-center py-2">
+                        No specimens match.
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasPrevious" @click="page -= 1">
+                            Previous
+                        </button>
+                        <span class="small text-muted"
+                              x-text="`Page ${specimens.pageNumber.toLocaleString()} of ${specimens.pageCount.toLocaleString()} (${specimens.count.toLocaleString()} rows)`"></span>
+                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasNext" @click="page += 1">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

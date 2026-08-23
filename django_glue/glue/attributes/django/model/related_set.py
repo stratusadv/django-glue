@@ -137,11 +137,6 @@ class RelatedSetFieldAttribute(BaseGlueAttribute):
         if related_glue is None:
             return None
 
-        # For eager loading, include the items
+        # For eager loading, paginate the prefetched instances in memory
         # This matches QuerySetGlue.query_with_params() output format
-        items = [
-            related_glue._build_child_model_payload(instance)
-            for instance in self._get_related_queryset()
-        ]
-
-        return {'items': items}
+        return related_glue.paginate(list(self._get_related_queryset()))
