@@ -4,11 +4,15 @@ import json
 from datetime import datetime, timezone
 from functools import cached_property
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import QuerySet
 from django.test import TestCase
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
