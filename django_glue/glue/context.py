@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from django_glue.conf import settings
 
 from django_glue import constants
+from django_glue.assets import asset_version
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 from django_glue.glue.loading import LoadingStrategy
 
@@ -76,5 +77,6 @@ class GlueContextManager:
         return {
             constants.DJANGO_GLUE_CONTEXT_KEY: self._glue_client_context,
             constants.DJANGO_GLUE_VERSION_KEY: constants.__VERSION__,
+            constants.DJANGO_GLUE_ASSET_VERSION_KEY: asset_version(),
             constants.DJANGO_GLUE_CONTEXT_SCRIPT_NAME_KEY: constants.DJANGO_GLUE_CONTEXT_SCRIPT_NAME
         }

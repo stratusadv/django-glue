@@ -9,6 +9,7 @@
 ### Fixes
 
 - **`Glue.<namespace>.<name>` is one shared instance**: the client registry used to build a brand-new proxy on every property access, so `Glue.querySet.tasks.filter(...)` inside an Alpine getter created a fresh, unloaded proxy per render and refetched forever. Each registered name now resolves to a single proxy; a later `manifest_list` carrying the same name (for example from a `Glue.view` render) updates that instance in place instead of replacing it.
+- **Bundle cache busting**: `{% django_glue_init %}` versions the script URL as `?v=<version>.<content hash>` (`DJANGO_GLUE_ASSET_VERSION`), so a rebuilt bundle is never served from the browser cache under an unchanged package version.
 - **`Glue.<namespace>` is enumerable**: `Object.keys(Glue.querySet)` lists the registered names; the registry properties were defined non-enumerable.
 - **`QuerySetProxy.refresh()`**: marks every proxy in the chain unloaded and reloads this one, so a list re-fetches after a create or delete from another component.
 - **`**kwargs` on `@Glue.attr` methods**: the call resolver treated a `*args` / `**kwargs` parameter as a required argument named `args` / `kwargs` and rejected every call.
