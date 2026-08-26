@@ -384,21 +384,19 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                     setattr(self.instance, field_name, file_value)
                 continue
 
-            if field_name not in state:
+            if field_name not in state and field.attname not in state:
                 continue
-
-            field_state = state[field_name]
-            value = field_state.get('value') if isinstance(field_state, dict) else field_state
 
             if getattr(field, 'many_to_many', False):
                 # M2M fields need special handling after save
                 continue
 
             if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
-                value = self._pk_from_related_value(value)
-                setattr(self.instance, field.attname, value)
+                setattr(self.instance, field.attname, self._related_pk_from_state(field, state))
                 continue
 
+            field_state = state[field_name]
+            value = field_state.get('value') if isinstance(field_state, dict) else field_state
             setattr(self.instance, field_name, value)
 
     def _get_file_from_request(self, field_name: str) -> Any:
@@ -439,6 +437,25 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             value = field_state.get('value') if isinstance(field_state, dict) else field_state
             pks = [self._pk_from_related_value(item) for item in value or []]
             getattr(self.instance, field_name).set(pks)
+
+    def _related_pk_from_state(self, field: Any, state: dict[str, Any]) -> Any:
+        """Resolve a forward relation's pk from client state."""
+        attname_state = state.get(field.attname)
+
+        if isinstance(attname_state, dict) and 'value' in attname_state:
+            return self._pk_from_related_value(attname_state['value'])
+
+        field_state = state.get(field.name)
+
+        if isinstance(field_state, dict) and 'value' not in field_state:
+            pk_state = field_state.get(field.related_model._meta.pk.name)
+
+            return self._pk_from_related_value(pk_state.get('value') if isinstance(pk_state, dict) else pk_state)
+
+        if isinstance(field_state, dict):
+            return self._pk_from_related_value(field_state['value'])
+
+        return self._pk_from_related_value(field_state)
 
     @staticmethod
     def _pk_from_related_value(value: Any) -> Any:

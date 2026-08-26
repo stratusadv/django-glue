@@ -10,6 +10,7 @@ class GlueClient {
         this._onMessage = null
         this._onError = null
         this._directNamespaces = new Set()
+        this._proxies = new Map()
 
         this._config = new GlueConfig({
             ...(context.config || {}),
@@ -86,6 +87,12 @@ class GlueClient {
         }
 
         const manifest = {policy, metadata, state, loading_strategy}
+        const key = name === namespace ? namespace : `${namespace}.${name}`
+
+        if (this._proxies.has(key)) {
+            this._updateProxy(this._proxies.get(key), manifest)
+            return
+        }
 
         if (name === namespace) {
             if (namespace in this && !this._directNamespaces.has(namespace)) {
@@ -94,7 +101,8 @@ class GlueClient {
 
             this._directNamespaces.add(namespace)
             Object.defineProperty(this, namespace, {
-                get: () => this._createProxy(manifest),
+                get: () => this._resolveProxy(key, manifest),
+                enumerable: true,
                 configurable: true,
             })
             return
@@ -109,9 +117,28 @@ class GlueClient {
         }
 
         Object.defineProperty(this[namespace], name, {
-            get: () => this._createProxy(manifest),
+            get: () => this._resolveProxy(key, manifest),
+            enumerable: true,
             configurable: true,
         })
+    }
+
+    _resolveProxy(key, manifest) {
+        if (!this._proxies.has(key)) {
+            this._proxies.set(key, this._createProxy(manifest))
+        }
+
+        return this._proxies.get(key)
+    }
+
+    _updateProxy(proxy, {policy, metadata, state, loading_strategy}) {
+        proxy._policy = policy
+        proxy._applyResponse({state, metadata, loading_strategy})
+
+        if ('_loadAttempted' in proxy) {
+            proxy._loadAttempted = false
+            proxy._loadError = null
+        }
     }
 }
 
