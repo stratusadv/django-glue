@@ -8,7 +8,7 @@ from django_glue import Glue, GlueAccess
 from test_project.lab.models import SPECIES, Specimen
 
 DEFAULT_SEED_COUNT = 100_000
-PAGE_SIZE = 25
+BATCH_SIZE = 25
 
 
 def volume_view(request: HttpRequest) -> HttpResponse:
@@ -18,16 +18,16 @@ def volume_view(request: HttpRequest) -> HttpResponse:
         target=Specimen.objects.all(),
         access=GlueAccess.VIEW,
         fields=['id', 'name', 'species', 'weight', 'catalogue_number'],
-        page_size=PAGE_SIZE,
+        batch_size=BATCH_SIZE,
     )
 
     context = {
         'page_title': 'Test Lab',
         'page_heading': 'Volume Test',
-        'page_subtitle': 'Search and page a queryset of 100,000 rows without loading it into the browser',
+        'page_subtitle': 'Search and seek through a queryset of 100,000 rows without loading it into the browser',
         'specimen_count': Specimen.objects.count(),
         'default_seed_count': DEFAULT_SEED_COUNT,
-        'page_size': PAGE_SIZE,
+        'batch_size': BATCH_SIZE,
         'species_choices': SPECIES,
     }
 

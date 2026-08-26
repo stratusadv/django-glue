@@ -1200,90 +1200,47 @@ describe('Foreign key proxy handling', () => {
     })
 })
 
-describe('QuerySet pagination', () => {
-    function pageResponse(rows, {total, page, page_size, page_count}) {
+describe('QuerySet seek pagination', () => {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null} = {}) {
         return new Response(JSON.stringify({
-            result: {items: rows, total, page, page_size, page_count},
+            result: {items: rows, seek_key, has_next, batch_size},
             state: {},
             policy: queryPolicy(),
             metadata: queryMetadata(),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
     }
 
-    test('loaded results expose server totals and page position', async () => {
+    test('loaded results expose batch size and hasNext', async () => {
         const object = querySet()
-        global.fetch = async () => pageResponse(
+        global.fetch = async () => batchResponse(
             [modelRow('gorillas.3', 3), modelRow('gorillas.4', 4)],
-            {total: 7, page: 2, page_size: 2, page_count: 4},
+            {seek_key: 'abc', has_next: true, batch_size: 2},
         )
-
-        const page = await object.page(2).all()
-
-        expect(page.items).toHaveLength(2)
-        expect(page.count).toBe(7)
-        expect(page.pageNumber).toBe(2)
-        expect(page.pageSize).toBe(2)
-        expect(page.pageCount).toBe(4)
-        expect(page.hasNext).toBe(true)
-        expect(page.hasPrevious).toBe(true)
-    })
-
-    test('unpaginated results fall back to item count', async () => {
-        const object = querySet()
-        global.fetch = async () => new Response(JSON.stringify({
-            result: {items: [modelRow('gorillas.1', 1)]},
-            state: {},
-            policy: queryPolicy(),
-            metadata: queryMetadata(),
-        }), {status: 200, headers: {'Content-Type': 'application/json'}})
 
         await object.all()
 
-        expect(object.count).toBe(1)
-        expect(object.pageNumber).toBe(1)
-        expect(object.pageSize).toBeNull()
-        expect(object.pageCount).toBe(1)
+        expect(object.items).toHaveLength(2)
+        expect(object.batchSize).toBe(2)
+        expect(object.hasNext).toBe(true)
+    })
+
+    test('unpaginated results have no seek_key and no next batch', async () => {
+        const object = querySet()
+        global.fetch = async () => batchResponse([modelRow('gorillas.1', 1)])
+
+        await object.all()
+
+        expect(object.items).toHaveLength(1)
+        expect(object.batchSize).toBeNull()
         expect(object.hasNext).toBe(false)
-        expect(object.hasPrevious).toBe(false)
     })
 
-    test('page sends the page number and page one is the base query', async () => {
+    test('filter, orderBy and slice each produce an independent query proxy', () => {
         const object = querySet()
-        let kwargs
-        global.fetch = async (_url, options) => {
-            kwargs = JSON.parse(options.body.get('kwargs'))
-            return pageResponse([], {total: 0, page: 3, page_size: 10, page_count: 1})
-        }
 
-        expect(object.page(1)).toBe(object)
-        expect(object.page(3).pageNumber).toBe(3)
-
-        await object.page(3).all()
-
-        expect(kwargs).toEqual({page: 3})
-    })
-
-    test('filter, orderBy and slice reset to the first page', () => {
-        const object = querySet()
-        const third = object.page(3)
-
-        expect(third.filter({name: 'Koko'})._queryParams).toEqual({filter: {name: 'Koko'}})
-        expect(third.orderBy('name')._queryParams).toEqual({order_by: 'name'})
-        expect(third.slice(0, 5)._queryParams).toEqual({slice: {start: 0, stop: 5}})
-        expect(third.filter({name: 'Koko'}).page(2)._queryParams).toEqual({filter: {name: 'Koko'}, page: 2})
-    })
-
-    test('next and previous walk from the loaded page', async () => {
-        const object = querySet()
-        global.fetch = async () => pageResponse([], {total: 30, page: 2, page_size: 10, page_count: 3})
-
-        expect(object.previous()).toBe(object)
-        expect(object.next()._queryParams).toEqual({page: 2})
-
-        const second = await object.next().all()
-
-        expect(second.next()._queryParams).toEqual({page: 3})
-        expect(second.previous()).toBe(object)
+        expect(object.filter({name: 'Koko'})._queryParams).toEqual({filter: {name: 'Koko'}})
+        expect(object.orderBy('name')._queryParams).toEqual({order_by: 'name'})
+        expect(object.slice(0, 5)._queryParams).toEqual({slice: {start: 0, stop: 5}})
     })
 
     test('query cache is keyed on canonical merged params', () => {
@@ -1291,42 +1248,42 @@ describe('QuerySet pagination', () => {
 
         expect(object.filter({a: 1}).orderBy('n')).toBe(object.orderBy('n').filter({a: 1}))
         expect(object.filter({a: 1}).filter({a: 1})).toBe(object.filter({a: 1}))
-        expect(object.page(2).page(1)).toBe(object)
     })
 
     test('query cache is bounded', () => {
         const object = querySet()
-        const first = object.page(2)
+        const first = object.filter({a: 2})
 
         for (let number = 3; number < 70; number += 1) {
-            object.page(number)
+            object.filter({a: number})
         }
 
         expect(object._queryCache.size).toBe(64)
-        expect(object.page(2)).not.toBe(first)
+        expect(object.filter({a: 2})).not.toBe(first)
     })
 })
 
 describe('QuerySet infinite scroll and seeding', () => {
-    function pageResponse(rows, {total, page, page_size, page_count}) {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null} = {}) {
         return new Response(JSON.stringify({
-            result: {items: rows, total, page, page_size, page_count},
+            result: {items: rows, seek_key, has_next, batch_size},
             state: {},
             policy: queryPolicy(),
             metadata: queryMetadata(),
         }), {status: 200, headers: {'Content-Type': 'application/json'}})
     }
 
-    test('loadMore appends the next page into the same proxy', async () => {
+    test('loadMore appends the next batch into the same proxy', async () => {
         const object = querySet()
         const requests = []
+        let call = 0
         global.fetch = async (_url, options) => {
             const kwargs = JSON.parse(options.body.get('kwargs'))
             requests.push(kwargs)
-            const page = kwargs.page || 1
-            return pageResponse(
-                [modelRow(`gorillas.${page * 2 - 1}`, page * 2 - 1), modelRow(`gorillas.${page * 2}`, page * 2)],
-                {total: 6, page, page_size: 2, page_count: 3},
+            call += 1
+            return batchResponse(
+                [modelRow(`gorillas.${call * 2 - 1}`, call * 2 - 1), modelRow(`gorillas.${call * 2}`, call * 2)],
+                {seek_key: `seek-${call}`, has_next: call < 3, batch_size: 2},
             )
         }
 
@@ -1337,7 +1294,6 @@ describe('QuerySet infinite scroll and seeding', () => {
         const same = await object.loadMore()
         expect(same).toBe(object)
         expect(object.items.map(item => item.name)).toEqual(['gorillas.1', 'gorillas.2', 'gorillas.3', 'gorillas.4'])
-        expect(object.pageNumber).toBe(2)
         expect(object.hasNext).toBe(true)
 
         await object.loadMore()
@@ -1345,12 +1301,12 @@ describe('QuerySet infinite scroll and seeding', () => {
         expect(object.hasNext).toBe(false)
 
         await object.loadMore()
-        expect(requests.map(request => request.page ?? 1)).toEqual([1, 2, 3])
+        expect(requests.map(request => request.seek_key ?? null)).toEqual([null, 'seek-1', 'seek-2'])
     })
 
-    test('loadMore on an unloaded proxy loads the first page', async () => {
+    test('loadMore on an unloaded proxy loads the first batch', async () => {
         const object = querySet()
-        global.fetch = async () => pageResponse([modelRow('gorillas.1', 1)], {total: 1, page: 1, page_size: 10, page_count: 1})
+        global.fetch = async () => batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10})
 
         await object.loadMore()
 
@@ -1364,7 +1320,7 @@ describe('QuerySet infinite scroll and seeding', () => {
         global.fetch = async () => {
             fetches += 1
             await new Promise(resolve => setTimeout(resolve, 10))
-            return pageResponse([modelRow('gorillas.1', 1)], {total: 3, page: 1, page_size: 1, page_count: 3})
+            return batchResponse([modelRow('gorillas.1', 1)], {seek_key: 'next', has_next: true, batch_size: 1})
         }
 
         await object.all()
@@ -1375,21 +1331,102 @@ describe('QuerySet infinite scroll and seeding', () => {
         expect(fetches).toBe(2)
     })
 
-    test('chained proxies keep the source rows and totals until they load', async () => {
+    test('a chained query proxy starts unloaded, independent of its source', async () => {
         const object = querySet()
-        global.fetch = async () => pageResponse(
+        global.fetch = async () => batchResponse(
             [modelRow('gorillas.1', 1), modelRow('gorillas.2', 2)],
-            {total: 50, page: 1, page_size: 2, page_count: 25},
+            {seek_key: 'seek-1', has_next: true, batch_size: 2},
         )
         await object.all()
 
-        const second = object.next()
+        const filtered = object.filter({name: 'Koko'})
 
-        expect(second._loaded).toBe(false)
-        expect(second.items.map(item => item.name)).toEqual(['gorillas.1', 'gorillas.2'])
-        expect(second.count).toBe(50)
-        expect(second.pageCount).toBe(25)
-        expect(second.pageNumber).toBe(2)
-        expect(second.hasNext).toBe(true)
+        expect(filtered._loaded).toBe(false)
+        expect(filtered).not.toBe(object)
+    })
+})
+
+describe('QuerySet count', () => {
+    test('count calls the count attribute with the current filter', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return new Response(JSON.stringify({
+                result: 7,
+                state: {},
+                policy: queryPolicy(),
+                metadata: queryMetadata(),
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const total = await object.filter({name__icontains: 'Ko'}).count()
+
+        expect(total).toBe(7)
+        expect(kwargs).toEqual({filter: {name__icontains: 'Ko'}})
+    })
+})
+
+describe('QuerySet with_total', () => {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null, total} = {}) {
+        const result = {items: rows, seek_key, has_next, batch_size}
+        if (total !== undefined) {
+            result.total = total
+        }
+        return new Response(JSON.stringify({
+            result,
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('all() without withTotal never asks for a total', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10})
+        }
+
+        await object.all()
+
+        expect(kwargs.with_total).toBeUndefined()
+        expect(object.total).toBeNull()
+    })
+
+    test('all({withTotal: true}) requests and stores the total', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10, total: 42})
+        }
+
+        await object.all({withTotal: true})
+
+        expect(kwargs.with_total).toBe(true)
+        expect(object.total).toBe(42)
+    })
+
+    test('loadMore() does not clobber a total fetched by an earlier all()', async () => {
+        const object = querySet()
+        let call = 0
+        global.fetch = async () => {
+            call += 1
+            return batchResponse(
+                [modelRow(`gorillas.${call}`, call)],
+                call === 1
+                    ? {seek_key: 'seek-1', has_next: true, batch_size: 1, total: 42}
+                    : {seek_key: null, has_next: false, batch_size: 1},
+            )
+        }
+
+        await object.all({withTotal: true})
+        expect(object.total).toBe(42)
+
+        await object.loadMore()
+
+        expect(object.total).toBe(42)
     })
 })

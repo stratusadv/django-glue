@@ -187,18 +187,35 @@ class GlueQuerySetFilterValidationError(GlueError):
         }
 
 
-class GlueQuerySetPageValidationError(GlueError):
-    """Raised when a page number is not a positive integer."""
+class GlueQuerySetCursorValidationError(GlueError):
+    """Raised when a seek_key is malformed or does not match the current query."""
 
-    code = 'queryset_page_validation_error'
+    code = 'queryset_cursor_validation_error'
     status = 422
 
-    def __init__(self, page: Any) -> None:
-        self.page = page
-        super().__init__(f'Page must be a positive integer, got {page!r}.')
+    def __init__(self, seek_key: Any) -> None:
+        self.seek_key = seek_key
+        super().__init__(f'seek_key is invalid for this query, got {seek_key!r}.')
 
     def details(self) -> dict:
-        return {'page': self.page}
+        return {'seek_key': self.seek_key}
+
+
+class GlueQuerySetSliceValidationError(GlueError):
+    """Raised when a slice window is wider than the rows already loaded under the current query."""
+
+    code = 'queryset_slice_validation_error'
+    status = 422
+
+    def __init__(self, width: int, loaded_row_count: int) -> None:
+        self.width = width
+        self.loaded_row_count = loaded_row_count
+        super().__init__(
+            f'slice window ({width}) exceeds loaded_row_count ({loaded_row_count}).'
+        )
+
+    def details(self) -> dict:
+        return {'width': self.width, 'loaded_row_count': self.loaded_row_count}
 
 
 class GlueInvalidPolicyError(GlueError):

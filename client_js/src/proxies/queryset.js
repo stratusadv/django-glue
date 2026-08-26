@@ -11,10 +11,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this._modelProxies = new Map()
         this._queryParams = options.queryParams || {}
         this._queryCache = options.queryCache || new Map([[JSON.stringify(this._queryParams), this]])
-        this._total = 0
-        this._pageNumber = this._queryParams.page || 1
-        this._pageSize = null
-        this._pageCount = 1
+        this._seekKey = null
+        this._hasNext = false
+        this._batchSize = null
+        this._total = null
         this.loading = false
 
         if (options.seed) {
@@ -30,28 +30,16 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return Array.from(this)
     }
 
-    get count() {
-        return this._total
-    }
-
-    get pageNumber() {
-        return this._pageNumber
-    }
-
-    get pageSize() {
-        return this._pageSize
-    }
-
-    get pageCount() {
-        return this._pageCount
+    get batchSize() {
+        return this._batchSize
     }
 
     get hasNext() {
-        return this._pageNumber < this._pageCount
+        return this._hasNext
     }
 
-    get hasPrevious() {
-        return this._pageNumber > 1
+    get total() {
+        return this._total
     }
 
     [Symbol.iterator]() {
@@ -67,12 +55,13 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this._modelProxies.values()
     }
 
-    async all() {
+    async all({withTotal = false} = {}) {
         if (this._loaded) {
             return this
         }
 
-        const result = await this.query_with_params(this._queryParams)
+        const params = withTotal ? {...this._queryParams, with_total: true} : this._queryParams
+        const result = await this.query_with_params(params)
         this._syncFromResult(result)
         this._loaded = true
         return this
@@ -102,7 +91,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         this.loading = true
 
         try {
-            const result = await this.query_with_params({...this._queryParams, page: this._pageNumber + 1})
+            const result = await this.query_with_params({...this._queryParams, seek_key: this._seekKey})
             this._syncFromResult(result, {append: true})
         } finally {
             this.loading = false
@@ -126,6 +115,10 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return proxy
     }
 
+    async count() {
+        return this._callAttribute('count', {filter: this._queryParams.filter})
+    }
+
     _applyResponse(data = {}) {
         super._applyResponse(data)
 
@@ -136,19 +129,20 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     _seedFrom(source) {
         this._modelProxies = new Map(source._modelProxies)
-        this._total = source._total
-        this._pageSize = source._pageSize
-        this._pageCount = source._pageCount
+        this._batchSize = source._batchSize
     }
 
     _syncFromResult(result = {}, {append = false} = {}) {
         const items = result.items || []
         const oldProxies = this._modelProxies
         this._modelProxies = append ? new Map(oldProxies) : new Map()
-        this._total = result.total ?? items.length
-        this._pageNumber = result.page ?? this._pageNumber
-        this._pageSize = result.page_size ?? null
-        this._pageCount = result.page_count ?? 1
+        this._seekKey = result.seek_key ?? null
+        this._hasNext = result.has_next ?? false
+        this._batchSize = result.batch_size ?? null
+
+        if ('total' in result) {
+            this._total = result.total
+        }
 
         items.forEach((row, index) => {
             const policy = this._policyForRow(row)
@@ -222,27 +216,15 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     filter(filter = {}) {
-        return this.query({filter, page: 1})
+        return this.query({filter})
     }
 
     orderBy(orderBy) {
-        return this.query({order_by: orderBy, page: 1})
+        return this.query({order_by: orderBy})
     }
 
     slice(start, stop) {
-        return this.query({slice: {start, stop}, page: 1})
-    }
-
-    page(number) {
-        return this.query({page: number})
-    }
-
-    next() {
-        return this.page(this._pageNumber + 1)
-    }
-
-    previous() {
-        return this.page(Math.max(1, this._pageNumber - 1))
+        return this.query({slice: {start, stop}})
     }
 
     _cloneWithQueryParams(queryParams = {}) {
@@ -282,7 +264,6 @@ class GlueQuerySetProxy extends BaseGlueProxy {
             ...(this._queryParams.slice || {}),
             ...(params.slice || {}),
         }
-        const page = params.page ?? this._queryParams.page ?? 1
         const mergedParams = {}
 
         if (Object.keys(filter).length) {
@@ -295,10 +276,6 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
         if (Object.keys(slice).length) {
             mergedParams.slice = slice
-        }
-
-        if (page !== 1) {
-            mergedParams.page = page
         }
 
         return mergedParams

@@ -137,6 +137,7 @@ class RelatedSetFieldAttribute(BaseGlueAttribute):
         if related_glue is None:
             return None
 
-        # For eager loading, paginate the prefetched instances in memory
-        # This matches QuerySetGlue.query_with_params() output format
-        return related_glue.paginate(list(self._get_related_queryset()))
+        # For eager loading, seek-paginate the prefetched instances in memory.
+        # This matches QuerySetGlue.query_with_params() output format.
+        return related_glue.seek_batch(list(self._get_related_queryset()))
+

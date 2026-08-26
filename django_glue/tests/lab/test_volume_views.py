@@ -30,7 +30,7 @@ class VolumeViewTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context['specimen_count'], 30)
-        self.assertContains(response, 'page_size=25')
+        self.assertContains(response, 'batch_size=25')
 
     def test_seed_view_creates_rows_and_redirects(self):
         response = self.client.post(reverse('lab:performance:volume_seed'), {'count': 40})

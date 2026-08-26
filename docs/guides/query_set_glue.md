@@ -50,7 +50,7 @@ def task_list_view(request):
 | `computed_attributes` | `Mapping[str, ComputedAttribute]` | No | Readonly computed values for each item |
 | `related_field_config` | `Mapping[str, dict]` | No | Field configuration for related objects (see [Model Glue: Related Field Config](model_object_glue.md#related-field-configuration)) |
 | `loading_strategy` | `LoadingStrategy` | No | `LAZY` (default), `EAGER`, or `INHERIT`. See [Loading Strategy](../api/glue/shortcuts.md#loading-strategy) |
-| `page_size` | `int \| None` | No | Rows per page. Defaults to the `DJANGO_GLUE_QUERYSET_PAGE_SIZE` setting (100). `None` disables paging for this queryset |
+| `batch_size` | `int \| None` | No | Rows per batch. Defaults to the `DJANGO_GLUE_QUERYSET_BATCH_SIZE` setting (100). `None` disables batching for this queryset |
 
 *Either `fields` or `exclude` must be provided.
 
@@ -58,9 +58,9 @@ def task_list_view(request):
 
     You can pass either a form class or a form instance for `form` and `forms`. When you pass a class, an instance is created automatically. See the [Model Glue Guide](model_object_glue.md#custom-forms) for details.
 
-### Pagination
+### Batching
 
-Every queryset is paged on the server. A query returns one page of rows plus the total count, so a table with 100,000 rows never reaches the browser in one response, whatever the frontend asks for.
+Every queryset is fetched from the server in batches, using seek (keyset) pagination rather than a numbered-page `Paginator`. A query returns one batch of rows, so a table with 100,000 rows never reaches the browser in one response, whatever the frontend asks for -- and unlike `OFFSET`-based paging, a batch costs the same whether it's the first one or the thousandth.
 
 ```python
 Glue.queryset(
@@ -69,13 +69,15 @@ Glue.queryset(
     target=Task.objects.all(),
     access=GlueAccess.VIEW,
     fields=['id', 'title'],
-    page_size=25,
+    batch_size=25,
 )
 ```
 
-The default page size comes from the `DJANGO_GLUE_QUERYSET_PAGE_SIZE` setting (100). Pass `page_size=None` to send the whole queryset in one page, for small lookup tables where paging is noise.
+The default batch size comes from the `DJANGO_GLUE_QUERYSET_BATCH_SIZE` setting (100). Pass `batch_size=None` to send the whole queryset in one response, for small lookup tables where batching is noise.
 
-The page size is signed into the policy token with the queryset, so the frontend can choose which page it wants but not how large a page is. Unordered querysets are ordered by `pk` before slicing so that pages do not overlap or skip rows between requests.
+The batch size is signed into the policy token with the queryset, so the frontend can choose to seek forward but not how large a batch is. Unordered querysets are ordered by `pk` before seeking, and `pk` is always added as a final tiebreaker even behind an explicit `order_by`, so batches never overlap or skip rows between requests -- even when the `order_by` field isn't unique.
+
+Getting a total row count is a separate, explicit operation -- see [Counting Rows](#counting-rows) below -- because it always costs a real `COUNT(*)`, and batching is specifically designed to avoid paying that on every request.
 
 ### Using select_related and prefetch_related
 
@@ -153,7 +155,7 @@ Glue.queryset(
 
 ### Loading Items
 
-`all()` loads the first page and resolves to the queryset itself. `items` is the loaded page as an array.
+`all()` loads the first batch and resolves to the queryset itself. `items` is the loaded batch as an array.
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
@@ -163,7 +165,7 @@ for (const task of tasks.items) {
 }
 ```
 
-Iterating a queryset that has not been loaded yet starts the load, so an Alpine `x-for` over `Glue.querySet.tasks.items` renders empty first and fills in when the page arrives. `loading` is `true` while a request is in flight.
+Iterating a queryset that has not been loaded yet starts the load, so an Alpine `x-for` over `Glue.querySet.tasks.items` renders empty first and fills in when the batch arrives. `loading` is `true` while a request is in flight.
 
 Each item is a full model glue object with its own methods:
 
@@ -190,7 +192,7 @@ const newest = Glue.querySet.tasks.orderBy(['-created_at', 'title'])
 const window = Glue.querySet.tasks.slice(0, 500)
 ```
 
-Filters use Django ORM lookups and are validated on the server against the fields you exposed. `slice()` narrows the queryset itself, like `queryset[start:stop]`; the result is then paged like any other query.
+Filters use Django ORM lookups and are validated on the server against the fields you exposed. `slice()` narrows the queryset itself, like `queryset[start:stop]`; the result is then batched like any other query. A slice's width can't exceed `batch_size` on a fresh query -- or however many rows a real sequence of batch fetches under the same filter has already covered -- so `slice()` can re-read territory that's already been loaded for free, but can't be used to pull an arbitrarily large window in one request.
 
 The methods chain, and the same parameters always give back the same proxy object, whichever order they were chained in:
 
@@ -201,43 +203,45 @@ const results = await Glue.querySet.tasks
     .all()
 ```
 
-### Paging
+### Counting Rows
 
-A query loads one page. `page(n)`, `next()`, and `previous()` chain the same way `filter()` does and return the proxy for that page. `filter()`, `orderBy()`, and `slice()` always start at the first page.
+Getting a total match count is a separate, explicit call -- `count()` always costs a real `COUNT(*)`, so it's never bundled into loading a batch unless you ask for it.
 
 ```javascript
-const first = await Glue.querySet.tasks.filter({done: false}).all()
-
-first.count        // rows matching the filter on the server, across every page
-first.items.length // rows on this page
-first.pageNumber   // 1
-first.pageSize     // 100, or null when the queryset is not paged
-first.pageCount    // Math.max(1, Math.ceil(count / pageSize))
-first.hasNext
-first.hasPrevious
-
-const second = await first.next().all()
-const last = await first.page(first.pageCount).all()
+const total = await Glue.querySet.tasks.filter({done: false}).count()
 ```
 
-`page(1)` is the base query, so `first.next().previous()` is `first`. A page past the end loads as empty with the same `count` and `pageCount`.
+For the common case of wanting a total alongside the *first* batch of a new filter (e.g. showing "N results" next to a live search box), pass `withTotal: true` to `all()` instead of calling `count()` separately -- this folds one `COUNT(*)` into that single request rather than firing two:
 
-A chained proxy starts out showing its source's rows, `count`, and `pageCount` until its own page arrives, so an `x-for` bound to `tasks.page(page)` swaps rows in place instead of collapsing to nothing between pages.
+```javascript
+const tasks = Glue.querySet.tasks.filter({title__icontains: search})
+await tasks.all({withTotal: true})
+
+tasks.total        // the count, fetched once
+tasks.items.length // rows in the first batch
+```
+
+`total` holds the most recently fetched value and is left untouched by subsequent `loadMore()` calls, which never request a total themselves -- so a total fetched once at the start of a scroll stays valid as more batches are appended.
 
 ### Infinite Scroll
 
-`loadMore()` fetches the next page and appends it to the same proxy. `items` grows, `pageNumber` is the last page loaded, and `hasNext` says whether another page exists. Calls while a request is in flight or when there is no next page do nothing.
+A query loads one batch at a time. `loadMore()` fetches the next batch and appends it to the same proxy. `items` grows, and `hasNext` says whether another batch exists. Calls while a request is in flight or when there is no next batch do nothing.
 
 ```javascript
 const tasks = await Glue.querySet.tasks.filter({done: false}).all()
 
 await tasks.loadMore()
-tasks.items.length // two pages
+tasks.items.length // two batches worth of rows
+
+tasks.hasNext  // whether calling loadMore() again would fetch anything
+tasks.batchSize // 100, or null when the queryset is not batched
 ```
+
+There is no numbered page to jump to and no `previous()` -- seeking is forward-only. A `filter()`/`orderBy()`/`slice()` call always starts its own fresh sequence from the beginning, independent of any other proxy's progress.
 
 ### Select Fields
 
-A select over a large table sends one query per keystroke and appends pages as the list is scrolled. The sentinel at the bottom of the list calls `loadMore()` whenever it comes into view (Alpine's Intersect plugin):
+A select over a large table sends one query per keystroke and appends batches as the list is scrolled. The sentinel at the bottom of the list calls `loadMore()` whenever it comes into view (Alpine's Intersect plugin):
 
 ```html
 <div x-data="{
@@ -258,13 +262,14 @@ A select over a large table sends one query per keystroke and appends pages as t
         <div x-intersect:enter="options.loadMore()">
             <span x-show="options.loading">Loading...</span>
             <span x-show="!options.loading && options.hasNext"
-                  x-text="`${options.items.length} of ${options.count}`"></span>
+                  x-text="`${options.items.length} loaded, scroll for more`"></span>
+            <span x-show="!options.loading && !options.hasNext">All results shown</span>
         </div>
     </div>
 </div>
 ```
 
-Changing the search text gives a different proxy, so each search term keeps its own loaded pages.
+Changing the search text gives a different proxy, so each search term keeps its own loaded batches.
 
 ### Fetching One Item
 
@@ -281,26 +286,25 @@ const task = await Glue.querySet.tasks.new({title: 'New Task'})
 await task.save()
 ```
 
-`new()` returns an unsaved model glue object with the server's defaults applied. It is not part of the loaded page until the page is reloaded.
+`new()` returns an unsaved model glue object with the server's defaults applied. It is not part of the loaded batch until the batch is reloaded.
 
 ## Methods and Properties
 
 | Method/Property | Description |
 |-----------------|-------------|
-| `all()` | Load the current page; resolves to the queryset |
+| `all({withTotal})` | Load the first batch; resolves to the queryset. Pass `{withTotal: true}` to also fetch `total` in the same request |
 | `get(pk)` | Load one row by primary key |
 | `new(initial)` | Build an unsaved item with default values |
-| `filter(params)` | Chain: add filter lookups, reset to page 1 |
-| `orderBy(fields)` | Chain: set ordering, reset to page 1 |
-| `slice(start, stop)` | Chain: narrow the queryset, reset to page 1 |
-| `page(number)` | Chain: select a page |
-| `next()` / `previous()` | Chain: select the adjacent page |
-| `loadMore()` | Append the next page to this proxy; resolves to the queryset |
+| `count()` | Fetch the number of rows matching the current filter, independent of any loaded batch |
+| `filter(params)` | Chain: add filter lookups, start a fresh seek sequence |
+| `orderBy(fields)` | Chain: set ordering, start a fresh seek sequence |
+| `slice(start, stop)` | Chain: narrow the queryset, bounded by what's already been loaded |
+| `loadMore()` | Append the next batch to this proxy; resolves to the queryset |
 | `refresh()` | Mark the whole chain stale and reload this proxy |
 | `items` | Loaded rows as an array; iterating an unloaded queryset starts the load |
-| `count` | Rows matching the query on the server, across every page |
-| `pageNumber` / `pageSize` / `pageCount` | Position and size of the loaded page |
-| `hasNext` / `hasPrevious` | Whether a page exists after or before this one |
+| `total` | Most recently fetched total via `count()` or `all({withTotal: true})`, or `null` if never fetched |
+| `batchSize` | Rows per batch, or `null` when the queryset is not batched |
+| `hasNext` | Whether calling `loadMore()` would fetch another batch |
 | `loading` | `true` while a request is in flight |
 
 ## Event Listeners
@@ -355,21 +359,19 @@ def task_list_view(request):
 <body>
     <div x-data="{
         search: '',
-        page: 1,
         get tasks() {
             return Glue.querySet.tasks
                 .filter({title__icontains: this.search})
                 .orderBy('-created_at')
-                .page(this.page)
         },
 
         async addTask() {
             const task = await Glue.querySet.tasks.new({title: 'New Task'})
             await task.save()
-            this.page = 1
+            await Glue.querySet.tasks.refresh()
         },
-    }">
-        <input x-model.debounce="search" @input="page = 1" placeholder="Search">
+    }" x-init="await tasks.all({withTotal: true})">
+        <input x-model.debounce="search" @input="await tasks.all({withTotal: true})" placeholder="Search">
         <button @click="addTask()">Add Task</button>
 
         <template x-for="task in tasks.items" :key="task.$key">
@@ -384,9 +386,8 @@ def task_list_view(request):
         </template>
 
         <div>
-            <button :disabled="!tasks.hasPrevious" @click="page -= 1">Previous</button>
-            <span x-text="`Page ${tasks.pageNumber} of ${tasks.pageCount} (${tasks.count} tasks)`"></span>
-            <button :disabled="!tasks.hasNext" @click="page += 1">Next</button>
+            <span x-text="`${tasks.items.length} of ${tasks.total} tasks`"></span>
+            <button :disabled="!tasks.hasNext" @click="tasks.loadMore()">Load more</button>
         </div>
     </div>
 
@@ -399,6 +400,6 @@ def task_list_view(request):
 
 | Access Level | Available Actions |
 |-------------|-------------------|
-| `VIEW` | `query_with_params()`, `get()`, `new()`, `foreign_key_choices()` |
+| `VIEW` | `query_with_params()`, `count()`, `get()`, `new()`, `foreign_key_choices()` |
 | `CHANGE` | All VIEW actions + child item `save()` |
 | `DELETE` | All CHANGE actions + child item `delete()` |

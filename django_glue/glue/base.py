@@ -252,13 +252,11 @@ class BaseGlue(ABC):
         call_result = glue_attribute.call(call_context)
         self._invalidate_attributes()
 
-        response_extra = {}
+        # The policy renews on every access, independent of updates_client_state.
+        response_extra = {'policy_token': self.policy.token}
         if getattr(glue_attribute, 'updates_client_state', True):
-            response_extra = {
-                'state': self.state,
-                'policy_token': self.policy.token,
-                'metadata': self.metadata,
-            }
+            response_extra['state'] = self.state
+            response_extra['metadata'] = self.metadata
 
         return GlueResponse.from_result(
             call_result,

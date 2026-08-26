@@ -6,11 +6,9 @@ import pickle
 from functools import cached_property
 from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
 
-from django.core.paginator import Paginator
-
 from django_glue.access import GlueAccess
 from django_glue.conf import settings
-from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueQuerySetPageValidationError
+from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueQuerySetSliceValidationError
 from django_glue.glue.attributes import BaseGlueAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
@@ -19,6 +17,7 @@ from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
+from django_glue.glue.objects.django.cursor import GlueCollectionCursor
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
@@ -28,7 +27,7 @@ if TYPE_CHECKING:
     from django.db import models
     from django_glue.glue.policy import GluePolicy
 
-DEFAULT_PAGE_SIZE = '__default__'
+DEFAULT_BATCH_SIZE = '__default__'
 
 
 class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFieldResolutionMixin, BaseGlue):
@@ -48,11 +47,13 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
         related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
-        page_size: int | None | Literal['__default__'] = DEFAULT_PAGE_SIZE,
+        batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
+        last_query_params: dict[str, Any] | None = None,
+        loaded_row_count: int = 0,
     ) -> None:
         super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.queryset = queryset
-        self.page_size = self._resolve_page_size(page_size)
+        self.batch_size = self._resolve_batch_size(batch_size)
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
         )
@@ -68,27 +69,31 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         self.related_field_config = ModelGlue._normalize_related_field_config(related_field_config)
         self._select_related = self._get_select_related_fields()
         self.initialize_computed_attributes(computed_attributes)
+        self._last_query_params = last_query_params
+        self._loaded_row_count = loaded_row_count
 
     @staticmethod
-    def _resolve_page_size(page_size: int | None | Literal['__default__']) -> int | None:
-        if page_size == DEFAULT_PAGE_SIZE:
-            page_size = settings.DJANGO_GLUE_QUERYSET_PAGE_SIZE
+    def _resolve_batch_size(batch_size: int | None | Literal['__default__']) -> int | None:
+        if batch_size == DEFAULT_BATCH_SIZE:
+            batch_size = settings.DJANGO_GLUE_QUERYSET_BATCH_SIZE
 
-        if page_size is None:
+        if batch_size is None:
             return None
 
-        if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size < 1:
-            msg = f'QuerySetGlue page_size must be a positive integer or None, got {page_size!r}.'
+        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+            msg = f'QuerySetGlue batch_size must be a positive integer or None, got {batch_size!r}.'
             raise ValueError(msg)
 
-        return page_size
+        return batch_size
 
     def get_identity(self) -> dict[str, Any]:
         identity = {
             'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
             'encoded_queryset': self._encode_queryset_query(self.queryset),
             'pk_field_name': self.queryset.model._meta.pk.name,
-            'page_size': self.page_size,
+            'batch_size': self.batch_size,
+            'last_query_params': self._last_query_params,
+            'loaded_row_count': self._loaded_row_count,
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
@@ -183,7 +188,9 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
             related_field_config=related_field_config,
-            page_size=policy.identity.get('page_size'),
+            batch_size=policy.identity.get('batch_size'),
+            last_query_params=policy.identity.get('last_query_params'),
+            loaded_row_count=policy.identity.get('loaded_row_count', 0),
         )
 
     @staticmethod
@@ -203,17 +210,16 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         filter: dict[str, Any] | None = None,  # noqa: A002
         order_by: str | list[str] | None = None,
         slice: dict[str, Any] | None = None,  # noqa: A002
-        page: int = 1,
+        seek_key: str | None = None,
+        with_total: bool = False,
     ) -> dict[str, Any]:
-        return self._query(filter=filter, order_by=order_by, slice=slice, page=page)
+        return self._query(filter=filter, order_by=order_by, slice=slice, seek_key=seek_key, with_total=with_total)
 
-    def _query(
+    def _filtered_and_ordered(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
         order_by: str | list[str] | None = None,
-        slice: dict[str, Any] | None = None,  # noqa: A002
-        page: int = 1,
-    ) -> dict[str, Any]:
+    ) -> models.QuerySet:
         queryset = self.queryset
         allowed_fields = set(self._included_fields)
 
@@ -231,38 +237,75 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
 
             queryset = queryset.order_by(*order_by)
 
-        if slice or self.page_size is not None:
+        return queryset
+
+    def _query(
+        self,
+        filter: dict[str, Any] | None = None,  # noqa: A002
+        order_by: str | list[str] | None = None,
+        slice: dict[str, Any] | None = None,  # noqa: A002
+        seek_key: str | None = None,
+        with_total: bool = False,
+    ) -> dict[str, Any]:
+        query_params = {'filter': filter, 'order_by': order_by}
+        if query_params != self._last_query_params:
+            self._last_query_params = query_params
+            self._loaded_row_count = 0
+
+        queryset = self._filtered_and_ordered(filter, order_by)
+        total = queryset.count() if with_total else None
+
+        if slice or self.batch_size is not None:
             queryset = self._ensure_ordered(queryset)
+
+        if slice and self.batch_size is not None:
+            width = (slice.get('stop') or 0) - (slice.get('start') or 0)
+            max_width = max(self._loaded_row_count, self.batch_size)
+            if width > max_width:
+                raise GlueQuerySetSliceValidationError(width, max_width)
 
         if slice:
             queryset = queryset[builtins.slice(slice.get('start'), slice.get('stop'))]
 
-        return self.paginate(queryset, page)
+        result = self.seek_batch(queryset, seek_key)
+        if with_total:
+            result['total'] = total
 
-    def paginate(self, objects: models.QuerySet | Sequence[models.Model], page: int = 1) -> dict[str, Any]:
-        if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-            raise GlueQuerySetPageValidationError(page)
+        return result
 
-        if self.page_size is None:
+    @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
+    def count(
+        self,
+        filter: dict[str, Any] | None = None,  # noqa: A002
+    ) -> int:
+        """Return the number of rows matching `filter` on the server.
+
+        Not part of query_with_params()/seek_batch() -- computing this always
+        costs a COUNT(*), so it's only ever run when explicitly called, never
+        as a side effect of loading a batch.
+        """
+        return self._filtered_and_ordered(filter).count()
+
+    def seek_batch(
+        self,
+        objects: models.QuerySet | Sequence[models.Model],
+        seek_key: str | None = None,
+    ) -> dict[str, Any]:
+        if self.batch_size is None:
             items = [self._build_child_model_payload(instance) for instance in objects]
+            self._loaded_row_count += len(items)
 
-            return {
-                'items': items if page == 1 else [],
-                'total': len(items),
-                'page': page,
-                'page_size': None,
-                'page_count': 1,
-            }
+            return {'items': items, 'seek_key': None, 'has_next': False, 'batch_size': None}
 
-        paginator = Paginator(objects, self.page_size)
-        instances = paginator.page(page).object_list if page <= paginator.num_pages else []
+        cursor = GlueCollectionCursor(objects, self.batch_size)
+        batch = cursor.seek(seek_key)
+        self._loaded_row_count += len(batch.items)
 
         return {
-            'items': [self._build_child_model_payload(instance) for instance in instances],
-            'total': paginator.count,
-            'page': page,
-            'page_size': self.page_size,
-            'page_count': paginator.num_pages,
+            'items': [self._build_child_model_payload(instance) for instance in batch.items],
+            'seek_key': batch.next_seek_key,
+            'has_next': batch.has_next,
+            'batch_size': self.batch_size,
         }
 
     @staticmethod

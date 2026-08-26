@@ -258,7 +258,7 @@
                                     <template x-for="skill in gorilla.skills.items" :key="skill.$key">
                                         <span class="badge bg-gorilla-green" x-text="skill.name"></span>
                                     </template>
-                                    <small class="text-muted" x-show="!gorilla.skills.loading && gorilla.skills.count === 0">No skills yet</small>
+                                    <small class="text-muted" x-show="!gorilla.skills.loading && gorilla.skills.items.length === 0">No skills yet</small>
                                 </div>
                             </div>
                         </div>
@@ -371,7 +371,7 @@
                 </div>
             </template>
 
-            <div x-show="!gorillaQuerySet.loading && gorillaQuerySet.count === 0" class="col-12">
+            <div x-show="!gorillaQuerySet.loading && gorillaQuerySet.items.length === 0" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

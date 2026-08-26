@@ -21,8 +21,9 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted mb-0">
-                        The queryset is registered with <code>page_size={{ page_size }}</code>. Every query below returns one page
-                        and the server total, so the browser never holds more than 25 rows at a time.
+                        The queryset is registered with <code>batch_size={{ batch_size }}</code>. Every query below seeks one batch
+                        of rows at a time, with no OFFSET and no COUNT(*), so the browser never holds more than {{ batch_size }} rows
+                        loaded per view.
                     </p>
                 </div>
             </div>
@@ -36,9 +37,13 @@
                      search: '',
                      open: false,
                      selected: null,
+                     total: null,
                      get options() {
                          const filter = this.search ? {name__icontains: this.search} : {}
                          return Glue.querySet.specimens.filter(filter)
+                     },
+                     async refreshTotal() {
+                         this.total = await this.options.count()
                      },
                      choose(specimen) {
                          this.selected = specimen
@@ -46,6 +51,7 @@
                          this.open = false
                      },
                  }"
+                 x-init="await refreshTotal(); $watch('search', async () => await refreshTotal())"
                  @click.outside="open = false">
                 <div class="card-header bg-gorilla-green text-white">
                     <h5 class="mb-0">Select field with infinite scroll</h5>
@@ -69,10 +75,10 @@
                             <div x-intersect:enter="options.loadMore()" class="px-3 py-2 small text-muted border-top">
                                 <span x-show="options.loading">Loading...</span>
                                 <span x-show="!options.loading && options.hasNext"
-                                      x-text="`${options.items.length.toLocaleString()} of ${options.count.toLocaleString()} loaded, scroll for more`"></span>
-                                <span x-show="!options.loading && !options.hasNext && options.count > 0"
-                                      x-text="`All ${options.count.toLocaleString()} shown`"></span>
-                                <span x-show="!options.loading && options.count === 0">No specimens match</span>
+                                      x-text="`${options.items.length.toLocaleString()} of ${(total ?? 0).toLocaleString()} loaded, scroll for more`"></span>
+                                <span x-show="!options.loading && !options.hasNext && total > 0"
+                                      x-text="`All ${total.toLocaleString()} shown`"></span>
+                                <span x-show="!options.loading && total === 0">No specimens match</span>
                             </div>
                         </div>
                     </div>
@@ -81,8 +87,9 @@
                         <span class="text-muted" x-text="`(id ${selected?.id}, ${selected?.species}, ${selected?.weight} mg)`"></span>
                     </div>
                     <p class="text-muted small mt-3 mb-0">
-                        Each keystroke queries the server for one page of matches. Scrolling to the bottom of the list calls
-                        <code>loadMore()</code>, which appends the next page to the same proxy. The whole table is never loaded.
+                        Each keystroke queries the server for one batch of matches. Scrolling to the bottom of the list calls
+                        <code>loadMore()</code>, which appends the next batch to the same proxy. The whole table is never loaded.
+                        <code>count()</code> is a separate, explicit call, fetched once per search rather than on every render.
                     </p>
                 </div>
             </div>
@@ -94,11 +101,7 @@
                      search: '',
                      species: '',
                      orderBy: 'catalogue_number',
-                     page: 1,
-                     pageSize: {{ page_size }},
-                     get fillerCount() {
-                         return Math.max(0, this.pageSize - this.specimens.items.length)
-                     },
+                     batchSize: {{ batch_size }},
                      get filter() {
                          const filter = {}
                          if (this.search) filter.name__icontains = this.search
@@ -109,12 +112,21 @@
                          return Glue.querySet.specimens
                              .filter(this.filter)
                              .orderBy(this.orderBy)
-                             .page(this.page)
                      },
-                 }"
-                 x-init="$watch('search', () => page = 1); $watch('species', () => page = 1); $watch('orderBy', () => page = 1)">
+                     get visibleItems() {
+                         // loadMore() appends every batch onto the same proxy, so
+                         // this only shows the most recent batch, not everything
+                         // fetched so far -- there's no server-side 'go back',
+                         // just 'seek forward', so an earlier batch's rows are
+                         // simply dropped from view once you've moved past them.
+                         return this.specimens.items.slice(-this.batchSize)
+                     },
+                     get fillerCount() {
+                         return Math.max(0, this.batchSize - this.visibleItems.length)
+                     },
+                 }">
                 <div class="card-header bg-gorilla-green text-white">
-                    <h5 class="mb-0">Paged table</h5>
+                    <h5 class="mb-0">Batched table</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-2 mb-2">
@@ -156,7 +168,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="specimen in specimens.items" :key="specimen.$key">
+                            <template x-for="specimen in visibleItems" :key="specimen.$key">
                                 <tr>
                                     <td x-text="specimen.catalogue_number"></td>
                                     <td class="text-truncate" x-text="specimen.name"></td>
@@ -172,17 +184,13 @@
                         </tbody>
                     </table>
 
-                    <div x-cloak x-show="!specimens.loading && specimens.count === 0" class="text-muted text-center py-2">
+                    <div x-cloak x-show="!specimens.loading && visibleItems.length === 0" class="text-muted text-center py-2">
                         No specimens match.
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center">
-                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasPrevious" @click="page -= 1">
-                            Previous
-                        </button>
-                        <span class="small text-muted"
-                              x-text="`Page ${specimens.pageNumber.toLocaleString()} of ${specimens.pageCount.toLocaleString()} (${specimens.count.toLocaleString()} rows)`"></span>
-                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasNext" @click="page += 1">
+                        <span class="small text-muted" x-text="`${visibleItems.length} rows shown`"></span>
+                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasNext" @click="specimens.loadMore()">
                             Next
                         </button>
                     </div>

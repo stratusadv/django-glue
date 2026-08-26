@@ -447,7 +447,7 @@ DJANGO_GLUE_SESSION_PROXY_KEY = 'django_glue_proxies'
 DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400
 DJANGO_GLUE_VIEW_MAX_REDIRECTS = 10
 DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
-DJANGO_GLUE_QUERYSET_PAGE_SIZE = 100  # Rows per page for Glue.queryset(); None disables pagination
+DJANGO_GLUE_QUERYSET_BATCH_SIZE = 100  # Rows per batch for Glue.queryset(); None disables batching
 ```
 
 Any `django_glue.settings` constant can be overridden by defining the same name in your Django project's `settings.py`. The `Settings` class in `conf.py` checks Django settings first, then falls back to defaults.
