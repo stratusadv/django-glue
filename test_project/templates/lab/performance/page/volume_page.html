@@ -37,13 +37,21 @@
                      search: '',
                      open: false,
                      selected: null,
-                     total: null,
+                     totalLoading: false,
                      get options() {
                          const filter = this.search ? {name__icontains: this.search} : {}
                          return Glue.querySet.specimens.filter(filter)
                      },
                      async refreshTotal() {
-                         this.total = await this.options.count()
+                         // withTotal folds one COUNT(*) into this same batch request instead of
+                         // firing a second, separate count() call -- options.total then comes
+                         // straight off the proxy, same as options.items/hasNext/loading.
+                         this.totalLoading = true
+                         try {
+                             await this.options.all({withTotal: true})
+                         } finally {
+                             this.totalLoading = false
+                         }
                      },
                      choose(specimen) {
                          this.selected = specimen
@@ -73,12 +81,12 @@
                                 </button>
                             </template>
                             <div x-intersect:enter="options.loadMore()" class="px-3 py-2 small text-muted border-top">
-                                <span x-show="options.loading">Loading...</span>
-                                <span x-show="!options.loading && options.hasNext"
-                                      x-text="`${options.items.length.toLocaleString()} of ${(total ?? 0).toLocaleString()} loaded, scroll for more`"></span>
-                                <span x-show="!options.loading && !options.hasNext && total > 0"
-                                      x-text="`All ${total.toLocaleString()} shown`"></span>
-                                <span x-show="!options.loading && total === 0">No specimens match</span>
+                                <span x-show="options.loading || totalLoading">Loading...</span>
+                                <span x-show="!options.loading && !totalLoading && options.hasNext"
+                                      x-text="`${options.items.length.toLocaleString()} of ${(options.total ?? 0).toLocaleString()} loaded, scroll for more`"></span>
+                                <span x-show="!options.loading && !totalLoading && !options.hasNext && options.total > 0"
+                                      x-text="`All ${(options.total ?? 0).toLocaleString()} shown`"></span>
+                                <span x-show="!options.loading && !totalLoading && options.total === 0">No specimens match</span>
                             </div>
                         </div>
                     </div>
