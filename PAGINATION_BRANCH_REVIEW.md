@@ -243,6 +243,12 @@ notes, already resolved elsewhere), and `.gitignore`'s `.vscode/` entry changed 
 (the trailing slash only matches a real directory, not the symlink this and other stratus projects
 actually use).
 
-**Status as of 2026-08-26**: all of the above is uncommitted on top of `9ac7632`. 313 unit + 13 e2e
-tests pass. Nothing known-broken; the bugfixes, the `limelight` migration, and the cleanup are three
-fairly separable diffs if splitting into multiple commits.
+**Status as of 2026-08-26**: the above was split into three commits, in order — `95f40a7` (the four
+bugfixes), `d9f4b63` (the `limelight` e2e migration), `19a6013` (TODO cleanup + `.gitignore` fix) —
+and pushed to `origin/braydenc/queryset-pagination-and-scrolling-performance` (now at `19a6013`,
+even with local). 313 unit + 13 e2e tests pass. Nothing known-broken.
+
+Two things still open on this branch: the `limelight` e2e migration (`d9f4b63`) still has no design
+writeup beyond the paragraph above — read the diff directly if it needs one; and this doc itself
+predates that commit split, so any future revision to the rework should keep the "Status" section
+current rather than letting it drift again.
