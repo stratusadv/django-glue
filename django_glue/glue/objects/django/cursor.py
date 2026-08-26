@@ -11,6 +11,25 @@ if TYPE_CHECKING:
     from django.db import models
 
 
+def parse_order_by(entries: Any) -> tuple[tuple[str, bool], ...]:
+    """Return (field_name, is_descending) for each order_by entry.
+
+    Handles both a plain '-field'/'field' string (Django's usual `order_by()`
+    argument) and a Django `OrderBy` expression such as
+    `F('field').desc(nulls_last=True)`, which `QuerySetGlue` uses so seek
+    pagination has a consistent, backend-independent place to put NULLs.
+    """
+    parsed = []
+    for entry in entries:
+        if isinstance(entry, str):
+            parsed.append((entry.lstrip('-'), entry.startswith('-')))
+        else:
+            expression = getattr(entry, 'expression', entry)
+            name = getattr(expression, 'name', str(expression))
+            parsed.append((name, bool(getattr(entry, 'descending', False))))
+    return tuple(parsed)
+
+
 @dataclass
 class GlueSeekBatch:
     """One batch of rows returned by a GlueCollectionCursor.seek() call."""
@@ -63,7 +82,7 @@ class GlueCollectionCursor:
         """Field names (in effect) this collection is sorted by, with pk forced on as the final tiebreaker."""
         if hasattr(objects, 'model'):
             pk_name = objects.model._meta.pk.name
-            order_fields = tuple(field.lstrip('-') for field in objects.query.order_by) or (pk_name,)
+            order_fields = tuple(name for name, _ in parse_order_by(objects.query.order_by)) or (pk_name,)
         else:
             # Already-materialized list (e.g. a prefetched related set): no ORM
             # ordering to read, so pk is the only tiebreaker available -- batches
@@ -103,11 +122,27 @@ class GlueCollectionCursor:
         (each `>` becomes `<` for a field sorted descending.) Every row is
         included or excluded by comparison alone -- unlike OFFSET, no row before
         the seek position is ever scanned or counted.
+
+        `QuerySetGlue` always orders nullable fields with `nulls_last=True`, so
+        NULL sorts after every real value regardless of direction. That needs
+        two adjustments here, following the same approach as the
+        django-cursor-pagination package:
+
+        - A seek value of `None` at a given depth means "the last row we saw
+          was already in the NULL bucket for this field". Nothing sorts after
+          NULL (nulls are last), so this depth contributes no comparison of
+          its own -- only a deeper depth's equality prefix (`field=None`,
+          which Django resolves to `field__isnull=True`) can find the next
+          row, by staying inside the same NULL bucket and breaking the tie on
+          a later field.
+        - A non-null seek value's comparison (`field__gt`/`field__lt`) is
+          extended with `OR field__isnull=True`, because SQL's `>`/`<` never
+          match NULL on their own -- without this, seeking would never cross
+          from the last real value into the trailing NULL bucket.
         """
         from django.db.models import Q  # noqa: PLC0415
 
-        order_by = list(queryset.query.order_by) or []
-        descending = {field.lstrip('-') for field in order_by if field.startswith('-')}
+        descending = {name for name, is_descending in parse_order_by(queryset.query.order_by) if is_descending}
 
         clauses = Q()
         for depth, (field, value) in enumerate(zip(self._ordering, after)):
@@ -115,8 +150,11 @@ class GlueCollectionCursor:
             for earlier_field, earlier_value in zip(self._ordering[:depth], after[:depth]):
                 clause &= Q(**{earlier_field: earlier_value})
 
+            if value is None:
+                continue
+
             lookup = f'{field}__lt' if field in descending else f'{field}__gt'
-            clause &= Q(**{lookup: value})
+            clause &= (Q(**{lookup: value}) | Q(**{f'{field}__isnull': True}))
             clauses |= clause
 
         return queryset.filter(clauses)

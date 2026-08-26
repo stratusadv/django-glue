@@ -180,3 +180,69 @@ size. That gap, not just OFFSET's cost, was the actual justification for reworki
 **Not changed:** `django-glue.js`/`.min.js` were rebuilt from source (`bun run build`); no manual
 edits went into the compiled bundle. All 93 Python tests and 89 JS tests pass as of the last full
 run.
+
+---
+
+## Follow-up fixes found after the rework landed (2026-08-26)
+
+The "Revisions made during review" rework above was committed as `9ac7632`. Continued exercise of
+the seek cursor (mainly via the new `limelight`-based e2e demos, see below) turned up four more
+bugs, each with a regression test in `test_queryset_pagination.py`:
+
+- **Seeking past a NULL-valued `order_by` field.** SQLite and Postgres disagree on where NULL
+  sorts by default (first vs. last), and the seek cursor's `field__gt`/`field__lt` comparisons never
+  match NULL either way, so a seek could skip or infinite-loop across a NULL bucket depending on
+  backend. Fixed by pinning ordering explicitly: `QuerySetGlue._nulls_last_order_by()` converts
+  plain `'-field'`/`'field'` strings into `F(field).asc(nulls_last=True)`/`.desc(nulls_last=True)`
+  expressions, and `GlueCollectionCursor._seek_filter()` extends each non-null comparison with
+  `OR field__isnull=True` (so seeking can cross from the last real value into the trailing NULL
+  bucket) while a seek value of `None` at a given depth contributes no comparison of its own (NULL
+  is already last, so only a deeper field can break the tie). A new `parse_order_by()` helper in
+  `cursor.py` normalizes both plain order-by strings and `OrderBy` expressions into
+  `(field_name, is_descending)` pairs so both sides read the same ordering consistently. Covered by
+  `QuerySetNullOrderingTestCase`.
+- **Non-unique `order_by` not actually getting a `pk` tiebreaker.** `_ensure_ordered()` used to
+  trust `queryset.ordered` to mean "a tiebreaker is present," but Django considers a queryset
+  "ordered" as soon as *any* explicit `order_by(...)` is given — e.g. `order_by('weight')` — even
+  though ties on `weight` have no defined order. The seek cursor's bookkeeping assumed `pk` always
+  broke ties, but the real SQL didn't. Fixed to append `pk` after any explicit ordering unless
+  it's already present. Covered by `test_non_unique_ordering_field_gets_pk_tiebreaker_in_the_real_sql`,
+  which asserts on the generated SQL rather than just output stability (the previous unordered-case
+  test could pass "by accident" on SQLite, which tends to return ties in rowid order anyway).
+- **`slice()` with an omitted `stop` silently passed validation.** `slice.get('stop') or 0` made a
+  missing `stop` compute a non-positive width, which skipped the `width > max_width` check entirely
+  and let an unbounded slice through with no bound at all. Fixed to treat a missing `stop` as
+  `width = None` and reject it explicitly — `GlueQuerySetSliceValidationError` now accepts
+  `width: int | None` and renders `None` as "unbounded (no stop given)" in its message. Covered by
+  `test_slice_missing_stop_is_rejected_instead_of_silently_unbounded`.
+- **Continuing a wide slice via `seek_key` crashed.** A slice can legitimately be wider than
+  `batch_size` once `loaded_row_count` covers it, but continuing to page through it with a
+  `seek_key` used to crash: Django can't `.filter()` a queryset that already had a Python slice
+  applied, and `_seek_filter()` does exactly that on the second call. Fixed so the OFFSET/LIMIT
+  slice is only applied on the request that establishes it (`seek_key is None`); a continuation
+  seeks purely off the WHERE-based cursor instead of re-slicing on top of it. Covered by
+  `test_slice_wider_than_batch_size_can_be_continued_with_seek_key`.
+
+### Separate thread: e2e tests migrated onto `limelight`
+
+Independent of the bugfixes above, the e2e suite was migrated from the old bespoke `-m demo` pytest
+marker/fixtures onto `limelight` — a new internal stratusadv package
+(`limelight[django,pytest] @ git+https://github.com/stratusadv/limelight.git@v0.1.0`) providing a
+`DemoSession`/`DjangoApplication`-based narrated-demo framework (title cards, named shot
+directories, `DEMO_MODE=narrate`). Root `conftest.py` (new) registers `limelight.pytest_plugin`;
+`django_glue/tests/e2e/conftest.py` (new) supplies `application`/`gorilla_app_user`/
+`seeded_gorillas` fixtures backing every e2e test; `test_gorilla_app.py` was substantially rewritten
+to drive itself through `DemoSession` rather than raw Playwright calls; a new
+`test_lab_volume_pagination.py` demos the seek-pagination lab page end to end. `justfile`'s
+`demo`/`demos` recipes now run under the `e2e` marker with `DEMO_MODE=narrate` set, replacing the
+old separate `demo` marker. This thread has no prior design writeup — read the diff directly if
+picking it up further.
+
+Also cleaned up in this pass: stale root `TODO.md`/`TODO_SESSION.md` deleted (unrelated old-session
+notes, already resolved elsewhere), and `.gitignore`'s `.vscode/` entry changed to bare `.vscode`
+(the trailing slash only matches a real directory, not the symlink this and other stratus projects
+actually use).
+
+**Status as of 2026-08-26**: all of the above is uncommitted on top of `9ac7632`. 313 unit + 13 e2e
+tests pass. Nothing known-broken; the bugfixes, the `limelight` migration, and the cleanup are three
+fairly separable diffs if splitting into multiple commits.

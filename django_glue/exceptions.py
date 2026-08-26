@@ -207,11 +207,12 @@ class GlueQuerySetSliceValidationError(GlueError):
     code = 'queryset_slice_validation_error'
     status = 422
 
-    def __init__(self, width: int, loaded_row_count: int) -> None:
+    def __init__(self, width: int | None, loaded_row_count: int) -> None:
         self.width = width
         self.loaded_row_count = loaded_row_count
+        width_display = 'unbounded (no stop given)' if width is None else str(width)
         super().__init__(
-            f'slice window ({width}) exceeds loaded_row_count ({loaded_row_count}).'
+            f'slice window ({width_display}) exceeds loaded_row_count ({loaded_row_count}).'
         )
 
     def details(self) -> dict:

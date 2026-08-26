@@ -17,7 +17,7 @@ from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
-from django_glue.glue.objects.django.cursor import GlueCollectionCursor
+from django_glue.glue.objects.django.cursor import GlueCollectionCursor, parse_order_by
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
@@ -235,9 +235,30 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             if isinstance(order_by, str):
                 order_by = [order_by]
 
-            queryset = queryset.order_by(*order_by)
+            queryset = queryset.order_by(*self._nulls_last_order_by(order_by))
 
         return queryset
+
+    @staticmethod
+    def _nulls_last_order_by(order_by: Sequence[str]) -> list[Any]:
+        """Convert plain '-field'/'field' order_by strings into expressions that pin NULLs last.
+
+        Seeking past a NULL needs the WHERE clause and the real SQL ordering to
+        agree on where NULLs sort -- that's backend-dependent otherwise (e.g.
+        SQLite puts NULL first for ascending, Postgres puts it last), so this
+        pins it explicitly rather than relying on either default. See
+        `GlueCollectionCursor._seek_filter` for the matching WHERE-clause side.
+        """
+        from django.db.models import F  # noqa: PLC0415
+
+        expressions = []
+        for entry in order_by:
+            if entry.startswith('-'):
+                expressions.append(F(entry[1:]).desc(nulls_last=True))
+            else:
+                expressions.append(F(entry).asc(nulls_last=True))
+
+        return expressions
 
     def _query(
         self,
@@ -259,12 +280,23 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             queryset = self._ensure_ordered(queryset)
 
         if slice and self.batch_size is not None:
-            width = (slice.get('stop') or 0) - (slice.get('start') or 0)
+            # `stop` must be given explicitly: an omitted `stop` used to fall
+            # back to 0 here (`slice.get('stop') or 0`), which made the width
+            # come out non-positive and silently skip this check entirely --
+            # letting an open-ended slice through with no bound at all.
+            start = slice.get('start') or 0
+            stop = slice.get('stop')
+            width = None if stop is None else stop - start
             max_width = max(self._loaded_row_count, self.batch_size)
-            if width > max_width:
+            if width is None or width > max_width:
                 raise GlueQuerySetSliceValidationError(width, max_width)
 
-        if slice:
+        # Only apply the requested window as an OFFSET/LIMIT on the request
+        # that establishes it (no seek_key yet). Django can't `.filter()` a
+        # queryset that's already been sliced, so a continuation call instead
+        # keeps seeking from wherever it left off via the WHERE-based cursor
+        # in seek_batch() below, rather than re-slicing on top of it.
+        if slice and seek_key is None:
             queryset = queryset[builtins.slice(slice.get('start'), slice.get('stop'))]
 
         result = self.seek_batch(queryset, seek_key)
@@ -310,10 +342,25 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
 
     @staticmethod
     def _ensure_ordered(queryset: models.QuerySet) -> models.QuerySet:
-        if queryset.ordered:
+        """Force `pk` on as a final tiebreaker, even behind an explicit, non-unique order_by.
+
+        `queryset.ordered` alone isn't enough to guarantee stable paging: an
+        explicit `order_by('weight')` makes Django consider the queryset
+        "ordered" even though ties on `weight` have no defined order, so the
+        seek cursor's assumption that `pk` always breaks ties needs to hold in
+        the real SQL too, not just in `GlueCollectionCursor`'s own bookkeeping.
+        """
+        pk_name = queryset.model._meta.pk.name
+        order_by = list(queryset.query.order_by)
+
+        if not order_by:
+            return queryset.order_by(pk_name)
+
+        existing_names = {name for name, _ in parse_order_by(order_by)}
+        if pk_name in existing_names or 'pk' in existing_names:
             return queryset
 
-        return queryset.order_by('pk')
+        return queryset.order_by(*order_by, pk_name)
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:

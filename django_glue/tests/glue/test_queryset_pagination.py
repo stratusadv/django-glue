@@ -6,7 +6,11 @@ from django.test import TestCase, override_settings
 
 from django_glue import ALL_FIELDS
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueQuerySetCursorValidationError, GlueQuerySetFilterValidationError
+from django_glue.exceptions import (
+    GlueQuerySetCursorValidationError,
+    GlueQuerySetFilterValidationError,
+    GlueQuerySetSliceValidationError,
+)
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.loading import LoadingStrategy
@@ -137,6 +141,33 @@ class QuerySetPaginationTestCase(TestCase):
 
         self.assertEqual(names, ['Gorilla 01', 'Gorilla 02', 'Gorilla 03'])
 
+    def test_slice_missing_stop_is_rejected_instead_of_silently_unbounded(self):
+        # `slice.get('stop') or 0` used to make an omitted `stop` compute a
+        # non-positive width, which skipped the check entirely and let an
+        # open-ended slice through with no bound at all.
+        glue_object = build_glue(batch_size=5)
+
+        with self.assertRaises(GlueQuerySetSliceValidationError) as context:
+            glue_object.query_with_params(slice={'start': 5})
+
+        self.assertIsNone(context.exception.width)
+
+    def test_slice_wider_than_batch_size_can_be_continued_with_seek_key(self):
+        # A slice's width can exceed batch_size once loaded_row_count already
+        # covers it (see the width-validation tests above). Continuing to
+        # page through that wider slice via seek_key used to crash -- Django
+        # can't `.filter()` a queryset that's already had a Python slice
+        # applied, and `_seek_filter()` does exactly that on the second call.
+        glue_object = build_glue(batch_size=2)
+        self._all_names_via_cursor(glue_object)  # loaded_row_count now covers all 7 rows
+
+        first = glue_object.query_with_params(slice={'start': 0, 'stop': 4})
+        self.assertEqual(self._names(first), ['Gorilla 00', 'Gorilla 01'])
+        self.assertTrue(first['has_next'])
+
+        second = glue_object.query_with_params(slice={'start': 0, 'stop': 4}, seek_key=first['seek_key'])
+        self.assertEqual(self._names(second), ['Gorilla 02', 'Gorilla 03'])
+
     def test_unordered_queryset_is_ordered_by_pk_and_seeks_without_offset(self):
         glue_object = build_glue(Gorilla.objects.all(), batch_size=3)
         first = glue_object.query_with_params()
@@ -164,6 +195,19 @@ class QuerySetPaginationTestCase(TestCase):
 
         self.assertEqual(sorted(names), sorted(f'Gorilla {index:02d}' for index in range(7)))
         self.assertEqual(len(names), 7)  # every row exactly once -- no skip, no duplicate
+
+    def test_non_unique_ordering_field_gets_pk_tiebreaker_in_the_real_sql(self):
+        # The previous test (stable pages on SQLite) can pass "by accident"
+        # since SQLite tends to return ties in rowid order anyway, even with
+        # no explicit tiebreaker. Assert the tiebreaker is actually in the
+        # generated SQL, not just that this backend happened to cooperate.
+        glue_object = build_glue(batch_size=2, fields=['id', 'name', 'weight'])
+
+        with self.assertNumQueries(1) as captured:
+            glue_object.query_with_params(order_by='weight')
+
+        order_by_clause = captured.captured_queries[0]['sql'].split('ORDER BY', 1)[1]
+        self.assertIn('id', order_by_clause)
 
     def test_unpaginated_query_does_not_count(self):
         glue_object = build_glue(batch_size=None)
@@ -277,6 +321,75 @@ class QuerySetWithTotalTestCase(TestCase):
 
         self.assertEqual(first['total'], 7)
         self.assertEqual(second['total'], 7)
+
+
+class QuerySetNullOrderingTestCase(TestCase):
+    """Seeking past a row whose order_by field is NULL (Fight.status is nullable)."""
+
+    def setUp(self):
+        gorilla = Gorilla.objects.create(name='Koko', age=18)
+        rival = Gorilla.objects.create(name='Rival', age=19)
+        # A mix of NULL and non-NULL statuses, deliberately not created in
+        # sorted order, so a naive scan wouldn't happen to visit them in the
+        # right order by coincidence.
+        for index, status in enumerate([None, 'sch', None, 'cmp', None, 'inp']):
+            Fight.objects.create(
+                name=f'Fight {index}', red_corner=gorilla, blue_corner=rival, status=status,
+            )
+
+    def _names(self, result):
+        return [row['state']['name']['value'] for row in result['items']]
+
+    def _all_names_via_cursor(self, glue_object, **params):
+        names = []
+        seek_key = None
+        for _ in range(20):
+            result = glue_object.query_with_params(seek_key=seek_key, **params)
+            names.extend(self._names(result))
+            if not result['has_next']:
+                return names
+            seek_key = result['seek_key']
+        raise AssertionError('cursor never terminated')
+
+    def test_seeking_past_a_null_ordering_value_does_not_raise(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name', 'status'],
+            batch_size=2,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        names = self._all_names_via_cursor(glue_object, order_by='status')
+
+        self.assertEqual(sorted(names), sorted(f'Fight {index}' for index in range(6)))
+        self.assertEqual(len(names), 6)  # every row exactly once -- no skip, no duplicate
+
+    def test_null_ordering_values_sort_last_regardless_of_direction(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name', 'status'],
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        ascending = glue_object.query_with_params(order_by='status')
+        descending = glue_object.query_with_params(order_by='-status')
+
+        # Whichever direction, the three NULL-status fights land at the end.
+        self.assertEqual(
+            [row['state']['status']['value'] for row in ascending['items']][-3:],
+            [None, None, None],
+        )
+        self.assertEqual(
+            [row['state']['status']['value'] for row in descending['items']][-3:],
+            [None, None, None],
+        )
 
 
 class RelatedSetPaginationTestCase(TestCase):
