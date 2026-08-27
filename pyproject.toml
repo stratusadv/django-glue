@@ -41,6 +41,7 @@ development = [
     "setuptools",
     "wheel",
     "playwright",
+    "limelight[django,pytest] @ git+https://github.com/stratusadv/limelight.git@v0.1.0",
     "faker>=18.0.0",
     "python-dotenv==1.2.2",
     "pytest>=7.0.0",

@@ -34,6 +34,9 @@
                     {% url 'lab:performance:stress' as the_url %}
                     {% include 'element/nav_link_list_element.html' with url=the_url label='Stress Test' %}
 
+                    {% url 'lab:performance:volume' as the_url %}
+                    {% include 'element/nav_link_list_element.html' with url=the_url label='Volume Test (100k rows)' %}
+
                     {% url 'lab:performance:flush_session' as the_url %}
                     {% include 'element/nav_link_list_element.html' with url=the_url label='Flush Session' %}
                 </ul>

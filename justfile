@@ -50,10 +50,10 @@ test-e2e-headed *ARGS:
 	{{E2E_ENV}}{{PYTHON}} -m pytest -m e2e --headed --slowmo 1000 {{ARGS}}
 
 demo NAME="" SPEED="normal":
-	$env:DEMO_SPEED='{{SPEED}}'; {{PYTHON}} -m pytest -m demo --headed --video on {{ if NAME == "" { "" } else { "-k '" + replace(NAME, "-", "_") + "'" } }}
+	{{E2E_ENV}}{{ if os() == "linux" { "DEMO_MODE=narrate DEMO_SPEED=" + SPEED + " " } else { "$env:DEMO_MODE='narrate'; $env:DEMO_SPEED='" + SPEED + "'; " } }}{{PYTHON}} -m pytest -m e2e --headed --video on {{ if NAME == "" { "" } else { "-k '" + replace(NAME, "-", "_") + "'" } }}
 
 demos:
-	{{PYTHON}} -m pytest -m demo --collect-only -q
+	{{PYTHON}} -m pytest -m e2e --collect-only -q
 
 act *ARGS:
 	act {{ARGS}}

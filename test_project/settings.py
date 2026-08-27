@@ -90,6 +90,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'django_glue_test_project.db',
+        'TEST': {
+            'NAME': BASE_DIR / 'django_glue_testing.db',
+        },
     }
 }
 

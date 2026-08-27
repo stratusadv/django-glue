@@ -1199,3 +1199,234 @@ describe('Foreign key proxy handling', () => {
         expect(proxy.parent_id).toBe(null)
     })
 })
+
+describe('QuerySet seek pagination', () => {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null} = {}) {
+        return new Response(JSON.stringify({
+            result: {items: rows, seek_key, has_next, batch_size},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('loaded results expose batch size and hasNext', async () => {
+        const object = querySet()
+        global.fetch = async () => batchResponse(
+            [modelRow('gorillas.3', 3), modelRow('gorillas.4', 4)],
+            {seek_key: 'abc', has_next: true, batch_size: 2},
+        )
+
+        await object.all()
+
+        expect(object.items).toHaveLength(2)
+        expect(object.batchSize).toBe(2)
+        expect(object.hasNext).toBe(true)
+    })
+
+    test('unpaginated results have no seek_key and no next batch', async () => {
+        const object = querySet()
+        global.fetch = async () => batchResponse([modelRow('gorillas.1', 1)])
+
+        await object.all()
+
+        expect(object.items).toHaveLength(1)
+        expect(object.batchSize).toBeNull()
+        expect(object.hasNext).toBe(false)
+    })
+
+    test('filter, orderBy and slice each produce an independent query proxy', () => {
+        const object = querySet()
+
+        expect(object.filter({name: 'Koko'})._queryParams).toEqual({filter: {name: 'Koko'}})
+        expect(object.orderBy('name')._queryParams).toEqual({order_by: 'name'})
+        expect(object.slice(0, 5)._queryParams).toEqual({slice: {start: 0, stop: 5}})
+    })
+
+    test('query cache is keyed on canonical merged params', () => {
+        const object = querySet()
+
+        expect(object.filter({a: 1}).orderBy('n')).toBe(object.orderBy('n').filter({a: 1}))
+        expect(object.filter({a: 1}).filter({a: 1})).toBe(object.filter({a: 1}))
+    })
+
+    test('query cache is bounded', () => {
+        const object = querySet()
+        const first = object.filter({a: 2})
+
+        for (let number = 3; number < 70; number += 1) {
+            object.filter({a: number})
+        }
+
+        expect(object._queryCache.size).toBe(64)
+        expect(object.filter({a: 2})).not.toBe(first)
+    })
+})
+
+describe('QuerySet infinite scroll and seeding', () => {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null} = {}) {
+        return new Response(JSON.stringify({
+            result: {items: rows, seek_key, has_next, batch_size},
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('loadMore appends the next batch into the same proxy', async () => {
+        const object = querySet()
+        const requests = []
+        let call = 0
+        global.fetch = async (_url, options) => {
+            const kwargs = JSON.parse(options.body.get('kwargs'))
+            requests.push(kwargs)
+            call += 1
+            return batchResponse(
+                [modelRow(`gorillas.${call * 2 - 1}`, call * 2 - 1), modelRow(`gorillas.${call * 2}`, call * 2)],
+                {seek_key: `seek-${call}`, has_next: call < 3, batch_size: 2},
+            )
+        }
+
+        await object.all()
+        expect(object.items).toHaveLength(2)
+        expect(object.hasNext).toBe(true)
+
+        const same = await object.loadMore()
+        expect(same).toBe(object)
+        expect(object.items.map(item => item.name)).toEqual(['gorillas.1', 'gorillas.2', 'gorillas.3', 'gorillas.4'])
+        expect(object.hasNext).toBe(true)
+
+        await object.loadMore()
+        expect(object.items).toHaveLength(6)
+        expect(object.hasNext).toBe(false)
+
+        await object.loadMore()
+        expect(requests.map(request => request.seek_key ?? null)).toEqual([null, 'seek-1', 'seek-2'])
+    })
+
+    test('loadMore on an unloaded proxy loads the first batch', async () => {
+        const object = querySet()
+        global.fetch = async () => batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10})
+
+        await object.loadMore()
+
+        expect(object.items).toHaveLength(1)
+        expect(object.loading).toBe(false)
+    })
+
+    test('loadMore does not double fetch while a request is in flight', async () => {
+        const object = querySet()
+        let fetches = 0
+        global.fetch = async () => {
+            fetches += 1
+            await new Promise(resolve => setTimeout(resolve, 10))
+            return batchResponse([modelRow('gorillas.1', 1)], {seek_key: 'next', has_next: true, batch_size: 1})
+        }
+
+        await object.all()
+        const first = object.loadMore()
+        const second = object.loadMore()
+        await Promise.all([first, second])
+
+        expect(fetches).toBe(2)
+    })
+
+    test('a chained query proxy starts unloaded, independent of its source', async () => {
+        const object = querySet()
+        global.fetch = async () => batchResponse(
+            [modelRow('gorillas.1', 1), modelRow('gorillas.2', 2)],
+            {seek_key: 'seek-1', has_next: true, batch_size: 2},
+        )
+        await object.all()
+
+        const filtered = object.filter({name: 'Koko'})
+
+        expect(filtered._loaded).toBe(false)
+        expect(filtered).not.toBe(object)
+    })
+})
+
+describe('QuerySet count', () => {
+    test('count calls the count attribute with the current filter', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return new Response(JSON.stringify({
+                result: 7,
+                state: {},
+                policy: queryPolicy(),
+                metadata: queryMetadata(),
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const total = await object.filter({name__icontains: 'Ko'}).count()
+
+        expect(total).toBe(7)
+        expect(kwargs).toEqual({filter: {name__icontains: 'Ko'}})
+    })
+})
+
+describe('QuerySet with_total', () => {
+    function batchResponse(rows, {seek_key = null, has_next = false, batch_size = null, total} = {}) {
+        const result = {items: rows, seek_key, has_next, batch_size}
+        if (total !== undefined) {
+            result.total = total
+        }
+        return new Response(JSON.stringify({
+            result,
+            state: {},
+            policy: queryPolicy(),
+            metadata: queryMetadata(),
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    test('all() without withTotal never asks for a total', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10})
+        }
+
+        await object.all()
+
+        expect(kwargs.with_total).toBeUndefined()
+        expect(object.total).toBeNull()
+    })
+
+    test('all({withTotal: true}) requests and stores the total', async () => {
+        const object = querySet()
+        let kwargs
+        global.fetch = async (_url, options) => {
+            kwargs = JSON.parse(options.body.get('kwargs'))
+            return batchResponse([modelRow('gorillas.1', 1)], {batch_size: 10, total: 42})
+        }
+
+        await object.all({withTotal: true})
+
+        expect(kwargs.with_total).toBe(true)
+        expect(object.total).toBe(42)
+    })
+
+    test('loadMore() does not clobber a total fetched by an earlier all()', async () => {
+        const object = querySet()
+        let call = 0
+        global.fetch = async () => {
+            call += 1
+            return batchResponse(
+                [modelRow(`gorillas.${call}`, call)],
+                call === 1
+                    ? {seek_key: 'seek-1', has_next: true, batch_size: 1, total: 42}
+                    : {seek_key: null, has_next: false, batch_size: 1},
+            )
+        }
+
+        await object.all({withTotal: true})
+        expect(object.total).toBe(42)
+
+        await object.loadMore()
+
+        expect(object.total).toBe(42)
+    })
+})

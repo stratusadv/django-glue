@@ -164,3 +164,49 @@ describe('GlueClient', () => {
         expect(capturedKwargs).toEqual({left: 5, right: 7})
     })
 })
+
+describe('GlueClient proxy identity', () => {
+    function manifest(overrides = {}) {
+        return {
+            is_glue_manifest: true,
+            policy_token: createPolicyToken(),
+            state: createState(),
+            metadata: createMetadata(),
+            ...overrides,
+        }
+    }
+
+    test('named proxies are constructed per access', () => {
+        const client = new GlueClient({manifest_list: [manifest()]})
+
+        // Proxies are built on every property access so they are constructed
+        // after Alpine's initTree and get wrapped in Alpine's reactive proxy.
+        // The intended idiom is to resolve once into x-data and hold that
+        // reference. See docs/roadmap/proxy_instance_management.md.
+        expect(client.model.gorilla).not.toBe(client.model.gorilla)
+    })
+
+    test('re-registering a name is picked up by the next access', () => {
+        const client = new GlueClient({manifest_list: [manifest()]})
+        const before = client.model.gorilla.name
+
+        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
+
+        expect(before).not.toBe('Renamed')
+        expect(client.model.gorilla.name).toBe('Renamed')
+    })
+
+    test('a proxy resolved before re-registration keeps its old state (GLUE-93)', () => {
+        const client = new GlueClient({manifest_list: [manifest()]})
+        // What an x-data scope holds: resolved once, kept for the scope's life.
+        const held = client.model.gorilla
+
+        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
+
+        // Known gap: _registerManifest only replaces the manifest captured by
+        // the accessor's getter, so an already-handed-out proxy is never
+        // updated. Tracked as GLUE-93; flip this to 'Renamed' when it is fixed.
+        expect(held.name).toBe('Koko')
+        expect(client.model.gorilla.name).toBe('Renamed')
+    })
+})

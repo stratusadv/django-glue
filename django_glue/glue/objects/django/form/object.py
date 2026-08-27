@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from django import forms
+from django.db.models import QuerySet
 from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
@@ -66,7 +67,7 @@ class FormGlue(BaseGlue):
         by pk before `field.prepare_value()` sees it removes that nondeterminism regardless
         of what prepare_value does with the value (return model instances, pks, etc).
         """
-        if hasattr(value, '__iter__') and not isinstance(value, str) and not hasattr(value, '_meta'):
+        if isinstance(value, (QuerySet, list, tuple, set, frozenset)):
             try:
                 return sorted(value, key=lambda item: getattr(item, 'pk', item))
             except TypeError:

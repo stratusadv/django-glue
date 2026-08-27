@@ -1,7 +1,7 @@
 __pycache__/
 .idea/
 .venv*/
-.vscode/
+.vscode
 .claude/
 .codegraph/
 .opencode/
