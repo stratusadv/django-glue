@@ -86,6 +86,13 @@ staleness without making `Glue.x.y === Glue.x.y` true.
 
 ## Rejected alternatives
 
+- **Query cache held on `GlueClient`, keyed by proxy name** (so a chained
+  queryset stays stable while the base proxy is rebuilt per access): works
+  mechanically, but puts queryset-only state and a `_queryCacheFor()` helper on
+  the namespace-agnostic client. `client.js` resolves a manifest to a proxy
+  class and constructs it; it must not know what any one proxy type does. See
+  the layering rules in `AGENTS.md`.
+
 - **Split API** (`Glue.querySet.x` fresh vs `Glue.shared.querySet.x` singleton):
   adds a concept every user must learn, and two similar-but-unequal objects
   invite their own confusion.

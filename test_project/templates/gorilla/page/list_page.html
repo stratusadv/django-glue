@@ -27,14 +27,29 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
-            get gorillaQuerySet() {
-                return Glue.querySet.gorillas
+            // Resolve the proxy ONCE and hold it. Glue.querySet.<name> builds a
+            // new proxy on every property access, so reading it from a getter
+            // that Alpine re-evaluates would rebuild (and refetch) the whole
+            // chain on every render. Chaining happens in loadGorillas() below,
+            // driven by $watch -- never during a render.
+            gorillaQuerySet: Glue.querySet.gorillas,
+            gorillaArray: [],
+            async loadGorillas() {
+                this.gorillaQuerySet = Glue.querySet.gorillas
                     .filter({name__icontains: this.search})
                     .orderBy(this.orderBy)
                     .slice(this.sliceStart, this.sliceStop)
+
+                await this.gorillaQuerySet.all()
+                this.gorillaArray = this.gorillaQuerySet.items
             },
-            get gorillaArray() {
-                return Array.from(this.gorillaQuerySet)
+            init() {
+                this.loadGorillas()
+
+                this.$watch('search', () => this.loadGorillas())
+                this.$watch('orderBy', () => this.loadGorillas())
+                this.$watch('sliceStart', () => this.loadGorillas())
+                this.$watch('sliceStop', () => this.loadGorillas())
             },
             async openProfileModal(gorillaId) {
                 try {
@@ -64,7 +79,8 @@
             gorillaArenaUrl(id) {
                 return '{% url "gorilla:arena" pk=0 %}'.replace('0', id)
             },
-    }">
+    }"
+        @gorillas-changed="loadGorillas()">
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_form" glue_type='form' modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_model" glue_type='model' modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
 

@@ -191,6 +191,32 @@ BaseGlueProxy
     └── GlueFunctionProxy
 ```
 
+### Layering Rules (JavaScript client)
+
+These are hard invariants. Breaking one is a design smell, not a shortcut.
+
+**`GlueClient` (`client.js`) must stay namespace-agnostic.** It resolves a
+manifest to a proxy class via `NAMESPACE_TO_PROXY_CLASS` and constructs it. It
+must never hold state, options, or branching that belong to one specific proxy
+type. If you find yourself adding something like a query cache, a form's
+dirty-field set, or a formset's row list to the client, the design is wrong --
+that state belongs on the proxy class that owns the concept, or on a collaborator
+that proxy owns. The one existing namespace check (`namespace === 'function'`,
+for `ProxyClass.create()`) is a wart, not a precedent to extend.
+
+**Glue core must not reference any frontend framework.** No `Alpine`, no
+`globalThis.Alpine?.reactive?.()`, no Vue, no framework import anywhere under
+`client_js/src/`. Glue works with Alpine because it *mutates state in place*
+(see `_mergeState` in `base.js`) so a framework's proxy observes the write --
+not because it knows the framework exists. A previous attempt at
+`reactiveSelf()` in `utils.js` violated this and was removed; see
+`docs/roadmap/proxy_instance_management.md`.
+
+**Proxy-specific behavior lives on the proxy class.** `_applyResponse()`
+overrides, chaining, caching, and hydration all belong in the subclass
+(`queryset.js`, `formset.js`, `sequence.js`), not in `base.js` and not in
+`client.js`.
+
 ### Access Control
 
 ```python

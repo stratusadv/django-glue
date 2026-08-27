@@ -38,16 +38,19 @@
                      open: false,
                      selected: null,
                      totalLoading: false,
-                     get options() {
-                         const filter = this.search ? {name__icontains: this.search} : {}
-                         return Glue.querySet.specimens.filter(filter)
-                     },
+                     // Held once, re-chained only in refreshTotal(). Reading
+                     // Glue.querySet.specimens from a getter would build a new
+                     // proxy on every render, so loadMore() would append to an
+                     // object the next render throws away.
+                     options: Glue.querySet.specimens,
                      async refreshTotal() {
                          // withTotal folds one COUNT(*) into this same batch request instead of
                          // firing a second, separate count() call -- options.total then comes
                          // straight off the proxy, same as options.items/hasNext/loading.
                          this.totalLoading = true
                          try {
+                             const filter = this.search ? {name__icontains: this.search} : {}
+                             this.options = Glue.querySet.specimens.filter(filter)
                              await this.options.all({withTotal: true})
                          } finally {
                              this.totalLoading = false
@@ -110,27 +113,45 @@
                      species: '',
                      orderBy: 'catalogue_number',
                      batchSize: {{ batch_size }},
+                     // Held once. Re-chained in reload(), which $watch drives on
+                     // input -- never from a getter the renderer evaluates.
+                     specimens: Glue.querySet.specimens,
+                     visibleItems: [],
                      get filter() {
                          const filter = {}
                          if (this.search) filter.name__icontains = this.search
                          if (this.species) filter.species = this.species
                          return filter
                      },
-                     get specimens() {
-                         return Glue.querySet.specimens
+                     async reload() {
+                         this.specimens = Glue.querySet.specimens
                              .filter(this.filter)
                              .orderBy(this.orderBy)
+
+                         await this.specimens.all()
+                         this.syncVisible()
                      },
-                     get visibleItems() {
+                     async nextBatch() {
+                         await this.specimens.loadMore()
+                         this.syncVisible()
+                     },
+                     syncVisible() {
                          // loadMore() appends every batch onto the same proxy, so
                          // this only shows the most recent batch, not everything
                          // fetched so far -- there's no server-side 'go back',
                          // just 'seek forward', so an earlier batch's rows are
                          // simply dropped from view once you've moved past them.
-                         return this.specimens.items.slice(-this.batchSize)
+                         this.visibleItems = this.specimens.items.slice(-this.batchSize)
                      },
                      get fillerCount() {
                          return Math.max(0, this.batchSize - this.visibleItems.length)
+                     },
+                     init() {
+                         this.reload()
+
+                         this.$watch('search', () => this.reload())
+                         this.$watch('species', () => this.reload())
+                         this.$watch('orderBy', () => this.reload())
                      },
                  }">
                 <div class="card-header bg-gorilla-green text-white">
@@ -198,7 +219,7 @@
 
                     <div class="d-flex justify-content-between align-items-center">
                         <span class="small text-muted" x-text="`${visibleItems.length} rows shown`"></span>
-                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasNext" @click="specimens.loadMore()">
+                        <button class="btn btn-sm btn-outline-secondary" :disabled="!specimens.hasNext" @click="nextBatch()">
                             Next
                         </button>
                     </div>
