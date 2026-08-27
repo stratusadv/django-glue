@@ -59,6 +59,17 @@ This is the biggest single-file change (~166 lines net).
 - This is described in the changelog as a real bug fix: an Alpine getter referencing `Glue.querySet.tasks.filter(...)` was constructing a brand-new, unloaded proxy on every reactive re-evaluation, causing infinite refetch loops.
 - Registry properties (`Object.defineProperty(this, namespace, ...)`) gain `enumerable: true` (were previously non-enumerable, so `Object.keys(Glue.querySet)` silently returned nothing).
 
+> **Reverted (2026-08-27):** the singleton change does not ship. Per-access
+> construction was a deliberate choice for Alpine reactivity, and the
+> infinite-refetch bug this was introduced to fix is actually fixed by
+> `queryset.js`'s shared query cache, not by `_proxies` -- verified: reverting
+> `client.js` leaves every queryset and pagination test passing. `_proxies`,
+> `_resolveProxy`, `_updateProxy`, and `reactiveSelf()` are removed; the shared
+> query cache and the `enumerable: true` fix stay. The one defect this leaves --
+> a resolved proxy not picking up a later `loadManifests()` -- is tracked as
+> GLUE-93. Full rationale, spike results, and rejected alternatives:
+> [`docs/roadmap/proxy_instance_management.md`](docs/roadmap/proxy_instance_management.md).
+
 ---
 
 ## 4. Nested/related proxy loading-strategy bug (`client_js/src/proxies/base.js`)

@@ -105,10 +105,6 @@ function shouldJsonSerializePostData(value) {
     return tag === '[object Object]' || tag === '[object Array]'
 }
 
-function reactiveSelf(object) {
-    return globalThis.Alpine?.reactive?.(object) ?? object
-}
-
 export {
     cloneValue,
     isPlainObject,
@@ -116,7 +112,6 @@ export {
     serializeValue,
     shouldJsonSerializePostData,
     parseJsonScriptById,
-    reactiveSelf,
     resolveUrl,
     resolveElement,
     htmlToFragment,

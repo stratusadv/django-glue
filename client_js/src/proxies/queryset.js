@@ -1,7 +1,6 @@
 import BaseGlueProxy from "./base"
 import GlueModelProxy from "./model"
 import GluePolicy from "../policy"
-import {reactiveSelf} from "../utils"
 
 const QUERY_CACHE_LIMIT = 64
 
@@ -69,7 +68,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     async refresh() {
         for (const proxy of this._queryCache.values()) {
-            reactiveSelf(proxy)._loaded = false
+            proxy._loaded = false
         }
 
         return this.all()
