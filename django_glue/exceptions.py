@@ -187,6 +187,38 @@ class GlueQuerySetFilterValidationError(GlueError):
         }
 
 
+class GlueQuerySetCursorValidationError(GlueError):
+    """Raised when a seek_key is malformed or does not match the current query."""
+
+    code = 'queryset_cursor_validation_error'
+    status = 422
+
+    def __init__(self, seek_key: Any) -> None:
+        self.seek_key = seek_key
+        super().__init__(f'seek_key is invalid for this query, got {seek_key!r}.')
+
+    def details(self) -> dict:
+        return {'seek_key': self.seek_key}
+
+
+class GlueQuerySetSliceValidationError(GlueError):
+    """Raised when a slice window is wider than the rows already loaded under the current query."""
+
+    code = 'queryset_slice_validation_error'
+    status = 422
+
+    def __init__(self, width: int | None, loaded_row_count: int) -> None:
+        self.width = width
+        self.loaded_row_count = loaded_row_count
+        width_display = 'unbounded (no stop given)' if width is None else str(width)
+        super().__init__(
+            f'slice window ({width_display}) exceeds loaded_row_count ({loaded_row_count}).'
+        )
+
+    def details(self) -> dict:
+        return {'width': self.width, 'loaded_row_count': self.loaded_row_count}
+
+
 class GlueInvalidPolicyError(GlueError):
     """Raised when proxy policy signature doesn't match, indicating tampering."""
 

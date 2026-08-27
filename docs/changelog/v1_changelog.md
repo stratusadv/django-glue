@@ -1,5 +1,30 @@
 # Changelog for Django Glue
 
+## v1.0.1-rc8
+
+### Features
+
+- **QuerySet seek pagination**: `Glue.queryset()` now fetches its rows in server-side batches using seek (keyset) pagination instead of a numbered-page `Paginator`. Every query (`all()`, `filter()`, `orderBy()`, `slice()`, `loadMore()`, and the initial `EAGER` state) returns one batch, `DJANGO_GLUE_QUERYSET_BATCH_SIZE` rows long (default 100), so a queryset of 100,000 rows can never be pulled into the browser by a bare `for...of` or `x-for`. Pass `batch_size=` to `Glue.queryset()` to size the batch per queryset, or `batch_size=None` to disable batching for that queryset. The batch size is signed into the policy token, so the client cannot widen it. Unordered querysets are ordered by `pk` before seeking so batches are stable, and `pk` is always forced on as a final tiebreaker even for a non-unique explicit `order_by`. Seeking costs the same regardless of how far a client has scrolled: each batch is fetched with `field > last_seen_value` instead of `OFFSET n`, and `hasNext` is derived from fetching one extra row, so no `COUNT(*)` is required to serve a batch. On the client, `filter()`, `orderBy()`, and `slice()` each start an independent seek sequence; `loadMore()` appends the next batch to the same proxy for infinite scroll, and `items`, `hasNext`, and `batchSize` describe what's currently loaded.
+- **Explicit, opt-in totals**: computing a total match count still costs a real `COUNT(*)`, so it's never bundled into a batch fetch by default. `await queryset.count()` runs one on demand for the current filter, independent of any batch in flight. For the common case of wanting a total alongside the *first* batch of a new filter (e.g. a live search box), `all({withTotal: true})` (or `query_with_params(with_total=True)` server-side) folds one `COUNT(*)` into that single request; `queryset.total` holds the most recently fetched value and survives subsequent `loadMore()` calls, which never request a total themselves.
+- **`slice()` is bounded by what's already been loaded**: `slice({start, stop})` still narrows the queryset like `queryset[start:stop]`, but its width can no longer exceed `batch_size` on a fresh query, or however many rows a real sequence of batch fetches has already covered (tracked server-side, per filter/order_by, as part of the signed policy -- the client cannot inflate it). Re-reading territory already walked is free; asking for an arbitrarily large one-shot window is rejected with `GlueQuerySetSliceValidationError`.
+
+### Fixes
+
+- **`Glue.<namespace>.<name>` is one shared instance**: the client registry used to build a brand-new proxy on every property access, so `Glue.querySet.tasks.filter(...)` inside an Alpine getter created a fresh, unloaded proxy per render and refetched forever. Each registered name now resolves to a single proxy; a later `manifest_list` carrying the same name (for example from a `Glue.view` render) updates that instance in place instead of replacing it.
+- **Bundle cache busting**: `{% django_glue_init %}` versions the script URL as `?v=<version>.<content hash>` (`DJANGO_GLUE_ASSET_VERSION`), so a rebuilt bundle is never served from the browser cache under an unchanged package version.
+- **`Glue.<namespace>` is enumerable**: `Object.keys(Glue.querySet)` lists the registered names; the registry properties were defined non-enumerable.
+- **`QuerySetProxy.refresh()`**: marks every proxy in the chain unloaded and reloads this one, so a list re-fetches after a create or delete from another component.
+- **`**kwargs` on `@Glue.attr` methods**: the call resolver treated a `*args` / `**kwargs` parameter as a required argument named `args` / `kwargs` and rejected every call.
+- **Foreign key state round trip**: a model with a glued forward relation (`red_corner` as a nested object plus `red_corner_id`) lost the key when the client echoed state back, because the nested object's manifest was read as a `{value: ...}` pair. The attname state wins, and a nested manifest is read by its pk field.
+- **Nested lazy related sets**: a `related_set` (M2M / reverse FK) on an eager row was created as an eager proxy with no state, so `gorilla.skills.all()` resolved to nothing. Nested proxies now follow their own `lazy` metadata.
+- **Form identity with an empty file field**: `FormGlue` sorted every iterable initial value to keep the signed policy stable, which also tried to iterate an unsaved `FieldFile` and raised `The 'profile_photo' attribute has no file associated with it`. Only querysets, lists, tuples, and sets are sorted now.
+
+### Changes
+
+- **Policies renew on every attribute call**: a fresh, signed `policy_token` now comes back with every response, not only when `updates_client_state` is true. This lets an attribute (like `query_with_params()`) update signed identity facts -- e.g. how many rows a seek sequence has served so far -- without also forcing a `state`/`metadata` refresh, and keeps a still-active proxy's policy from expiring out from under continued use.
+- **Query result shape**: `query_with_params()` returns `{items, seek_key, has_next, batch_size}` (plus `total` when `with_total` was requested) instead of `{items, total, page, page_size, page_count}`. There is no more numbered `page`/`page_count`.
+- **Chained queries share one cache**: `filter()` / `orderBy()` / `slice()` proxies are cached by their merged parameters across the whole chain, so `qs.filter(a).orderBy(b)` and `qs.orderBy(b).filter(a)` are the same proxy. The cache is bounded to 64 entries. Each proxy seeks independently from the start of its own query -- there is no `page(n)`/`next()`/`previous()` to jump between them.
+
 ## v1.0.1-rc7
 
 ### Changes

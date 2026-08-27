@@ -31,6 +31,9 @@ class LoadedAttributeCall:
         return self.attr_owner_instance(**self.parameters)
 
 
+_VARIADIC_KINDS = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+
+
 class CallableAttribute(BaseGlueAttribute):
     """
     An attribute that can be invoked with arguments.
@@ -109,7 +112,7 @@ class CallableAttribute(BaseGlueAttribute):
         resolved_parameters: dict[str, Any] = {}
 
         for param_name, param in signature.parameters.items():
-            if param_name == 'self':
+            if param_name == 'self' or param.kind in _VARIADIC_KINDS:
                 continue
 
             resolved_param_value = self._resolve_call_parameter(
