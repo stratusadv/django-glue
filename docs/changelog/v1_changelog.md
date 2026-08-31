@@ -10,7 +10,7 @@
 
 ### Fixes
 
-- **`Glue.<namespace>.<name>` is one shared instance**: the client registry used to build a brand-new proxy on every property access, so `Glue.querySet.tasks.filter(...)` inside an Alpine getter created a fresh, unloaded proxy per render and refetched forever. Each registered name now resolves to a single proxy; a later `manifest_list` carrying the same name (for example from a `Glue.view` render) updates that instance in place instead of replacing it.
+- **Infinite refetch inside an Alpine getter**: `Glue.querySet.tasks.filter(...)` referenced inside a reactive getter used to create a fresh, unloaded proxy on every re-evaluation and refetch forever. This is fixed by `filter()`/`orderBy()`/`slice()` sharing one query cache across the whole chain (see "Chained queries share one cache" below) rather than by caching proxies globally by name — `Glue.<namespace>.<name>` still constructs a new proxy per access, which is what makes the held-proxy idiom (resolve once into `x-data`, re-chain only in a `$watch`) work correctly with Alpine's reactivity.
 - **Bundle cache busting**: `{% django_glue_init %}` versions the script URL as `?v=<version>.<content hash>` (`DJANGO_GLUE_ASSET_VERSION`), so a rebuilt bundle is never served from the browser cache under an unchanged package version.
 - **`Glue.<namespace>` is enumerable**: `Object.keys(Glue.querySet)` lists the registered names; the registry properties were defined non-enumerable.
 - **`QuerySetProxy.refresh()`**: marks every proxy in the chain unloaded and reloads this one, so a list re-fetches after a create or delete from another component.
