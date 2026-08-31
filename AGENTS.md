@@ -370,14 +370,14 @@ await Glue.model.task.save()              // Persists to Django
 await Glue.model.task.delete()            // Deletes instance
 
 // QuerySet proxy - work with collections
-const allTasks = await Glue.querySet.tasks.all()
-const filtered = await Glue.querySet.tasks.queryWithParams({
-    filter: { done: false, title__icontains: 'urgent' }
-})
+const allTasks = (await Glue.querySet.tasks.all()).items
+const filtered = await Glue.querySet.tasks
+    .filter({ done: false, title__icontains: 'urgent' })
+    .all()
 
 // Each item is a full GlueModelProxy
-filtered[0].done = true
-await filtered[0].save()
+filtered.items[0].done = true
+await filtered.items[0].save()
 
 // Form proxy - validation and submission
 Glue.form.contact_form.name = 'John'

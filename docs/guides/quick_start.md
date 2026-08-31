@@ -119,13 +119,14 @@ Create a template that uses Alpine.js to interact with the proxies:
 
         async loadTasks() {
             this.loading = true
-            this.tasks = await Glue.querySet.tasks.all()
+            this.tasks = (await Glue.querySet.tasks.all()).items
             this.loading = false
         },
 
         async addTask() {
-            await Glue.querySet.tasks.prependNew()
-            this.tasks = Glue.querySet.tasks._items
+            const task = await Glue.querySet.tasks.new({title: 'New Task'})
+            await task.save()
+            await this.loadTasks()
         },
 
         async saveTask(task) {
@@ -137,8 +138,7 @@ Create a template that uses Alpine.js to interact with the proxies:
 
         async deleteTask(task) {
             await task.delete()
-            // Parent queryset auto-refreshes after child delete
-            this.tasks = Glue.querySet.tasks._items
+            await this.loadTasks()
         }
     }">
         <div style="margin-bottom: 1rem;">
@@ -198,8 +198,8 @@ Let's trace what happens when you toggle a task's done checkbox:
 - **`Glue.queryset()`** — Register a QuerySet proxy for working with collections
 - **`Glue.model()`** — Register a Model proxy for a single instance
 - **`GlueAccess.DELETE`** — Grants full CRUD permissions (VIEW + CHANGE + DELETE)
-- **`Glue.querySet.tasks.all()`** — Fetch all items from a QuerySet proxy
-- **`Glue.querySet.tasks.prependNew()`** — Create a new unsaved item at the start of the list
+- **`Glue.querySet.tasks.all()`** — Fetch the first batch from a QuerySet proxy; resolves to `{items, ...}`
+- **`Glue.querySet.tasks.new(initial)`** — Build an unsaved item with default values, ready to `save()`
 - **`task.save()`** — Persist changes on a model proxy
 - **`task.delete()`** — Delete a model instance
 

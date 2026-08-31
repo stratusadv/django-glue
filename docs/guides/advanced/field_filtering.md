@@ -95,7 +95,7 @@ Glue.queryset(
 )
 ```
 
-Only the specified fields will be returned when you call `all()` or `queryWithParams()`.
+Only the specified fields will be returned when you call `all()`, `filter()`, `orderBy()`, or `slice()`.
 
 ## Related Fields
 
