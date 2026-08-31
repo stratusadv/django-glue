@@ -1,3 +1,3 @@
 {% if not hide_label %}
-<label class="form-label fw-bold" x-text="{{ glue_field }}.label"></label>
+<label class="form-label fw-bold" x-text="{{ glue_field_meta|default:glue_field }}.label"></label>
 {% endif %}

@@ -27,14 +27,29 @@
             sliceStart: 0,
             sliceStop: 100,
             orderBy: 'name',
+            // Resolve the proxy ONCE and hold it. Glue.querySet.<name> builds a
+            // new proxy on every property access, so reading it from a getter
+            // that Alpine re-evaluates would rebuild (and refetch) the whole
+            // chain on every render. Chaining happens in loadGorillas() below,
+            // driven by $watch -- never during a render.
             gorillaQuerySet: Glue.querySet.gorillas,
-            get gorillaArray() {
-                return Array.from(
-                    this.gorillaQuerySet
+            gorillaArray: [],
+            async loadGorillas() {
+                this.gorillaQuerySet = Glue.querySet.gorillas
                     .filter({name__icontains: this.search})
                     .orderBy(this.orderBy)
                     .slice(this.sliceStart, this.sliceStop)
-                )
+
+                await this.gorillaQuerySet.all()
+                this.gorillaArray = this.gorillaQuerySet.items
+            },
+            init() {
+                this.loadGorillas()
+
+                this.$watch('search', () => this.loadGorillas())
+                this.$watch('orderBy', () => this.loadGorillas())
+                this.$watch('sliceStart', () => this.loadGorillas())
+                this.$watch('sliceStop', () => this.loadGorillas())
             },
             async openProfileModal(gorillaId) {
                 try {
@@ -64,7 +79,8 @@
             gorillaArenaUrl(id) {
                 return '{% url "gorilla:arena" pk=0 %}'.replace('0', id)
             },
-    }">
+    }"
+        @gorillas-changed="loadGorillas()">
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_form" glue_type='form' modal_id="addGorillaFormModal" title="Add Fighter (Form Proxy)" %}
         {% include "gorilla/component/gorilla_form_modal.html" with glue_name="new_gorilla_model" glue_type='model' modal_id="addGorillaModelModal" title="Add Fighter (Model Proxy)" %}
 
@@ -159,9 +175,6 @@
                 </div>
                 
                 <div class="d-flex gap-2 justify-content-center flex-wrap">
-                    <button class="btn btn-gorilla" type="button" @click="await gorillas.prependNew()">
-                        + Add Inline
-                    </button>
                     <button class="btn btn-gorilla-secondary" type="button" data-bs-toggle="modal" data-bs-target="#addGorillaFormModal">
                         + Add via Form
                     </button>
@@ -195,7 +208,6 @@
 
             <template x-for="gorilla in gorillaArray" :key="gorilla.$key">
                 <div class="col-md-6" x-data="{
-                    skillDropdownOpen: false,
                     init() {
                         gorilla.addListener('save', event => {
                             if (event.proxy.hasErrors()) {
@@ -223,27 +235,6 @@
                                 return `${label}: ${text}`;
                             });
                         return messages.length ? messages.join(' ') : 'Check form for errors.';
-                    },
-                    selectedSkillIds() {
-                        return gorilla.skills.map(skill => Number(skill.pk));
-                    },
-                    isSkillSelected(choice) {
-                        return this.selectedSkillIds().includes(Number(choice.pk));
-                    },
-                    toggleSkill(choice) {
-                        const skillId = Number(choice.pk);
-                        if (this.isSkillSelected(choice)) {
-                            gorilla.skills = gorilla.skills.filter(skill => Number(skill.pk) !== skillId);
-                        } else {
-                            gorilla.skills = [...gorilla.skills, choice];
-                        }
-                    },
-                    skillsSummary() {
-                        const selectedIds = this.selectedSkillIds();
-                        const names = gorilla.$fields.skills.choices
-                            .filter(choice => selectedIds.includes(Number(choice.pk)))
-                            .map(choice => choice.__str__);
-                        return names.length ? names.join(', ') : 'No skills selected';
                     },
                 }">
                     <div class="card card-gorilla h-100">
@@ -279,39 +270,12 @@
 
                             <div class="mt-3">
                                 <label class="form-label fw-bold">Skills</label>
-                                <div class="dropdown w-100">
-                                    <button
-                                        type="button"
-                                        class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center"
-                                        @click="skillDropdownOpen = !skillDropdownOpen"
-                                        :title="skillsSummary()">
-                                        <span class="text-truncate" x-text="skillsSummary()"></span>
-                                        <span class="ms-2">▼</span>
-                                    </button>
-                                    <div
-                                        x-show="skillDropdownOpen"
-                                        x-transition
-                                        @click.away="skillDropdownOpen = false"
-                                        class="dropdown-menu show w-100 p-2"
-                                        style="max-height: 220px; overflow-y: auto; z-index: 1050;">
-                                        <template x-for="choice in gorilla.$fields.skills.choices || []" :key="choice.pk">
-                                            <label class="dropdown-item d-flex align-items-center gap-2 mb-0">
-                                                <input
-                                                    type="checkbox"
-                                                    class="form-check-input m-0"
-                                                    :checked="isSkillSelected(choice)"
-                                                    @change="toggleSkill(choice)">
-                                                <span x-text="choice.__str__"></span>
-                                            </label>
-                                        </template>
-                                        <div
-                                            class="dropdown-item text-muted small"
-                                            x-show="(gorilla.$fields.skills.choices || []).length === 0">
-                                            No skills available
-                                        </div>
-                                    </div>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <template x-for="skill in gorilla.skills.items" :key="skill.$key">
+                                        <span class="badge bg-gorilla-green" x-text="skill.name"></span>
+                                    </template>
+                                    <small class="text-muted" x-show="!gorilla.skills.loading && gorilla.skills.items.length === 0">No skills yet</small>
                                 </div>
-                                <small class="text-muted">Save the fighter to persist skill changes.</small>
                             </div>
                         </div>
                         <div class="card-footer bg-gorilla-cream">
@@ -423,7 +387,7 @@
                 </div>
             </template>
 
-            <div x-show="gorillaQuerySet.count === 0" class="col-12">
+            <div x-show="!gorillaQuerySet.loading && gorillaQuerySet.items.length === 0" class="col-12">
                 <div class="alert alert-warning text-center">
                     <h5>No fighters found!</h5>
                     <p class="mb-0">Try a different search or add some gorillas to the roster.</p>

@@ -50,12 +50,34 @@ def task_list_view(request):
 | `computed_attributes` | `Mapping[str, ComputedAttribute]` | No | Readonly computed values for each item |
 | `related_field_config` | `Mapping[str, dict]` | No | Field configuration for related objects (see [Model Glue: Related Field Config](model_object_glue.md#related-field-configuration)) |
 | `loading_strategy` | `LoadingStrategy` | No | `LAZY` (default), `EAGER`, or `INHERIT`. See [Loading Strategy](../api/glue/shortcuts.md#loading-strategy) |
+| `batch_size` | `int \| None` | No | Rows per batch. Defaults to the `DJANGO_GLUE_QUERYSET_BATCH_SIZE` setting (100). `None` disables batching for this queryset |
 
 *Either `fields` or `exclude` must be provided.
 
 !!! tip
 
     You can pass either a form class or a form instance for `form` and `forms`. When you pass a class, an instance is created automatically. See the [Model Glue Guide](model_object_glue.md#custom-forms) for details.
+
+### Batching
+
+Every queryset is fetched from the server in batches, using seek (keyset) pagination rather than a numbered-page `Paginator`. A query returns one batch of rows, so a table with 100,000 rows never reaches the browser in one response, whatever the frontend asks for -- and unlike `OFFSET`-based paging, a batch costs the same whether it's the first one or the thousandth.
+
+```python
+Glue.queryset(
+    request=request,
+    unique_name='tasks',
+    target=Task.objects.all(),
+    access=GlueAccess.VIEW,
+    fields=['id', 'title'],
+    batch_size=25,
+)
+```
+
+The default batch size comes from the `DJANGO_GLUE_QUERYSET_BATCH_SIZE` setting (100). Pass `batch_size=None` to send the whole queryset in one response, for small lookup tables where batching is noise.
+
+The batch size is signed into the policy token with the queryset, so the frontend can choose to seek forward but not how large a batch is. Unordered querysets are ordered by `pk` before seeking, and `pk` is always added as a final tiebreaker even behind an explicit `order_by`, so batches never overlap or skip rows between requests -- even when the `order_by` field isn't unique.
+
+Getting a total row count is a separate, explicit operation -- see [Counting Rows](#counting-rows) below -- because it always costs a real `COUNT(*)`, and batching is specifically designed to avoid paying that on every request.
 
 ### Using select_related and prefetch_related
 
@@ -75,8 +97,8 @@ On the frontend, related objects are nested:
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
-console.log(tasks[0].assigned_to.name)  // Nested FK object
-console.log(tasks[0].tags)              // M2M as array of PKs
+console.log(tasks.items[0].assigned_to.name)  // Nested FK object
+console.log(tasks.items[0].tags)              // M2M as array of PKs
 ```
 
 ### Adding Computed Attributes
@@ -107,7 +129,7 @@ The callable receives the model instance and its return value is exposed as a re
 
 ```javascript
 const groups = await Glue.querySet.groups.all()
-console.log(groups[0].permission_data)
+console.log(groups.items[0].permission_data)
 ```
 
 Computed attributes also support keyword arguments by passing a `(callable, kwargs)` tuple:
@@ -131,172 +153,159 @@ Glue.queryset(
 
 ## Frontend: Using the QuerySet
 
-### Fetching All Items
+### Loading Items
+
+`all()` loads the first batch and resolves to the queryset itself. `items` is the loaded batch as an array.
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
+
+for (const task of tasks.items) {
+    console.log(task.title)
+}
 ```
+
+Iterating a queryset that has not been loaded yet starts the load, so an Alpine `x-for` over `Glue.querySet.tasks.items` renders empty first and fills in when the batch arrives. `loading` is `true` while a request is in flight.
 
 Each item is a full model glue object with its own methods:
 
 ```javascript
 const tasks = await Glue.querySet.tasks.all()
 
-// Access fields
-console.log(tasks[0].title)
+tasks.items[0].title = 'Updated Title'
+await tasks.items[0].save()
 
-// Modify and save individual items
-tasks[0].title = 'Updated Title'
-await tasks[0].save()
-
-// Delete individual items
-await tasks[0].delete()
+await tasks.items[1].delete()
 ```
 
-### Filtering
+### Filtering, Ordering, and Slicing
 
-Use `queryWithParams()` to filter the queryset server-side:
+`filter()`, `orderBy()`, and `slice()` return a new queryset proxy with the merged parameters. Nothing is fetched until that proxy is loaded or iterated.
 
 ```javascript
-// Single condition
-const activeTasks = await Glue.querySet.tasks.queryWithParams({
-    filter: { done: false }
-})
+const active = Glue.querySet.tasks.filter({done: false})
+const urgent = Glue.querySet.tasks.filter({done: false, priority: 2})
+const matching = Glue.querySet.tasks.filter({title__icontains: 'search term'})
 
-// Multiple conditions
-const urgentTasks = await Glue.querySet.tasks.queryWithParams({
-    filter: { done: false, priority: 2 }
-})
+const newest = Glue.querySet.tasks.orderBy(['-created_at', 'title'])
 
-// Django ORM lookups
-const searchResults = await Glue.querySet.tasks.queryWithParams({
-    filter: { title__icontains: 'search term' }
-})
+const window = Glue.querySet.tasks.slice(0, 500)
 ```
 
-### Ordering
+Filters use Django ORM lookups and are validated on the server against the fields you exposed. `slice()` narrows the queryset itself, like `queryset[start:stop]`; the result is then batched like any other query. A slice's width can't exceed `batch_size` on a fresh query -- or however many rows a real sequence of batch fetches under the same filter has already covered -- so `slice()` can re-read territory that's already been loaded for free, but can't be used to pull an arbitrarily large window in one request.
+
+The methods chain, and the same parameters always give back the same proxy object, whichever order they were chained in:
 
 ```javascript
-const sortedTasks = await Glue.querySet.tasks.queryWithParams({
-    order_by: ['title']
-})
-
-// Descending order
-const sortedTasks = await Glue.querySet.tasks.queryWithParams({
-    order_by: ['-created_at', 'title']
-})
+const results = await Glue.querySet.tasks
+    .filter({done: false, title__icontains: 'urgent'})
+    .orderBy('-created_at')
+    .all()
 ```
 
-### Pagination with Slice
+### Counting Rows
+
+Getting a total match count is a separate, explicit call -- `count()` always costs a real `COUNT(*)`, so it's never bundled into loading a batch unless you ask for it.
 
 ```javascript
-const page1 = await Glue.querySet.tasks.queryWithParams({
-    slice: { start: 0, stop: 10 }
-})
-
-const page2 = await Glue.querySet.tasks.queryWithParams({
-    slice: { start: 10, stop: 20 }
-})
+const total = await Glue.querySet.tasks.filter({done: false}).count()
 ```
 
-### Combining Query Parameters
+For the common case of wanting a total alongside the *first* batch of a new filter (e.g. showing "N results" next to a live search box), pass `withTotal: true` to `all()` instead of calling `count()` separately -- this folds one `COUNT(*)` into that single request rather than firing two:
 
 ```javascript
-const results = await Glue.querySet.tasks.queryWithParams({
-    filter: { done: false, title__icontains: 'urgent' },
-    order_by: ['-created_at'],
-    slice: { start: 0, stop: 10 }
-})
+const tasks = Glue.querySet.tasks.filter({title__icontains: search})
+await tasks.all({withTotal: true})
+
+tasks.total        // the count, fetched once
+tasks.items.length // rows in the first batch
 ```
 
-### Chainable Query Building
+`total` holds the most recently fetched value and is left untouched by subsequent `loadMore()` calls, which never request a total themselves -- so a total fetched once at the start of a scroll stays valid as more batches are appended.
 
-Build queries step by step using chainable methods. Set up the query parameters first, then call `all()` to execute:
+### Infinite Scroll
+
+A query loads one batch at a time. `loadMore()` fetches the next batch and appends it to the same proxy. `items` grows, and `hasNext` says whether another batch exists. Calls while a request is in flight or when there is no next batch do nothing.
 
 ```javascript
-Glue.querySet.tasks
-    .filter({ done: false })
-    .orderBy(['-created_at'])
-    .slice(0, 10)
+const tasks = await Glue.querySet.tasks.filter({done: false}).all()
 
-const results = await Glue.querySet.tasks.all()
+await tasks.loadMore()
+tasks.items.length // two batches worth of rows
+
+tasks.hasNext  // whether calling loadMore() again would fetch anything
+tasks.batchSize // 100, or null when the queryset is not batched
 ```
 
-The chainable methods modify the internal query parameters. When you call `all()`, those parameters are sent to the server.
+There is no numbered page to jump to and no `previous()` -- seeking is forward-only. A `filter()`/`orderBy()`/`slice()` call always starts its own fresh sequence from the beginning, independent of any other proxy's progress.
 
-## Creating and Managing Items
+### Select Fields
+
+A select over a large table sends one query per keystroke and appends batches as the list is scrolled. The sentinel at the bottom of the list calls `loadMore()` whenever it comes into view (Alpine's Intersect plugin):
+
+```html
+<div x-data="{
+    search: '',
+    open: false,
+    selected: null,
+    get options() {
+        return Glue.querySet.tasks.filter({title__icontains: this.search})
+    },
+}" @click.outside="open = false">
+    <input x-model.debounce.300ms="search" @focus="open = true" placeholder="Search tasks">
+
+    <div x-show="open" style="max-height: 16rem; overflow-y: auto">
+        <template x-for="task in options.items" :key="task.$key">
+            <button type="button" @click="selected = task; search = task.title; open = false" x-text="task.title"></button>
+        </template>
+
+        <div x-intersect:enter="options.loadMore()">
+            <span x-show="options.loading">Loading...</span>
+            <span x-show="!options.loading && options.hasNext"
+                  x-text="`${options.items.length} loaded, scroll for more`"></span>
+            <span x-show="!options.loading && !options.hasNext">All results shown</span>
+        </div>
+    </div>
+</div>
+```
+
+Changing the search text gives a different proxy, so each search term keeps its own loaded batches.
+
+### Fetching One Item
+
+```javascript
+const task = await Glue.querySet.tasks.get(42)
+```
+
+`get(pk)` loads a single row through the queryset, so it only finds rows the queryset contains.
 
 ### Creating a New Item
 
-Add a new unsaved item to the queryset:
-
 ```javascript
-// Add to the beginning
-await Glue.querySet.tasks.prependNew()
-
-// Add to the end
-await Glue.querySet.tasks.appendNew()
+const task = await Glue.querySet.tasks.new({title: 'New Task'})
+await task.save()
 ```
 
-The new item is a full model glue object with default values from the server:
+`new()` returns an unsaved model glue object with the server's defaults applied. It is not part of the loaded batch until the batch is reloaded.
 
-```javascript
-await Glue.querySet.tasks.prependNew()
-const newItem = Glue.querySet.tasks._items[0]
-newItem.title = 'New Task'
-await newItem.save()
-```
-
-### Deleting an Individual Item
-
-```javascript
-const tasks = await Glue.querySet.tasks.all()
-await tasks[0].delete()
-```
-
-When a child item is deleted, the parent queryset is automatically refreshed. No manual `refresh()` call is needed.
-
-## Convenience Methods and Properties
+## Methods and Properties
 
 | Method/Property | Description |
 |-----------------|-------------|
-| `all()` | Fetch all items using current query params |
-| `queryWithParams(params)` | Fetch items with filter/order/slice params |
-| `refresh()` | Clear cache and re-fetch with current params |
-| `filter(params)` | Chainable: set filter params |
-| `orderBy(params)` | Chainable: set order params |
-| `slice(start, stop)` | Chainable: set slice params |
-| `prependNew()` | Create new item at the start; returns updated `_items` |
-| `appendNew()` | Create new item at the end; returns updated `_items` |
-| `isEmpty` | Returns `true` if loaded and no items |
-| `isLoaded` | Returns `true` if items have been fetched |
-
-```javascript
-await Glue.querySet.tasks.all()
-
-if (Glue.querySet.tasks.isEmpty) {
-    console.log('No tasks found')
-}
-
-if (Glue.querySet.tasks.isLoaded) {
-    console.log('Tasks have been loaded')
-}
-```
-
-## Iteration
-
-QuerySet glue objects implement `Symbol.iterator`, so you can use `for...of`:
-
-```javascript
-const tasks = await Glue.querySet.tasks.all()
-for (const task of tasks) {
-    console.log(task.title)
-}
-```
-
-!!! note
-
-    `for...of` iteration doesn't work reliably in Alpine.js templates. Use the returned array directly in `x-for` loops.
+| `all({withTotal})` | Load the first batch; resolves to the queryset. Pass `{withTotal: true}` to also fetch `total` in the same request |
+| `get(pk)` | Load one row by primary key |
+| `new(initial)` | Build an unsaved item with default values |
+| `count()` | Fetch the number of rows matching the current filter, independent of any loaded batch |
+| `filter(params)` | Chain: add filter lookups, start a fresh seek sequence |
+| `orderBy(fields)` | Chain: set ordering, start a fresh seek sequence |
+| `slice(start, stop)` | Chain: narrow the queryset, bounded by what's already been loaded |
+| `loadMore()` | Append the next batch to this proxy; resolves to the queryset |
+| `refresh()` | Mark the whole chain stale and reload this proxy |
+| `items` | Loaded rows as an array; iterating an unloaded queryset starts the load |
+| `total` | Most recently fetched total via `count()` or `all({withTotal: true})`, or `null` if never fetched |
+| `batchSize` | Rows per batch, or `null` when the queryset is not batched |
+| `hasNext` | Whether calling `loadMore()` would fetch another batch |
+| `loading` | `true` while a request is in flight |
 
 ## Event Listeners
 
@@ -349,38 +358,37 @@ def task_list_view(request):
 </head>
 <body>
     <div x-data="{
-        tasks: [],
-        loading: false,
-
-        async init() {
-            this.loading = true
-            this.tasks = await Glue.querySet.tasks.all()
-            this.loading = false
+        search: '',
+        get tasks() {
+            return Glue.querySet.tasks
+                .filter({title__icontains: this.search})
+                .orderBy('-created_at')
         },
 
         async addTask() {
-            await Glue.querySet.tasks.prependNew()
-            this.tasks = Glue.querySet.tasks._items
+            const task = await Glue.querySet.tasks.new({title: 'New Task'})
+            await task.save()
+            await Glue.querySet.tasks.refresh()
         },
-
-        async deleteTask(task) {
-            await task.delete()
-            // Parent queryset auto-refreshes after child delete
-            this.tasks = Glue.querySet.tasks._items
-        }
-    }">
+    }" x-init="await tasks.all({withTotal: true})">
+        <input x-model.debounce="search" @input="await tasks.all({withTotal: true})" placeholder="Search">
         <button @click="addTask()">Add Task</button>
 
-        <template x-for="task in tasks" :key="task.$key">
+        <template x-for="task in tasks.items" :key="task.$key">
             <div>
                 <input x-model="task.title" placeholder="Task title">
                 <label>
                     <input type="checkbox" x-model="task.done"> Done
                 </label>
                 <button @click="task.save()">Save</button>
-                <button @click="deleteTask(task)">Delete</button>
+                <button @click="task.delete()">Delete</button>
             </div>
         </template>
+
+        <div>
+            <span x-text="`${tasks.items.length} of ${tasks.total} tasks`"></span>
+            <button :disabled="!tasks.hasNext" @click="tasks.loadMore()">Load more</button>
+        </div>
     </div>
 
     {% django_glue_init %}
@@ -392,6 +400,6 @@ def task_list_view(request):
 
 | Access Level | Available Actions |
 |-------------|-------------------|
-| `VIEW` | `query_with_params()`, `get()`, `new()`, `foreign_key_choices()` |
+| `VIEW` | `query_with_params()`, `count()`, `get()`, `new()`, `foreign_key_choices()` |
 | `CHANGE` | All VIEW actions + child item `save()` |
 | `DELETE` | All CHANGE actions + child item `delete()` |

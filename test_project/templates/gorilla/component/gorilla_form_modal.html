@@ -12,7 +12,10 @@
             await this.gorilla.save();
             if (!this.gorilla.hasErrors()) {
                 $store.notifications.success('Fighter created successfully!');
-                Glue.querySet.gorillas.refresh();
+                // The list page holds its own queryset proxy, so refreshing a
+                // freshly-resolved Glue.querySet.gorillas here would not reach
+                // it. Tell the list to reload instead.
+                $dispatch('gorillas-changed');
                 bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();
             }
         } finally {

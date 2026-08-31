@@ -2,13 +2,23 @@ import BaseGlueProxy from "./base"
 import GlueModelProxy from "./model"
 import GluePolicy from "../policy"
 
+const QUERY_CACHE_LIMIT = 64
+
 class GlueQuerySetProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
         this._modelProxies = new Map()
         this._queryParams = options.queryParams || {}
-        this._queryCache = {}
+        this._queryCache = options.queryCache || new Map([[JSON.stringify(this._queryParams), this]])
+        this._seekKey = null
+        this._hasNext = false
+        this._batchSize = null
+        this._total = null
         this.loading = false
+
+        if (options.seed) {
+            this._seedFrom(options.seed)
+        }
 
         if (this._canHydrateFromState()) {
             this._syncFromResult(this._state)
@@ -17,6 +27,18 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     get items() {
         return Array.from(this)
+    }
+
+    get batchSize() {
+        return this._batchSize
+    }
+
+    get hasNext() {
+        return this._hasNext
+    }
+
+    get total() {
+        return this._total
     }
 
     [Symbol.iterator]() {
@@ -32,14 +54,48 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this._modelProxies.values()
     }
 
-    async all() {
+    async all({withTotal = false} = {}) {
         if (this._loaded) {
             return this
         }
 
-        const result = await this.query_with_params(this._queryParams)
+        const params = withTotal ? {...this._queryParams, with_total: true} : this._queryParams
+        const result = await this.query_with_params(params)
         this._syncFromResult(result)
         this._loaded = true
+        return this
+    }
+
+    async refresh() {
+        for (const proxy of this._queryCache.values()) {
+            proxy._loaded = false
+        }
+
+        return this.all()
+    }
+
+    async loadMore() {
+        if (this.loading) {
+            return this
+        }
+
+        if (!this._loaded) {
+            return this.all()
+        }
+
+        if (!this.hasNext) {
+            return this
+        }
+
+        this.loading = true
+
+        try {
+            const result = await this.query_with_params({...this._queryParams, seek_key: this._seekKey})
+            this._syncFromResult(result, {append: true})
+        } finally {
+            this.loading = false
+        }
+
         return this
     }
 
@@ -58,10 +114,34 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return proxy
     }
 
-    _syncFromResult(result = {}) {
+    async count() {
+        return this._callAttribute('count', {filter: this._queryParams.filter})
+    }
+
+    _applyResponse(data = {}) {
+        super._applyResponse(data)
+
+        if (data.state !== undefined && this._canHydrateFromState()) {
+            this._syncFromResult(this._state)
+        }
+    }
+
+    _seedFrom(source) {
+        this._modelProxies = new Map(source._modelProxies)
+        this._batchSize = source._batchSize
+    }
+
+    _syncFromResult(result = {}, {append = false} = {}) {
         const items = result.items || []
         const oldProxies = this._modelProxies
-        this._modelProxies = new Map()
+        this._modelProxies = append ? new Map(oldProxies) : new Map()
+        this._seekKey = result.seek_key ?? null
+        this._hasNext = result.has_next ?? false
+        this._batchSize = result.batch_size ?? null
+
+        if ('total' in result) {
+            this._total = result.total
+        }
 
         items.forEach((row, index) => {
             const policy = this._policyForRow(row)
@@ -111,11 +191,27 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     query(params = {}) {
-        const key = JSON.stringify(params)
-        if (!this._queryCache[key]) {
-            this._queryCache[key] = this._cloneWithQueryParams(params)
+        const queryParams = this._mergeQueryParams(params)
+        const key = JSON.stringify(queryParams)
+
+        if (!this._queryCache.has(key)) {
+            this._queryCache.set(key, this._cloneWithQueryParams(queryParams))
+            this._evictQueryCache()
         }
-        return this._queryCache[key]
+
+        return this._queryCache.get(key)
+    }
+
+    _evictQueryCache() {
+        for (const key of this._queryCache.keys()) {
+            if (this._queryCache.size <= QUERY_CACHE_LIMIT) {
+                return
+            }
+
+            if (key !== '{}' && this._queryCache.get(key) !== this) {
+                this._queryCache.delete(key)
+            }
+        }
     }
 
     filter(filter = {}) {
@@ -130,11 +226,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this.query({slice: {start, stop}})
     }
 
-    get count() {
-        return this._modelProxies.size
-    }
-
-    _cloneWithQueryParams(params = {}) {
+    _cloneWithQueryParams(queryParams = {}) {
         return new this.constructor({
             http: this._http,
             policy: this._policy,
@@ -142,7 +234,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
             metadata: this._metadata,
             client: this._client,
             owner: this._owner,
-            queryParams: this._mergeQueryParams(params),
+            queryParams,
+            queryCache: this._queryCache,
+            seed: this,
             loadingStrategy: 'lazy',
         })
     }
@@ -156,37 +250,31 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     }
 
     _hasQueryParams() {
-        return Boolean(
-            Object.keys(this._queryParams.filter || {}).length
-            || Object.keys(this._queryParams.slice || {}).length
-            || this._queryParams.order_by
-        )
+        return Object.keys(this._queryParams).length > 0
     }
 
     _mergeQueryParams(params = {}) {
-        const mergedParams = {
-            ...this._queryParams,
-            ...params,
-        }
         const filter = {
             ...(this._queryParams.filter || {}),
             ...(params.filter || {}),
         }
+        const orderBy = params.order_by ?? this._queryParams.order_by
         const slice = {
             ...(this._queryParams.slice || {}),
             ...(params.slice || {}),
         }
+        const mergedParams = {}
 
         if (Object.keys(filter).length) {
             mergedParams.filter = filter
-        } else {
-            delete mergedParams.filter
+        }
+
+        if (orderBy) {
+            mergedParams.order_by = orderBy
         }
 
         if (Object.keys(slice).length) {
             mergedParams.slice = slice
-        } else {
-            delete mergedParams.slice
         }
 
         return mergedParams

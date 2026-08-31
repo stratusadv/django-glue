@@ -1,7 +1,7 @@
 {% load static %}
 {% csrf_token %}
 
-<script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_VERSION }}"></script>
+<script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_ASSET_VERSION }}"></script>
 
 {{ DJANGO_GLUE_CONTEXT|json_script:DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}
 

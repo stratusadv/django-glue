@@ -95,6 +95,7 @@ class GlueClient {
             this._directNamespaces.add(namespace)
             Object.defineProperty(this, namespace, {
                 get: () => this._createProxy(manifest),
+                enumerable: true,
                 configurable: true,
             })
             return
@@ -110,9 +111,11 @@ class GlueClient {
 
         Object.defineProperty(this[namespace], name, {
             get: () => this._createProxy(manifest),
+            enumerable: true,
             configurable: true,
         })
     }
+
 }
 
 export default GlueClient

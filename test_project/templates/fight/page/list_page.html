@@ -57,12 +57,12 @@
         },
         cornerChoice(corner, choices) {
             const cornerId = this.cornerId(corner);
-            return (choices || []).find(choice => Number(choice.pk) === cornerId);
+            return (choices || []).find(choice => Number(choice.value) === cornerId);
         },
         cornerRank(corner, choices) {
             const choice = this.cornerChoice(corner, choices);
-            if (choice?.rank_points !== undefined) {
-                return choice.rank_points;
+            if (choice?.obj?.rank_points !== undefined) {
+                return choice.obj.rank_points;
             }
             if (corner && typeof corner === 'object') {
                 return corner.value?.rank_points ?? corner.rank_points ?? null;
@@ -123,8 +123,8 @@
                                     <span class="corner-label text-danger">Red Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.form.red_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.form.$fields.red_corner.choices" :key="choice.pk">
-                                            <option :value="choice.pk" x-text="choice.__str__" :selected="Number(fight.form.red_corner) === Number(choice.pk)"></option>
+                                        <template x-for="choice in fight.form.$fields.red_corner.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label" :selected="Number(fight.form.red_corner) === Number(choice.value)"></option>
                                         </template>
                                     </select>
                                     <template x-if="fight.red_corner">
@@ -142,8 +142,8 @@
                                     <span class="corner-label text-primary">Blue Corner</span>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model.number="fight.form.blue_corner">
                                         <option value="0">------------</option>
-                                        <template x-for="choice in fight.form.$fields.blue_corner.choices" :key="choice.pk">
-                                            <option :value="choice.pk" x-text="choice.__str__ + ' (' + choice.pk + ') '" :selected="Number(fight.form.blue_corner) === Number(choice.pk)"></option>
+                                        <template x-for="choice in fight.form.$fields.blue_corner.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label + ' (' + choice.value + ') '" :selected="Number(fight.form.blue_corner) === Number(choice.value)"></option>
                                         </template>
                                     </select>
                                     <template x-if="fight.blue_corner">
@@ -172,8 +172,8 @@
                                     <label class="form-label small text-muted mb-1">Location</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.form.location">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.form.$fields.location.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.form.location === value"></option>
+                                        <template x-for="choice in fight.form.$fields.location.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label" :selected="fight.form.location === choice.value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -181,8 +181,8 @@
                                     <label class="form-label small text-muted mb-1">Weather</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.form.weather_conditions">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.form.$fields.weather_conditions.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.form.weather_conditions === value"></option>
+                                        <template x-for="choice in fight.form.$fields.weather_conditions.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label" :selected="fight.form.weather_conditions === choice.value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -190,8 +190,8 @@
                                     <label class="form-label small text-muted mb-1">Terrain</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.form.terrain_type">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.form.$fields.terrain_type.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.form.terrain_type === value"></option>
+                                        <template x-for="choice in fight.form.$fields.terrain_type.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label" :selected="fight.form.terrain_type === choice.value"></option>
                                         </template>
                                     </select>
                                 </div>
@@ -203,8 +203,8 @@
                                     <label class="form-label small text-muted mb-1">Status</label>
                                     <select class="form-select form-select-sm form-select-gorilla" x-model="fight.form.status">
                                         <option value="0">------------</option>
-                                        <template x-for="[value, label] in fight.form.$fields.status.choices" :key="value">
-                                            <option :value="value" x-text="label" :selected="fight.form.status === value "></option>
+                                        <template x-for="choice in fight.form.$fields.status.choices" :key="choice.value">
+                                            <option :value="choice.value" x-text="choice.label" :selected="fight.form.status === choice.value"></option>
                                         </template>
                                     </select>
                                 </div>
