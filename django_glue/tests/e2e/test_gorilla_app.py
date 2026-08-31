@@ -223,6 +223,76 @@ def test_fight_page_hydrates_fields_demo(
     }
 
 
+def test_saving_a_foreign_key_through_the_nested_shape_persists_it_demo(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    """
+    Regression coverage for ModelGlue._load_client_state()'s FK round trip
+    (_related_pk_from_state()): a forward FK arrives in client state in two
+    shapes at once -- the flat `red_corner_id` and the full nested Gorilla
+    manifest under `red_corner` (no top-level 'value' key). The old code only
+    ever read the nested shape and blindly did `.get('value')` on it, which
+    silently produced None -- nulling the FK on save with no error. This
+    reassigns red_corner purely through the nested shape (leaving the flat
+    red_corner_id stale, exactly the "attname missing/stale" case) and calls
+    fight.save() directly, the same trigger `test_model_edit_save_demo` uses
+    below, just on a model that actually has a forward FK.
+    """
+    demo = DemoSession.start(page, application, shot_directory_name='fight-fk-round-trip-save')
+    demo.goto('fight:list')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.title_card(
+        'Saving A Foreign Key',
+        kicker='django-glue',
+        subtitle='fight.save() must persist a reassigned FK from its nested shape, not null it.',
+    )
+
+    demo.narrate('Reassigning red_corner through its nested manifest, then calling save()', step='1')
+    result = page.evaluate(
+        """async () => {
+            // Only 'fights' is registered on this page -- pull Gamma Grove's
+            // id off the other seeded fight's red_corner rather than a
+            // separate gorillas queryset.
+            const allFights = await window.Glue.querySet.fights.all();
+            const fight = allFights.items.find(item => item.name === 'Alpha vs Beta');
+            const gammaId = allFights.items.find(item => item.name === 'Gamma Exhibition').red_corner.id;
+
+            // Sanity check: the nested proxy is really the full-object
+            // shape this fix is about, not a flat value.
+            const beforeShape = {
+                hasNestedValue: 'value' in (fight._state.red_corner || {}),
+                nestedName: fight.red_corner?.name,
+            };
+
+            // Point the nested manifest's own pk at Gamma Grove, and drop
+            // the flat red_corner_id state entirely -- attname-with-value
+            // wins by design when both shapes are present (that's a
+            // different, already-passing case), so isolating the nested-
+            // only shape is what actually exercises the fallback the old
+            // code got wrong.
+            delete fight._state.red_corner_id;
+            fight._state.red_corner.id.value = gammaId;
+
+            await fight.save();
+
+            return {beforeShape, gammaId};
+        }"""
+    )
+
+    assert result['beforeShape']['hasNestedValue'] is False
+    assert result['beforeShape']['nestedName'] == 'Alpha Atlas'
+
+    demo.narrate('The reassignment persisted -- not silently nulled', step='2')
+    from test_project.fight.models import Fight
+
+    fight = Fight.objects.get(name='Alpha vs Beta')
+    assert fight.red_corner_id == result['gammaId']
+    assert fight.red_corner.name == 'Gamma Grove'
+
+
 def test_model_edit_save_demo(
     page: Page,
     application: Application,

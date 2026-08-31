@@ -1198,6 +1198,92 @@ describe('Foreign key proxy handling', () => {
         // parent_id should be null
         expect(proxy.parent_id).toBe(null)
     })
+
+    test('field-level lazy metadata overrides an eager parent strategy', async () => {
+        registerProxyClass('model', GlueModelProxy)
+
+        // Child model is eager overall, but this one FK field explicitly
+        // declares lazy: true -- the field's own metadata must win, not the
+        // parent's strategy (a real bug: the nested proxy used to always
+        // inherit the parent's strategy, so an eager-per-field attribute on
+        // a lazy parent -- or vice versa, as here -- got built with the
+        // wrong strategy and no state).
+        const childPolicy = createPolicy({
+            name: 'child',
+            namespace: 'model',
+            attributes: [
+                'id',
+                'title',
+                'parent_id',
+                createPolicy({
+                    name: 'child.parent',
+                    namespace: 'model',
+                    attributes: ['id', 'name', 'load'],
+                    identity: {target_pk: 1, pk_field_name: 'id'},
+                }),
+            ],
+            identity: {target_pk: 2, pk_field_name: 'id'},
+        })
+
+        const childMetadata = createMetadata({
+            attributes: {
+                id: {namespace: 'field', type: 'IntegerField'},
+                title: {namespace: 'field', type: 'CharField'},
+                parent_id: {namespace: 'field', type: 'IntegerField'},
+                parent: {
+                    namespace: 'related_field',
+                    lazy: true,  // overrides the parent's own 'eager' strategy below
+                    fk_attname: 'parent_id',
+                    pk_field: 'id',
+                    glue_namespace: 'model',
+                    metadata: {
+                        attributes: {
+                            id: {namespace: 'field', type: 'IntegerField'},
+                            name: {namespace: 'field', type: 'CharField'},
+                            load: {namespace: 'callable'},
+                        },
+                    },
+                },
+            },
+        })
+
+        const childState = {
+            id: {value: 2, errors: []},
+            title: {value: 'Child Task', errors: []},
+            parent_id: {value: 1, errors: []},
+            parent: {},  // Lazy shape: no eager nested state provided
+        }
+
+        let loadCalled = false
+        global.fetch = async () => {
+            loadCalled = true
+            return new Response(JSON.stringify({
+                state: {
+                    id: {value: 1, errors: []},
+                    name: {value: 'Loaded Parent', errors: []},
+                },
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const proxy = new GlueModelProxy({
+            http: http(),
+            policy: childPolicy,
+            state: childState,
+            metadata: childMetadata,
+            loadingStrategy: 'eager',  // the parent itself is eager
+        })
+        proxy._loaded = true
+
+        // The field's own lazy: true must win over the parent's 'eager'.
+        expect(proxy.parent._loadingStrategy).toBe('lazy')
+        expect(proxy.parent._loaded).toBe(false)
+
+        // Accessing a field on it should trigger a load, same as a genuinely
+        // lazy proxy would -- if the parent's strategy had won instead, this
+        // would wrongly be treated as already-loaded with no state.
+        const _name = proxy.parent.name
+        expect(loadCalled).toBe(true)
+    })
 })
 
 describe('QuerySet seek pagination', () => {
