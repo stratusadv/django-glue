@@ -20,9 +20,10 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // self-heals from a shared, cache-key-scoped cache on every read
     // (including incidental reads from template re-renders), which
     // silently overwrites anything assigned outside that cache. Use this
-    // when a caller (e.g. a glue-callable-backed dependent-choices reload)
-    // is the authoritative source for this field's choices right now,
-    // instead of the field's own default foreign_key_choices() lookup.
+    // when a caller (e.g. a glue-callable-backed dependent-choices reload,
+    // or an active search -- see searchChoices()) is the authoritative
+    // source for this field's choices right now, instead of the field's
+    // own default foreign_key_choices() lookup.
     overrideChoices(choices) {
         this._choices = Array.isArray(choices) ? choices : []
         this._choicesOverridden = true
@@ -51,6 +52,25 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         const pk = this.pk
         if (pk == null) return undefined
         return (this.choices || []).find(choice => String(choice.value) === String(pk))
+    }
+
+    // True once the field's registered batch_size (choices_batch_size
+    // metadata, see FormFieldAttribute.add_choice_metadata) caused the last
+    // fetch to stop short of the full related queryset -- whether that
+    // fetch came from the default cache-backed load or an active search.
+    get hasMoreChoices() {
+        if (this._searchActive) {
+            return Boolean(this._searchHasNext)
+        }
+        return Boolean(this._getOrCreateCache(this._getChoicesCacheKey()).hasNext)
+    }
+
+    get isLoadingMoreChoices() {
+        return Boolean(this._loadMorePromise)
+    }
+
+    get isSearchingChoices() {
+        return Boolean(this._searchPromise)
     }
 
     buildChoices(...choiceFields) {
@@ -84,10 +104,13 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
         cache.promise = this.owner.foreign_key_choices({
             field_name: this.name,
-            choice_fields: missingFields.filter(f => !['value', 'label', 'pk', '__str__'].includes(f)),
+            choice_fields: this._serverChoiceFields(missingFields),
+            batch_size: this.choices_batch_size ?? null,
         }).then(result => {
-            const newChoices = Array.isArray(result) ? result : []
-            this._mergeChoices(newChoices)
+            const {results = [], has_next: hasNext = false, seek_key: seekKey = null} = result || {}
+            this._mergeChoices(results)
+            cache.hasNext = hasNext
+            cache.seekKey = seekKey
             requiredFields.forEach(f => cache.loadedFields.add(f))
             return this._choices || []
         }).finally(() => {
@@ -95,6 +118,113 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         })
 
         return cache.promise
+    }
+
+    // Fetches the next batch after whatever was loaded last -- continuing
+    // the active search if one is in progress, otherwise extending the
+    // shared default-choices cache. A field with no choices_batch_size
+    // metadata never has more to load (hasMoreChoices is always false), so
+    // this is a no-op for every field that hasn't opted into batching.
+    async loadMoreChoices(choiceFields = []) {
+        if (this._loadMorePromise) {
+            return this._loadMorePromise
+        }
+
+        if (this._searchActive) {
+            if (!this._searchHasNext) {
+                return this._choices || []
+            }
+
+            this._loadMorePromise = this.owner.foreign_key_choices({
+                field_name: this.name,
+                choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
+                search: this._searchQuery,
+                search_field: this._searchField,
+                seek_key: this._searchSeekKey,
+                batch_size: this.choices_batch_size ?? null,
+            }).then(result => {
+                const {results = [], has_next: hasNext = false, seek_key: seekKey = null} = result || {}
+                this._searchHasNext = hasNext
+                this._searchSeekKey = seekKey
+                return this.overrideChoices([...(this._choices || []), ...results])
+            }).finally(() => {
+                this._loadMorePromise = null
+            })
+
+            return this._loadMorePromise
+        }
+
+        const cacheKey = this._getChoicesCacheKey()
+        const cache = this._getOrCreateCache(cacheKey)
+        if (!cache.hasNext || cache.promise) {
+            return this._choices || []
+        }
+
+        this._loadMorePromise = cache.promise = this.owner.foreign_key_choices({
+            field_name: this.name,
+            choice_fields: this._serverChoiceFields([...cache.loadedFields]),
+            seek_key: cache.seekKey,
+            batch_size: this.choices_batch_size ?? null,
+        }).then(result => {
+            const {results = [], has_next: hasNext = false, seek_key: seekKey = null} = result || {}
+            cache.hasNext = hasNext
+            cache.seekKey = seekKey
+            this._mergeChoices(results)
+            return this._choices || []
+        }).finally(() => {
+            cache.promise = null
+            this._loadMorePromise = null
+        })
+
+        return this._loadMorePromise
+    }
+
+    // Runs a server-side search (icontains on searchField, see the
+    // scroll_queryset_filter_field convention in scroll.html for the same
+    // pattern applied to Glue.queryset() scroll lists) and takes over this
+    // field's choices via overrideChoices() until clearSearch() runs. Only
+    // meaningful for a field that opted into batching -- searchField must
+    // be passed explicitly by the widget, since there's no generic way to
+    // filter on a model's __str__ at the database layer.
+    async searchChoices(query, searchField, choiceFields = []) {
+        if (!query) {
+            return this.clearSearch()
+        }
+
+        this._searchActive = true
+        this._searchQuery = query
+        this._searchField = searchField
+        this._searchSeekKey = null
+
+        this._searchPromise = this.owner.foreign_key_choices({
+            field_name: this.name,
+            choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
+            search: query,
+            search_field: searchField,
+            batch_size: this.choices_batch_size ?? null,
+        }).then(result => {
+            const {results = [], has_next: hasNext = false, seek_key: seekKey = null} = result || {}
+            this._searchHasNext = hasNext
+            this._searchSeekKey = seekKey
+            return this.overrideChoices(results)
+        }).finally(() => {
+            this._searchPromise = null
+        })
+
+        return this._searchPromise
+    }
+
+    // Reverts to the default (cache-backed) choices list, as they stood
+    // before searchChoices() took over -- e.g. when the user clears the
+    // search box or closes the dropdown.
+    clearSearch() {
+        this._searchActive = false
+        this._searchQuery = ''
+        this._searchField = ''
+        this._searchSeekKey = null
+        this._searchHasNext = false
+        this.clearChoicesOverride()
+        return this.choices
     }
 
     _getChoicesCacheKey() {
@@ -110,6 +240,10 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return [...new Set(['pk', '__str__', ...choiceFields.filter(Boolean)])]
     }
 
+    _serverChoiceFields(fields = []) {
+        return fields.filter(f => !['value', 'label', 'pk', '__str__'].includes(f))
+    }
+
     _getOrCreateCache(cacheKey) {
         let cache = RelationFieldGlue.loadingCache.get(cacheKey)
         if (!cache) {
@@ -118,6 +252,8 @@ class RelationFieldGlue extends ChoiceFieldGlue {
                 promise: null,
                 choices: [],
                 fields: new Set(),
+                hasNext: false,
+                seekKey: null,
             }
             RelationFieldGlue.loadingCache.set(cacheKey, cache)
         }

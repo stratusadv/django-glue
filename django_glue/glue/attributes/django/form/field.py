@@ -37,6 +37,19 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
                 f'{self.form.__class__.__module__}.{self.form.__class__.__name__}.'
                 f'{self.name}.{self.field.queryset.model._meta.label_lower}'
             )
+            # Batched/searchable loading is opt-in per field: a ModelForm
+            # declares it by setting a `foreign_key_choice_config` dict of
+            # {field_name: {'search_field': ..., 'batch_size': ...}} class
+            # attribute. Fields that don't opt in get no choices_batch_size,
+            # so RelationFieldGlue.ensureChoices() sends batch_size=None and
+            # foreign_key_choices() keeps returning every row in one
+            # response, unchanged from before this existed.
+            choice_config = getattr(self.form, 'foreign_key_choice_config', None) or {}
+            field_config = choice_config.get(self.name, {})
+            if 'search_field' in field_config:
+                metadata['choices_search_field'] = field_config['search_field']
+            if 'batch_size' in field_config:
+                metadata['choices_batch_size'] = field_config['batch_size']
             return
         super().add_choice_metadata(metadata)
 

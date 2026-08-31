@@ -3,36 +3,46 @@
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __moduleCache = /* @__PURE__ */ new WeakMap;
+  function __accessProp(key) {
+    return this[key];
+  }
   var __toCommonJS = (from) => {
-    var entry = __moduleCache.get(from), desc;
+    var entry = (__moduleCache ??= new WeakMap).get(from), desc;
     if (entry)
       return entry;
     entry = __defProp({}, "__esModule", { value: true });
-    if (from && typeof from === "object" || typeof from === "function")
-      __getOwnPropNames(from).map((key) => !__hasOwnProp.call(entry, key) && __defProp(entry, key, {
-        get: () => from[key],
-        enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
-      }));
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (var key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(entry, key))
+          __defProp(entry, key, {
+            get: __accessProp.bind(from, key),
+            enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+          });
+    }
     __moduleCache.set(from, entry);
     return entry;
   };
+  var __moduleCache;
+  var __returnValue = (v) => v;
+  function __exportSetter(name, newValue) {
+    this[name] = __returnValue.bind(null, newValue);
+  }
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, {
         get: all[name],
         enumerable: true,
         configurable: true,
-        set: (newValue) => all[name] = () => newValue
+        set: __exportSetter.bind(all, name)
       });
   };
 
   // client_js/django_glue.js
   var exports_django_glue = {};
   __export(exports_django_glue, {
-    resolveUrl: () => resolveUrl,
+    GlueClient: () => client_default,
     parseJsonScriptById: () => parseJsonScriptById,
-    GlueClient: () => client_default
+    resolveUrl: () => resolveUrl
   });
 
   // client_js/src/config.js
@@ -1044,6 +1054,18 @@
         return;
       return (this.choices || []).find((choice) => String(choice.value) === String(pk));
     }
+    get hasMoreChoices() {
+      if (this._searchActive) {
+        return Boolean(this._searchHasNext);
+      }
+      return Boolean(this._getOrCreateCache(this._getChoicesCacheKey()).hasNext);
+    }
+    get isLoadingMoreChoices() {
+      return Boolean(this._loadMorePromise);
+    }
+    get isSearchingChoices() {
+      return Boolean(this._searchPromise);
+    }
     buildChoices(...choiceFields) {
       this.ensureChoices(choiceFields);
       return this.choices;
@@ -1068,16 +1090,99 @@
       }
       cache.promise = this.owner.foreign_key_choices({
         field_name: this.name,
-        choice_fields: missingFields.filter((f) => !["value", "label", "pk", "__str__"].includes(f))
+        choice_fields: this._serverChoiceFields(missingFields),
+        batch_size: this.choices_batch_size ?? null
       }).then((result) => {
-        const newChoices = Array.isArray(result) ? result : [];
-        this._mergeChoices(newChoices);
+        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
+        this._mergeChoices(results);
+        cache.hasNext = hasNext;
+        cache.seekKey = seekKey;
         requiredFields.forEach((f) => cache.loadedFields.add(f));
         return this._choices || [];
       }).finally(() => {
         cache.promise = null;
       });
       return cache.promise;
+    }
+    async loadMoreChoices(choiceFields = []) {
+      if (this._loadMorePromise) {
+        return this._loadMorePromise;
+      }
+      if (this._searchActive) {
+        if (!this._searchHasNext) {
+          return this._choices || [];
+        }
+        this._loadMorePromise = this.owner.foreign_key_choices({
+          field_name: this.name,
+          choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
+          search: this._searchQuery,
+          search_field: this._searchField,
+          seek_key: this._searchSeekKey,
+          batch_size: this.choices_batch_size ?? null
+        }).then((result) => {
+          const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
+          this._searchHasNext = hasNext;
+          this._searchSeekKey = seekKey;
+          return this.overrideChoices([...this._choices || [], ...results]);
+        }).finally(() => {
+          this._loadMorePromise = null;
+        });
+        return this._loadMorePromise;
+      }
+      const cacheKey = this._getChoicesCacheKey();
+      const cache = this._getOrCreateCache(cacheKey);
+      if (!cache.hasNext || cache.promise) {
+        return this._choices || [];
+      }
+      this._loadMorePromise = cache.promise = this.owner.foreign_key_choices({
+        field_name: this.name,
+        choice_fields: this._serverChoiceFields([...cache.loadedFields]),
+        seek_key: cache.seekKey,
+        batch_size: this.choices_batch_size ?? null
+      }).then((result) => {
+        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
+        cache.hasNext = hasNext;
+        cache.seekKey = seekKey;
+        this._mergeChoices(results);
+        return this._choices || [];
+      }).finally(() => {
+        cache.promise = null;
+        this._loadMorePromise = null;
+      });
+      return this._loadMorePromise;
+    }
+    async searchChoices(query, searchField, choiceFields = []) {
+      if (!query) {
+        return this.clearSearch();
+      }
+      this._searchActive = true;
+      this._searchQuery = query;
+      this._searchField = searchField;
+      this._searchSeekKey = null;
+      this._searchPromise = this.owner.foreign_key_choices({
+        field_name: this.name,
+        choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
+        search: query,
+        search_field: searchField,
+        batch_size: this.choices_batch_size ?? null
+      }).then((result) => {
+        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
+        this._searchHasNext = hasNext;
+        this._searchSeekKey = seekKey;
+        return this.overrideChoices(results);
+      }).finally(() => {
+        this._searchPromise = null;
+      });
+      return this._searchPromise;
+    }
+    clearSearch() {
+      this._searchActive = false;
+      this._searchQuery = "";
+      this._searchField = "";
+      this._searchSeekKey = null;
+      this._searchHasNext = false;
+      this.clearChoicesOverride();
+      return this.choices;
     }
     _getChoicesCacheKey() {
       return this.choices_cache_key || [
@@ -1090,6 +1195,9 @@
     _choiceObjectFields(choiceFields = []) {
       return [...new Set(["pk", "__str__", ...choiceFields.filter(Boolean)])];
     }
+    _serverChoiceFields(fields = []) {
+      return fields.filter((f) => !["value", "label", "pk", "__str__"].includes(f));
+    }
     _getOrCreateCache(cacheKey) {
       let cache = RelationFieldGlue.loadingCache.get(cacheKey);
       if (!cache) {
@@ -1097,7 +1205,9 @@
           loadedFields: new Set,
           promise: null,
           choices: [],
-          fields: new Set
+          fields: new Set,
+          hasNext: false,
+          seekKey: null
         };
         RelationFieldGlue.loadingCache.set(cacheKey, cache);
       }

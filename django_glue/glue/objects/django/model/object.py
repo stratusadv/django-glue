@@ -23,6 +23,7 @@ from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
+from django_glue.glue.objects.django.cursor import GlueCollectionCursor
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
@@ -468,14 +469,24 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         self,
         field_name: str | None = None,
         choice_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
+        search: str = '',
+        search_field: str = '',
+        seek_key: str | None = None,
+        batch_size: int | None = None,
+    ) -> dict[str, Any]:
+        empty_result = {'results': [], 'has_next': False, 'seek_key': None}
         if not field_name or field_name not in self._included_fields:
-            return []
+            return empty_result
 
         field = self.instance._meta.get_field(field_name)
         related_model = getattr(field, 'related_model', None)
         if related_model is None:
-            return []
+            return empty_result
+
+        queryset = related_model.objects.all()
+        if search and search_field:
+            queryset = queryset.filter(**{f'{search_field}__icontains': search})
+        queryset = queryset.order_by('pk')
 
         def serialize_choice(obj: Model) -> dict[str, Any]:
             choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
@@ -487,7 +498,25 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 'obj': choice_obj,
             }
 
-        return [serialize_choice(obj) for obj in related_model.objects.all()]
+        # batch_size is opt-in (None by default), same as FormGlue's
+        # foreign_key_choices -- see the comment there. Nothing currently
+        # sends a per-field choices_batch_size for a plain (non-form) model
+        # field, so this always returns every row today; the parameters
+        # exist so the response shape matches FormGlue's, since both are
+        # read by the same RelationFieldGlue client code.
+        if batch_size is None:
+            return {
+                'results': [serialize_choice(obj) for obj in queryset],
+                'has_next': False,
+                'seek_key': None,
+            }
+
+        batch = GlueCollectionCursor(queryset, batch_size).seek(seek_key)
+        return {
+            'results': [serialize_choice(obj) for obj in batch.items],
+            'has_next': batch.has_next,
+            'seek_key': batch.next_seek_key,
+        }
 
     # delete() only needs self.instance's pk (already resolved from the signed
     # policy identity) -- it never reads client-submitted field values. The

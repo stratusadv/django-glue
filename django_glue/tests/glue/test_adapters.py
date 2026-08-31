@@ -945,7 +945,9 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
         result = glue_object.foreign_key_choices(field_name='skills', choice_fields=['name'])
 
-        self.assertEqual(result, [{
+        self.assertFalse(result['has_next'])
+        self.assertIsNone(result['seek_key'])
+        self.assertEqual(result['results'], [{
             'value': skill.pk,
             'label': 'Grappling',
             'obj': {'pk': skill.pk, '__str__': 'Grappling', 'name': 'Grappling'},
@@ -1304,7 +1306,9 @@ class DjangoFormGlueObjectTestCase(TestCase):
         response = glue_object.process_attribute_call(context)
         payload = json.loads(response.content)
 
-        self.assertEqual(payload['result'], [{
+        self.assertFalse(payload['result']['has_next'])
+        self.assertIsNone(payload['result']['seek_key'])
+        self.assertEqual(payload['result']['results'], [{
             'value': skill.pk,
             'label': 'Grappling',
             'obj': {'pk': skill.pk, '__str__': 'Grappling'},
@@ -1312,6 +1316,100 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertNotIn('state', payload)
         self.assertNotIn('policy', payload)
         self.assertNotIn('metadata', payload)
+
+    def test_foreign_key_choices_without_batch_size_returns_every_row(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        for index in range(5):
+            Skill.objects.create(name=f'Skill {index}')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(len(result['results']), 5)
+        self.assertFalse(result['has_next'])
+        self.assertIsNone(result['seek_key'])
+
+    def test_foreign_key_choices_batch_size_paginates_via_seek_key(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        skills = [Skill.objects.create(name=f'Skill {index}') for index in range(5)]
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        first_page = glue_object.foreign_key_choices(field_name='skill', batch_size=2)
+
+        self.assertEqual([c['value'] for c in first_page['results']], [s.pk for s in skills[:2]])
+        self.assertTrue(first_page['has_next'])
+        self.assertIsNotNone(first_page['seek_key'])
+
+        second_page = glue_object.foreign_key_choices(
+            field_name='skill', batch_size=2, seek_key=first_page['seek_key'],
+        )
+
+        self.assertEqual([c['value'] for c in second_page['results']], [s.pk for s in skills[2:4]])
+        self.assertTrue(second_page['has_next'])
+
+        third_page = glue_object.foreign_key_choices(
+            field_name='skill', batch_size=2, seek_key=second_page['seek_key'],
+        )
+
+        self.assertEqual([c['value'] for c in third_page['results']], [skills[4].pk])
+        self.assertFalse(third_page['has_next'])
+        self.assertIsNone(third_page['seek_key'])
+
+    def test_foreign_key_choices_search_field_filters_with_icontains(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        Skill.objects.create(name='Grappling')
+        striking = Skill.objects.create(name='Striking')
+        Skill.objects.create(name='Wrestling')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(
+            field_name='skill', search='strik', search_field='name',
+        )
+
+        self.assertEqual(result['results'], [{
+            'value': striking.pk,
+            'label': 'Striking',
+            'obj': {'pk': striking.pk, '__str__': 'Striking'},
+        }])
+
+    def test_foreign_key_choices_search_without_search_field_is_ignored(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        Skill.objects.create(name='Grappling')
+        Skill.objects.create(name='Striking')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        # A search term with no search_field can't be applied (there's no
+        # generic way to filter on a model's __str__ at the database layer),
+        # so it's a no-op rather than an error -- the field returns
+        # unfiltered, matching how a widget that never opted into search
+        # behaves if it's ever accidentally passed one.
+        result = glue_object.foreign_key_choices(field_name='skill', search='strik')
+
+        self.assertEqual(len(result['results']), 2)
 
     def test_form_field_adapter_builds_metadata(self):
         form = ContactForm()
@@ -1321,6 +1419,32 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(attribute.required_access, GlueAccess.CHANGE)
         self.assertEqual(attribute.metadata['type'], 'CharField')
         self.assertEqual(attribute.metadata['max_length'], 100)
+
+    def test_relation_field_metadata_carries_opted_in_batch_config(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            foreign_key_choice_config = {'skill': {'search_field': 'name', 'batch_size': 25}}
+
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertEqual(metadata['choices_search_field'], 'name')
+        self.assertEqual(metadata['choices_batch_size'], 25)
+
+    def test_relation_field_metadata_has_no_batch_config_by_default(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertNotIn('choices_search_field', metadata)
+        self.assertNotIn('choices_batch_size', metadata)
 
     def test_form_adapter_builds_policy_state_and_metadata(self):
         form = ContactForm(initial={'name': 'Ada'})

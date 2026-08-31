@@ -252,6 +252,47 @@ const choices = await brandField.choices()
 
 Choices are cached to avoid duplicate requests.
 
+By default a relation field's choices load in a single request, with no
+limit -- fine for a small related table, but every row goes over the wire
+for a large one. A field can opt into batched, searchable loading instead by
+declaring `foreign_key_choice_config` on the `ModelForm`:
+
+```python
+class ContactForm(forms.ModelForm):
+    foreign_key_choice_config = {
+        'company': {'search_field': 'name', 'batch_size': 50},
+    }
+
+    class Meta:
+        model = Contact
+        fields = ['name', 'company']
+```
+
+With that config, the field's proxy exposes:
+
+```javascript
+const companyField = Glue.form.contact_form.$fields.company
+
+// First 50 rows, ordered by pk.
+await companyField.choices
+companyField.hasMoreChoices  // true if the related table has more than 50 rows
+
+// Fetch the next 50, appended to the existing choices.
+await companyField.loadMoreChoices()
+
+// Server-side search (`name__icontains`), replacing choices with matches
+// until clearSearch() runs. searchField must be passed explicitly -- there's
+// no way to filter on a model's __str__ at the database layer.
+await companyField.searchChoices('acme', 'name')
+companyField.hasMoreChoices  // true if the search itself has more matches
+await companyField.loadMoreChoices()  // continues the active search
+
+companyField.clearSearch()  // reverts to the default (unsearched) choices
+```
+
+A field with no `foreign_key_choice_config` entry keeps returning every row
+in one response, unchanged from before this existed.
+
 ## Full Example: Contact Form
 
 ### Backend

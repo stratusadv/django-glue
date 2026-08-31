@@ -150,7 +150,7 @@ def test_many_to_many_choices_load_demo(
                 return {
                     name: String(gorilla.name),
                     selected: skills.items.map(skill => String(skill.name)),
-                    choiceCount: choices.length,
+                    choiceCount: choices.results.length,
                 };
             }));
         }"""

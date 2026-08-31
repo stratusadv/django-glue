@@ -13,6 +13,7 @@ from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.form import FormFieldAttribute
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.objects.django.cursor import GlueCollectionCursor
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
@@ -194,14 +195,24 @@ class FormGlue(BaseGlue):
         self,
         field_name: str | None = None,
         choice_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
+        search: str = '',
+        search_field: str = '',
+        seek_key: str | None = None,
+        batch_size: int | None = None,
+    ) -> dict[str, Any]:
+        empty_result = {'results': [], 'has_next': False, 'seek_key': None}
         if not field_name or field_name not in self.form.fields:
-            return []
+            return empty_result
 
         field = self.form.fields[field_name]
         queryset = getattr(field, 'queryset', None)
         if queryset is None:
-            return []
+            return empty_result
+
+        if search and search_field:
+            queryset = queryset.filter(**{f'{search_field}__icontains': search})
+
+        queryset = queryset.order_by('pk')
 
         def serialize_choice(obj: Any) -> dict[str, Any]:
             choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
@@ -213,7 +224,24 @@ class FormGlue(BaseGlue):
                 'obj': choice_obj,
             }
 
-        return [serialize_choice(obj) for obj in queryset.all()]
+        # batch_size is opt-in (None by default) and comes from the client,
+        # which only sends one when the widget declared it via the form's
+        # foreign_key_choice_config -- see FormFieldAttribute.add_choice_metadata.
+        # Existing fields that never opted in keep returning every row in one
+        # response exactly as before, so this stays backward compatible.
+        if batch_size is None:
+            return {
+                'results': [serialize_choice(obj) for obj in queryset],
+                'has_next': False,
+                'seek_key': None,
+            }
+
+        batch = GlueCollectionCursor(queryset, batch_size).seek(seek_key)
+        return {
+            'results': [serialize_choice(obj) for obj in batch.items],
+            'has_next': batch.has_next,
+            'seek_key': batch.next_seek_key,
+        }
 
     def _bind_form(self) -> forms.BaseForm:
         state = self._loaded_state or {}
