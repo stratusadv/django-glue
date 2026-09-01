@@ -1446,6 +1446,44 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertNotIn('choices_search_field', metadata)
         self.assertNotIn('choices_batch_size', metadata)
 
+    def test_batched_relation_field_metadata_seeds_the_current_selection(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            foreign_key_choice_config = {'skill': {'search_field': 'name', 'batch_size': 1}}
+
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        # Two rows so the current selection (created second, higher pk)
+        # would never appear in a real batch_size=1 first page ordered by
+        # pk -- proves selected_choice isn't just echoing the first result.
+        Skill.objects.create(name='Grappling')
+        selected = Skill.objects.create(name='Striking')
+
+        glue_object = FormGlue(SkillForm(initial={'skill': selected.pk}), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertEqual(metadata['selected_choice'], {
+            'value': selected.pk,
+            'label': 'Striking',
+            'obj': {'pk': selected.pk, '__str__': 'Striking'},
+        })
+
+    def test_batched_relation_field_metadata_has_no_selection_when_field_is_empty(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            foreign_key_choice_config = {'skill': {'search_field': 'name', 'batch_size': 1}}
+
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all(), required=False)
+
+        Skill.objects.create(name='Grappling')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertNotIn('selected_choice', metadata)
+
     def test_form_adapter_builds_policy_state_and_metadata(self):
         form = ContactForm(initial={'name': 'Ada'})
         glue_object = with_request(FormGlue(form, **glue_context(name='contact')))

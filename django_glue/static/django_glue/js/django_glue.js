@@ -1052,7 +1052,13 @@
       const pk = this.pk;
       if (pk == null)
         return;
-      return (this.choices || []).find((choice) => String(choice.value) === String(pk));
+      const loaded = (this.choices || []).find((choice) => String(choice.value) === String(pk));
+      if (loaded)
+        return loaded;
+      if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
+        return this.selected_choice;
+      }
+      return;
     }
     get hasMoreChoices() {
       if (this._searchActive) {

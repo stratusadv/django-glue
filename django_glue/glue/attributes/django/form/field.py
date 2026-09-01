@@ -50,8 +50,40 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
                 metadata['choices_search_field'] = field_config['search_field']
             if 'batch_size' in field_config:
                 metadata['choices_batch_size'] = field_config['batch_size']
+                self._add_selected_choice_metadata(metadata)
             return
         super().add_choice_metadata(metadata)
+
+    def _add_selected_choice_metadata(self, metadata: dict[str, Any]) -> None:
+        """Seed the currently selected choice for a batched field.
+
+        A batched field's default page is ordered by pk and may never
+        include whatever this field's current value already points at --
+        without this, an edit form's dropdown trigger renders blank for an
+        existing selection until the user happens to scroll or search their
+        way to it. This is a single, cheap lookup independent of the
+        batching/cache system: it only ever fills in `selectedChoice`
+        client-side as a fallback when the value isn't in a loaded batch,
+        it never gets merged into the batched `choices` list itself.
+        """
+        current_value = self.field.prepare_value(
+            self.form.get_initial_for_field(self.field, self.name)
+        )
+        # Single-value (FK) fields only for now -- a ModelMultipleChoiceField
+        # (M2M) prepares to a list of pks, which would need seeding one
+        # selected_choice per selected row rather than a single fallback.
+        if current_value in (None, '') or isinstance(current_value, (list, tuple)):
+            return
+
+        selected_obj = self.field.queryset.filter(pk=current_value).first()
+        if selected_obj is None:
+            return
+
+        metadata['selected_choice'] = {
+            'value': selected_obj.pk,
+            'label': f'{selected_obj}',
+            'obj': {'pk': selected_obj.pk, '__str__': f'{selected_obj}'},
+        }
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
         metadata['disabled'] = self.field.disabled

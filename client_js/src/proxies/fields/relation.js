@@ -51,7 +51,20 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get selectedChoice() {
         const pk = this.pk
         if (pk == null) return undefined
-        return (this.choices || []).find(choice => String(choice.value) === String(pk))
+
+        const loaded = (this.choices || []).find(choice => String(choice.value) === String(pk))
+        if (loaded) return loaded
+
+        // selected_choice metadata (see FormFieldAttribute.add_choice_metadata)
+        // is the one exception to "choices are the source of truth" -- a
+        // batched field's loaded page(s) may simply never have reached the
+        // row this field is already set to, so fall back to the
+        // server-seeded label rather than rendering blank.
+        if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
+            return this.selected_choice
+        }
+
+        return undefined
     }
 
     // True once the field's registered batch_size (choices_batch_size
