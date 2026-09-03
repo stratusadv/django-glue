@@ -31,6 +31,9 @@ dependencies = [
     "pydantic",
 ]
 
+[project.optional-dependencies]
+production = []
+
 [dependency-groups]
 dev = [
     "pyright",
