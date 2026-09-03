@@ -223,6 +223,83 @@ def test_fight_page_hydrates_fields_demo(
     }
 
 
+def test_searchable_choice_retains_selection_after_search_clears_demo(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    del seeded_gorillas
+
+    demo = DemoSession.start(
+        page,
+        application,
+        shot_directory_name='fight-searchable-related-choice',
+    )
+    demo.goto('fight:list')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.title_card(
+        'Searchable Related Choice',
+        kicker='django-glue',
+        subtitle='A selected search result keeps its rich label after the search is cleared.',
+    )
+
+    selected = page.get_by_test_id('selected-fighter-choice')
+    search = page.get_by_placeholder('Search fighter choices...')
+    expect(selected).to_have_text('Alpha Atlas')
+
+    demo.narrate('Search the bounded server-side choice source', step='1')
+    demo.fill(search, 'Gamma')
+    gamma_choice = page.get_by_role('button', name='Gamma Grove', exact=True)
+    expect(gamma_choice).to_be_visible()
+
+    demo.narrate('Select the result and clear the search', step='2')
+    demo.click(gamma_choice)
+
+    expect(search).to_have_value('')
+    expect(selected).to_have_text('Gamma Grove')
+    expect(page.get_by_test_id('fighter-choice-results').get_by_role('button')).to_have_count(0)
+
+
+def test_searchable_multiple_choices_hydrate_and_retain_selections_demo(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    del seeded_gorillas
+
+    demo = DemoSession.start(
+        page,
+        application,
+        shot_directory_name='fight-searchable-multiple-related-choices',
+    )
+    demo.goto('fight:list')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    selected = page.get_by_test_id('selected-multiple-fighter-choices')
+    expect(selected).to_contain_text('Alpha Atlas')
+    expect(selected).to_contain_text('Beta Boulder')
+
+    demo.narrate('Search and add another fighter without losing existing labels', step='1')
+    search = page.get_by_placeholder('Search multiple fighter choices...')
+    demo.fill(search, 'Gamma')
+    gamma_choice = page.get_by_test_id('multiple-fighter-choice-results').get_by_role(
+        'button',
+        name='Gamma Grove',
+        exact=True,
+    )
+    expect(gamma_choice).to_be_visible()
+    demo.click(gamma_choice)
+
+    expect(search).to_have_value('')
+    expect(selected).to_contain_text('Alpha Atlas')
+    expect(selected).to_contain_text('Beta Boulder')
+    expect(selected).to_contain_text('Gamma Grove')
+    expect(
+        page.get_by_test_id('multiple-fighter-choice-results').get_by_role('button')
+    ).to_have_count(0)
+
+
 def test_saving_a_foreign_key_through_the_nested_shape_persists_it_demo(
     page: Page,
     application: Application,

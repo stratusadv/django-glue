@@ -252,16 +252,17 @@ const choices = await brandField.choices()
 
 Choices are cached to avoid duplicate requests.
 
-By default a relation field's choices load in a single request, with no
-limit -- fine for a small related table, but every row goes over the wire
-for a large one. A field can opt into batched, searchable loading instead by
-declaring `foreign_key_choice_config` on the `ModelForm`:
+Use `Glue.choices()` to enable bounded server-side search and declare additional
+fields on each choice object:
 
 ```python
 class ContactForm(forms.ModelForm):
-    foreign_key_choice_config = {
-        'company': {'search_field': 'name', 'batch_size': 50},
-    }
+    company = forms.ModelChoiceField(queryset=Glue.choices(
+        Company.objects.filter(is_active=True),
+        search_fields=['name', 'account_number'],
+        fields=['name', 'account_number', 'logo_url'],
+        search_limit=25,
+    ))
 
     class Meta:
         model = Contact
@@ -273,25 +274,27 @@ With that config, the field's proxy exposes:
 ```javascript
 const companyField = Glue.form.contact_form.$fields.company
 
-// First 50 rows, ordered by pk.
-await companyField.choices
-companyField.hasMoreChoices  // true if the related table has more than 50 rows
-
-// Fetch the next 50, appended to the existing choices.
-await companyField.loadMoreChoices()
-
-// Server-side search (`name__icontains`), replacing choices with matches
-// until clearSearch() runs. searchField must be passed explicitly -- there's
-// no way to filter on a model's __str__ at the database layer.
-await companyField.searchChoices('acme', 'name')
-companyField.hasMoreChoices  // true if the search itself has more matches
-await companyField.loadMoreChoices()  // continues the active search
-
-companyField.clearSearch()  // reverts to the default (unsearched) choices
+// Search returns at most search_limit matches and replaces choices until
+// clearSearch() runs.
+await companyField.searchChoices('acme')
+companyField.clearSearch()
 ```
 
-A field with no `foreign_key_choice_config` entry keeps returning every row
-in one response, unchanged from before this existed.
+For a searchable `ModelMultipleChoiceField`, `selectedChoices` contains every
+selected rich choice even when the active search results are cleared. Use
+`addChoice(value)`, `removeChoice(value)`, or `toggleChoice(value)` to update the
+selection without losing labels for selections made by earlier searches.
+
+`search_limit`, `search_fields`, and `fields` are server-owned. The browser sends
+only the field name and search text, so it cannot widen the result limit, search
+an undeclared ORM path, or request undeclared model attributes.
+
+!!! warning "Non-searchable querysets load every row"
+
+    A `Glue.choices()` queryset with no `search_fields` is serialized in full and
+    every row is sent to the browser -- there is no cap. Reserve it for a small,
+    bounded lookup table. If the related table grows with app data, add
+    `search_fields` so choices load on demand.
 
 ## Full Example: Contact Form
 

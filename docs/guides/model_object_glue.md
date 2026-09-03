@@ -225,6 +225,11 @@ Glue.model(
     related_field_config={
         'project': {
             'fields': ['id', 'name', 'code'],
+            'choice_queryset': Glue.choices(
+                Project.objects.filter(is_active=True),
+                search_fields=['name', 'code'],
+                fields=['name', 'code', 'logo_url'],
+            ),
         },
         'user': {
             'fields': ['id', 'first_name', 'last_name'],
@@ -233,12 +238,26 @@ Glue.model(
 )
 ```
 
-Each related field name maps to a config dict with either `fields` or `exclude`:
+Each related field name maps to a configuration dictionary:
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `fields` | `Sequence[str]` or `'__all__'` | Fields to include on the related object |
 | `exclude` | `Sequence[str]` or `'__all__'` | Fields to exclude from the related object |
+| `choice_queryset` | `QuerySet` | Trusted queryset, bounded search, and object-shape configuration for relation choices |
+
+`related_field_config.fields` controls the related model proxy. The `fields`
+passed to `Glue.choices()` control the additional keys on each
+`choice.obj`; `pk` and `__str__` are always included. The configured choice
+queryset is stored in the signed policy and propagated to model proxies returned
+by `Glue.queryset()`.
+
+!!! warning "Non-searchable querysets load every row"
+
+    If the `choice_queryset` (or a plain relation with no configured queryset)
+    has no `search_fields`, every related row is serialized and sent to the
+    browser on each metadata build, with no cap. Give the choice queryset
+    `search_fields` unless the related table is a small, bounded lookup.
 
 Access related object fields on the frontend as nested properties:
 

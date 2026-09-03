@@ -30,6 +30,29 @@ def parse_order_by(entries: Any) -> tuple[tuple[str, bool], ...]:
     return tuple(parsed)
 
 
+def ensure_stable_seek_ordering_on_queryset(queryset: models.QuerySet) -> models.QuerySet:
+    """Force `pk` on as a final tiebreaker, even behind an explicit, non-unique order_by.
+
+    `queryset.ordered` alone isn't enough to guarantee stable seek pagination: an
+    explicit `order_by('weight')` makes Django consider the queryset "ordered"
+    even though ties on `weight` have no defined order, so the seek cursor's
+    assumption that `pk` always breaks ties needs to hold in the real SQL too,
+    not just in `GlueCollectionCursor`'s own bookkeeping. A queryset that already
+    orders by the pk (under either `pk` or its concrete field name) is returned
+    unchanged.
+    """
+    pk_name = queryset.model._meta.pk.name
+    order_by = list(queryset.query.order_by)
+    if not order_by:
+        return queryset.order_by(pk_name)
+
+    existing_names = {name for name, _ in parse_order_by(order_by)}
+    if pk_name in existing_names or 'pk' in existing_names:
+        return queryset
+
+    return queryset.order_by(*order_by, pk_name)
+
+
 @dataclass
 class GlueSeekBatch:
     """One batch of rows returned by a GlueCollectionCursor.seek() call."""
@@ -48,16 +71,21 @@ class GlueCollectionCursor:
     only `has_next` is exposed, derived from fetching one extra row past
     `batch_size` rather than from a separate count query.
 
-    `objects` must already be ordered (see `QuerySetGlue._ensure_ordered`); this
-    class always treats the model's pk as a forced, deduplicated final tiebreaker
-    over whatever ordering is already present, so a non-unique explicit order_by
-    (e.g. `order_by('species')`) still yields stable, non-overlapping batches.
+    A QuerySet is normalized on construction (see
+    `ensure_stable_seek_ordering_on_queryset`) so the model's pk is always a
+    forced, deduplicated final tiebreaker over whatever ordering is already
+    present -- a non-unique explicit order_by (e.g. `order_by('species')`) still
+    yields stable, non-overlapping batches. A pre-materialized list is used as-is.
     """
 
     def __init__(self, objects: models.QuerySet | Sequence[models.Model], batch_size: int) -> None:
-        self.objects = objects
+        self.objects = (
+            ensure_stable_seek_ordering_on_queryset(objects)
+            if hasattr(objects, 'query')
+            else objects
+        )
         self.batch_size = batch_size
-        self._ordering = self._ordering_fields(objects)
+        self._ordering = self._ordering_fields(self.objects)
 
     def seek(self, seek_key: str | None = None) -> GlueSeekBatch:
         objects = self.objects

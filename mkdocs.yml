@@ -64,6 +64,8 @@ nav:
           - GlueFormProxy: api/javascript/form_glue.md
           - GlueView: api/javascript/view_glue.md
           - GlueFunctionProxy: api/javascript/function_glue.md
+  - Architecture:
+      - Choice Sources: decisions/choice-querysets.md
   - Changelog:
       - v1.0.0: changelog/v1_changelog.md
       - Archived: changelog/archived_changelog.md

@@ -26,11 +26,13 @@ DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
 ### QuerySet Batch Size
 
 ```python
-# Default number of rows a Glue.queryset() fetches per batch (default: 100)
+# Default number of QuerySetGlue rows per batch (default: 100)
 DJANGO_GLUE_QUERYSET_BATCH_SIZE = 100
 ```
 
-Applies to every `Glue.queryset()` that doesn't pass its own `batch_size=`. The batch size is signed into the policy token, so a client can request more batches (`loadMore()`, `filter()`, etc.) but can't widen how many rows come back per request. Pass `batch_size=None` to a specific `Glue.queryset()` call to disable batching for that queryset entirely.
+Applies only to `Glue.queryset()` collection loading. Relation choices are not
+batched: searchable `Glue.choices()` sources use their trusted `search_limit`,
+while non-searchable sources load as complete enumerations.
 
 ## Request Timeout
 

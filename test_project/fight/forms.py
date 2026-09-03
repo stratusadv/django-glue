@@ -1,7 +1,9 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
+from django_glue import Glue
 from test_project.fight.models import Fight
+from test_project.gorilla.models import Gorilla
 
 
 class FightForm(forms.ModelForm):
@@ -28,6 +30,25 @@ class FightForm(forms.ModelForm):
             'spectator_count',
             'terrain_type',
         ]
+
+
+class SearchableFighterChoiceForm(forms.Form):
+    fighter = forms.ModelChoiceField(
+        queryset=Glue.choices(
+            Gorilla.objects.order_by('name'),
+            search_fields=['name'],
+            fields=['name', 'rank_points'],
+            search_limit=2,
+        )
+    )
+    fighters = forms.ModelMultipleChoiceField(
+        queryset=Glue.choices(
+            Gorilla.objects.order_by('name'),
+            search_fields=['name'],
+            fields=['name', 'rank_points'],
+            search_limit=2,
+        )
+    )
 
 
 class ContactPromoterForm(forms.Form):

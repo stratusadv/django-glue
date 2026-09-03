@@ -95,6 +95,31 @@ Glue.model(
 
 ## Related Field Configuration
 
+`Glue.choices()` configures either a native Django queryset or a static choice
+iterable while preserving the source type expected by Django fields:
+
+```python
+Glue.choices(
+    Company.objects.filter(is_active=True),
+    search_fields=['name', 'account_number'],
+    fields=['name', 'account_number', 'logo_url'],
+    search_limit=25,
+)
+```
+
+Searchable querysets return no general choices until the browser supplies a
+query, then return at most `search_limit` matches. Querysets without
+`search_fields` are treated as deliberately small enumerations and load fully.
+Static pairs such as `Glue.choices(Status.choices)` remain ordinary local choices.
+
+!!! warning "Non-searchable querysets load every row"
+
+    A `Glue.choices()` queryset with no `search_fields` is serialized in full on
+    every metadata build -- one choice object per row, all sent to the browser.
+    There is no row cap. Only use a non-searchable queryset for a bounded lookup
+    table (a few dozen rows at most); anything that can grow with app data should
+    declare `search_fields` so it loads on demand instead.
+
 The `related_field_config` parameter on `Glue.model()` and `Glue.queryset()` controls which fields are exposed on related objects (ForeignKey, OneToOne, reverse FK, and ManyToMany relationships).
 
 ```python
@@ -107,6 +132,11 @@ Glue.model(
     related_field_config={
         'project': {
             'fields': ['id', 'name', 'code'],
+            'choice_queryset': Glue.choices(
+                Project.objects.filter(is_active=True),
+                search_fields=['name', 'code'],
+                fields=['name', 'code'],
+            ),
         },
         'user': {
             'fields': ['id', 'first_name', 'last_name'],
@@ -118,12 +148,13 @@ Glue.model(
 
 ### Configuration options
 
-Each related field name maps to a config dict with either `fields` or `exclude`:
+Each related field name maps to a configuration dictionary:
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `fields` | `Sequence[str]` or `'__all__'` | Fields to include on the related object |
 | `exclude` | `Sequence[str]` or `'__all__'` | Fields to exclude from the related object |
+| `choice_queryset` | `QuerySet` | Trusted queryset and choice-search configuration |
 
 This is particularly useful for:
 

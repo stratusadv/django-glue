@@ -1023,7 +1023,7 @@
     static loadingCache = new Map;
     get choices() {
       if (this.choice_model_path && !this._choicesOverridden) {
-        this.ensureChoices([]);
+        this.ensureChoices();
       }
       return this._choices || [];
     }
@@ -1055,140 +1055,85 @@
       const loaded = (this.choices || []).find((choice) => String(choice.value) === String(pk));
       if (loaded)
         return loaded;
+      if (this._retainedSelectedChoice && String(this._retainedSelectedChoice.value) === String(pk)) {
+        return this._retainedSelectedChoice;
+      }
       if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
         return this.selected_choice;
       }
       return;
     }
-    get hasMoreChoices() {
-      if (this._searchActive) {
-        return Boolean(this._searchHasNext);
-      }
-      return Boolean(this._getOrCreateCache(this._getChoicesCacheKey()).hasNext);
-    }
-    get isLoadingMoreChoices() {
-      return Boolean(this._loadMorePromise);
-    }
     get isSearchingChoices() {
       return Boolean(this._searchPromise);
     }
-    buildChoices(...choiceFields) {
-      this.ensureChoices(choiceFields);
-      return this.choices;
-    }
-    ensureChoices(choiceFields = []) {
+    ensureChoices() {
       const cacheKey = this._getChoicesCacheKey();
       const cache = this._getOrCreateCache(cacheKey);
       cache.fields.add(this);
       if (this._choices !== cache.choices) {
         this.choices = cache.choices;
       }
-      const requiredFields = this._choiceObjectFields(choiceFields);
-      const missingFields = requiredFields.filter((f) => !cache.loadedFields.has(f));
-      if (missingFields.length === 0) {
+      if (cache.loaded) {
         return cache.promise || Promise.resolve(this._choices || []);
       }
       if (cache.promise) {
-        return cache.promise.then(() => this.ensureChoices(choiceFields));
+        return cache.promise;
       }
       if (typeof this.owner.foreign_key_choices !== "function") {
         return Promise.resolve(this._choices || []);
       }
       cache.promise = this.owner.foreign_key_choices({
-        field_name: this.name,
-        choice_fields: this._serverChoiceFields(missingFields),
-        batch_size: this.choices_batch_size ?? null
+        field_name: this.name
       }).then((result) => {
-        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
+        const { results = [] } = result || {};
         this._mergeChoices(results);
-        cache.hasNext = hasNext;
-        cache.seekKey = seekKey;
-        requiredFields.forEach((f) => cache.loadedFields.add(f));
+        cache.loaded = true;
         return this._choices || [];
       }).finally(() => {
         cache.promise = null;
       });
       return cache.promise;
     }
-    async loadMoreChoices(choiceFields = []) {
-      if (this._loadMorePromise) {
-        return this._loadMorePromise;
-      }
-      if (this._searchActive) {
-        if (!this._searchHasNext) {
-          return this._choices || [];
-        }
-        this._loadMorePromise = this.owner.foreign_key_choices({
-          field_name: this.name,
-          choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
-          search: this._searchQuery,
-          search_field: this._searchField,
-          seek_key: this._searchSeekKey,
-          batch_size: this.choices_batch_size ?? null
-        }).then((result) => {
-          const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
-          this._searchHasNext = hasNext;
-          this._searchSeekKey = seekKey;
-          return this.overrideChoices([...this._choices || [], ...results]);
-        }).finally(() => {
-          this._loadMorePromise = null;
-        });
-        return this._loadMorePromise;
-      }
-      const cacheKey = this._getChoicesCacheKey();
-      const cache = this._getOrCreateCache(cacheKey);
-      if (!cache.hasNext || cache.promise) {
-        return this._choices || [];
-      }
-      this._loadMorePromise = cache.promise = this.owner.foreign_key_choices({
-        field_name: this.name,
-        choice_fields: this._serverChoiceFields([...cache.loadedFields]),
-        seek_key: cache.seekKey,
-        batch_size: this.choices_batch_size ?? null
-      }).then((result) => {
-        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
-        cache.hasNext = hasNext;
-        cache.seekKey = seekKey;
-        this._mergeChoices(results);
-        return this._choices || [];
-      }).finally(() => {
-        cache.promise = null;
-        this._loadMorePromise = null;
-      });
-      return this._loadMorePromise;
-    }
-    async searchChoices(query, searchField, choiceFields = []) {
+    async searchChoices(query) {
       if (!query) {
         return this.clearSearch();
       }
+      this._rememberSelectedChoice();
+      this._searchGeneration = (this._searchGeneration || 0) + 1;
+      const searchGeneration = this._searchGeneration;
       this._searchActive = true;
       this._searchQuery = query;
-      this._searchField = searchField;
-      this._searchSeekKey = null;
-      this._searchPromise = this.owner.foreign_key_choices({
+      const searchPromise = this.owner.foreign_key_choices({
         field_name: this.name,
-        choice_fields: this._serverChoiceFields(this._choiceObjectFields(choiceFields)),
-        search: query,
-        search_field: searchField,
-        batch_size: this.choices_batch_size ?? null
+        search: query
       }).then((result) => {
-        const { results = [], has_next: hasNext = false, seek_key: seekKey = null } = result || {};
-        this._searchHasNext = hasNext;
-        this._searchSeekKey = seekKey;
+        if (searchGeneration !== this._searchGeneration || !this._searchActive || query !== this._searchQuery) {
+          return this._choices || [];
+        }
+        const { results = [] } = result || {};
         return this.overrideChoices(results);
       }).finally(() => {
-        this._searchPromise = null;
+        if (this._searchPromise === searchPromise) {
+          this._searchPromise = null;
+        }
       });
-      return this._searchPromise;
+      this._searchPromise = searchPromise;
+      return searchPromise;
     }
     clearSearch() {
+      this._rememberSelectedChoice();
+      this._searchGeneration = (this._searchGeneration || 0) + 1;
       this._searchActive = false;
       this._searchQuery = "";
-      this._searchField = "";
-      this._searchSeekKey = null;
-      this._searchHasNext = false;
+      this._searchPromise = null;
       this.clearChoicesOverride();
       return this.choices;
+    }
+    _rememberSelectedChoice() {
+      const selectedChoice = this.selectedChoice;
+      if (selectedChoice) {
+        this._retainedSelectedChoice = selectedChoice;
+      }
     }
     _getChoicesCacheKey() {
       return this.choices_cache_key || [
@@ -1198,22 +1143,14 @@
         this.name
       ].filter(Boolean).join(":");
     }
-    _choiceObjectFields(choiceFields = []) {
-      return [...new Set(["pk", "__str__", ...choiceFields.filter(Boolean)])];
-    }
-    _serverChoiceFields(fields = []) {
-      return fields.filter((f) => !["value", "label", "pk", "__str__"].includes(f));
-    }
     _getOrCreateCache(cacheKey) {
       let cache = RelationFieldGlue.loadingCache.get(cacheKey);
       if (!cache) {
         cache = {
-          loadedFields: new Set,
+          loaded: false,
           promise: null,
           choices: [],
-          fields: new Set,
-          hasNext: false,
-          seekKey: null
+          fields: new Set
         };
         RelationFieldGlue.loadingCache.set(cacheKey, cache);
       }
@@ -1235,7 +1172,9 @@
       });
       cache.choices = merged;
       for (const field of cache.fields) {
-        field.choices = cache.choices;
+        if (!field._choicesOverridden) {
+          field.choices = cache.choices;
+        }
       }
     }
   }
@@ -1248,7 +1187,22 @@
     }
     get selectedChoices() {
       const selectedPks = new Set(this.selectedPks.map((value) => String(value)));
-      return (this.choices || []).filter((choice) => selectedPks.has(String(choice.value)));
+      if (selectedPks.size === 0)
+        return [];
+      const candidates = [
+        ...this.selected_choices || [],
+        ...this._retainedSelectedChoices || [],
+        ...this.choices || []
+      ];
+      const choicesByValue = new Map(candidates.map((choice) => [String(choice.value), choice]));
+      return this.selectedPks.map((value) => choicesByValue.get(String(value))).filter(Boolean);
+    }
+    _rememberSelectedChoice() {
+      const retainedByValue = new Map((this._retainedSelectedChoices || []).map((choice) => [String(choice.value), choice]));
+      for (const choice of this.selectedChoices) {
+        retainedByValue.set(String(choice.value), choice);
+      }
+      this._retainedSelectedChoices = Array.from(retainedByValue.values());
     }
     hasChoiceSelected(value) {
       return this.selectedPks.some((item) => String(item) === String(value));

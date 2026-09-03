@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
+import pickle
 from functools import cached_property
-from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence, TypedDict, cast
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError
+from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import (
@@ -12,21 +15,26 @@ from django_glue.glue.attributes import (
     GlueObjectAttribute,
     ReadOnlyAttribute,
 )
-from django_glue.glue.base import BaseGlue
 from django_glue.glue.attributes.django.model import (
     ForeignKeyFieldAttribute,
     ModelFieldAttribute,
     RelatedSetFieldAttribute,
 )
+from django_glue.glue.base import BaseGlue
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
-from django_glue.glue.objects.django.cursor import GlueCollectionCursor
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
+from django_glue.glue.options.django import (
+    DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
+    GlueRelatedModelChoices,
+    RelatedModelChoicesResult,
+)
+
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
 from django_glue.glue.policy import GluePolicy  # noqa: TC001
@@ -40,10 +48,28 @@ if TYPE_CHECKING:
 ALL_FIELDS: Literal['__all__'] = '__all__'
 
 
+class RelatedFieldConfig(TypedDict, total=False):
+    fields: Sequence[str] | Literal['__all__']
+    exclude: Sequence[str] | Literal['__all__']
+    choice_queryset: QuerySet
+
+
+class NormalizedRelatedFieldConfig(TypedDict, total=False):
+    fields: tuple[str, ...] | Literal['__all__']
+    exclude: tuple[str, ...] | Literal['__all__']
+    choice_queryset: QuerySet
+
+
+class RelatedFieldPolicyConfig(TypedDict, total=False):
+    fields: Sequence[str] | Literal['__all__']
+    exclude: Sequence[str] | Literal['__all__']
+    encoded_choice_queryset: str
+
+
 class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFieldResolutionMixin, BaseGlue):
 
     namespace = 'model'
-    globally_excluded_field_types = frozenset({'BinaryField'})
+    globally_excluded_field_types = DEFAULT_EXCLUDED_MODEL_FIELD_TYPES
 
     def __init__(
         self,
@@ -58,7 +84,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         forms: Mapping[str, forms.ModelForm] | None = None,
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
         super().__init__(name=name, access=access, loading_strategy=loading_strategy)
@@ -93,7 +119,10 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         self.annotations = annotations
         self._select_related = set(select_related or ())
-        self.related_field_config = self._normalize_related_field_config(related_field_config)
+        self.related_field_config = self._normalize_related_field_config(
+            related_field_config=related_field_config,
+            model_class=self.instance.__class__,
+        )
         self.initialize_computed_attributes(computed_attributes)
 
         self.forms = self.normalize_forms(form, forms)
@@ -115,7 +144,9 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         if self._select_related:
             identity['select_related'] = list(self._select_related)
         if self.related_field_config:
-            identity['related_field_config'] = self.related_field_config
+            identity['related_field_config'] = self._serialize_related_field_config(
+                self.related_field_config
+            )
         identity |= self.computed_attributes_identity()
 
         return identity
@@ -222,16 +253,102 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
     @staticmethod
     def _normalize_related_field_config(
-        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None,
-    ) -> dict[str, dict[str, tuple[str, ...] | Literal['__all__']]]:
-        normalized = {}
+        related_field_config: Mapping[str, RelatedFieldConfig] | None,
+        model_class: type[Model],
+    ) -> dict[str, NormalizedRelatedFieldConfig]:
+        normalized: dict[str, NormalizedRelatedFieldConfig] = {}
         for field_name, config in (related_field_config or {}).items():
-            normalized[field_name] = {
-                key: value if value == ALL_FIELDS else tuple(value)
-                for key, value in config.items()
-                if key in {'fields', 'exclude'} and value
-            }
+            # Every key must name a relation on the model -- related_field_config
+            # only ever configures related objects, so a non-relation (or typo'd)
+            # key is a mistake worth surfacing rather than silently dropping.
+            try:
+                related_field = model_class._meta.get_field(field_name)
+            except FieldDoesNotExist as exception:
+                msg = f'related_field_config contains an unknown field: {field_name!r}.'
+                raise ValueError(msg) from exception
+            related_model = getattr(related_field, 'related_model', None)
+            if related_model is None:
+                msg = f'related_field_config field {field_name!r} is not a relation.'
+                raise ValueError(msg)
+
+            normalized_config = NormalizedRelatedFieldConfig()
+            fields = config.get('fields')
+            if fields:
+                normalized_config['fields'] = (
+                    fields if fields == ALL_FIELDS else tuple(fields)
+                )
+            exclude = config.get('exclude')
+            if exclude:
+                normalized_config['exclude'] = (
+                    exclude if exclude == ALL_FIELDS else tuple(exclude)
+                )
+            choice_queryset = config.get('choice_queryset')
+            if choice_queryset is not None:
+                if not isinstance(choice_queryset, QuerySet):
+                    msg = (
+                        f'related_field_config[{field_name!r}].choice_queryset '
+                        'must be a QuerySet.'
+                    )
+                    raise TypeError(msg)
+                if choice_queryset.model is not related_model:
+                    msg = (
+                        f'related_field_config[{field_name!r}].choice_queryset must query '
+                        f'{related_model._meta.label}, not {choice_queryset.model._meta.label}.'
+                    )
+                    raise ValueError(msg)
+                normalized_config['choice_queryset'] = choice_queryset.all()
+            normalized[field_name] = normalized_config
         return normalized
+
+    @staticmethod
+    def _serialize_related_field_config(
+        related_field_config: Mapping[str, NormalizedRelatedFieldConfig],
+    ) -> dict[str, RelatedFieldPolicyConfig]:
+        serialized: dict[str, RelatedFieldPolicyConfig] = {}
+        for field_name, config in related_field_config.items():
+            serialized_config = RelatedFieldPolicyConfig()
+            fields = config.get('fields')
+            if fields:
+                serialized_config['fields'] = fields
+            exclude = config.get('exclude')
+            if exclude:
+                serialized_config['exclude'] = exclude
+            choice_queryset = config.get('choice_queryset')
+            if choice_queryset is not None:
+                serialized_config['encoded_choice_queryset'] = base64.b64encode(
+                    pickle.dumps(choice_queryset.query)
+                ).decode('utf-8')
+            serialized[field_name] = serialized_config
+        return serialized
+
+    @staticmethod
+    def _deserialize_related_field_config(
+        related_field_config: Mapping[str, RelatedFieldPolicyConfig],
+    ) -> dict[str, NormalizedRelatedFieldConfig]:
+        # The exact inverse of _serialize_related_field_config: the policy is
+        # signed, so its contents are already validated -- reconstruct the
+        # normalized internal shape directly, no re-validation needed.
+        deserialized: dict[str, NormalizedRelatedFieldConfig] = {}
+        for field_name, config in related_field_config.items():
+            deserialized_config = NormalizedRelatedFieldConfig()
+            fields = config.get('fields')
+            if fields:
+                deserialized_config['fields'] = (
+                    fields if fields == ALL_FIELDS else tuple(fields)
+                )
+            exclude = config.get('exclude')
+            if exclude:
+                deserialized_config['exclude'] = (
+                    exclude if exclude == ALL_FIELDS else tuple(exclude)
+                )
+            encoded_queryset = config.get('encoded_choice_queryset')
+            if encoded_queryset is not None:
+                query = pickle.loads(base64.b64decode(encoded_queryset))
+                choice_queryset = query.model.objects.all()
+                choice_queryset.query = query
+                deserialized_config['choice_queryset'] = choice_queryset
+            deserialized[field_name] = deserialized_config
+        return deserialized
 
     @property
     def _model_meta(self) -> Any:
@@ -320,7 +437,6 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         target_pk = policy.identity.get('target_pk')
         select_related = policy.identity.get('select_related', [])
-        related_field_config = policy.identity.get('related_field_config', {})
 
         if target_pk is None:
             instance = model_class()
@@ -351,7 +467,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             instance=instance
         )
 
-        return cls(
+        glue_object = cls(
             instance,
             name=policy.name,
             access=policy.access,
@@ -359,8 +475,14 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             forms=forms,
             select_related=select_related,
             computed_attributes=policy.identity.get('computed_attributes', {}),
-            related_field_config=related_field_config,
         )
+        # Restored post-construction from the signed (already-validated) policy:
+        # _deserialize_related_field_config yields the normalized internal shape,
+        # so it does not go back through __init__ normalization.
+        glue_object.related_field_config = cls._deserialize_related_field_config(
+            policy.identity.get('related_field_config', {})
+        )
+        return glue_object
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         """Apply client-provided state to the model instance."""
@@ -464,59 +586,52 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             return value.get('value')
         return getattr(value, 'pk', value)
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    # Choice loading is read-only: it reads the field definition and the related
+    # model, never this instance's own field values. Skip the client-state
+    # rehydration and the state/metadata echo (which would re-pickle every choice
+    # field's fingerprint on each search keystroke) -- matches FormGlue.
+    @DeclaredAttribute(
+        required_access=GlueAccess.VIEW,
+        takes_client_state=False,
+        updates_client_state=False,
+    )
     def foreign_key_choices(
         self,
         field_name: str | None = None,
-        choice_fields: list[str] | None = None,
         search: str = '',
-        search_field: str = '',
-        seek_key: str | None = None,
-        batch_size: int | None = None,
-    ) -> dict[str, Any]:
-        empty_result = {'results': [], 'has_next': False, 'seek_key': None}
+    ) -> RelatedModelChoicesResult:
         if not field_name or field_name not in self._included_fields:
-            return empty_result
+            return GlueRelatedModelChoices.empty()
 
+        queryset = self._choice_queryset_for_field(field_name)
+        if queryset is None:
+            return GlueRelatedModelChoices.empty()
+
+        return GlueRelatedModelChoices(
+            queryset,
+            value_field_name=self._choice_value_field_name_for_field(field_name),
+        ).load(
+            search=search,
+        )
+
+    def _choice_value_field_name_for_field(self, field_name: str) -> str:
+        field = self.instance._meta.get_field(field_name)
+        target_field = getattr(field, 'target_field', None)
+        if target_field is not None:
+            return target_field.name
+        return field.related_model._meta.pk.name
+
+    def _choice_queryset_for_field(self, field_name: str) -> QuerySet | None:
         field = self.instance._meta.get_field(field_name)
         related_model = getattr(field, 'related_model', None)
         if related_model is None:
-            return empty_result
-
-        queryset = related_model.objects.all()
-        if search and search_field:
-            queryset = queryset.filter(**{f'{search_field}__icontains': search})
-        queryset = queryset.order_by('pk')
-
-        def serialize_choice(obj: Model) -> dict[str, Any]:
-            choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
-            for choice_field in choice_fields or []:
-                choice_obj[choice_field] = getattr(obj, choice_field)
-            return {
-                'value': obj.pk,
-                'label': f'{obj}',
-                'obj': choice_obj,
-            }
-
-        # batch_size is opt-in (None by default), same as FormGlue's
-        # foreign_key_choices -- see the comment there. Nothing currently
-        # sends a per-field choices_batch_size for a plain (non-form) model
-        # field, so this always returns every row today; the parameters
-        # exist so the response shape matches FormGlue's, since both are
-        # read by the same RelationFieldGlue client code.
-        if batch_size is None:
-            return {
-                'results': [serialize_choice(obj) for obj in queryset],
-                'has_next': False,
-                'seek_key': None,
-            }
-
-        batch = GlueCollectionCursor(queryset, batch_size).seek(seek_key)
-        return {
-            'results': [serialize_choice(obj) for obj in batch.items],
-            'has_next': batch.has_next,
-            'seek_key': batch.next_seek_key,
-        }
+            return None
+        configured_queryset = self.related_field_config.get(field_name, {}).get(
+            'choice_queryset'
+        )
+        if configured_queryset is not None:
+            return configured_queryset
+        return related_model.objects.all()
 
     # delete() only needs self.instance's pk (already resolved from the signed
     # policy identity) -- it never reads client-submitted field values. The

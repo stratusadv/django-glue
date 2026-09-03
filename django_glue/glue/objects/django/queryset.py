@@ -4,27 +4,37 @@ import base64
 import builtins
 import pickle
 from functools import cached_property
-from typing import Any, Literal, Mapping, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
 from django_glue.access import GlueAccess
 from django_glue.conf import settings
-from django_glue.exceptions import GlueQuerySetFilterValidationError, GlueQuerySetSliceValidationError
-from django_glue.glue.attributes import BaseGlueAttribute
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.exceptions import (
+    GlueQuerySetFilterValidationError,
+    GlueQuerySetSliceValidationError,
+)
+from django_glue.glue.attributes import BaseGlueAttribute, DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
-from django_glue.glue.objects.django.cursor import GlueCollectionCursor, parse_order_by
+from django_glue.glue.objects.django.cursor import (
+    GlueCollectionCursor,
+    ensure_stable_seek_ordering_on_queryset,
+)
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
-from django_glue.glue.objects.django.model.object import ALL_FIELDS, ModelGlue
+from django_glue.glue.objects.django.model.object import (
+    ALL_FIELDS,
+    ModelGlue,
+    RelatedFieldConfig,
+)
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
 
 if TYPE_CHECKING:
     from django import forms
     from django.db import models
+
     from django_glue.glue.policy import GluePolicy
 
 DEFAULT_BATCH_SIZE = '__default__'
@@ -45,7 +55,7 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
         last_query_params: dict[str, Any] | None = None,
@@ -66,7 +76,10 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             raise ValueError(msg)
 
         self.forms = self.normalize_forms(form, forms)
-        self.related_field_config = ModelGlue._normalize_related_field_config(related_field_config)
+        self.related_field_config = ModelGlue._normalize_related_field_config(
+            related_field_config=related_field_config,
+            model_class=self.queryset.model,
+        )
         self._select_related = self._get_select_related_fields()
         self.initialize_computed_attributes(computed_attributes)
         self._last_query_params = last_query_params
@@ -98,7 +111,9 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
         if self.related_field_config:
-            identity['related_field_config'] = self.related_field_config
+            identity['related_field_config'] = ModelGlue._serialize_related_field_config(
+                self.related_field_config
+            )
         identity |= self.computed_attributes_identity()
 
         return identity
@@ -179,19 +194,24 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {})
         )
-        related_field_config = policy.identity.get('related_field_config', {})
-        return cls(
+        glue_object = cls(
             queryset,
             name=policy.name,
             access=policy.access,
             fields=fields,
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
-            related_field_config=related_field_config,
             batch_size=policy.identity.get('batch_size'),
             last_query_params=policy.identity.get('last_query_params'),
             loaded_row_count=policy.identity.get('loaded_row_count', 0),
         )
+        # Restored post-construction from the signed (already-validated) policy:
+        # _deserialize_related_field_config yields the normalized internal shape,
+        # so it does not go back through __init__ normalization.
+        glue_object.related_field_config = ModelGlue._deserialize_related_field_config(
+            policy.identity.get('related_field_config', {})
+        )
+        return glue_object
 
     @staticmethod
     def _encode_queryset_query(queryset: models.QuerySet) -> str:
@@ -276,8 +296,8 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
         queryset = self._filtered_and_ordered(filter, order_by)
         total = queryset.count() if with_total else None
 
-        if slice or self.batch_size is not None:
-            queryset = self._ensure_ordered(queryset)
+        if slice:
+            queryset = ensure_stable_seek_ordering_on_queryset(queryset)
 
         if slice and self.batch_size is not None:
             # `stop` must be given explicitly: an omitted `stop` used to fall
@@ -339,28 +359,6 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             'has_next': batch.has_next,
             'batch_size': self.batch_size,
         }
-
-    @staticmethod
-    def _ensure_ordered(queryset: models.QuerySet) -> models.QuerySet:
-        """Force `pk` on as a final tiebreaker, even behind an explicit, non-unique order_by.
-
-        `queryset.ordered` alone isn't enough to guarantee stable paging: an
-        explicit `order_by('weight')` makes Django consider the queryset
-        "ordered" even though ties on `weight` have no defined order, so the
-        seek cursor's assumption that `pk` always breaks ties needs to hold in
-        the real SQL too, not just in `GlueCollectionCursor`'s own bookkeeping.
-        """
-        pk_name = queryset.model._meta.pk.name
-        order_by = list(queryset.query.order_by)
-
-        if not order_by:
-            return queryset.order_by(pk_name)
-
-        existing_names = {name for name, _ in parse_order_by(order_by)}
-        if pk_name in existing_names or 'pk' in existing_names:
-            return queryset
-
-        return queryset.order_by(*order_by, pk_name)
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:

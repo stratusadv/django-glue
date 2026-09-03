@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from django.forms import ModelMultipleChoiceField
 
 from django_glue.glue.attributes.django.field import BaseDjangoFieldGlueAttribute
+from django_glue.glue.options.django import GlueRelatedModelChoices
 
 if TYPE_CHECKING:
     from django import forms
@@ -28,6 +31,10 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
 
     def add_choice_metadata(self, metadata: dict[str, Any]) -> None:
         if hasattr(self.field, 'queryset'):
+            related_choices = GlueRelatedModelChoices(
+                self.field.queryset,
+                value_field_name=getattr(self.field, 'to_field_name', None),
+            )
             metadata['choices'] = []
             metadata['pk_field'] = self.field.queryset.model._meta.pk.name
             metadata['choice_model_path'] = (
@@ -35,55 +42,47 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
             )
             metadata['choices_cache_key'] = (
                 f'{self.form.__class__.__module__}.{self.form.__class__.__name__}.'
-                f'{self.name}.{self.field.queryset.model._meta.label_lower}'
+                f'{self.name}.{self.field.queryset.model._meta.label_lower}.'
+                f'{related_choices.fingerprint()}'
             )
-            # Batched/searchable loading is opt-in per field: a ModelForm
-            # declares it by setting a `foreign_key_choice_config` dict of
-            # {field_name: {'search_field': ..., 'batch_size': ...}} class
-            # attribute. Fields that don't opt in get no choices_batch_size,
-            # so RelationFieldGlue.ensureChoices() sends batch_size=None and
-            # foreign_key_choices() keeps returning every row in one
-            # response, unchanged from before this existed.
-            choice_config = getattr(self.form, 'foreign_key_choice_config', None) or {}
-            field_config = choice_config.get(self.name, {})
-            if 'search_field' in field_config:
-                metadata['choices_search_field'] = field_config['search_field']
-            if 'batch_size' in field_config:
-                metadata['choices_batch_size'] = field_config['batch_size']
-                self._add_selected_choice_metadata(metadata)
+            metadata['choices_searchable'] = related_choices.is_searchable
+            if related_choices.is_searchable:
+                self._add_selected_choice_metadata(
+                    metadata=metadata,
+                    related_choices=related_choices,
+                )
             return
         super().add_choice_metadata(metadata)
 
-    def _add_selected_choice_metadata(self, metadata: dict[str, Any]) -> None:
-        """Seed the currently selected choice for a batched field.
+    def _add_selected_choice_metadata(
+        self,
+        metadata: dict[str, Any],
+        related_choices: GlueRelatedModelChoices,
+    ) -> None:
+        """Seed the currently selected choice(s) before a searchable field is queried.
 
-        A batched field's default page is ordered by pk and may never
-        include whatever this field's current value already points at --
-        without this, an edit form's dropdown trigger renders blank for an
-        existing selection until the user happens to scroll or search their
-        way to it. This is a single, cheap lookup independent of the
-        batching/cache system: it only ever fills in `selectedChoice`
-        client-side as a fallback when the value isn't in a loaded batch,
-        it never gets merged into the batched `choices` list itself.
+        Searchable sources deliberately return no unfiltered result set, so a
+        single-value field seeds ``selected_choice`` and a multiple-value field
+        seeds one ``selected_choices`` entry per selection. This lets the browser
+        render the form's current value without weakening that rule or issuing a
+        search request.
         """
         current_value = self.field.prepare_value(
             self.form.get_initial_for_field(self.field, self.name)
         )
-        # Single-value (FK) fields only for now -- a ModelMultipleChoiceField
-        # (M2M) prepares to a list of pks, which would need seeding one
-        # selected_choice per selected row rather than a single fallback.
-        if current_value in (None, '') or isinstance(current_value, (list, tuple)):
+        if current_value in (None, ''):
             return
 
-        selected_obj = self.field.queryset.filter(pk=current_value).first()
-        if selected_obj is None:
+        is_multiple = isinstance(self.field, ModelMultipleChoiceField)
+        values = list(current_value) if is_multiple else [current_value]
+        selected_choices = related_choices.serialize_selected_values(values)
+        if not selected_choices:
             return
 
-        metadata['selected_choice'] = {
-            'value': selected_obj.pk,
-            'label': f'{selected_obj}',
-            'obj': {'pk': selected_obj.pk, '__str__': f'{selected_obj}'},
-        }
+        if is_multiple:
+            metadata['selected_choices'] = selected_choices
+        else:
+            metadata['selected_choice'] = selected_choices[0]
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
         metadata['disabled'] = self.field.disabled

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Sequence
 
 from django_glue.glue.attributes.django.model.field import ModelFieldAttribute
 
@@ -57,18 +57,6 @@ class ForeignKeyFieldAttribute(ModelFieldAttribute):
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
         super().add_extra_metadata(metadata)
-
-        related_model = self.field.related_model
-
-        # Relation metadata
-        metadata['choices'] = []
-        metadata['pk_field'] = related_model._meta.pk.name
-        metadata['choice_model_path'] = f'{related_model.__module__}.{related_model.__name__}'
-        metadata['related_model'] = metadata['choice_model_path']
-        metadata['choices_cache_key'] = (
-            f'{self.instance.__class__._meta.label_lower}.{self.name}.'
-            f'{related_model._meta.label_lower}'
-        )
 
         # FK proxy metadata
         metadata['lazy'] = not self.is_cached
