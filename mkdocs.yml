@@ -67,7 +67,7 @@ nav:
   - Architecture:
       - Choice Sources: decisions/choice-querysets.md
   - Changelog:
-      - v1.0.0: changelog/v1_changelog.md
+      - v1.0.0: changelog/changelog.md
       - Archived: changelog/archived_changelog.md
   - Roadmap:
       - Current: roadmap/roadmap_2026.md
