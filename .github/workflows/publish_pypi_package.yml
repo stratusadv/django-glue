@@ -5,39 +5,29 @@ on:
     types: [created]
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    name: Build and publish
+    needs: ci
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "latest"
-
-      - name: Setup Python
-        run: uv python install 3.11
-
-      - name: Install dependencies
-        run: uv sync --extra development
+        uses: astral-sh/setup-uv@v5
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install JS dependencies
-        run: bun install
-
       - name: Build JS bundle
-        run: bun run build
-
-      - name: Run JS tests
-        run: bun test
-
-      - name: Run Python tests
-        run: uv run pytest django_glue/tests/ -v
+        run: |
+          bun install
+          bun run build
 
       - name: Build package
         run: uv build
