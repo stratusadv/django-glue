@@ -551,6 +551,7 @@ requires-dist = [
     { name = "django", specifier = ">=5" },
     { name = "pydantic" },
 ]
+provides-extras = ["production"]
 
 [package.metadata.requires-dev]
 dev = [
