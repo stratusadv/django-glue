@@ -3,36 +3,46 @@
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __moduleCache = /* @__PURE__ */ new WeakMap;
+  function __accessProp(key) {
+    return this[key];
+  }
   var __toCommonJS = (from) => {
-    var entry = __moduleCache.get(from), desc;
+    var entry = (__moduleCache ??= new WeakMap).get(from), desc;
     if (entry)
       return entry;
     entry = __defProp({}, "__esModule", { value: true });
-    if (from && typeof from === "object" || typeof from === "function")
-      __getOwnPropNames(from).map((key) => !__hasOwnProp.call(entry, key) && __defProp(entry, key, {
-        get: () => from[key],
-        enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
-      }));
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (var key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(entry, key))
+          __defProp(entry, key, {
+            get: __accessProp.bind(from, key),
+            enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+          });
+    }
     __moduleCache.set(from, entry);
     return entry;
   };
+  var __moduleCache;
+  var __returnValue = (v) => v;
+  function __exportSetter(name, newValue) {
+    this[name] = __returnValue.bind(null, newValue);
+  }
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, {
         get: all[name],
         enumerable: true,
         configurable: true,
-        set: (newValue) => all[name] = () => newValue
+        set: __exportSetter.bind(all, name)
       });
   };
 
   // client_js/django_glue.js
   var exports_django_glue = {};
   __export(exports_django_glue, {
-    resolveUrl: () => resolveUrl,
+    GlueClient: () => client_default,
     parseJsonScriptById: () => parseJsonScriptById,
-    GlueClient: () => client_default
+    resolveUrl: () => resolveUrl
   });
 
   // client_js/src/config.js
@@ -1013,7 +1023,7 @@
     static loadingCache = new Map;
     get choices() {
       if (this.choice_model_path && !this._choicesOverridden) {
-        this.ensureChoices([]);
+        this.ensureChoices();
       }
       return this._choices || [];
     }
@@ -1042,42 +1052,88 @@
       const pk = this.pk;
       if (pk == null)
         return;
-      return (this.choices || []).find((choice) => String(choice.value) === String(pk));
+      const loaded = (this.choices || []).find((choice) => String(choice.value) === String(pk));
+      if (loaded)
+        return loaded;
+      if (this._retainedSelectedChoice && String(this._retainedSelectedChoice.value) === String(pk)) {
+        return this._retainedSelectedChoice;
+      }
+      if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
+        return this.selected_choice;
+      }
+      return;
     }
-    buildChoices(...choiceFields) {
-      this.ensureChoices(choiceFields);
-      return this.choices;
+    get isSearchingChoices() {
+      return Boolean(this._searchPromise);
     }
-    ensureChoices(choiceFields = []) {
+    ensureChoices() {
       const cacheKey = this._getChoicesCacheKey();
       const cache = this._getOrCreateCache(cacheKey);
       cache.fields.add(this);
       if (this._choices !== cache.choices) {
         this.choices = cache.choices;
       }
-      const requiredFields = this._choiceObjectFields(choiceFields);
-      const missingFields = requiredFields.filter((f) => !cache.loadedFields.has(f));
-      if (missingFields.length === 0) {
+      if (cache.loaded) {
         return cache.promise || Promise.resolve(this._choices || []);
       }
       if (cache.promise) {
-        return cache.promise.then(() => this.ensureChoices(choiceFields));
+        return cache.promise;
       }
       if (typeof this.owner.foreign_key_choices !== "function") {
         return Promise.resolve(this._choices || []);
       }
       cache.promise = this.owner.foreign_key_choices({
-        field_name: this.name,
-        choice_fields: missingFields.filter((f) => !["value", "label", "pk", "__str__"].includes(f))
+        field_name: this.name
       }).then((result) => {
-        const newChoices = Array.isArray(result) ? result : [];
-        this._mergeChoices(newChoices);
-        requiredFields.forEach((f) => cache.loadedFields.add(f));
+        const { results = [] } = result || {};
+        this._mergeChoices(results);
+        cache.loaded = true;
         return this._choices || [];
       }).finally(() => {
         cache.promise = null;
       });
       return cache.promise;
+    }
+    async searchChoices(query) {
+      if (!query) {
+        return this.clearSearch();
+      }
+      this._rememberSelectedChoice();
+      this._searchGeneration = (this._searchGeneration || 0) + 1;
+      const searchGeneration = this._searchGeneration;
+      this._searchActive = true;
+      this._searchQuery = query;
+      const searchPromise = this.owner.foreign_key_choices({
+        field_name: this.name,
+        search: query
+      }).then((result) => {
+        if (searchGeneration !== this._searchGeneration || !this._searchActive || query !== this._searchQuery) {
+          return this._choices || [];
+        }
+        const { results = [] } = result || {};
+        return this.overrideChoices(results);
+      }).finally(() => {
+        if (this._searchPromise === searchPromise) {
+          this._searchPromise = null;
+        }
+      });
+      this._searchPromise = searchPromise;
+      return searchPromise;
+    }
+    clearSearch() {
+      this._rememberSelectedChoice();
+      this._searchGeneration = (this._searchGeneration || 0) + 1;
+      this._searchActive = false;
+      this._searchQuery = "";
+      this._searchPromise = null;
+      this.clearChoicesOverride();
+      return this.choices;
+    }
+    _rememberSelectedChoice() {
+      const selectedChoice = this.selectedChoice;
+      if (selectedChoice) {
+        this._retainedSelectedChoice = selectedChoice;
+      }
     }
     _getChoicesCacheKey() {
       return this.choices_cache_key || [
@@ -1087,14 +1143,11 @@
         this.name
       ].filter(Boolean).join(":");
     }
-    _choiceObjectFields(choiceFields = []) {
-      return [...new Set(["pk", "__str__", ...choiceFields.filter(Boolean)])];
-    }
     _getOrCreateCache(cacheKey) {
       let cache = RelationFieldGlue.loadingCache.get(cacheKey);
       if (!cache) {
         cache = {
-          loadedFields: new Set,
+          loaded: false,
           promise: null,
           choices: [],
           fields: new Set
@@ -1119,7 +1172,9 @@
       });
       cache.choices = merged;
       for (const field of cache.fields) {
-        field.choices = cache.choices;
+        if (!field._choicesOverridden) {
+          field.choices = cache.choices;
+        }
       }
     }
   }
@@ -1132,7 +1187,22 @@
     }
     get selectedChoices() {
       const selectedPks = new Set(this.selectedPks.map((value) => String(value)));
-      return (this.choices || []).filter((choice) => selectedPks.has(String(choice.value)));
+      if (selectedPks.size === 0)
+        return [];
+      const candidates = [
+        ...this.selected_choices || [],
+        ...this._retainedSelectedChoices || [],
+        ...this.choices || []
+      ];
+      const choicesByValue = new Map(candidates.map((choice) => [String(choice.value), choice]));
+      return this.selectedPks.map((value) => choicesByValue.get(String(value))).filter(Boolean);
+    }
+    _rememberSelectedChoice() {
+      const retainedByValue = new Map((this._retainedSelectedChoices || []).map((choice) => [String(choice.value), choice]));
+      for (const choice of this.selectedChoices) {
+        retainedByValue.set(String(choice.value), choice);
+      }
+      this._retainedSelectedChoices = Array.from(retainedByValue.values());
     }
     hasChoiceSelected(value) {
       return this.selectedPks.some((item) => String(item) === String(value));

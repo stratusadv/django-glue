@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from django.test import TestCase, override_settings
 
-from django_glue import ALL_FIELDS
+from django_glue import ALL_FIELDS, Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
     GlueQuerySetCursorValidationError,
@@ -17,7 +17,7 @@ from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.attributes.django.model.related_set import RelatedSetFieldAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
 from test_project.fight.models import Fight
-from test_project.gorilla.models import Gorilla
+from test_project.gorilla.models import Gorilla, Skill
 
 
 def request_with_session(session_key='test-session'):
@@ -56,6 +56,37 @@ class QuerySetPaginationTestCase(TestCase):
                 return names
             seek_key = result['seek_key']
         raise AssertionError('cursor never terminated')
+
+    def test_choice_queryset_config_propagates_to_child_model_policy(self):
+        visible = Skill.objects.create(name='Visible')
+        Skill.objects.create(name='Hidden')
+        glue_object = build_glue(
+            fields=['id', 'name', 'skills'],
+            related_field_config={
+                'skills': {
+                    'choice_queryset': Glue.choices(
+                        Skill.objects.filter(name='Visible'),
+                        fields=['name'],
+                    ),
+                },
+            },
+        )
+
+        restored_queryset = QuerySetGlue._reconstruct_from_policy(glue_object.policy)
+        restored_queryset.request = request_with_session()
+        child_payload = restored_queryset._build_child_model_payload(
+            restored_queryset.queryset.first()
+        )
+        child_policy = GluePolicy.from_token(child_payload['policy_token'])
+        child = ModelGlue._reconstruct_from_policy(child_policy)
+
+        result = child.foreign_key_choices(field_name='skills')
+
+        self.assertEqual(
+            [choice['value'] for choice in result['results']],
+            [visible.pk],
+        )
+        self.assertEqual(result['results'][0]['obj']['name'], 'Visible')
 
     def test_batch_size_defaults_to_setting(self):
         with override_settings(DJANGO_GLUE_QUERYSET_BATCH_SIZE=3):

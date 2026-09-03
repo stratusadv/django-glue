@@ -33,6 +33,28 @@ jobs:
           sync-extras: development documentation
           manage-py-path: manage.py
 
+  django-compatibility:
+    name: Django ${{ matrix.django-version }} compatibility
+    runs-on: ubuntu-latest
+    needs: linting
+    strategy:
+      matrix:
+        django-version: ['5.0.*', '5.1.*', '5.2.*', '6.0.*', '6.1.*']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - run: >-
+          uv run
+          --isolated
+          --with 'django==${{ matrix.django-version }}'
+          --extra development
+          pytest
+          django_glue/tests/glue/test_adapters.py
+          django_glue/tests/glue/test_queryset_pagination.py
+          -q
+
   js-tests:
     name: JavaScript Tests
     runs-on: ubuntu-latest

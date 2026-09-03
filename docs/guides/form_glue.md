@@ -252,6 +252,50 @@ const choices = await brandField.choices()
 
 Choices are cached to avoid duplicate requests.
 
+Use `Glue.choices()` to enable bounded server-side search and declare additional
+fields on each choice object:
+
+```python
+class ContactForm(forms.ModelForm):
+    company = forms.ModelChoiceField(queryset=Glue.choices(
+        Company.objects.filter(is_active=True),
+        search_fields=['name', 'account_number'],
+        fields=['name', 'account_number', 'logo_url'],
+        search_limit=25,
+    ))
+
+    class Meta:
+        model = Contact
+        fields = ['name', 'company']
+```
+
+With that config, the field's proxy exposes:
+
+```javascript
+const companyField = Glue.form.contact_form.$fields.company
+
+// Search returns at most search_limit matches and replaces choices until
+// clearSearch() runs.
+await companyField.searchChoices('acme')
+companyField.clearSearch()
+```
+
+For a searchable `ModelMultipleChoiceField`, `selectedChoices` contains every
+selected rich choice even when the active search results are cleared. Use
+`addChoice(value)`, `removeChoice(value)`, or `toggleChoice(value)` to update the
+selection without losing labels for selections made by earlier searches.
+
+`search_limit`, `search_fields`, and `fields` are server-owned. The browser sends
+only the field name and search text, so it cannot widen the result limit, search
+an undeclared ORM path, or request undeclared model attributes.
+
+!!! warning "Non-searchable querysets load every row"
+
+    A `Glue.choices()` queryset with no `search_fields` is serialized in full and
+    every row is sent to the browser -- there is no cap. Reserve it for a small,
+    bounded lookup table. If the related table grows with app data, add
+    `search_fields` so choices load on demand.
+
 ## Full Example: Contact Form
 
 ### Backend

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django_glue.glue.attributes.django.field import BaseDjangoFieldGlueAttribute
+from django_glue.glue.options.django import GlueRelatedModelChoices
 
 if TYPE_CHECKING:
     from django.db import models
@@ -38,14 +39,31 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
         # TODO: Move this to ManyRelatedFieldAttribute when implementing M2M as QuerySetGlue
         if getattr(self.field, 'is_relation', False) and getattr(self.field, 'related_model', None):
             related_model = self.field.related_model
+            choice_queryset = self.owner._choice_queryset_for_field(self.name)
+            related_choices = GlueRelatedModelChoices(
+                choice_queryset,
+                value_field_name=self.owner._choice_value_field_name_for_field(
+                    self.name
+                ),
+            )
             metadata['choices'] = []
             metadata['pk_field'] = related_model._meta.pk.name
             metadata['choice_model_path'] = f'{related_model.__module__}.{related_model.__name__}'
             metadata['related_model'] = metadata['choice_model_path']
             metadata['choices_cache_key'] = (
                 f'{self.instance.__class__._meta.label_lower}.{self.name}.'
-                f'{related_model._meta.label_lower}'
+                f'{related_model._meta.label_lower}.'
+                f'{related_choices.fingerprint()}'
             )
+            metadata['choices_searchable'] = related_choices.is_searchable
+            if related_choices.is_searchable:
+                selected_choices = related_choices.serialize_selected_values(
+                    self.get() if self.field.many_to_many else [self.get()]
+                )
+                if self.field.many_to_many:
+                    metadata['selected_choices'] = selected_choices
+                elif selected_choices:
+                    metadata['selected_choice'] = selected_choices[0]
 
     def get(self) -> Any:
         if getattr(self.field, 'many_to_many', False):

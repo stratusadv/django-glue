@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from django.forms import ModelMultipleChoiceField
 
 from django_glue.glue.attributes.django.field import BaseDjangoFieldGlueAttribute
+from django_glue.glue.options.django import GlueRelatedModelChoices
 
 if TYPE_CHECKING:
     from django import forms
@@ -28,6 +31,10 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
 
     def add_choice_metadata(self, metadata: dict[str, Any]) -> None:
         if hasattr(self.field, 'queryset'):
+            related_choices = GlueRelatedModelChoices(
+                self.field.queryset,
+                value_field_name=getattr(self.field, 'to_field_name', None),
+            )
             metadata['choices'] = []
             metadata['pk_field'] = self.field.queryset.model._meta.pk.name
             metadata['choice_model_path'] = (
@@ -35,10 +42,47 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
             )
             metadata['choices_cache_key'] = (
                 f'{self.form.__class__.__module__}.{self.form.__class__.__name__}.'
-                f'{self.name}.{self.field.queryset.model._meta.label_lower}'
+                f'{self.name}.{self.field.queryset.model._meta.label_lower}.'
+                f'{related_choices.fingerprint()}'
             )
+            metadata['choices_searchable'] = related_choices.is_searchable
+            if related_choices.is_searchable:
+                self._add_selected_choice_metadata(
+                    metadata=metadata,
+                    related_choices=related_choices,
+                )
             return
         super().add_choice_metadata(metadata)
+
+    def _add_selected_choice_metadata(
+        self,
+        metadata: dict[str, Any],
+        related_choices: GlueRelatedModelChoices,
+    ) -> None:
+        """Seed the currently selected choice(s) before a searchable field is queried.
+
+        Searchable sources deliberately return no unfiltered result set, so a
+        single-value field seeds ``selected_choice`` and a multiple-value field
+        seeds one ``selected_choices`` entry per selection. This lets the browser
+        render the form's current value without weakening that rule or issuing a
+        search request.
+        """
+        current_value = self.field.prepare_value(
+            self.form.get_initial_for_field(self.field, self.name)
+        )
+        if current_value in (None, ''):
+            return
+
+        is_multiple = isinstance(self.field, ModelMultipleChoiceField)
+        values = list(current_value) if is_multiple else [current_value]
+        selected_choices = related_choices.serialize_selected_values(values)
+        if not selected_choices:
+            return
+
+        if is_multiple:
+            metadata['selected_choices'] = selected_choices
+        else:
+            metadata['selected_choice'] = selected_choices[0]
 
     def add_extra_metadata(self, metadata: dict[str, Any]) -> None:
         metadata['disabled'] = self.field.disabled

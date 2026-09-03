@@ -1,22 +1,26 @@
-from typing import Callable, Iterable, Literal, Mapping, Sequence, Union
+from typing import Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, BaseFormSet, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.context import GlueContextManager
+from django_glue.glue.function import FunctionGlue
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
-from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
-from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.glue.objects.django.model.object import ModelGlue, RelatedFieldConfig
 from django_glue.glue.objects.django.queryset import DEFAULT_BATCH_SIZE, QuerySetGlue
 from django_glue.glue.objects.django.template import TemplateGlue
-from django_glue.glue.function import FunctionGlue
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.options.django import (
+    DEFAULT_SEARCH_LIMIT,
+    configure_choices,
+)
+from django_glue.glue.sequence import SequenceGlue
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
@@ -99,6 +103,7 @@ def _html_attr(*args, **kwargs) -> DeclaredAttribute:
 
 # Type alias for form parameter: can be either an instance or a class
 FormOrClass = Union[ModelForm, type[ModelForm]]
+ChoiceSource = TypeVar('ChoiceSource')
 
 
 class Glue:
@@ -110,6 +115,21 @@ class Glue:
     property = _GluePropertyDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
+
+    @staticmethod
+    def choices(
+        source: ChoiceSource,
+        *,
+        search_fields: Sequence[str] = (),
+        fields: Sequence[str] = (),
+        search_limit: int = DEFAULT_SEARCH_LIMIT,
+    ) -> ChoiceSource:
+        return configure_choices(
+            source=source,
+            search_fields=search_fields,
+            fields=fields,
+            search_limit=search_limit,
+        )
 
     @staticmethod
     def object(
@@ -145,7 +165,7 @@ class Glue:
         forms: Mapping[str, FormOrClass] | None = None,
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> ModelGlue:
         return Glue.object(
@@ -176,7 +196,7 @@ class Glue:
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, Mapping[str, Sequence[str] | Literal['__all__']]] | None = None,
+        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
     ) -> QuerySetGlue:

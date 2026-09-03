@@ -2,8 +2,12 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from django_glue import Glue
+from test_project.fight.forms import (
+    ContactPromoterForm,
+    FightForm,
+    SearchableFighterChoiceForm,
+)
 from test_project.fight.models import Fight
-from test_project.fight.forms import FightForm, ContactPromoterForm
 
 
 def list_view(request: HttpRequest) -> HttpResponse:
@@ -31,6 +35,20 @@ def list_view(request: HttpRequest) -> HttpResponse:
             'terrain_type',
         ],
         form=FightForm(),
+    )
+
+    relation_choice_form = SearchableFighterChoiceForm()
+    initial_gorilla = relation_choice_form.fields['fighter'].queryset.first()
+    if initial_gorilla is not None:
+        relation_choice_form.initial['fighter'] = initial_gorilla.pk
+    relation_choice_form.initial['fighters'] = list(
+        relation_choice_form.fields['fighters'].queryset.values_list('pk', flat=True)[:2]
+    )
+    Glue.form(
+        request=request,
+        target=relation_choice_form,
+        unique_name='relation_choice_form',
+        access=Glue.Access.CHANGE,
     )
 
     return render(request, template_name='fight/page/list_page.html')

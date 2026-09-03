@@ -693,7 +693,7 @@ describe('Glue proxies', () => {
     test('relation fields lazily load and share choices through the field interface', async () => {
         RelationFieldGlue.loadingCache.clear()
         mockOperationFetch({
-            result: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}],
+            result: {results: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}], has_next: false, seek_key: null},
             state: createState({instance_data: {id: 1, skills: []}}),
             policy: createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']}),
             metadata: createMetadata({
@@ -742,7 +742,7 @@ describe('Glue proxies', () => {
     test('overrideChoices() survives incidental reads that would otherwise re-trigger ensureChoices()', async () => {
         RelationFieldGlue.loadingCache.clear()
         mockOperationFetch({
-            result: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}],
+            result: {results: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}], has_next: false, seek_key: null},
             state: createState({instance_data: {id: 1, skills: []}}),
             policy: createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']}),
             metadata: createMetadata({
@@ -801,6 +801,218 @@ describe('Glue proxies', () => {
         expect(object.$fields.skills.choices).toEqual([
             {value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}},
         ])
+    })
+
+    // Reads the `kwargs` field off a mocked fetch call's FormData body --
+    // sendAttributeRequest() posts kwargs as a JSON string field, not a
+    // JSON request body, so a plain mockOperationFetch() (one fixed
+    // response for every call) can't tell requests in a batched-loading
+    // sequence apart. These tests need to.
+    function kwargsFromCall(call) {
+        return JSON.parse(call.options.body.get('kwargs'))
+    }
+
+    function relationChoicesResponse(result) {
+        return new Response(JSON.stringify({
+            result,
+            state: createState({instance_data: {id: 1, skills: []}}),
+            policy_token: createPolicyToken(),
+            metadata: createMetadata(),
+            messages: [],
+        }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    }
+
+    function buildRelationObject(overrides = {}) {
+        const metadata = createMetadata({
+            fields: {
+                skills: {
+                    type: 'ManyToManyField',
+                    label: 'Skills',
+                    choices: [],
+                    choice_model_path: 'test_project.gorilla.models.Skill',
+                    choices_cache_key: overrides.cacheKey,
+                    selected_choices: overrides.selectedChoices,
+                },
+            },
+            attributes: {foreign_key_choices: {namespace: 'callable'}},
+        })
+        const policy = createPolicy({attributes: ['id', 'skills', 'foreign_key_choices']})
+        const state = createState({
+            instance_data: {id: 1, skills: overrides.selectedValues || []},
+        })
+        const object = new GlueModelProxy({http: http(), policy, state, metadata})
+        object._loaded = true
+        return object
+    }
+
+    test('searchChoices() takes over choices without polluting the default cache', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        const calls = []
+        global.fetch = async (url, options) => {
+            calls.push({url, options})
+            const kwargs = kwargsFromCall(calls[calls.length - 1])
+            const body = kwargs.search === 'strike'
+                ? {results: [{value: 10, label: 'Striking', obj: {pk: 10, __str__: 'Striking'}}]}
+                : {results: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}]}
+            return new Response(JSON.stringify({
+                result: body,
+                state: createState({instance_data: {id: 1, skills: []}}),
+                policy_token: createPolicyToken(),
+                metadata: createMetadata(),
+                messages: [],
+            }), {status: 200, headers: {'Content-Type': 'application/json'}})
+        }
+
+        const object = buildRelationObject({cacheKey: 'gorilla.skills.search'})
+        const field = object.$fields.skills
+
+        // Default (unsearched) choices load first, same as any other field.
+        expect(field.choices).toEqual([])
+        await new Promise(resolve => setTimeout(resolve, 0))
+        expect(field.choices.map(c => c.value)).toEqual([1])
+
+        await field.searchChoices('strike')
+        expect(field.choices.map(c => c.value)).toEqual([10])
+        expect(kwargsFromCall(calls[calls.length - 1])).toEqual({
+            field_name: 'skills',
+            search: 'strike',
+        })
+
+        field.clearSearch()
+        expect(field.choices.map(c => c.value)).toEqual([1])
+    })
+
+    test('clearSearch() retains a choice selected from search results', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        global.fetch = async (url, options) => {
+            const kwargs = kwargsFromCall({url, options})
+            const result = kwargs.search
+                ? {results: [{value: 10, label: 'Striking', obj: {pk: 10, __str__: 'Striking'}}]}
+                : {results: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}]}
+            return relationChoicesResponse(result)
+        }
+        const field = buildRelationObject({cacheKey: 'gorilla.skills.retained'}).$fields.skills
+
+        expect(field.choices).toEqual([])
+        await new Promise(resolve => setTimeout(resolve, 0))
+        await field.searchChoices('strike')
+        field.value = [10]
+        field.clearSearch()
+
+        expect(field.choices.map(choice => choice.value)).toEqual([1])
+        expect(field.selectedChoices).toEqual([{
+            value: 10,
+            label: 'Striking',
+            obj: {pk: 10, __str__: 'Striking'},
+        }])
+
+        field.value = [1]
+        expect(field.selectedChoices[0].value).toBe(1)
+    })
+
+    test('searchable multiple relations retain all selected choices', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        global.fetch = async (_url, options) => {
+            const kwargs = JSON.parse(options.body.get('kwargs'))
+            const results = kwargs.search
+                ? [{value: 3, label: 'Gamma', obj: {pk: 3, __str__: 'Gamma'}}]
+                : []
+            return relationChoicesResponse({results})
+        }
+        const field = buildRelationObject({
+            cacheKey: 'gorilla.skills.multiple-retained',
+            selectedValues: [1, 2],
+            selectedChoices: [
+                {value: 1, label: 'Alpha', obj: {pk: 1, __str__: 'Alpha'}},
+                {value: 2, label: 'Beta', obj: {pk: 2, __str__: 'Beta'}},
+            ],
+        }).$fields.skills
+
+        expect(field.selectedChoices.map(choice => choice.label)).toEqual(['Alpha', 'Beta'])
+
+        await field.searchChoices('gamma')
+        field.value = [1, 2]
+        field.addChoice(3)
+        field.clearSearch()
+
+        expect(field.choices).toEqual([])
+        expect(field.selectedChoices.map(choice => choice.label)).toEqual([
+            'Alpha',
+            'Beta',
+            'Gamma',
+        ])
+
+        field.removeChoice(2)
+        expect(field.selectedChoices.map(choice => choice.label)).toEqual(['Alpha', 'Gamma'])
+    })
+
+    test('selectedChoices prefers a fresh search result over the stale server seed', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        global.fetch = async (_url, options) => {
+            const kwargs = JSON.parse(options.body.get('kwargs'))
+            const results = kwargs.search
+                ? [{value: 1, label: 'Alpha (renamed)', obj: {pk: 1, __str__: 'Alpha (renamed)'}}]
+                : []
+            return relationChoicesResponse({results})
+        }
+        const field = buildRelationObject({
+            cacheKey: 'gorilla.skills.seed-vs-fresh',
+            selectedValues: [1],
+            selectedChoices: [{value: 1, label: 'Alpha', obj: {pk: 1, __str__: 'Alpha'}}],
+        }).$fields.skills
+
+        expect(field.selectedChoices.map(choice => choice.label)).toEqual(['Alpha'])
+
+        await field.searchChoices('alpha')
+        field.value = [1]
+
+        // The current results carry the up-to-date label; the seed must not win.
+        expect(field.selectedChoices.map(choice => choice.label)).toEqual(['Alpha (renamed)'])
+    })
+
+    test('searchChoices() ignores an older response that completes after a newer search', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        const pending = []
+        global.fetch = (url, options) => new Promise(resolve => {
+            pending.push({url, options, resolve})
+        })
+        const field = buildRelationObject({cacheKey: 'gorilla.skills.search-race'}).$fields.skills
+
+        const olderSearch = field.searchChoices('gr')
+        const newerSearch = field.searchChoices('grap')
+
+        pending[1].resolve(relationChoicesResponse({
+            results: [{value: 2, label: 'Grappling', obj: {pk: 2, __str__: 'Grappling'}}],
+        }))
+        await newerSearch
+
+        pending[0].resolve(relationChoicesResponse({
+            results: [{value: 1, label: 'Greco', obj: {pk: 1, __str__: 'Greco'}}],
+        }))
+        await olderSearch
+
+        expect(field.choices.map(choice => choice.value)).toEqual([2])
+        expect(field.isSearchingChoices).toBe(false)
+    })
+
+    test('clearSearch() invalidates an in-flight search response', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        const pending = []
+        global.fetch = (url, options) => new Promise(resolve => {
+            pending.push({url, options, resolve})
+        })
+        const field = buildRelationObject({cacheKey: 'gorilla.skills.clear-race'}).$fields.skills
+
+        const search = field.searchChoices('grap')
+        field.clearSearch()
+
+        pending[0].resolve(relationChoicesResponse({
+            results: [{value: 2, label: 'Grappling', obj: {pk: 2, __str__: 'Grappling'}}],
+        }))
+        await search
+
+        expect(field.choices).toEqual([])
+        expect(field.isSearchingChoices).toBe(false)
     })
 
     test('querysets build model proxies from returned row manifests', async () => {

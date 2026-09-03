@@ -5,39 +5,48 @@ from datetime import datetime, timezone
 from functools import cached_property
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import QuerySet
-from django.test import TestCase
+from django.db.models import F, QuerySet
+from django.test import TestCase, override_settings
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
-from django_glue.glue import (
-    BaseGlue,
-    FormFieldAttribute,
-    ModelFieldAttribute,
-    FormGlue,
-    ModelGlue,
-    QuerySetGlue,
-    TemplateGlue,
-    GluePolicy,
-    FunctionGlue,
-    SequenceGlue,
-    GlueClassRegistry,
-)
-from django_glue.glue.loading import LoadingStrategy
-from django_glue.glue.attributes import DeclaredAttribute, CompositeStateAttribute, GlueObjectAttribute
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueCalledStateAttributeError,
     GlueInvalidAttributeError,
+    GlueInvalidPolicyError,
 )
-from django_glue.response import GlueResponse
+from django_glue.glue import (
+    BaseGlue,
+    FormFieldAttribute,
+    FormGlue,
+    FunctionGlue,
+    GlueClassRegistry,
+    GluePolicy,
+    ModelFieldAttribute,
+    ModelGlue,
+    QuerySetGlue,
+    SequenceGlue,
+    TemplateGlue,
+)
+from django_glue.glue.attributes import (
+    CompositeStateAttribute,
+    DeclaredAttribute,
+    GlueObjectAttribute,
+)
+from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.options.django import (
+    GlueRelatedModelChoices,
+)
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
+from django_glue.response import GlueResponse
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.test_forms import ContactForm, FightForm, TestModelForm
@@ -305,11 +314,11 @@ class AllFieldsTestCase(TestCase):
     def test_model_all_fields_includes_all_model_fields(self):
         from django_glue.glue.objects.django.model.object import ALL_FIELDS
 
-        glue_object = ModelGlue(
+        glue_object = with_request(ModelGlue(
             self.gorilla,
             **glue_context(access=GlueAccess.VIEW),
             fields=ALL_FIELDS,
-        )
+        ))
 
         included = glue_object._included_fields
         # Should include standard fields
@@ -943,13 +952,175 @@ class DjangoModelGlueObjectTestCase(TestCase):
         skill = Skill.objects.create(name='Grappling')
         glue_object = ModelGlue(self.gorilla, **glue_context(), fields=['skills'])
 
-        result = glue_object.foreign_key_choices(field_name='skills', choice_fields=['name'])
+        result = glue_object.foreign_key_choices(field_name='skills')
 
-        self.assertEqual(result, [{
+        self.assertEqual(result['results'], [{
             'value': skill.pk,
             'label': 'Grappling',
-            'obj': {'pk': skill.pk, '__str__': 'Grappling', 'name': 'Grappling'},
+            'obj': {'pk': skill.pk, '__str__': 'Grappling'},
         }])
+
+    def test_model_foreign_key_choices_uses_registered_choice_queryset(self):
+        Skill.objects.create(name='Hidden')
+        visible = Skill.objects.create(name='Visible', difficulty=4)
+        choice_queryset = Glue.choices(
+            Skill.objects.filter(name='Visible'),
+            search_fields=['name', 'description'],
+            fields=['name', 'difficulty'],
+        )
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['skills'],
+            related_field_config={
+                'skills': {'choice_queryset': choice_queryset},
+            },
+        )
+
+        result = glue_object.foreign_key_choices(
+            field_name='skills',
+            search='vis',
+        )
+
+        self.assertEqual(result['results'], [{
+            'value': visible.pk,
+            'label': 'Visible',
+            'obj': {
+                'pk': visible.pk,
+                '__str__': 'Visible',
+                'name': 'Visible',
+                'difficulty': 4,
+            },
+        }])
+
+    def test_registered_choice_queryset_survives_policy_reconstruction(self):
+        visible = Skill.objects.create(name='Visible')
+        Skill.objects.create(name='Hidden')
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['skills'],
+            related_field_config={
+                'skills': {
+                    'choice_queryset': Glue.choices(
+                        Skill.objects.filter(name='Visible'),
+                        fields=['name'],
+                    ),
+                },
+            },
+        ))
+
+        restored = ModelGlue._reconstruct_from_policy(glue_object.policy)
+        result = restored.foreign_key_choices(field_name='skills')
+
+        self.assertEqual(
+            [choice['value'] for choice in result['results']],
+            [visible.pk],
+        )
+        self.assertEqual(result['results'][0]['obj']['name'], 'Visible')
+
+    def test_searchable_registered_choice_queryset_survives_policy_reconstruction(self):
+        matching = Skill.objects.create(name='Grappling')
+        Skill.objects.create(name='Striking')
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['skills'],
+            related_field_config={
+                'skills': {
+                    'choice_queryset': Glue.choices(
+                        Skill.objects.all(),
+                        search_fields=['name'],
+                        fields=['name'],
+                    ),
+                },
+            },
+        ))
+
+        restored = ModelGlue._reconstruct_from_policy(glue_object.policy)
+
+        # Searchability (the QuerySetChoiceOptions on the Query) must survive the
+        # pickle round trip: no results without a query, filtered results with one.
+        self.assertEqual(
+            restored.foreign_key_choices(field_name='skills')['results'],
+            [],
+        )
+        searched = restored.foreign_key_choices(field_name='skills', search='grap')
+        self.assertEqual(
+            [choice['value'] for choice in searched['results']],
+            [matching.pk],
+        )
+
+    def test_tampered_choice_queryset_policy_is_rejected_before_deserialization(self):
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['skills'],
+            related_field_config={
+                'skills': {
+                    'choice_queryset': Glue.choices(
+                        Skill.objects.all(),
+                    ),
+                },
+            },
+        ))
+
+        with (
+            patch(
+                'django_glue.glue.objects.django.model.object.pickle.loads'
+            ) as deserialize_query,
+            self.assertRaises(GlueInvalidPolicyError),
+        ):
+            verified_policy = GluePolicy.from_token(f'{glue_object.policy.token}x')
+            ModelGlue._reconstruct_from_policy(verified_policy)
+
+        deserialize_query.assert_not_called()
+
+    def test_registered_choice_queryset_validates_relation_and_model(self):
+        with self.assertRaises(ValueError):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(),
+                fields=['skills'],
+                related_field_config={
+                    'missing': {'choice_queryset': Skill.objects.all()},
+                },
+            )
+
+        with self.assertRaises(ValueError):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(),
+                fields=['skills'],
+                related_field_config={
+                    'skills': {'choice_queryset': Gorilla.objects.all()},
+                },
+            )
+
+    def test_model_foreign_key_choices_does_not_echo_model_state(self):
+        skill = Skill.objects.create(name='Grappling')
+        glue_object = with_request(ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['skills'],
+        ))
+        context = AttributeCallRequestContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=glue_object.policy,
+            target_glue_client_state={'skills': {'value': []}},
+            target_attribute_name='foreign_key_choices',
+            target_attribute_call_kwargs={'field_name': 'skills'},
+        )
+
+        response = glue_object.process_attribute_call(context)
+        payload = json.loads(response.content)
+
+        self.assertEqual(
+            [choice['value'] for choice in payload['result']['results']],
+            [skill.pk],
+        )
+        self.assertNotIn('state', payload)
+        self.assertNotIn('metadata', payload)
 
     def test_model_save_normalizes_rich_relation_and_file_state(self):
         skill = Skill.objects.create(name='Grappling')
@@ -1304,7 +1475,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         response = glue_object.process_attribute_call(context)
         payload = json.loads(response.content)
 
-        self.assertEqual(payload['result'], [{
+        self.assertEqual(payload['result']['results'], [{
             'value': skill.pk,
             'label': 'Grappling',
             'obj': {'pk': skill.pk, '__str__': 'Grappling'},
@@ -1312,6 +1483,453 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertNotIn('state', payload)
         self.assertNotIn('policy', payload)
         self.assertNotIn('metadata', payload)
+
+    def test_unsearchable_foreign_key_choices_returns_every_row(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        for index in range(5):
+            Skill.objects.create(name=f'Skill {index}')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(len(result['results']), 5)
+
+    def test_foreign_key_choices_uses_model_choice_to_field_name(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(
+                queryset=Skill.objects.all(),
+                to_field_name='name',
+            )
+
+        skill = Skill.objects.create(name='Grappling')
+        glue_object = FormGlue(
+            SkillForm(),
+            **glue_context(name='skill-form'),
+        )
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'], [{
+            'value': 'Grappling',
+            'label': 'Grappling',
+            'obj': {
+                'pk': skill.pk,
+                '__str__': 'Grappling',
+            },
+        }])
+
+        glue_object._load_client_state({
+            'skill': {'value': 'Grappling'},
+        })
+        self.assertTrue(glue_object.save()['valid'])
+
+    def test_searchable_foreign_key_choices_requires_search_and_limits_results(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+                search_limit=2,
+            ))
+
+        skills = [Skill.objects.create(name=f'Skill {index}') for index in range(3)]
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        self.assertEqual(
+            glue_object.foreign_key_choices(field_name='skill'),
+            {'results': []},
+        )
+        result = glue_object.foreign_key_choices(
+            field_name='skill',
+            search='skill',
+        )
+
+        self.assertEqual(
+            [choice['value'] for choice in result['results']],
+            [skill.pk for skill in skills[:2]],
+        )
+
+    def test_foreign_key_choices_search_field_filters_with_icontains(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+            ))
+
+        Skill.objects.create(name='Grappling')
+        striking = Skill.objects.create(name='Striking')
+        Skill.objects.create(name='Wrestling')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(
+            field_name='skill',
+            search='strik',
+        )
+
+        self.assertEqual(result['results'], [{
+            'value': striking.pk,
+            'label': 'Striking',
+            'obj': {'pk': striking.pk, '__str__': 'Striking'},
+        }])
+
+    def test_foreign_key_choices_searches_multiple_declared_fields(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name', 'description'],
+            ))
+
+        name_match = Skill.objects.create(name='Defence', description='')
+        description_match = Skill.objects.create(name='Guard', description='Defence skill')
+        Skill.objects.create(name='Striking', description='Offence')
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+
+        result = glue_object.foreign_key_choices(
+            field_name='skill',
+            search='defence',
+        )
+
+        self.assertEqual(
+            [choice['value'] for choice in result['results']],
+            [name_match.pk, description_match.pk],
+        )
+
+    def test_foreign_key_choices_search_without_search_field_is_ignored(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        Skill.objects.create(name='Grappling')
+        Skill.objects.create(name='Striking')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        # A search term with no search_field can't be applied (there's no
+        # generic way to filter on a model's __str__ at the database layer),
+        # so it's a no-op rather than an error -- the field returns
+        # unfiltered, matching how a widget that never opted into search
+        # behaves if it's ever accidentally passed one.
+        result = glue_object.foreign_key_choices(field_name='skill', search='strik')
+
+        self.assertEqual(len(result['results']), 2)
+
+    def test_foreign_key_choices_uses_server_owned_shape(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                fields=['name', 'difficulty'],
+            ))
+
+        skill = Skill.objects.create(
+            name='Grappling',
+            difficulty=3,
+        )
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'], [{
+            'value': skill.pk,
+            'label': 'Grappling',
+            'obj': {
+                'pk': skill.pk,
+                '__str__': 'Grappling',
+                'name': 'Grappling',
+                'difficulty': 3,
+            },
+        }])
+
+    def test_queryset_choice_options_survive_form_field_cloning(self):
+        from django import forms
+
+        configured_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_fields=['name'],
+            fields=['name'],
+            search_limit=10,
+        )
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=configured_queryset)
+
+        field_queryset = SkillForm().fields['skill'].queryset
+        options = GlueRelatedModelChoices(field_queryset).explicit_options
+
+        self.assertIsNotNone(options)
+        self.assertEqual(options.search_fields, ('name',))
+        self.assertEqual(options.fields, ('name',))
+        self.assertEqual(options.search_limit, 10)
+
+    def test_queryset_choice_options_survive_queryset_cloning(self):
+        configured_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_fields=['name'],
+            fields=['description'],
+            search_limit=10,
+        )
+        cloned_querysets = [
+            configured_queryset.all(),
+            configured_queryset.filter(name='Grappling'),
+            configured_queryset.exclude(name='Striking'),
+            configured_queryset.order_by('name'),
+            configured_queryset.distinct(),
+        ]
+
+        for cloned_queryset in cloned_querysets:
+            with self.subTest(query=str(cloned_queryset.query)):
+                options = GlueRelatedModelChoices(cloned_queryset).explicit_options
+
+                self.assertIsNotNone(options)
+                self.assertEqual(options.search_fields, ('name',))
+                self.assertEqual(options.fields, ('description',))
+                self.assertEqual(options.search_limit, 10)
+
+    def test_reconfiguring_choice_queryset_does_not_mutate_source_options(self):
+        original_queryset = Glue.choices(
+            Skill.objects.all(),
+            fields=['name'],
+            search_limit=10,
+        )
+        reconfigured_queryset = Glue.choices(
+            original_queryset,
+            fields=['description'],
+            search_limit=20,
+        )
+
+        original_options = GlueRelatedModelChoices(original_queryset).explicit_options
+        reconfigured_options = GlueRelatedModelChoices(
+            reconfigured_queryset
+        ).explicit_options
+
+        self.assertIsNotNone(original_options)
+        self.assertIsNotNone(reconfigured_options)
+        self.assertEqual(original_options.fields, ('name',))
+        self.assertEqual(original_options.search_limit, 10)
+        self.assertEqual(reconfigured_options.fields, ('description',))
+        self.assertEqual(reconfigured_options.search_limit, 20)
+
+    def test_choice_queryset_fingerprint_is_stable_for_equivalent_querysets(self):
+        queryset = Glue.choices(
+            Skill.objects.filter(name='Visible'),
+            search_fields=['name'],
+            fields=['description'],
+            search_limit=25,
+        )
+
+        self.assertEqual(
+            GlueRelatedModelChoices(queryset).fingerprint(),
+            GlueRelatedModelChoices(queryset.all()).fingerprint(),
+        )
+
+    def test_choice_queryset_fingerprint_includes_query(self):
+        visible_queryset = Glue.choices(
+            Skill.objects.filter(name='Visible'),
+            fields=['name'],
+        )
+        hidden_queryset = Glue.choices(
+            Skill.objects.filter(name='Hidden'),
+            fields=['name'],
+        )
+
+        self.assertNotEqual(
+            GlueRelatedModelChoices(visible_queryset).fingerprint(),
+            GlueRelatedModelChoices(hidden_queryset).fingerprint(),
+        )
+
+    def test_choice_queryset_fingerprint_includes_options(self):
+        name_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_fields=['name'],
+            fields=['name'],
+        )
+        description_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_fields=['description'],
+            fields=['description'],
+        )
+
+        self.assertNotEqual(
+            GlueRelatedModelChoices(name_queryset).fingerprint(),
+            GlueRelatedModelChoices(description_queryset).fingerprint(),
+        )
+
+    def test_choice_queryset_fingerprint_includes_search_limit(self):
+        small_limit_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_limit=25,
+        )
+        large_limit_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_limit=100,
+        )
+
+        self.assertNotEqual(
+            GlueRelatedModelChoices(small_limit_queryset).fingerprint(),
+            GlueRelatedModelChoices(large_limit_queryset).fingerprint(),
+        )
+
+    def test_choice_queryset_fingerprint_includes_value_field(self):
+        queryset = Skill.objects.all()
+
+        pk_fingerprint = GlueRelatedModelChoices(queryset).fingerprint()
+        name_fingerprint = GlueRelatedModelChoices(
+            queryset,
+            value_field_name='name',
+        ).fingerprint()
+
+        self.assertNotEqual(pk_fingerprint, name_fingerprint)
+
+    def test_choice_queryset_rejects_invalid_configuration(self):
+        for search_limit in (0, -1, True, '5', 2.5):
+            with self.assertRaises(ValueError):
+                Glue.choices(
+                    Skill.objects.all(),
+                    search_limit=search_limit,
+                )
+
+        with self.assertRaises(ValueError):
+            Glue.choices(
+                Skill.objects.all(),
+                search_fields=['missing'],
+            )
+
+        with self.assertRaises(ValueError):
+            Glue.choices(
+                Skill.objects.all(),
+                search_fields=['gorillas__name'],
+            )
+
+        with self.assertRaises(ValueError):
+            Glue.choices(
+                Skill.objects.all(),
+                search_fields=['gorillas'],
+            )
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Skill.objects.all(), fields=['pk'])
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Skill.objects.all(), fields=['delete'])
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Skill.objects.all(), fields=['gorillas'])
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Gorilla.objects.all(), fields=['signature'])
+
+        with self.assertRaises(ValueError):
+            Glue.choices(
+                Skill.objects.all()[:10],
+                search_fields=['name'],
+            )
+
+    def test_unsearchable_foreign_key_choices_accepts_sliced_queryset(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all()[:10])
+
+        glue_object = FormGlue(
+            SkillForm(),
+            **glue_context(name='skill-form'),
+        )
+
+        self.assertEqual(
+            glue_object.foreign_key_choices(field_name='skill'),
+            {'results': []},
+        )
+
+    def test_static_choices_source_remains_compatible_with_choice_field(self):
+        from django import forms
+
+        choices = Glue.choices([
+            ('draft', 'Draft'),
+            ('published', 'Published'),
+        ])
+        field = forms.ChoiceField(choices=choices)
+
+        self.assertEqual(list(field.choices), choices)
+
+    def test_static_choices_reject_queryset_specific_options(self):
+        choices = [('draft', 'Draft')]
+
+        for options in (
+            {'search_fields': ['label']},
+            {'fields': ['description']},
+            {'search_limit': 10},
+        ):
+            with self.subTest(options=options), self.assertRaises(TypeError):
+                Glue.choices(choices, **options)
+
+    def test_choice_queryset_accepts_declared_annotations(self):
+        from django import forms
+
+        skill = Skill.objects.create(name='Grappling')
+        configured_queryset = Glue.choices(
+            Skill.objects.annotate(presentation_name=F('name')),
+            search_fields=['presentation_name'],
+            fields=['presentation_name'],
+        )
+
+        class SkillForm(forms.Form):
+            selected_skill = forms.ModelChoiceField(queryset=configured_queryset)
+
+        glue_object = FormGlue(
+            SkillForm(),
+            **glue_context(name='skill-form'),
+        )
+        result = glue_object.foreign_key_choices(
+            field_name='selected_skill',
+            search='grap',
+        )
+
+        self.assertEqual(
+            result['results'][0]['obj']['presentation_name'],
+            skill.name,
+        )
+
+    def test_choice_queryset_deduplicates_search_fields(self):
+        configured_queryset = Glue.choices(
+            Skill.objects.all(),
+            search_fields=['name', 'description', 'name'],
+        )
+
+        options = GlueRelatedModelChoices(configured_queryset).explicit_options
+
+        self.assertIsNotNone(options)
+        self.assertEqual(options.search_fields, ('name', 'description'))
+
+    def test_choice_queryset_deduplicates_choice_fields(self):
+        configured_queryset = Glue.choices(
+            Skill.objects.all(),
+            fields=['name', 'description', 'name'],
+        )
+
+        options = GlueRelatedModelChoices(configured_queryset).explicit_options
+
+        self.assertIsNotNone(options)
+        self.assertEqual(options.fields, ('name', 'description'))
 
     def test_form_field_adapter_builds_metadata(self):
         form = ContactForm()
@@ -1321,6 +1939,155 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(attribute.required_access, GlueAccess.CHANGE)
         self.assertEqual(attribute.metadata['type'], 'CharField')
         self.assertEqual(attribute.metadata['max_length'], 100)
+
+    def test_relation_field_metadata_marks_searchable_choices(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+            ))
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertTrue(metadata['choices_searchable'])
+        self.assertNotIn('choices_batch_size', metadata)
+
+    def test_relation_field_metadata_is_not_searchable_by_default(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertFalse(metadata['choices_searchable'])
+        self.assertNotIn('choices_batch_size', metadata)
+
+    def test_searchable_relation_field_metadata_seeds_the_current_selection(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+            ))
+
+        Skill.objects.create(name='Grappling')
+        selected = Skill.objects.create(name='Striking')
+
+        glue_object = FormGlue(SkillForm(initial={'skill': selected.pk}), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertEqual(metadata['selected_choice'], {
+            'value': selected.pk,
+            'label': 'Striking',
+            'obj': {'pk': selected.pk, '__str__': 'Striking'},
+        })
+
+    def test_selected_choice_metadata_uses_declared_shape(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+                fields=['name', 'difficulty'],
+            ))
+
+        selected = Skill.objects.create(name='Grappling', difficulty=3)
+        glue_object = FormGlue(
+            SkillForm(initial={'skill': selected.pk}),
+            **glue_context(name='skill-form'),
+        )
+
+        selected_choice = glue_object.attributes['skill'].metadata['selected_choice']
+
+        self.assertEqual(selected_choice['obj'], {
+            'pk': selected.pk,
+            '__str__': 'Grappling',
+            'name': 'Grappling',
+            'difficulty': 3,
+        })
+
+    def test_searchable_multiple_choice_metadata_seeds_all_selected_choices(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skills = forms.ModelMultipleChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+                fields=['difficulty'],
+            ))
+
+        grappling = Skill.objects.create(name='Grappling', difficulty=3)
+        striking = Skill.objects.create(name='Striking', difficulty=4)
+        glue_object = FormGlue(
+            SkillForm(initial={'skills': [striking.pk, grappling.pk]}),
+            **glue_context(name='skill-form'),
+        )
+
+        selected_choices = glue_object.attributes['skills'].metadata['selected_choices']
+
+        self.assertEqual(
+            [choice['value'] for choice in selected_choices],
+            [striking.pk, grappling.pk],
+        )
+        self.assertEqual(
+            [choice['obj']['difficulty'] for choice in selected_choices],
+            [4, 3],
+        )
+
+    def test_selected_choice_metadata_uses_model_choice_to_field_name(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(
+                queryset=Glue.choices(
+                    Skill.objects.all(),
+                    search_fields=['name'],
+                ),
+                to_field_name='name',
+            )
+
+        selected = Skill.objects.create(name='Grappling')
+        glue_object = FormGlue(
+            SkillForm(initial={'skill': 'Grappling'}),
+            **glue_context(name='skill-form'),
+        )
+
+        selected_choice = glue_object.attributes['skill'].metadata['selected_choice']
+
+        self.assertEqual(selected_choice, {
+            'value': 'Grappling',
+            'label': 'Grappling',
+            'obj': {
+                'pk': selected.pk,
+                '__str__': 'Grappling',
+            },
+        })
+
+    def test_searchable_relation_field_metadata_has_no_selection_when_field_is_empty(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(
+                queryset=Glue.choices(
+                    Skill.objects.all(),
+                    search_fields=['name'],
+                ),
+                required=False,
+            )
+
+        Skill.objects.create(name='Grappling')
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertNotIn('selected_choice', metadata)
 
     def test_form_adapter_builds_policy_state_and_metadata(self):
         form = ContactForm(initial={'name': 'Ada'})
@@ -2118,6 +2885,37 @@ class ForeignKeyFieldTestCase(TestCase):
         # Check namespace via metadata
         self.assertEqual(attributes['red_corner_id'].metadata['namespace'], 'field')
         self.assertEqual(attributes['red_corner'].metadata['namespace'], 'related_field')
+
+    def test_fk_metadata_combines_choice_and_proxy_metadata(self):
+        choice_queryset = Glue.choices(
+            Gorilla.objects.all(),
+            search_fields=['name'],
+        )
+        glue_object = with_request(ModelGlue(
+            self.fight,
+            **glue_context(name='fight'),
+            fields=['name', 'red_corner'],
+            related_field_config={
+                'red_corner': {'choice_queryset': choice_queryset},
+            },
+        ))
+
+        metadata = glue_object.attributes['red_corner'].metadata
+
+        self.assertEqual(metadata['choices'], [])
+        self.assertEqual(metadata['pk_field'], 'id')
+        self.assertEqual(
+            metadata['choice_model_path'],
+            'test_project.gorilla.models.Gorilla',
+        )
+        self.assertTrue(metadata['choices_searchable'])
+        self.assertNotIn('choices_batch_size', metadata)
+        self.assertIn(
+            GlueRelatedModelChoices(choice_queryset).fingerprint(),
+            metadata['choices_cache_key'],
+        )
+        self.assertEqual(metadata['fk_attname'], 'red_corner_id')
+        self.assertFalse(metadata['lazy'])
 
     def test_fk_attname_state_contains_raw_pk_value(self):
         """The attname field state should contain the raw FK value."""

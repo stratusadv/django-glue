@@ -40,6 +40,84 @@
 {% endblock %}
 
 {% block content %}
+    <div class="card card-fight mb-4" x-data="{
+        form: Glue.form.relation_choice_form,
+        query: '',
+        multipleQuery: '',
+        async search() {
+            await this.form.$fields.fighter.searchChoices(this.query)
+        },
+        select(choice) {
+            this.form.fighter = choice.value
+            this.query = ''
+            this.form.$fields.fighter.clearSearch()
+        },
+        async searchMultiple() {
+            await this.form.$fields.fighters.searchChoices(this.multipleQuery)
+        },
+        selectMultiple(choice) {
+            this.form.$fields.fighters.addChoice(choice.value)
+            this.multipleQuery = ''
+            this.form.$fields.fighters.clearSearch()
+        }
+    }">
+        <div class="card-header bg-gorilla-green text-white">
+            <h5 class="mb-0">Searchable Fighter Choice</h5>
+        </div>
+        <div class="card-body">
+            <label class="form-label" for="fighter-choice-search">Search fighters</label>
+            <input
+                id="fighter-choice-search"
+                class="form-control"
+                placeholder="Search fighter choices..."
+                x-model="query"
+                @input.debounce.150ms="search()">
+            <div class="list-group mt-2" data-testid="fighter-choice-results">
+                <template x-for="choice in form.$fields.fighter.choices" :key="choice.value">
+                    <button
+                        type="button"
+                        class="list-group-item list-group-item-action"
+                        x-text="choice.label"
+                        @click="select(choice)"></button>
+                </template>
+            </div>
+            <div class="mt-3">
+                Selected:
+                <strong
+                    data-testid="selected-fighter-choice"
+                    x-text="form.$fields.fighter.selectedChoice?.label || ''"></strong>
+            </div>
+
+            <hr>
+
+            <label class="form-label" for="fighter-multiple-choice-search">
+                Search multiple fighters
+            </label>
+            <input
+                id="fighter-multiple-choice-search"
+                class="form-control"
+                placeholder="Search multiple fighter choices..."
+                x-model="multipleQuery"
+                @input.debounce.150ms="searchMultiple()">
+            <div class="list-group mt-2" data-testid="multiple-fighter-choice-results">
+                <template x-for="choice in form.$fields.fighters.choices" :key="choice.value">
+                    <button
+                        type="button"
+                        class="list-group-item list-group-item-action"
+                        x-text="choice.label"
+                        @click="selectMultiple(choice)"></button>
+                </template>
+            </div>
+            <div class="mt-3" data-testid="selected-multiple-fighter-choices">
+                <template
+                    x-for="choice in form.$fields.fighters.selectedChoices"
+                    :key="choice.value">
+                    <span class="badge text-bg-secondary me-1" x-text="choice.label"></span>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <div x-data="{
         fights: Glue.querySet.fights,
         search: '',

@@ -8,11 +8,14 @@ from django.db.models import QuerySet
 from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute
-from django_glue.glue.base import BaseGlue
+from django_glue.glue.attributes import BaseGlueAttribute, DeclaredAttribute
 from django_glue.glue.attributes.django.form import FormFieldAttribute
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.base import BaseGlue
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.options.django import (
+    GlueRelatedModelChoices,
+    RelatedModelChoicesResult,
+)
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
@@ -193,27 +196,22 @@ class FormGlue(BaseGlue):
     def foreign_key_choices(
         self,
         field_name: str | None = None,
-        choice_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
+        search: str = '',
+    ) -> RelatedModelChoicesResult:
         if not field_name or field_name not in self.form.fields:
-            return []
+            return GlueRelatedModelChoices.empty()
 
         field = self.form.fields[field_name]
         queryset = getattr(field, 'queryset', None)
         if queryset is None:
-            return []
+            return GlueRelatedModelChoices.empty()
 
-        def serialize_choice(obj: Any) -> dict[str, Any]:
-            choice_obj = {'pk': obj.pk, '__str__': f'{obj}'}
-            for choice_field in choice_fields or []:
-                choice_obj[choice_field] = getattr(obj, choice_field)
-            return {
-                'value': obj.pk,
-                'label': f'{obj}',
-                'obj': choice_obj,
-            }
-
-        return [serialize_choice(obj) for obj in queryset.all()]
+        return GlueRelatedModelChoices(
+            queryset,
+            value_field_name=getattr(field, 'to_field_name', None),
+        ).load(
+            search=search,
+        )
 
     def _bind_form(self) -> forms.BaseForm:
         state = self._loaded_state or {}

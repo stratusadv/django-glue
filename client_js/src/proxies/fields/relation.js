@@ -6,7 +6,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
     get choices() {
         if (this.choice_model_path && !this._choicesOverridden) {
-            this.ensureChoices([])
+            this.ensureChoices()
         }
         return this._choices || []
     }
@@ -20,9 +20,10 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // self-heals from a shared, cache-key-scoped cache on every read
     // (including incidental reads from template re-renders), which
     // silently overwrites anything assigned outside that cache. Use this
-    // when a caller (e.g. a glue-callable-backed dependent-choices reload)
-    // is the authoritative source for this field's choices right now,
-    // instead of the field's own default foreign_key_choices() lookup.
+    // when a caller (e.g. a glue-callable-backed dependent-choices reload,
+    // or an active search -- see searchChoices()) is the authoritative
+    // source for this field's choices right now, instead of the field's
+    // own default foreign_key_choices() lookup.
     overrideChoices(choices) {
         this._choices = Array.isArray(choices) ? choices : []
         this._choicesOverridden = true
@@ -50,15 +51,31 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     get selectedChoice() {
         const pk = this.pk
         if (pk == null) return undefined
-        return (this.choices || []).find(choice => String(choice.value) === String(pk))
+
+        const loaded = (this.choices || []).find(choice => String(choice.value) === String(pk))
+        if (loaded) return loaded
+
+        if (
+            this._retainedSelectedChoice
+            && String(this._retainedSelectedChoice.value) === String(pk)
+        ) {
+            return this._retainedSelectedChoice
+        }
+
+        // selected_choice metadata seeds the current value of a searchable
+        // relation before the user has issued a query.
+        if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
+            return this.selected_choice
+        }
+
+        return undefined
     }
 
-    buildChoices(...choiceFields) {
-        this.ensureChoices(choiceFields)
-        return this.choices
+    get isSearchingChoices() {
+        return Boolean(this._searchPromise)
     }
 
-    ensureChoices(choiceFields = []) {
+    ensureChoices() {
         const cacheKey = this._getChoicesCacheKey()
         const cache = this._getOrCreateCache(cacheKey)
         cache.fields.add(this)
@@ -67,15 +84,12 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             this.choices = cache.choices
         }
 
-        const requiredFields = this._choiceObjectFields(choiceFields)
-        const missingFields = requiredFields.filter(f => !cache.loadedFields.has(f))
-
-        if (missingFields.length === 0) {
+        if (cache.loaded) {
             return cache.promise || Promise.resolve(this._choices || [])
         }
 
         if (cache.promise) {
-            return cache.promise.then(() => this.ensureChoices(choiceFields))
+            return cache.promise
         }
 
         if (typeof this.owner.foreign_key_choices !== 'function') {
@@ -84,17 +98,73 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
         cache.promise = this.owner.foreign_key_choices({
             field_name: this.name,
-            choice_fields: missingFields.filter(f => !['value', 'label', 'pk', '__str__'].includes(f)),
         }).then(result => {
-            const newChoices = Array.isArray(result) ? result : []
-            this._mergeChoices(newChoices)
-            requiredFields.forEach(f => cache.loadedFields.add(f))
+            const {results = []} = result || {}
+            this._mergeChoices(results)
+            cache.loaded = true
             return this._choices || []
         }).finally(() => {
             cache.promise = null
         })
 
         return cache.promise
+    }
+
+    // Runs a server-side search over the fields declared by
+    // Glue.choices() and takes over this field's choices via
+    // overrideChoices() until clearSearch() runs.
+    async searchChoices(query) {
+        if (!query) {
+            return this.clearSearch()
+        }
+
+        this._rememberSelectedChoice()
+        this._searchGeneration = (this._searchGeneration || 0) + 1
+        const searchGeneration = this._searchGeneration
+        this._searchActive = true
+        this._searchQuery = query
+
+        const searchPromise = this.owner.foreign_key_choices({
+            field_name: this.name,
+            search: query,
+        }).then(result => {
+            if (
+                searchGeneration !== this._searchGeneration
+                || !this._searchActive
+                || query !== this._searchQuery
+            ) {
+                return this._choices || []
+            }
+            const {results = []} = result || {}
+            return this.overrideChoices(results)
+        }).finally(() => {
+            if (this._searchPromise === searchPromise) {
+                this._searchPromise = null
+            }
+        })
+        this._searchPromise = searchPromise
+
+        return searchPromise
+    }
+
+    // Reverts to the default (cache-backed) choices list, as they stood
+    // before searchChoices() took over -- e.g. when the user clears the
+    // search box or closes the dropdown.
+    clearSearch() {
+        this._rememberSelectedChoice()
+        this._searchGeneration = (this._searchGeneration || 0) + 1
+        this._searchActive = false
+        this._searchQuery = ''
+        this._searchPromise = null
+        this.clearChoicesOverride()
+        return this.choices
+    }
+
+    _rememberSelectedChoice() {
+        const selectedChoice = this.selectedChoice
+        if (selectedChoice) {
+            this._retainedSelectedChoice = selectedChoice
+        }
     }
 
     _getChoicesCacheKey() {
@@ -106,15 +176,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         ].filter(Boolean).join(':')
     }
 
-    _choiceObjectFields(choiceFields = []) {
-        return [...new Set(['pk', '__str__', ...choiceFields.filter(Boolean)])]
-    }
-
     _getOrCreateCache(cacheKey) {
         let cache = RelationFieldGlue.loadingCache.get(cacheKey)
         if (!cache) {
             cache = {
-                loadedFields: new Set(),
+                loaded: false,
                 promise: null,
                 choices: [],
                 fields: new Set(),
@@ -142,7 +208,9 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         cache.choices = merged
 
         for (const field of cache.fields) {
-            field.choices = cache.choices
+            if (!field._choicesOverridden) {
+                field.choices = cache.choices
+            }
         }
     }
 }
