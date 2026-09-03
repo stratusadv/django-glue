@@ -31,7 +31,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           settings-module: test_project.settings
-          sync-extras: ""
           manage-py-path: manage.py
 
   django-compatibility:
@@ -94,4 +93,3 @@ jobs:
       - uses: stratusadv/github-actions/security@v1
         with:
           python-version: '3.11'
-          sync-extras: ''
