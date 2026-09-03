@@ -519,8 +519,8 @@ dependencies = [
     { name = "pydantic" },
 ]
 
-[package.optional-dependencies]
-development = [
+[package.dev-dependencies]
+dev = [
     { name = "build" },
     { name = "faker" },
     { name = "limelight", extra = ["django", "pytest"] },
@@ -536,7 +536,7 @@ development = [
     { name = "twine" },
     { name = "wheel" },
 ]
-documentation = [
+docs = [
     { name = "markdown-exec", extra = ["ansi"] },
     { name = "mkdocs" },
     { name = "mkdocs-include-markdown-plugin" },
@@ -548,31 +548,36 @@ documentation = [
 
 [package.metadata]
 requires-dist = [
-    { name = "build", marker = "extra == 'development'" },
     { name = "django", specifier = ">=5" },
-    { name = "faker", marker = "extra == 'development'", specifier = ">=18.0.0" },
-    { name = "limelight", extras = ["django", "pytest"], marker = "extra == 'development'", git = "https://github.com/stratusadv/limelight.git?rev=v0.1.0" },
-    { name = "markdown-exec", extras = ["ansi"], marker = "extra == 'documentation'" },
-    { name = "mkdocs", marker = "extra == 'documentation'" },
-    { name = "mkdocs-include-markdown-plugin", marker = "extra == 'documentation'" },
-    { name = "mkdocs-material", marker = "extra == 'documentation'" },
-    { name = "mkdocs-table-reader-plugin", marker = "extra == 'documentation'" },
-    { name = "mkdocstrings-python", marker = "extra == 'documentation'" },
-    { name = "openpyxl", marker = "extra == 'documentation'" },
-    { name = "pillow", marker = "extra == 'development'", specifier = ">=10.0.0" },
-    { name = "playwright", marker = "extra == 'development'" },
     { name = "pydantic" },
-    { name = "pyright", marker = "extra == 'development'" },
-    { name = "pytest", marker = "extra == 'development'", specifier = ">=7.0.0" },
-    { name = "pytest-cov", marker = "extra == 'development'", specifier = ">=4.0.0" },
-    { name = "pytest-django", marker = "extra == 'development'", specifier = ">=4.5.0" },
-    { name = "python-dotenv", marker = "extra == 'development'", specifier = "==1.2.2" },
-    { name = "ruff", marker = "extra == 'development'", specifier = "==0.15.4" },
-    { name = "setuptools", marker = "extra == 'development'" },
-    { name = "twine", marker = "extra == 'development'" },
-    { name = "wheel", marker = "extra == 'development'" },
 ]
-provides-extras = ["production", "development", "documentation"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "build" },
+    { name = "faker", specifier = ">=18.0.0" },
+    { name = "limelight", extras = ["django", "pytest"], git = "https://github.com/stratusadv/limelight.git?rev=v0.1.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "playwright" },
+    { name = "pyright" },
+    { name = "pytest", specifier = ">=7.0.0" },
+    { name = "pytest-cov", specifier = ">=4.0.0" },
+    { name = "pytest-django", specifier = ">=4.5.0" },
+    { name = "python-dotenv", specifier = "==1.2.2" },
+    { name = "ruff", specifier = "==0.15.4" },
+    { name = "setuptools" },
+    { name = "twine" },
+    { name = "wheel" },
+]
+docs = [
+    { name = "markdown-exec", extras = ["ansi"] },
+    { name = "mkdocs" },
+    { name = "mkdocs-include-markdown-plugin" },
+    { name = "mkdocs-material" },
+    { name = "mkdocs-table-reader-plugin" },
+    { name = "mkdocstrings-python" },
+    { name = "openpyxl" },
+]
 
 [[package]]
 name = "docutils"

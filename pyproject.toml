@@ -31,10 +31,8 @@ dependencies = [
     "pydantic",
 ]
 
-[project.optional-dependencies]
-production = []
-
-development = [
+[dependency-groups]
+dev = [
     "pyright",
     "twine",
     "build",
@@ -51,7 +49,7 @@ development = [
     "pillow>=10.0.0",
 ]
 
-documentation = [
+docs = [
     "mkdocs",
     "markdown-exec[ansi]",
     "mkdocs-include-markdown-plugin",
@@ -73,6 +71,9 @@ requires = [
     "wheel",
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 
 [tool.pyright]
 pythonVersion = "3.11"

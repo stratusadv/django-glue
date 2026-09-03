@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           settings-module: test_project.settings
-          sync-extras: development documentation
+          sync-extras: ""
           manage-py-path: manage.py
 
   django-compatibility:
@@ -50,7 +50,7 @@ jobs:
           uv run
           --isolated
           --with 'django==${{ matrix.django-version }}'
-          --extra development
+          --group dev
           pytest
           django_glue/tests/glue/test_adapters.py
           django_glue/tests/glue/test_queryset_pagination.py
@@ -75,7 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --extra development
+      - run: uv sync --group dev
       - uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
