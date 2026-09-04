@@ -1022,6 +1022,9 @@
   class RelationFieldGlue extends choice_default {
     static loadingCache = new Map;
     get choices() {
+      if (this._searchQuery) {
+        return this._searchChoices || [];
+      }
       if (this.choice_model_path && !this._choicesOverridden) {
         this.ensureChoices();
       }
@@ -1101,17 +1104,17 @@
       this._rememberSelectedChoice();
       this._searchGeneration = (this._searchGeneration || 0) + 1;
       const searchGeneration = this._searchGeneration;
-      this._searchActive = true;
       this._searchQuery = query;
       const searchPromise = this.owner.foreign_key_choices({
         field_name: this.name,
         search: query
       }).then((result) => {
-        if (searchGeneration !== this._searchGeneration || !this._searchActive || query !== this._searchQuery) {
-          return this._choices || [];
+        if (searchGeneration !== this._searchGeneration || query !== this._searchQuery) {
+          return this._searchChoices || [];
         }
         const { results = [] } = result || {};
-        return this.overrideChoices(results);
+        this._searchChoices = Array.isArray(results) ? results : [];
+        return this._searchChoices;
       }).finally(() => {
         if (this._searchPromise === searchPromise) {
           this._searchPromise = null;
@@ -1123,10 +1126,9 @@
     clearSearch() {
       this._rememberSelectedChoice();
       this._searchGeneration = (this._searchGeneration || 0) + 1;
-      this._searchActive = false;
       this._searchQuery = "";
       this._searchPromise = null;
-      this.clearChoicesOverride();
+      this._searchChoices = null;
       return this.choices;
     }
     _rememberSelectedChoice() {

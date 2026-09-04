@@ -1,5 +1,11 @@
 # Changelog for Django Glue
 
+## v1.0.1
+
+### Fixes
+
+- **Searching a relation field no longer discards choices set via `overrideChoices()`.**
+
 ## v1.0.0
 
 ### Breaking

@@ -5,6 +5,9 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     static loadingCache = new Map()
 
     get choices() {
+        if (this._searchQuery) {
+            return this._searchChoices || []
+        }
         if (this.choice_model_path && !this._choicesOverridden) {
             this.ensureChoices()
         }
@@ -20,10 +23,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // self-heals from a shared, cache-key-scoped cache on every read
     // (including incidental reads from template re-renders), which
     // silently overwrites anything assigned outside that cache. Use this
-    // when a caller (e.g. a glue-callable-backed dependent-choices reload,
-    // or an active search -- see searchChoices()) is the authoritative
-    // source for this field's choices right now, instead of the field's
-    // own default foreign_key_choices() lookup.
+    // when a caller (e.g. a glue-callable-backed dependent-choices reload)
+    // is the authoritative source for this field's choices right now,
+    // instead of the field's own default foreign_key_choices() lookup.
+    // Independent of search -- see searchChoices()/clearSearch(), which
+    // hold their own results and leave this override alone.
     overrideChoices(choices) {
         this._choices = Array.isArray(choices) ? choices : []
         this._choicesOverridden = true
@@ -110,9 +114,13 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return cache.promise
     }
 
-    // Runs a server-side search over the fields declared by
-    // Glue.choices() and takes over this field's choices via
-    // overrideChoices() until clearSearch() runs.
+    // Runs a server-side search over the fields declared by Glue.choices()
+    // and takes over this field's choices via a dedicated _searchChoices
+    // slot (read by the choices getter above whenever _searchQuery is set)
+    // until clearSearch() runs. This is deliberately independent of
+    // overrideChoices()/_choicesOverridden -- those track a caller-supplied
+    // choice list (e.g. a dependent-choices reload) that has nothing to do
+    // with search and must survive a search starting and ending around it.
     async searchChoices(query) {
         if (!query) {
             return this.clearSearch()
@@ -121,7 +129,6 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         this._rememberSelectedChoice()
         this._searchGeneration = (this._searchGeneration || 0) + 1
         const searchGeneration = this._searchGeneration
-        this._searchActive = true
         this._searchQuery = query
 
         const searchPromise = this.owner.foreign_key_choices({
@@ -130,13 +137,13 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         }).then(result => {
             if (
                 searchGeneration !== this._searchGeneration
-                || !this._searchActive
                 || query !== this._searchQuery
             ) {
-                return this._choices || []
+                return this._searchChoices || []
             }
             const {results = []} = result || {}
-            return this.overrideChoices(results)
+            this._searchChoices = Array.isArray(results) ? results : []
+            return this._searchChoices
         }).finally(() => {
             if (this._searchPromise === searchPromise) {
                 this._searchPromise = null
@@ -147,16 +154,18 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return searchPromise
     }
 
-    // Reverts to the default (cache-backed) choices list, as they stood
-    // before searchChoices() took over -- e.g. when the user clears the
-    // search box or closes the dropdown.
+    // Reverts to the default (override- or cache-backed) choices list, as
+    // they stood before searchChoices() took over -- e.g. when the user
+    // clears the search box or closes the dropdown. Only touches search
+    // state; a choice list assigned via overrideChoices() is untouched and
+    // reasserts itself once _searchQuery is cleared (see the choices
+    // getter).
     clearSearch() {
         this._rememberSelectedChoice()
         this._searchGeneration = (this._searchGeneration || 0) + 1
-        this._searchActive = false
         this._searchQuery = ''
         this._searchPromise = null
-        this.clearChoicesOverride()
+        this._searchChoices = null
         return this.choices
     }
 

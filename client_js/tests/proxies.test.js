@@ -882,6 +882,42 @@ describe('Glue proxies', () => {
         expect(field.choices.map(c => c.value)).toEqual([1])
     })
 
+    test('clearSearch() does not clobber a choice list assigned via overrideChoices()', async () => {
+        // Regression test: a search-and-select widget calls field.clearSearch()
+        // unconditionally on every dropdown open/close, even when no search was
+        // ever run. A caller-supplied override (e.g. a dependent-choices
+        // glue-callable keyed off another field, like a project list scoped to
+        // the selected partner) must survive that, not just survive incidental
+        // re-reads of `.choices` -- see the sibling "survives incidental reads"
+        // test above for that half.
+        RelationFieldGlue.loadingCache.clear()
+        global.fetch = async (_url, options) => {
+            const kwargs = kwargsFromCall({url: _url, options})
+            const result = kwargs.search
+                ? {results: [{value: 10, label: 'Striking', obj: {pk: 10, __str__: 'Striking'}}]}
+                : {results: [{value: 1, label: 'Grappling', obj: {pk: 1, __str__: 'Grappling'}}]}
+            return relationChoicesResponse(result)
+        }
+        const field = buildRelationObject({cacheKey: 'gorilla.skills.override-vs-search'}).$fields.skills
+
+        const overridden = [{value: 99, label: 'Manually supplied'}]
+        field.overrideChoices(overridden)
+        expect(field.choices).toEqual(overridden)
+
+        // Opening the dropdown with no search ever having run.
+        field.clearSearch()
+        expect(field.choices).toEqual(overridden)
+
+        // A real search still takes over the displayed list...
+        await field.searchChoices('strike')
+        expect(field.choices.map(c => c.value)).toEqual([10])
+
+        // ...and clearing it restores the override rather than falling
+        // through to the field's default cache-backed lookup.
+        field.clearSearch()
+        expect(field.choices).toEqual(overridden)
+    })
+
     test('clearSearch() retains a choice selected from search results', async () => {
         RelationFieldGlue.loadingCache.clear()
         global.fetch = async (url, options) => {
