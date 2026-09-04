@@ -96,7 +96,6 @@ plugins:
             show_symbol_type_heading: true
   - markdown-exec
   - search
-  - table-reader
 
 theme:
   name: material
