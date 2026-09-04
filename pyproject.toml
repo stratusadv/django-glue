@@ -2,7 +2,8 @@
 name = "django-glue"
 description = "Industrial Strength Glue for Django Backends and Frontends!"
 readme = { file = "README.md", content-type = "text/markdown" }
-license = { file = "LICENSE.md", content-type = "text/markdown" }
+license = "MIT"
+license-files = ["LICENSE.md"]
 authors = [
     { name = "Austin Sauer", email = "austins@stratusadv.com" },
     { name = "Nathan Johnson", email = "nathanj@stratusadv.com" },
@@ -13,7 +14,7 @@ classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 5",
-    "License :: OSI Approved :: MIT License",
+    "Framework :: Django :: 6",
     "Operating System :: OS Independent",
     "Programming Language :: JavaScript",
     "Programming Language :: Python :: 3.11",
@@ -28,20 +29,12 @@ dynamic = ["version"]
 
 dependencies = [
     "django>=5",
-    "pydantic",
+    "pydantic>=2",
 ]
-
-[project.optional-dependencies]
-development = []
-production = []
 
 [dependency-groups]
 dev = [
     "pyright",
-    "twine",
-    "build",
-    "setuptools",
-    "wheel",
     "playwright",
     "limelight[django,pytest] @ git+https://github.com/stratusadv/limelight.git@v0.1.0",
     "faker>=18.0.0",
@@ -58,9 +51,7 @@ docs = [
     "markdown-exec[ansi]",
     "mkdocs-include-markdown-plugin",
     "mkdocs-material",
-    "mkdocs-table-reader-plugin",
     "mkdocstrings-python",
-    "openpyxl",
 ]
 
 [project.urls]
@@ -70,10 +61,7 @@ Repository = "https://github.com/stratusadv/django-glue"
 Changelog = "https://django-glue.stratusadv.com/changelog/changelog/"
 
 [build-system]
-requires = [
-    "setuptools>=45",
-    "wheel",
-]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv]

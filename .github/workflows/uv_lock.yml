@@ -22,17 +22,17 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
     - name: Setup Python
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: '3.11'
 
     - name: Install uv
-      uses: astral-sh/setup-uv@v6
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       with:
         version: "latest"
 
@@ -56,7 +56,7 @@ jobs:
 
     - name: Commit uv lock changes
       if: steps.uv_lock.outputs.lock_updated == 'true' && github.event_name == 'pull_request'
-      uses: stefanzweifel/git-auto-commit-action@v6
+      uses: stefanzweifel/git-auto-commit-action@v7
       with:
         commit_message: 'chore: update uv.lock'
         file_pattern: 'uv.lock'
@@ -66,7 +66,7 @@ jobs:
 
     - name: Add PR comment
       if: steps.uv_lock.outputs.lock_updated == 'true' && github.event_name == 'pull_request'
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       with:
         script: |
           await github.rest.issues.createComment({
