@@ -204,13 +204,14 @@ that state belongs on the proxy class that owns the concept, or on a collaborato
 that proxy owns. The one existing namespace check (`namespace === 'function'`,
 for `ProxyClass.create()`) is a wart, not a precedent to extend.
 
-**Glue core must not reference any frontend framework.** No `Alpine`, no
-`globalThis.Alpine?.reactive?.()`, no Vue, no framework import anywhere under
-`client_js/src/`. Glue works with Alpine because it *mutates state in place*
-(see `_mergeState` in `base.js`) so a framework's proxy observes the write --
-not because it knows the framework exists. A previous attempt at
-`reactiveSelf()` in `utils.js` violated this and was removed; see
-`docs/roadmap/proxy_instance_management.md`.
+**Alpine.js is glue's frontend framework.** The client may use Alpine's APIs
+(`Alpine.reactive`, `Alpine.morph`, `Alpine.data`, `Alpine.addScopeToNode`, and
+its lifecycle hooks). No other frontend framework is referenced under
+`client_js/src/`, and the Python side stays framework-free. Glue initialises
+during page parsing, before Alpine's deferred script runs, so client code must
+not assume `Alpine` exists when `GlueClient` is constructed. This replaced an
+earlier rule forbidding any framework reference; see
+`docs/decisions/component-system.md`.
 
 **Proxy-specific behavior lives on the proxy class.** `_applyResponse()`
 overrides, chaining, caching, and hydration all belong in the subclass
