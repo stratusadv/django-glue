@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from typing import TYPE_CHECKING, NoReturn
 from urllib.parse import urlparse
 
@@ -78,7 +79,7 @@ class GlueViewFragmentResolver(GlueResolver[ViewFragmentRequestContext]):
             logger.exception('Resolved Glue view raised an exception')
             raise GlueRequestError(
                 code=GlueRequestErrorCode.VIEW_CALL_FAILED,
-                message=f'View raised an exception: {e!s}',
+                message=f'View raised an exception: {traceback.format_exc()}',
                 status=500,
             ) from e
 
