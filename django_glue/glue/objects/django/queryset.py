@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 from django_glue.access import GlueAccess
 from django_glue.conf import settings
 from django_glue.exceptions import (
+    GlueModelInstanceNotFoundError,
     GlueQuerySetFilterValidationError,
     GlueQuerySetSliceValidationError,
 )
@@ -362,7 +363,18 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
     def get(self, pk: Any) -> dict[str, Any]:
-        return self._build_child_model_payload(self.queryset.get(pk=pk))
+        # A pk outside this queryset is a routine client outcome, not a server fault: a
+        # row can leave the bound filter between render and refresh. Report it as 404 so
+        # callers can tell "not in this collection" apart from a genuine failure.
+        try:
+            instance = self.queryset.get(pk=pk)
+        except self.queryset.model.DoesNotExist as error:
+            raise GlueModelInstanceNotFoundError(
+                model_name=self.queryset.model._meta.label,
+                pk=pk,
+            ) from error
+
+        return self._build_child_model_payload(instance)
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
