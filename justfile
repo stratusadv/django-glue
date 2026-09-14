@@ -41,7 +41,7 @@ test-failed:
 	{{PYTHON}} -m pytest . --ff --lf
 
 test-coverage:
-	{{PYTHON}} -m pytest . --cov=app --cov-report=term-missing --cov-report=html:.test_coverage/
+	{{PYTHON}} -m pytest . --cov=django_glue --cov-report=term-missing --cov-report=html:.test_coverage/
 
 test-e2e *ARGS:
 	{{E2E_ENV}}{{PYTHON}} -m pytest -m e2e {{ARGS}}

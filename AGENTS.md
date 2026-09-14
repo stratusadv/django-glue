@@ -625,7 +625,7 @@ The JS client starts a `setInterval` on init, collecting all proxy names and sen
 
 ```bash
 # Install Python dependencies
-pip install -e ".[development]"
+uv sync
 
 # Install Bun (https://bun.sh)
 # Then install JS dependencies
