@@ -131,11 +131,18 @@ document.
 This is a heuristic. It cannot dispose non-rendered objects, does not cascade, and
 has no generation tracking — so it cannot prevent a late response from patching a
 new incarnation at the same name, which `state-model.md` §7's generations exist
-to do.
+to do. A root that is detached temporarily rather than permanently is swept as
+though it were gone.
+
+Implemented as `GlueClient.sweepDisposedComponents()`, called after a component
+morph. It touches only the `component` namespace, since no other family has a DOM
+root to reason about.
 
 **Closes when** address ownership lands. The sweep must then be **deleted**, not
 extended — a heuristic kept alongside real ownership becomes a second, conflicting
-source of truth about liveness.
+source of truth about liveness. The replacements are specific: §7's owner edges
+make removal decidable without consulting the DOM, and its per-address
+generations close the late-response hole this cannot.
 
 ### 4. Callable results have no lifecycle
 

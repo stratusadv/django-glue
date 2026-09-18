@@ -5,6 +5,12 @@ import {morph as alpineMorph} from "./alpine"
 // strategy that rebuilds them from server HTML wipes that work.
 const IGNORE_ATTRIBUTE = 'data-morph-ignore'
 
+// The attribute a component's root carries, and the namespace its proxy
+// registers under. Together they let the client find a component's DOM root
+// and decide whether it is still live.
+const ROOT_ATTRIBUTE = 'data-glue'
+const COMPONENT_NAMESPACE = 'component'
+
 function shouldIgnore(node) {
     return node.nodeType === Node.ELEMENT_NODE && node.hasAttribute(IGNORE_ATTRIBUTE)
 }
@@ -25,4 +31,14 @@ function morphComponentRoot(element, html) {
     })
 }
 
-export {IGNORE_ATTRIBUTE, morphComponentRoot}
+function componentRoot(name) {
+    return document.querySelector(`[${ROOT_ATTRIBUTE}="${name}"]`)
+}
+
+export {
+    COMPONENT_NAMESPACE,
+    IGNORE_ATTRIBUTE,
+    ROOT_ATTRIBUTE,
+    componentRoot,
+    morphComponentRoot,
+}

@@ -489,10 +489,17 @@ class BaseGlueProxy {
             // target to choose. Children it stamped are registered above first,
             // so their proxies exist before the DOM referencing them appears.
             if (result.glue_component) {
-                return new GlueComponentHtmlResult(
+                const html = new GlueComponentHtmlResult(
                     result.html,
                     result.glue_component,
                 ).apply()
+
+                // Swept after the morph, so children the re-render dropped are
+                // already out of the document and children it introduced are
+                // already in it.
+                this._client.sweepDisposedComponents()
+
+                return html
             }
 
             return new GlueHtmlResult(result.html)

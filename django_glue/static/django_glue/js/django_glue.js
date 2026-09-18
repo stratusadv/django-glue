@@ -4133,6 +4133,8 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/morph.js
   var IGNORE_ATTRIBUTE = "data-morph-ignore";
+  var ROOT_ATTRIBUTE = "data-glue";
+  var COMPONENT_NAMESPACE = "component";
   function shouldIgnore(node) {
     return node.nodeType === Node.ELEMENT_NODE && node.hasAttribute(IGNORE_ATTRIBUTE);
   }
@@ -4143,6 +4145,9 @@ ${expression ? 'Expression: "' + expression + `"
           skip();
       }
     });
+  }
+  function componentRoot(name) {
+    return document.querySelector(`[${ROOT_ATTRIBUTE}="${name}"]`);
   }
 
   // client_js/src/componentHtmlResult.js
@@ -4155,7 +4160,7 @@ ${expression ? 'Expression: "' + expression + `"
       return this.html;
     }
     apply() {
-      const element = document.querySelector(`[data-glue="${this.name}"]`);
+      const element = componentRoot(this.name);
       if (element === null) {
         throw new GlueProxyError(`Cannot apply rendered HTML for component "${this.name}": its root ` + `element is not in the document. It may have been removed or replaced.`);
       }
@@ -4556,7 +4561,9 @@ ${expression ? 'Expression: "' + expression + `"
       if (this._resultIsTemplateResponse(result)) {
         this._client.loadManifests(result.manifest_list);
         if (result.glue_component) {
-          return new componentHtmlResult_default(result.html, result.glue_component).apply();
+          const html = new componentHtmlResult_default(result.html, result.glue_component).apply();
+          this._client.sweepDisposedComponents();
+          return html;
         }
         return new htmlResult_default(result.html);
       }
@@ -5544,6 +5551,17 @@ ${expression ? 'Expression: "' + expression + `"
       (manifest_list || []).forEach((manifest) => {
         this._registerManifest(manifest);
       });
+    }
+    sweepDisposedComponents() {
+      const registered = this[COMPONENT_NAMESPACE];
+      if (!registered) {
+        return [];
+      }
+      const disposed = Object.keys(registered).filter((name) => componentRoot(name) === null);
+      disposed.forEach((name) => {
+        delete registered[name];
+      });
+      return disposed;
     }
     _createProxy({ policy, metadata = {}, state = {}, loading_strategy = "lazy" }) {
       const namespace = policy?.namespace || metadata?.namespace;

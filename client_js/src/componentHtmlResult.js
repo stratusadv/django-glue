@@ -1,4 +1,4 @@
-import {morphComponentRoot} from "./morph"
+import {componentRoot, morphComponentRoot} from "./morph"
 import {GlueProxyError} from "./errors"
 
 // A component knows its own root, so re-rendering one takes no target. That
@@ -16,7 +16,7 @@ class GlueComponentHtmlResult {
     }
 
     apply() {
-        const element = document.querySelector(`[data-glue="${this.name}"]`)
+        const element = componentRoot(this.name)
 
         if (element === null) {
             throw new GlueProxyError(

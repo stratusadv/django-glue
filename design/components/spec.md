@@ -488,12 +488,27 @@ its DOM disappears. `next_week()` re-renders the dashboard, stamps seven new day
 cards, and leaves seven dead registrations behind; navigating a month leaks
 dozens.
 
-After a morph, the client sweeps the registry and drops entries whose
-`data-glue` root is no longer in the document.
+After a component morph, the client sweeps the `component` namespace and drops
+entries whose `data-glue` root is no longer in the document.
+
+Ordering matters and falls out of the response pipeline: `manifest_list` is
+registered first, then the HTML is morphed, then the sweep runs. So by sweep time
+children the re-render introduced are already in the document and children it
+dropped are already out, and neither is misjudged.
+
+Only the `component` namespace is swept. A `ModelGlue` or `QuerySetGlue` has no
+DOM root, so root-absence says nothing about whether it is live.
 
 **This is a DOM-liveness heuristic, not `state-model.md` §7 disposal.** It cannot
-dispose non-rendered objects, it does not cascade, and it has no generation
-tracking. It must be **deleted** when real ownership arrives, not extended.
+reach a non-rendered object, does not cascade to objects a component introduced,
+and has no generation tracking — so it cannot stop a late response from patching
+a new incarnation registered at the same name. A component root detached
+temporarily rather than permanently (a modal removed from the document and later
+re-inserted) is swept as though it were gone.
+
+It must be **deleted** when real address ownership arrives, not extended: a
+heuristic kept alongside real ownership becomes a second, conflicting source of
+truth about liveness.
 
 ### 11. Callable results may return configured Glue objects
 

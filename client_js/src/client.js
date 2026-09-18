@@ -4,6 +4,7 @@ import GlueView from "./view"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
 import GluePolicy from "./policy"
+import {COMPONENT_NAMESPACE, componentRoot} from "./morph"
 
 class GlueClient {
     constructor(context) {
@@ -43,6 +44,38 @@ class GlueClient {
         (manifest_list || []).forEach(manifest => {
             this._registerManifest(manifest)
         })
+    }
+
+    // Drops component registrations whose root element has left the document.
+    //
+    // Stamped components register flat, with no owner edges, so nothing removes
+    // one when a re-render replaces it: navigating a dashboard through a month
+    // of weeks would otherwise accumulate a dead proxy per day card, each
+    // holding a stale policy token.
+    //
+    // This is a DOM-liveness heuristic, NOT state-model.md §7 disposal. It
+    // cannot reach a non-rendered object, does not cascade to objects a
+    // component introduced, and has no generation tracking, so it cannot stop a
+    // late response from patching a new incarnation at the same name. It must
+    // be deleted when real address ownership arrives, not extended --
+    // a heuristic kept alongside real ownership becomes a second, conflicting
+    // source of truth about liveness. See design/REINTEGRATION.md seam 3.
+    sweepDisposedComponents() {
+        const registered = this[COMPONENT_NAMESPACE]
+
+        if (!registered) {
+            return []
+        }
+
+        const disposed = Object.keys(registered).filter(
+            name => componentRoot(name) === null,
+        )
+
+        disposed.forEach(name => {
+            delete registered[name]
+        })
+
+        return disposed
     }
 
     _createProxy({policy, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
