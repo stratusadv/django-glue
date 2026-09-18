@@ -1,66 +1,49 @@
 import {beforeEach, describe, expect, test} from "bun:test"
-import {IGNORE_ATTRIBUTE, morphChildren, morphElement} from "../src/morph"
+import {IGNORE_ATTRIBUTE, morphComponentRoot} from "../src/morph"
+import GlueComponentHtmlResult from "../src/componentHtmlResult"
 
-describe('Morphing replaced HTML', () => {
+describe('Morphing a component root', () => {
     beforeEach(() => {
         document.body.innerHTML = ''
     })
 
-    test('morphElement updates content while preserving the element itself', () => {
-        document.body.innerHTML = '<div id="card"><span>Old</span></div>'
-        const element = document.getElementById('card')
+    test('content updates while the root element itself survives', () => {
+        document.body.innerHTML = '<div data-glue="card_a1"><span>Old</span></div>'
+        const element = document.querySelector('[data-glue="card_a1"]')
 
-        morphElement(element, '<div id="card"><span>New</span></div>')
+        morphComponentRoot(element, '<div data-glue="card_a1"><span>New</span></div>')
 
         // The point of morphing: the node survives, so an Alpine scope, focus,
         // and caret position attached to it survive with it.
-        expect(document.getElementById('card')).toBe(element)
+        expect(document.querySelector('[data-glue="card_a1"]')).toBe(element)
         expect(element.textContent).toBe('New')
     })
 
-    test('morphChildren updates children while preserving the container', () => {
-        document.body.innerHTML = '<div id="list" class="a"><span>Old</span></div>'
-        const element = document.getElementById('list')
-
-        morphChildren(element, '<span>New</span>')
-
-        expect(document.getElementById('list')).toBe(element)
-        expect(element.getAttribute('class')).toBe('a')
-        expect(element.textContent).toBe('New')
-    })
-
-    test('morphChildren preserves an unchanged child node', () => {
+    test('an unchanged child keeps its node identity', () => {
         document.body.innerHTML =
-            '<ul id="list"><li id="a">A</li><li id="b">B</li></ul>'
-        const element = document.getElementById('list')
+            '<ul data-glue="list_a1"><li id="a">A</li><li id="b">B</li></ul>'
+        const element = document.querySelector('[data-glue="list_a1"]')
         const unchanged = document.getElementById('a')
 
-        morphChildren(element, '<li id="a">A</li><li id="b">B changed</li>')
+        morphComponentRoot(
+            element,
+            '<ul data-glue="list_a1"><li id="a">A</li><li id="b">B changed</li></ul>',
+        )
 
         expect(document.getElementById('a')).toBe(unchanged)
         expect(document.getElementById('b').textContent).toBe('B changed')
     })
 
-    test('morphChildren accepts several top-level children', () => {
-        document.body.innerHTML = '<div id="list"><span>Old</span></div>'
-        const element = document.getElementById('list')
-
-        morphChildren(element, '<span>One</span><span>Two</span>')
-
-        expect(element.children).toHaveLength(2)
-        expect(element.textContent).toBe('OneTwo')
-    })
-
     test('a subtree marked data-morph-ignore is left alone', () => {
         document.body.innerHTML =
-            `<div id="card"><div id="widget" ${IGNORE_ATTRIBUTE}>third-party</div></div>`
-        const element = document.getElementById('card')
+            `<div data-glue="card_a1"><div id="widget" ${IGNORE_ATTRIBUTE}>third-party</div></div>`
+        const element = document.querySelector('[data-glue="card_a1"]')
         const widget = document.getElementById('widget')
         widget.dataset.painted = 'yes'
 
-        morphElement(
+        morphComponentRoot(
             element,
-            `<div id="card"><div id="widget" ${IGNORE_ATTRIBUTE}></div></div>`,
+            `<div data-glue="card_a1"><div id="widget" ${IGNORE_ATTRIBUTE}></div></div>`,
         )
 
         expect(document.getElementById('widget')).toBe(widget)
@@ -68,42 +51,49 @@ describe('Morphing replaced HTML', () => {
         expect(widget.textContent).toBe('third-party')
     })
 
-    test('a multi-node fragment is replaced, since it has no single identity', () => {
-        // A Glue.view fragment often opens with a <style> before its content.
-        // Morphing would reconcile into the first element and drop the rest.
-        document.body.innerHTML = '<div id="host"><div id="slot"></div></div>'
-        const host = document.getElementById('host')
-
-        morphElement(
-            document.getElementById('slot'),
-            '<style>.a{color:red}</style><div class="content">Body</div>',
-        )
-
-        expect(host.querySelector('style')).not.toBeNull()
-        expect(host.querySelector('.content').textContent).toBe('Body')
-        expect(document.getElementById('slot')).toBeNull()
-    })
-
-    test('surrounding whitespace does not make a single root look multi-node', () => {
-        document.body.innerHTML = '<div id="card">Old</div>'
-        const element = document.getElementById('card')
-
-        morphElement(element, '\n  <div id="card">New</div>\n')
-
-        expect(document.getElementById('card')).toBe(element)
-        expect(element.textContent).toBe('New')
-    })
-
     test('unrelated siblings are untouched', () => {
         document.body.innerHTML =
-            '<div id="first">First</div><div id="second">Second</div>'
-        const first = document.getElementById('first')
+            '<div data-glue="first_a1">First</div><div id="second">Second</div>'
+        const first = document.querySelector('[data-glue="first_a1"]')
         const second = document.getElementById('second')
 
-        morphElement(first, '<div id="first">Changed</div>')
+        morphComponentRoot(first, '<div data-glue="first_a1">Changed</div>')
 
         expect(document.getElementById('second')).toBe(second)
         expect(first.textContent).toBe('Changed')
         expect(second.textContent).toBe('Second')
+    })
+})
+
+describe('Applying a component render result', () => {
+    beforeEach(() => {
+        document.body.innerHTML = ''
+    })
+
+    test('it finds its own root, so no target is supplied', () => {
+        document.body.innerHTML =
+            '<div><div data-glue="day_a1"><span>Old</span></div></div>'
+        const element = document.querySelector('[data-glue="day_a1"]')
+
+        const html = new GlueComponentHtmlResult(
+            '<div data-glue="day_a1"><span>New</span></div>',
+            'day_a1',
+        ).apply()
+
+        expect(document.querySelector('[data-glue="day_a1"]')).toBe(element)
+        expect(element.textContent).toBe('New')
+        expect(html).toContain('New')
+    })
+
+    test('a missing root is a named error, not a silent no-op', () => {
+        expect(
+            () => new GlueComponentHtmlResult('<div></div>', 'gone_a1').apply(),
+        ).toThrow(/gone_a1/)
+    })
+
+    test('it stringifies to its HTML', () => {
+        const result = new GlueComponentHtmlResult('<div>x</div>', 'a1')
+
+        expect(String(result)).toBe('<div>x</div>')
     })
 })

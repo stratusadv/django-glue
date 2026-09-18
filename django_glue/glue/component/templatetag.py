@@ -9,7 +9,6 @@ from django.utils.safestring import mark_safe
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.component.naming import canonical_key, derive_component_name
-from django_glue.glue.component.root_injection import inject_root_attributes
 from django_glue.glue.component.registry import glue_component_registry
 from django_glue.glue.context import GlueContextManager
 
@@ -89,12 +88,7 @@ class GlueComponentNode(Node):
         with context.push(**component.get_context_data()):
             html = template.template.render(context)
 
-        return mark_safe(inject_root_attributes(
-            html,
-            component.root_attributes,
-            component_name=component.name,
-            template_name=component.template,
-        ))
+        return mark_safe(component.inject_root(html))
 
     @staticmethod
     def _resolve_request(context: Context) -> Any:

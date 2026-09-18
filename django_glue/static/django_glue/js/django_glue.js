@@ -292,6 +292,167 @@
   }
   var http_default = GlueHttp;
 
+  // client_js/src/view.js
+  class GlueView {
+    constructor(http, url, sharedPayload = {}) {
+      this.http = http;
+      this.url = new URL(url, window.location.origin).pathname;
+      this.sharedPayload = sharedPayload;
+    }
+    async get(payload = {}) {
+      return await this._fetchView(payload, "GET");
+    }
+    async post(payload = {}) {
+      return await this._fetchView(payload, "POST");
+    }
+    async renderInnerHtml(target, payload = {}) {
+      const element = resolveElement(target);
+      const html = await this.post(payload);
+      element.replaceChildren(htmlToFragment(html));
+      return html;
+    }
+    async renderOuterHtml(target, payload = {}) {
+      const element = resolveElement(target);
+      const html = await this.post(payload);
+      element.replaceWith(htmlToFragment(html));
+      return html;
+    }
+    async _renderInsertAdjacentHtml(target, position, payload = {}) {
+      const element = resolveElement(target);
+      const html = await this.post(payload);
+      const fragment = htmlToFragment(html);
+      if (position === "beforebegin") {
+        element.before(fragment);
+      } else if (position === "afterbegin") {
+        element.prepend(fragment);
+      } else if (position === "beforeend") {
+        element.append(fragment);
+      } else if (position === "afterend") {
+        element.after(fragment);
+      } else {
+        throw new Error(`Invalid insert position: ${position}`);
+      }
+      return html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "afterbegin", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
+      return await this._renderInsertAdjacentHtml(target, "afterend", payload);
+    }
+    async _fetchView(payload = {}, method = "POST") {
+      const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
+        method: "POST",
+        contentType: "application/json",
+        csrfProtected: true,
+        body: JSON.stringify({
+          url_path: this.url,
+          method,
+          view_payload: {
+            ...this.sharedPayload,
+            ...payload
+          }
+        })
+      });
+      globalThis.Glue.loadManifests(response.data?.manifest_list || []);
+      return response.data?.html || "";
+    }
+  }
+  var view_default = GlueView;
+
+  // client_js/src/proxies/registry.js
+  var NAMESPACE_TO_PROXY_CLASS = {};
+  function registerProxyClass(namespace, proxyClass) {
+    NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
+  }
+  function getProxyClass(namespace) {
+    return NAMESPACE_TO_PROXY_CLASS[namespace];
+  }
+
+  // client_js/src/policy.js
+  class GluePolicy {
+    static fromSignedPolicyToken(token) {
+      if (typeof token !== "string") {
+        throw new TypeError("Glue policy token must be a string.");
+      }
+      const encodedPayload = token.split(":", 1)[0];
+      if (!encodedPayload || encodedPayload.startsWith(".")) {
+        throw new Error("Glue policy token must contain uncompressed Django signed JSON.");
+      }
+      const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encodedPayload.length / 4) * 4, "=");
+      const binary = atob(base64);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+      return this._fromDecodedPayload(payload, token);
+    }
+    static _fromDecodedPayload(payload, token = payload.token) {
+      const attributes = (payload.attributes || []).map((attribute) => {
+        if (typeof attribute !== "object" || attribute === null) {
+          return attribute;
+        }
+        return this._fromDecodedPayload(attribute);
+      });
+      return new this({ ...payload, attributes, token });
+    }
+    constructor(data) {
+      Object.assign(this, data);
+    }
+  }
+  var policy_default = GluePolicy;
+
+  // client_js/src/htmlResult.js
+  class GlueHtmlResult {
+    constructor(html) {
+      this.html = html;
+    }
+    toString() {
+      return this.html;
+    }
+    async renderInnerHtml(target) {
+      resolveElement(target).replaceChildren(htmlToFragment(this.html));
+      return this.html;
+    }
+    async renderOuterHtml(target) {
+      resolveElement(target).replaceWith(htmlToFragment(this.html));
+      return this.html;
+    }
+    async _renderInsertAdjacentHtml(target, position) {
+      const element = resolveElement(target);
+      const fragment = htmlToFragment(this.html);
+      if (position === "beforebegin") {
+        element.before(fragment);
+      } else if (position === "afterbegin") {
+        element.prepend(fragment);
+      } else if (position === "beforeend") {
+        element.append(fragment);
+      } else if (position === "afterend") {
+        element.after(fragment);
+      } else {
+        throw new Error(`Invalid insert position: ${position}`);
+      }
+      return this.html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target) {
+      return await this._renderInsertAdjacentHtml(target, "beforebegin");
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target) {
+      return await this._renderInsertAdjacentHtml(target, "afterbegin");
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target) {
+      return await this._renderInsertAdjacentHtml(target, "beforeend");
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target) {
+      return await this._renderInsertAdjacentHtml(target, "afterend");
+    }
+  }
+  var htmlResult_default = GlueHtmlResult;
+
   // node_modules/alpinejs/dist/module.esm.js
   var flushPending = false;
   var flushing = false;
@@ -3975,201 +4136,34 @@ ${expression ? 'Expression: "' + expression + `"
   function shouldIgnore(node) {
     return node.nodeType === Node.ELEMENT_NODE && node.hasAttribute(IGNORE_ATTRIBUTE);
   }
-  var MORPH_OPTIONS = {
-    updating: (element, toElement, childrenOnly, skip) => {
-      if (shouldIgnore(element))
-        skip();
-    }
-  };
-  function isSignificant(node) {
-    if (node.nodeType === Node.COMMENT_NODE)
-      return false;
-    if (node.nodeType === Node.TEXT_NODE)
-      return node.textContent.trim() !== "";
-    return true;
-  }
-  function soleElementOf(fragment) {
-    const nodes = [...fragment.childNodes].filter(isSignificant);
-    if (nodes.length === 1 && nodes[0].nodeType === Node.ELEMENT_NODE) {
-      return nodes[0];
-    }
-    return null;
-  }
-  function morphElement(element, html) {
-    const fragment = htmlToFragment(html);
-    const root = soleElementOf(fragment);
-    if (root === null) {
-      element.replaceWith(fragment);
-      return;
-    }
-    morph2(element, root.outerHTML, MORPH_OPTIONS);
-  }
-  function morphChildren(element, html) {
-    const shell = element.cloneNode(false);
-    shell.innerHTML = html;
-    morph2(element, shell.outerHTML, MORPH_OPTIONS);
-  }
-
-  // client_js/src/view.js
-  class GlueView {
-    constructor(http, url, sharedPayload = {}) {
-      this.http = http;
-      this.url = new URL(url, window.location.origin).pathname;
-      this.sharedPayload = sharedPayload;
-    }
-    async get(payload = {}) {
-      return await this._fetchView(payload, "GET");
-    }
-    async post(payload = {}) {
-      return await this._fetchView(payload, "POST");
-    }
-    async renderInnerHtml(target, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      morphChildren(element, html);
-      return html;
-    }
-    async renderOuterHtml(target, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      morphElement(element, html);
-      return html;
-    }
-    async _renderInsertAdjacentHtml(target, position, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      const fragment = htmlToFragment(html);
-      if (position === "beforebegin") {
-        element.before(fragment);
-      } else if (position === "afterbegin") {
-        element.prepend(fragment);
-      } else if (position === "beforeend") {
-        element.append(fragment);
-      } else if (position === "afterend") {
-        element.after(fragment);
-      } else {
-        throw new Error(`Invalid insert position: ${position}`);
+  function morphComponentRoot(element, html) {
+    morph2(element, html, {
+      updating: (current, incoming, childrenOnly, skip) => {
+        if (shouldIgnore(current))
+          skip();
       }
-      return html;
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "afterbegin", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "afterend", payload);
-    }
-    async _fetchView(payload = {}, method = "POST") {
-      const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
-        method: "POST",
-        contentType: "application/json",
-        csrfProtected: true,
-        body: JSON.stringify({
-          url_path: this.url,
-          method,
-          view_payload: {
-            ...this.sharedPayload,
-            ...payload
-          }
-        })
-      });
-      globalThis.Glue.loadManifests(response.data?.manifest_list || []);
-      return response.data?.html || "";
-    }
-  }
-  var view_default = GlueView;
-
-  // client_js/src/proxies/registry.js
-  var NAMESPACE_TO_PROXY_CLASS = {};
-  function registerProxyClass(namespace, proxyClass) {
-    NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
-  }
-  function getProxyClass(namespace) {
-    return NAMESPACE_TO_PROXY_CLASS[namespace];
+    });
   }
 
-  // client_js/src/policy.js
-  class GluePolicy {
-    static fromSignedPolicyToken(token) {
-      if (typeof token !== "string") {
-        throw new TypeError("Glue policy token must be a string.");
-      }
-      const encodedPayload = token.split(":", 1)[0];
-      if (!encodedPayload || encodedPayload.startsWith(".")) {
-        throw new Error("Glue policy token must contain uncompressed Django signed JSON.");
-      }
-      const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(encodedPayload.length / 4) * 4, "=");
-      const binary = atob(base64);
-      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-      const payload = JSON.parse(new TextDecoder().decode(bytes));
-      return this._fromDecodedPayload(payload, token);
-    }
-    static _fromDecodedPayload(payload, token = payload.token) {
-      const attributes = (payload.attributes || []).map((attribute) => {
-        if (typeof attribute !== "object" || attribute === null) {
-          return attribute;
-        }
-        return this._fromDecodedPayload(attribute);
-      });
-      return new this({ ...payload, attributes, token });
-    }
-    constructor(data) {
-      Object.assign(this, data);
-    }
-  }
-  var policy_default = GluePolicy;
-
-  // client_js/src/htmlResult.js
-  class GlueHtmlResult {
-    constructor(html) {
+  // client_js/src/componentHtmlResult.js
+  class GlueComponentHtmlResult {
+    constructor(html, name) {
       this.html = html;
+      this.name = name;
     }
     toString() {
       return this.html;
     }
-    async renderInnerHtml(target) {
-      morphChildren(resolveElement(target), this.html);
-      return this.html;
-    }
-    async renderOuterHtml(target) {
-      morphElement(resolveElement(target), this.html);
-      return this.html;
-    }
-    async _renderInsertAdjacentHtml(target, position) {
-      const element = resolveElement(target);
-      const fragment = htmlToFragment(this.html);
-      if (position === "beforebegin") {
-        element.before(fragment);
-      } else if (position === "afterbegin") {
-        element.prepend(fragment);
-      } else if (position === "beforeend") {
-        element.append(fragment);
-      } else if (position === "afterend") {
-        element.after(fragment);
-      } else {
-        throw new Error(`Invalid insert position: ${position}`);
+    apply() {
+      const element = document.querySelector(`[data-glue="${this.name}"]`);
+      if (element === null) {
+        throw new GlueProxyError(`Cannot apply rendered HTML for component "${this.name}": its root ` + `element is not in the document. It may have been removed or replaced.`);
       }
+      morphComponentRoot(element, this.html);
       return this.html;
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(target) {
-      return await this._renderInsertAdjacentHtml(target, "beforebegin");
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target) {
-      return await this._renderInsertAdjacentHtml(target, "afterbegin");
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target) {
-      return await this._renderInsertAdjacentHtml(target, "beforeend");
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target) {
-      return await this._renderInsertAdjacentHtml(target, "afterend");
     }
   }
-  var htmlResult_default = GlueHtmlResult;
+  var componentHtmlResult_default = GlueComponentHtmlResult;
 
   // client_js/src/proxies/base.js
   function isPlainObject2(value) {
@@ -4561,6 +4555,9 @@ ${expression ? 'Expression: "' + expression + `"
       }
       if (this._resultIsTemplateResponse(result)) {
         this._client.loadManifests(result.manifest_list);
+        if (result.glue_component) {
+          return new componentHtmlResult_default(result.html, result.glue_component).apply();
+        }
         return new htmlResult_default(result.html);
       }
       Object.keys(result).forEach((key) => {

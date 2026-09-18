@@ -145,6 +145,55 @@ class TestStamping:
             render("{% glue_component 'two-roots' %}", request_with_session)
 
 
+class TestRerender:
+    def test_render_returns_component_marked_html(self, request_with_session) -> None:
+        """The marker is what tells the client to morph into the component's
+        own root instead of handing the HTML back for a caller to place."""
+        component = DayCard(name='day_a1', date=datetime.date(2026, 9, 9))
+        component.request = request_with_session
+
+        result = component.render().result
+
+        assert result['is_glue_template_response'] is True
+        assert result['glue_component'] == 'day_a1'
+
+    def test_a_re_render_carries_its_own_binding(self, request_with_session) -> None:
+        """Without this the morph would strip the binding off the root it is
+        morphing into, and the component would go dead after one re-render."""
+        component = DayCard(name='day_a1', date=datetime.date(2026, 9, 9))
+        component.request = request_with_session
+
+        html = component.render().result['html']
+
+        assert 'x-data="{ component: Glue.component.day_a1 }"' in html
+        assert 'data-glue="day_a1"' in html
+
+    def test_a_re_render_matches_what_stamping_produced(
+        self,
+        request_with_session,
+    ) -> None:
+        stamped = render(
+            "{% glue_component 'day-card' date=date %}",
+            request_with_session,
+            date=datetime.date(2026, 9, 9),
+        )
+        component = GlueContextManager(request_with_session).glue_objects[0]
+
+        assert component.render().result['html'].strip() == stamped.strip()
+
+    def test_children_stamped_during_a_re_render_ride_along(
+        self,
+        request_with_session,
+    ) -> None:
+        """The client registers these before the morphed DOM references them."""
+        board = WeekBoard(name='board_a1', label='Week 37')
+        board.request = request_with_session
+
+        result = board.render().result
+
+        assert len(result['manifest_list']) == len(board.days)
+
+
 class TestKeys:
     def test_key_is_required_inside_a_loop(self, request_with_session) -> None:
         with pytest.raises(GlueComponentKeyError, match='needs key='):

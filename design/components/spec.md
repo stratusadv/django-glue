@@ -42,9 +42,21 @@ The component design's motivating problems, from
 5. Server-rendered HTML is applied by replacement, destroying Alpine scopes and
    local UI state.
 
-This prototype targets **1, 2, and 5**. Problems 3 and 4 require `$refresh()` and
-declared events, which are `state-model.md` §7 contracts and genuinely blocked on
-the new wire.
+This prototype targets **1, 2, and 5 — the last for components only.**
+
+Problems 3 and 4 require `$refresh()` and declared events, which are
+`state-model.md` §7 contracts and genuinely blocked on the new wire.
+
+Problem 5 is scoped deliberately. `component-system.md` names `GlueView` and
+`GlueTemplateProxy` among the offenders, but its resolution for them is
+migration, not universal morphing: §6 says *"morph boundaries are component
+boundaries, and addresses supply the node keys"*, and `design.md`'s
+polymorphic-notification analysis concludes that the production HTML-result
+escape hatch becomes a *"render-first component"*. A `Glue.view` fragment has no
+address and therefore no node keys to reconcile against. Generic HTML results
+keep replacement; content that needs Alpine scopes, focus, or caret preserved
+across a refresh becomes a component. That answer is stronger now than when the
+design was written, because a component is cheap to declare.
 
 ### What the current wire already provides
 
@@ -409,39 +421,49 @@ declared attribute, used for mount and for structural change — the dashboard's
 Re-rendering a whole card to change one number Alpine could have bound directly is
 not the contract.
 
-#### Replacement is always morphed
+#### Morphing is a component mechanism
 
-Per `component-system.md` §6: *"Server-rendered HTML that replaces existing
-content is always applied with `Alpine.morph`; glue never replaces DOM any other
-way. Insertion stays plain insertion."*
+Per `component-system.md` §6: *"Morph boundaries are component boundaries, and
+addresses supply the node keys."*
 
-The replacement surface is two implementations:
+A component re-render is morphed into that component's own root. Nothing else
+is. `Glue.view` fragments and generic `GlueHtmlResult` output keep plain
+replacement, because they have no address and therefore no node keys to
+reconcile against. The four `renderInsertAdjacentHtml*` methods are insertion,
+not replacement, and were never in scope.
 
-- `htmlResult.js` — `renderInnerHtml` / `renderOuterHtml`
-- `view.js` — `renderInnerHtml` / `renderOuterHtml` (`proxies/template.js`
-  delegates here and has no DOM code of its own)
+§6 also says *"glue never replaces DOM any other way,"* which read literally
+would extend morphing to every replacement path. That reading was tried and
+rejected on evidence. A `Glue.view` fragment routinely returns **multiple
+top-level nodes** — `test_project`'s outer-HTML profile modal fetches a
+fragment that opens with a `<style>` before its content — and morphing
+reconciles the target into the first element and drops the rest, which put the
+modal's form outside the dialog. The narrower sentence is the operative one, and
+the design's own answer for those consumers is to migrate them (§Context).
 
-Both switch to morph, sharing one implementation in `client_js/src/morph.js`.
-The four `renderInsertAdjacentHtml*` methods are insertion and are unchanged.
+**A component re-render takes no target.** The component owns its root, so the
+client resolves `[data-glue="<name>"]` itself:
+
+```javascript
+await dashboard.render()            // morphs into its own root
+await result.renderOuterHtml('#x')  // generic HTML; caller names the target
+```
+
+The server marks component HTML with `glue_component` in the result envelope,
+and the client applies it rather than handing it back. Requiring a caller-supplied
+selector here would reintroduce motivating problem 2 in a new place.
+
+**A re-render re-injects the root binding.** `render()` runs the same injection
+the stamping tag does, so the morph target and the incoming HTML both carry
+`x-data` and `data-glue`. Skipping it would morph the binding off the component's
+own root and leave it inert after one re-render.
+
+Children stamped during a re-render ride along in `manifest_list` and are
+registered before the morph, so their proxies exist before the DOM referencing
+them appears.
+
 Third-party-owned subtrees opt out with `data-morph-ignore`, the attribute the
 morph lab settled on.
-
-This changes behavior for existing `render_as_html` callers, which is intended:
-preserving replacement would preserve motivating problem 5.
-
-**Morphing applies to one element, so `renderOuterHtml` morphs only when the
-incoming HTML is one element.** A multi-node fragment is replaced instead.
-
-This is not a fallback, it is the correct semantic: morph preserves the identity
-of an element across a re-render, and a fragment that is not a single element
-has no identity to preserve. The case is real rather than hypothetical — a
-`Glue.view` fragment commonly opens with a `<style>` before its content, and
-`test_project`'s outer-HTML profile modal does exactly that. Morphing such a
-fragment reconciles the target into its first element and drops the rest.
-
-Components are unaffected: §8 enforces a single root, so component HTML always
-takes the morph path. `renderInnerHtml` is likewise unaffected — the container
-is the stable identity there, so any number of children reconcile normally.
 
 ### 9. Access
 

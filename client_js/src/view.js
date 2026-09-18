@@ -1,5 +1,4 @@
 import {resolveElement, htmlToFragment} from "./utils"
-import {morphChildren, morphElement} from "./morph"
 
 class GlueView {
     constructor(http, url, sharedPayload = {}) {
@@ -16,17 +15,22 @@ class GlueView {
         return await this._fetchView(payload, 'POST')
     }
 
+    // Plain replacement, not morphing. Morph boundaries are component
+    // boundaries (component-system.md §6) and a view fragment has no address,
+    // so there are no node keys to reconcile against. A fragment that needs
+    // Alpine scopes, focus, or caret preserved across a refresh becomes a
+    // component; see design/components/spec.md §8.
     async renderInnerHtml(target, payload = {}) {
         const element = resolveElement(target)
         const html = await this.post(payload)
-        morphChildren(element, html)
+        element.replaceChildren(htmlToFragment(html))
         return html
     }
 
     async renderOuterHtml(target, payload = {}) {
         const element = resolveElement(target)
         const html = await this.post(payload)
-        morphElement(element, html)
+        element.replaceWith(htmlToFragment(html))
         return html
     }
 

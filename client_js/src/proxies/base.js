@@ -1,6 +1,7 @@
 import {getProxyClass} from "./registry"
 import GluePolicy from "../policy"
 import GlueHtmlResult from "../htmlResult"
+import GlueComponentHtmlResult from "../componentHtmlResult"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -482,6 +483,18 @@ class BaseGlueProxy {
 
         if (this._resultIsTemplateResponse(result)) {
             this._client.loadManifests(result.manifest_list)
+
+            // A component re-render is applied here rather than handed back for
+            // the caller to place: the component owns its root, so there is no
+            // target to choose. Children it stamped are registered above first,
+            // so their proxies exist before the DOM referencing them appears.
+            if (result.glue_component) {
+                return new GlueComponentHtmlResult(
+                    result.html,
+                    result.glue_component,
+                ).apply()
+            }
+
             return new GlueHtmlResult(result.html)
         }
 

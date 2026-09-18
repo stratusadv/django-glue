@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 from typing import TYPE_CHECKING, Any, Self
 
+from django.template.response import TemplateResponse
 from django.utils.html import format_html
 
 from django_glue.access import GlueAccess
@@ -21,8 +22,9 @@ from django_glue.glue.component.registry import (
     derive_tag_name,
     glue_component_registry,
 )
+from django_glue.glue.component.root_injection import inject_root_attributes
 from django_glue.glue.loading import LoadingStrategy
-from django_glue.response import GlueResponse, GlueTemplateResponse
+from django_glue.response import GlueResponse, render_template_response_html
 
 if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
@@ -224,6 +226,20 @@ class Component(BaseGlue):
             self.name,
         )
 
+    def inject_root(self, html: str) -> str:
+        """Add this component's binding to the root element it rendered.
+
+        Called from both render paths: the template tag's initial stamp and a
+        later ``render()``. A re-render that skipped this would morph the
+        binding straight off the component's own root.
+        """
+        return inject_root_attributes(
+            html,
+            self.root_attributes,
+            component_name=self.name,
+            template_name=self.template,
+        )
+
     def get_context_data(self) -> dict[str, Any]:
         return {'component': self}
 
@@ -238,11 +254,20 @@ class Component(BaseGlue):
             msg = f"Cannot render unbound component '{self.name}'."
             raise GlueComponentRegistrationError(msg)
 
-        return GlueTemplateResponse(
-            request=self.request,
-            template=self.template,
-            context=self.get_context_data(),
+        html, manifest_list = render_template_response_html(
+            TemplateResponse(self.request, self.template, self.get_context_data()),
+            self.request,
         )
+
+        # `glue_component` tells the client this HTML belongs to one addressed
+        # component, so it morphs into that component's own root instead of
+        # being handed back for a caller to place somewhere.
+        return GlueResponse(result={
+            'is_glue_template_response': True,
+            'glue_component': self.name,
+            'html': self.inject_root(html),
+            'manifest_list': manifest_list,
+        })
 
 
 Component._parameter_names: tuple[str, ...] = ()
