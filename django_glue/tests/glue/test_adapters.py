@@ -426,6 +426,51 @@ class AllFieldsTestCase(TestCase):
 
         self.assertEqual(glue_object._included_fields, [])
 
+    def test_queryset_fields_list_containing_all_marker_raises_helpful_error(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "fields contains '__all__' as an element",
+        ):
+            QuerySetGlue(
+                Gorilla.objects.all(),
+                **glue_context(name='gorillas', access=GlueAccess.VIEW),
+                fields=['__all__'],
+            )
+
+    def test_queryset_exclude_list_containing_all_marker_raises_helpful_error(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "exclude contains '__all__' as an element",
+        ):
+            QuerySetGlue(
+                Gorilla.objects.all(),
+                **glue_context(name='gorillas', access=GlueAccess.VIEW),
+                exclude=['__all__'],
+            )
+
+    def test_model_fields_list_containing_all_marker_raises_helpful_error(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "fields contains '__all__' as an element",
+        ):
+            ModelGlue(
+                self.gorilla,
+                **glue_context(),
+                fields=['__all__'],
+            )
+
+    def test_related_field_config_fields_list_containing_all_marker_raises_helpful_error(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            r"related_field_config\['red_corner'\]\.fields contains '__all__' as an element",
+        ):
+            QuerySetGlue(
+                Fight.objects.all(),
+                **glue_context(name='fights', access=GlueAccess.VIEW),
+                fields=['name'],
+                related_field_config={'red_corner': {'fields': ['__all__']}},
+            )
+
     def test_all_fields_is_exported_from_main_module(self):
         from django_glue import ALL_FIELDS
 

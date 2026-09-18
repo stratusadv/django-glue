@@ -72,6 +72,11 @@ class QuerySetGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelF
             exclude if exclude == ALL_FIELDS else tuple(exclude)
         )
 
+        if isinstance(self.fields, tuple):
+            self._reject_nested_all_marker(self.fields, 'fields')
+        if isinstance(self.exclude, tuple):
+            self._reject_nested_all_marker(self.exclude, 'exclude')
+
         if not self.fields and not self.exclude:
             msg = 'QuerySetGlue requires at least one of fields or exclude.'
             raise ValueError(msg)

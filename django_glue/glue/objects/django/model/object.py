@@ -96,6 +96,11 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             exclude if exclude == ALL_FIELDS else tuple(exclude)
         )
 
+        if isinstance(self.fields, tuple):
+            self._reject_nested_all_marker(self.fields, 'fields')
+        if isinstance(self.exclude, tuple):
+            self._reject_nested_all_marker(self.exclude, 'exclude')
+
         if not self.fields and not self.exclude:
             msg = 'ModelGlue requires at least one of fields or exclude.'
             raise ValueError(msg)
@@ -277,11 +282,23 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 normalized_config['fields'] = (
                     fields if fields == ALL_FIELDS else tuple(fields)
                 )
+                if isinstance(normalized_config['fields'], tuple):
+                    ModelGlue._reject_nested_all_marker(
+                        normalized_config['fields'],
+                        'fields',
+                        prefix=f"related_field_config[{field_name!r}]",
+                    )
             exclude = config.get('exclude')
             if exclude:
                 normalized_config['exclude'] = (
                     exclude if exclude == ALL_FIELDS else tuple(exclude)
                 )
+                if isinstance(normalized_config['exclude'], tuple):
+                    ModelGlue._reject_nested_all_marker(
+                        normalized_config['exclude'],
+                        'exclude',
+                        prefix=f"related_field_config[{field_name!r}]",
+                    )
             choice_queryset = config.get('choice_queryset')
             if choice_queryset is not None:
                 if not isinstance(choice_queryset, QuerySet):
