@@ -1,4 +1,5 @@
 import {resolveElement, htmlToFragment} from "./utils"
+import {morphChildren, morphElement} from "./morph"
 
 // Wraps a server-rendered HTML string with the same render*Html API as
 // GlueView/GlueTemplateProxy, so a `@Glue.attr` method that returns a
@@ -22,12 +23,12 @@ class GlueHtmlResult {
     }
 
     async renderInnerHtml(target) {
-        resolveElement(target).replaceChildren(htmlToFragment(this.html))
+        morphChildren(resolveElement(target), this.html)
         return this.html
     }
 
     async renderOuterHtml(target) {
-        resolveElement(target).replaceWith(htmlToFragment(this.html))
+        morphElement(resolveElement(target), this.html)
         return this.html
     }
 

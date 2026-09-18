@@ -421,12 +421,27 @@ The replacement surface is two implementations:
 - `view.js` — `renderInnerHtml` / `renderOuterHtml` (`proxies/template.js`
   delegates here and has no DOM code of its own)
 
-Both switch to morph. The four `renderInsertAdjacentHtml*` methods are insertion
-and are unchanged. A component template must have a single root element, and
-third-party-owned subtrees opt out with an ignore attribute.
+Both switch to morph, sharing one implementation in `client_js/src/morph.js`.
+The four `renderInsertAdjacentHtml*` methods are insertion and are unchanged.
+Third-party-owned subtrees opt out with `data-morph-ignore`, the attribute the
+morph lab settled on.
 
 This changes behavior for existing `render_as_html` callers, which is intended:
 preserving replacement would preserve motivating problem 5.
+
+**Morphing applies to one element, so `renderOuterHtml` morphs only when the
+incoming HTML is one element.** A multi-node fragment is replaced instead.
+
+This is not a fallback, it is the correct semantic: morph preserves the identity
+of an element across a re-render, and a fragment that is not a single element
+has no identity to preserve. The case is real rather than hypothetical — a
+`Glue.view` fragment commonly opens with a `<style>` before its content, and
+`test_project`'s outer-HTML profile modal does exactly that. Morphing such a
+fragment reconciles the target into its first element and drops the rest.
+
+Components are unaffected: §8 enforces a single root, so component HTML always
+takes the morph path. `renderInnerHtml` is likewise unaffected — the container
+is the stable identity there, so any number of children reconcile normally.
 
 ### 9. Access
 

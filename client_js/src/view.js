@@ -1,4 +1,5 @@
 import {resolveElement, htmlToFragment} from "./utils"
+import {morphChildren, morphElement} from "./morph"
 
 class GlueView {
     constructor(http, url, sharedPayload = {}) {
@@ -18,14 +19,14 @@ class GlueView {
     async renderInnerHtml(target, payload = {}) {
         const element = resolveElement(target)
         const html = await this.post(payload)
-        element.replaceChildren(htmlToFragment(html))
+        morphChildren(element, html)
         return html
     }
 
     async renderOuterHtml(target, payload = {}) {
         const element = resolveElement(target)
         const html = await this.post(payload)
-        element.replaceWith(htmlToFragment(html))
+        morphElement(element, html)
         return html
     }
 
