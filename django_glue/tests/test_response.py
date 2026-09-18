@@ -1,8 +1,13 @@
 from django.template.response import TemplateResponse
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
 from django_glue.message import GlueMessage
-from django_glue.response import GlueResponse, GlueTemplateResponse
+from django_glue.response import (
+    GlueRedirectResponse,
+    GlueResponse,
+    GlueTemplateResponse,
+)
 from django_glue.tests.conftest import MockSession
 
 
@@ -57,6 +62,16 @@ class GlueResponseTestCase(TestCase):
 
         with self.assertRaises(TypeError):
             GlueResponse.from_result(HttpResponse('raw'))
+
+
+class GlueRedirectResponseTestCase(TestCase):
+    def test_result_contains_reversed_redirect_url(self):
+        response = GlueRedirectResponse('gorilla:detail', pk=5)
+
+        self.assertEqual(
+            response.result,
+            {'redirect': {'url': reverse('gorilla:detail', kwargs={'pk': 5})}},
+        )
 
 
 class GlueTemplateResponseTestCase(TestCase):
