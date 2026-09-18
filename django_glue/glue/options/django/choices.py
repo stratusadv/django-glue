@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import pickle
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
@@ -13,6 +14,8 @@ from django.utils.module_loading import import_string
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from django.http import HttpRequest
 
 from django_glue.glue.options.django.constants import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
@@ -47,6 +50,7 @@ class GlueRelatedModelChoices:
         self.value_field_name = (
             value_field_name or queryset.model._meta.pk.name
         )
+        self._label_formatter_takes_request = None
 
     @property
     def explicit_options(self) -> QuerySetChoiceOptions | None:
@@ -80,8 +84,8 @@ class GlueRelatedModelChoices:
         )
         return hashlib.sha256(pickle.dumps(fingerprint_value)).hexdigest()[:32]
 
-    def serialize_item(self, instance: Model) -> dict[str, Any]:
-        label = self._render_label(instance)
+    def serialize_item(self, instance: Model, request: HttpRequest) -> dict[str, Any]:
+        label = self._render_label(instance, request)
         choice_object = {
             'pk': instance.pk,
             '__str__': str(instance),
@@ -100,6 +104,7 @@ class GlueRelatedModelChoices:
     def serialize_selected_values(
         self,
         values: Sequence[Any],
+        request: HttpRequest,
     ) -> list[dict[str, Any]]:
         if not values:
             return []
@@ -110,7 +115,7 @@ class GlueRelatedModelChoices:
         choices_by_value = {
             str(choice['value']): choice
             for choice in (
-                self.serialize_item(instance)
+                self.serialize_item(instance, request)
                 for instance in queryset
             )
         }
@@ -120,7 +125,7 @@ class GlueRelatedModelChoices:
             if str(value) in choices_by_value
         ]
 
-    def load(self, *, search: str = '') -> RelatedModelChoicesResult:
+    def load(self, *, search: str = '', request: HttpRequest) -> RelatedModelChoicesResult:
         queryset = self.queryset
         if self.is_searchable:
             if search:
@@ -133,16 +138,28 @@ class GlueRelatedModelChoices:
             queryset = queryset[:self.options.search_limit]
 
         return {
-            'results': [self.serialize_item(instance) for instance in queryset],
+            'results': [
+                self.serialize_item(instance, request) for instance in queryset
+            ],
         }
 
-    def _render_label(self, instance: Model) -> str:
+    def _render_label(self, instance: Model, request: HttpRequest) -> str:
         formatter = self.options.label_formatter
         if formatter is None:
             return str(instance)
         if isinstance(formatter, str):
             formatter = import_string(formatter)
-        result = formatter(instance)
+        if self._label_formatter_takes_request is None:
+            positional_count, has_var_positional = _label_formatter_positional_arity(
+                formatter
+            )
+            self._label_formatter_takes_request = (
+                has_var_positional or positional_count >= 2
+            )
+        if self._label_formatter_takes_request:
+            result = formatter(request, instance)
+        else:
+            result = formatter(instance)
         if isinstance(result, TemplateResponse):
             result.render()
             return result.content.decode(result.charset or 'utf-8')
@@ -225,6 +242,32 @@ def _validate_search_limit(search_limit: int) -> None:
         raise ValueError(msg)
 
 
+def _label_formatter_positional_arity(formatter: Callable) -> tuple[int, bool]:
+    parameters = inspect.signature(formatter).parameters
+    kinds = [parameter.kind for parameter in parameters.values()]
+    positional_count = (
+        kinds.count(inspect.Parameter.POSITIONAL_ONLY)
+        + kinds.count(inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    )
+    return positional_count, inspect.Parameter.VAR_POSITIONAL in kinds
+
+
+def _check_label_formatter_signature(formatter: Callable) -> None:
+    try:
+        positional_count, has_var_positional = _label_formatter_positional_arity(
+            formatter
+        )
+    except (TypeError, ValueError) as exception:
+        msg = f'Glue.choices label_formatter {formatter!r} could not be inspected.'
+        raise TypeError(msg) from exception
+    if not has_var_positional and positional_count not in (1, 2):
+        msg = (
+            'Glue.choices label_formatter must accept (instance) or '
+            '(request, instance).'
+        )
+        raise TypeError(msg)
+
+
 def _validate_label_formatter(label_formatter: Callable | str | None) -> None:
     if label_formatter is None:
         return
@@ -243,8 +286,10 @@ def _validate_label_formatter(label_formatter: Callable | str | None) -> None:
                 'does not resolve to a callable.'
             )
             raise ValueError(msg)
+        _check_label_formatter_signature(resolved)
         return
     if callable(label_formatter):
+        _check_label_formatter_signature(label_formatter)
         try:
             pickle.dumps(label_formatter)
         except (pickle.PicklingError, AttributeError) as exception:

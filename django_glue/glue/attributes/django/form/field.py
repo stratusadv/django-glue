@@ -75,7 +75,10 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
 
         is_multiple = isinstance(self.field, ModelMultipleChoiceField)
         values = list(current_value) if is_multiple else [current_value]
-        selected_choices = related_choices.serialize_selected_values(values)
+        selected_choices = related_choices.serialize_selected_values(
+            values,
+            request=self.owner.request,
+        )
         if not selected_choices:
             return
 

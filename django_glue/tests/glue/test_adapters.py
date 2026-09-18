@@ -1558,10 +1558,10 @@ def skill_label_template_string(skill: Skill) -> str:
     return 'pre {% if 1 %}mid{% endif %} post'
 
 
-def skill_label_formatter_html(skill: Skill):
+def skill_label_formatter_html(request, skill: Skill):
     from django.template.response import TemplateResponse
 
-    return TemplateResponse(None, 'choice_label_test.html', {'skill': skill})
+    return TemplateResponse(request, 'choice_label_test.html', {'skill': skill})
 
 
 def skill_label_formatter_bad_return(skill: Skill):
@@ -1877,6 +1877,12 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         with self.assertRaisesRegex(ValueError, 'must be picklable'):
             Glue.choices(Skill.objects.all(), label_formatter=lambda skill: skill.name)
+
+        with self.assertRaisesRegex(TypeError, 'must accept'):
+            Glue.choices(
+                Skill.objects.all(),
+                label_formatter=lambda request, skill, extra: skill.name,
+            )
 
         with self.assertRaises(TypeError):
             Glue.choices([('a', 'A')], label_formatter=skill_label_formatter)

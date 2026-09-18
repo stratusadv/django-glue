@@ -629,6 +629,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             value_field_name=self._choice_value_field_name_for_field(field_name),
         ).load(
             search=search,
+            request=self.request,
         )
 
     def _choice_value_field_name_for_field(self, field_name: str) -> str:
