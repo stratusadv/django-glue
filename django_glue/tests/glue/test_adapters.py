@@ -1897,7 +1897,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         with self.assertRaisesRegex(TypeError, 'must return a string or a TemplateResponse'):
             glue_object.foreign_key_choices(field_name='skill')
 
-    def test_relation_field_metadata_marks_html_labels(self):
+    def test_choices_carry_has_html_label_when_formatter_is_set(self):
         from django import forms
 
         class SkillForm(forms.Form):
@@ -1906,21 +1906,25 @@ class DjangoFormGlueObjectTestCase(TestCase):
                 label_formatter=skill_label_formatter,
             ))
 
+        Skill.objects.create(name='Grappling')
         glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
-        metadata = glue_object.attributes['skill'].metadata
+        glue_object._load_client_state({'skill': {'value': None}})
+        result = glue_object.foreign_key_choices(field_name='skill')
 
-        self.assertTrue(metadata['choices_label_is_html'])
+        self.assertTrue(result['results'][0]['has_html_label'])
 
-    def test_relation_field_metadata_defaults_html_labels_to_false(self):
+    def test_choices_omit_has_html_label_without_a_formatter(self):
         from django import forms
 
         class SkillForm(forms.Form):
             skill = forms.ModelChoiceField(queryset=Skill.objects.all())
 
+        Skill.objects.create(name='Grappling')
         glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
-        metadata = glue_object.attributes['skill'].metadata
+        glue_object._load_client_state({'skill': {'value': None}})
+        result = glue_object.foreign_key_choices(field_name='skill')
 
-        self.assertFalse(metadata['choices_label_is_html'])
+        self.assertNotIn('has_html_label', result['results'][0])
 
     def test_selected_choice_metadata_uses_formatted_label(self):
         from django import forms
@@ -1941,6 +1945,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         metadata = glue_object.attributes['skill'].metadata
 
         self.assertEqual(metadata['selected_choice']['label'], 'Grappling (difficulty 3)')
+        self.assertTrue(metadata['selected_choice']['has_html_label'])
 
     def test_foreign_key_choices_search_field_filters_with_icontains(self):
         from django import forms

@@ -4,7 +4,7 @@ import GlueHttp from "../src/http"
 import GlueModelProxy from "../src/proxies/model"
 import {createMetadata, createPolicy} from "./testUtils"
 
-function makeSkillField(labelIsHtml) {
+function makeSkillField() {
     const object = new GlueModelProxy({
         http: new GlueHttp(new GlueConfig()),
         policy: createPolicy({attributes: ['skill']}),
@@ -14,7 +14,6 @@ function makeSkillField(labelIsHtml) {
                 type: 'ForeignKey',
                 choice_model_path: 'test_project.gorilla.models.Skill',
                 choices: [],
-                choices_label_is_html: labelIsHtml,
             },
         }}),
     })
@@ -22,30 +21,39 @@ function makeSkillField(labelIsHtml) {
     return object.$fields.skill
 }
 
-describe('relation field choiceLabelHtml', () => {
+describe('relation field choice labels', () => {
     test('escapes plain labels for safe html rendering', () => {
-        const field = makeSkillField(false)
+        const field = makeSkillField()
         const choice = {value: 1, label: 'Fish & Chips <b>bold</b>'}
 
         expect(field.choiceLabelHtml(choice)).toBe('Fish &amp; Chips &lt;b&gt;bold&lt;/b&gt;')
     })
 
     test('returns html labels verbatim', () => {
-        const field = makeSkillField(true)
-        const choice = {value: 2, label: '<b>Grappling</b>'}
+        const field = makeSkillField()
+        const choice = {value: 2, label: '<b>Grappling</b>', has_html_label: true}
 
         expect(field.choiceLabelHtml(choice)).toBe('<b>Grappling</b>')
     })
 
+    test('strips markup from the text label', () => {
+        const field = makeSkillField()
+
+        expect(field.choiceLabelText({value: 2, label: '<b>Grappling</b>', has_html_label: true}))
+            .toBe('Grappling')
+        expect(field.choiceLabelText({value: 1, label: 'Fish & Chips'}))
+            .toBe('Fish & Chips')
+    })
+
     test('treats missing labels as empty strings', () => {
-        const field = makeSkillField(false)
+        const field = makeSkillField()
 
         expect(field.choiceLabelHtml({value: 3})).toBe('')
         expect(field.choiceLabelHtml(null)).toBe('')
     })
 })
 
-describe('static choice field choiceLabelHtml', () => {
+describe('static choice field choice labels', () => {
     test('escapes labels', () => {
         const object = new GlueModelProxy({
             http: new GlueHttp(new GlueConfig()),

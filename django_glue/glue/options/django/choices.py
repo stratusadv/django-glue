@@ -68,10 +68,6 @@ class GlueRelatedModelChoices:
     def is_searchable(self) -> bool:
         return bool(self.options.search_fields)
 
-    @property
-    def has_label_formatter(self) -> bool:
-        return self.options.label_formatter is not None
-
     def fingerprint(self) -> str:
         query = self.queryset.query.clone()
         if hasattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE):
@@ -92,11 +88,14 @@ class GlueRelatedModelChoices:
         }
         for field_name in self.options.fields:
             choice_object[field_name] = getattr(instance, field_name)
-        return {
+        item = {
             'value': instance.serializable_value(self.value_field_name),
             'label': label,
             'obj': choice_object,
         }
+        if self.options.label_formatter is not None:
+            item['has_html_label'] = True
+        return item
 
     def serialize_selected_values(
         self,

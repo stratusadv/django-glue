@@ -56,7 +56,6 @@ class ModelFieldAttribute(BaseDjangoFieldGlueAttribute):
                 f'{related_choices.fingerprint()}'
             )
             metadata['choices_searchable'] = related_choices.is_searchable
-            metadata['choices_label_is_html'] = related_choices.has_label_formatter
             if related_choices.is_searchable:
                 selected_choices = related_choices.serialize_selected_values(
                     self.get() if self.field.many_to_many else [self.get()]

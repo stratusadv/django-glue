@@ -988,10 +988,13 @@
     }
     choiceLabelHtml(choice) {
       const label = String(choice?.label ?? "");
-      if (this.choices_label_is_html) {
+      if (choice?.has_html_label) {
         return label;
       }
       return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    choiceLabelText(choice) {
+      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
     }
   }
   var choice_default = ChoiceFieldGlue;
