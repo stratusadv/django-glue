@@ -7,6 +7,7 @@ from django.http import HttpRequest
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.component.object import Component
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.loading import LoadingStrategy
@@ -108,6 +109,7 @@ ChoiceSource = TypeVar('ChoiceSource')
 
 class Glue:
     Access = GlueAccess
+    Component = Component
     LoadingStrategy = LoadingStrategy
     attribute = DeclaredAttribute
     attr = DeclaredAttribute

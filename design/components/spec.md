@@ -106,11 +106,33 @@ dynamic import.
 `time-entry-day`) and may be overridden for a domain-qualified or collision-free
 public name.
 
-Classes register through `__init_subclass__` on `Glue.Component`. Because a class
-that is never imported never registers, Glue autodiscovers a `components` module
-per installed app, following Django's admin autodiscovery convention. A Django
-system check rejects two classes claiming the same effective tag name at startup
-rather than resolving by import order.
+Classes register through `__init_subclass__` on `Glue.Component`. Defining a
+subclass with a template registers it; there is no decorator and no explicit
+registry call. An intermediate base that declares no template claims no tag name,
+so shared ancestors are not stampable.
+
+Because a class that is never imported never registers, Glue autodiscovers
+component modules at `AppConfig.ready()`. Discovery is **exhaustive**: for each
+installed app it imports `<app>.components`, and when that is a package it
+imports every submodule beneath it, recursively.
+
+This deliberately goes further than Django's `autodiscover_modules`, which
+imports `<app>.components` and stops — a package's submodules are invisible to it
+unless `__init__.py` re-exports them. The `admin.py` precedent is weaker than it
+looks: a missed admin registration means a model is absent from a UI, whereas a
+missed component registration fails *late and inconsistently*. The component
+registers whenever some unrelated view happens to import its module, so stamping
+succeeds and the page renders; reconstruction on the next request then fails with
+`No Glue component is registered`. A bug that depends on unrelated import order
+is worth a small departure from convention to delete. One file per component is
+also the layout any app with more than a handful will want.
+
+Modules and packages whose names begin with `_` are skipped.
+
+A Django system check rejects two classes claiming the same effective tag name at
+startup rather than resolving by import order. Registration records collisions
+instead of raising, because raising at import time would itself be import-order
+dependent.
 
 ### 3. Components are stamped with a Django template tag
 
@@ -296,16 +318,40 @@ component template places it on its single root element:
 {# time_tracker/component/day.html #}
 <div class="day-card" {{ glue_attrs }}>
     <h3>{{ component.date }}</h3>
-    <p x-text="$glue.total_hours"></p>
-    <button @click="$glue.add_entry()">Add</button>
+    <p x-text="component.total_hours"></p>
+    <button @click="component.add_entry()">Add</button>
 </div>
 ```
 
 `glue_attrs` renders the Alpine binding and the root marker:
 
 ```html
-<div class="day-card" x-data="Glue.component.time_entry_day_a3f9b2" data-glue="time_entry_day_a3f9b2">
+<div class="day-card" x-data="{ component: Glue.component.time_entry_day_a3f9b2 }" data-glue="time_entry_day_a3f9b2">
 ```
+
+**The proxy is bound under the same name the render context uses.** An attribute
+is spelled identically on both sides of the boundary — `{{ component.total_hours }}`
+renders it server-side, `x-text="component.total_hours"` binds it client-side.
+
+`component-system.md` §7 instead specifies a `$glue` magic resolving the nearest
+component proxy. That is **not** implemented, and the difference is deliberate: a
+second name for the same thing, differing only by which language the author is
+writing in, is a wart in every line that touches both. Binding the proxy into
+scope under `component` removes it, and removes the magic with it — a nested
+Alpine scope resolves the owning component through the ordinary scope chain, so
+there is no "nearest root" walk to explain and no failure mode for using it
+outside a component.
+
+The cost is that a bare `x-text="total_hours"` no longer resolves; an expression
+always names the object. That is an improvement in a template where several
+proxies may be in scope.
+
+A `$glue` magic may still be added later, when there is something besides a
+component worth resolving — but alongside this, not as the primary interface.
+When declared events arrive, a handler compiled at a stamp site will need
+scoping to the composing parent, because the stamped child's own `component`
+shadows its owner's within that subtree. §7 already solves that by scoping stamp
+handlers explicitly; binding under `component` neither causes nor prevents it.
 
 The alternative — rendering the template and splicing attributes into the root's
 opening tag server-side — is rejected. The entire reason the tag form beats the
@@ -321,9 +367,11 @@ A wrapper element is also rejected: it puts the Alpine scope and the morph
 boundary on different nodes, which is the split that makes stamp-scoped behavior
 fragile. One component, one root, one identity.
 
-`$glue` resolves to the proxy bound in the enclosing Alpine scope. It must not
-re-read `Glue.component.<name>`, because that registration is a getter that
-constructs a **new** proxy on every access.
+`Glue.component.<name>` is read **once**, when `x-data` evaluates and creates the
+scope. That registration is a getter that constructs a *new* proxy on every
+access, so anything resolving the component repeatedly must read the bound scope
+rather than the global name, or every reference hands back a different object.
+Binding it into `x-data` is what makes one proxy per scope fall out naturally.
 
 #### Steady state flows through state, not HTML
 

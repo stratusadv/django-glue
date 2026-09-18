@@ -1,0 +1,8 @@
+{# A component template has a single root element, and places {{ glue_attrs }} #}
+{# on it. Glue never parses or rewrites rendered HTML to inject the binding. #}
+<div class="gorilla-card card" {{ glue_attrs }}>
+    <div class="card-body">
+        <h5 class="card-title" x-text="component.name">{{ component.name }}</h5>
+        <p class="card-text text-muted mb-0">Gorilla #{{ component.gorilla_id }}</p>
+    </div>
+</div>
