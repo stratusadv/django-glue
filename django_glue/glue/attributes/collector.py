@@ -1,242 +1,328 @@
 from __future__ import annotations
 
 import inspect
-import json
+from collections.abc import Iterable, Mapping
+from dataclasses import replace
+from functools import cache, partial
 from typing import Any, TYPE_CHECKING
 
-from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.exceptions import GlueInvalidAttributeError
-from django_glue.glue.attributes.callable import CallableAttribute
-from django_glue.glue.attributes.composite import CompositeStateAttribute
-from django_glue.glue.attributes.declared import DeclaredAttributeOptions
-from django_glue.glue.attributes.glue_object import GlueObjectAttribute
-from django_glue.glue.attributes.readonly import ReadOnlyAttribute
+from django_glue.glue.attributes.definition import (
+    GlueAttributeDefinition,
+    GlueAttributeKind,
+    GlueValueRole,
+    _resolve_glue_result_annotation,
+)
 
 if TYPE_CHECKING:
-    from django_glue.glue.attributes.base import BaseGlueAttribute
-    from django_glue.glue.base import BaseGlue
+    from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+
+
+_NAMESPACE_DEPTH_LIMIT = 20
 
 
 class GlueAttributeCollector:
-    """
-    Discovers @Attribute-decorated members on a glue object and its providers.
-
-    Recursively walks nested value attributes that themselves contain
-    @Attribute-decorated members.
-    """
-
-    def __init__(self, root_glue_owner: BaseGlue) -> None:
-        self.root_glue_owner = root_glue_owner
-        self.visited_attribute_owners: set[int] = set()
-        self.glue_attributes: dict[str, BaseGlueAttribute] = {}
-        self.identity_attributes: list[BaseGlueAttribute] = []
-
-    def collect(self) -> dict[str, BaseGlueAttribute]:
-        """Collect all attributes from the owner and its providers."""
-        self._collect_glue_attributes_from_root()
-        self._collect_glue_attributes_from_glue_attr_providers()
-        return self.glue_attributes
-
-    def _collect_glue_attributes_from_root(self) -> None:
-        """Discover attributes defined directly on the owner."""
-        self._collect_attrs_from_glue_attr_owner(
-            glue_attr_owner=self.root_glue_owner,
-            discovery_path_prefix=''
-        )
-
-    def _collect_glue_attributes_from_glue_attr_providers(self) -> None:
-        """Discover attributes from the owner's attribute providers."""
-        for glue_attribute_provider in self.root_glue_owner.attribute_providers.values():
-            self._collect_attrs_from_glue_attr_owner(
-                glue_attr_owner=glue_attribute_provider,
-                discovery_path_prefix=''
-            )
-
-    def _collect_attrs_from_glue_attr_owner(
-            self,
-            glue_attr_owner: Any,
-            discovery_path_prefix: str
-        ) -> None:
-        """Discover attributes on a glue attribute owner, tracking visited objects to prevent cycles."""
-        if self._glue_attr_owner_is_visited(glue_attr_owner):
-            return
-
-        self._mark_glue_attr_owner_visited(glue_attr_owner)
-
-        owner_class = glue_attr_owner.__class__
-        attr_owner_instance = glue_attr_owner if glue_attr_owner is not self.root_glue_owner else None
-
-        for attr_name, attr in inspect.getmembers_static(owner_class):
-            options = self._get_glue_options(owner_class, attr_name, attr)
-            if options is None:
-                continue
-
-            glue_attr_qualified_name = self._build_qualified_name(
-                path_prefix=discovery_path_prefix,
-                attr_name=attr_name
-            )
-
-            self._create_glue_attribute(
-                glue_attr_owner=glue_attr_owner,
-                attr_owner_instance=attr_owner_instance,
-                qualified_name=glue_attr_qualified_name,
-                attr_name=attr_name,
+    @staticmethod
+    @cache
+    def collect(owner_type: type[Any]) -> tuple[GlueAttributeDefinition, ...]:
+        return tuple(
+            definition
+            for source_name, static_attribute in inspect.getmembers_static(owner_type)
+            if (options := GlueAttributeCollector._get_options(static_attribute)) is not None
+            for definition in GlueAttributeCollector._compile_declaration(
+                source_name=source_name,
                 options=options,
+                declaration=static_attribute,
             )
+        )
 
-    def _create_glue_attribute(
-        self,
-        glue_attr_owner: Any,
-        attr_owner_instance: Any | None,
-        qualified_name: str,
-        attr_name: str,
-        options: DeclaredAttributeOptions,
+    @staticmethod
+    def collect_from_providers(
+        attribute_providers: Iterable[Any],
+    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
+        definitions = []
+        providers = {}
+        for provider in attribute_providers:
+            if provider is None:
+                msg = 'Glue attribute providers cannot be None.'
+                raise TypeError(msg)
+            provider_definitions = GlueAttributeCollector.collect(type(provider))
+            definitions.extend(provider_definitions)
+            providers.update({
+                definition.path: provider
+                for definition in provider_definitions
+            })
+        return tuple(definitions), providers
+
+    @staticmethod
+    def collect_extra_attributes(
+        attribute_groups: Iterable[tuple[Any, Mapping[str, Any]]],
+    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
+        definitions = []
+        providers = {}
+        for provider, declarations in attribute_groups:
+            if provider is None:
+                msg = 'Glue attribute providers cannot be None.'
+                raise TypeError(msg)
+            if not isinstance(declarations, Mapping):
+                msg = 'Glue attribute provider declarations must be a mapping.'
+                raise TypeError(msg)
+            for path, declaration in declarations.items():
+                options = GlueAttributeCollector._get_options(declaration)
+                if options is None:
+                    msg = f'Glue attribute declaration {path!r} must use a Glue declaration.'
+                    raise TypeError(msg)
+                scoped_definitions = GlueAttributeCollector._compile_declaration(
+                    source_name=path.split('.')[-1],
+                    options=options,
+                    path=path,
+                    declaration=declaration,
+                )
+                definitions.extend(
+                    GlueAttributeCollector._bind_scoped_declaration(
+                        definition,
+                        declaration,
+                        path,
+                    )
+                    for definition in scoped_definitions
+                )
+                providers.update({
+                    definition.path: provider
+                    for definition in scoped_definitions
+                })
+        return tuple(definitions), providers
+
+    @staticmethod
+    def _bind_scoped_declaration(
+        definition: GlueAttributeDefinition,
+        declaration: Any,
+        path: str,
+    ) -> GlueAttributeDefinition:
+        if definition.path != path or definition.kind == GlueAttributeKind.NAMESPACE:
+            return definition
+        has_descriptor = (
+            getattr(declaration, 'target', None) is not None
+            or getattr(declaration, '_property', None) is not None
+        )
+        if not has_descriptor:
+            return definition
+        getter = partial(
+            GlueAttributeCollector._get_scoped_declaration,
+            declaration=declaration,
+        )
+        if definition.kind == GlueAttributeKind.CALLABLE:
+            return replace(
+                definition,
+                callable_target=getter,
+            )
+        setter = None
+        if definition.value_role == GlueValueRole.EDITABLE_STATE:
+            setter = partial(
+                GlueAttributeCollector._set_scoped_declaration,
+                declaration=declaration,
+            )
+        return replace(
+            definition,
+            getter=getter,
+            setter=setter,
+        )
+
+    @staticmethod
+    def _get_scoped_declaration(
+        provider: Any,
+        *,
+        declaration: Any,
+    ) -> Any:
+        return declaration.__get__(provider, type(provider))
+
+    @staticmethod
+    def _set_scoped_declaration(
+        provider: Any,
+        value: Any,
+        *,
+        declaration: Any,
     ) -> None:
-        """
-        Create and register a glue attribute, recursing depth-first into objects
-        that are detected to have nested glue attributes.
-        """
-        if options.is_callable:
-            glue_attribute = self._create_callable_attribute(
-                attr_name, options, attr_owner_instance
-            )
-            self.glue_attributes[qualified_name] = glue_attribute
-            return
+        declaration.__set__(provider, value)
 
-        value = getattr(glue_attr_owner, attr_name)
-
-        # Check if the value is a BaseGlue instance - wrap it in GlueObjectAttribute
-        if self._is_glue_object(value):
-            glue_attribute = GlueObjectAttribute(
-                owner=self.root_glue_owner,
-                name=attr_name,
-                required_access=options.required_access,
-                glue_object=value,
-                attr_owner_instance=attr_owner_instance,
-            )
-            self.glue_attributes[qualified_name] = glue_attribute
-            if options.is_identity:
-                self.identity_attributes.append(glue_attribute)
-            return
-
-        has_nested_glue_attributes = (
-            value is not None and self._has_glue_attributes(value.__class__)
-        )
-        if not has_nested_glue_attributes and not self._can_serialize_as_state(value):
-            raise GlueInvalidAttributeError(
-                attribute=qualified_name,
-                owner=f'{glue_attr_owner.__class__.__module__}.{glue_attr_owner.__class__.__qualname__}',
-                value_type=f'{value.__class__.__module__}.{value.__class__.__qualname__}',
-            )
-
-        glue_attribute = self._create_state_attribute(
-            attr_name, options, attr_owner_instance, has_nested_glue_attributes
-        )
-        self.glue_attributes[qualified_name] = glue_attribute
-        if options.is_identity:
-            self.identity_attributes.append(glue_attribute)
-
-        # Depth-first: recurse immediately into containers
-        if has_nested_glue_attributes:
-            self._collect_attrs_from_glue_attr_owner(
-                glue_attr_owner=value,
-                discovery_path_prefix=qualified_name
-            )
-
-    def _glue_attr_owner_is_visited(self, glue_attr_owner: Any) -> bool:
-        """Check if a glue attribute owner has already been visited."""
-        return id(glue_attr_owner) in self.visited_attribute_owners
-
-    def _mark_glue_attr_owner_visited(self, glue_attr_owner: Any) -> None:
-        """Mark a glue attribute owner as visited to prevent cycles."""
-        self.visited_attribute_owners.add(id(glue_attr_owner))
-
-    def _create_callable_attribute(
-        self,
-        attr_name: str,
+    @staticmethod
+    def _compile_declaration(
+        source_name: str,
         options: DeclaredAttributeOptions,
-        attr_owner_instance: Any | None,
-    ) -> CallableAttribute:
-        """Create a CallableAttribute from a decorated method."""
-        return CallableAttribute(
-            owner=self.root_glue_owner,
-            name=attr_name,
-            required_access=options.required_access,
-            takes_client_state=options.takes_client_state,
-            updates_client_state=options.updates_client_state,
-            render_as_html=options.render_as_html,
-            attr_owner_instance=attr_owner_instance,
-        )
-
-    def _create_state_attribute(
-        self,
-        attr_name: str,
-        options: DeclaredAttributeOptions,
-        attr_owner_instance: Any | None,
-        has_nested_glue_attributes: bool,
-    ) -> BaseGlueAttribute:
-        # These are the only potential state attribute types right now.
-        # More likely to be added in the future.
-        if has_nested_glue_attributes:
-            return CompositeStateAttribute(
-                owner=self.root_glue_owner,
-                name=attr_name,
-                required_access=options.required_access,
-                attr_owner_instance=attr_owner_instance,
+        *,
+        path: str | None = None,
+        declaration: Any | None = None,
+    ) -> tuple[GlueAttributeDefinition, ...]:
+        path = path if path is not None else source_name
+        if options.is_namespace:
+            return GlueAttributeCollector._compile_namespace(
+                path=path,
+                source_name=source_name,
+                options=options,
+                chain=frozenset(),
+                depth=0,
             )
-
-        # Fallback for primitive values declared as attributes
-        return ReadOnlyAttribute(
-            owner=self.root_glue_owner,
-            name=attr_name,
-            required_access=options.required_access,
-            attr_owner_instance=attr_owner_instance,
+        if options.expected_type is not None:
+            return (
+                GlueAttributeDefinition(
+                    path=path,
+                    source_name=source_name,
+                    kind=GlueAttributeKind.CHILD,
+                    required_access=options.required_access,
+                    expected_type=options.expected_type,
+                    is_nullable=options.is_nullable,
+                ),
+            )
+        kind = (
+            GlueAttributeKind.CALLABLE
+            if options.is_callable
+            else GlueAttributeKind.VALUE
+        )
+        allowed_arguments, injected_arguments = (
+            GlueAttributeCollector._compile_callable_arguments(
+                declaration,
+                path,
+            )
+            if kind == GlueAttributeKind.CALLABLE
+            else ((), ())
+        )
+        expected_type, is_nullable = (
+            _resolve_glue_result_annotation(
+                getattr(declaration, 'target', declaration),
+            )
+            if kind == GlueAttributeKind.CALLABLE
+            else (None, False)
+        )
+        return (
+            GlueAttributeDefinition(
+                path=path,
+                source_name=source_name,
+                kind=kind,
+                required_access=options.required_access,
+                value_role=options.value_role,
+                is_parameter=options.is_parameter,
+                is_identity=options.is_identity,
+                allowed_arguments=allowed_arguments,
+                injected_arguments=injected_arguments,
+                render_as_html=options.render_as_html,
+                expected_type=expected_type,
+                is_nullable=is_nullable,
+            ),
         )
 
-    def _has_glue_attributes(self, cls: type) -> bool:
-        """Check if a class has any @DeclaredAttribute-decorated members."""
-        return any(
-            self._get_glue_options(cls, attr_name, attr) is not None
-            for attr_name, attr in inspect.getmembers_static(cls)
-        )
-
     @staticmethod
-    def _is_glue_object(value: Any) -> bool:
-        """Check if a value is a BaseGlue instance."""
-        # Import here to avoid circular imports
-        from django_glue.glue.base import BaseGlue
-        return isinstance(value, BaseGlue)
+    def _compile_callable_arguments(
+        declaration: Any | None,
+        path: str,
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        target = getattr(declaration, 'target', declaration)
+        if target is None or not callable(target):
+            msg = f'Callable attribute {path!r} requires a callable target.'
+            raise TypeError(msg)
 
-    @staticmethod
-    def _can_serialize_as_state(value: Any) -> bool:
-        try:
-            json.dumps(value, cls=GlueResponseJSONEncoder)
-        except TypeError:
-            return False
-        return True
-
-    @staticmethod
-    def _get_glue_options(
-        target_class: type,
-        attr_name: str,
-        attr: Any
-    ) -> DeclaredAttributeOptions | None:
-        """Get the glue options for an attribute, if it's a glue attribute."""
-        options = getattr(attr, '__glue_options__', None)
-        if options is not None:
-            return options
-
-        for base_cls in target_class.__mro__:
-            base_attr = base_cls.__dict__.get(attr_name)
-            if base_attr is None:
+        allowed_arguments = []
+        injected_arguments = []
+        for name, parameter in inspect.signature(inspect.unwrap(target)).parameters.items():
+            if name == 'self' or parameter.kind in {
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            }:
                 continue
-            options = getattr(base_attr, '__glue_options__', None)
-            if options is not None:
-                return options
+            if parameter.kind == inspect.Parameter.POSITIONAL_ONLY:
+                msg = (
+                    f'Callable attribute {path!r} cannot expose positional-only '
+                    f'argument {name!r}.'
+                )
+                raise TypeError(msg)
 
-        return None
+            annotation = parameter.annotation
+            is_request = GlueAttributeCollector._is_request_annotation(annotation)
+            if name == 'request':
+                if annotation is not inspect.Parameter.empty and not is_request:
+                    msg = (
+                        f'Callable attribute {path!r} reserves argument '
+                        f"'request' for HttpRequest injection."
+                    )
+                    raise TypeError(msg)
+                injected_arguments.append(name)
+            elif is_request:
+                injected_arguments.append(name)
+            else:
+                allowed_arguments.append(name)
+
+        return tuple(allowed_arguments), tuple(injected_arguments)
 
     @staticmethod
-    def _build_qualified_name(path_prefix: str, attr_name: str) -> str:
-        """Build a dot-separated qualified attribute name."""
-        return f'{path_prefix}.{attr_name}' if path_prefix else attr_name
+    def _is_request_annotation(annotation: Any) -> bool:
+        if isinstance(annotation, str):
+            return annotation.strip("'\"").split('.')[-1] in {
+                'HttpRequest',
+                'WSGIRequest',
+            }
+        if not isinstance(annotation, type):
+            return False
+        return any(
+            base.__name__ == 'HttpRequest'
+            and base.__module__.startswith('django.http')
+            for base in annotation.__mro__
+        )
+
+    @staticmethod
+    def _compile_namespace(
+        path: str,
+        source_name: str,
+        options: DeclaredAttributeOptions,
+        chain: frozenset[type[Any]],
+        depth: int,
+    ) -> tuple[GlueAttributeDefinition, ...]:
+        provider_type = options.provider_type
+        if provider_type is None:
+            msg = f'Namespace attribute {path!r} requires a provider type.'
+            raise ValueError(msg)
+        if provider_type in chain:
+            msg = f'Namespace provider graph cycles through {provider_type.__name__!r}.'
+            raise ValueError(msg)
+        if depth > _NAMESPACE_DEPTH_LIMIT:
+            msg = f'Namespace provider graph exceeds depth limit at {path!r}.'
+            raise ValueError(msg)
+
+        definitions = [
+            GlueAttributeDefinition(
+                path=path,
+                source_name=source_name,
+                kind=GlueAttributeKind.NAMESPACE,
+                required_access=options.required_access,
+                provider_type=provider_type,
+            ),
+        ]
+        next_chain = chain | {provider_type}
+        for child_name, static_attribute in inspect.getmembers_static(provider_type):
+            child_options = GlueAttributeCollector._get_options(static_attribute)
+            if child_options is None:
+                continue
+            if child_options.is_namespace:
+                definitions.extend(
+                    GlueAttributeCollector._compile_namespace(
+                        path=f'{path}.{child_name}',
+                        source_name=child_name,
+                        options=child_options,
+                        chain=next_chain,
+                        depth=depth + 1,
+                    )
+                )
+            else:
+                definitions.extend(
+                    GlueAttributeCollector._compile_declaration(
+                        source_name=child_name,
+                        options=child_options,
+                        path=f'{path}.{child_name}',
+                        declaration=static_attribute,
+                    )
+                )
+        return tuple(definitions)
+
+    @staticmethod
+    def _get_options(static_attribute: Any) -> DeclaredAttributeOptions | None:
+        return getattr(
+            static_attribute,
+            '__glue_options__',
+            None,
+        )

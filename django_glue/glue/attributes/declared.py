@@ -1,26 +1,37 @@
-from dataclasses import dataclass
+from __future__ import annotations
+
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import update_wrapper
 from types import MethodType
-from typing import Any
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from django_glue.access import GlueAccess
+from django_glue.glue.attributes.definition import GlueValueRole
 from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
+
+if TYPE_CHECKING:
+    from django_glue.glue.base import BaseGlue
 
 _MISSING = object()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, kw_only=True)
 class DeclaredAttributeOptions:
     """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
 
-    required_access: GlueAccess = GlueAccess.VIEW
+    required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
     is_callable: bool = True
     takes_client_state: bool | list[str] | tuple[str, ...] = True
     updates_client_state: bool = True
     is_identity: bool = False
     render_as_html: bool = False
+    is_parameter: bool = False
+    value_role: GlueValueRole | None = None
+    is_namespace: bool = False
+    provider_type: type[Any] | None = None
+    expected_type: type[Any] | None = None
+    is_nullable: bool = False
 
 
 class DeclaredAttribute:
@@ -58,10 +69,12 @@ class DeclaredAttribute:
         self,
         value: Any = _MISSING,
         *,
-        required_access: GlueAccess = GlueAccess.VIEW,
+        required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW,
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         identity: bool = False,
+        parameter: bool = False,
+        editable: bool = False,
         render_as_html: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
@@ -77,6 +90,8 @@ class DeclaredAttribute:
         self._takes_client_state = takes_client_state
         self._updates_client_state = updates_client_state
         self._identity = identity
+        self._parameter = parameter
+        self._editable = editable
         self._render_as_html = render_as_html
         self.default = default
         self.default_factory = default_factory
@@ -106,7 +121,16 @@ class DeclaredAttribute:
             updates_client_state=self._updates_client_state,
             is_identity=self._identity,
             render_as_html=self._render_as_html,
+            is_parameter=self._parameter,
+            value_role=self._resolve_value_role(),
         )
+
+    def _resolve_value_role(self) -> GlueValueRole | None:
+        if self._is_callable:
+            return None
+        if self._editable:
+            return GlueValueRole.EDITABLE_STATE
+        return GlueValueRole.RECONSTRUCTOR
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if self.target is None and len(args) == 1 and not kwargs and self._is_decoratable(args[0]):
@@ -169,14 +193,25 @@ class DeclaredAttribute:
             return
         instance.__dict__.pop(self._get_storage_name(), None)
 
-    def _bind_target(self, target: Callable[..., Any] | property) -> 'DeclaredAttribute':
+    def _bind_target(self, target: Callable[..., Any] | property) -> DeclaredAttribute:
         self.target = target
         self._is_callable = not isinstance(target, property)
+        self._validate_callable_options()
         wrapped = target.fget if isinstance(target, property) else target
         if wrapped is not None:
             update_wrapper(self, wrapped)
         self._update_glue_options()
         return self
+
+    def _validate_callable_options(self) -> None:
+        if not self._is_callable:
+            return
+        if self._parameter:
+            msg = 'Glue.attr parameter=True is only valid for value declarations.'
+            raise TypeError(msg)
+        if self._editable:
+            msg = 'Glue.attr editable=True is only valid for value declarations.'
+            raise TypeError(msg)
 
     def _get_storage_name(self) -> str:
         if not self.storage_name:
@@ -207,7 +242,6 @@ class DeclaredAttribute:
             value.__dict__.pop('policy', None)
             value.__dict__.pop('metadata', None)
             value.__dict__.pop('state', None)
-            value.__dict__.pop('_attribute_collector', None)
             for child in value.__dict__.values():
                 self._reset_glue_default(child, seen)
             return

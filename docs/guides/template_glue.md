@@ -12,7 +12,6 @@ Template glue allows you to render Django templates from JavaScript with dynamic
 
 ### When Not to Use
 
-- When the template needs to register its own glue objects. Use [GlueView](view_glue/view_glue.md) instead.
 - When the content is static and doesn't change. Include it in your template normally.
 - When you only need JSON data. Use model or queryset actions directly instead.
 
@@ -56,13 +55,39 @@ Access the template as a property of the global `Glue.template` object using the
 Glue.template.card
 ```
 
+## Shared HTML Rendering
+
+Views, template proxies, and `GlueTemplateResponse` results share the same
+rendering implementation. Replacement methods use bundled Alpine morph:
+matching elements retain Alpine state, focus, and local input state.
+A changed element type or key denotes a replacement rather than the same node.
+
+Use a stable `key` attribute (or `id` as a fallback) for repeated elements.
+For collection reordering, prefer Alpine's keyed `x-for`; morphing is not a
+guarantee that every node moves intact through arbitrary reorderings.
+
+Add `data-morph-ignore` to a widget root to skip updates to that element and
+its subtree while it remains in the rendered structure. Removing its enclosing
+component still removes the widget.
+
+`renderInnerHtml` accepts empty HTML or multiple roots.
+`renderOuterHtml` requires one root element; surrounding comments and whitespace
+are ignored. Empty HTML, text-only output, and multiple roots raise an error
+without changing the DOM. Missing targets also raise an error.
+Adjacent insertion methods continue to insert new nodes.
+
+All render methods return the HTML string. The fetch helpers (`get()`,
+`post()`, and template `renderHtml()`) also keep their string return values.
+Manifests are registered before rendering so newly inserted components can
+resolve their Glue objects.
+
 ## Render Methods
 
 All render methods accept a target DOM element and an optional payload of context data:
 
 ### renderInnerHtml
 
-Replace the contents of an element:
+Morph the contents of an element, preserving its container:
 
 ```javascript
 await Glue.template.card.renderInnerHtml(document.getElementById('target'), { name: 'John' })
@@ -70,7 +95,7 @@ await Glue.template.card.renderInnerHtml(document.getElementById('target'), { na
 
 ### renderOuterHtml
 
-Replace the element entirely:
+Morph the element and its contents. The response must contain exactly one root element:
 
 ```javascript
 await Glue.template.card.renderOuterHtml(document.getElementById('target'), { name: 'Jane' })
@@ -219,8 +244,8 @@ def dashboard_view(request):
 
 | Method                                | Behavior                           | Use When                          |
 | ------------------------------------- | ---------------------------------- | --------------------------------- |
-| `renderInnerHtml`                     | Replaces element's **contents**    | Container has bindings to keep    |
-| `renderOuterHtml`                     | Replaces the **element entirely**  | Response HTML defines container   |
+| `renderInnerHtml`                     | Morphs element's **contents**    | Container has bindings to keep    |
+| `renderOuterHtml`                     | Morphs the **element and contents**  | Response HTML defines container   |
 | `renderInsertAdjacentHtmlBeforeEnd`   | Inserts at end of element          | Append content                    |
 | `renderInsertAdjacentHtmlAfterEnd`    | Inserts after element              | Add sibling after                 |
 | `renderInsertAdjacentHtmlBeforeBegin` | Inserts before element             | Add sibling before                |

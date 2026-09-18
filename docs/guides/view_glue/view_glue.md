@@ -34,11 +34,37 @@ You can also pass shared payload data that will be included with every request:
 const view = Glue.view('/path/to/view/', { sharedParam: 'value' })
 ```
 
+## Shared HTML Rendering
+
+Views, template proxies, and `GlueTemplateResponse` results share the same
+rendering implementation. Replacement methods use bundled Alpine morph:
+matching elements retain Alpine state, focus, and local input state.
+A changed element type or key denotes a replacement rather than the same node.
+
+Use a stable `key` attribute (or `id` as a fallback) for repeated elements.
+For collection reordering, prefer Alpine's keyed `x-for`; morphing is not a
+guarantee that every node moves intact through arbitrary reorderings.
+
+Add `data-morph-ignore` to a widget root to skip updates to that element and
+its subtree while it remains in the rendered structure. Removing its enclosing
+component still removes the widget.
+
+`renderInnerHtml` accepts empty HTML or multiple roots.
+`renderOuterHtml` requires one root element; surrounding comments and whitespace
+are ignored. Empty HTML, text-only output, and multiple roots raise an error
+without changing the DOM. Missing targets also raise an error.
+Adjacent insertion methods continue to insert new nodes.
+
+All render methods return the HTML string. The fetch helpers (`get()`,
+`post()`, and template `renderHtml()`) also keep their string return values.
+Manifests are registered before rendering so newly inserted components can
+resolve their Glue objects.
+
 ## Render Methods
 
 ### renderInnerHtml
 
-Replace the contents of an element:
+Morph the contents of an element, preserving its container:
 
 ```javascript
 await view.renderInnerHtml(document.getElementById('target'), { param: 'value' })
@@ -46,7 +72,7 @@ await view.renderInnerHtml(document.getElementById('target'), { param: 'value' }
 
 ### renderOuterHtml
 
-Replace the element entirely:
+Morph the element and its contents. The response must contain exactly one root element:
 
 ```javascript
 await view.renderOuterHtml(document.getElementById('target'), { param: 'value' })
@@ -202,8 +228,8 @@ await Glue.model.task_1.get()
 
 | Method | Behavior | Use When |
 |--------|----------|----------|
-| `renderInnerHtml` | Replaces element's **contents** | Container has bindings you need to keep |
-| `renderOuterHtml` | Replaces the **element entirely** | Response HTML defines the container |
+| `renderInnerHtml` | Morphs element's **contents** | Container has bindings you need to keep |
+| `renderOuterHtml` | Morphs the **element and contents** | Response HTML defines the container |
 | `renderInsertAdjacentHtmlBeforeEnd` | Inserts at end of element | Append content |
 | `renderInsertAdjacentHtmlAfterEnd` | Inserts after element | Add sibling after |
 | `renderInsertAdjacentHtmlBeforeBegin` | Inserts before element | Add sibling before |

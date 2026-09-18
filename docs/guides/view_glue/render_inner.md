@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`renderInnerHtml` is the most common GlueView method — it replaces the contents of a DOM element with HTML rendered by a Django view, while preserving the container element itself.
+`renderInnerHtml` is the most common GlueView method. It morphs the contents of a DOM element with HTML rendered by a Django view while preserving the container element.
 
 ### When to Use
 
@@ -20,7 +20,7 @@
 await view.renderInnerHtml(targetElement, payload)
 ```
 
-The target element's `innerHTML` is replaced with the rendered HTML from the Django view. Any proxies registered by that view are automatically initialized.
+The response uses the shared HTML envelope. Its manifests are registered first, then bundled Alpine morph updates the target's children. Matching keyed nodes retain Alpine state, focus, and local input state. Use `data-morph-ignore` on roots owned by third-party JavaScript.
 
 ## Example: Dynamic Dashboard Content
 
@@ -77,8 +77,8 @@ def dashboard_content_view(request):
 
 | Method | Behavior | Use When |
 |--------|----------|----------|
-| `renderInnerHtml` | Replaces element's **contents** | Container element has bindings you need to keep |
-| `renderOuterHtml` | Replaces the **element entirely** | You want the response HTML to define the container |
+| `renderInnerHtml` | Morphs element's **contents** | Container element defines the boundary |
+| `renderOuterHtml` | Morphs the **element and contents** | Response HTML defines one root element |
 
 ## See Also
 

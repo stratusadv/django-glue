@@ -202,7 +202,7 @@ describe('Glue proxies', () => {
         })
 
         const item = collection.items[0]
-        collection._applyResponse({
+        collection._applyResponseData({
             state: {
                 items: [
                     {
@@ -243,7 +243,7 @@ describe('Glue proxies', () => {
         })
         const originalForm = formset.forms[0]
 
-        formset._applyResponse({
+        formset._applyResponseData({
             policy_token: createPolicyToken({
                 name: 'contacts',
                 namespace: 'formSet',
@@ -384,7 +384,7 @@ describe('Glue proxies', () => {
 
         expect(object.day_collection.items).toHaveLength(0)
 
-        object._applyResponse({
+        object._applyResponseData({
             policy_token: createPolicyToken({
                 name: 'dashboard',
                 namespace: 'timeEntryDashboard',

@@ -14,7 +14,6 @@ from django_glue.exceptions import (
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.loading import LoadingStrategy
-from django_glue.glue.attributes.django.model.related_set import RelatedSetFieldAttribute
 from django_glue.glue.objects.django.model.object import ModelGlue
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
@@ -432,22 +431,22 @@ class RelatedSetPaginationTestCase(TestCase):
             Fight.objects.create(name=f'Fight {index}', red_corner=self.gorilla, blue_corner=rival)
 
     @override_settings(DJANGO_GLUE_QUERYSET_BATCH_SIZE=2)
-    def test_prefetched_related_set_state_is_paginated_in_memory(self):
-        instance = Gorilla.objects.prefetch_related('fights_as_red_corner').get(pk=self.gorilla.pk)
+    def test_projected_related_collection_uses_queryset_pagination(self):
         glue_object = ModelGlue(
-            instance,
+            self.gorilla,
             name='gorilla',
             access=GlueAccess.VIEW,
-            fields=['name', 'fights_as_red_corner'],
+            fields=[
+                'name',
+                'fights_as_red_corner__id',
+                'fights_as_red_corner__name',
+            ],
         )
         glue_object.request = request_with_session()
-        glue_object.policy
-        attribute = glue_object.attributes['fights_as_red_corner']
+        child = glue_object._bound_children[0].glue_object
 
-        self.assertIsInstance(attribute, RelatedSetFieldAttribute)
-
-        with self.assertNumQueries(0):
-            state = attribute.state
+        self.assertIsInstance(child, QuerySetGlue)
+        state = child.state
 
         self.assertEqual(len(state['items']), 2)
         self.assertTrue(state['has_next'])

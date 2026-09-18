@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, model_validator
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
 from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.glue.attributes.definition import GlueAttributeKind
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -30,6 +31,14 @@ class GluePolicyTokenSerializer:
         return json.loads(data.decode('latin-1'))
 
 
+class GlueCallableCapability(BaseModel):
+    allowed_arguments: tuple[str, ...] = ()
+
+
+class GlueCapability(BaseModel):
+    callables: dict[str, GlueCallableCapability] = Field(default_factory=dict)
+
+
 class GluePolicy(BaseModel):
     """Signed client-held policy for a glued backend object."""
 
@@ -40,6 +49,9 @@ class GluePolicy(BaseModel):
     identity: dict[str, Any]
     access: GlueAccess
     attributes: list[str | Self] = Field(default_factory=list)
+    address: str = ''
+    children: dict[str, str] = Field(default_factory=dict)
+    capability: GlueCapability = Field(default_factory=GlueCapability)
     created_at: float
     token: str = ''
 
@@ -51,18 +63,22 @@ class GluePolicy(BaseModel):
         *,
         glue_object: BaseGlue,
     ) -> Self:
-        attributes: list[str | Self] = []
+        attributes = [
+            definition.path
+            for definition in glue_object._attribute_registry
+            if definition.kind in {
+                GlueAttributeKind.VALUE,
+                GlueAttributeKind.CALLABLE,
+            }
+        ]
 
-        for attr_name, attr in glue_object.attributes.items():
-            nested_glue = getattr(attr, 'glue_object', None)
-            if nested_glue is not None:
-                if hasattr(attr, '_prepare_glue_object'):
-                    nested_glue = attr._prepare_glue_object()
-                else:
-                    nested_glue.request = glue_object.request
-                attributes.append(cls.from_glue_object(glue_object=nested_glue))
-            else:
-                attributes.append(attr_name)
+        callables = {
+            definition.path: {
+                'allowed_arguments': definition.allowed_arguments,
+            }
+            for definition in glue_object._attribute_registry
+            if definition.kind == GlueAttributeKind.CALLABLE
+        }
 
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
@@ -72,6 +88,11 @@ class GluePolicy(BaseModel):
             'identity': glue_object.identity,
             'access': glue_object.access,
             'attributes': attributes,
+            'address': glue_object.address,
+            'children': glue_object.children,
+            'capability': {
+                'callables': callables,
+            },
         })
 
     @classmethod

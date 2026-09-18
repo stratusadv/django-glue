@@ -6,14 +6,12 @@ from typing import TYPE_CHECKING, NoReturn
 from urllib.parse import urlparse
 
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.template.response import TemplateResponse
 from django.urls import NoReverseMatch, resolve, reverse
 
 from django_glue.conf import settings
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
-from django_glue.glue.context import GlueContextManager
-from django_glue.response import render_template_response_html
+from django_glue.response import render_html_payload
 from django_glue.resolver.base import GlueResolver
 from django_glue.resolver.view_fragment.context import ViewFragmentRequestContext
 from django_glue.resolver.view_fragment.request import ViewFragmentHttpRequest
@@ -42,9 +40,6 @@ class GlueViewFragmentResolver(GlueResolver[ViewFragmentRequestContext]):
             return self._render_response(response)
 
         return self._raise_too_many_redirects()
-
-    def _serialized_new_glue_manifests(self) -> list[dict]:
-        return GlueContextManager(self.request).serialized_manifests
 
     def _build_glue_view_http_request(
         self,
@@ -108,21 +103,12 @@ class GlueViewFragmentResolver(GlueResolver[ViewFragmentRequestContext]):
             ) from error
 
     def _render_response(self, response: HttpResponse) -> JsonResponse:
-        if isinstance(response, TemplateResponse):
-            html, manifest_list = render_template_response_html(response, self.request)
-            return JsonResponse(
-                {'html': html, 'manifest_list': manifest_list},
-                safe=False,
-                encoder=GlueResponseJSONEncoder,
-            )
-
         if isinstance(response, HttpResponse):
             return JsonResponse(
-                {
-                    'html': response.content.decode('utf-8'),
-                    'manifest_list': self._serialized_new_glue_manifests(),
-                },
-                safe=False,
+                render_html_payload(
+                    response,
+                    request=self.request,
+                ),
                 encoder=GlueResponseJSONEncoder,
             )
 

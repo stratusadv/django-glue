@@ -69,6 +69,42 @@ The `{% django_glue_init %}` tag injects:
 3. The Glue manifest as JSON
 4. Initialization code that creates the global `Glue` object
 
+The client bundles Alpine.js and its morph plugin (both pinned to 3.15.12).
+No separate Alpine installation is needed. Glue exposes `window.Alpine`
+immediately and starts it once the document and deferred scripts are ready.
+Inline Glue setup works immediately; `x-data` components mount at startup.
+
+### Migrating an existing Alpine page
+
+Remove separate Alpine core and morph script tags, including tags in inherited
+base templates and individual widgets. Remove application calls to
+`Alpine.start()`; Glue owns startup. Two Alpine runtimes on one page are not
+supported.
+
+Keep optional plugins such as intersect, mask, collapse, persist, focus, and
+sort. Load their CDN scripts with `defer` and use versions compatible with the
+bundled Alpine version. Register custom stores, components, and directives in
+`alpine:init`, as before:
+
+```html
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.store('theme', {name: 'dark'})
+    })
+</script>
+```
+
+This follows Alpine's [extension registration lifecycle](https://alpinejs.dev/essentials/installation).
+Avoid `async` plugin scripts, which may arrive after Alpine starts. Code that
+needs initialized DOM state should use `alpine:initialized` or `$nextTick`.
+
+For Stratus Portal, the Alpine core and six optional plugin tags come from
+Spire's inherited `django_spire/base/base.html`. Remove the core tag there and
+keep the six plugin tags. Spire's JSON-tree widget also has its own core script
+tag that must be removed. Portal's `alpine:init` stores and inline
+`Glue.onMessage` setup fit the bundled lifecycle. This is a migration checklist,
+not a claim that the portal has been migrated or browser-tested.
+
 ## Optional Configuration
 
 Override defaults in your `settings.py`:

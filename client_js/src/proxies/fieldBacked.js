@@ -57,6 +57,17 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         return this._ensureLoaded()
     }
 
+    _applyResponseData(data = {}) {
+        super._applyResponseData(data)
+
+        // A new manifest starts a fresh loading cycle, including recovery
+        // from an earlier failed lazy load.
+        if (data.loading_strategy !== undefined) {
+            this._loadAttempted = false
+            this._loadError = null
+        }
+    }
+
     _configureAttributeInitializers() {
         super._configureAttributeInitializers()
         this._fields = {}

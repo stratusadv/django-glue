@@ -29,8 +29,8 @@ class GlueSequenceProxy extends BaseGlueProxy {
         return this._itemProxies.values()
     }
 
-    _applyResponse(data = {}) {
-        super._applyResponse(data)
+    _applyResponseData(data = {}) {
+        super._applyResponseData(data)
         if (data.state !== undefined) {
             this._syncItemsFromState()
         }
@@ -48,7 +48,7 @@ class GlueSequenceProxy extends BaseGlueProxy {
 
             if (existing) {
                 existing._policy = policy
-                existing._applyResponse({
+                existing._applyResponseData({
                     state: manifest.state,
                     metadata: manifest.metadata,
                     loading_strategy: manifest.loading_strategy,

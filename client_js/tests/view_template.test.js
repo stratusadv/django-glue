@@ -3,7 +3,6 @@ import GlueConfig from "../src/config"
 import GlueClient from "../src/client"
 import GlueHttp from "../src/http"
 import GlueView from "../src/view"
-import GlueHtmlResult from "../src/htmlResult"
 import GlueTemplateProxy from "../src/proxies/template"
 import {createMetadata, createPolicy, createPolicyToken, createState, mockOperationFetch} from "./testUtils"
 
@@ -144,7 +143,7 @@ describe('Glue views and template proxies', () => {
         expect(document.body.innerHTML).toContain('<div id="target"><i>First</i><b>Old</b><i>Last</i></div><em>After</em>')
     })
 
-    test('a @Glue.attr call returning a GlueTemplateResponse resolves to a GlueHtmlResult', async () => {
+    test('a @Glue.attr call returning a GlueTemplateResponse resolves to a renderable HTML result', async () => {
         happyDOM.setURL('http://localhost/')
         const calls = mockOperationFetch({
             result: {
@@ -173,7 +172,7 @@ describe('Glue views and template proxies', () => {
         const result = await client.querySet.gorillas.some_custom_thing()
 
         expect(calls).toHaveLength(1)
-        expect(result).toBeInstanceOf(GlueHtmlResult)
+        expect(typeof result.renderInnerHtml).toBe('function')
         expect(result.html).toBe('<p>Row list</p>')
         expect(result.toString()).toBe('<p>Row list</p>')
 

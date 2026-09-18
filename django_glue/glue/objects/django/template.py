@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from django.template import TemplateDoesNotExist, TemplateSyntaxError
-from django.template.loader import render_to_string
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.exceptions import GlueRequestError
+from django_glue.response import GlueResponse, GlueTemplateResponse
 
 if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
@@ -61,11 +60,15 @@ class TemplateGlue(BaseGlue):
         )
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW)
-    def render_html(self, kwargs: dict[str, Any]) -> dict[str, str]:
+    def render_html(self, kwargs: dict[str, Any]) -> GlueResponse:
         context_data = self.initial_context_data
         merged_context = {**context_data, **kwargs}
         try:
-            html = render_to_string(self.target, context=merged_context)
+            return GlueTemplateResponse(
+                request=self.request,
+                template=self.target,
+                context=merged_context,
+            )
         except TemplateDoesNotExist as e:
             raise GlueRequestError(
                 code='template_not_found',
@@ -78,4 +81,3 @@ class TemplateGlue(BaseGlue):
                 message=f'Template syntax error in {self.target}: {e!s}',
                 status=500,
             ) from e
-        return {'html': html}

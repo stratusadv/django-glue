@@ -5,6 +5,13 @@
 > renamed several public names. See **"Revisions made during review"** at the bottom for what
 > actually shipped -- sections 1 and 10 below describe the *original* implementation this branch
 > arrived with, not the final one.
+>
+> **Later superseded (2026-09-10):** the component-system work made Alpine an
+> explicit bundled dependency and restored one reactive proxy per registered
+> name. Manifest updates are now owned by `BaseGlueProxy.applyManifestData()`;
+> response updates use `_applyResponseData()`. The review below retains the old
+> `_updateProxy()` and `_applyResponse()` names as historical evidence. See
+> `design/reactive-system/component-system.md` for the current design.
 
 3 commits, 46 files, +3014/-1203 (excluding `uv.lock` and the codegraph db).
 

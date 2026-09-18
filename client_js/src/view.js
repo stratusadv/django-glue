@@ -1,7 +1,8 @@
-import {resolveElement, htmlToFragment} from "./utils"
+import HtmlRenderer, {htmlResultFromResponse} from "./htmlRenderer"
 
-class GlueView {
+class GlueView extends HtmlRenderer() {
     constructor(http, url, sharedPayload = {}) {
+        super()
         this.http = http
         this.url = new URL(url, window.location.origin).pathname
         this.sharedPayload = sharedPayload
@@ -15,54 +16,8 @@ class GlueView {
         return await this._fetchView(payload, 'POST')
     }
 
-    async renderInnerHtml(target, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        element.replaceChildren(htmlToFragment(html))
-        return html
-    }
-
-    async renderOuterHtml(target, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        element.replaceWith(htmlToFragment(html))
-        return html
-    }
-
-    async _renderInsertAdjacentHtml(target, position, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        const fragment = htmlToFragment(html)
-
-        if (position === 'beforebegin') {
-            element.before(fragment)
-        } else if (position === 'afterbegin') {
-            element.prepend(fragment)
-        } else if (position === 'beforeend') {
-            element.append(fragment)
-        } else if (position === 'afterend') {
-            element.after(fragment)
-        } else {
-            throw new Error(`Invalid insert position: ${position}`)
-        }
-
-        return html
-    }
-
-    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'beforebegin', payload)
-    }
-
-    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'afterbegin', payload)
-    }
-
-    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'beforeend', payload)
-    }
-
-    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'afterend', payload)
+    async _getHtml(payload = {}) {
+        return this.post(payload)
     }
 
     async _fetchView(payload = {}, method = 'POST') {
@@ -80,9 +35,7 @@ class GlueView {
             }),
         })
 
-        globalThis.Glue.loadManifests(response.data?.manifest_list || [])
-
-        return response.data?.html || ''
+        return htmlResultFromResponse(response.data, globalThis.Glue).html
     }
 }
 

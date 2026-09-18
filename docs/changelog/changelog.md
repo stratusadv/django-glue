@@ -1,5 +1,19 @@
 # Changelog for Django Glue
 
+## Unreleased
+
+### Breaking
+
+- **Alpine.js and its morph plugin are bundled at 3.15.12.** Consuming projects must remove separate Alpine core and morph scripts and must not call `Alpine.start()`. Optional plugins can remain as deferred scripts and existing `alpine:init` registrations continue to run before DOM mounting.
+- **`renderOuterHtml()` requires exactly one root element.** Empty, text-only, or multi-root output now raises an error before changing the DOM.
+
+### Features
+
+- **Component base class.** Define server-backed components with `class MyComponent(Glue.Component)`, a class-owned `template`, overridable render context, and unified HTML rendering. Components load eagerly by default so their initial Alpine state accompanies server-rendered markup.
+- **Stable reactive Glue proxy identity.** Each registered name resolves to one Alpine-reactive instance. Later manifests patch held references in place, resolving GLUE-93. Action-returned Glue manifests remain transient proxies and do not join the global registry.
+- **Unified HTML responses and rendering.** Glue views, template proxies, and HTML-returning attributes share `{is_glue_template_response, html, manifest_list}` and one Alpine morph renderer. Replacements preserve matching keyed nodes, Alpine state, focus, and caret position; `data-morph-ignore` protects third-party widget roots. Adjacent insertion retains its existing behavior.
+- **Template proxy rendering uses request context** and carries manifests registered during rendering.
+
 ## v1.0.1
 
 ### Fixes

@@ -1,6 +1,7 @@
 import BaseGlueProxy from "./base"
 import GlueModelProxy from "./model"
 import GluePolicy from "../policy"
+import {reactive} from "../alpine"
 
 const QUERY_CACHE_LIMIT = 64
 
@@ -68,7 +69,9 @@ class GlueQuerySetProxy extends BaseGlueProxy {
 
     async refresh() {
         for (const proxy of this._queryCache.values()) {
-            proxy._loaded = false
+            // Cached querysets may be bound in Alpine scopes; a write to the
+            // underlying object would not reach them.
+            reactive(proxy)._loaded = false
         }
 
         return this.all()
@@ -118,8 +121,8 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this._callAttribute('count', {filter: this._queryParams.filter})
     }
 
-    _applyResponse(data = {}) {
-        super._applyResponse(data)
+    _applyResponseData(data = {}) {
+        super._applyResponseData(data)
 
         if (data.state !== undefined && this._canHydrateFromState()) {
             this._syncFromResult(this._state)
@@ -168,7 +171,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         let proxy = existingProxy
 
         if (proxy) {
-            proxy._applyResponse({
+            proxy._applyResponseData({
                 policy_token: row.policy_token,
                 state: row.state,
                 metadata: row.metadata || this._metadata,

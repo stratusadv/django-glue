@@ -6,7 +6,6 @@ from django.core.files.uploadedfile import UploadedFile
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model, QuerySet
 from django.db.models.fields.files import FieldFile
-from django.forms import model_to_dict
 from pydantic import BaseModel
 
 
@@ -36,11 +35,12 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
         if isinstance(o, BaseModel):
             return o.model_dump()
 
-        if isinstance(o, Model):
-            return model_to_dict(o)
-
-        if isinstance(o, QuerySet):
-            return [model_to_dict(item) for item in o]
+        if isinstance(o, Model | QuerySet):
+            message = (
+                f'Raw Django object {type(o).__name__} is not serializable as an '
+                'ordinary Glue value.'
+            )
+            raise TypeError(message)
 
         if isinstance(o, FieldFile):
             return _serialize_field_file(o)

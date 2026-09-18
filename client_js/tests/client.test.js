@@ -165,48 +165,173 @@ describe('GlueClient', () => {
     })
 })
 
+function identityManifest(overrides = {}) {
+    return {
+        is_glue_manifest: true,
+        policy_token: createPolicyToken(),
+        state: createState(),
+        metadata: createMetadata(),
+        ...overrides,
+    }
+}
+
+const renamedManifest = () => identityManifest({
+    state: createState({instance_data: {id: 1, name: 'Renamed'}}),
+})
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 25))
+
 describe('GlueClient proxy identity', () => {
-    function manifest(overrides = {}) {
-        return {
-            is_glue_manifest: true,
-            policy_token: createPolicyToken(),
-            state: createState(),
-            metadata: createMetadata(),
-            ...overrides,
+    test('named proxies are one shared instance per name', () => {
+        const client = new GlueClient({manifest_list: [identityManifest()]})
+
+        expect(client.model.gorilla).toBe(client.model.gorilla)
+    })
+
+    test('direct namespace proxies are one shared instance', () => {
+        const client = new GlueClient({
+            manifest_list: [identityManifest({
+                policy_token: createPolicyToken({
+                    name: 'timeEntryDashboard',
+                    namespace: 'timeEntryDashboard',
+                    attributes: [],
+                }),
+                state: {},
+                metadata: {attributes: {}},
+            })],
+        })
+
+        expect(client.timeEntryDashboard).toBe(client.timeEntryDashboard)
+    })
+
+    test('function proxies are one shared instance', () => {
+        const client = new GlueClient({
+            manifest_list: [identityManifest({
+                policy_token: createPolicyToken({
+                    name: 'add',
+                    namespace: 'function',
+                    identity: {params: ['left', 'right']},
+                    attributes: ['execute'],
+                }),
+                state: {},
+                metadata: {
+                    namespace: 'function',
+                    params: ['left', 'right'],
+                    attributes: {execute: {namespace: 'callable'}},
+                },
+            })],
+        })
+
+        expect(client.function.add).toBe(client.function.add)
+    })
+
+    test('handed-out proxies are Alpine reactive proxies', () => {
+        const client = new GlueClient({manifest_list: [identityManifest()]})
+        const proxy = client.model.gorilla
+
+        // Alpine.reactive returns a reactive proxy unchanged, and wraps anything else.
+        expect(globalThis.Alpine.reactive(proxy)).toBe(proxy)
+    })
+
+    test('re-registering a name updates the existing instance in place', () => {
+        const client = new GlueClient({manifest_list: [identityManifest()]})
+        const held = client.model.gorilla
+
+        client.loadManifests([renamedManifest()])
+
+        expect(client.model.gorilla).toBe(held)
+        expect(held.name).toBe('Renamed')
+    })
+
+    test('an action-returned manifest resolves as a reactive unregistered proxy', () => {
+        const client = new GlueClient({manifest_list: []})
+        const resolved = client.resolveManifest(identityManifest())
+
+        expect(resolved.name).toBe('Koko')
+        expect(globalThis.Alpine.reactive(resolved)).toBe(resolved)
+        expect(client.model).toBeUndefined()
+    })
+
+    test('a fresh lazy manifest lets a held model recover from a failed load', async () => {
+        const client = new GlueClient({manifest_list: [identityManifest({state: {}})]})
+        const held = client.model.gorilla
+        client.http.sendAttributeRequest = async () => { throw new Error('Offline') }
+
+        await held._ensureLoaded()
+        expect(held._loadError.message).toBe('Offline')
+
+        client.loadManifests([identityManifest({state: {}})])
+        client.http.sendAttributeRequest = async () => ({data: {state: renamedManifest().state}})
+        await held._ensureLoaded()
+
+        expect(held.name).toBe('Renamed')
+        expect(held._loadError).toBeNull()
+    })
+
+    test('a reference held in an Alpine scope observes re-registration (GLUE-93)', async () => {
+        const client = new GlueClient({manifest_list: [identityManifest()]})
+        // What an x-data scope holds: resolved once, kept for the scope's life.
+        const held = client.model.gorilla
+        let observed
+        globalThis.Alpine.effect(() => {
+            observed = held.name
+        })
+        await settle()
+        expect(observed).toBe('Koko')
+
+        client.loadManifests([renamedManifest()])
+        await settle()
+
+        expect(observed).toBe('Renamed')
+    })
+})
+
+describe('GlueClient with bundled Alpine', () => {
+    function withoutAlpine(readyState, run) {
+        const alpine = globalThis.Alpine
+        delete globalThis.Alpine
+        Object.defineProperty(document, 'readyState', {value: readyState, configurable: true})
+
+        try {
+            return run()
+        } finally {
+            delete document.readyState
+            globalThis.Alpine = alpine
         }
     }
 
-    test('named proxies are constructed per access', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-
-        // Proxies are built on every property access so they are constructed
-        // after Alpine's initTree and get wrapped in Alpine's reactive proxy.
-        // The intended idiom is to resolve once into x-data and hold that
-        // reference. See docs/roadmap/proxy_instance_management.md.
-        expect(client.model.gorilla).not.toBe(client.model.gorilla)
+    test('constructing the client does not need Alpine', () => {
+        withoutAlpine('loading', () => {
+            expect(() => new GlueClient({manifest_list: [identityManifest()]})).not.toThrow()
+        })
     })
 
-    test('re-registering a name is picked up by the next access', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-        const before = client.model.gorilla.name
-
-        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
-
-        expect(before).not.toBe('Renamed')
-        expect(client.model.gorilla.name).toBe('Renamed')
+    test('proxies are reactive before DOM initialization', () => {
+        withoutAlpine('loading', () => {
+            const client = new GlueClient({manifest_list: [identityManifest()]})
+            expect(client.model.gorilla.name).toBe('Koko')
+            expect(client.model.gorilla).toBe(client.model.gorilla)
+        })
     })
 
-    test('a proxy resolved before re-registration keeps its old state (GLUE-93)', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-        // What an x-data scope holds: resolved once, kept for the scope's life.
-        const held = client.model.gorilla
+    test('early references observe manifests registered before DOM initialization', () => {
+        let client
+        let held
+        withoutAlpine('loading', () => {
+            client = new GlueClient({manifest_list: [identityManifest()]})
+            held = client.model.gorilla
+            expect(() => client.loadManifests([renamedManifest()])).not.toThrow()
+        })
 
-        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
-
-        // Known gap: _registerManifest only replaces the manifest captured by
-        // the accessor's getter, so an already-handed-out proxy is never
-        // updated. Tracked as GLUE-93; flip this to 'Renamed' when it is fixed.
-        expect(held.name).toBe('Koko')
         expect(client.model.gorilla.name).toBe('Renamed')
+        expect(client.model.gorilla).toBe(held)
+    })
+
+    test('proxies do not require an external Alpine global', () => {
+        withoutAlpine('complete', () => {
+            const client = new GlueClient({manifest_list: [identityManifest()]})
+
+            expect(client.model.gorilla.name).toBe('Koko')
+        })
     })
 })

@@ -37,6 +37,18 @@ test-app *PATTERN:
 test:
 	{{PYTHON}} -m pytest -m "not e2e" .
 
+js-build:
+	bun run build
+
+js-install:
+	bun install
+
+js-tests:
+	bun run test
+
+js-tests-watch:
+	bun run test:watch
+
 test-failed:
 	{{PYTHON}} -m pytest . --ff --lf
 

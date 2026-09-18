@@ -293,7 +293,7 @@ HTTP POST /__dg__/callable_attribute/user/save/
                                         )
     │
     ▼
-_applyResponse(data)
+_applyResponseData(data)
     - Update policy (re-signed)
     - Deep merge state
     - Process messages

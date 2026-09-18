@@ -5,6 +5,7 @@ from typing import Any, Callable, TYPE_CHECKING
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.declared import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.collection import BaseCollectionGlue
 from django_glue.glue.loading import LoadingStrategy
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ class SequenceLazyLoadNotSupportedError(NotImplementedError):
         )
 
 
-class SequenceGlue(BaseGlue):
+class SequenceGlue(BaseCollectionGlue):
     """A list of independent Glue objects.
 
     Items are serialized as an ``items`` array of complete manifests (each
@@ -45,19 +46,24 @@ class SequenceGlue(BaseGlue):
         access: GlueAccess = GlueAccess.VIEW,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
         _reconstructed: bool = False,
+        _item_keys: list[str] | None = None,
     ) -> None:
         super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.items = items
         self._reconstructed = _reconstructed
+        self._item_keys = _item_keys if _item_keys is not None else [item.name for item in items]
 
-    def get_identity(self) -> dict:
-        return {}
+    def get_identity(self) -> dict[str, Any]:
+        return {'item_keys': self._item_keys}
 
     def get_state(self) -> dict[str, Any]:
         return {'items': [self._item_manifest(item) for item in self.items]}
 
     def get_metadata(self) -> dict[str, Any]:
         return {'attributes': {}}
+
+    def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
+        return [(item.name, item) for item in self.items]
 
     def _item_manifest(self, item: BaseGlue) -> dict[str, Any]:
         item.request = self.request
@@ -82,6 +88,7 @@ class SequenceGlue(BaseGlue):
             name=policy.name,
             access=policy.access,
             _reconstructed=True,
+            _item_keys=policy.identity['item_keys'],
         )
 
     @classmethod

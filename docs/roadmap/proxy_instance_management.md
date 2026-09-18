@@ -1,5 +1,12 @@
 # Proxy Instance Management
 
+> **Superseded** by `design/reactive-system/component-system.md`. Glue now depends on
+> Alpine.js: each registered name resolves to one reactive instance and
+> `loadManifests()` patches it in place, so GLUE-93 no longer applies. The
+> proxy owns this through `applyManifestData()` and `_applyResponseData()`;
+> the client no longer has `_updateProxy()`. Action-returned manifests remain
+> transient. The reasoning and old method names below are kept for history.
+
 From the `braydenc/queryset-pagination-and-scrolling-performance` review
 (2026-08-27).
 
@@ -123,9 +130,9 @@ the same object.
 
 ## Related
 
-- `client_js/src/client.js` -- `_proxies`, `_resolveProxy`, `_updateProxy`
+- `client_js/src/client.js` -- `_proxies`, `_resolveProxy`, `resolveManifest`
 - `client_js/src/proxies/queryset.js` -- `_queryCache` (the real infinite-loop
-  fix), `refresh()`, `_applyResponse()`
+  fix), `refresh()`, `_applyResponseData()`
 - `client_js/src/utils.js` -- `reactiveSelf()`, single call site, to be removed
   with whatever lands here
 - `PAGINATION_BRANCH_REVIEW.md` section 3

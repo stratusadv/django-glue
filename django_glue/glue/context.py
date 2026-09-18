@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 from django_glue.conf import settings
@@ -9,10 +9,13 @@ from django_glue import constants
 from django_glue.assets import asset_version
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
     from django.http import HttpRequest
+
+TGlue = TypeVar('TGlue', bound='BaseGlue')
 
 
 class GlueManifest(BaseModel):
@@ -45,12 +48,18 @@ class GlueContextManager:
     def serialized_manifests(self) -> list[dict[str, Any]]:
         return [glue.manifest.model_dump() for glue in self.glue_objects]
 
-    def add_glue(self, glue: BaseGlue) -> BaseGlue:
+    def add_glue(self, glue: TGlue) -> TGlue:
+        glue.request = self.request
+        glue._require_authorization(GlueOperation(
+            kind=GlueOperationKind.INTRODUCE,
+            attribute=None,
+            required_access=glue.access,
+        ))
+
         # Ensure session exists (Django creates sessions lazily)
         if not self.request.session.session_key:
             self.request.session.create()
 
-        glue.request = self.request
         self.glue_objects.append(glue)
         return glue
 

@@ -6,6 +6,8 @@ from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
+from test_project.gorilla.models import Gorilla
+
 from django_glue.encoders import GlueResponseJSONEncoder, _serialize_field_file
 
 
@@ -110,3 +112,28 @@ class GlueResponseJSONEncoderFileTestCase(TestCase):
         result = json.loads(json.dumps(content_file, cls=GlueResponseJSONEncoder))
 
         self.assertEqual(result['name'], 'content.txt')
+
+
+class GlueResponseJSONEncoderCompositionBoundaryTestCase(TestCase):
+    """Raw Django objects are rejected as ordinary value state (composition boundary)."""
+
+    def test_encoder_rejects_raw_model_instance(self):
+        gorilla = Gorilla.objects.create(name='Alpha', age=12)
+
+        with self.assertRaisesRegex(TypeError, 'Raw Django object Gorilla'):
+            json.dumps(gorilla, cls=GlueResponseJSONEncoder)
+
+    def test_encoder_rejects_raw_queryset(self):
+        queryset = Gorilla.objects.all()
+
+        with self.assertRaisesRegex(TypeError, 'Raw Django object QuerySet'):
+            json.dumps(queryset, cls=GlueResponseJSONEncoder)
+
+    def test_encoder_rejects_nested_raw_django_object(self):
+        gorilla = Gorilla.objects.create(name='Alpha', age=12)
+
+        with self.assertRaisesRegex(TypeError, 'Raw Django object Gorilla'):
+            json.dumps(
+                {'rows': [{'value': gorilla}]},
+                cls=GlueResponseJSONEncoder,
+            )

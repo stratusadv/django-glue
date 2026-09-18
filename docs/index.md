@@ -28,9 +28,9 @@
   - Works with your existing Django views and templates with minimal setup.
   - No need to rewrite your application to adopt Django Glue.
 
-- **Frontend Framework Agnostic**
-  - Designed to work with any frontend style or framework.
-  - No required JavaScript dependencies beyond the included client library.
+- **Reactive Alpine Frontend**
+  - The included client bundles pinned Alpine.js and morph versions.
+  - Server-rendered updates preserve matching keyed nodes, local Alpine state, focus, and caret position.
 
 - **Granular Access Control**
   - Secure per-proxy permission levels: `VIEW`, `CHANGE`, and `DELETE`.

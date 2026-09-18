@@ -9,7 +9,7 @@ class CompositeStateAttribute(StateAttribute):
     """
     A state attribute that contains nested Glue attributes.
 
-    Used for objects with @DeclaredAttribute-decorated members that are
+    Used for objects with @DeclaredAttribute-decorated attributes that are
     exposed as a group under a common namespace (e.g., 'stats.score', 'stats.reset').
     """
 

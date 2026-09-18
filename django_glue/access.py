@@ -6,6 +6,7 @@ from enum import StrEnum
 class GlueAccess(StrEnum):
     # The order of these variables controls how the permission cascade each other in the has_access method
     VIEW = 'view'
+    ADD = 'add'
     CHANGE = 'change'
     DELETE = 'delete'
 

@@ -1,6 +1,6 @@
 import {getProxyClass} from "./registry"
 import GluePolicy from "../policy"
-import GlueHtmlResult from "../htmlResult"
+import {htmlResultFromResponse} from "../htmlRenderer"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -86,7 +86,7 @@ class BaseGlueProxy {
                 kwargs,
             })
 
-            this._applyResponse(response.data)
+            this._applyResponseData(response.data)
 
             const result = this._convertResultManifestsToProxies(response.data?.result)
             if (response.data) {
@@ -137,7 +137,13 @@ class BaseGlueProxy {
         return this._state
     }
 
-    _applyResponse(data = {}) {
+    applyManifestData({policy, metadata, state, loading_strategy}) {
+        this._policy = policy
+        this._applyResponseData({metadata, state, loading_strategy})
+        return this
+    }
+
+    _applyResponseData(data = {}) {
         const shouldRefreshGlueObjectAttributes = Boolean(data.policy_token || data.metadata)
         if (data.policy_token) {
             this._policy = GluePolicy.fromSignedPolicyToken(data.policy_token)
@@ -331,7 +337,7 @@ class BaseGlueProxy {
 
         if (proxy[cacheKey]) {
             proxy[cacheKey]._policy = attributePolicy
-            proxy[cacheKey]._applyResponse({
+            proxy[cacheKey]._applyResponseData({
                 state: nestedState,
                 metadata: nestedMetadata,
             })
@@ -477,12 +483,11 @@ class BaseGlueProxy {
         }
 
         if (this._resultIsManifest(result)) {
-            return this._client._createProxyFromManifest(result)
+            return this._client.resolveManifest(result)
         }
 
         if (this._resultIsTemplateResponse(result)) {
-            this._client.loadManifests(result.manifest_list)
-            return new GlueHtmlResult(result.html)
+            return htmlResultFromResponse(result, this._client)
         }
 
         Object.keys(result).forEach(key => {

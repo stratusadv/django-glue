@@ -4,7 +4,7 @@ from django.http import HttpRequest
 
 from django_glue import Glue
 from django_glue.response import GlueResponse
-from test_project.gorilla.services import GorillaServiceDescriptor
+from test_project.gorilla.services import GorillaService
 
 
 class Skill(models.Model):
@@ -67,7 +67,7 @@ class Gorilla(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    services = Glue.attribute(GorillaServiceDescriptor(), required_access=Glue.Access.CHANGE)
+    services = Glue.namespace(GorillaService)
 
     class Meta:
         db_table = 'gorilla'
@@ -120,4 +120,3 @@ class Gorilla(models.Model):
     def something(self) -> None:
         self.age = self.age + 1
         self.save()
-

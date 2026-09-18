@@ -204,16 +204,18 @@ that state belongs on the proxy class that owns the concept, or on a collaborato
 that proxy owns. The one existing namespace check (`namespace === 'function'`,
 for `ProxyClass.create()`) is a wart, not a precedent to extend.
 
-**Alpine.js is glue's frontend framework.** The client may use Alpine's APIs
-(`Alpine.reactive`, `Alpine.morph`, `Alpine.data`, `Alpine.addScopeToNode`, and
-its lifecycle hooks). No other frontend framework is referenced under
-`client_js/src/`, and the Python side stays framework-free. Glue initialises
-during page parsing, before Alpine's deferred script runs, so client code must
-not assume `Alpine` exists when `GlueClient` is constructed. This replaced an
-earlier rule forbidding any framework reference; see
-`docs/decisions/component-system.md`.
+**Alpine.js is glue's frontend framework, and `client_js/src/alpine.js` is the
+only module that references it.** Everything else imports from that module
+(`reactive()` and `morph()`). No other frontend framework is referenced under
+`client_js/src/`, and the Python side stays framework-free. Glue bundles Alpine
+and morph, exposes its runtime as `window.Alpine`, and starts it after page
+parsing and deferred plugin registration. Do not load a separate Alpine core
+or morph script or call `Alpine.start()` in consuming projects. Objects are
+reactive as soon as they are handed out, including during page parsing; every
+write to a handed-out object goes through `reactive()` so Alpine observes it.
+See `design/reactive-system/component-system.md`.
 
-**Proxy-specific behavior lives on the proxy class.** `_applyResponse()`
+**Proxy-specific behavior lives on the proxy class.** `_applyResponseData()`
 overrides, chaining, caching, and hydration all belong in the subclass
 (`queryset.js`, `formset.js`, `sequence.js`), not in `base.js` and not in
 `client.js`.
@@ -730,3 +732,9 @@ The following areas currently have no tests:
 - QuerySet serialization uses `pickle` + `base64`. This is safe because data is stored in server-side Django sessions (signed and encrypted), never transmitted to the client.
 - CSRF protection is enforced on all POST endpoints via Django's built-in middleware and the JS client's `X-CSRFToken` header injection.
 - Access control is enforced server-side on every action request.
+
+## Python Value Types
+
+- Prefer `@dataclass(frozen=True, slots=True, kw_only=True)` over `NamedTuple` for immutable structured records. This keeps record fields explicit without introducing positional tuple semantics.
+- Prefer `StrEnum` over string `Literal` unions when values form a named runtime domain. This provides runtime validation and discoverability while retaining natural string serialization and comparison.
+- Use `TypedDict` or `Literal` when the contract is intentionally dictionary-shaped or needs static typing only.

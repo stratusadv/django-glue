@@ -4,12 +4,14 @@ import GlueView from "./view"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
 import GluePolicy from "./policy"
+import {reactive} from "./alpine"
 
 class GlueClient {
     constructor(context) {
         this._onMessage = null
         this._onError = null
         this._directNamespaces = new Set()
+        this._proxies = new Map()
 
         this._config = new GlueConfig({
             ...(context.config || {}),
@@ -40,9 +42,7 @@ class GlueClient {
     }
 
     loadManifests(manifest_list = []) {
-        (manifest_list || []).forEach(manifest => {
-            this._registerManifest(manifest)
-        })
+        (manifest_list || []).forEach(manifest => this._registerManifest(manifest))
     }
 
     _createProxy({policy, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
@@ -63,13 +63,19 @@ class GlueClient {
         })
     }
 
-    _createProxyFromManifest({policy_token, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
-        return this._createProxy({
+    resolveManifest(manifest) {
+        const {
+            policy_token,
+            metadata = {},
+            state = {},
+            loading_strategy = 'lazy',
+        } = manifest
+        return reactive(this._createProxy({
             policy: GluePolicy.fromSignedPolicyToken(policy_token),
             metadata,
             state,
             loading_strategy,
-        })
+        }))
     }
 
     _registerManifest({policy_token, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
@@ -86,6 +92,14 @@ class GlueClient {
         }
 
         const manifest = {policy, metadata, state, loading_strategy}
+        const key = name === namespace ? namespace : `${namespace}.${name}`
+
+        // Patch an instance that has already been handed out, so references
+        // held in x-data scopes observe the new state.
+        if (this._proxies.has(key)) {
+            reactive(this._proxies.get(key)).applyManifestData(manifest)
+            return
+        }
 
         if (name === namespace) {
             if (namespace in this && !this._directNamespaces.has(namespace)) {
@@ -94,7 +108,7 @@ class GlueClient {
 
             this._directNamespaces.add(namespace)
             Object.defineProperty(this, namespace, {
-                get: () => this._createProxy(manifest),
+                get: () => this._resolveProxy(key, manifest),
                 enumerable: true,
                 configurable: true,
             })
@@ -110,12 +124,20 @@ class GlueClient {
         }
 
         Object.defineProperty(this[namespace], name, {
-            get: () => this._createProxy(manifest),
+            get: () => this._resolveProxy(key, manifest),
             enumerable: true,
             configurable: true,
         })
+
     }
 
+    _resolveProxy(key, manifest) {
+        if (!this._proxies.has(key)) {
+            this._proxies.set(key, reactive(this._createProxy(manifest)))
+        }
+
+        return reactive(this._proxies.get(key))
+    }
 }
 
 export default GlueClient

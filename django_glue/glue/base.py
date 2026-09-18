@@ -1,32 +1,47 @@
 from __future__ import annotations
 
+import inspect
 import json
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from functools import cached_property
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Self
+
+from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
+    GlueAuthorizationError,
     GlueCalledStateAttributeError,
     GlueMissingAttributeError,
+    GlueRequestError,
+    GlueRequestErrorCode,
 )
-from django_glue.glue.attributes.callable import CallableAttribute
+from django_glue.glue import address
 from django_glue.glue.attributes.collector import GlueAttributeCollector
 from django_glue.glue.attributes.declared import DeclaredAttribute
-from django_glue.glue.attributes.glue_object import GlueObjectAttribute
-from django_glue.glue.attributes.state import StateAttribute
+from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
+from django_glue.glue.attributes.registry import GlueAttributeRegistry
+from django_glue.glue.children import GlueChildBinder
 from django_glue.glue.context import GlueManifest
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
+from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
+    from django_glue.glue.attributes.definition import (
+        BoundGlueAttribute,
+        GlueAttributeDefinition,
+    )
+    from django_glue.glue.attributes.adapter import GlueAttributeAdapter
+    from django_glue.glue.children import BoundGlueChild
+    from django.http import JsonResponse
     from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
-    from django_glue.glue.attributes import BaseGlueAttribute
-    from django_glue.access import GlueAccess
-    from django.http import HttpRequest, JsonResponse
-    from django_glue.glue.policy import GluePolicy
 
 
 class BaseGlue(ABC):
@@ -45,6 +60,7 @@ class BaseGlue(ABC):
         self.access = access
         self.loading_strategy = LoadingStrategy(loading_strategy)
         self.request: HttpRequest | None = None
+        self._address: str | None = None
 
     @property
     def resolved_loading_strategy(self) -> LoadingStrategy:
@@ -60,8 +76,6 @@ class BaseGlue(ABC):
     @cached_property
     def policy(self) -> GluePolicy:
         """Signed client-held policy for this request-bound Glue object."""
-        from django_glue.glue.policy import GluePolicy  # noqa: PLC0415
-
         if not self.is_bound:
             msg = (
                 f"Cannot generate policy for unbound GlueObject '{self.name}'. "
@@ -70,6 +84,21 @@ class BaseGlue(ABC):
             raise RuntimeError(msg)
 
         return GluePolicy.from_glue_object(glue_object=self)
+
+    @property
+    def address(self) -> str:
+        """The stable, opaque wire address for this object (state-model.md §10).
+
+        Assigned at introduction or by the introducing owner's child binder. It is
+        never derived from parameter values, so a parameter transition (e.g. a
+        ``target_pk`` that advances after a save) does not rewrite it.
+        """
+        if self._address is None:
+            self._address = self._derive_address()
+        return self._address
+
+    def _derive_address(self) -> str:
+        return address.top_level(self.name, self.namespace)
 
     @property
     def manifest(self) -> GlueManifest:
@@ -81,24 +110,125 @@ class BaseGlue(ABC):
         )
 
     @cached_property
-    def _attribute_collector(self) -> GlueAttributeCollector:
-        """The attribute collector for this glue object."""
-        collector = GlueAttributeCollector(self)
-        collector.collect()
-        return collector
+    def _attribute_registry(self) -> GlueAttributeRegistry:
+        attribute_definitions, attribute_providers = self._collect_attributes()
+        return GlueAttributeRegistry(
+            attribute_definitions,
+            attribute_providers=attribute_providers,
+        )
+
+    def _collect_attributes(
+        self,
+    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
+        provider_definitions, provider_bindings = GlueAttributeCollector.collect_from_providers(
+            self.get_attribute_providers()
+        )
+        extra_definitions, extra_bindings = GlueAttributeCollector.collect_extra_attributes(
+            self.get_extra_attributes()
+        )
+        adapters = self.get_attribute_adapters()
+        definitions = (
+            GlueAttributeCollector.collect(type(self))
+            + provider_definitions
+            + extra_definitions
+        )
+        return (
+            tuple(
+                replace(definition, adapter=adapters.get(definition.path))
+                if definition.kind == GlueAttributeKind.VALUE
+                else definition
+                for definition in definitions
+            ),
+            provider_bindings | extra_bindings,
+        )
+
+    @cached_property
+    def _bound_attributes(self) -> dict[str, BoundGlueAttribute]:
+        return {
+            attribute.definition.path: attribute
+            for attribute in self._attribute_registry.bind(self)
+        }
+
+    @cached_property
+    def _bound_children(self) -> tuple[BoundGlueChild, ...]:
+        return self._bind_children()
 
     @property
-    def attributes(self) -> dict[str, BaseGlueAttribute]:
-        """Runtime attributes exposed by this object and its providers."""
-        return self._attribute_collector.glue_attributes
+    def children(self) -> dict[str, str]:
+        """Shallow signed map from canonical child paths to addresses (state-model.md §10).
+
+        Carries no child policy or state; the child is an independently addressed,
+        independently introduced object.
+        """
+        return {child.path: child.address for child in self._bound_children}
+
+    def get_extra_attributes(
+        self,
+    ) -> Iterable[tuple[Any, Mapping[str, Any]]]:
+        return ()
+
+    def get_attribute_adapters(self) -> Mapping[str, GlueAttributeAdapter]:
+        return {}
+
+    def _bind_children(
+        self,
+        *,
+        live_children: Mapping[str, str] | None = None,
+        reintroduce: Iterable[str] = (),
+    ) -> tuple[BoundGlueChild, ...]:
+        return GlueChildBinder(
+            self,
+            self._attribute_registry,
+        ).bind(
+            live_children=live_children,
+            reintroduce=reintroduce,
+        )
 
     @property
-    def attribute_providers(self) -> dict[str, Any]:
-        """Objects whose @Attribute-decorated members are exposed through this GlueObject."""
+    def attributes(self) -> dict[str, BoundGlueAttribute]:
+        return self._bound_attributes
+
+    @property
+    def attribute_providers(self) -> Iterable[Any]:
+        """Objects whose @Attribute-decorated attributes are exposed through this GlueObject."""
         return self.get_attribute_providers()
 
-    def get_attribute_providers(self) -> dict[str, Any]:
-        return {}
+    def get_attribute_providers(self) -> Iterable[Any]:
+        return ()
+
+    def authorize(
+        self,
+        request: HttpRequest,
+        operation: GlueOperation,
+    ) -> bool:
+        _ = request, operation
+        return True
+
+    def _require_authorization(self, operation: GlueOperation) -> None:
+        if self.request is None:
+            msg = f"Cannot authorize unbound Glue object '{self.name}'."
+            raise RuntimeError(msg)
+
+        if not self.authorize(self.request, operation):
+            raise GlueAuthorizationError(
+                object_name=self.name,
+                operation=operation,
+            )
+
+    def _resolve_required_access(
+        self,
+        required_access: GlueAccess | Callable[[BaseGlue], GlueAccess],
+    ) -> GlueAccess:
+        """Resolve a declared required access against this glue object.
+
+        A declaration may be a plain ``GlueAccess`` or a callable receiving
+        the reconstructed glue object, so the required access can be chosen
+        from the signed target identity (state-model.md §3) rather than from
+        client input.
+        """
+        if callable(required_access):
+            return required_access(self)
+        return required_access
 
     @property
     def identity(self) -> dict[str, Any]:
@@ -118,24 +248,14 @@ class BaseGlue(ABC):
 
     def _build_identity_from_attributes(self) -> dict[str, Any]:
         """Build identity dict from collected identity attributes."""
-        from django_glue.glue.policy import GluePolicy
-
         identity_data: dict[str, Any] = {}
 
-        for attr in self._attribute_collector.identity_attributes:
-            value = attr.get()
-
-            if isinstance(attr, GlueObjectAttribute):
-                # For nested Glue objects, store the full policy
-                glue_object: BaseGlue = value
-                glue_object.request = self.request
-                policy = GluePolicy.from_glue_object(glue_object=glue_object)
-                identity_data[attr.name] = policy.model_dump()
-            else:
-                # Serialize using GlueResponseJSONEncoder for dates, etc.
-                identity_data[attr.name] = json.loads(
-                    json.dumps(value, cls=GlueResponseJSONEncoder)
-                )
+        for path, attribute in self._bound_attributes.items():
+            if not attribute.definition.is_identity:
+                continue
+            identity_data[path] = json.loads(
+                json.dumps(attribute.get(), cls=GlueResponseJSONEncoder)
+            )
 
         return identity_data
 
@@ -146,9 +266,15 @@ class BaseGlue(ABC):
 
     def get_state(self) -> dict[str, Any]:
         return {
-            name: attribute.state
-            for name, attribute in self.attributes.items()
-            if isinstance(attribute, StateAttribute | GlueObjectAttribute)
+            path: self._get_attribute_state(attribute)
+            for path, attribute in self._bound_attributes.items()
+            if attribute.definition.kind == GlueAttributeKind.VALUE
+        }
+
+    def _get_attribute_state(self, attribute: BoundGlueAttribute) -> Any:
+        return {
+            'value': attribute.get(),
+            **attribute.unsigned_data(),
         }
 
     @cached_property
@@ -159,60 +285,79 @@ class BaseGlue(ABC):
     def get_metadata(self) -> dict[str, Any]:
         return {
             'attributes': {
-                name: attr.metadata
-                for name, attr in self.attributes.items()
+                path: self._get_attribute_metadata(attribute)
+                for path, attribute in self._bound_attributes.items()
             },
         }
+
+    def _get_attribute_metadata(
+        self,
+        attribute: BoundGlueAttribute,
+    ) -> dict[str, Any]:
+        definition = attribute.definition
+        if definition.adapter is not None:
+            return attribute.schema()
+        if definition.kind == GlueAttributeKind.CALLABLE:
+            return {
+                'namespace': 'callable',
+                'takes_client_state': True,
+            }
+        if definition.kind == GlueAttributeKind.NAMESPACE:
+            return {'namespace': 'namespace'}
+        if definition.kind == GlueAttributeKind.CHILD:
+            return {'namespace': 'child'}
+        return {'name': definition.path, 'namespace': 'readonly'}
 
     @classmethod
     def from_attribute_call_resolver_context(
         cls,
         context: AttributeCallRequestContext
-    ) -> BaseGlue:
+    ) -> Self:
         glue_object = cls._reconstruct_from_policy(context.target_glue_policy)
         glue_object.request = context.request
+        glue_object._address = context.target_glue_policy.address
 
-        attribute = glue_object.attributes.get(context.target_attribute_name)
-        takes_client_state = getattr(attribute, 'takes_client_state', True) if attribute else True
-        if attribute and takes_client_state:
-            state = context.target_glue_client_state or {}
-            if isinstance(takes_client_state, list | tuple):
-                state = {
-                    key: state[key]
-                    for key in takes_client_state
-                    if key in state
-                }
-            glue_object._load_client_state(state)
-            glue_object._invalidate_attributes()
+        attribute = glue_object._bound_attributes.get(context.target_attribute_name)
+        required_access = (
+            glue_object._resolve_required_access(attribute.definition.required_access)
+            if attribute is not None
+            else GlueAccess.VIEW
+        )
+        glue_object._require_authorization(GlueOperation(
+            kind=GlueOperationKind.CALL,
+            attribute=None,
+            required_access=required_access,
+        ))
 
         return glue_object
 
     @classmethod
     @abstractmethod
-    def _reconstruct_from_policy(cls, policy: GluePolicy) -> BaseGlue:
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> Self:
         """Reconstruct a GlueObject from a signed policy."""
         raise NotImplementedError
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         """Apply client-provided state attributes to this Glue object."""
-        for name, attribute in self.attributes.items():
-            if not isinstance(attribute, StateAttribute):
+        for path, attribute in self._bound_attributes.items():
+            if attribute.definition.value_role != GlueValueRole.EDITABLE_STATE:
                 continue
-            if name not in state:
+            if path not in state:
                 continue
 
-            attribute_state = state[name]
+            attribute_state = state[path]
             value = (
                 attribute_state.get('value')
                 if isinstance(attribute_state, dict)
                 else attribute_state
             )
-            setattr(self, name, value)
+            attribute.apply_update(value)
 
     def _invalidate_attributes(self) -> None:
         """Discard discovered attributes after target state hydration."""
         self.__dict__.pop('attributes', None)
-        self.__dict__.pop('_attribute_collector', None)
+        self.__dict__.pop('_attribute_registry', None)
+        self.__dict__.pop('_bound_attributes', None)
         self.__dict__.pop('policy', None)
         self.__dict__.pop('metadata', None)
         self._invalidate_state()
@@ -229,39 +374,98 @@ class BaseGlue(ABC):
         call_context: AttributeCallRequestContext
     ) -> JsonResponse:
         """Perform a callable attribute request against a resolved target."""
-        glue_attribute = self.attributes.get(call_context.target_attribute_name, None)
-        if not glue_attribute:
+        bound_attribute = self._bound_attributes.get(call_context.target_attribute_name)
+        if bound_attribute is None:
             raise GlueMissingAttributeError(call_context.target_attribute_name, self.name)
 
-        if not isinstance(glue_attribute, CallableAttribute):
+        definition = bound_attribute.definition
+        if definition.kind != GlueAttributeKind.CALLABLE:
             raise GlueCalledStateAttributeError(call_context.target_attribute_name, self.name)
 
-        if not call_context.target_glue_policy.access.has_access(glue_attribute.required_access):
+        required_access = self._resolve_required_access(definition.required_access)
+        if not call_context.target_glue_policy.access.has_access(required_access):
             raise GlueAccessError(
                 attribute=call_context.target_attribute_name,
-                required_access=glue_attribute.required_access.value,
+                required_access=required_access.value,
                 current_access=call_context.target_glue_policy.access.value,
             )
 
-        if call_context.target_attribute_name not in call_context.target_glue_policy.attributes:
+        signed_callable = call_context.target_glue_policy.capability.callables.get(
+            call_context.target_attribute_name
+        )
+        if signed_callable is None:
             raise GlueMissingAttributeError(
                 call_context.target_attribute_name,
                 call_context.target_glue_policy.name
             )
 
-        call_result = glue_attribute.call(call_context)
-        self._invalidate_attributes()
+        supplied_arguments = set(call_context.target_attribute_call_kwargs)
+        admitted_arguments = (
+            set(definition.allowed_arguments)
+            & set(signed_callable.allowed_arguments)
+        )
+        invalid_arguments = supplied_arguments - admitted_arguments
+        if invalid_arguments:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_KWARGS,
+                message='Callable arguments are not admitted by the signed capability.',
+                details={
+                    'attribute': definition.path,
+                    'arguments': sorted(invalid_arguments),
+                },
+            )
 
-        # The policy renews on every access, independent of updates_client_state.
-        response_extra = {'policy_token': self.policy.token}
-        if getattr(glue_attribute, 'updates_client_state', True):
-            response_extra['state'] = self.state
-            response_extra['metadata'] = self.metadata
+        self._require_authorization(GlueOperation(
+            kind=GlueOperationKind.CALL,
+            attribute=call_context.target_attribute_name,
+            required_access=required_access,
+        ))
+
+        self._load_client_state(call_context.target_glue_client_state or {})
+        self._invalidate_attributes()
+        bound_attribute = self._bound_attributes[call_context.target_attribute_name]
+        call_result = bound_attribute.call(
+            **self._resolve_callable_arguments(
+                bound_attribute,
+                call_context,
+            )
+        )
 
         return GlueResponse.from_result(
             call_result,
-            render_as_html=getattr(glue_attribute, 'render_as_html', False),
+            render_as_html=definition.render_as_html,
         ).to_json_response(
             glue_object=self,
-            **response_extra,
+            policy_token=self.policy.token,
+            state=self.state,
+            metadata=self.metadata,
         )
+
+    @staticmethod
+    def _resolve_callable_arguments(
+        attribute: BoundGlueAttribute,
+        call_context: AttributeCallRequestContext,
+    ) -> dict[str, Any]:
+        target = attribute.get()
+        signature = inspect.signature(inspect.unwrap(target))
+        supplied = call_context.target_attribute_call_kwargs
+        resolved: dict[str, Any] = {}
+
+        for name, parameter in signature.parameters.items():
+            if name in attribute.definition.injected_arguments:
+                resolved[name] = call_context.request
+            elif name in supplied:
+                resolved[name] = supplied[name]
+            elif parameter.kind in {
+                inspect.Parameter.VAR_POSITIONAL,
+                inspect.Parameter.VAR_KEYWORD,
+            }:
+                continue
+            elif parameter.default is inspect.Parameter.empty:
+                msg = (
+                    f"Attribute '{attribute.definition.path}' missing required "
+                    f"argument: '{name}'."
+                )
+                raise ValueError(msg)
+
+        return resolved

@@ -3,23 +3,13 @@ from __future__ import annotations
 import base64
 import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, TypedDict, cast
 
-from django.core.exceptions import FieldDoesNotExist, ValidationError
+from django.core.exceptions import FieldDoesNotExist, ObjectDoesNotExist, ValidationError
 from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import (
-    BaseGlueAttribute,
-    DeclaredAttribute,
-    GlueObjectAttribute,
-    ReadOnlyAttribute,
-)
-from django_glue.glue.attributes.django.model import (
-    ForeignKeyFieldAttribute,
-    ModelFieldAttribute,
-    RelatedSetFieldAttribute,
-)
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
@@ -28,11 +18,17 @@ from django_glue.glue.objects.django.computed_attributes import (
 )
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.field_adapter import ModelFieldAdapter
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
 from django_glue.glue.options.django import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
     GlueRelatedModelChoices,
     RelatedModelChoicesResult,
+)
+from django_glue.glue.queryset_unpickler import (
+    _queryset_class_path,
+    _resolve_queryset_class,
+    unpickle_query,
 )
 
 # Runtime import required: Glue.Attribute method annotations are resolved with
@@ -64,9 +60,22 @@ class RelatedFieldPolicyConfig(TypedDict, total=False):
     fields: Sequence[str] | Literal['__all__']
     exclude: Sequence[str] | Literal['__all__']
     encoded_choice_queryset: str
+    choice_queryset_class_path: str
 
 
-class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFieldResolutionMixin, BaseGlue):
+def _required_save_access(glue: ModelGlue) -> GlueAccess:
+    """Saving an unsaved row requires ADD; saving a persisted row requires
+    CHANGE (state-model.md §3, ADR 010).
+    """
+    return GlueAccess.ADD if glue.instance.pk is None else GlueAccess.CHANGE
+
+
+class ModelGlue(
+    GlueComputedAttributesMixin,
+    ModelGlueFormConfigMixin,
+    ModelFieldResolutionMixin,
+    BaseGlue
+):
 
     namespace = 'model'
     globally_excluded_field_types = DEFAULT_EXCLUDED_MODEL_FIELD_TYPES
@@ -75,10 +84,11 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         self,
         instance: models.Model,
         *,
-        name: str,
-        access: GlueAccess,
+        name: str | None = None,
+        access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
+        editable: Sequence[str] | None = None,
         annotations: Sequence[str] = (),
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
@@ -119,6 +129,10 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         self.annotations = annotations
         self._select_related = set(select_related or ())
+        self.editable = self._normalize_editable(
+            editable,
+            self.access,
+        )
         self.related_field_config = self._normalize_related_field_config(
             related_field_config=related_field_config,
             model_class=self.instance.__class__,
@@ -128,9 +142,13 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         self.forms = self.normalize_forms(form, forms)
         self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
+        self._editable_draft: dict[str, Any] = {}
+        # Internal, signed for collection children: the access a row settles to
+        # after its first save (None for top-level model bindings).
+        self._row_access: GlueAccess | None = None
 
-    def get_attribute_providers(self) -> dict[str, Any]:
-        return {'instance': self.instance}
+    def get_attribute_providers(self) -> tuple[Any, ...]:
+        return (self.instance,)
 
     def get_identity(self) -> dict[str, Any]:
         instance = self.instance
@@ -138,6 +156,9 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             'model_class_path': f'{instance.__class__.__module__}.{instance.__class__.__name__}',
             'target_pk': instance.pk,
             'pk_field_name': instance._meta.pk.name, # type: ignore  # noqa: PGH003
+            'fields': self.fields,
+            'exclude': self.exclude,
+            'editable': self.editable,
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
@@ -147,105 +168,193 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
             identity['related_field_config'] = self._serialize_related_field_config(
                 self.related_field_config
             )
+        if self._projected_field_paths:
+            identity['projected_fields'] = self._projected_field_paths
+        if self._row_access is not None:
+            identity['row_access'] = self._row_access
         identity |= self.computed_attributes_identity()
 
         return identity
 
-    @cached_property
-    def attributes(self) -> dict[str, BaseGlueAttribute]:
-        attributes = super().attributes
+    def get_extra_attributes(self) -> tuple[tuple[Any, Mapping[str, Any]], ...]:
+        from django_glue import Glue  # noqa: PLC0415
+
+        declarations = {}
 
         for field_name in self._included_fields:
-            # Handle reverse relations (no field object in _meta.get_field for these)
             if self._is_reverse_relation(field_name):
-                attributes[field_name] = self._build_related_set_attribute(
-                    field_name, 'reverse_fk',
+                declarations[field_name] = Glue.property(
+                    lambda owner, field_name=field_name: owner._get_model_attribute_value(
+                        field_name
+                    )
                 )
                 continue
-
-            field = self._get_model_field(field_name)
-
-            # Use ForeignKeyFieldAttribute for FK/O2O fields
-            if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
-                # Add the attname (e.g., parent_id) as a regular field for the raw FK value
-                attributes[field.attname] = ModelFieldAttribute(
-                    owner=self,
-                    name=field.attname,
-                    field=field,
-                    instance=self.instance,
-                    required_access=self._field_access(field_name),
+            if field_name in self.editable:
+                declarations[field_name] = Glue.attr(
+                    property(
+                        fget=lambda owner, field_name=field_name: owner._get_model_attribute_value(field_name),
+                        fset=lambda owner, value, field_name=field_name: owner._stage_model_attribute_value(
+                            field_name,
+                            value,
+                        ),
+                    ),
+                    required_access=GlueAccess.CHANGE,
+                    editable=True,
                 )
-                if field_name == field.attname and field.name != field_name:
-                    continue
-
-                # Add the FK field (e.g., parent) for the nested object
-                attributes[field_name] = ForeignKeyFieldAttribute(
-                    owner=self,
-                    name=field_name,
-                    field=field,
-                    instance=self.instance,
-                    required_access=self._field_access(field_name),
-                    is_cached=self._is_fk_cached(field_name),
-                    related_fields=self.related_field_config.get(field_name, {}).get('fields'),
-                    related_exclude=self.related_field_config.get(field_name, {}).get('exclude'),
-                )
-
-            # Use RelatedSetFieldAttribute for M2M fields
-            elif getattr(field, 'many_to_many', False):
-                attributes[field_name] = self._build_related_set_attribute(
-                    field_name, 'm2m',
-                )
-
             else:
-                attributes[field_name] = ModelFieldAttribute(
-                    owner=self,
-                    name=field_name,
-                    field=field,
-                    instance=self.instance,
-                    required_access=self._field_access(field_name),
+                declarations[field_name] = Glue.property(
+                    lambda owner, field_name=field_name: owner._get_model_attribute_value(field_name)
+                )
+        for name in (*self._annotation_names, *self._computed_attribute_names):
+            declarations[name] = Glue.property(
+                lambda owner, name=name: owner._get_derived_attribute_value(name)
+            )
+        for relation_name, subfields in self._projected_relations:
+            declarations[relation_name] = Glue.property(
+                self._relation_child_factory(relation_name, subfields)
+            )
+        named_forms = tuple(
+            name
+            for name in self.forms
+            if name != 'default'
+        )
+        if named_forms:
+            declarations['forms'] = Glue.namespace(dict)
+        for form_name in self.forms:
+            path = 'form' if form_name == 'default' else f'forms.{form_name}'
+
+            def get_form(
+                owner: ModelGlue,
+                form_name: str = form_name,
+                path: str = path,
+            ) -> FormGlue:
+                return owner._build_form_child(
+                    form_name=form_name,
+                    path=path,
                 )
 
-        attributes.update({
-            annotation_name: ReadOnlyAttribute(
+            declarations[path] = Glue.property(get_form)
+        return (
+            (self, declarations),
+        )
+
+    def get_attribute_adapters(self) -> Mapping[str, ModelFieldAdapter]:
+        return {
+            field_name: ModelFieldAdapter(
                 owner=self,
-                name=annotation_name,
-                required_access=GlueAccess.VIEW,
-                attr_owner_instance=self.instance,
-            )
-            for annotation_name in (*self._annotation_names, *self._computed_attribute_names)
-        })
-        attributes.update(self._form_attributes())
-        return attributes
-
-    def _form_attributes(self) -> dict[str, BaseGlueAttribute]:
-        attributes: dict[str, BaseGlueAttribute] = {}
-        default_attribute = None
-
-        for form_name, form in self.forms.items():
-            # Need to rebuild the form here in order to properly bind instance data!
-            form = form.__class__(instance=self.instance)
-
-            attribute_name = f'forms.{form_name}'
-            form_attribute = GlueObjectAttribute(
-                owner=self,
-                name=attribute_name,
-                required_access=self.access,
-                glue_object=FormGlue(
-                    form=form,
-                    name=f'{self.name}.{attribute_name}',
-                    access=self.access,
-                    loading_strategy=self.resolved_loading_strategy,
+                name=field_name,
+                field=(
+                    self._get_reverse_relation(field_name)
+                    if self._is_reverse_relation(field_name)
+                    else self._get_model_field(field_name)
                 ),
             )
-            attributes[attribute_name] = form_attribute
+            for field_name in self._included_fields
+        }
 
-            if form_name == 'default':
-                default_attribute = form_attribute
+    def _build_form_child(
+        self,
+        *,
+        form_name: str,
+        path: str,
+    ) -> FormGlue:
+        configured_form = self.forms[form_name]
+        form = configured_form.__class__(
+            instance=self.instance,
+            initial=configured_form.initial,
+        )
+        return FormGlue(
+            form=form,
+            name=f'{self.name}.{path}',
+            access=self.access,
+            loading_strategy=self.resolved_loading_strategy,
+        )
 
-        if default_attribute is not None:
-            attributes['form'] = default_attribute
+    def _relation_child_factory(
+        self,
+        relation_name: str,
+        subfields: tuple[str, ...],
+    ) -> Callable[[ModelGlue], BaseGlue | None]:
+        """Return a child-producing factory for a projected relation.
 
-        return attributes
+        The return annotation is normalized to match the relation's
+        nullability: a nullable foreign key yields a nullable child slot that
+        is re-evaluated on every owner interaction, while a non-nullable one
+        is never evaluated to discover it still exists (state-model.md §4).
+        """
+        from django_glue.glue.objects.django.queryset import QuerySetGlue  # noqa: PLC0415
+
+        nullable = self._relation_is_nullable(relation_name)
+        child_type = (
+            QuerySetGlue
+            if self._relation_is_to_many(relation_name)
+            else ModelGlue
+        )
+
+        def get_relation(owner: ModelGlue) -> BaseGlue | None:
+            return owner._build_relation_child(relation_name, subfields)
+
+        get_relation.__annotations__ = {
+            'owner': ModelGlue,
+            'return': child_type | None if nullable else child_type,
+        }
+        return get_relation
+
+    def _build_relation_child(
+        self,
+        relation_name: str,
+        subfields: tuple[str, ...],
+    ) -> BaseGlue | None:
+        if self._relation_is_to_many(relation_name):
+            if self.instance.pk is None:
+                field = self._get_model_field(relation_name)
+                related = field.related_model._default_manager.none()
+            else:
+                related = getattr(self.instance, relation_name).all()
+        else:
+            try:
+                related = getattr(self.instance, relation_name)
+            except ObjectDoesNotExist:
+                return None
+        if related is None:
+            return None
+        return self._construct_relation_child(
+            related,
+            name=f'{self.name}.{relation_name}',
+            subfields=subfields,
+        )
+
+    def _get_model_attribute_value(self, field_name: str) -> Any:
+        if field_name in self._editable_draft:
+            return self._editable_draft[field_name]
+        relation_name = (
+            field_name[:-4]
+            if field_name.endswith('_ids')
+            else field_name
+        )
+        if self._relation_is_to_many(relation_name):
+            if self.instance.pk is None:
+                return ()
+            return tuple(
+                getattr(self.instance, relation_name).values_list(
+                    'pk',
+                    flat=True,
+                )
+            )
+        field = self._get_model_field(field_name)
+        return getattr(self.instance, field.attname)
+
+    def _stage_model_attribute_value(
+        self,
+        field_name: str,
+        value: Any,
+    ) -> None:
+        self._editable_draft[field_name] = value
+
+    def _get_derived_attribute_value(self, name: str) -> Any:
+        if name in self.computed_attributes:
+            return self.computed_attribute_values(self.instance)[name]
+        return getattr(self.instance, name)
 
     @cached_property
     def _annotation_names(self) -> tuple[str, ...]:
@@ -318,6 +427,9 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 serialized_config['encoded_choice_queryset'] = base64.b64encode(
                     pickle.dumps(choice_queryset.query)
                 ).decode('utf-8')
+                serialized_config['choice_queryset_class_path'] = (
+                    _queryset_class_path(choice_queryset)
+                )
             serialized[field_name] = serialized_config
         return serialized
 
@@ -343,8 +455,10 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 )
             encoded_queryset = config.get('encoded_choice_queryset')
             if encoded_queryset is not None:
-                query = pickle.loads(base64.b64decode(encoded_queryset))
-                choice_queryset = query.model.objects.all()
+                query = unpickle_query(encoded_queryset)
+                choice_queryset = _resolve_queryset_class(
+                    config.get('choice_queryset_class_path')
+                )(model=query.model)
                 choice_queryset.query = query
                 deserialized_config['choice_queryset'] = choice_queryset
             deserialized[field_name] = deserialized_config
@@ -358,12 +472,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
     def get_state(self) -> dict[str, Any]:
         self.hydrate_computed_attributes(self.instance)
         self._validate()
-        state = {}
-        for name, attribute in self.attributes.items():
-            if hasattr(type(attribute), 'state'):
-                state[name] = attribute.state
-
-        return state
+        return super().get_state()
 
     def _validate(self) -> None:
         if (
@@ -381,53 +490,6 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
             )
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
-            },
-        }
-
-    def _field_access(self, field_name: str) -> GlueAccess:
-        field = self._get_model_field(field_name)
-        return GlueAccess.CHANGE if field.editable else GlueAccess.VIEW
-
-    def _is_fk_cached(self, field_name: str) -> bool:
-        """Check if a FK field's related instance is already cached (via select_related)."""
-        if field_name in self._select_related:
-            return True
-        field = self._get_model_field(field_name)
-        return field.is_cached(self.instance)
-
-    def _is_prefetched(self, relation_name: str) -> bool:
-        """Check if a relation was prefetched (via prefetch_related)."""
-        cache = getattr(self.instance, '_prefetched_objects_cache', {})
-        return relation_name in cache
-
-    def _build_related_set_attribute(
-        self,
-        field_name: str,
-        relation_type: str,
-    ) -> RelatedSetFieldAttribute:
-        """Build RelatedSetFieldAttribute for reverse FK or M2M."""
-        if relation_type == 'reverse_fk':
-            rel = self._get_reverse_relation(field_name)
-            related_model = rel.related_model
-        else:  # m2m
-            field = self._get_model_field(field_name)
-            related_model = field.related_model
-
-        return RelatedSetFieldAttribute(
-            owner=self,
-            name=field_name,
-            instance=self.instance,
-            related_model=related_model,
-            required_access=GlueAccess.VIEW,  # Read-only for v1
-            is_prefetched=self._is_prefetched(field_name),
-            relation_type=relation_type,
-        )
-
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> ModelGlue:
         model_class = cast(
@@ -437,6 +499,19 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         target_pk = policy.identity.get('target_pk')
         select_related = policy.identity.get('select_related', [])
+        # Collection children sign the access their row settles to. A draft
+        # (target_pk None) requires ADD until its first save; a persisted row
+        # takes the signed row access. Top-level model bindings have no
+        # row_access and keep their registered policy access (state-model.md
+        # §3, ADR 010). Identity values are JSON round-tripped, so the signed
+        # row_access must be coerced back to a GlueAccess.
+        raw_row_access = policy.identity.get('row_access')
+        if raw_row_access is not None:
+            row_access = GlueAccess(raw_row_access)
+            restored_access = GlueAccess.ADD if target_pk is None else row_access
+        else:
+            row_access = None
+            restored_access = policy.access
 
         if target_pk is None:
             instance = model_class()
@@ -446,22 +521,6 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
                 queryset = queryset.select_related(*select_related)
             instance = queryset.get(pk=target_pk)
 
-        all_valid_names = set(cls._all_available_field_names_for_meta(model_class._meta))
-
-        fields = []
-        for attr in policy.attributes:
-            if isinstance(attr, str):
-                if attr in all_valid_names:
-                    fields.append(attr)
-            else:
-                # Nested policy - extract field name from policy name
-                # e.g., "fights.1.red_corner" -> "red_corner"
-                nested_name = attr.name
-                if nested_name.startswith(policy.name + '.'):
-                    field_name = nested_name[len(policy.name) + 1:]
-                    if field_name in all_valid_names:
-                        fields.append(field_name)
-
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {}),
             instance=instance
@@ -470,12 +529,15 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
         glue_object = cls(
             instance,
             name=policy.name,
-            access=policy.access,
-            fields=fields,
+            access=restored_access,
+            fields=policy.identity['fields'],
+            exclude=policy.identity['exclude'],
+            editable=policy.identity['editable'],
             forms=forms,
             select_related=select_related,
             computed_attributes=policy.identity.get('computed_attributes', {}),
         )
+        glue_object._row_access = row_access
         # Restored post-construction from the signed (already-validated) policy:
         # _deserialize_related_field_config yields the normalized internal shape,
         # so it does not go back through __init__ normalization.
@@ -492,13 +554,11 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
     def _apply_state(self, state: dict[str, Any]) -> None:
         """Apply state data directly to model fields."""
-        for field_name in self._included_fields:
+        for field_name in self.editable:
             if self._is_reverse_relation(field_name):
                 continue
 
             field = self._get_model_field(field_name)
-            if not field.editable:
-                continue
 
             # Handle file fields from request.FILES
             if getattr(field, 'get_internal_type', lambda: '')() in {'FileField', 'ImageField'}:
@@ -529,12 +589,18 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
         return self.request.FILES.get(field_name)
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=_required_save_access)
     def save(self) -> dict[str, Any]:
         try:
             self.instance.full_clean()
             self.instance.save()
             self._apply_m2m_state(self._loaded_state or {})
+            # A collection draft settles to its signed row access on first save:
+            # this re-signs the successor response at the settled access, so the
+            # client's next request carries the persisted-row permission
+            # (state-model.md ADR 010).
+            if self._row_access is not None:
+                self.access = self._row_access
             return {  # noqa: TRY300
                 'success': True,
                 'errors': {}
@@ -547,7 +613,7 @@ class ModelGlue(GlueComputedAttributesMixin, ModelGlueFormConfigMixin, ModelFiel
 
     def _apply_m2m_state(self, state: dict[str, Any]) -> None:
         """Apply M2M field values after the instance has been saved."""
-        for field_name in self._included_fields:
+        for field_name in self.editable:
             if field_name not in state:
                 continue
             if self._is_reverse_relation(field_name):

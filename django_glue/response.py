@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Self
 
@@ -42,8 +44,7 @@ class GlueResponse:
             # or the Glue.html_attr shortcut), a TemplateResponse is just
             # rendered to text and sent as plain result data -- no implicit
             # GlueTemplateResponse envelope.
-            html, _ = render_template_response_html(result)
-            return cls(result=html)
+            return cls(result=render_html_payload(result)['html'])
 
         if isinstance(result, HttpResponse):
             msg = (
@@ -95,27 +96,47 @@ class GlueResponse:
         )
 
     @classmethod
-    def _serialize_glue_values(cls, value: Any, glue_object: Any = None) -> Any:
+    def _serialize_glue_values(
+        cls, payload: dict[str, Any], glue_object: Any = None
+    ) -> dict[str, Any]:
+        serialized: dict[str, Any] = {}
+        for key, item in payload.items():
+            if key == 'result':
+                serialized[key] = cls._serialize_result(item, glue_object)
+            else:
+                cls._reject_glue_objects(item)
+                serialized[key] = item
+        return serialized
+
+    @classmethod
+    def _serialize_result(cls, result: Any, glue_object: Any = None) -> Any:
+        from django_glue.glue.base import BaseGlue
+
+        if isinstance(result, BaseGlue):
+            if glue_object is not None:
+                result.request = glue_object.request
+            return result.manifest.model_dump()
+
+        cls._reject_glue_objects(result)
+        return result
+
+    @classmethod
+    def _reject_glue_objects(cls, value: Any, *, path: str = 'result') -> None:
         from django_glue.glue.base import BaseGlue
 
         if isinstance(value, BaseGlue):
-            if glue_object is not None:
-                value.request = glue_object.request
-            return value.manifest.model_dump()
+            message = (
+                f'BaseGlue value of type {type(value).__name__} cannot appear '
+                f'nested at {path}; return it directly as the result instead.'
+            )
+            raise TypeError(message)
 
         if isinstance(value, dict):
-            return {
-                key: cls._serialize_glue_values(item, glue_object)
-                for key, item in value.items()
-            }
-
-        if isinstance(value, list | tuple):
-            return [
-                cls._serialize_glue_values(item, glue_object)
-                for item in value
-            ]
-
-        return value
+            for key, item in value.items():
+                cls._reject_glue_objects(item, path=f'{path}.{key}')
+        elif isinstance(value, list | tuple):
+            for index, item in enumerate(value):
+                cls._reject_glue_objects(item, path=f'{path}[{index}]')
 
 
 class GlueRedirectResponse:
@@ -131,44 +152,14 @@ class GlueRedirectResponse:
         )
 
 
-def render_template_response_html(
-    response: TemplateResponse,
+def render_html_payload(
+    response: HttpResponse,
     request: HttpRequest | None = None,
-) -> tuple[str, list[dict[str, Any]]]:
-    """Render a TemplateResponse and collect the manifests registered on its request.
+) -> dict[str, Any]:
+    from django_glue.glue.context import GlueContextManager
 
-    Shared by GlueTemplateResponse.from_template_response (a `@Glue.attr`
-    method returning a response directly) and GlueViewFragmentResolver's
-    `Glue.view(...)` fragment resolution -- both need the same
-    render + charset-safe decode + manifest-collection steps, just wrapped
-    in different response envelopes for their respective transports.
-
-    response.render() is a no-op if the response is already rendered, so
-    this is safe to call regardless of caller-side render state.
-
-    request identifies whose manifests to collect. Pass it explicitly when
-    the caller already has the right request in hand -- e.g. the resolver
-    passes its own self.request, which GlueContextManager treats as
-    equivalent to the wrapped request it dispatched the view with (see
-    test_glue_view_http_request_uses_base_request_for_registered_proxies).
-    Falls back to response._request (set by Django's own TemplateResponse
-    machinery during real rendering) when omitted, which is the common case
-    for GlueTemplateResponse -- but that's a private attribute of a real
-    TemplateResponse, so it's absent on some other HttpResponse subclasses
-    and always absent on a mock, hence the explicit override.
-
-    TODO: explore going further than sharing this one step -- GlueTemplateResponse's
-    result envelope ({'is_glue_template_response': True, 'html', 'manifest_list'})
-    and GlueViewFragmentResolver's bare {'html', 'manifest_list'} JsonResponse are
-    still two independent shapes for what the client treats as the same kind of
-    thing (see client_js/src/htmlResult.js vs. client_js/src/view.js -- both
-    render HTML + ride-along manifests, with separate client classes). Worth
-    checking whether Glue.view(...) could also return this same envelope shape
-    (or GlueHtmlResult itself) so the client only needs one HTML-result type.
-    """
-    from django_glue.glue.context import GlueContextManager  # noqa: PLC0415
-
-    response.render()
+    if isinstance(response, TemplateResponse):
+        response.render()
 
     resolved_request = request if request is not None else getattr(response, '_request', None)
     manifest_list = (
@@ -176,7 +167,11 @@ def render_template_response_html(
         if resolved_request is not None
         else []
     )
-    return response.content.decode(response.charset or 'utf-8'), manifest_list
+    return {
+        'is_glue_template_response': True,
+        'html': response.content.decode(response.charset or 'utf-8'),
+        'manifest_list': manifest_list,
+    }
 
 
 class GlueTemplateResponse:
@@ -208,10 +203,4 @@ class GlueTemplateResponse:
 
     @classmethod
     def from_template_response(cls, response: TemplateResponse) -> GlueResponse:
-        html, manifest_list = render_template_response_html(response)
-
-        return GlueResponse(result={
-            'is_glue_template_response': True,
-            'html': html,
-            'manifest_list': manifest_list,
-        })
+        return GlueResponse(result=render_html_payload(response))

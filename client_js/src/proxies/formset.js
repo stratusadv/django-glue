@@ -9,7 +9,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
         this._nextKey = this._formProxies.size
         this.nonFormErrors = []
         // True once append()/pop() has diverged from the server's last-known
-        // form list. While true, an incidental _applyResponse (e.g. triggered
+        // form list. While true, an incidental _applyResponseData (e.g. triggered
         // by an unrelated attribute call on a parent object refreshing this
         // cached nested formset) must not rebuild _formProxies from server
         // policy/state, or it would silently discard the pending local edit.
@@ -71,8 +71,8 @@ class GlueFormSetProxy extends BaseGlueProxy {
         return {form_list: this.forms.map(form => form._state)}
     }
 
-    _applyResponse(data = {}) {
-        super._applyResponse(data)
+    _applyResponseData(data = {}) {
+        super._applyResponseData(data)
         if (this._hasPendingLocalEdit || !(data.policy_token || data.metadata || data.state)) return
 
         this._formProxies = this._initialForms()
@@ -119,7 +119,7 @@ class GlueFormSetProxy extends BaseGlueProxy {
                 || cachedForm.metadata !== metadata
             ) {
                 cachedForm.proxy._policy = policy
-                cachedForm.proxy._applyResponse({state, metadata, loading_strategy: this._loadingStrategy})
+                cachedForm.proxy._applyResponseData({state, metadata, loading_strategy: this._loadingStrategy})
                 cachedForm.policy = policy
                 cachedForm.state = state
                 cachedForm.metadata = metadata

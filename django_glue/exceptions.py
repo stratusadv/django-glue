@@ -5,9 +5,14 @@ These exceptions provide clear, specific error types for different failure modes
 making it easier to handle errors appropriately in views and client code.
 """
 
+from __future__ import annotations
+
 import inspect
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from django_glue.glue.operation import GlueOperation
 
 
 class GlueRequestErrorCode(StrEnum):
@@ -92,6 +97,35 @@ class GlueAccessError(GlueError):
             'attribute': self.attribute,
             'required_access': self.required_access,
             'current_access': self.current_access,
+        }
+
+
+class GlueAuthorizationError(GlueError):
+    code = 'not_authorized'
+    status = 403
+
+    def __init__(
+        self,
+        object_name: str,
+        operation: GlueOperation,
+    ) -> None:
+        self.object_name = object_name
+        self.operation = operation
+        attribute = (
+            f" attribute '{operation.attribute}'"
+            if operation.attribute
+            else ''
+        )
+        super().__init__(
+            f"Authorization denied for{attribute} on Glue object '{object_name}'."
+        )
+
+    def details(self) -> dict:
+        return {
+            'object': self.object_name,
+            'kind': self.operation.kind.value,
+            'attribute': self.operation.attribute,
+            'required_access': self.operation.required_access.value,
         }
 
 
