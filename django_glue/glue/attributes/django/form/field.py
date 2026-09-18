@@ -61,11 +61,11 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
     ) -> None:
         """Seed the currently selected choice(s) before a searchable field is queried.
 
-        Searchable sources deliberately return no unfiltered result set, so a
-        single-value field seeds ``selected_choice`` and a multiple-value field
-        seeds one ``selected_choices`` entry per selection. This lets the browser
-        render the form's current value without weakening that rule or issuing a
-        search request.
+        A searchable source's unfiltered load returns only its first
+        ``search_limit`` rows, so the form's current selection may not be among
+        them. A single-value field seeds ``selected_choice`` and a
+        multiple-value field seeds one ``selected_choices`` entry per selection,
+        so the browser can render the form's current value immediately.
         """
         current_value = self.field.prepare_value(
             self.form.get_initial_for_field(self.field, self.name)

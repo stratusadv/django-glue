@@ -113,13 +113,11 @@ class GlueRelatedModelChoices:
     def load(self, *, search: str = '') -> RelatedModelChoicesResult:
         queryset = self.queryset
         if self.is_searchable:
-            if not search:
-                return self.empty()
-
-            search_filter = Q()
-            for search_field in self.options.search_fields:
-                search_filter |= Q(**{f'{search_field}__icontains': search})
-            queryset = queryset.filter(search_filter)
+            if search:
+                search_filter = Q()
+                for search_field in self.options.search_fields:
+                    search_filter |= Q(**{f'{search_field}__icontains': search})
+                queryset = queryset.filter(search_filter)
             if not queryset.ordered:
                 queryset = queryset.order_by(queryset.model._meta.pk.name)
             queryset = queryset[:self.options.search_limit]
@@ -152,6 +150,8 @@ def configure_choices(
     _validate_queryset(source)
     _validate_search_limit(search_limit)
     configured_queryset = source.all()
+    if not search_fields and fields:
+        search_fields = fields
     if search_fields and configured_queryset.query.is_sliced:
         msg = 'Searchable Glue.choices querysets must not be sliced.'
         raise ValueError(msg)
