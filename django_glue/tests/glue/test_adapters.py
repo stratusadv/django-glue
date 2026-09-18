@@ -1550,6 +1550,24 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertIn('Glue.attribute', str(context.exception))
 
 
+def skill_label_formatter(skill: Skill) -> str:
+    return f'{skill.name} (difficulty {skill.difficulty})'
+
+
+def skill_label_template_string(skill: Skill) -> str:
+    return 'pre {% if 1 %}mid{% endif %} post'
+
+
+def skill_label_formatter_html(skill: Skill):
+    from django.template.response import TemplateResponse
+
+    return TemplateResponse(None, 'choice_label_test.html', {'skill': skill})
+
+
+def skill_label_formatter_bad_return(skill: Skill):
+    return 42
+
+
 class DjangoFormGlueObjectTestCase(TestCase):
     def test_foreign_key_choices_does_not_return_validated_form_state(self):
         from django import forms
@@ -1770,6 +1788,159 @@ class DjangoFormGlueObjectTestCase(TestCase):
                 Skill.objects.all()[:10],
                 fields=['name'],
             )
+
+    def test_label_formatter_string_result_renders_label(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                label_formatter=skill_label_formatter,
+            ))
+
+        Skill.objects.create(name='Grappling', difficulty=3)
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'][0]['label'], 'Grappling (difficulty 3)')
+        self.assertEqual(result['results'][0]['obj']['__str__'], 'Grappling')
+
+    def test_label_formatter_string_result_is_rendered_as_template(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                label_formatter=skill_label_template_string,
+            ))
+
+        Skill.objects.create(name='Grappling')
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'][0]['label'], 'pre mid post')
+
+    def test_label_formatter_template_response_result_renders_html(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                label_formatter=skill_label_formatter_html,
+            ))
+
+        Skill.objects.create(name='Grappling')
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'][0]['label'], '<b>Grappling</b>')
+
+    def test_label_formatter_dotted_path_is_stored_and_resolved(self):
+        from django import forms
+
+        configured_queryset = Glue.choices(
+            Skill.objects.all(),
+            label_formatter='django_glue.tests.glue.test_adapters.skill_label_formatter',
+        )
+        options = GlueRelatedModelChoices(configured_queryset).explicit_options
+        self.assertEqual(
+            options.label_formatter,
+            'django_glue.tests.glue.test_adapters.skill_label_formatter',
+        )
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=configured_queryset)
+
+        Skill.objects.create(name='Grappling', difficulty=5)
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        result = glue_object.foreign_key_choices(field_name='skill')
+
+        self.assertEqual(result['results'][0]['label'], 'Grappling (difficulty 5)')
+
+    def test_label_formatter_rejects_invalid_values(self):
+        with self.assertRaises(TypeError):
+            Glue.choices(Skill.objects.all(), label_formatter=42)
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Skill.objects.all(), label_formatter='nonexistent.module.path')
+
+        with self.assertRaises(ValueError):
+            Glue.choices(Skill.objects.all(), label_formatter='django.db.models')
+
+        with self.assertRaisesRegex(ValueError, 'must be picklable'):
+            Glue.choices(Skill.objects.all(), label_formatter=lambda skill: skill.name)
+
+        with self.assertRaises(TypeError):
+            Glue.choices([('a', 'A')], label_formatter=skill_label_formatter)
+
+    def test_label_formatter_rejects_invalid_return_type(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                label_formatter=skill_label_formatter_bad_return,
+            ))
+
+        Skill.objects.create(name='Grappling')
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        glue_object._load_client_state({'skill': {'value': None}})
+
+        with self.assertRaisesRegex(TypeError, 'must return a string or a TemplateResponse'):
+            glue_object.foreign_key_choices(field_name='skill')
+
+    def test_relation_field_metadata_marks_html_labels(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                label_formatter=skill_label_formatter,
+            ))
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertTrue(metadata['choices_label_is_html'])
+
+    def test_relation_field_metadata_defaults_html_labels_to_false(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        glue_object = FormGlue(SkillForm(), **glue_context(name='skill-form'))
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertFalse(metadata['choices_label_is_html'])
+
+    def test_selected_choice_metadata_uses_formatted_label(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(
+                Skill.objects.all(),
+                search_fields=['name'],
+                label_formatter=skill_label_formatter,
+            ))
+
+        selected = Skill.objects.create(name='Grappling', difficulty=3)
+        glue_object = FormGlue(
+            SkillForm(initial={'skill': selected.pk}),
+            **glue_context(name='skill-form'),
+        )
+
+        metadata = glue_object.attributes['skill'].metadata
+
+        self.assertEqual(metadata['selected_choice']['label'], 'Grappling (difficulty 3)')
 
     def test_foreign_key_choices_search_field_filters_with_icontains(self):
         from django import forms

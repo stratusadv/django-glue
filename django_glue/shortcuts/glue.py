@@ -123,12 +123,14 @@ class Glue:
         search_fields: Sequence[str] = (),
         fields: Sequence[str] = (),
         search_limit: int = DEFAULT_SEARCH_LIMIT,
+        label_formatter: Callable | str | None = None,
     ) -> ChoiceSource:
         return configure_choices(
             source=source,
             search_fields=search_fields,
             fields=fields,
             search_limit=search_limit,
+            label_formatter=label_formatter,
         )
 
     @staticmethod

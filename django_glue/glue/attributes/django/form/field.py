@@ -46,6 +46,7 @@ class FormFieldAttribute(BaseDjangoFieldGlueAttribute):
                 f'{related_choices.fingerprint()}'
             )
             metadata['choices_searchable'] = related_choices.is_searchable
+            metadata['choices_label_is_html'] = related_choices.has_label_formatter
             if related_choices.is_searchable:
                 self._add_selected_choice_metadata(
                     metadata=metadata,

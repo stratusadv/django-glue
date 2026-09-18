@@ -1041,6 +1041,13 @@
     clearChoicesOverride() {
       this._choicesOverridden = false;
     }
+    choiceLabelHtml(choice) {
+      const label = String(choice?.label ?? "");
+      if (this.choices_label_is_html) {
+        return label;
+      }
+      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
     get pk() {
       const value = this.value;
       if (value && typeof value === "object") {

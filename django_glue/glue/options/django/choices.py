@@ -3,10 +3,16 @@ from __future__ import annotations
 import hashlib
 import pickle
 from dataclasses import dataclass
-from typing import Any, Sequence, TypedDict, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
 from django.core.exceptions import FieldDoesNotExist, FieldError
 from django.db.models import Model, Q, QuerySet
+from django.template import Context, Template
+from django.template.response import TemplateResponse
+from django.utils.module_loading import import_string
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from django_glue.glue.options.django.constants import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
@@ -22,6 +28,7 @@ class QuerySetChoiceOptions:
     search_fields: tuple[str, ...]
     fields: tuple[str, ...]
     search_limit: int
+    label_formatter: Callable | str | None = None
 
 
 class RelatedModelChoicesResult(TypedDict):
@@ -61,6 +68,10 @@ class GlueRelatedModelChoices:
     def is_searchable(self) -> bool:
         return bool(self.options.search_fields)
 
+    @property
+    def has_label_formatter(self) -> bool:
+        return self.options.label_formatter is not None
+
     def fingerprint(self) -> str:
         query = self.queryset.query.clone()
         if hasattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE):
@@ -74,10 +85,10 @@ class GlueRelatedModelChoices:
         return hashlib.sha256(pickle.dumps(fingerprint_value)).hexdigest()[:32]
 
     def serialize_item(self, instance: Model) -> dict[str, Any]:
-        label = str(instance)
+        label = self._render_label(instance)
         choice_object = {
             'pk': instance.pk,
-            '__str__': label,
+            '__str__': str(instance),
         }
         for field_name in self.options.fields:
             choice_object[field_name] = getattr(instance, field_name)
@@ -126,6 +137,27 @@ class GlueRelatedModelChoices:
             'results': [self.serialize_item(instance) for instance in queryset],
         }
 
+    def _render_label(self, instance: Model) -> str:
+        formatter = self.options.label_formatter
+        if formatter is None:
+            return str(instance)
+        if isinstance(formatter, str):
+            formatter = import_string(formatter)
+        result = formatter(instance)
+        if isinstance(result, TemplateResponse):
+            result.render()
+            return result.content.decode(result.charset or 'utf-8')
+        if isinstance(result, str):
+            return Template(result).render(Context())
+        formatter_name = (
+            formatter if isinstance(formatter, str) else repr(formatter)
+        )
+        msg = (
+            f'Glue.choices label_formatter {formatter_name!r} must return '
+            f'a string or a TemplateResponse, got {type(result).__name__}.'
+        )
+        raise TypeError(msg)
+
     @staticmethod
     def empty() -> RelatedModelChoicesResult:
         return {'results': []}
@@ -137,18 +169,25 @@ def configure_choices(
     search_fields: Sequence[str] = (),
     fields: Sequence[str] = (),
     search_limit: int = DEFAULT_SEARCH_LIMIT,
+    label_formatter: Callable | str | None = None,
 ) -> ChoiceSource:
     if not isinstance(source, QuerySet):
-        if search_fields or fields or search_limit != DEFAULT_SEARCH_LIMIT:
+        if (
+            search_fields
+            or fields
+            or search_limit != DEFAULT_SEARCH_LIMIT
+            or label_formatter is not None
+        ):
             msg = (
-                'search_fields, fields, and search_limit are only supported '
-                'for Django QuerySet choice sources.'
+                'search_fields, fields, search_limit, and label_formatter are '
+                'only supported for Django QuerySet choice sources.'
             )
             raise TypeError(msg)
         return source
 
     _validate_queryset(source)
     _validate_search_limit(search_limit)
+    _validate_label_formatter(label_formatter)
     configured_queryset = source.all()
     if not search_fields and fields:
         search_fields = fields
@@ -169,6 +208,7 @@ def configure_choices(
                 fields=fields,
             ),
             search_limit=search_limit,
+            label_formatter=label_formatter,
         ),
     )
     return cast('ChoiceSource', configured_queryset)
@@ -184,6 +224,40 @@ def _validate_search_limit(search_limit: int) -> None:
     if isinstance(search_limit, bool) or not isinstance(search_limit, int) or search_limit < 1:
         msg = f'Glue.choices search_limit must be a positive integer, got {search_limit!r}.'
         raise ValueError(msg)
+
+
+def _validate_label_formatter(label_formatter: Callable | str | None) -> None:
+    if label_formatter is None:
+        return
+    if isinstance(label_formatter, str):
+        try:
+            resolved = import_string(label_formatter)
+        except ImportError as exception:
+            msg = (
+                f'Glue.choices label_formatter path {label_formatter!r} '
+                'could not be imported.'
+            )
+            raise ValueError(msg) from exception
+        if not callable(resolved):
+            msg = (
+                f'Glue.choices label_formatter path {label_formatter!r} '
+                'does not resolve to a callable.'
+            )
+            raise ValueError(msg)
+        return
+    if callable(label_formatter):
+        try:
+            pickle.dumps(label_formatter)
+        except (pickle.PicklingError, AttributeError) as exception:
+            msg = (
+                'Glue.choices label_formatter must be picklable, since it travels '
+                'inside glue policies -- use a module-level function or a dotted '
+                f'path string, not a lambda or closure. ({exception})'
+            )
+            raise ValueError(msg) from exception
+        return
+    msg = 'Glue.choices label_formatter must be a callable or a dotted path string.'
+    raise TypeError(msg)
 
 
 def _normalize_search_fields(
