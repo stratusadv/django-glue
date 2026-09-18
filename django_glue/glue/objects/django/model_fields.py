@@ -178,4 +178,18 @@ class ModelFieldResolutionMixin:
                 continue
             included.append(name)
             seen.add(name)
+
+        # The primary key is always exposed so the client can identify the
+        # instance, unless it is explicitly excluded. It may already be
+        # present under its name or attname (e.g. when the pk is itself an FK).
+        pk_name = self._model_meta.pk.name
+        pk_attname = self._model_meta.pk.attname
+        if (
+            pk_name not in seen
+            and pk_attname not in seen
+            and pk_name not in excluded
+            and pk_attname not in excluded
+        ):
+            included.insert(0, pk_name)
+
         return included

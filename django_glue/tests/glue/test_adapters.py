@@ -471,6 +471,59 @@ class AllFieldsTestCase(TestCase):
                 related_field_config={'red_corner': {'fields': ['__all__']}},
             )
 
+    def test_model_pk_always_included_with_explicit_fields(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['name'],
+        )
+
+        self.assertEqual(glue_object._included_fields, ['id', 'name'])
+
+    def test_queryset_pk_always_included_with_explicit_fields(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            fields=['name'],
+        )
+
+        self.assertEqual(glue_object._included_fields, ['id', 'name'])
+
+    def test_queryset_pk_included_in_row_state(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['name'],
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        row = glue_object.query_with_params()['items'][0]
+
+        self.assertIn('id', row['state'])
+        self.assertEqual(row['state']['id']['value'], self.gorilla.pk)
+
+    def test_model_pk_not_included_when_explicitly_excluded(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            **glue_context(),
+            fields=['name'],
+            exclude=['id'],
+        )
+
+        self.assertEqual(glue_object._included_fields, ['name'])
+
+    def test_queryset_pk_not_included_when_explicitly_excluded(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            **glue_context(name='gorillas', access=GlueAccess.VIEW),
+            fields=['name'],
+            exclude=['id'],
+        )
+
+        self.assertEqual(glue_object._included_fields, ['name'])
+
     def test_all_fields_is_exported_from_main_module(self):
         from django_glue import ALL_FIELDS
 
