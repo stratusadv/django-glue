@@ -38,8 +38,9 @@
     {% include 'lab/morph/region.html' %}
 </div>
 
+{# idiomorph is one of the strategies this lab compares. Alpine.morph is the #}
+{# other, and Glue bundles it, so no separate morph plugin is loaded here. #}
 <script src="{% static 'vendor/idiomorph.min.js' %}"></script>
-<script src="{% static 'vendor/alpine-morph.min.js' %}"></script>
 <script>
     // Stands in for third-party JS that owns a subtree: it writes content the
     // server render knows nothing about, so any strategy that rebuilds those
