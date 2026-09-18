@@ -986,6 +986,16 @@
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
     }
+    choiceLabelHtml(choice) {
+      const label = String(choice?.label ?? "");
+      if (choice?.has_html_label) {
+        return label;
+      }
+      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    choiceLabelText(choice) {
+      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
+    }
   }
   var choice_default = ChoiceFieldGlue;
 
