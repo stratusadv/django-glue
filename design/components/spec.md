@@ -85,7 +85,7 @@ class TimeEntryDay(Glue.Component):
 The template path is declared on the class. Glue receives template paths only and
 never holds markup or styling. The render context comes from
 `get_context_data()`, which by default exposes the component instance as
-`component` and the framework-supplied `glue_attrs` (§3).
+`component` and nothing else — a component template is ordinary HTML (§8).
 
 ### 2. Components are registered by tag name, not by namespace
 
@@ -137,12 +137,15 @@ dependent.
 ### 3. Components are stamped with a Django template tag
 
 ```django
-{% load glue %}
+{% load django_glue %}
 
 {% for date in component.dates %}
     {% glue_component 'time-entry-day' date=date user_id=component.user_id key=date %}
 {% endfor %}
 ```
+
+The tag lives in the existing `django_glue` library alongside `{% django_glue_init %}`,
+so a template needs one `{% load %}` for everything Glue provides.
 
 This **supersedes** `component-system.md` §5's `<glue:time-entry-day />` element
 grammar for the prototype. The element grammar exists largely to recover typed
@@ -309,25 +312,57 @@ when it names `forloop.counter` or `forloop.counter0`. Duplicate
 
 ### 8. Rendering is state-first; replacement is morphed
 
-#### The tag emits the component's own root
+#### A component template is ordinary HTML
 
-The tag supplies `glue_attrs` into the component's render context, and the
-component template places it on its single root element:
+A component template carries no Glue marker. It renders a single root element,
+and Glue injects the Alpine binding and root marker into that element after
+rendering:
 
 ```django
 {# time_tracker/component/day.html #}
-<div class="day-card" {{ glue_attrs }}>
+<div class="day-card" @click="open = true">
     <h3>{{ component.date }}</h3>
     <p x-text="component.total_hours"></p>
     <button @click="component.add_entry()">Add</button>
 </div>
 ```
 
-`glue_attrs` renders the Alpine binding and the root marker:
+becomes:
 
 ```html
-<div class="day-card" x-data="{ component: Glue.component.time_entry_day_a3f9b2 }" data-glue="time_entry_day_a3f9b2">
+<div class="day-card" @click="open = true" x-data="{ component: Glue.component.time_entry_day_a3f9b2 }" data-glue="time_entry_day_a3f9b2">
 ```
+
+This is the shape Livewire uses: it requires one root element per component and
+injects `wire:id` into it, then finds components client-side with
+`[wire:id]`. The single-root requirement and its "multiple root elements
+detected" error exist precisely because something must locate the root in
+already-rendered output.
+
+**Single root is enforced, not advised.** Zero root elements, more than one, or
+text outside the root is an error naming the template. The rule is load-bearing
+here — it is what makes the scan unambiguous — and §6 requires it anyway for
+morphing.
+
+Two alternatives were rejected. **A marker the author places** —
+`<div class="card" {{ glue_attrs }}>` — avoids the scan but taxes every
+component template forever with a token whose only purpose is framework
+bookkeeping. **A tag that owns the root** —
+`{% glue_root class='card' %}` — cannot express a real component root at all:
+template keyword arguments must be Python identifiers, so `@click`, `:class`,
+`x-show` and `data-*` are unwritable. A **wrapper element** is also rejected: it
+puts the Alpine scope and the morph boundary on different nodes, which is the
+split that makes stamp-scoped behavior fragile.
+
+The scan is narrow by construction, and materially narrower than the `<glue:>`
+element scanner this design avoids elsewhere: that one had to find elements in
+arbitrary page templates in HTML data context, skipping `script`, `style`,
+comments and `verbatim`. This one finds the first element of a component's own
+rendered fragment, under a rule that guarantees exactly one answer. It skips
+leading whitespace, comments and doctypes; it does not mistake a `>` inside a
+quoted attribute value (`x-show="count > 0"`) for the end of a tag; it does not
+read `<` inside a `script` or `style` body as markup; and it handles void and
+self-closing elements.
 
 **The proxy is bound under the same name the render context uses.** An attribute
 is spelled identically on both sides of the boundary — `{{ component.total_hours }}`
@@ -353,19 +388,7 @@ scoping to the composing parent, because the stamped child's own `component`
 shadows its owner's within that subtree. §7 already solves that by scoping stamp
 handlers explicitly; binding under `component` neither causes nor prevents it.
 
-The alternative — rendering the template and splicing attributes into the root's
-opening tag server-side — is rejected. The entire reason the tag form beats the
-element form is that it never parses HTML, and splicing reintroduces exactly that:
-locating an element in rendered output while tolerating comments, doctypes,
-leading whitespace, and conditional roots.
-
-Rendering a component whose output never consumed `glue_attrs` is an error. This
-turns the mechanism's only real failure mode — forgetting the marker — into a
-loud one instead of a component with no reactivity.
-
-A wrapper element is also rejected: it puts the Alpine scope and the morph
-boundary on different nodes, which is the split that makes stamp-scoped behavior
-fragile. One component, one root, one identity.
+One component, one root, one identity.
 
 `Glue.component.<name>` is read **once**, when `x-data` evaluates and creates the
 scope. That registration is a getter that constructs a *new* proxy on every
@@ -526,7 +549,7 @@ itself.
 
 Unit tests cover what has real edge cases and needs no browser: name-derivation
 determinism across renders, parameter coercion round-tripping through the signed
-token, duplicate tag-name rejection, `glue_attrs` non-consumption, `key` required
-under `forloop`, and the reserved block-tag error.
+token, duplicate tag-name rejection, root injection and its single-root
+enforcement, `key` required under `forloop`, and the reserved block-tag error.
 
 `just test` is the regression check; the E2E is the gate.

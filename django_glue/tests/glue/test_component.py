@@ -280,11 +280,11 @@ class TestMount:
 
 
 class TestRendering:
-    def test_glue_attrs_carries_the_alpine_binding_and_root_marker(self) -> None:
+    def test_root_attributes_carry_the_binding_and_the_marker(self) -> None:
         component = GreetingComponent(name='greeter', greeting='hi')
 
-        assert component.glue_attrs == (
-            'x-data="{ component: Glue.component.greeter }" data-glue="greeter"'
+        assert component.root_attributes == (
+            ' x-data="{ component: Glue.component.greeter }" data-glue="greeter"'
         )
 
     def test_the_proxy_is_bound_under_the_same_name_the_template_context_uses(
@@ -296,15 +296,14 @@ class TestRendering:
         """
         component = GreetingComponent(name='greeter', greeting='hi')
 
-        assert 'component: Glue.component.greeter' in component.glue_attrs
+        assert component.alpine_binding == '{ component: Glue.component.greeter }'
         assert 'component' in component.get_context_data()
 
-    def test_context_exposes_the_component_and_its_attrs(self) -> None:
+    def test_the_context_exposes_only_the_component(self) -> None:
+        """A component template is ordinary HTML; it carries no Glue marker."""
         component = GreetingComponent(name='greeter', greeting='hi')
-        context = component.get_context_data()
 
-        assert context['component'] is component
-        assert context['glue_attrs'] == component.glue_attrs
+        assert component.get_context_data() == {'component': component}
 
     def test_render_requires_a_bound_request(self) -> None:
         component = GreetingComponent(name='greeter', greeting='hi')

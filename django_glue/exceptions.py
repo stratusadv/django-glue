@@ -383,3 +383,17 @@ class GlueComponentRegistrationError(GlueError):
 
     code = 'component_registration'
     status = 500
+
+
+class GlueComponentKeyError(GlueError):
+    """A stamped component's key is missing, unusable, or duplicated."""
+
+    code = 'component_key'
+    status = 500
+
+
+class GlueComponentRootError(GlueError):
+    """A component template did not render exactly one Glue-owned root element."""
+
+    code = 'component_root'
+    status = 500

@@ -1,0 +1,8 @@
+{% load django_glue %}
+{# Stamps children, so a nested tag resolves this component as its parent. #}
+<section class="week-board">
+    <h2>{{ component.label }}</h2>
+    {% for day in component.days %}
+        {% glue_component 'day-card' date=day key=day %}
+    {% endfor %}
+</section>

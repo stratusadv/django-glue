@@ -190,31 +190,42 @@ class Component(BaseGlue):
         return self
 
     @property
-    def glue_attrs(self) -> str:
-        """The Alpine binding and root marker for this component's root element.
-
-        A component template places this on its single root element. Glue never
-        parses or rewrites rendered HTML to inject it.
+    def alpine_binding(self) -> str:
+        """The ``x-data`` expression binding this component's proxy into scope.
 
         The proxy is bound under the name ``component``, matching what
-        ``get_context_data()`` exposes to the template. An attribute is therefore
-        spelled the same on both sides of the boundary -- ``{{ component.name }}``
-        renders it, ``x-text="component.name"`` binds it -- and a nested Alpine
+        ``get_context_data()`` exposes to the template, so an attribute is
+        spelled the same on both sides of the boundary: ``{{ component.total }}``
+        renders it and ``x-text="component.total"`` binds it. A nested Alpine
         scope resolves the owning component through the ordinary scope chain
         rather than through a magic.
+
+        ``Glue.<namespace>.<name>`` is read once, when ``x-data`` creates the
+        scope. That registration is a getter that builds a *new* proxy on every
+        access, so binding it here is what makes one proxy per scope fall out.
         """
         return format_html(
-            'x-data="{{ component: Glue.{}.{} }}" data-glue="{}"',
+            '{{ component: Glue.{}.{} }}',
             self.namespace,
             self.name,
+        )
+
+    @property
+    def root_attributes(self) -> str:
+        """The attributes Glue injects into this component's rendered root.
+
+        A component template is ordinary HTML and carries no Glue marker; these
+        are added to whatever root element it rendered. ``data-glue`` is the
+        morph target and makes the component identifiable in devtools.
+        """
+        return format_html(
+            ' x-data="{}" data-glue="{}"',
+            self.alpine_binding,
             self.name,
         )
 
     def get_context_data(self) -> dict[str, Any]:
-        return {
-            'component': self,
-            'glue_attrs': self.glue_attrs,
-        }
+        return {'component': self}
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False)
     def render(self) -> GlueResponse:
