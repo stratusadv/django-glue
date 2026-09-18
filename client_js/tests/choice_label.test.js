@@ -44,3 +44,23 @@ describe('relation field choiceLabelHtml', () => {
         expect(field.choiceLabelHtml(null)).toBe('')
     })
 })
+
+describe('static choice field choiceLabelHtml', () => {
+    test('escapes labels', () => {
+        const object = new GlueModelProxy({
+            http: new GlueHttp(new GlueConfig()),
+            policy: createPolicy({attributes: ['status']}),
+            state: {status: {value: null}},
+            metadata: createMetadata({fields: {
+                status: {
+                    type: 'ChoiceField',
+                    choices: [{value: 'calm', label: 'Calm & Steady'}],
+                },
+            }}),
+        })
+        object._loaded = true
+
+        expect(object.$fields.status.choiceLabelHtml({value: 'calm', label: 'Calm & Steady'}))
+            .toBe('Calm &amp; Steady')
+    })
+})

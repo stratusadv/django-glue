@@ -986,6 +986,13 @@
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
     }
+    choiceLabelHtml(choice) {
+      const label = String(choice?.label ?? "");
+      if (this.choices_label_is_html) {
+        return label;
+      }
+      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
   }
   var choice_default = ChoiceFieldGlue;
 
@@ -1040,13 +1047,6 @@
     }
     clearChoicesOverride() {
       this._choicesOverridden = false;
-    }
-    choiceLabelHtml(choice) {
-      const label = String(choice?.label ?? "");
-      if (this.choices_label_is_html) {
-        return label;
-      }
-      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
     get pk() {
       const value = this.value;
