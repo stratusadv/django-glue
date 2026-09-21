@@ -4,7 +4,12 @@ import GlueView from "./view"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
 import GluePolicy from "./policy"
-import {COMPONENT_NAMESPACE, componentRoot} from "./morph"
+import {
+    COMPONENT_NAMESPACE,
+    MANIFEST_ATTRIBUTE,
+    ROOT_ATTRIBUTE,
+    componentRoot,
+} from "./morph"
 
 class GlueClient {
     constructor(context) {
@@ -19,6 +24,29 @@ class GlueClient {
         this.http = new GlueHttp(this._config);
         
         this.loadManifests(context.manifest_list)
+        this._registerComponentsWhenParsed()
+    }
+
+    // Components are read from the DOM, so the scan has to wait for the body.
+    // alpine:init fires at the top of Alpine.start(), after DOMContentLoaded
+    // and before Alpine walks the tree -- so every component proxy exists by
+    // the time an x-data referencing one is evaluated.
+    _registerComponentsWhenParsed() {
+        if (typeof document === 'undefined') {
+            return
+        }
+
+        document.addEventListener(
+            'alpine:init',
+            () => this.registerComponentsFromDom(),
+            {once: true},
+        )
+
+        // Constructed after the document was already parsed (a lazily loaded
+        // page, a test), in which case alpine:init may have been and gone.
+        if (document.readyState !== 'loading') {
+            this.registerComponentsFromDom()
+        }
     }
 
     onMessage(callback) {
@@ -44,6 +72,32 @@ class GlueClient {
         (manifest_list || []).forEach(manifest => {
             this._registerManifest(manifest)
         })
+    }
+
+    // Registers every component whose root is in the document, reading each
+    // one's manifest from its own root element.
+    //
+    // A component cannot travel in the page's manifest_list: that list is
+    // serialized once, wherever {% django_glue_init %} sits, and in a
+    // conventional layout that is the <head> -- long before any component in
+    // the body has been stamped. Reading the DOM instead makes registration
+    // independent of where the init tag happens to be, and lets a morphed-in
+    // component bring its own fresh policy with it.
+    registerComponentsFromDom(root = document) {
+        const registered = []
+
+        root.querySelectorAll(`[${MANIFEST_ATTRIBUTE}]`).forEach(element => {
+            const manifest = element.getAttribute(MANIFEST_ATTRIBUTE)
+
+            if (!manifest) {
+                return
+            }
+
+            this._registerManifest(JSON.parse(manifest))
+            registered.push(element.getAttribute(ROOT_ATTRIBUTE))
+        })
+
+        return registered
     }
 
     // Drops component registrations whose root element has left the document.

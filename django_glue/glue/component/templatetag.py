@@ -10,7 +10,6 @@ from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.component.naming import canonical_key, derive_component_name
 from django_glue.glue.component.registry import glue_component_registry
-from django_glue.glue.context import GlueContextManager
 
 if TYPE_CHECKING:
     from django.template.base import FilterExpression, Parser, Token
@@ -70,9 +69,15 @@ class GlueComponentNode(Node):
             },
         )
 
+        # A component carries its own manifest on its root element rather than
+        # joining the page's manifest_list, so it is bound here directly instead
+        # of through GlueContextManager.add_glue. The session still has to exist
+        # before a policy can be signed.
+        if not request.session.session_key:
+            request.session.create()
+
         component.request = request
         component.mount()
-        GlueContextManager(request).add_glue(component)
 
         return self._render_component(component, context)
 

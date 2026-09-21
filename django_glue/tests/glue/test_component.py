@@ -280,12 +280,23 @@ class TestMount:
 
 
 class TestRendering:
-    def test_root_attributes_carry_the_binding_and_the_marker(self) -> None:
+    def test_root_attributes_carry_the_binding_and_the_marker(self, mock_request) -> None:
         component = GreetingComponent(name='greeter', greeting='hi')
+        component.request = mock_request
 
-        assert component.root_attributes == (
-            ' x-data="{ component: Glue.component.greeter }" data-glue="greeter"'
-        )
+        attributes = component.root_attributes
+
+        assert ' x-data="{ component: Glue.component.greeter }"' in attributes
+        assert ' data-glue="greeter"' in attributes
+
+    def test_root_attributes_carry_the_component_manifest(self, mock_request) -> None:
+        """A component's policy rides on its own root, not in the page's
+        manifest_list, which is serialized before the body is stamped."""
+        component = GreetingComponent(name='greeter', greeting='hi')
+        component.request = mock_request
+
+        assert 'data-glue-manifest="' in component.root_attributes
+        assert 'is_glue_manifest' in component.root_attributes
 
     def test_the_proxy_is_bound_under_the_same_name_the_template_context_uses(
         self,

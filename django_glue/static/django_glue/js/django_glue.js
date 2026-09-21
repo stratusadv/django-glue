@@ -4134,6 +4134,7 @@ ${expression ? 'Expression: "' + expression + `"
   // client_js/src/morph.js
   var IGNORE_ATTRIBUTE = "data-morph-ignore";
   var ROOT_ATTRIBUTE = "data-glue";
+  var MANIFEST_ATTRIBUTE = "data-glue-manifest";
   var COMPONENT_NAMESPACE = "component";
   function shouldIgnore(node) {
     return node.nodeType === Node.ELEMENT_NODE && node.hasAttribute(IGNORE_ATTRIBUTE);
@@ -4562,6 +4563,7 @@ ${expression ? 'Expression: "' + expression + `"
         this._client.loadManifests(result.manifest_list);
         if (result.glue_component) {
           const html = new componentHtmlResult_default(result.html, result.glue_component).apply();
+          this._client.registerComponentsFromDom();
           this._client.sweepDisposedComponents();
           return html;
         }
@@ -5531,6 +5533,16 @@ ${expression ? 'Expression: "' + expression + `"
       });
       this.http = new http_default(this._config);
       this.loadManifests(context.manifest_list);
+      this._registerComponentsWhenParsed();
+    }
+    _registerComponentsWhenParsed() {
+      if (typeof document === "undefined") {
+        return;
+      }
+      document.addEventListener("alpine:init", () => this.registerComponentsFromDom(), { once: true });
+      if (document.readyState !== "loading") {
+        this.registerComponentsFromDom();
+      }
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -5551,6 +5563,18 @@ ${expression ? 'Expression: "' + expression + `"
       (manifest_list || []).forEach((manifest) => {
         this._registerManifest(manifest);
       });
+    }
+    registerComponentsFromDom(root = document) {
+      const registered = [];
+      root.querySelectorAll(`[${MANIFEST_ATTRIBUTE}]`).forEach((element) => {
+        const manifest = element.getAttribute(MANIFEST_ATTRIBUTE);
+        if (!manifest) {
+          return;
+        }
+        this._registerManifest(JSON.parse(manifest));
+        registered.push(element.getAttribute(ROOT_ATTRIBUTE));
+      });
+      return registered;
     }
     sweepDisposedComponents() {
       const registered = this[COMPONENT_NAMESPACE];

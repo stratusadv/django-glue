@@ -494,9 +494,10 @@ class BaseGlueProxy {
                     result.glue_component,
                 ).apply()
 
-                // Swept after the morph, so children the re-render dropped are
-                // already out of the document and children it introduced are
-                // already in it.
+                // Children the re-render introduced arrive inside the morphed
+                // HTML carrying their own manifests, so they are registered
+                // from the DOM; then the sweep drops the ones it displaced.
+                this._client.registerComponentsFromDom()
                 this._client.sweepDisposedComponents()
 
                 return html

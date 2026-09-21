@@ -19,6 +19,57 @@ function componentManifest(name) {
     }
 }
 
+function rootWith(name) {
+    const manifest = JSON.stringify(componentManifest(name)).replace(/"/g, '&quot;')
+
+    return `<div data-glue="${name}" data-glue-manifest="${manifest}"></div>`
+}
+
+describe('Registering components from the DOM', () => {
+    beforeEach(() => {
+        document.body.innerHTML = ''
+    })
+
+    test('a component is registered from the manifest on its own root', () => {
+        // The page's manifest_list is serialized wherever django_glue_init
+        // sits -- the <head> in a conventional layout -- so a component
+        // stamped in the body can never appear in it.
+        document.body.innerHTML = rootWith('day_a1') + rootWith('day_a2')
+        const client = clientWith([])
+
+        expect(client.registerComponentsFromDom().sort()).toEqual(['day_a1', 'day_a2'])
+        expect(client.component.day_a1).toBeDefined()
+        expect(client.component.day_a2).toBeDefined()
+    })
+
+    test('an element with no manifest is skipped', () => {
+        document.body.innerHTML = '<div data-glue="day_a1"></div>'
+        const client = clientWith([])
+
+        expect(client.registerComponentsFromDom()).toEqual([])
+    })
+
+    test('scanning a subtree registers only what is inside it', () => {
+        document.body.innerHTML =
+            `<div id="inside">${rootWith('day_a1')}</div>${rootWith('day_a2')}`
+        const client = clientWith([])
+
+        const registered = client.registerComponentsFromDom(
+            document.getElementById('inside'),
+        )
+
+        expect(registered).toEqual(['day_a1'])
+    })
+
+    test('components already in the document register on construction', () => {
+        document.body.innerHTML = rootWith('day_a1')
+
+        const client = clientWith([])
+
+        expect(client.component.day_a1).toBeDefined()
+    })
+})
+
 describe('Sweeping disposed components', () => {
     beforeEach(() => {
         document.body.innerHTML = ''

@@ -540,7 +540,40 @@ hidden Glue objects.
 
 ## Wire adjustments
 
-The prototype adjusts the current wire in four places and no others.
+The prototype adjusts the current wire in five places and no others.
+
+0. **A component's manifest travels on its own root element**, not in the
+   page's `manifest_list`.
+
+   `{% django_glue_init %}` serializes `manifest_list` exactly once, wherever it
+   is placed — and in a conventional layout that is the `<head>`. django-spire's
+   base template puts it at line 106, inside `base_head_js`. A component stamped
+   in the body registers into `GlueContextManager` *after* that script has
+   already been written, so its policy never reaches the client: the proxy at
+   `Glue.component.<name>` does not exist, and Alpine throws when it evaluates
+   the `x-data` the injector wrote.
+
+   This is not a layout quirk to work around. A page-level list has one fixed
+   emission point and stamping happens wherever the author writes the tag, so
+   the two can always disagree — and in the most common arrangement they always
+   do. The fix is to stop having a rendezvous: `data-glue-manifest` on the root
+   carries the component's policy, metadata and state, and the client registers
+   components by scanning `[data-glue-manifest]`.
+
+   This is the shape Livewire uses — `wire:snapshot` on the root element, found
+   client-side via `[wire:id]`. It also unifies two paths that were otherwise
+   drifting: a re-rendered component's fresh policy now arrives *inside* the
+   HTML being morphed, rather than through a side channel the morph knows
+   nothing about.
+
+   The scan runs on `alpine:init`, which fires at the top of `Alpine.start()` —
+   after `DOMContentLoaded` and before Alpine walks the tree — so every proxy
+   exists before any `x-data` referencing one is evaluated. It runs again after
+   a component morph, for children the re-render introduced.
+
+   Consequently `{% glue_component %}` does **not** call
+   `GlueContextManager.add_glue`; it binds the request and ensures the session
+   directly. A component appearing in both channels would produce two proxies.
 
 1. **Non-registering construction.** `Glue.model`, `Glue.form`, `Glue.queryset`,
    `Glue.formset` and `Glue.sequence` currently require `request` and

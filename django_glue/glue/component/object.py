@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import inspect
+import json
 from typing import TYPE_CHECKING, Any, Self
 
 from django.template.response import TemplateResponse
 from django.utils.html import format_html
 
 from django_glue.access import GlueAccess
+from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueComponentParameterError,
     GlueComponentRegistrationError,
@@ -219,11 +221,21 @@ class Component(BaseGlue):
         A component template is ordinary HTML and carries no Glue marker; these
         are added to whatever root element it rendered. ``data-glue`` is the
         morph target and makes the component identifiable in devtools.
+
+        ``data-glue-manifest`` carries the component's own policy, metadata and
+        state. A component does **not** travel in the page's ``manifest_list``:
+        that list is serialized once, wherever ``{% django_glue_init %}`` sits,
+        which in a conventional layout is the ``<head>`` -- before any component
+        in the body has been stamped. Carrying it here removes the ordering
+        question instead of arranging around it, and means a re-rendered
+        component's fresh policy arrives with its HTML rather than through a
+        second channel. See design/components/spec.md §8.
         """
         return format_html(
-            ' x-data="{}" data-glue="{}"',
+            ' x-data="{}" data-glue="{}" data-glue-manifest="{}"',
             self.alpine_binding,
             self.name,
+            json.dumps(self.manifest.model_dump(), cls=GlueResponseJSONEncoder),
         )
 
     def inject_root(self, html: str) -> str:

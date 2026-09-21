@@ -9,6 +9,7 @@ const IGNORE_ATTRIBUTE = 'data-morph-ignore'
 // registers under. Together they let the client find a component's DOM root
 // and decide whether it is still live.
 const ROOT_ATTRIBUTE = 'data-glue'
+const MANIFEST_ATTRIBUTE = 'data-glue-manifest'
 const COMPONENT_NAMESPACE = 'component'
 
 function shouldIgnore(node) {
@@ -38,6 +39,7 @@ function componentRoot(name) {
 export {
     COMPONENT_NAMESPACE,
     IGNORE_ATTRIBUTE,
+    MANIFEST_ATTRIBUTE,
     ROOT_ATTRIBUTE,
     componentRoot,
     morphComponentRoot,
