@@ -2,6 +2,7 @@ import {getProxyClass} from "./registry"
 import GluePolicy from "../policy"
 import GlueHtmlResult from "../htmlResult"
 import GlueComponentHtmlResult from "../componentHtmlResult"
+import {reactive} from "../alpine"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -28,7 +29,11 @@ class BaseGlueProxy {
         }
         this._policy = policy
         this._name = policy?.name
-        this._state = state || {}
+        // The state is wrapped in Alpine's reactive proxy so the in-place
+        // merges below are observed by any Alpine effect reading it --
+        // including proxies handed to a modal outside an Alpine scope.
+        // Alpine is a Glue dependency; the client bundles it (see ../alpine).
+        this._state = reactive(state || {})
         this._metadata = metadata || {}
         this._client = client
         this._listeners = {before: {}, after: {}, error: {}}
@@ -170,7 +175,7 @@ class BaseGlueProxy {
     _applyState(state) {
         const nextState = state || {}
         if (!this._state || typeof this._state !== 'object') {
-            this._state = nextState
+            this._state = reactive(nextState)
             return
         }
         this._mergeState(this._state, nextState)
@@ -368,7 +373,7 @@ class BaseGlueProxy {
             },
             set(value) {
                 const root = this.__glue__root || this
-                if (!root._state) root._state = {}
+                if (!root._state) root._state = reactive({})
                 root._state[attributeQualName] = value
             },
             enumerable: true,

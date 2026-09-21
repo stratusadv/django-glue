@@ -1,3 +1,5 @@
+import {reactive} from "../../alpine"
+
 class FieldGlue {
     constructor({owner, name, stateKey, metadata = {}}) {
         this.name = name
@@ -25,7 +27,7 @@ class FieldGlue {
 
     set value(value) {
         if (!this.owner._state) {
-            this.owner._state = {}
+            this.owner._state = reactive({})
         }
         if (!this.owner._state[this.stateKey]) {
             this.owner._state[this.stateKey] = {}

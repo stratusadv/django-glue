@@ -4127,6 +4127,11 @@ ${expression ? 'Expression: "' + expression + `"
       globalThis.addEventListener("load", start, { once: true });
     }
   }
+  function reactive3(object) {
+    if (object === null || typeof object !== "object")
+      return object;
+    return module_default.reactive(object);
+  }
   function morph2(element, html, options = {}) {
     return module_default.morph(element, html, options);
   }
@@ -4196,7 +4201,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       this._policy = policy;
       this._name = policy?.name;
-      this._state = state || {};
+      this._state = reactive3(state || {});
       this._metadata = metadata || {};
       this._client = client;
       this._listeners = { before: {}, after: {}, error: {} };
@@ -4306,7 +4311,7 @@ ${expression ? 'Expression: "' + expression + `"
     _applyState(state) {
       const nextState = state || {};
       if (!this._state || typeof this._state !== "object") {
-        this._state = nextState;
+        this._state = reactive3(nextState);
         return;
       }
       this._mergeState(this._state, nextState);
@@ -4466,7 +4471,7 @@ ${expression ? 'Expression: "' + expression + `"
         set(value) {
           const root = this.__glue__root || this;
           if (!root._state)
-            root._state = {};
+            root._state = reactive3({});
           root._state[attributeQualName] = value;
         },
         enumerable: true,
@@ -4665,7 +4670,7 @@ ${expression ? 'Expression: "' + expression + `"
     }
     set value(value) {
       if (!this.owner._state) {
-        this.owner._state = {};
+        this.owner._state = reactive3({});
       }
       if (!this.owner._state[this.stateKey]) {
         this.owner._state[this.stateKey] = {};
@@ -5021,6 +5026,9 @@ ${expression ? 'Expression: "' + expression + `"
         this.loading = false;
       });
       return this._loadPromise;
+    }
+    load() {
+      return this._ensureLoaded();
     }
     retryLoad() {
       this._loadAttempted = false;
