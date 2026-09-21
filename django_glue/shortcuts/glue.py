@@ -105,6 +105,7 @@ def _html_attr(*args, **kwargs) -> DeclaredAttribute:
 # Type alias for form parameter: can be either an instance or a class
 FormOrClass = Union[ModelForm, type[ModelForm]]
 ChoiceSource = TypeVar('ChoiceSource')
+TGlue = TypeVar('TGlue', bound=BaseGlue)
 
 
 class Glue:
@@ -141,14 +142,29 @@ class Glue:
         return GlueContextManager(request).add_glue(glue)
 
     @staticmethod
+    def _configured(request: HttpRequest | None, glue: TGlue) -> TGlue:
+        """Register a page-owned object, or return it configured but unbound.
+
+        The family shortcuts serve two contexts. Their established
+        request-and-name form registers a page root from a view. Omitting the
+        request returns a configured, unbound object for a child property or a
+        callable result, where the response pipeline supplies the request and
+        the address instead (component-system.md §4).
+        """
+        if request is None:
+            return glue
+
+        return Glue.object(request, glue)
+
+    @staticmethod
     def sequence(
-        request: HttpRequest,
-        unique_name: str,
-        items: Iterable[BaseGlue],
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
+        items: Iterable[BaseGlue] = (),
         access: GlueAccess = GlueAccess.VIEW,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> SequenceGlue:
-        return Glue.object(request, SequenceGlue(
+        return Glue._configured(request, SequenceGlue(
             list(items),
             name=unique_name,
             access=access,
@@ -157,9 +173,9 @@ class Glue:
 
     @staticmethod
     def model(
-        request: HttpRequest,
-        unique_name: str,
-        target: Model,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
+        target: Model | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
@@ -170,9 +186,9 @@ class Glue:
         related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> ModelGlue:
-        return Glue.object(
-            request=request,
-            glue=ModelGlue(
+        return Glue._configured(
+            request,
+            ModelGlue(
                 instance=target,
                 name=unique_name,
                 access=access,
@@ -189,9 +205,9 @@ class Glue:
 
     @staticmethod
     def queryset(
-        request: HttpRequest,
-        unique_name: str,
-        target: QuerySet,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
+        target: QuerySet | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
@@ -202,9 +218,9 @@ class Glue:
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
     ) -> QuerySetGlue:
-        return Glue.object(
-            request=request,
-            glue=QuerySetGlue(
+        return Glue._configured(
+            request,
+            QuerySetGlue(
                 queryset=target,
                 name=unique_name,
                 access=access,
@@ -221,15 +237,15 @@ class Glue:
 
     @staticmethod
     def form(
-        request: HttpRequest,
-        unique_name: str,
-        target: BaseForm,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
+        target: BaseForm | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> FormGlue:
-        return Glue.object(
-            request=request,
-            glue=FormGlue(
+        return Glue._configured(
+            request,
+            FormGlue(
                 form=target,
                 name=unique_name,
                 access=access,
@@ -239,15 +255,15 @@ class Glue:
 
     @staticmethod
     def formset(
-        request: HttpRequest,
-        unique_name: str,
-        target: BaseFormSet,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
+        target: BaseFormSet | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         loading_strategy: LoadingStrategy = LoadingStrategy.EAGER,
     ) -> FormSetGlue:
-        return Glue.object(
-            request=request,
-            glue=FormSetGlue(
+        return Glue._configured(
+            request,
+            FormSetGlue(
                 formset=target,
                 name=unique_name,
                 access=access,
