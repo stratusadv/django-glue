@@ -24,23 +24,6 @@ function cloneValue(value) {
     return value
 }
 
-function parseFieldValue(field, value) {
-    if (value === null || value === undefined || value === '' || value instanceof Date) {
-        return value
-    }
-
-    const type = field?.type
-    if (type === 'DateField') {
-        return new Date(`${value}T00:00:00`)
-    }
-
-    if (['DateTimeField', 'SplitDateTimeField'].includes(type)) {
-        return new Date(value)
-    }
-
-    return value
-}
-
 function serializeValue(value) {
     if (value === null || value === undefined) {
         return value
@@ -98,7 +81,6 @@ function shouldJsonSerializePostData(value) {
 export {
     cloneValue,
     isPlainObject,
-    parseFieldValue,
     serializeValue,
     shouldJsonSerializePostData,
     parseJsonScriptById,

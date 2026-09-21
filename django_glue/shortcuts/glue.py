@@ -65,8 +65,6 @@ class _GluePropertyDescriptor:
         self.__glue_options__ = DeclaredAttributeOptions(
             required_access=GlueAccess.VIEW,
             is_callable=False,
-            takes_client_state=True,
-            updates_client_state=True,
             is_identity=self._identity,
             value_role=GlueValueRole.DERIVED_OUTPUT,
             expected_type=expected_type,

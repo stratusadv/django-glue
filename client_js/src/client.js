@@ -1,24 +1,32 @@
 import GlueConfig from "./config"
 import GlueHttp from "./http"
 import GlueView from "./view"
-import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "./proxies"
 import {GlueProxyError} from "./errors"
 import GluePolicy from "./policy"
-import {reactive} from "./alpine"
+import GlueAddressRegistry from "./runtime/addressRegistry"
+import GlueAttributeMaterializer from "./runtime/attributeMaterializer"
+import GlueChildBinder from "./runtime/childBinder"
+import GlueResponseDispatcher from "./runtime/responseDispatcher"
 
 class GlueClient {
     constructor(context) {
         this._onMessage = null
         this._onError = null
         this._directNamespaces = new Set()
-        this._proxies = new Map()
-
+        this._publicAddresses = new Map()
         this._config = new GlueConfig({
             ...(context.config || {}),
             urls: context.urls || {},
         })
-        this.http = new GlueHttp(this._config);
-        
+        this.http = new GlueHttp(this._config)
+        const materializer = new GlueAttributeMaterializer()
+        this._registry = new GlueAddressRegistry({
+            client: this,
+            http: this.http,
+            materializer,
+        })
+        this._registry.childBinder = new GlueChildBinder(this._registry)
+        this._dispatcher = new GlueResponseDispatcher(this._registry)
         this.loadManifests(context.manifest_list)
     }
 
@@ -41,74 +49,71 @@ class GlueClient {
         return new GlueView(this.http, url, sharedPayload)
     }
 
-    loadManifests(manifest_list = []) {
-        (manifest_list || []).forEach(manifest => this._registerManifest(manifest))
-    }
-
-    _createProxy({policy, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
-        const namespace = policy?.namespace || metadata?.namespace
-        const ProxyClass = NAMESPACE_TO_PROXY_CLASS[namespace] || BaseGlueProxy
-
-        if (namespace === 'function') {
-            return ProxyClass.create({http: this.http, policy, metadata})
-        }
-
-        return new ProxyClass({
-            http: this.http,
-            policy,
-            state,
-            metadata,
-            client: this,
-            loadingStrategy: loading_strategy,
-        })
+    loadManifests(manifestList = []) {
+        this._introduceManifests(manifestList)
+        const childAddresses = new Set(
+            this._collectManifests(manifestList).flatMap(manifest => (
+                Object.values(GluePolicy.fromSignedPolicyToken(manifest.policy_token).children || {})
+            ))
+        )
+        ;(manifestList || [])
+            .filter(manifest => !childAddresses.has(manifest.address))
+            .forEach(manifest => this._registerPublicManifest(manifest))
     }
 
     resolveManifest(manifest) {
-        const {
-            policy_token,
-            metadata = {},
-            state = {},
-            loading_strategy = 'lazy',
-        } = manifest
-        return reactive(this._createProxy({
-            policy: GluePolicy.fromSignedPolicyToken(policy_token),
-            metadata,
-            state,
-            loading_strategy,
-        }))
+        this._introduceManifests([manifest])
+        return this._registry.getProxy(manifest.address)
     }
 
-    _registerManifest({policy_token, metadata = {}, state = {}, loading_strategy = 'lazy'}) {
-        const policy = GluePolicy.fromSignedPolicyToken(policy_token)
-        const name = policy?.name
-        const namespace = policy?.namespace || metadata?.namespace
+    _introduceManifests(manifestList) {
+        const entries = this._collectManifests(manifestList)
+        this._dispatcher.introduce(entries)
+        entries.forEach(entry => this._registry.refresh(
+            this._registry.getRecord(entry.address)
+        ))
+    }
 
+    _collectManifests(manifestList) {
+        const entries = []
+        const seen = new Set()
+        const collect = value => {
+            if (Array.isArray(value)) {
+                value.forEach(collect)
+                return
+            }
+            if (!value || typeof value !== 'object') return
+            if (value.is_glue_manifest === true) {
+                if (!seen.has(value.address)) {
+                    seen.add(value.address)
+                    entries.push(value)
+                }
+            }
+            Object.values(value).forEach(collect)
+        }
+        collect(manifestList || [])
+        return entries
+    }
+
+    _registerPublicManifest(manifest) {
+        const policy = GluePolicy.fromSignedPolicyToken(manifest.policy_token)
+        const {name, namespace} = policy
         if (!name) {
             throw new GlueProxyError('Cannot register a Glue proxy without policy.name.')
         }
-
         if (!namespace) {
             throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`)
         }
 
-        const manifest = {policy, metadata, state, loading_strategy}
         const key = name === namespace ? namespace : `${namespace}.${name}`
-
-        // Patch an instance that has already been handed out, so references
-        // held in x-data scopes observe the new state.
-        if (this._proxies.has(key)) {
-            reactive(this._proxies.get(key)).applyManifestData(manifest)
-            return
-        }
-
+        this._publicAddresses.set(key, manifest.address)
         if (name === namespace) {
             if (namespace in this && !this._directNamespaces.has(namespace)) {
                 throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`)
             }
-
             this._directNamespaces.add(namespace)
             Object.defineProperty(this, namespace, {
-                get: () => this._resolveProxy(key, manifest),
+                get: () => this._registry.getProxy(this._publicAddresses.get(key)),
                 enumerable: true,
                 configurable: true,
             })
@@ -118,25 +123,12 @@ class GlueClient {
         if (this._directNamespaces.has(namespace)) {
             throw new GlueProxyError(`Cannot register named Glue proxy "${namespace}.${name}" because that namespace is already registered directly.`)
         }
-
-        if (!(namespace in this)) {
-            this[namespace] = {}
-        }
-
+        if (!(namespace in this)) this[namespace] = {}
         Object.defineProperty(this[namespace], name, {
-            get: () => this._resolveProxy(key, manifest),
+            get: () => this._registry.getProxy(this._publicAddresses.get(key)),
             enumerable: true,
             configurable: true,
         })
-
-    }
-
-    _resolveProxy(key, manifest) {
-        if (!this._proxies.has(key)) {
-            this._proxies.set(key, reactive(this._createProxy(manifest)))
-        }
-
-        return reactive(this._proxies.get(key))
     }
 }
 

@@ -81,12 +81,12 @@ def attribute_call_context(
     request: HttpRequest,
     policy: GluePolicy,
     *,
-    state: dict[str, Any] | None = None,
+    updates: dict[str, Any] | None = None,
 ) -> AttributeCallRequestContext:
     return AttributeCallRequestContext(
         request=request,
         target_glue_policy=policy,
-        target_glue_client_state=state,
+        target_glue_updates=updates or {},
         target_attribute_name='change',
     )
 
@@ -149,7 +149,7 @@ def test_reconstruction_denial_precedes_client_state_hydration(
     context = attribute_call_context(
         mock_request,
         policy,
-        state={'value': {'value': 'untrusted'}},
+        updates={'value': 'untrusted'},
     )
 
     with pytest.raises(GlueAuthorizationError):
@@ -173,7 +173,7 @@ def test_attribute_denial_blocks_call_without_issuing_successor_policy(
     context = attribute_call_context(
         mock_request,
         glue.policy,
-        state={'value': {'value': 'untrusted'}},
+        updates={'value': 'untrusted'},
     )
     mock_request.authorization_operations.clear()
     mock_request.denied_attributes.add('change')

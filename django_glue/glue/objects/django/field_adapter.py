@@ -7,6 +7,7 @@ from django.forms import ModelMultipleChoiceField
 
 from django_glue.glue.attributes.adapter import GlueAttributeAdapter
 from django_glue.glue.options.django import GlueRelatedModelChoices
+from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django import forms
@@ -60,6 +61,7 @@ class FormFieldAdapter(GlueAttributeAdapter):
             self.field,
             editable=self.name in self.owner.editable,
         )
+        schema['value_path'] = self.name
         schema['widget'] = self.field.widget.__class__.__name__
         if not hasattr(self.field, 'queryset'):
             return schema
@@ -75,33 +77,45 @@ class FormFieldAdapter(GlueAttributeAdapter):
                 f'{self.field.queryset.model.__module__}.'
                 f'{self.field.queryset.model.__name__}'
             ),
-            'choices_cache_key': (
-                f'{self.owner.form.__class__.__module__}.'
-                f'{self.owner.form.__class__.__name__}.{self.name}.'
-                f'{self.field.queryset.model._meta.label_lower}.'
-                f'{related_choices.fingerprint()}'
-            ),
             'choices_searchable': related_choices.is_searchable,
         })
+        return schema
+
+    def coerce(self, value: Any) -> Any:
+        return glue_serializer_registry.coerce(value, self.field)
+
+    def decode(self, value: Any) -> Any:
+        return glue_serializer_registry.decode(value, self.field)
+
+    def computed_data(self) -> dict[str, Any]:
+        """Complete current state-dependent output (state-model.md §10
+        `$fields`): the current selection and the field's validation errors.
+        Emitted only when the adapter re-derived this request."""
+        output = {'errors': self.owner._field_errors.get(self.name, [])}
+        if not hasattr(self.field, 'queryset'):
+            return output
+
+        related_choices = GlueRelatedModelChoices(
+            self.field.queryset,
+            value_field_name=getattr(self.field, 'to_field_name', None),
+        )
         if not related_choices.is_searchable:
-            return schema
+            return output
 
         current_value = self.field.prepare_value(
-            self.owner.form.get_initial_for_field(self.field, self.name)
+            self.owner._get_form_attribute_value(self.name)
         )
         if current_value in (None, ''):
-            return schema
+            return output
+
         is_multiple = isinstance(self.field, ModelMultipleChoiceField)
         values = list(current_value) if is_multiple else [current_value]
         selected_choices = related_choices.serialize_selected_values(values)
         if is_multiple:
-            schema['selected_choices'] = selected_choices
+            output['selected_choices'] = selected_choices
         elif selected_choices:
-            schema['selected_choice'] = selected_choices[0]
-        return schema
-
-    def unsigned_data(self) -> dict[str, Any]:
-        return {'errors': self.owner._field_errors.get(self.name, [])}
+            output['selected_choice'] = selected_choices[0]
+        return output
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +129,7 @@ class ModelFieldAdapter(GlueAttributeAdapter):
             self.field,
             editable=self.name in self.owner.editable,
         )
+        schema['value_path'] = self.name
         related_model = getattr(self.field, 'related_model', None)
         if (
             not getattr(self.field, 'is_relation', False)
@@ -129,19 +144,9 @@ class ModelFieldAdapter(GlueAttributeAdapter):
             choice_queryset,
             value_field_name=self.owner._choice_value_field_name_for_field(field_name),
         )
-        selected_value = self.owner._get_model_attribute_value(self.name)
-        selected_values = (
-            selected_value
-            if getattr(self.field, 'many_to_many', False)
-            else [selected_value]
-        )
-        selected_choices = (
-            related_choices.serialize_selected_values(selected_values)
-            if related_choices.is_searchable
-            else []
-        )
         schema.update({
             'choices': [],
+            'choice_field': field_name,
             'pk_field': related_model._meta.pk.name,
             'choice_model_path': (
                 f'{related_model.__module__}.{related_model.__name__}'
@@ -149,17 +154,53 @@ class ModelFieldAdapter(GlueAttributeAdapter):
             'related_model': (
                 f'{related_model.__module__}.{related_model.__name__}'
             ),
-            'choices_cache_key': (
-                f'{self.owner.instance.__class__._meta.label_lower}.{self.name}.'
-                f'{related_model._meta.label_lower}.{related_choices.fingerprint()}'
-            ),
             'choices_searchable': related_choices.is_searchable,
         })
-        if getattr(self.field, 'many_to_many', False):
-            schema['selected_choices'] = selected_choices
-        elif selected_choices:
-            schema['selected_choice'] = selected_choices[0]
         return schema
 
-    def unsigned_data(self) -> dict[str, Any]:
-        return {'errors': self.owner._field_errors.get(self.name, [])}
+    def coerce(self, value: Any) -> Any:
+        return glue_serializer_registry.coerce(value, self.field)
+
+    def decode(self, value: Any) -> Any:
+        return glue_serializer_registry.decode(value, self.field)
+
+    def computed_data(self) -> dict[str, Any]:
+        """Complete current state-dependent output (state-model.md §10
+        `$fields`): the current selection, the choices cache key, and the
+        field's validation errors. Emitted only when the adapter re-derived
+        this request."""
+        output = {'errors': self.owner._field_errors.get(self.name, [])}
+        field = self.field
+        related_model = getattr(field, 'related_model', None)
+        if (
+            not getattr(field, 'is_relation', False)
+            or related_model is None
+            or not getattr(field, 'concrete', False)
+        ):
+            return output
+
+        field_name = getattr(field, 'name', self.name)
+        choice_queryset = self.owner._choice_queryset_for_field(field_name)
+        related_choices = GlueRelatedModelChoices(
+            choice_queryset,
+            value_field_name=self.owner._choice_value_field_name_for_field(field_name),
+        )
+        if not related_choices.is_searchable:
+            return output
+
+        output['choices_cache_key'] = (
+            f'{self.owner.instance.__class__._meta.label_lower}.{self.name}.'
+            f'{related_model._meta.label_lower}.{related_choices.fingerprint()}'
+        )
+        selected_value = self.owner._get_model_attribute_value(self.name)
+        selected_values = (
+            selected_value
+            if getattr(field, 'many_to_many', False)
+            else [selected_value]
+        )
+        selected_choices = related_choices.serialize_selected_values(selected_values)
+        if getattr(field, 'many_to_many', False):
+            output['selected_choices'] = selected_choices
+        elif selected_choices:
+            output['selected_choice'] = selected_choices[0]
+        return output

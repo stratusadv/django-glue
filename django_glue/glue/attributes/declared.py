@@ -22,8 +22,6 @@ class DeclaredAttributeOptions:
 
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
     is_callable: bool = True
-    takes_client_state: bool | list[str] | tuple[str, ...] = True
-    updates_client_state: bool = True
     is_identity: bool = False
     render_as_html: bool = False
     is_parameter: bool = False
@@ -48,12 +46,6 @@ class DeclaredAttribute:
         def save(self, data: dict) -> dict:
             ...
 
-        # As a decorator on a method that doesn't need client state
-        # (required_access defaults to VIEW, so it can be omitted)
-        @Attribute(takes_client_state=False)
-        def load(self) -> dict:
-            ...
-
         # As a class attribute for a value
         services = Attribute(TaskService(), required_access=GlueAccess.DELETE)
 
@@ -70,8 +62,6 @@ class DeclaredAttribute:
         value: Any = _MISSING,
         *,
         required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW,
-        takes_client_state: bool | list[str] | tuple[str, ...] = True,
-        updates_client_state: bool = True,
         identity: bool = False,
         parameter: bool = False,
         editable: bool = False,
@@ -87,8 +77,6 @@ class DeclaredAttribute:
             raise TypeError('DeclaredAttribute received both default and default_factory.')
 
         self.required_access = required_access
-        self._takes_client_state = takes_client_state
-        self._updates_client_state = updates_client_state
         self._identity = identity
         self._parameter = parameter
         self._editable = editable
@@ -117,8 +105,6 @@ class DeclaredAttribute:
         self.__glue_options__ = DeclaredAttributeOptions(
             required_access=self.required_access,
             is_callable=self._is_callable,
-            takes_client_state=self._takes_client_state,
-            updates_client_state=self._updates_client_state,
             is_identity=self._identity,
             render_as_html=self._render_as_html,
             is_parameter=self._parameter,

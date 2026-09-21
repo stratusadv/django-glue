@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import json
+
 from django import forms
 from django.test import TestCase
 
 from django_glue import Glue
 from django_glue.glue.objects.django.formset import FormSetGlue
+from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
+from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from test_project.test_forms import ContactForm
 
-from django_glue.tests.glue.test_objects import glue_context, with_request
+from django_glue.tests.glue.test_objects import (
+    glue_context,
+    policy_from_manifest,
+    request_with_session,
+    with_request,
+)
 
 
 class SampleContactFormSet(Glue.FormSet):
@@ -61,6 +70,50 @@ class FormSetGlueTestCase(TestCase):
         self.assertEqual(appended.state['name']['value'], 'Ada')
         self.assertEqual(glue_object.get_keyed_items(), [('1', appended)])
 
+    def test_append_attribute_call_introduces_the_new_child_in_manifest_list(self):
+        glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
+        policy = glue_object.policy
+        reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+        context = AttributeCallRequestContext.model_construct(
+            request=reconstructed.request,
+            target_glue_policy=policy,
+            target_glue_updates={},
+            target_attribute_name='append',
+            target_attribute_call_kwargs={'key': '1', 'initial': {'name': 'Ada'}},
+        )
+
+        payload = json.loads(reconstructed.process_attribute_call(context).content)
+
+        self.assertEqual(len(payload['manifest_list']), 1)
+        introduction = payload['manifest_list'][0]
+        child_policy = policy_from_manifest(introduction)
+        self.assertEqual(child_policy.name, 'contacts.1')
+        self.assertEqual(child_policy.namespace, 'form')
+        self.assertEqual(child_policy.state_snapshot['name'], 'Ada')
+        self.assertEqual(introduction['address'], payload['result']['address'])
+        successor = GluePolicy.from_token(payload['policy_token'])
+        self.assertEqual(successor.children, {'1': introduction['address']})
+
+    def test_attribute_call_without_child_changes_omits_introductions(self):
+        glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
+        policy = glue_object.policy
+        reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+        context = AttributeCallRequestContext.model_construct(
+            request=reconstructed.request,
+            target_glue_policy=policy,
+            target_glue_updates={},
+            target_attribute_name='validate',
+            target_attribute_call_kwargs={},
+        )
+
+        payload = json.loads(reconstructed.process_attribute_call(context).content)
+
+        self.assertNotIn('manifest_list', payload)
+        self.assertNotIn('policy_token', payload)
+        self.assertTrue(payload['result']['valid'])
+
     def test_collection_starts_empty(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
 
@@ -80,10 +133,10 @@ class FormSetGlueTestCase(TestCase):
 
         glue_object._load_client_state({'forms': {
             '1': {
-                'name': {'value': 'Ada'},
-                'email': {'value': 'ada@example.com'},
-                'message': {'value': 'Hello'},
-                'priority': {'value': 'low'},
+                'name': 'Ada',
+                'email': 'ada@example.com',
+                'message': 'Hello',
+                'priority': 'low',
             },
         }})
 
@@ -96,10 +149,10 @@ class FormSetGlueTestCase(TestCase):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
         glue_object._load_client_state({'forms': {
             '1': {
-                'name': {'value': 'Ada'},
-                'email': {'value': 'ada@example.com'},
-                'message': {'value': 'Hello'},
-                'priority': {'value': 'low'},
+                'name': 'Ada',
+                'email': 'ada@example.com',
+                'message': 'Hello',
+                'priority': 'low',
             },
         }})
 

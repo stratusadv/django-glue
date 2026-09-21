@@ -34,7 +34,7 @@ class AttributeCallRequestContext(BaseModel):
 
     request: HttpRequest
     target_glue_policy: GluePolicy
-    target_glue_client_state: Any = None
+    target_glue_updates: dict[str, Any] = Field(default_factory=dict)
     target_attribute_name: str
     target_attribute_call_kwargs: dict[str, Any] = Field(default_factory=dict)
 
@@ -53,7 +53,7 @@ class AttributeCallContextFactory:
         # Accumulated during parsing
         self._policy_token: str | None = None
         self._validated_policy: GluePolicy | None = None
-        self._state: Any = None
+        self._updates: dict[str, Any] = {}
         self._kwargs: dict[str, Any] = {}
         self._attribute: str | None = None
 
@@ -75,7 +75,7 @@ class AttributeCallContextFactory:
             return AttributeCallRequestContext(
                 request=self.request,
                 target_glue_policy=self._validated_policy,  # type: ignore[arg-type]
-                target_glue_client_state=self._state,
+                target_glue_updates=self._updates,
                 target_attribute_name=self._attribute,  # type: ignore[arg-type]
                 target_attribute_call_kwargs=self._kwargs,
             )
@@ -104,7 +104,14 @@ class AttributeCallContextFactory:
                 details={'field': 'policy_token'},
             )
 
-        self._state = self._load_json_field('state', required=False)
+        updates = self._load_json_field('updates', required=False) or {}
+        if not isinstance(updates, dict):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_UPDATES,
+                message='"updates" must be a JSON object.',
+                details={'type': type(updates).__name__},
+            )
+        self._updates = updates
 
         kwargs = self._load_json_field('kwargs', required=False) or {}
         if not isinstance(kwargs, dict):

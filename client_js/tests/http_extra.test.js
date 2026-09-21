@@ -151,4 +151,32 @@ describe('GlueHttp edge cases', () => {
         expect(result.data).toEqual({nested: {name: 'nested'}, attachments: ['existing'], name: 'Koko'})
     })
 
+    test('expands FileList values into one form entry per file', async () => {
+        class TestFileList extends Array {}
+        const previousFileList = global.FileList
+        global.FileList = TestFileList
+        let body
+        global.fetch = async (_url, options) => {
+            body = options.body
+            return new Response('{}', {status: 200})
+        }
+
+        try {
+            const files = new TestFileList(
+                new File(['a'], 'a.txt'),
+                new File(['b'], 'b.txt'),
+            )
+            const glueHttp = http()
+            glueHttp._extractFiles = () => ({files: {uploads: files}, data: {}})
+
+            await glueHttp.sendAttributeRequest({
+                name: 'gorilla', policyToken: 'token', attribute: 'save', kwargs: {},
+            })
+
+            expect(body.getAll('uploads')).toHaveLength(2)
+        } finally {
+            global.FileList = previousFileList
+        }
+    })
+
 })

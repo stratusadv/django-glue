@@ -11,8 +11,7 @@ Alpine.start()
 
 global.fetch = async () => new Response(JSON.stringify({
     result: {},
-    state: {},
-    policy: {},
-    metadata: {},
+    static_data: {},
+    computed_data: {},
     messages: [],
 }), {status: 200, headers: {'Content-Type': 'application/json'}})

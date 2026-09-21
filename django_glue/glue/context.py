@@ -22,9 +22,10 @@ class GlueManifest(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
     is_glue_manifest: Literal[True] = True
+    address: str = ''
     policy_token: str
-    metadata: dict[str, Any]
-    state: dict[str, Any] = {}
+    static_data: dict[str, Any] = {}
+    computed_data: dict[str, Any] = {}
     loading_strategy: LoadingStrategy = LoadingStrategy.LAZY
 
 
@@ -46,7 +47,19 @@ class GlueContextManager:
 
     @property
     def serialized_manifests(self) -> list[dict[str, Any]]:
-        return [glue.manifest.model_dump() for glue in self.glue_objects]
+        serialized: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for glue in self.glue_objects:
+            if glue.address in seen:
+                continue
+            seen.add(glue.address)
+            serialized.append(glue.manifest.model_dump())
+            for child_manifest in glue._serialized_child_manifests():
+                if child_manifest['address'] in seen:
+                    continue
+                seen.add(child_manifest['address'])
+                serialized.append(child_manifest)
+        return serialized
 
     def add_glue(self, glue: TGlue) -> TGlue:
         glue.request = self.request

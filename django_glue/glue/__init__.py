@@ -1,12 +1,9 @@
-from django_glue.glue.attributes import BaseGlueAttribute, CompositeStateAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.component import Component
 from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.objects.django import (
-    FormFieldAttribute,
     FormGlue,
     FormSetGlue,
-    ModelFieldAttribute,
     ModelGlue,
     QuerySetGlue,
     TemplateGlue,
@@ -17,16 +14,12 @@ from django_glue.glue.registry import GlueClassRegistry, glue_class_registry
 
 __all__ = [
     'BaseGlue',
-    'BaseGlueAttribute',
     'Component',
-    'CompositeStateAttribute',
-    'FormFieldAttribute',
     'FormGlue',
     'FormSetGlue',
     'FunctionGlue',
     'GlueClassRegistry',
     'GluePolicy',
-    'ModelFieldAttribute',
     'ModelGlue',
     'QuerySetGlue',
     'SequenceGlue',

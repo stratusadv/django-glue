@@ -74,9 +74,6 @@ class FormSetGlue(BaseCollectionGlue):
     def get_state(self) -> dict[str, Any]:
         return {'forms': {key: form.state for key, form in self._forms}}
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {'attributes': {}}
-
     def clean(self, form_list: list[forms.BaseForm]) -> list[str]:  # noqa: ARG002
         """Cross-form validation hook. Override to add formset-level errors.
 
@@ -85,21 +82,14 @@ class FormSetGlue(BaseCollectionGlue):
         """
         return []
 
-    @DeclaredAttribute(
-        required_access=GlueAccess.CHANGE,
-        takes_client_state=False,
-        updates_client_state=False,
-    )
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def append(self, key: str, initial: dict[str, Any] | None = None) -> FormGlue:
         form = self.form_class(initial=initial or {})
         form_glue = self._build_form_glue(form, key)
         self._forms.append((key, form_glue))
         return form_glue
 
-    @DeclaredAttribute(
-        required_access=GlueAccess.CHANGE,
-        updates_client_state=False,
-    )
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:
         form_glues = [form for _, form in self._forms]
         per_form = [form.validate() for form in form_glues]
@@ -112,10 +102,7 @@ class FormSetGlue(BaseCollectionGlue):
             'non_form_errors': non_form_errors,
         }
 
-    @DeclaredAttribute(
-        required_access=GlueAccess.CHANGE,
-        updates_client_state=False,
-    )
+    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def save(self) -> dict[str, Any]:
         results = [form.save() for _, form in self._forms]
         return {'valid': all(result['valid'] for result in results)}

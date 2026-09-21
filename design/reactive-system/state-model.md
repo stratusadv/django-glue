@@ -125,7 +125,7 @@ client-read-only. A property is recomputed from signed state or another
 authoritative source, so the server never consumes the browser's copy. It is
 sent downward for display and reconciliation but omitted from signed retained
 state. Client-interface metadata is more disposable still: the server ignores
-the browser's copy, and it ships downward in `schema`.
+the browser's copy, and it ships downward in `static_data`.
 
 Note the flag is deliberately inverted relative to Livewire. Livewire needs
 `#[Locked]` because every public property is client-writable by default; glue
@@ -218,7 +218,7 @@ maintainers rather than users:
 
 Direction and Timing are independent: a form field's `label` and a component's
 `total_hours` both travel down only, but an unchanged label normally ships only
-in the initial `schema` while `total_hours` is recomputed for each authoritative
+in the initial `static_data` while `total_hours` is recomputed for each authoritative
 response. Parameterized values and non-parameterized retained state travel both
 ways inside the signed policy token; the editable role adds a separate untrusted
 update channel to either location. Neither answer derives from the other, which
@@ -317,7 +317,7 @@ It is consulted at exactly three points, in this order:
 `authorize()` never substitutes for the other two terms, and the other two never
 substitute for it. A denial at any point is reported through the per-address
 `error` channel in §10 with code `not_authorized`, leaving the client's canonical
-data, token, schema and drafts for that address untouched.
+data, token, static data and drafts for that address untouched.
 
 **The default is deliberately permissive, and that is a documented choice.** A
 bare `BaseGlue` authorizes everything, because the signed capability and the
@@ -389,8 +389,8 @@ Three current tangles then disappear:
 
 - **Mixed grain.** `ModelFieldAttribute.state` currently combines an editable
   `value` and derived `errors` in one object. The attribute's value enters
-  `state_snapshot`; its errors enter `unsigned_data`; its stable interface
-  metadata enters `schema`.
+  `state_snapshot`; its errors enter `computed_data`; its stable interface
+  metadata enters `static_data`.
 - **Family-specific serialization.** Type adapters encode, decode, coerce, and
   validate leaves without making those leaves independently addressable.
 - **Nested timing and authority.** A foreign key's raw editable identity is a
@@ -462,7 +462,7 @@ many times. Fifty entries across six projects introduce six children, not fifty.
 
 A `BaseGlue` instance is never encoded or hydrated as an ordinary value. It
 cannot appear directly or recursively in `target.parameters`,
-`state_snapshot`, editable `updates`, ordinary `unsigned_data`, schema values,
+`state_snapshot`, editable `updates`, ordinary `computed_data`, static data values,
 or semantic-event detail. Structured values use declared serializer adapters;
 they do not use `BaseGlue` merely to obtain grouping or methods.
 
@@ -476,7 +476,7 @@ address-producing route:
 3. an addressed collection exposes stable-key items; or
 4. an authorized callable directly returns one declared transient child.
 
-An ordinary `@Glue.property` result is derived output in `unsigned_data`. A
+An ordinary `@Glue.property` result is derived output in `computed_data`. A
 Glue-object return annotation instead declares a child slot and makes the
 property its server-owned factory. Glue requires the result to be `None` for a
 nullable slot or a configured, unbound `BaseGlue` matching that annotation,
@@ -643,7 +643,7 @@ The client mirrors the semantic boundary rather than the old attribute class
 hierarchy. One address registry owns one stable Alpine-reactive proxy and
 request queue per live address. An attribute materializer projects value paths,
 field aliases, derived output, callables, and stable namespace objects from
-schema. A child binder connects property paths and keyed collection
+static data. A child binder connects property paths and keyed collection
 slots to proxies in the address registry. A response dispatcher registers all
 introduced object entries first, applies each successor response to the proxy
 for that address, and only then resolves callable results and effects.
@@ -675,7 +675,7 @@ map. Child policies and state remain independent.
 | Family                         | Signed policy data                                                                  | Editable updates                                                            | Derived/output channel                                                     | Adapter-specific gate                                                                                                                                                             |
 | ------------------------------ | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Custom objects and components  | parameterized values, reconstructors, acknowledged editable drafts                  | declared`editable=True` leaves                                            | `@Glue.property`, schema, HTML effects                                   | generated construction and addressed lifecycle                                                                                                                                    |
-| `ModelGlue`                  | model class, target PK, exposure/configuration, acknowledged editable draft overlay | the`editable=` projection (§9), derived from field metadata when omitted | current persisted read-only fields, annotations, relation children, errors | re-fetch and authorize the model; validate the draft before persistence; define stale-row conflict behaviour                                                                      |
+| `ModelGlue`                  | model class, target PK, exposure/configuration, exposed editable values (row baseline plus acknowledged draft overlay) | the`editable=` projection (§9), derived from field metadata when omitted | current persisted read-only fields, annotations, relation children, errors | re-fetch and authorize the model; validate the draft before persistence; define stale-row conflict behaviour                                                                      |
 | `FormGlue` / `ModelForm`   | form class, target PK, initial/server state, acknowledged bound-data draft          | enabled exposed fields                                                      | errors, labels, widgets, choices                                           | preserve complete raw bound data for cross-field validation; files need a handler                                                                                                 |
 | `QuerySetGlue`               | authenticated query continuation, configuration, cursor and pagination bookkeeping  | declared query controls only                                                | rows, annotations, counts, and keyed child references                      | verify before unpickling through an allowlisting unpickler; bound payload size; close filter/order allowlists; key row construction by the editable projection; preserve batching |
 | `FormSetGlue`                | construction rules, stable membership/order, acknowledged form drafts               | keyed form fields and declared collection operations                        | form/non-form errors and keyed child references                            | replace positional identity with keys; preserve management-form invariants                                                                                                        |
@@ -703,12 +703,15 @@ For Django adapters, retained editable state is an edit buffer, not a claim
 about the wrapped object. `FormGlue` retains the form's admitted raw bound data,
 including values that fail field, form, uniqueness, or cross-field validation.
 Errors and other presentation output are recomputed into
-`unsigned_data`. `ModelGlue` likewise retains an editable draft overlay while
-the database row remains the persisted source of truth. On reconstruction it
-re-fetches and reauthorizes the row before applying the draft for editing; it
-must validate and authorize again before persistence. A successful save may
-normalize values, assign defaults, or advance `target_pk`, and the successor
-snapshot rebases the draft to those resulting server values.
+`computed_data`. `ModelGlue` likewise retains an editable draft overlay while
+the database row remains the persisted source of truth. The overlay resolves to
+the row's current value on every exposed editable path, so the signed snapshot
+carries a complete baseline and the client's canonical view is complete from the
+token alone. On reconstruction it re-fetches and reauthorizes the row and admits
+only the difference between the signed snapshot and the re-fetched row as the
+draft for editing; it must validate and authorize again before persistence. A
+successful save may normalize values, assign defaults, or advance `target_pk`,
+and the successor snapshot rebases the draft to those resulting server values.
 
 #### `$fields` is a client projection
 
@@ -719,7 +722,7 @@ tree. The client constructs stable field proxies from schema descriptors whose
 
 ```json
 {
-  "schema": {
+  "static_data": {
     "fields": {
       "email": {
         "value_path": "email",
@@ -733,7 +736,7 @@ tree. The client constructs stable field proxies from schema descriptors whose
   "state_snapshot": {
     "email": "not-an-email"
   },
-  "unsigned_data": {
+  "computed_data": {
     "fields": {
       "email": {
         "errors": ["Enter a valid email address."]
@@ -748,16 +751,17 @@ That produces two aliases over one reactive leaf:
 ```javascript
 form.email                 // direct value access
 form.$fields.email.value   // the same value through the editing interface
-form.$fields.email.errors  // unsigned field output
-form.$fields.email.label   // schema
+form.$fields.email.errors  // computed field output
+form.$fields.email.label   // static_data
 ```
 
 The schema's `editable` flag lets the client render the right interface, but it
 is advisory and grants no authority. The server still checks the current
 declaration, signed capability, and current authorization. Fixed field choices
-live in schema; state-dependent choices and errors live under
-`unsigned_data.fields`; search results remain method results. Updating schema,
-state, or unsigned field output patches the existing field proxy rather than
+live in `static_data`; state-dependent choices and errors live under
+`computed_data.fields`; search results remain method results. Updating view
+data, state, or computed field output patches the existing field proxy rather
+than
 replacing it.
 
 For scalar model fields, direct access and `$fields.<name>.value` address the
@@ -828,7 +832,7 @@ The normalized result is signed independently of row projection:
 
 The server validates declared paths when issuing the capability, then validates
 the signed paths again against current model metadata and framework query rules
-on every request. Schema may advertise the resulting query interface but cannot
+on every request. Static data may advertise the resulting query interface but cannot
 grant it. These restrictions apply only to client-supplied query controls; the
 server-authored base queryset retains its full Django semantics and always
 bounds `all`, `count`, `get`, filtering, ordering, and pagination.
@@ -884,7 +888,7 @@ Application authorization is checked for both `new()` and `save()`. The
 collection's `ADD` capability is necessary but does not imply Django model
 permission, tenant membership, or any other application rule.
 
-### 5. The client reconciles signed state and unsigned data
+### 5. The client reconciles signed state and computed data
 
 Taken from Livewire, which got this right:
 
@@ -897,17 +901,17 @@ becomes a *derived value rather than a decision*, which is what removes
 `takes_client_state` entirely.
 
 The response is different: it carries a successor policy token plus
-`unsigned_data`, not a server-computed diff. The token carries parameters in
+`computed_data`, not a server-computed diff. The token carries parameters in
 `target.parameters`, canonical object state in `state_snapshot`, and the
 owner's shallow path/address relationships in `children`.
-`unsigned_data` carries the complete current down-only output the server will
+`computed_data` carries the complete current down-only output the server will
 recompute or ignore, including derived properties, form errors, query results,
 and annotations. Signed state is not duplicated beside the token, and unsigned
 output is never carried back to the server.
 
 The client decodes the successor token and assembles the authoritative view from
 its exposed parameters, exposed state snapshot, and the response's
-`unsigned_data`. Parameters appear in that view only when deliberately exposed;
+`computed_data`. Parameters appear in that view only when deliberately exposed;
 being required for reconstruction does not automatically make one reactive.
 Whatever the entry does carry is one atomic response for the address. The
 decoded `children` map is reconciled by the address registry rather than
@@ -916,7 +920,7 @@ inserted into canonical value state.
 Either half may be **omitted** when it did not change (§10). An omitted
 `policy_token` means the client's held token remains current and its decoded
 parameters, state snapshot and `children` map are still authoritative; an omitted
-`unsigned_data` means the previous downward output still stands. The client
+`computed_data` means the previous downward output still stands. The client
 assembles the authoritative view from the newest value it holds for each half,
 and an entry carrying neither — nor `result` or `effects` — is a no-op rather
 than an instruction to clear anything. Omission is therefore distinct from an
@@ -928,19 +932,19 @@ baseline. They do not mean the draft is domain-valid or persisted. For example,
 an invalid email may be canonical `FormGlue` state while the bound form is
 invalid and the database still contains the previous email.
 
-Because `unsigned_data` is not returned on the next request, the server still
+Because `computed_data` is not returned on the next request, the server still
 does not possess the browser's complete previous canonical view and cannot
 calculate a true client-relative diff for the whole object. It verifies the
 token, reconstructs the target, hydrates state, admits permitted updates,
 derives current output, and returns a successor token plus fresh
-`unsigned_data`.
+`computed_data`.
 
 Receiving a response does **not** mean assigning its values wholesale to the
 reactive object. Each request retains the canonical data and exact updates it
 was sent with. On response, the client performs a three-way reconciliation:
 
 ```text
-authoritative  = assemble(decode(response.policy_token), response.unsigned_data)
+authoritative  = assemble(decode(response.policy_token), response.computed_data)
 expected       = apply(request.canonical, request.updates)
 server_changes = diff(expected, authoritative)
 canonical      = authoritative
@@ -968,7 +972,7 @@ revision, captured when a request is sent:
   an accidental consequence of merging state.
 
 Absence is a value, and its meaning is per role. Both `state_snapshot` and
-`unsigned_data` are complete rather than differential, so a key missing from the
+`computed_data` are complete rather than differential, so a key missing from the
 authoritative view is a removal and `patch` must delete it. That is not a
 rehabilitation of `_mergeState`: the removed defect was deleting keys the server
 *did not send* from a **partial** response, which silently discarded whatever the
@@ -1447,7 +1451,7 @@ Glue.model(
 
 The signed capability carries the normalized result, and the server revalidates
 it against current model metadata on every request, exactly as the query
-capability does. Schema's per-field `editable` flag continues to describe the
+capability does. Static data's per-field `editable` flag continues to describe the
 interface for rendering and continues to grant nothing.
 
 The derived default is retained knowingly: `field.editable` is the closest thing
@@ -1542,7 +1546,7 @@ reflects and filters to `isPublic() && !isStatic() && isDefault()`, while
 it, and calling it directly throws). A computed value is therefore never a
 public property and never persisted in Livewire's hydration snapshot. Glue
 copies that boundary selectively: a derived property's evaluated value appears
-in `unsigned_data` sent downward, but never in the signed `state_snapshot` sent
+in `computed_data` sent downward, but never in the signed `state_snapshot` sent
 back. Where several derived values share
 expensive work, the sharing
 is a private `cached_property`: plain Python, invisible to glue, and it removes
@@ -1642,7 +1646,7 @@ server must hydrate on the next request. It contains internal reconstructors and
 server-acknowledged editable drafts, which may be domain-invalid. Parameterized
 values remain in `target.parameters` whether their role is reconstructor or
 editable state; derived output is recomputed and appears only in downward
-`unsigned_data`. `children` is the owner's shallow, signed mapping from canonical
+`computed_data`. `children` is the owner's shallow, signed mapping from canonical
 child paths to addresses. It carries no child policy or state. Attribute roles
 and parameter exposure are not repeated beside each value: the current server
 declaration defines both, and the capability narrows what this client may
@@ -1697,7 +1701,7 @@ Page load:
     {
       "address": "dash#7f3a9c21",
       "policy_token": "...",
-      "schema": {
+      "static_data": {
         "events": ["saved"],
         "children": {
           "entry_form": { "kind": "form", "nullable": false }
@@ -1711,13 +1715,13 @@ Page load:
           }
         }
       },
-      "unsigned_data": { "total_hours": 8.5 }
+      "computed_data": { "total_hours": 8.5 }
     },
     {
       "address": "dash#7f3a9c21.entry_form",
       "policy_token": "...",
-      "schema": { "fields": {} },
-      "unsigned_data": { "errors": {} }
+      "static_data": { "fields": {} },
+      "computed_data": { "errors": {} }
     }
   ]
 }
@@ -1746,7 +1750,7 @@ Response:
     {
       "address": "dash#7f3a9c21",
       "policy_token": "...",
-      "unsigned_data": {
+      "computed_data": {
         "total_hours": 9.0
       },
       "result": {},
@@ -1789,7 +1793,7 @@ failure per address:
     {
       "address": "dash#7f3a9c21",
       "policy_token": "...",
-      "unsigned_data": { "total_hours": 9.0 }
+      "computed_data": { "total_hours": 9.0 }
     },
     {
       "address": "dash#7f3a9c21.entry_form",
@@ -1809,11 +1813,11 @@ The boundary between the two failure scopes is exact:
 - **Address faults fail one entry.** These are faults attributable to one
   target: bad signature, expired policy, subject or session mismatch, adapter
   reconstruction failure, protocol admission failure, and authorization denial
-  (§3). The entry carries `error` and carries no `policy_token`, `schema`,
-  `unsigned_data`, `result` or `effects`.
+  (§3).   The entry carries `error` and carries no `policy_token`, `static_data`,
+  `computed_data`, `result` or `effects`.
 
 An entry carrying `error` leaves that address's client-side canonical data,
-policy token, schema and editable drafts **exactly as they were**, does not
+policy token, static data and editable drafts **exactly as they were**, does not
 advance its generation, and rejects the promise of whatever operation targeted
 it. It is not a state transition, so it never participates in reconciliation.
 Other entries in the same envelope apply normally, which is what preserves the
@@ -1824,7 +1828,7 @@ are distinguished because their client-side remedies differ: the first is
 terminal for that operation, while the second is recoverable by reintroduction
 (§Reintroducing an expired child).
 
-`objects` is a flat transport collection, not an ownership tree. The schema
+`objects` is a flat transport collection, not an ownership tree. The static data
 declares each fixed child slot and whether it is nullable; collection and
 callable schemas declare their keyed or transient child mechanisms. The owner's
 successor token supplies the authoritative current path/address binding. The
@@ -1893,7 +1897,7 @@ For each received envelope, the client applies one staged operation:
    existing registration when a referenced address is already live under the
    same owner;
 5. reconcile each included object's signed snapshot, replacement schema, and
-   `unsigned_data` into its stable proxy, **using the newest value the client
+   `computed_data` into its stable proxy, **using the newest value the client
    holds for any half the entry omitted**;
 6. bind canonical child paths to the resolved proxies and mark displaced
    children;
@@ -1981,7 +1985,7 @@ signed token on the server.
 
 Callable capability is positive and per callable. Each callable in the signed
 policy names the arguments that this token permits the client to supply; the
-unsigned schema describes their types, defaults, and presentation:
+unsigned static data describes their types, defaults, and presentation:
 
 ```json
 {
@@ -1990,7 +1994,7 @@ unsigned schema describes their types, defaults, and presentation:
       "save": { "allowed_arguments": ["force"] }
     }
   },
-  "schema": {
+  "static_data": {
     "callables": {
       "save": {
         "parameters": {
@@ -2003,14 +2007,14 @@ unsigned schema describes their types, defaults, and presentation:
 ```
 
 The effective client-input set is the intersection of the signed
-`allowed_arguments` and the current callable declaration. Schema is not an
+`allowed_arguments` and the current callable declaration. Static data is not an
 authority source. Consequently, adding a new callable argument does not grant
 it to previously issued tokens.
 
 Server-injected parameters are classified from the current callable's
 annotations through a closed injection registry; `HttpRequest` is the first
 built-in injected type. Injected parameters are omitted from both
-`allowed_arguments` and client schema. If a request nevertheless supplies an
+`allowed_arguments` and client static data. If a request nevertheless supplies an
 argument currently classified as injected, Glue rejects the entire request
 during protocol admission, before invoking the callable, and issues no
 successor token. This current-declaration check also protects an old token if a
@@ -2089,7 +2093,7 @@ must enforce token-size and encoded-query-size limits, verify the signature,
 subject, session, expiry, namespace, and signed expected-model identifier before
 deserialization, and only then decode and unpickle through one narrow path. The
 resulting query's model must immediately match that signed identifier before the
-query is used. No update, callable argument, schema value, `unsigned_data`, or
+query is used. No update, callable argument, static data value, `computed_data`, or
 other unsigned request value may reach that path. The reconstructed base
 queryset still bounds every client query and the signed query capability still
 governs all client-added filtering and ordering.
@@ -2151,7 +2155,7 @@ Editable updates have two distinct validation stages:
    requested action: Django field and form validation, `Model.full_clean()`,
    uniqueness, cross-field rules, and application invariants. Failure does not
    reject the draft. The successor token acknowledges it in `state_snapshot`,
-   while `unsigned_data` carries the recomputed errors.
+   while `computed_data` carries the recomputed errors.
 
 This follows Livewire's handling of ordinary validation failures and preserves
 Django's bound-form semantics. A submitted invalid value remains visible even
@@ -2175,7 +2179,7 @@ A failed `FormGlue.save()` therefore has this conceptual result:
       "display_name": "Chase"
     }
   },
-  "unsigned_data": {
+  "computed_data": {
     "fields": {
       "email": {
         "errors": ["Enter a valid email address."]
@@ -2190,32 +2194,35 @@ PK 42 remains unchanged. A successful later save may normalize the email and
 rebase `state_snapshot`; a successful create may additionally advance
 `target.parameters.target_pk` from `null` to the new PK.
 
-`schema` describes the client-visible interface needed to construct field and
-attribute projections: types, labels, widgets, callable shapes, and state-path
-mappings. It normally ships when an address is first introduced. If that
-interface later changes, the server may send a replacement schema atomically
-with the successor token and `unsigned_data`; unchanged schema is omitted. The
+`static_data` describes the client-visible interface needed to construct field
+and attribute projections: types, labels, widgets, callable shapes, and
+state-path mappings. It normally ships when an address is first introduced.
+If that interface later changes, the server may send a replacement
+`static_data` atomically with the successor token and `computed_data`;
+unchanged `static_data` is omitted. The
 client applies a replacement without changing the addressed proxy's identity.
 
-Schema describes shape, not authority. It never grants access, and the server
+Static data describes shape, not authority. It never grants access, and the server
 must not consult a browser-returned copy. Effective permission still comes from
 the current server declaration, signed capability, and current application
-authorization. Schema therefore never returns to the server.
+authorization. Static data therefore never returns to the server.
 
-Response `unsigned_data` is the complete current down-only output for that
-address, not a diff. It is not covered by the policy-token signature, is never
-returned to the server, and must never be used for server reconstruction or
-hydration. It is still authoritative when received as part of the server
-response; "unsigned" names its policy-token boundary, not an invitation to
-accept it from a request.
+Response `computed_data` is the complete current down-only output for that
+address, not a diff. Like `static_data`, it is not covered by the
+policy-token signature, is never returned to the server, and must never be
+used for server reconstruction or hydration. It is still authoritative when
+received as part of the server response. Both downward channels are unsigned
+in that signature sense, and neither is an invitation to accept such values
+from a request.
 
-The explicit `unsigned_` prefix is appropriate here because this is an internal
-wire-format field and the protection boundary is the point of the distinction.
-It does not expose signing as developer-facing declaration vocabulary, which is
-why it does not conflict with rejecting a public `signed=True` option.
+The two downward channels are keyed by volatility, not by that shared
+boundary: `static_data` is a function of the declaration and access — stable
+for the token's lifetime, resent only when the interface itself changes —
+while `computed_data` is a function of current state, re-derived as the
+request touches it.
 
 The client derives the actual response patch using the reconciliation in §5. A
-response affecting several objects contains one policy-token/`unsigned_data`
+response affecting several objects contains one policy-token/`computed_data`
 pair per canonical address. Requests follow the same rule: the normal case
 contains one addressed object entry, while independent refreshes, targeted
 invalidation, or interactions spanning established Glue families may batch
@@ -2223,7 +2230,7 @@ only the independently addressed entries that participate. A batch never embeds
 one policy token inside another, supplies ancestor authority, or merges state
 snapshots. Every entry is reconstructed, admitted, authorized, advanced, and
 reconciled against its own address. `effects` and fragments never mix into
-`unsigned_data`. Batching provides no causal ordering: a parent refresh that
+`computed_data`. Batching provides no causal ordering: a parent refresh that
 must observe a child save is a subsequent request, normally triggered after
 the child's result or declared event. A truly atomic cross-object transition
 belongs to one authorized callable.
@@ -2283,7 +2290,7 @@ every referenced child be live or introduced has nothing stale to reject.
 
 #### Responses omit what did not change
 
-An addressed response carries a successor token and complete `unsigned_data`
+An addressed response carries a successor token and complete `computed_data`
 *when either changed*. Both are omitted when they did not, and both omissions are
 **derived rather than declared** — there is no flag, because `updates_client_state`
 was exactly such a flag and it conflated direction with timing.
@@ -2297,7 +2304,7 @@ reconstructed with, the input is unchanged by construction. When nothing
 changed, the incoming token remains exactly valid and is not reissued. The entry
 simply omits `policy_token` and the client keeps the token it has.
 
-**`unsigned_data` omission.** An adapter that did not re-derive its downward
+**`computed_data` omission.** An adapter that did not re-derive its downward
 output omits the key entirely. When present it remains complete rather than
 differential; "omitted" and "empty" are therefore distinct, and the client
 treats omission as *unchanged* and an empty object as *everything removed*.
@@ -2305,7 +2312,7 @@ treats omission as *unchanged* and an empty object as *everything removed*.
 This matters because it is the difference between a workable and an unusable
 read path. Search-as-you-type against a `QuerySetGlue` calls a read-only attribute
 per keystroke. Unconditional reissue would pickle the query, base64 it, and sign
-it on every keystroke, and unconditional `unsigned_data` would re-run the query to
+it on every keystroke, and unconditional `computed_data` would re-run the query to
 resend rows the caller did not ask for. The current code avoids both with
 `updates_client_state=False` on `foreign_key_choices`, `query_with_params`,
 `count`, `get`, and `new` — that flag is deleted, and these rules are what replace
@@ -2327,7 +2334,7 @@ non-parameterized reconstructors, acknowledged editable drafts, and shallow
 child bindings that the server needs on its next request.
 Parent and child tokens never contain one another, and selective batching never
 submits the mounted tree implicitly. An owner token contains only its shallow
-path/address `children` map, never child policy or state. Schema, derived
+path/address `children` map, never child policy or state. Static data, derived
 output, and database-derived row data remain outside the token. Collection
 keys enter `state_snapshot` only under the consumption rule in §8; current
 owned-child bindings still appear in `children` so the next successor can
@@ -2495,7 +2502,7 @@ Implementation order, gates, and deferred work are maintained in
 - **Livewire's entire client-facing snapshot round-tripping upward.** Glue's
   signed token carries the narrower subset the server will consume:
   `target.parameters`, `state_snapshot`, and the shallow `children` map.
-  Derived output and schema remain downward-only because Glue recomputes or
+  Derived output and static data remain downward-only because Glue recomputes or
   ignores them.
 - **Universal one-time tokens.** True replay prevention requires shared
   server-side latest-token state, complicates concurrent tabs, and removes the

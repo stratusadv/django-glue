@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING, Any, Callable, Self
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
+from django_glue.conf import settings as glue_settings
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
-    GlueCalledStateAttributeError,
+    GlueCalledNonCallableAttributeError,
     GlueMissingAttributeError,
     GlueRequestError,
     GlueRequestErrorCode,
@@ -30,6 +31,7 @@ from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
+from django_glue.serialization import GlueSerializerError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -61,6 +63,7 @@ class BaseGlue(ABC):
         self.loading_strategy = LoadingStrategy(loading_strategy)
         self.request: HttpRequest | None = None
         self._address: str | None = None
+        self._derived_paths: set[str] = set()
 
     @property
     def resolved_loading_strategy(self) -> LoadingStrategy:
@@ -102,12 +105,35 @@ class BaseGlue(ABC):
 
     @property
     def manifest(self) -> GlueManifest:
+        static_data = self.get_static_data()
+        computed_data = (
+            self.get_computed_data(include_all=True)
+            if self.resolved_loading_strategy == LoadingStrategy.EAGER
+            else {}
+        )
         return GlueManifest(
+            address=self.address,
             policy_token=self.policy.token,
-            metadata=self.metadata,
-            state=self.state if self.resolved_loading_strategy == LoadingStrategy.EAGER else {},
+            static_data=static_data,
+            computed_data=computed_data,
             loading_strategy=self.resolved_loading_strategy,
         )
+
+    def _serialized_child_manifests(self) -> list[dict[str, Any]]:
+        serialized: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def add_children(owner: BaseGlue) -> None:
+            for child in owner._bound_children:
+                if child.glue_object is None or child.address in seen:
+                    continue
+                seen.add(child.address)
+                child.glue_object._address = child.address
+                serialized.append(child.glue_object.manifest.model_dump())
+                add_children(child.glue_object)
+
+        add_children(self)
+        return serialized
 
     @cached_property
     def _attribute_registry(self) -> GlueAttributeRegistry:
@@ -274,39 +300,98 @@ class BaseGlue(ABC):
     def _get_attribute_state(self, attribute: BoundGlueAttribute) -> Any:
         return {
             'value': attribute.get(),
-            **attribute.unsigned_data(),
+            **attribute.computed_data(),
         }
 
-    @cached_property
-    def metadata(self) -> dict[str, Any]:
-        """Build non-authoritative client metadata for target."""
-        return self.get_metadata()
+    def get_static_data(self) -> dict[str, Any]:
+        """Client-visible static data (state-model.md §10 "Responses omit what
+        did not change"): field descriptors with ``value_path`` state-path
+        mappings, addressed-child kind/nullable slots, and callable argument
+        shapes. Down-only and client-forgets: stable across calls for an
+        unchanged object, omitted from the response when it did not change,
+        and never sent back to the server."""
+        fields: dict[str, Any] = {}
+        children: dict[str, Any] = {}
+        callables: dict[str, Any] = {}
+        for path, attribute in self._bound_attributes.items():
+            definition = attribute.definition
+            if definition.kind is GlueAttributeKind.VALUE:
+                if definition.adapter is None:
+                    fields[path] = {
+                        'value_path': path,
+                        'editable': definition.value_role is GlueValueRole.EDITABLE_STATE,
+                    }
+                else:
+                    fields[path] = attribute.schema()
+            elif definition.kind is GlueAttributeKind.CHILD:
+                children[path] = {
+                    'kind': definition.expected_type.namespace,
+                    'nullable': definition.is_nullable,
+                }
+            elif definition.kind is GlueAttributeKind.CALLABLE:
+                callables[path] = {
+                    'allowed_arguments': list(definition.allowed_arguments),
+                }
+        static_data: dict[str, Any] = {}
+        if fields:
+            static_data['fields'] = fields
+        if children:
+            static_data['children'] = children
+        if callables:
+            static_data['callables'] = callables
+        return static_data
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'attributes': {
-                path: self._get_attribute_metadata(attribute)
-                for path, attribute in self._bound_attributes.items()
-            },
-        }
+    def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
+        """Complete current down-only output (state-model.md §5, §10):
+        re-derived values at top level, and re-derived adapter output under
+        ``fields``.
 
-    def _get_attribute_metadata(
-        self,
-        attribute: BoundGlueAttribute,
-    ) -> dict[str, Any]:
-        definition = attribute.definition
-        if definition.adapter is not None:
-            return attribute.schema()
-        if definition.kind == GlueAttributeKind.CALLABLE:
-            return {
-                'namespace': 'callable',
-                'takes_client_state': True,
-            }
-        if definition.kind == GlueAttributeKind.NAMESPACE:
-            return {'namespace': 'namespace'}
-        if definition.kind == GlueAttributeKind.CHILD:
-            return {'namespace': 'child'}
-        return {'name': definition.path, 'namespace': 'readonly'}
+        Only output re-derived this request is included — "an adapter that
+        did not re-derive its downward output omits the key entirely," so
+        omission means the client's previous value stands. ``include_all``
+        is the introduction surface, where every value is fresh by
+        construction.
+        """
+        computed: dict[str, Any] = {}
+        fields_output: dict[str, Any] = {}
+        for path, attribute in self._bound_attributes.items():
+            definition = attribute.definition
+            if definition.kind is not GlueAttributeKind.VALUE:
+                continue
+            if definition.value_role is GlueValueRole.DERIVED_OUTPUT:
+                if include_all or path in self._derived_paths:
+                    computed[path] = attribute.get()
+            elif definition.adapter is not None:
+                if include_all or path in self._derived_paths:
+                    adapter_output = attribute.computed_data()
+                    if adapter_output:
+                        fields_output[path] = adapter_output
+        if fields_output:
+            computed['fields'] = fields_output
+        return computed
+
+    @staticmethod
+    def _retained_values_equal(
+        incoming: GluePolicy,
+        successor: GluePolicy,
+    ) -> bool:
+        """Whether the successor's retained values match the verified incoming
+        token (state-model.md §10 "Responses omit what did not change").
+
+        ``created_at`` is temporal and ``token`` is the signature over the
+        rest, so both are excluded; the subject fields stay in the comparison
+        — they are constant for a verified request, so any divergence there
+        means the token must be reissued. Values are normalized through the
+        library's own encoder, matching how identity data is round-tripped.
+        """
+        exclude = {'created_at', 'token'}
+        incoming_dump = json.loads(
+            json.dumps(incoming.model_dump(exclude=exclude), cls=GlueResponseJSONEncoder)
+        )
+        successor_dump = json.loads(
+            json.dumps(successor.model_dump(exclude=exclude), cls=GlueResponseJSONEncoder)
+        )
+        return incoming_dump == successor_dump
 
     @classmethod
     def from_attribute_call_resolver_context(
@@ -337,21 +422,99 @@ class BaseGlue(ABC):
         """Reconstruct a GlueObject from a signed policy."""
         raise NotImplementedError
 
+    def _retained_state(self) -> dict[str, Any]:
+        """Non-parameterized retained state signed into the successor policy
+        token's ``state_snapshot``: internal reconstructors plus the family's
+        acknowledged editable state (state-model.md §5, §10)."""
+        retained: dict[str, Any] = {}
+        for path, attribute in self._bound_attributes.items():
+            definition = attribute.definition
+            if (
+                definition.kind is GlueAttributeKind.VALUE
+                and definition.value_role is GlueValueRole.RECONSTRUCTOR
+            ):
+                retained[path] = attribute.get()
+        return retained
+
+    def _admit_updates(
+        self,
+        policy: GluePolicy,
+        updates: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Protocol admission for client updates (state-model.md §10, stage 1).
+
+        Checks the current declaration, the signed capability, payload shape
+        and resource limits. A violation fails the request before the action
+        runs, so no successor token is issued.
+        """
+        if not updates:
+            return {}
+        if not isinstance(updates, dict):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_UPDATES,
+                message='"updates" must be a JSON object.',
+            )
+        if len(updates) > glue_settings.DJANGO_GLUE_MAX_UPDATES:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_UPDATES,
+                message='Too many updates in one request.',
+                details={'limit': glue_settings.DJANGO_GLUE_MAX_UPDATES},
+            )
+        if len(json.dumps(updates).encode('utf-8')) > glue_settings.DJANGO_GLUE_MAX_UPDATES_ENCODED_BYTES:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_UPDATES,
+                message='Updates exceed the encoded size limit.',
+                details={'limit': glue_settings.DJANGO_GLUE_MAX_UPDATES_ENCODED_BYTES},
+            )
+
+        signed_attributes = {
+            entry for entry in policy.attributes if isinstance(entry, str)
+        }
+        admitted: dict[str, Any] = {}
+        for path, value in updates.items():
+            attribute = self._bound_attributes.get(path)
+            if attribute is None:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_UPDATES,
+                    message='Update targets an unknown attribute.',
+                    details={'attribute': path},
+                )
+            definition = attribute.definition
+            if (
+                definition.kind != GlueAttributeKind.VALUE
+                or definition.value_role != GlueValueRole.EDITABLE_STATE
+            ):
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_UPDATES,
+                    message='Update targets a non-editable attribute.',
+                    details={'attribute': path},
+                )
+            if path not in signed_attributes:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_UPDATES,
+                    message='Update is not admitted by the signed capability.',
+                    details={'attribute': path},
+                )
+            try:
+                admitted[path] = attribute.coerce_update(value)
+            except GlueSerializerError as error:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_UPDATES,
+                    message='Update value could not be coerced.',
+                    details={'attribute': path},
+                ) from error
+        return admitted
+
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        """Apply client-provided state attributes to this Glue object."""
+        """Apply retained state (signed snapshot plus admitted updates) to this
+        Glue object (state-model.md §10)."""
         for path, attribute in self._bound_attributes.items():
             if attribute.definition.value_role != GlueValueRole.EDITABLE_STATE:
                 continue
             if path not in state:
                 continue
-
-            attribute_state = state[path]
-            value = (
-                attribute_state.get('value')
-                if isinstance(attribute_state, dict)
-                else attribute_state
-            )
-            attribute.apply_update(value)
+            attribute.apply_update(state[path])
+            self._derived_paths.add(path)
 
     def _invalidate_attributes(self) -> None:
         """Discard discovered attributes after target state hydration."""
@@ -359,13 +522,12 @@ class BaseGlue(ABC):
         self.__dict__.pop('_attribute_registry', None)
         self.__dict__.pop('_bound_attributes', None)
         self.__dict__.pop('policy', None)
-        self.__dict__.pop('metadata', None)
         self._invalidate_state()
 
     def _invalidate_state(self) -> None:
         self.__dict__.pop('state', None)
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def load_state(self) -> dict[str, Any]:
         return self.state
 
@@ -380,7 +542,7 @@ class BaseGlue(ABC):
 
         definition = bound_attribute.definition
         if definition.kind != GlueAttributeKind.CALLABLE:
-            raise GlueCalledStateAttributeError(call_context.target_attribute_name, self.name)
+            raise GlueCalledNonCallableAttributeError(call_context.target_attribute_name, self.name)
 
         required_access = self._resolve_required_access(definition.required_access)
         if not call_context.target_glue_policy.access.has_access(required_access):
@@ -421,7 +583,19 @@ class BaseGlue(ABC):
             required_access=required_access,
         ))
 
-        self._load_client_state(call_context.target_glue_client_state or {})
+        policy = call_context.target_glue_policy
+        incoming_static_data = self.get_static_data()
+        updates = self._admit_updates(policy, call_context.target_glue_updates)
+        retained_state = {
+            path: attribute.decode_retained(policy.state_snapshot[path])
+            for path, attribute in self._bound_attributes.items()
+            if (
+                attribute.definition.value_role == GlueValueRole.EDITABLE_STATE
+                and path in policy.state_snapshot
+                and path not in updates
+            )
+        }
+        self._load_client_state({**retained_state, **updates})
         self._invalidate_attributes()
         bound_attribute = self._bound_attributes[call_context.target_attribute_name]
         call_result = bound_attribute.call(
@@ -431,14 +605,26 @@ class BaseGlue(ABC):
             )
         )
 
+        static_data = self.get_static_data()
+        payload: dict[str, Any] = {}
+        if not self._retained_values_equal(policy, self.policy):
+            payload['policy_token'] = self.policy.token
+        if static_data != incoming_static_data:
+            payload['static_data'] = static_data
+        computed_data = self.get_computed_data()
+        if computed_data:
+            payload['computed_data'] = computed_data
+        if self.children != policy.children:
+            manifest_list = self._serialized_child_manifests()
+            if manifest_list:
+                payload['manifest_list'] = manifest_list
+
         return GlueResponse.from_result(
             call_result,
             render_as_html=definition.render_as_html,
         ).to_json_response(
             glue_object=self,
-            policy_token=self.policy.token,
-            state=self.state,
-            metadata=self.metadata,
+            **payload,
         )
 
     @staticmethod

@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import base64
+import json
 import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Callable, Literal, Mapping, Sequence, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping, Sequence, TypedDict, cast
 
 from django.core.exceptions import FieldDoesNotExist, ObjectDoesNotExist, ValidationError
 from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
+from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.children import BoundGlueChild
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
@@ -140,7 +143,6 @@ class ModelGlue(
         self.initialize_computed_attributes(computed_attributes)
 
         self.forms = self.normalize_forms(form, forms)
-        self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
         # Internal, signed for collection children: the access a row settles to
@@ -349,7 +351,22 @@ class ModelGlue(
         field_name: str,
         value: Any,
     ) -> None:
+        field = self._get_model_field(field_name)
+        if getattr(field, 'get_internal_type', lambda: '')() in {'FileField', 'ImageField'}:
+            return
         self._editable_draft[field_name] = value
+
+    def _retained_state(self) -> dict[str, Any]:
+        """The snapshot carries a complete baseline: the overlay resolves to
+        the row's current value on every exposed editable path, so the
+        client's canonical view is complete from the token alone
+        (state-model.md §4)."""
+        retained = super()._retained_state()
+        retained.update({
+            field_name: self._get_model_attribute_value(field_name)
+            for field_name in self.editable
+        })
+        return retained
 
     def _get_derived_attribute_value(self, name: str) -> Any:
         if name in self.computed_attributes:
@@ -476,7 +493,7 @@ class ModelGlue(
 
     def _validate(self) -> None:
         if (
-            self._loaded_state is None
+            not self._editable_draft
             or not self.access.has_access(GlueAccess.CHANGE)
         ):
             self._field_errors = {}
@@ -538,6 +555,8 @@ class ModelGlue(
             computed_attributes=policy.identity.get('computed_attributes', {}),
         )
         glue_object._row_access = row_access
+        if row_access is not None:
+            glue_object._signed_row_children = policy.children
         # Restored post-construction from the signed (already-validated) policy:
         # _deserialize_related_field_config yields the normalized internal shape,
         # so it does not go back through __init__ normalization.
@@ -546,41 +565,83 @@ class ModelGlue(
         )
         return glue_object
 
+    def _bind_children(
+        self,
+        *,
+        live_children: Mapping[str, str] | None = None,
+        reintroduce: Iterable[str] = (),
+    ) -> tuple[BoundGlueChild, ...]:
+        """Bind children, restoring signed collection-owned relation
+        references for reconstructed collection rows (state-model.md §4).
+
+        A collection row never owns its projected relation children; the
+        collection does. Re-deriving them from the row would address them
+        beneath the row instead of the collection and reintroduce duplicate
+        proxies, so the references the row policy signed at introduction
+        stand as its prior child state. Non-relation children (e.g. forms)
+        re-derive normally."""
+        bound_children = super()._bind_children(
+            live_children=live_children,
+            reintroduce=reintroduce,
+        )
+        signed_children = getattr(self, '_signed_row_children', None)
+        if self._row_access is None or not signed_children:
+            return bound_children
+        relation_paths = {
+            relation_name
+            for relation_name, _subfields in self._projected_relations
+        }
+        return tuple(
+            BoundGlueChild(path=child.path, address=signed_children[child.path])
+            if child.path in relation_paths and child.path in signed_children
+            else child
+            for child in bound_children
+        )
+
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        """Apply client-provided state to the model instance."""
-        self.__dict__.pop('state', None)
-        self._loaded_state = state
-        self._apply_state(state)
+        """Admit acknowledged edits into the editable draft, then apply the
+        draft to the instance for editing (state-model.md §4). The re-fetched
+        row is the baseline, so only values that differ from it enter the
+        draft."""
+        self._invalidate_state()
+        super()._load_client_state(
+            {
+                path: value
+                for path, value in state.items()
+                if path not in self.editable or not self._matches_row_value(path, value)
+            }
+        )
+        self._apply_draft_to_instance()
+        self._apply_file_fields()
 
-    def _apply_state(self, state: dict[str, Any]) -> None:
-        """Apply state data directly to model fields."""
-        for field_name in self.editable:
-            if self._is_reverse_relation(field_name):
-                continue
+    def _matches_row_value(self, field_name: str, value: Any) -> bool:
+        """Whether a signed value still equals the row's current value,
+        normalized the way token payloads JSON round-trip."""
+        current = self._get_model_attribute_value(field_name)
+        return json.loads(json.dumps(value, cls=GlueResponseJSONEncoder)) == json.loads(
+            json.dumps(current, cls=GlueResponseJSONEncoder)
+        )
 
+    def _apply_draft_to_instance(self) -> None:
+        """Apply the admitted draft to the instance. M2M membership is
+        deferred to save(), where the instance has a pk to attach it to."""
+        for field_name, value in self._editable_draft.items():
             field = self._get_model_field(field_name)
-
-            # Handle file fields from request.FILES
-            if getattr(field, 'get_internal_type', lambda: '')() in {'FileField', 'ImageField'}:
-                file_value = self._get_file_from_request(field_name)
-                if file_value is not None:
-                    setattr(self.instance, field_name, file_value)
-                continue
-
-            if field_name not in state and field.attname not in state:
-                continue
-
             if getattr(field, 'many_to_many', False):
-                # M2M fields need special handling after save
                 continue
-
             if getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
-                setattr(self.instance, field.attname, self._related_pk_from_state(field, state))
+                setattr(self.instance, field.attname, value)
                 continue
-
-            field_state = state[field_name]
-            value = field_state.get('value') if isinstance(field_state, dict) else field_state
             setattr(self.instance, field_name, value)
+
+    def _apply_file_fields(self) -> None:
+        for field_name in self.editable:
+            field = self._get_model_field(field_name)
+            if getattr(field, 'get_internal_type', lambda: '')() not in {'FileField', 'ImageField'}:
+                continue
+            file_value = self._get_file_from_request(field_name)
+            if file_value is not None:
+                setattr(self.instance, field_name, file_value)
 
     def _get_file_from_request(self, field_name: str) -> Any:
         """Get a file from request.FILES for a field."""
@@ -594,21 +655,28 @@ class ModelGlue(
         try:
             self.instance.full_clean()
             self.instance.save()
-            self._apply_m2m_state(self._loaded_state or {})
+            self._apply_m2m_state(self._editable_draft)
+            self._rebase_draft()
             # A collection draft settles to its signed row access on first save:
             # this re-signs the successor response at the settled access, so the
             # client's next request carries the persisted-row permission
             # (state-model.md ADR 010).
             if self._row_access is not None:
                 self.access = self._row_access
+            self._field_errors = {}
+            self._derived_paths.update(self._included_fields)
             return {  # noqa: TRY300
                 'success': True,
                 'errors': {}
             }
         except ValidationError as e:
+            self._field_errors = (
+                e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
+            )
+            self._derived_paths.update(self._included_fields)
             return {
                 'success': False,
-                'errors': e.message_dict if hasattr(e, 'message_dict') else {'__all__': e.messages}
+                'errors': self._field_errors
             }
 
     def _apply_m2m_state(self, state: dict[str, Any]) -> None:
@@ -616,35 +684,28 @@ class ModelGlue(
         for field_name in self.editable:
             if field_name not in state:
                 continue
-            if self._is_reverse_relation(field_name):
-                continue
-
             field = self._get_model_field(field_name)
             if not getattr(field, 'many_to_many', False):
                 continue
-            field_state = state[field_name]
-            value = field_state.get('value') if isinstance(field_state, dict) else field_state
-            pks = [self._pk_from_related_value(item) for item in value or []]
+            pks = [
+                self._pk_from_related_value(item)
+                for item in state[field_name] or []
+            ]
             getattr(self.instance, field_name).set(pks)
 
-    def _related_pk_from_state(self, field: Any, state: dict[str, Any]) -> Any:
-        """Resolve a forward relation's pk from client state."""
-        attname_state = state.get(field.attname)
-
-        if isinstance(attname_state, dict) and 'value' in attname_state:
-            return self._pk_from_related_value(attname_state['value'])
-
-        field_state = state.get(field.name)
-
-        if isinstance(field_state, dict) and 'value' not in field_state:
-            pk_state = field_state.get(field.related_model._meta.pk.name)
-
-            return self._pk_from_related_value(pk_state.get('value') if isinstance(pk_state, dict) else pk_state)
-
-        if isinstance(field_state, dict):
-            return self._pk_from_related_value(field_state['value'])
-
-        return self._pk_from_related_value(field_state)
+    def _rebase_draft(self) -> None:
+        """Rebase the draft onto the values the saved instance now holds
+        (state-model.md §4)."""
+        for field_name in tuple(self._editable_draft):
+            field = self._get_model_field(field_name)
+            if getattr(field, 'many_to_many', False):
+                self._editable_draft[field_name] = tuple(
+                    getattr(self.instance, field_name).values_list('pk', flat=True)
+                )
+            elif getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
+                self._editable_draft[field_name] = getattr(self.instance, field.attname)
+            else:
+                self._editable_draft[field_name] = getattr(self.instance, field_name)
 
     @staticmethod
     def _pk_from_related_value(value: Any) -> Any:
@@ -652,21 +713,19 @@ class ModelGlue(
             return value.get('value')
         return getattr(value, 'pk', value)
 
-    # Choice loading is read-only: it reads the field definition and the related
-    # model, never this instance's own field values. Skip the client-state
-    # rehydration and the state/metadata echo (which would re-pickle every choice
-    # field's fingerprint on each search keystroke) -- matches FormGlue.
-    @DeclaredAttribute(
-        required_access=GlueAccess.VIEW,
-        takes_client_state=False,
-        updates_client_state=False,
-    )
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
         search: str = '',
     ) -> RelatedModelChoicesResult:
-        if not field_name or field_name not in self._included_fields:
+        projected_relations = {
+            relation_name for relation_name, _subfields in self._projected_relations
+        }
+        if not field_name or (
+            field_name not in self._included_fields
+            and field_name not in projected_relations
+        ):
             return GlueRelatedModelChoices.empty()
 
         queryset = self._choice_queryset_for_field(field_name)
@@ -699,18 +758,6 @@ class ModelGlue(
             return configured_queryset
         return related_model.objects.all()
 
-    # delete() only needs self.instance's pk (already resolved from the signed
-    # policy identity) -- it never reads client-submitted field values. The
-    # default takes_client_state=True re-hydrates every StateAttribute from
-    # the client's echoed state via setattr(), including raw JS strings for
-    # numeric fields (e.g. a DecimalField's <input> value). That silently
-    # replaces the freshly-loaded instance's real field values with strings,
-    # which then breaks any VIEW-access computed property that does
-    # arithmetic on those fields once attribute collection runs for this
-    # call (e.g. TypeError: unsupported operand type(s) for +: 'int' and
-    # 'str' from a median_price-style property) -- a bug entirely unrelated
-    # to deleting the row. takes_client_state=False skips that hydration
-    # since delete has no legitimate use for it.
-    @DeclaredAttribute(required_access=GlueAccess.DELETE, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.DELETE)
     def delete(self) -> None:
         self.instance.delete()

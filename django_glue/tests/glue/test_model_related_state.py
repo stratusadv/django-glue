@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -14,6 +15,7 @@ from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
+from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.test_forms import TestModelForm as GorillaModelForm
@@ -41,31 +43,34 @@ class RelatedStateTestCase(TestCase):
 
         self.assertEqual(state['red_corner']['value'], self.alpha.pk)
 
-        glue_object._load_client_state(state)
+        glue_object._load_client_state({
+            'name': state['name']['value'],
+            'red_corner': state['red_corner']['value'],
+            'blue_corner': state['blue_corner']['value'],
+        })
 
         self.assertEqual(glue_object.instance.red_corner_id, self.alpha.pk)
         self.assertEqual(glue_object.state['red_corner']['value'], self.alpha.pk)
 
     def test_flat_relation_state_applies_raw_identity(self):
         glue_object = self._glue()
-        state = glue_object.state
-        state['red_corner'] = {'value': self.beta.pk, 'errors': []}
 
-        glue_object._load_client_state(state)
+        glue_object._load_client_state({'red_corner': self.beta.pk})
 
         self.assertEqual(glue_object.instance.red_corner_id, self.beta.pk)
+        self.assertEqual(glue_object.state['red_corner']['value'], self.beta.pk)
 
     def test_plain_value_state_still_applies(self):
         glue_object = self._glue()
 
-        glue_object._load_client_state({'red_corner': {'value': self.beta.pk}})
+        glue_object._load_client_state({'red_corner': self.beta.pk})
 
         self.assertEqual(glue_object.instance.red_corner_id, self.beta.pk)
 
     def test_null_value_clears_the_relation(self):
         glue_object = self._glue()
 
-        glue_object._load_client_state({'blue_corner': {'value': None}})
+        glue_object._load_client_state({'blue_corner': None})
 
         self.assertIsNone(glue_object.instance.blue_corner_id)
 
@@ -79,8 +84,8 @@ class RelatedStateTestCase(TestCase):
         )
 
         glue_object._load_client_state({
-            'name': {'value': 'Updated'},
-            'description': {'value': 'Not admitted'},
+            'name': 'Updated',
+            'description': 'Not admitted',
         })
 
         assert glue_object.instance.name == 'Updated'
@@ -460,6 +465,58 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
         assert children[0].glue_object.request is glue_object.request
         assert set(children[0].glue_object._included_fields) == {'id', 'name'}
 
+    def test_row_policies_reference_the_collection_owned_relation_child(self):
+        glue_object = self._glue(
+            fields=['name', 'red_corner__id', 'red_corner__name']
+        )
+
+        result = glue_object.query_with_params()
+        row_policies = [
+            GluePolicy.from_token(row['policy_token'])
+            for row in result['items']
+        ]
+        relation_address = glue_object.policy.children[
+            f'red_corner.{self.alpha.pk}'
+        ]
+        serialized = glue_object._serialized_child_manifests()
+
+        assert all(
+            policy.children['red_corner'] == relation_address
+            for policy in row_policies
+        )
+        assert sum(
+            manifest['address'] == relation_address
+            for manifest in serialized
+        ) == 1
+
+    def test_projected_to_many_rows_reference_collection_owned_querysets(self):
+        skill = Skill.objects.create(name='Grappling')
+        self.alpha.skills.add(skill)
+        glue_object = QuerySetGlue(
+            Gorilla.objects.filter(pk=self.alpha.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['name', 'skills__id', 'skills__name'],
+        )
+        glue_object.request = request_with_session()
+
+        result = glue_object.query_with_params()
+        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        relation_address = glue_object.policy.children[
+            f'skills.{self.alpha.pk}'
+        ]
+        serialized = glue_object._serialized_child_manifests()
+        relation_manifest = next(
+            manifest
+            for manifest in serialized
+            if manifest['address'] == relation_address
+        )
+
+        assert row_policy.children['skills'] == relation_address
+        assert GluePolicy.from_token(
+            relation_manifest['policy_token']
+        ).namespace == 'querySet'
+
     def test_row_exposes_raw_identity_not_the_shared_child(self):
         glue_object = self._glue(
             fields=['name', 'red_corner__id', 'red_corner__name']
@@ -550,6 +607,73 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
 
         assert len(children) == 1
         assert children[0].glue_object.instance is self.alpha
+
+    def test_reconstructed_row_restores_collection_owned_relation_references(self):
+        glue_object = self._glue(
+            fields=['name', 'red_corner__id', 'red_corner__name']
+        )
+        result = glue_object.query_with_params()
+        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        relation_address = glue_object.policy.children[
+            f'red_corner.{self.alpha.pk}'
+        ]
+
+        reconstructed = ModelGlue._reconstruct_from_policy(row_policy)
+        reconstructed.request = request_with_session()
+        reconstructed._address = row_policy.address
+
+        assert row_policy.children == {'red_corner': relation_address}
+        assert reconstructed.children == row_policy.children
+        relation_child = reconstructed._bound_children[0]
+        assert relation_child.path == 'red_corner'
+        assert relation_child.address == relation_address
+        assert relation_child.glue_object is None
+
+    def test_reconstructed_to_many_row_restores_collection_owned_queryset_reference(self):
+        skill = Skill.objects.create(name='Grappling')
+        self.alpha.skills.add(skill)
+        glue_object = QuerySetGlue(
+            Gorilla.objects.filter(pk=self.alpha.pk),
+            name='gorillas',
+            access=GlueAccess.VIEW,
+            fields=['name', 'skills__id', 'skills__name'],
+        )
+        glue_object.request = request_with_session()
+        result = glue_object.query_with_params()
+        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        relation_address = glue_object.policy.children[
+            f'skills.{self.alpha.pk}'
+        ]
+
+        reconstructed = ModelGlue._reconstruct_from_policy(row_policy)
+        reconstructed.request = request_with_session()
+        reconstructed._address = row_policy.address
+
+        assert reconstructed.children == row_policy.children
+        relation_child = reconstructed._bound_children[0]
+        assert relation_child.path == 'skills'
+        assert relation_child.address == relation_address
+        assert relation_child.glue_object is None
+
+    def test_row_attribute_call_on_projected_row_is_quiet_about_children(self):
+        glue_object = self._glue(
+            fields=['name', 'red_corner__id', 'red_corner__name']
+        )
+        result = glue_object.query_with_params()
+        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        context = AttributeCallRequestContext.model_construct(
+            request=request_with_session(),
+            target_glue_policy=row_policy,
+            target_glue_updates={},
+            target_attribute_name='load_state',
+            target_attribute_call_kwargs={},
+        )
+        reconstructed = ModelGlue.from_attribute_call_resolver_context(context)
+
+        payload = json.loads(reconstructed.process_attribute_call(context).content)
+
+        assert 'manifest_list' not in payload
+        assert 'policy_token' not in payload
 
 
 class ProjectedRelationCreationAccessTestCase(TestCase):

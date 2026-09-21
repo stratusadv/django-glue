@@ -22,6 +22,7 @@ class GlueRequestErrorCode(StrEnum):
     INVALID_CONTENT_TYPE = 'invalid_content_type'
     INVALID_JSON = 'invalid_json'
     INVALID_KWARGS = 'invalid_kwargs'
+    INVALID_UPDATES = 'invalid_updates'
 
     # Missing required fields
     MISSING_FIELD = 'missing_field'
@@ -340,8 +341,8 @@ class GlueExpiredPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
-class GlueCalledStateAttributeError(GlueError):
-    code = 'called_state_attribute'
+class GlueCalledNonCallableAttributeError(GlueError):
+    code = 'called_non_callable_attribute'
     status = 404
 
     def __init__(self, attribute: str, proxy_name: str, reason: str | None = None) -> None:
@@ -349,7 +350,7 @@ class GlueCalledStateAttributeError(GlueError):
         self.proxy_name = proxy_name
         self.reason = reason
         message = (
-            f"Invalid attribute target {attribute}. Only CallableAttributes can be called."
+            f"Invalid attribute target {attribute}. Only callable attributes can be called."
         )
         if reason:
             message += f': {reason}'

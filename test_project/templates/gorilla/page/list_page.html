@@ -227,7 +227,11 @@
                         }, 'error');
                     },
                     errorSummary(proxy) {
-                        const errors = proxy._state?.errors || {};
+                        const errors = Object.fromEntries(
+                            Object.entries(proxy.$fields || {})
+                                .filter(([, field]) => field.hasErrors)
+                                .map(([name, field]) => [name, field.errors])
+                        );
                         const messages = Object.entries(errors)
                             .map(([field, fieldErrors]) => {
                                 const label = proxy.$fields?.[field]?.label || field;

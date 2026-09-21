@@ -54,8 +54,8 @@ class FormIdentityTestCase(TestCase):
         )
 
         glue_object._load_client_state({
-            'name': {'value': 'Grace'},
-            'email': {'value': 'attacker@example.com'},
+            'name': 'Grace',
+            'email': 'attacker@example.com',
         })
 
         assert glue_object.form.data['name'] == 'Grace'

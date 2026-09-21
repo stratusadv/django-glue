@@ -98,12 +98,12 @@ class GlueHttp {
         })
     }
 
-    async sendAttributeRequest({name, policyToken, state = null, attribute, kwargs = {}}) {
+    async sendAttributeRequest({name, policyToken, updates = {}, attribute, kwargs = {}}) {
         const formData = new FormData()
-        const {files, data} = this._extractFiles(serializeValue(state || {}))
+        const {files, data} = this._extractFiles(serializeValue(updates))
 
         formData.append('policy_token', policyToken)
-        formData.append('state', JSON.stringify(data))
+        formData.append('updates', JSON.stringify(data))
         formData.append('attribute', attribute)
         formData.append('kwargs', JSON.stringify(kwargs))
 

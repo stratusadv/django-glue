@@ -11,6 +11,7 @@ django.setup()
 
 from django_glue.access import GlueAccess
 from django_glue.glue import ModelGlue, FunctionGlue
+from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 from django_glue.tests.conftest import MockSession
 from test_project.gorilla.models import Gorilla
@@ -30,14 +31,14 @@ class GlueAttributeRequestViewTestCase(TestCase):
             height=1.8,
         )
 
-    def attribute_request(self, object_name, policy, attribute, kwargs=None, state=None):
+    def attribute_request(self, object_name, policy, attribute, kwargs=None, updates=None):
         request = self.factory.post(
             f'/__dg__/callable_attribute/{object_name}/',
             data={
                 'policy_token': policy.token,
                 'attribute': attribute,
                 'kwargs': json.dumps(kwargs or {}, default=str),
-                **({'state': json.dumps(state, default=str)} if state is not None else {}),
+                **({'updates': json.dumps(updates, default=str)} if updates is not None else {}),
             },
         )
         request.resolver_match = type(
@@ -62,11 +63,11 @@ class GlueAttributeRequestViewTestCase(TestCase):
             'gorilla',
             policy,
             'save',
-            state={
-                'name': {'value': 'Updated'},
-                'age': {'value': 19},
-                'weight': {'value': 210.0},
-                'height': {'value': 1.9},
+            updates={
+                'name': 'Updated',
+                'age': 19,
+                'weight': 210.0,
+                'height': 1.9,
             },
         )
 
@@ -77,9 +78,14 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.assertEqual(self.gorilla.name, 'Updated')
         data = json.loads(response.content)
         self.assertIn('policy_token', data)
-        self.assertIn('state', data)
-        self.assertIn('metadata', data)
+        self.assertIn('computed_data', data)
+        self.assertNotIn('static_data', data)
         self.assertEqual(data['result']['success'], True)
+        successor = GluePolicy.from_token(data['policy_token'])
+        self.assertEqual(
+            successor.state_snapshot,
+            {'name': 'Updated', 'age': 19, 'weight': 210.0, 'height': 1.9},
+        )
 
     def test_attribute_request_view_enforces_policy_access(self):
         glue_object = ModelGlue(
@@ -94,7 +100,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
             'gorilla',
             policy,
             'save',
-            state={'name': {'value': 'Updated'}},
+            updates={'name': 'Updated'},
         )
 
         response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
@@ -117,7 +123,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
             'gorilla',
             policy,
             'save',
-            state={'name': {'value': 'Updated'}},
+            updates={'name': 'Updated'},
         )
         request.user = type('User', (), {'id': 2})()
 
@@ -219,9 +225,9 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.assertEqual(data['result']['gorilla'], 'Koko')
         self.assertEqual(len(data['messages']), 1)
         self.assertIn('Koko beats their chest!', data['messages'][0]['message'])
-        self.assertIn('policy_token', data)
-        self.assertIn('state', data)
-        self.assertIn('metadata', data)
+        self.assertNotIn('policy_token', data)
+        self.assertNotIn('static_data', data)
+        self.assertNotIn('computed_data', data)
 
     def request_context(self):
         return type('Request', (), {'session': self.session, 'FILES': {}})()

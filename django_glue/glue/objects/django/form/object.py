@@ -49,7 +49,6 @@ class FormGlue(BaseGlue):
         super().__init__(name=name, access=access, loading_strategy=loading_strategy)
         self.form = form
         self.editable = self._normalize_editable(editable)
-        self._loaded_state: dict[str, Any] | None = None
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
         self._bound_form: forms.BaseForm | None = None
@@ -249,19 +248,27 @@ class FormGlue(BaseGlue):
         return model_class(**field_kwargs)
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        """Bind client-provided state before executing form attributes."""
-        self._loaded_state = {
-            name: value
-            for name, value in state.items()
-            if name in self.editable
-        }
+        """Bind retained state (signed snapshot plus admitted updates) before
+        executing form attributes (state-model.md §10)."""
+        super()._load_client_state(state)
         self.form = self._bind_form()
+
+    def _retained_state(self) -> dict[str, Any]:
+        retained = super()._retained_state()
+        retained.update({
+            name: self._get_form_attribute_value(name)
+            for name in self.editable
+        })
+        return retained
 
     @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         self._bound_form = bound_form
-        return {'valid': bound_form.is_valid(), 'errors': dict(bound_form.errors)}
+        valid = bound_form.is_valid()
+        self._field_errors = dict(bound_form.errors)
+        self._derived_paths.update(self.form.fields)
+        return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     @DeclaredAttribute(required_access=_required_save_access)
     def save(self) -> dict[str, Any]:
@@ -269,10 +276,12 @@ class FormGlue(BaseGlue):
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
+        self._field_errors = dict(bound_form.errors)
+        self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     # Choice loading is read-only; returning form state would trigger validation during serialization.
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -294,17 +303,11 @@ class FormGlue(BaseGlue):
         )
 
     def _bind_form(self) -> forms.BaseForm:
-        state = self._loaded_state or {}
         form_class = self.form.__class__
-        # Extract values from new state structure: {field_name: {value: ..., errors: ...}}
-        data = {}
-        for field_name in self.form.fields:
-            field_state = state.get(field_name, self.form[field_name].value())
-            data[field_name] = (
-                field_state.get('value')
-                if isinstance(field_state, dict)
-                else field_state
-            )
+        data = {
+            field_name: self._editable_draft.get(field_name, self.form[field_name].value())
+            for field_name in self.form.fields
+        }
         kwargs = {
             'data': data,
             'files': self.request.FILES if self.request else None,

@@ -172,6 +172,15 @@ class QuerySetGlue(
     def get_state(self) -> dict[str, Any]:
         return self._query()
 
+    def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
+        """The current page rides the introduction surface: rows, annotations,
+        counts, and keyed child references are the family's down-only half
+        (state-model.md §4 family table)."""
+        computed = super().get_computed_data(include_all=include_all)
+        if include_all:
+            computed.update(self.get_state())
+        return computed
+
     @cached_property
     def _orm_annotation_names(self) -> tuple[str, ...]:
         return tuple(self.queryset.query.annotations)
@@ -220,7 +229,7 @@ class QuerySetGlue(
         queryset.query = query
         return queryset
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def query_with_params(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -321,7 +330,7 @@ class QuerySetGlue(
 
         return result
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def count(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -358,7 +367,7 @@ class QuerySetGlue(
             'batch_size': self.batch_size,
         }
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def get(self, pk: Any) -> dict[str, Any]:
         # A pk outside this queryset is a routine client outcome, not a server fault: a
         # row can leave the bound filter between render and refresh. Report it as 404 so
@@ -373,7 +382,7 @@ class QuerySetGlue(
 
         return self._build_child_model_payload(instance)
 
-    @DeclaredAttribute(required_access=GlueAccess.ADD, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.ADD)
     def new(self, initial: dict | None = None) -> dict[str, Any]:
         # ADD admits creating a draft, not expanding it: the fields a client may
         # pre-fill are exactly the fields the signed policy marks editable
@@ -398,6 +407,14 @@ class QuerySetGlue(
             for instance in self._current_batch
         ]
 
+    def _bind_children(self) -> tuple[BoundGlueChild, ...]:
+        row_children = super()._bind_children()
+        relation_children = self._bind_relation_children(
+            self._current_batch,
+            owner_address=self.address,
+        )
+        return row_children + relation_children
+
     def _row_glue(self, instance: models.Model) -> ModelGlue:
         child_name = f'{self.name}.{instance.pk}'
         child_forms = {
@@ -421,7 +438,7 @@ class QuerySetGlue(
             instance,
             name=child_name,
             access=child_access,
-            fields=self._included_fields,
+            fields=tuple(self._included_fields) + self._projected_field_paths,
             editable=self.editable,
             annotations=self._orm_annotation_names,
             forms=child_forms,
@@ -432,6 +449,34 @@ class QuerySetGlue(
         )
         child_object._row_access = row_access
         child_object.request = self.request
+        if instance.pk is not None:
+            child_object._address = address.item(self.address, str(instance.pk))
+
+        relation_paths = {
+            relation_name for relation_name, _subfields in self._projected_relations
+        }
+        bound_children = []
+        for child in child_object._bind_children():
+            if child.path not in relation_paths:
+                bound_children.append(child)
+                continue
+            relation_name = child.path
+            if self._relation_is_to_many(relation_name):
+                relation_key = instance.pk
+            else:
+                related = getattr(instance, relation_name, None)
+                if related is None:
+                    continue
+                relation_key = related.pk
+            bound_children.append(BoundGlueChild(
+                path=relation_name,
+                address=self._relation_child_address(
+                    self.address,
+                    relation_name,
+                    relation_key,
+                ),
+            ))
+        child_object.__dict__['_bound_children'] = tuple(bound_children)
 
         # Propagate visited relations for cycle detection in nested objects
         if hasattr(self, '_visited_relations'):
@@ -440,7 +485,8 @@ class QuerySetGlue(
         return child_object
 
     def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
-        return self._row_glue(instance).manifest.model_dump()
+        child = self._row_glue(instance)
+        return child.manifest.model_dump()
 
     def _bind_relation_children(
         self,
@@ -462,15 +508,20 @@ class QuerySetGlue(
         children: dict[tuple[str, Any], BoundGlueChild] = {}
         for relation_name, subfields in self._projected_relations:
             for instance in instances:
-                related = getattr(instance, relation_name)
+                if self._relation_is_to_many(relation_name):
+                    related = getattr(instance, relation_name).all()
+                    related_key = instance.pk
+                else:
+                    related = getattr(instance, relation_name)
+                    related_key = getattr(related, 'pk', None)
                 if related is None:
                     continue
-                member = (relation_name, related.pk)
+                member = (relation_name, related_key)
                 if member in children:
                     continue
                 child = self._construct_relation_child(
                     related,
-                    name=f'{self.name}.{relation_name}.{related.pk}',
+                    name=f'{self.name}.{relation_name}.{related_key}',
                     subfields=subfields,
                 )
                 if not child.authorize(
@@ -484,11 +535,11 @@ class QuerySetGlue(
                     continue
                 child.request = self.request
                 children[member] = BoundGlueChild(
-                    path=f'{relation_name}.{related.pk}',
+                    path=f'{relation_name}.{related_key}',
                     address=self._relation_child_address(
                         owner_address,
                         relation_name,
-                        related.pk,
+                        related_key,
                     ),
                     glue_object=child,
                 )

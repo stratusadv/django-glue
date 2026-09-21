@@ -11,7 +11,7 @@ Django Glue already solves the backend/frontend contract: signed, stateless
 policies (`glue/policy.py`), declared attributes (`@Glue.attr`,
 `@Glue.property`), nested glue objects (`GlueObjectAttribute`), a namespace
 registry (`glue/registry.py`), and a round trip that can return a successor
-policy, unsigned data, new manifests, and HTML.
+policy, computed data, new manifests, and HTML.
 
 The time entry dashboard in stratusadv-portal
 (`app/time_tracker/glue/dashboard/`) proves the ViewModel half of a component
@@ -120,7 +120,7 @@ class TimeEntryDay(Glue.Component):
   dashboard works today. `render()` exists for mount and for dynamic insertion
   (modals, fragments, and structural change such as a new week).
 - **State synchronization is not rendering.** Responses carry a successor
-  policy token and addressed `unsigned_data` as defined by `state-model.md` §5
+  policy token and addressed `computed_data` as defined by `state-model.md` §5
   and §10. The client assembles and reconciles their values into the existing
   reactive object; it does not replace the object or infer data from rendered
   HTML.
@@ -470,7 +470,7 @@ stamp site permits but does not sign their values. At the load trigger, Glue
 evaluates those expressions through the enclosing Alpine scope and submits the
 results as untrusted construction input. The server rejects additional names,
 validates the declared parameter types, applies current authorization, calls
-`mount()`, and returns the normal policy, schema, unsigned data, and HTML.
+`mount()`, and returns the normal policy, static data, computed data, and HTML.
 
 An accepted Alpine value is then signed into the normal policy's
 `target.parameters`. It is sampled once and does not remain bound to Alpine;
@@ -609,8 +609,8 @@ Server-rendered HTML that replaces existing content is always applied with
 the DOM through Alpine's bindings without glue writing nodes. Morph boundaries
 are component boundaries, and addresses supply the node keys.
 
-When a response contains both `unsigned_data` and HTML, the successor token and
-`unsigned_data` are assembled and reconciled first, and the HTML is morphed
+When a response contains both `computed_data` and HTML, the successor token and
+`computed_data` are assembled and reconciled first, and the HTML is morphed
 second. The state model preserves editable values changed after the request was
 sent; morphing preserves the corresponding DOM nodes, Alpine scopes, focus, and
 caret. Neither mechanism substitutes for the other.
@@ -1090,7 +1090,7 @@ Findings:
 - **The state transport is governed by `state-model.md`.**
   `takes_client_state` and `updates_client_state` are removed. Requests derive
   editable updates from canonical versus ephemeral state; responses carry an
-  addressed successor policy token and `unsigned_data`, which are assembled and
+  addressed successor policy token and `computed_data`, which are assembled and
   reconciled without replacing newer local edits.
 - **Stale documentation.** `AGENTS.md` still documents the removed
   `proxies/` package, `@action`, and session-based registration, and

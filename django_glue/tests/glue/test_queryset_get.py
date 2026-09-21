@@ -41,7 +41,7 @@ class QuerySetGetTestCase(TestCase):
     def test_get_returns_payload_for_a_row_inside_the_queryset(self):
         result = self.glue_object.get(pk=self.inside.pk)
 
-        assert result['state']['name']['value'] == 'Inside'
+        assert result['computed_data']['name'] == 'Inside'
 
     def test_get_reports_not_found_for_a_row_outside_the_queryset(self):
         with self.assertRaises(GlueModelInstanceNotFoundError) as context:

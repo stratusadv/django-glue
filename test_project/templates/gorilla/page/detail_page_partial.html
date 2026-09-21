@@ -1,24 +1,3 @@
-<style>
-.stat-card {
-    background: linear-gradient(135deg, var(--gorilla-green) 0%, var(--gorilla-green-dark) 100%);
-    color: white;
-    border-radius: 10px;
-    padding: 1rem;
-    text-align: center;
-}
-
-.stat-value {
-    font-family: "Jersey 15", sans-serif;
-    font-size: 2rem;
-}
-
-.stat-label {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    opacity: 0.9;
-}
-</style>
-
 <div x-data="{
     gorilla: Glue.model.gorilla,
     init() {
@@ -39,9 +18,9 @@
     },
     errorSummary(proxy) {
         const errors = Object.fromEntries(
-            Object.entries(proxy._state || {})
-                .filter(([, fieldState]) => fieldState?.errors?.length)
-                .map(([field, fieldState]) => [field, fieldState.errors])
+            Object.entries(proxy.$fields || {})
+                .filter(([, field]) => field.hasErrors)
+                .map(([name, field]) => [name, field.errors])
         );
         const messages = Object.entries(errors)
             .map(([field, fieldErrors]) => {
@@ -52,6 +31,26 @@
         return messages.length ? messages.join(' ') : 'Check form for errors.';
     }
 }">
+<style>
+.stat-card {
+    background: linear-gradient(135deg, var(--gorilla-green) 0%, var(--gorilla-green-dark) 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.stat-value {
+    font-family: "Jersey 15", sans-serif;
+    font-size: 2rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    opacity: 0.9;
+}
+</style>
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card card-gorilla">

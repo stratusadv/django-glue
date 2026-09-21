@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
+from django_glue.glue import address
 from django_glue.glue.attributes.declared import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.collection import BaseCollectionGlue
@@ -59,17 +60,15 @@ class SequenceGlue(BaseCollectionGlue):
     def get_state(self) -> dict[str, Any]:
         return {'items': [self._item_manifest(item) for item in self.items]}
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {'attributes': {}}
-
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return [(item.name, item) for item in self.items]
 
     def _item_manifest(self, item: BaseGlue) -> dict[str, Any]:
         item.request = self.request
+        item._address = address.item(self.address, item.name)
         return item.manifest.model_dump()
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def load_state(self) -> dict[str, Any]:
         """Return sequence state, or raise if lazily reconstructed.
 

@@ -36,14 +36,14 @@ class _AttributeRequestMixin:
         self.factory = RequestFactory()
         self.session = MockSession(session_key='session-1')
 
-    def attribute_request(self, object_name, policy, attribute, kwargs=None, state=None):
+    def attribute_request(self, object_name, policy, attribute, kwargs=None, updates=None):
         request = self.factory.post(
             f'/__dg__/callable_attribute/{object_name}/{attribute}/',
             data={
                 'policy_token': policy.token,
                 'attribute': attribute,
                 'kwargs': json.dumps(kwargs or {}, default=str),
-                **({'state': json.dumps(state, default=str)} if state is not None else {}),
+                **({'updates': json.dumps(updates, default=str)} if updates is not None else {}),
             },
         )
         request.resolver_match = type(
@@ -55,13 +55,13 @@ class _AttributeRequestMixin:
         request.user = 'TestUser'
         return request
 
-    def call(self, object_name, policy, attribute, kwargs=None, state=None):
+    def call(self, object_name, policy, attribute, kwargs=None, updates=None):
         request = self.attribute_request(
             object_name,
             policy,
             attribute,
             kwargs=kwargs,
-            state=state,
+            updates=updates,
         )
         return glue_attribute_call_view(
             request,
@@ -168,7 +168,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             row.name,
             row,
             'save',
-            state={'name': {'value': 'Hacked'}},
+            updates={'name': 'Hacked'},
         )
 
         self.assertEqual(response.status_code, 403)
@@ -194,7 +194,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             draft.name,
             draft,
             'save',
-            state={'name': {'value': 'New'}, 'age': {'value': 5}},
+            updates={'name': 'New', 'age': 5},
         )
 
         self.assertEqual(save_response.status_code, 200)
@@ -210,7 +210,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             successor.name,
             successor,
             'save',
-            state={'name': {'value': 'Edited'}},
+            updates={'name': 'Edited'},
         )
         self.assertEqual(second.status_code, 403)
         saved.refresh_from_db()
@@ -233,7 +233,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             draft.name,
             draft,
             'save',
-            state={'name': {'value': 'New'}, 'age': {'value': 5}},
+            updates={'name': 'New', 'age': 5},
         )
 
         self.assertEqual(save_response.status_code, 200)
@@ -245,7 +245,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             successor.name,
             successor,
             'save',
-            state={'name': {'value': 'Edited'}, 'age': {'value': 6}},
+            updates={'name': 'Edited', 'age': 6},
         )
         self.assertEqual(edit_response.status_code, 200)
         self.assertEqual(Gorilla.objects.get(name='Edited').age, 6)
@@ -300,7 +300,7 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla',
             glue_object.policy,
             'save',
-            state={'name': {'value': 'Fresh'}, 'age': {'value': 5}},
+            updates={'name': 'Fresh', 'age': 5},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -312,7 +312,7 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla',
             successor,
             'save',
-            state={'name': {'value': 'Mutated'}, 'age': {'value': 5}},
+            updates={'name': 'Mutated', 'age': 5},
         )
         self.assertEqual(second.status_code, 403)
         saved.refresh_from_db()
@@ -327,7 +327,7 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla',
             glue_object.policy,
             'save',
-            state={'name': {'value': 'Mutated'}},
+            updates={'name': 'Mutated'},
         )
 
         self.assertEqual(response.status_code, 403)
@@ -344,7 +344,7 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla',
             glue_object.policy,
             'save',
-            state={'name': {'value': 'Updated'}},
+            updates={'name': 'Updated'},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -379,12 +379,12 @@ class GlueFormSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla_form',
             glue_object.policy,
             'save',
-            state={
-                'name': {'value': 'Filo'},
-                'age': {'value': 5},
-                'weight': {'value': 200.0},
-                'height': {'value': 1.8},
-                'rank_points': {'value': 0},
+            updates={
+                'name': 'Filo',
+                'age': 5,
+                'weight': 200.0,
+                'height': 1.8,
+                'rank_points': 0,
             },
         )
 
@@ -405,12 +405,12 @@ class GlueFormSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'gorilla_form',
             glue_object.policy,
             'save',
-            state={
-                'name': {'value': 'Mutated'},
-                'age': {'value': 18},
-                'weight': {'value': 200.0},
-                'height': {'value': 1.8},
-                'rank_points': {'value': 0},
+            updates={
+                'name': 'Mutated',
+                'age': 18,
+                'weight': 200.0,
+                'height': 1.8,
+                'rank_points': 0,
             },
         )
 

@@ -17,11 +17,11 @@ families and do not introduce a second state engine.
 
 ```text
 Django declaration
-    -> signed policy token + schema + unsigned data
+    -> signed policy token + static data + computed data
     -> one addressed reactive client object
     -> editable updates and/or a callable invocation
     -> reconstruction, authorization, admission, validation
-    -> successor token + unsigned data + result/effects
+    -> successor token + computed data + result/effects
     -> three-way reconciliation into the same client object
 ```
 
@@ -40,7 +40,7 @@ server objects.
    explicit `editable=` projection, so read exposure never silently implies
    write exposure.
 3. **Signed continuity.** Anything the server will consume from the browser on
-   the next request is carried in the signed token. Derived output and schema
+   the next request is carried in the signed token. Derived output and static data
    never travel upward.
 4. **Current authority wins.** Effective access is the intersection of the
    signed capability, the current declaration, and current application
@@ -137,7 +137,7 @@ server objects.
 | `Glue.attr(x)` | reconstructor | no | `state_snapshot` | never |
 | `Glue.attr(x, parameter=True, editable=True)` | editable state | yes | `target.parameters` | admitted diff |
 | `Glue.attr(x, editable=True)` | editable state | no | `state_snapshot` | admitted diff |
-| `@Glue.property` | derived output | no | `unsigned_data` | never returned |
+| `@Glue.property` | derived output | no | `computed_data` | never returned |
 
 `parameter=True` is independent of the value role. It exposes a declaration to
 initial construction and supplies its canonical value through the generated
@@ -154,23 +154,23 @@ A Glue-object-typed `@Glue.property` is also the server-owned production point
 for an addressed Glue child. An ordinary return value follows the table above;
 a configured `BaseGlue` return matching the annotation is registered as a child
 and represented by an internal address reference instead of being inserted
-into `unsigned_data`. Raw Django models, forms, querysets, and formsets are not
+into `computed_data`. Raw Django models, forms, querysets, and formsets are not
 promoted implicitly.
 
 ## Transport outline
 
 - Initial introduction: a flat `objects` collection containing `address`,
-  `policy_token`, `schema`, and `unsigned_data` for every newly introduced
+  `policy_token`, `static_data`, and `computed_data` for every newly introduced
   address.
 - Request: a flat `objects` collection containing `address`, `policy_token`,
   editable `updates`, and optionally one callable invocation per participating
   address.
 - Response: a flat `objects` collection containing `address`, successor
-  `policy_token`, complete `unsigned_data`, optional replacement `schema`, and
+  `policy_token`, complete `computed_data`, optional replacement `static_data`, and
   per-address `result`, `effects`, and component `html` where applicable. A
   declared Glue-object result carries an address resolved from another entry in
   the same collection.
-- A successor token and `unsigned_data` are each omitted when they did not
+- A successor token and `computed_data` are each omitted when they did not
   change, and an omission means *unchanged* while an empty value is
   authoritative and clears. Derived, never declared.
 - Every addressed Glue object owns its policy independently. Nested components
@@ -323,7 +323,7 @@ cancels any not-yet-issued debounce before finalizing.
 The signed parameter names an `entry_version_id`, every call resolves it
 through current authorization, and structured block input is bounded and
 validated while server order comes from list position. Initial blocks travel
-in initial render context rather than recurring `unsigned_data`; the
+in initial render context rather than recurring `computed_data`; the
 Editor.js-owned DOM is morph-protected. Plain JavaScript resolves the component
 through `Glue.from(element)`. Cross-tab overwrite protection may opt into the
 state model's authoritative version contract; otherwise last-write-wins is an

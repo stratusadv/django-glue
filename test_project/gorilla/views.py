@@ -29,7 +29,8 @@ def list_view(request: HttpRequest) -> HttpResponse:
             'fighting_stats',
             'created_at',
             'updated_at',
-            'skills',
+            'skills__id',
+            'skills__name',
         ],
     )
 

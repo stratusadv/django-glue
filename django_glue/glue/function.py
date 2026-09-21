@@ -39,14 +39,10 @@ class FunctionGlue(BaseGlue):
     def get_state(self) -> dict[str, Any]:
         return {'function_path': self.target}
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'params': self.identity.get('params', []),
-            'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
-            },
-        }
+    def get_static_data(self) -> dict[str, Any]:
+        static_data = super().get_static_data()
+        static_data['params'] = self.identity.get('params', [])
+        return static_data
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> FunctionGlue:

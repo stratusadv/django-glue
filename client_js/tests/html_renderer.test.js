@@ -1,21 +1,33 @@
 import {describe, expect, test} from "bun:test"
 import {htmlResultFromResponse} from "../src/htmlRenderer"
 import GlueView from "../src/view"
-import GlueTemplateProxy from "../src/proxies/template"
-import {createPolicy} from "./testUtils"
+import GlueClient from "../src/client"
+import {createManifest} from "./testUtils"
+
+function templateRenderer(html) {
+    const client = new GlueClient({manifest_list: [createManifest({
+        policy: {
+            name: 'panel', namespace: 'template', address: 'panel#test',
+            attributes: ['render_html'], state_snapshot: {},
+        },
+        staticData: {fields: {}, callables: {render_html: {allowed_arguments: []}}},
+    })]})
+    client.http.sendAttributeRequest = async () => ({data: {
+        result: {is_glue_template_response: true, html, manifest_list: []},
+    }})
+    return client.template.panel
+}
 
 const renderers = {
     result: html => htmlResultFromResponse({html}),
-    view: html => new GlueView({
-        _config: {glueViewUrlPath: '/view/'},
-        sendRequest: async () => ({data: {is_glue_template_response: true, html, manifest_list: []}}),
-    }, '/fragment/'),
-    template: html => new GlueTemplateProxy({
-        policy: createPolicy({namespace: 'template', attributes: ['render_html']}),
-        http: {sendAttributeRequest: async () => ({data: {
-            result: {is_glue_template_response: true, html, manifest_list: []},
-        }})},
-    }),
+    view: html => {
+        happyDOM.setURL('http://localhost/')
+        return new GlueView({
+            _config: {glueViewUrlPath: '/view/'},
+            sendRequest: async () => ({data: {is_glue_template_response: true, html, manifest_list: []}}),
+        }, '/fragment/')
+    },
+    template: templateRenderer,
 }
 
 for (const [name, createRenderer] of Object.entries(renderers)) {

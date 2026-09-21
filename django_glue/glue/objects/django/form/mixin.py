@@ -60,7 +60,7 @@ class ModelGlueFormConfigMixin:
                 # fails with "the data may have been tampered with" even
                 # though nothing was. prepare_value() reduces these to plain,
                 # deterministic PKs instead, same as FormGlue._prepared_initial
-                # and FormFieldAttribute.get().
+                # and FormGlue._get_form_attribute_value().
                 'initial': {
                     field_name: (
                         form.fields[field_name].prepare_value(value)

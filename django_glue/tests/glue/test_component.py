@@ -179,9 +179,11 @@ def test_component_renders_owned_template(mock_request) -> None:
 def test_component_render_is_exposed_as_glue_attribute() -> None:
     component = GreetingComponent()
 
-    assert component.metadata['attributes']['render'] == {
-        'namespace': 'callable',
-        'takes_client_state': True,
+    assert component.get_static_data() == {
+        'callables': {
+            'load_state': {'allowed_arguments': []},
+            'render': {'allowed_arguments': []},
+        },
     }
 
 
@@ -209,6 +211,15 @@ def test_component_collects_static_and_extra_attribute_definitions() -> None:
         'reset',
         'value',
     )
+
+
+def test_component_static_data_marks_editable_value_paths() -> None:
+    component = ExtendedGreetingComponent()
+
+    assert component.get_static_data()['fields']['value'] == {
+        'value_path': 'value',
+        'editable': True,
+    }
 
 
 def test_component_binds_extra_attributes_to_external_object() -> None:

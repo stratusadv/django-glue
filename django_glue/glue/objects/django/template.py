@@ -42,14 +42,6 @@ class TemplateGlue(BaseGlue):
             'context_data': self.initial_context_data,
         }
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
-            },
-        }
-
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> TemplateGlue:
         return cls(

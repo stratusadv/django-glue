@@ -155,13 +155,13 @@ def call_context(
     attribute: str,
     *,
     kwargs: dict[str, Any] | None = None,
-    state: dict[str, Any] | None = None,
+    updates: dict[str, Any] | None = None,
 ) -> AttributeCallRequestContext:
     assert glue_object.request is not None
     return AttributeCallRequestContext.model_construct(
         request=glue_object.request,
         target_glue_policy=glue_object.policy,
-        target_glue_client_state=state,
+        target_glue_updates=updates or {},
         target_attribute_name=attribute,
         target_attribute_call_kwargs=kwargs or {},
     )
@@ -194,7 +194,7 @@ def test_call_injects_request_and_applies_editable_updates(
         glue_object,
         'process',
         kwargs={'step': 2},
-        state={'value': {'value': 'draft'}},
+        updates={'value': 'draft'},
     )
 
     response = glue_object.process_attribute_call(context)

@@ -53,9 +53,9 @@
         },
         errorSummary(proxy) {
             const errors = Object.fromEntries(
-                Object.entries(proxy._state || {})
-                    .filter(([, fieldState]) => fieldState?.errors?.length)
-                    .map(([field, fieldState]) => [field, fieldState.errors])
+                Object.entries(proxy.$fields || {})
+                    .filter(([, field]) => field.hasErrors)
+                    .map(([name, field]) => [name, field.errors])
             );
             const messages = Object.entries(errors)
                 .map(([field, fieldErrors]) => {

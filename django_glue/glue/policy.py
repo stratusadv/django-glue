@@ -51,6 +51,7 @@ class GluePolicy(BaseModel):
     attributes: list[str | Self] = Field(default_factory=list)
     address: str = ''
     children: dict[str, str] = Field(default_factory=dict)
+    state_snapshot: dict[str, Any] = Field(default_factory=dict)
     capability: GlueCapability = Field(default_factory=GlueCapability)
     created_at: float
     token: str = ''
@@ -90,6 +91,7 @@ class GluePolicy(BaseModel):
             'attributes': attributes,
             'address': glue_object.address,
             'children': glue_object.children,
+            'state_snapshot': glue_object._retained_state(),
             'capability': {
                 'callables': callables,
             },

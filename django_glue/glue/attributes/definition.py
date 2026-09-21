@@ -19,6 +19,7 @@ from typing import (
 
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueInvalidAttributeError
+from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.access import GlueAccess
@@ -101,6 +102,7 @@ class GlueAttributeDefinition:
     is_parameter: bool = False
     is_identity: bool = False
     provider_type: type[Any] | None = None
+    value_type: Any | None = None
     expected_type: type[Any] | None = None
     is_nullable: bool = False
     allowed_arguments: tuple[str, ...] = ()
@@ -209,19 +211,15 @@ class BoundGlueAttribute:
     owner: Any
     provider: Any | None = None
 
-    @property
-    def metadata(self) -> dict[str, Any]:
-        return self.owner._get_attribute_metadata(self)
-
     def schema(self) -> dict[str, Any]:
         if self.definition.adapter is None:
             return {}
         return dict(self.definition.adapter.schema())
 
-    def unsigned_data(self) -> dict[str, Any]:
+    def computed_data(self) -> dict[str, Any]:
         if self.definition.adapter is None:
             return {}
-        return dict(self.definition.adapter.unsigned_data())
+        return dict(self.definition.adapter.computed_data())
 
     def get(self) -> Any:
         if self.definition.callable_target is not None:
@@ -234,6 +232,11 @@ class BoundGlueAttribute:
                 self.definition.source_name,
             )
         self._validate_value_result(value)
+        if (
+            self.definition.kind is GlueAttributeKind.VALUE
+            and self.definition.value_role is GlueValueRole.DERIVED_OUTPUT
+        ):
+            self.owner._derived_paths.add(self.definition.path)
         return value
 
     def call(self, *args: Any, **kwargs: Any) -> Any:
@@ -319,6 +322,24 @@ class BoundGlueAttribute:
             self.definition.source_name,
             value,
         )
+
+    def coerce_update(self, value: Any) -> Any:
+        if self.definition.adapter is not None:
+            return self.definition.adapter.coerce(value)
+        target = self.definition.value_type
+        if target is None:
+            current = self.get()
+            target = type(current) if current is not None else None
+        return glue_serializer_registry.coerce(value, target)
+
+    def decode_retained(self, value: Any) -> Any:
+        if self.definition.adapter is not None:
+            return self.definition.adapter.decode(value)
+        target = self.definition.value_type
+        if target is None:
+            current = self.get()
+            target = type(current) if current is not None else None
+        return glue_serializer_registry.decode(value, target)
 
     def _resolve_attribute_owner(self) -> Any:
         attribute_owner = self._binding_owner()

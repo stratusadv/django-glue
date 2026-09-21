@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Iterable, Mapping
+from contextlib import suppress
 from dataclasses import replace
 from functools import cache, partial
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, get_type_hints
 
 from django_glue.glue.attributes.definition import (
     GlueAttributeDefinition,
@@ -24,6 +25,9 @@ class GlueAttributeCollector:
     @staticmethod
     @cache
     def collect(owner_type: type[Any]) -> tuple[GlueAttributeDefinition, ...]:
+        value_types: dict[str, Any] = {}
+        with suppress(NameError, TypeError):
+            value_types = get_type_hints(owner_type)
         return tuple(
             definition
             for source_name, static_attribute in inspect.getmembers_static(owner_type)
@@ -32,6 +36,7 @@ class GlueAttributeCollector:
                 source_name=source_name,
                 options=options,
                 declaration=static_attribute,
+                value_type=value_types.get(source_name),
             )
         )
 
@@ -150,6 +155,7 @@ class GlueAttributeCollector:
         *,
         path: str | None = None,
         declaration: Any | None = None,
+        value_type: Any | None = None,
     ) -> tuple[GlueAttributeDefinition, ...]:
         path = path if path is not None else source_name
         if options.is_namespace:
@@ -198,6 +204,7 @@ class GlueAttributeCollector:
                 kind=kind,
                 required_access=options.required_access,
                 value_role=options.value_role,
+                value_type=value_type if kind == GlueAttributeKind.VALUE else None,
                 is_parameter=options.is_parameter,
                 is_identity=options.is_identity,
                 allowed_arguments=allowed_arguments,
@@ -293,6 +300,9 @@ class GlueAttributeCollector:
                 provider_type=provider_type,
             ),
         ]
+        value_types: dict[str, Any] = {}
+        with suppress(NameError, TypeError):
+            value_types = get_type_hints(provider_type)
         next_chain = chain | {provider_type}
         for child_name, static_attribute in inspect.getmembers_static(provider_type):
             child_options = GlueAttributeCollector._get_options(static_attribute)
@@ -315,6 +325,7 @@ class GlueAttributeCollector:
                         options=child_options,
                         path=f'{path}.{child_name}',
                         declaration=static_attribute,
+                        value_type=value_types.get(child_name),
                     )
                 )
         return tuple(definitions)
