@@ -121,6 +121,40 @@ not queries.
 
 **Closes when** seam 1 closes and the slot-resolution table is implemented.
 
+#### Measured: what a stamped child actually costs
+
+The same pressure applies to stamped components, and the portal's time entry
+dashboard refactor put a number on it.
+
+`component-system.md` §"Shared derivation follows ownership" predicts the cost
+and advises against the split: *"the dashboard owns `user_id` and `week_of`,
+constructs one cached `TimeEntryPeriod`, and derives both the weekly summary and
+keyed day data from it. Day cards are presentation regions unless they genuinely
+need independent server state or lifecycle."*
+
+We split them anyway, deliberately, to measure the prediction rather than argue
+about it:
+
+| | `time_entry` queries | round trips to first paint |
+| --- | --- | --- |
+| Before (one Glue object) | 1 | 2 — page, then `get_week()` after mount |
+| After (dashboard + 7 day components) | 8 | 1 — the page arrives rendered |
+
+So an independently addressed child costs **one extra query each** on this wire,
+because it has no way to receive what its owner already fetched. Seven cards,
+seven extra queries. The dashboard still runs its own `TimeEntryPeriod` for the
+weekly summary, which is the eighth.
+
+That is the concrete argument for §7's addressed children and shared derivation:
+the cost is not composition itself, it is composition *without* a way to pass
+derived data down. It also is not free to avoid — collapsing the days back into
+presentation regions gives up the independent lifecycle that makes each card's
+`new_entry()` its own authorized operation.
+
+Worth noting what the split bought: the page now arrives server-rendered, so the
+old post-mount `get_week()` fetch and its `x-show="ready"` flash are gone. Seven
+queries during render replaced one query in a second request.
+
 ### 3. Lifecycle is a DOM-liveness sweep, not disposal
 
 `components/spec.md` §10. Stamped components register flat with no owner edges, so
