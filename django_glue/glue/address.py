@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from base64 import urlsafe_b64encode
 from hashlib import sha256
+from secrets import token_hex
 
 
 def opaque_segment(namespace: str, name: str) -> str:
@@ -33,3 +34,12 @@ def child(owner_address: str, path: str) -> str:
 def item(collection_address: str, key: str) -> str:
     """Address of a keyed collection item: ``collection[key]``."""
     return f'{collection_address}[{key}]'
+
+
+def transient(owner_address: str) -> str:
+    """Address of a transient callable result beneath its producer.
+
+    The key is an opaque freshly minted string, quoted per the keyed-item
+    scheme, so repeated calls introduce distinct addresses.
+    """
+    return item(owner_address, f'"t{token_hex(8)}"')

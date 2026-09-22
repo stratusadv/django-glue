@@ -70,6 +70,14 @@ function createManifest({policy = {}, staticData = {}, computedData = {}, ...ove
     }
 }
 
+// Page-load wire entry (state-model.md §10): the manifest shape without the
+// phase-5 result tag.
+function createEntry(overrides = {}) {
+    const manifest = createManifest(overrides)
+    const {is_glue_manifest, ...entry} = manifest
+    return entry
+}
+
 function createState(overrides = {}) {
     return {
         id: 1,
@@ -86,7 +94,7 @@ function mockOperationFetch(payload = {}) {
     const calls = []
     global.fetch = async (url, options) => {
         calls.push({url, options})
-        return new Response(JSON.stringify({result: {}, messages: [], ...payload}), {
+        return new Response(JSON.stringify({objects: [], ...payload}), {
             status: payload.status || 200,
             headers: {'Content-Type': 'application/json'},
         })
@@ -94,12 +102,28 @@ function mockOperationFetch(payload = {}) {
     return calls
 }
 
+// Wire shapes for attribute-call responses (state-model.md §10):
+// {objects: [entry, ...]} where each entry is addressed and carries
+// policy_token / static_data / computed_data (omitted when unchanged),
+// result, and effects.
+
+function objectsEnvelope(entries) {
+    return {data: {objects: entries}}
+}
+
+function attributeResponse(address, fields = {}) {
+    return objectsEnvelope([{address, ...fields}])
+}
+
 export {
+    attributeResponse,
+    createEntry,
     createManifest,
     createPolicy,
     createPolicyToken,
     createState,
     createStaticData,
     mockOperationFetch,
+    objectsEnvelope,
     policyData,
 }

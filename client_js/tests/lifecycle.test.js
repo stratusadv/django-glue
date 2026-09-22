@@ -1,9 +1,9 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createManifest} from "./testUtils"
+import {attributeResponse, createEntry} from "./testUtils"
 
 function modelClient() {
-    const client = new GlueClient({manifest_list: [createManifest()]})
+    const client = new GlueClient({objects: [createEntry()]})
     globalThis.Glue = client
     return client
 }
@@ -15,7 +15,7 @@ describe('proxy lifecycle', () => {
         const events = []
         proxy.addListener('save', event => events.push(['before', event.object]), 'before')
         proxy.addListener('save', event => events.push(['after', event.proxy]))
-        client.http.sendAttributeRequest = async () => ({data: {result: {ok: true}}})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: {ok: true}})
 
         await proxy.save()
 
@@ -28,7 +28,7 @@ describe('proxy lifecycle', () => {
         let calls = 0
         const listener = () => calls++
         proxy.addListener('save', listener).removeListener('save', listener)
-        client.http.sendAttributeRequest = async () => ({data: {result: null}})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: null})
 
         await proxy.save()
 
@@ -42,10 +42,10 @@ describe('proxy lifecycle', () => {
         const global = []
         client.onMessage(event => global.push(event))
         proxy.onMessage(event => local.push(event))
-        client.http.sendAttributeRequest = async () => ({data: {
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
             result: null,
-            messages: [{level: 'success', message: 'Saved'}],
-        }})
+            effects: {messages: [{level: 'success', message: 'Saved'}]},
+        })
 
         await proxy.save()
 
@@ -71,7 +71,7 @@ describe('proxy lifecycle', () => {
     test('does not treat untagged result objects as manifests', async () => {
         const client = modelClient()
         const result = {address: 'other#test', policy_token: 'not-a-token', value: 3}
-        client.http.sendAttributeRequest = async () => ({data: {result}})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result})
 
         expect(await client.model.gorilla.save()).toEqual(result)
         expect(client._registry.getProxy('other#test')).toBeNull()

@@ -22,11 +22,22 @@ class GlueAddressRecord {
         this.revisions = new Map()
         this.generation = 0
         this.loadingStrategy = loadingStrategy
+        this.owner = null
+        this.stale = false
+        this.disposed = false
+        this.boundChildren = {}
+        this.displacedChildren = null
         this.proxy = null
         this._queue = Promise.resolve()
         this._suppressMutations = false
         this.reactiveValues = reactive({})
         this._replaceReactive(this.canonical)
+    }
+
+    dispose() {
+        this.disposed = true
+        this.generation += 1
+        this._queue = Promise.resolve()
     }
 
     attachProxy(proxy) {
@@ -63,6 +74,7 @@ class GlueAddressRecord {
                 this.editablePaths,
             ),
             revisions: new Map(this.revisions),
+            generation: this.generation,
         }
     }
 
@@ -73,6 +85,13 @@ class GlueAddressRecord {
     }
 
     introduce(entry) {
+        if (this.disposed) {
+            this.disposed = false
+            this.stale = false
+            this.generation += 1
+            this._queue = Promise.resolve()
+        }
+        const wasStale = this.stale
         this._applyPolicyToken(entry.policy_token)
         this.staticData = cloneValue(entry.static_data || {})
         this.computedData = cloneValue(entry.computed_data || {})
@@ -81,10 +100,15 @@ class GlueAddressRecord {
         const previousCanonical = this.canonical
         this.canonical = authoritative
         this._applyAuthoritative(previousCanonical, authoritative, null)
+        if (wasStale) this.generation += 1
         this.proxy?._refreshMaterializedInterface()
     }
 
     reconcile(entry, requestCapture) {
+        if (
+            requestCapture?.generation !== undefined &&
+            requestCapture.generation !== this.generation
+        ) return
         if (entry.policy_token !== undefined) this._applyPolicyToken(entry.policy_token)
         if (entry.static_data !== undefined) this.staticData = cloneValue(entry.static_data || {})
         if (entry.computed_data !== undefined) {
@@ -108,6 +132,7 @@ class GlueAddressRecord {
         }
         this.policyToken = policyToken
         this.policy = policy
+        this.stale = false
     }
 
     _applyAuthoritative(expected, authoritative, requestCapture) {

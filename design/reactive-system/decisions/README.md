@@ -14,6 +14,7 @@
 | [`010`](010-target-derived-required-access.md) | Accepted; implemented on branch | Let `required_access` be a callable resolved against the reconstructed target |
 | [`011`](011-collection-owned-item-keys.md) | Accepted; implementation pending | Let each collection own its item-key derivation; no `BaseGlue.key` |
 | [`012`](012-formset-is-a-keyed-collection.md) | Accepted; implemented on branch | FormSetGlue is a keyed collection of FormGlue, not a BaseFormSet |
+| [`013`](013-policy-token-lifetime.md) | Accepted; implementation pending | The policy-token lifetime is 24 hours from issuance |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

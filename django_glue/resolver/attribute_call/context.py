@@ -1,206 +1,131 @@
-"""Validated context for resolving a client-initiated attribute call."""
-
-from __future__ import annotations
-
 import json
-from json import JSONDecodeError
 from typing import Any
+
+from django.http import HttpRequest
 from pydantic import BaseModel, Field, ValidationError
 
-from django.http import HttpRequest  # noqa: TC002 - need for base model annotation
-from django.conf import settings
+from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
+from django_glue.glue import policy
 
-from django_glue.exceptions import (
-    GlueInvalidSessionError,
-    GlueInvalidUserError,
-    GlueRequestError,
-    GlueRequestErrorCode,
-)
-from django_glue.glue.policy import GluePolicy
+
+class AttributeCall(BaseModel):
+    attribute: str
+    kwargs: dict[str, Any] = Field(default_factory=dict)
+
+
+class AddressedObjectEntry(BaseModel):
+    """One addressed object in the ``objects`` request envelope
+    (state-model.md §10).
+
+    ``call`` is optional: a reintroduction request names the owner and the
+    canonical child paths to re-sign and carries no call (state-model.md
+    §10 "Reintroducing an expired child")."""
+
+    address: str
+    policy_token: str
+    updates: dict[str, Any] = Field(default_factory=dict)
+    call: AttributeCall | None = None
+    reintroduce: list[str] = Field(default_factory=list)
 
 
 class AttributeCallRequestContext(BaseModel):
-    """
-    Validated input context for resolving a client-initiated attribute call.
-
-    This object contains the validated components needed to resolve an attribute
-    call against a Glue object. All fields represent client-provided data that
-    has been validated for structure but not yet for authorization or business logic.
-
-    Use AttributeCallRequestParser to construct this from an HttpRequest.
-    """
+    """Per-entry context: one reconstructed object and its single call."""
 
     model_config = {'arbitrary_types_allowed': True}
 
     request: HttpRequest
-    target_glue_policy: GluePolicy
+    target_glue_policy: policy.GluePolicy
     target_glue_updates: dict[str, Any] = Field(default_factory=dict)
-    target_attribute_name: str
+    target_attribute_name: str | None = None
     target_attribute_call_kwargs: dict[str, Any] = Field(default_factory=dict)
+    reintroduce: list[str] = Field(default_factory=list)
+
+
+class AttributeCallBatchContext(BaseModel):
+    model_config = {'arbitrary_types_allowed': True}
+
+    request: HttpRequest
+    entries: list[AddressedObjectEntry]
 
 
 class AttributeCallContextFactory:
-    """
-    Factory that parses and validates an HTTP request into an AttributeCallContext.
+    """Parses and validates the request envelope.
 
-    Usage:
-        context = AttributeCallContextFactory(request).create()
+    Envelope faults (malformed ``objects``, empty batch, duplicate
+    addresses) fail the whole request. Address-scoped faults — a policy
+    that does not decode, an outer address that disagrees with its signed
+    policy — are the resolver's to report per entry, because the other
+    entries in the batch still travel.
     """
 
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
 
-        # Accumulated during parsing
-        self._policy_token: str | None = None
-        self._validated_policy: GluePolicy | None = None
-        self._updates: dict[str, Any] = {}
-        self._kwargs: dict[str, Any] = {}
-        self._attribute: str | None = None
-
-    def create(self) -> AttributeCallRequestContext:
-        """
-        Execute all validation steps and return the validated context.
-
-        Raises GlueRequestError for malformed requests,
-        GlueInvalidSessionError/GlueInvalidUserError for auth mismatches.
-        """
+    def create(self) -> AttributeCallBatchContext:
         self._validate_content_type()
-        self._parse_json_fields()
-        self._parse_attribute()
-        self._validate_policy()
-        self._validate_path_params_match_policy()
-        self._validate_session_and_user()
+        return AttributeCallBatchContext(
+            request=self.request,
+            entries=self._validated_entries,
+        )
 
-        try:
-            return AttributeCallRequestContext(
-                request=self.request,
-                target_glue_policy=self._validated_policy,  # type: ignore[arg-type]
-                target_glue_updates=self._updates,
-                target_attribute_name=self._attribute,  # type: ignore[arg-type]
-                target_attribute_call_kwargs=self._kwargs,
-            )
-        except ValidationError as e:
-            message = f'{e}' if settings.DEBUG else 'Malformed Glue Attribute Request'
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.MALFORMED_REQUEST,
-                message=message,
-                details={'errors': e.errors(include_input=False)} if settings.DEBUG else {},
-            ) from e
-
-    def _validate_content_type(self) -> None:
-        if self.request.content_type != 'multipart/form-data':
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.INVALID_CONTENT_TYPE,
-                message=f'Expected multipart/form-data, got {self.request.content_type}',
-                details={'content_type': self.request.content_type},
-            )
-
-    def _parse_json_fields(self) -> None:
-        self._policy_token = self.request.POST.get('policy_token')
-        if not self._policy_token:
+    @property
+    def _validated_entries(self) -> list[AddressedObjectEntry]:
+        if 'objects' not in self.request.POST:
             raise GlueRequestError(
                 code=GlueRequestErrorCode.MISSING_FIELD,
-                message='"policy_token" is required.',
-                details={'field': 'policy_token'},
+                message='objects is required',
+                details={'field': 'objects'},
             )
-
-        updates = self._load_json_field('updates', required=False) or {}
-        if not isinstance(updates, dict):
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.INVALID_UPDATES,
-                message='"updates" must be a JSON object.',
-                details={'type': type(updates).__name__},
-            )
-        self._updates = updates
-
-        kwargs = self._load_json_field('kwargs', required=False) or {}
-        if not isinstance(kwargs, dict):
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.INVALID_KWARGS,
-                message='"kwargs" must be a JSON object.',
-                details={'type': type(kwargs).__name__},
-            )
-        self._kwargs = kwargs
-
-    def _parse_attribute(self) -> None:
-        attribute = self.request.POST.get('attribute')
-        if not attribute:
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.MISSING_FIELD,
-                message='"attribute" is required.',
-                details={'field': 'attribute'},
-            )
-        self._attribute = attribute
-
-    def _validate_policy(self) -> None:
-        assert self._policy_token is not None
-        self._validated_policy = GluePolicy.from_token(self._policy_token)
-
-    def _validate_path_params_match_policy(self) -> None:
-        if not self.request.resolver_match:
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.MISSING_PATH_PARAMETERS,
-                message='No path parameters were available for the Glue attribute request.',
-            )
-
-        path_object_name = self.request.resolver_match.kwargs.get('object_name')
-        if path_object_name != self._validated_policy.name:  # type: ignore[union-attr]
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.OBJECT_NAME_MISMATCH,
-                message='Object name mismatch between URL path and policy.',
-                details={
-                    'path_name': path_object_name,
-                    'policy_name': self._validated_policy.name,  # type: ignore[union-attr]
-                },
-            )
-
-        path_attribute_name = self.request.resolver_match.kwargs.get('attribute_name')
-        if path_attribute_name != self._attribute:
-            raise GlueRequestError(
-                code=GlueRequestErrorCode.ATTRIBUTE_NAME_MISMATCH,
-                message='Attribute name mismatch between URL path and request body.',
-                details={'path_name': path_attribute_name, 'body_name': self._attribute},
-            )
-
-    def _validate_session_and_user(self) -> None:
-        policy = self._validated_policy
-        assert policy is not None  # Guaranteed by _validate_policy
-
-        current_session_id = self.request.session.session_key
-        if policy.session_id != current_session_id:
-            raise GlueInvalidSessionError(
-                policy.name,
-                policy_session_id=policy.session_id,
-                current_session_id=current_session_id,
-            )
-
-        current_user_id = getattr(getattr(self.request, 'user', None), 'id', None)
-        if policy.request_user_id != current_user_id:
-            raise GlueInvalidUserError(
-                policy.name,
-                policy_user_id=policy.request_user_id,
-                current_user_id=current_user_id,
-            )
-
-    def _load_json_field(self, field_name: str, *, required: bool) -> Any:
-        raw_value = self.request.POST.get(field_name)
-        if not raw_value:
-            if required:
-                raise GlueRequestError(
-                    code=GlueRequestErrorCode.MISSING_FIELD,
-                    message=f'"{field_name}" is required.',
-                    details={'field': field_name},
-                )
-            return None
 
         try:
-            return json.loads(raw_value)
-        except JSONDecodeError as e:
+            parsed = json.loads(self.request.POST.get('objects', ''))
+        except (TypeError, ValueError) as error:
             raise GlueRequestError(
                 code=GlueRequestErrorCode.INVALID_JSON,
-                message=f'{field_name} must be valid JSON.',
-                details={'field': field_name, 'error': str(e)},
-            ) from e
+                message='objects is not valid JSON.',
+                details={'field': 'objects'},
+            ) from error
 
+        if not isinstance(parsed, list) or not parsed:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.MALFORMED_REQUEST,
+                message='objects must be a non-empty list of addressed entries.',
+                details={'field': 'objects'},
+            )
 
-AttributeCallRequestContext.model_rebuild()
+        entries = []
+        for item in parsed:
+            try:
+                entry = AddressedObjectEntry.model_validate(item)
+            except ValidationError as error:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.MALFORMED_REQUEST,
+                    message='Each objects entry needs an address, a policy_token, and a call.',
+                    details={'field': 'objects', 'errors': error.errors()},
+                ) from error
+            if entry.call is None and not entry.reintroduce:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.MALFORMED_REQUEST,
+                    message='Each objects entry needs a call or a reintroduce list.',
+                    details={'field': 'objects', 'address': entry.address},
+                )
+            entries.append(entry)
+
+        addresses = [entry.address for entry in entries]
+        if len(addresses) != len(set(addresses)):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.DUPLICATE_ADDRESSES,
+                message='objects addresses must be unique within a request.',
+                details={'field': 'objects'},
+            )
+
+        return entries
+
+    def _validate_content_type(self) -> None:
+        content_type = self.request.content_type or ''
+        if not content_type.startswith('multipart/form-data'):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_CONTENT_TYPE,
+                message='Glue requests must be sent as multipart/form-data.',
+                details={'content_type': content_type},
+            )

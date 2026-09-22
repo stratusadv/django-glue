@@ -43,7 +43,34 @@ class GlueAddressRegistry {
     refresh(record) {
         this.materializer.refresh(record)
         this.childBinder.refresh(record)
+        const displaced = record.displacedChildren
+        if (displaced) {
+            record.displacedChildren = null
+            displaced.forEach(address => this.dispose(address))
+        }
         record.proxy?._afterRecordRefresh?.()
+    }
+
+    dispose(address) {
+        const record = this.records.get(address)
+        if (!record || record.disposed) return
+        const doomed = [address]
+        let index = 0
+        while (index < doomed.length) {
+            const current = doomed[index]
+            this.records.forEach(candidate => {
+                if (candidate.owner?.address === current && !doomed.includes(candidate.address)) {
+                    doomed.push(candidate.address)
+                }
+            })
+            index += 1
+        }
+        doomed.forEach(doomedAddress => {
+            const doomedRecord = this.records.get(doomedAddress)
+            if (!doomedRecord || doomedRecord.disposed) return
+            doomedRecord.dispose()
+            doomedRecord.proxy?._onDispose?.()
+        })
     }
 
     getRecord(address) {

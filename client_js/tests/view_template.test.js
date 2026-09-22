@@ -2,7 +2,7 @@ import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
 import GlueView from "../src/view"
 import {htmlResultFromResponse} from "../src/htmlRenderer"
-import {createManifest} from "./testUtils"
+import {attributeResponse, createEntry, createManifest} from "./testUtils"
 
 describe('view and template facades', () => {
     test('view requests merge payloads, preserve the inner method, and load manifests', async () => {
@@ -59,17 +59,17 @@ describe('view and template facades', () => {
     })
 
     test('template proxies render through the shared HTML interface', async () => {
-        const manifest = createManifest({
+        const manifest = createEntry({
             policy: {
                 name: 'card', namespace: 'template', address: 'card#test',
                 attributes: ['render_html'], state_snapshot: {},
             },
             staticData: {fields: {}, callables: {render_html: {allowed_arguments: ['title']}}},
         })
-        const client = new GlueClient({manifest_list: [manifest]})
+        const client = new GlueClient({objects: [manifest]})
         client.http.sendAttributeRequest = async request => {
             expect(request.kwargs).toEqual({title: 'Profile'})
-            return {data: {result: {html: '<p>Rendered</p>'}}}
+            return attributeResponse('card#test', {result: {html: '<p>Rendered</p>'}})
         }
         document.body.innerHTML = '<div id="target"></div>'
 
@@ -79,20 +79,20 @@ describe('view and template facades', () => {
     })
 
     test('callable template responses load their public manifests', async () => {
-        const source = createManifest({
+        const source = createEntry({
             policy: {attributes: ['save'], state_snapshot: {}},
             staticData: {callables: {save: {allowed_arguments: []}}},
         })
         const child = createManifest({policy: {
             name: 'new_row', address: 'new-row#test', state_snapshot: {id: 7, name: 'New'},
         }})
-        const client = new GlueClient({manifest_list: [source]})
+        const client = new GlueClient({objects: [source]})
         globalThis.Glue = client
-        client.http.sendAttributeRequest = async () => ({data: {result: {
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: {
             is_glue_template_response: true,
             html: '<p>Row list</p>',
             manifest_list: [child],
-        }}})
+        }})
 
         const result = await client.model.gorilla.save()
 

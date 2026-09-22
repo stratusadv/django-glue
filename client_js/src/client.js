@@ -27,7 +27,7 @@ class GlueClient {
         })
         this._registry.childBinder = new GlueChildBinder(this._registry)
         this._dispatcher = new GlueResponseDispatcher(this._registry)
-        this.loadManifests(context.manifest_list)
+        this._loadEntries(context.objects || [])
     }
 
     onMessage(callback) {
@@ -50,24 +50,27 @@ class GlueClient {
     }
 
     loadManifests(manifestList = []) {
-        this._introduceManifests(manifestList)
-        const childAddresses = new Set(
-            this._collectManifests(manifestList).flatMap(manifest => (
-                Object.values(GluePolicy.fromSignedPolicyToken(manifest.policy_token).children || {})
-            ))
-        )
-        ;(manifestList || [])
-            .filter(manifest => !childAddresses.has(manifest.address))
-            .forEach(manifest => this._registerPublicManifest(manifest))
+        this._loadEntries(this._collectManifests(manifestList))
     }
 
     resolveManifest(manifest) {
-        this._introduceManifests([manifest])
+        this._introduceEntries([manifest])
         return this._registry.getProxy(manifest.address)
     }
 
-    _introduceManifests(manifestList) {
-        const entries = this._collectManifests(manifestList)
+    _loadEntries(entries = []) {
+        this._introduceEntries(entries)
+        const childAddresses = new Set(
+            entries.flatMap(entry => (
+                Object.values(GluePolicy.fromSignedPolicyToken(entry.policy_token).children || {})
+            ))
+        )
+        entries
+            .filter(entry => !childAddresses.has(entry.address))
+            .forEach(entry => this._registerPublicEntry(entry))
+    }
+
+    _introduceEntries(entries) {
         this._dispatcher.introduce(entries)
         entries.forEach(entry => this._registry.refresh(
             this._registry.getRecord(entry.address)
@@ -95,8 +98,8 @@ class GlueClient {
         return entries
     }
 
-    _registerPublicManifest(manifest) {
-        const policy = GluePolicy.fromSignedPolicyToken(manifest.policy_token)
+    _registerPublicEntry(entry) {
+        const policy = GluePolicy.fromSignedPolicyToken(entry.policy_token)
         const {name, namespace} = policy
         if (!name) {
             throw new GlueProxyError('Cannot register a Glue proxy without policy.name.')
@@ -106,7 +109,7 @@ class GlueClient {
         }
 
         const key = name === namespace ? namespace : `${namespace}.${name}`
-        this._publicAddresses.set(key, manifest.address)
+        this._publicAddresses.set(key, entry.address)
         if (name === namespace) {
             if (namespace in this && !this._directNamespaces.has(namespace)) {
                 throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -139,8 +138,8 @@ class ProtocolAdmissionTestCase(TestCase):
             target_attribute_name='echo',
             target_attribute_call_kwargs={},
         )
-        response = glue_object.process_attribute_call(context)
-        return json.loads(response.content)
+        entry, _introduced = glue_object.process_attribute_call(context)
+        return entry
 
     def test_callable_sees_updates_merged_over_the_signed_snapshot(self):
         reconstructed = AdmissionProbeGlue._reconstruct_from_policy(self.policy)
@@ -343,8 +342,7 @@ class ModelStateSnapshotTestCase(TestCase):
             target_attribute_name='save',
             target_attribute_call_kwargs={},
         )
-        response = glue_object.process_attribute_call(context)
-        payload = json.loads(response.content)
+        payload, _introduced = glue_object.process_attribute_call(context)
         successor = (
             GluePolicy.from_token(payload['policy_token'])
             if 'policy_token' in payload

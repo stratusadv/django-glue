@@ -20,9 +20,12 @@ class GlueResponse:
     result: Any = None
     messages: Iterable[GlueMessage] | None = None
     status: int = 200
+    redirect: dict[str, Any] | None = None
+    dispose: Iterable[str] | None = None
 
     def __post_init__(self) -> None:
         self.messages = list(self.messages or [])
+        self.dispose = list(self.dispose or [])
 
     @classmethod
     def from_result(cls, result: Any, *, render_as_html: bool = False) -> Self:
@@ -142,12 +145,10 @@ class GlueResponse:
 class GlueRedirectResponse:
     def __new__(cls, view_name: str, **kwargs) -> GlueResponse:
         return GlueResponse(
-            result={
-                'redirect': {
-                    'url': reverse(
-                        view_name, kwargs=kwargs
-                    )
-                }
+            redirect={
+                'url': reverse(
+                    view_name, kwargs=kwargs
+                )
             }
         )
 

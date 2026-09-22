@@ -1,11 +1,11 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createManifest, createPolicyToken} from "./testUtils"
+import {attributeResponse, createEntry, createManifest, createPolicyToken} from "./testUtils"
 
 describe('GlueClient registry', () => {
-    test('registers named and direct proxies from addressed manifests', () => {
-        const named = createManifest()
-        const direct = createManifest({
+    test('registers named and direct proxies from addressed entries', () => {
+        const named = createEntry()
+        const direct = createEntry({
             policy: {
                 name: 'dashboard',
                 namespace: 'dashboard',
@@ -15,21 +15,21 @@ describe('GlueClient registry', () => {
             },
             staticData: {fields: {}, callables: {}},
         })
-        const client = new GlueClient({manifest_list: [named, direct]})
+        const client = new GlueClient({objects: [named, direct]})
 
         expect(client.model.gorilla._record.address).toBe('gorilla#test')
         expect(client.dashboard._record.address).toBe('dashboard#test')
         expect(client.model.gorilla).toBe(client.model.gorilla)
     })
 
-    test('rejects a manifest whose outer and signed addresses differ', () => {
-        const manifest = createManifest()
-        manifest.address = 'wrong#address'
-        expect(() => new GlueClient({manifest_list: [manifest]})).toThrow('does not match')
+    test('rejects an entry whose outer and signed addresses differ', () => {
+        const entry = createEntry()
+        entry.address = 'wrong#address'
+        expect(() => new GlueClient({objects: [entry]})).toThrow('does not match')
     })
 
     test('reintroducing an address patches the stable proxy', () => {
-        const client = new GlueClient({manifest_list: [createManifest()]})
+        const client = new GlueClient({objects: [createEntry()]})
         const held = client.model.gorilla
         client.loadManifests([createManifest({
             policy: {state_snapshot: {id: 1, name: 'Michael', birthday: '1973-03-01'}},
@@ -40,7 +40,7 @@ describe('GlueClient registry', () => {
     })
 
     test('binds child paths through the address registry', () => {
-        const child = createManifest({
+        const child = createEntry({
             policy: {
                 name: 'parent',
                 address: 'gorilla#test.parent',
@@ -52,18 +52,18 @@ describe('GlueClient registry', () => {
                 name: {value_path: 'name', editable: false},
             }, callables: {}},
         })
-        const parent = createManifest({
+        const parent = createEntry({
             policy: {children: {parent: child.address}},
             staticData: {children: {parent: {kind: 'model', nullable: true}}},
         })
-        const client = new GlueClient({manifest_list: [parent, child]})
+        const client = new GlueClient({objects: [parent, child]})
 
         expect(client.model.gorilla.parent).toBe(client._registry.getProxy(child.address))
         expect(client.model.gorilla.parent.$owner).toBe(client.model.gorilla)
     })
 
     test('keeps function proxies callable and filters declared parameters', async () => {
-        const manifest = createManifest({
+        const manifest = createEntry({
             policy: {
                 name: 'add',
                 namespace: 'function',
@@ -77,11 +77,11 @@ describe('GlueClient registry', () => {
                 params: [{name: 'left'}, {name: 'right'}],
             },
         })
-        const client = new GlueClient({manifest_list: [manifest]})
+        const client = new GlueClient({objects: [manifest]})
         let sent
         client.http.sendAttributeRequest = async request => {
             sent = request
-            return {data: {result: {result: 12}}}
+            return attributeResponse('add#test', {result: {result: 12}})
         }
 
         expect(await client.function.add({left: 5, right: 7, ignored: true})).toBe(12)
@@ -89,18 +89,17 @@ describe('GlueClient registry', () => {
     })
 
     test('rejects direct and named registrations sharing a namespace', () => {
-        const direct = createManifest({policy: {
+        const direct = createEntry({policy: {
             name: 'custom', namespace: 'custom', address: 'custom#test', attributes: [], state_snapshot: {},
         }})
-        const named = createManifest({policy: {
+        const named = createEntry({policy: {
             name: 'named', namespace: 'custom', address: 'named#test', attributes: [], state_snapshot: {},
         }})
-        expect(() => new GlueClient({manifest_list: [direct, named]})).toThrow('already registered directly')
+        expect(() => new GlueClient({objects: [direct, named]})).toThrow('already registered directly')
     })
 
-    test('requires the new manifest keys', () => {
-        expect(() => new GlueClient({manifest_list: [{
-            is_glue_manifest: true,
+    test('requires addressed entries with a signed token', () => {
+        expect(() => new GlueClient({objects: [{
             policy_token: createPolicyToken(),
             state: {},
             metadata: {},

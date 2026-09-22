@@ -112,11 +112,12 @@ starts only with explicit implementation authorization.
 These defence-in-depth and operational improvements do not alter the state
 roles or wire format and do not gate the redesign:
 
-- [ ] Choose and document one policy-token lifetime. Code currently uses a
-  rolling 24-hour lifetime while older docs also name 10 minutes and 1 hour.
-  This is no longer purely operational: the child-reintroduction contract in
-  `state-model.md` §10 depends on a known expiry, so the number must be chosen
-  before that path is implemented.
+- [x] Choose and document one policy-token lifetime. **Chosen: 24 hours from
+  issuance** (`DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400`), fixed rather
+  than rolling; a successor token with fresh issuance is delivered only when
+  retained values change. See [ADR 013](decisions/013-policy-token-lifetime.md).
+  This unblocks the child-reintroduction contract in `state-model.md` §10,
+  which depends on a known expiry.
 - [ ] Add configurable total-payload, nesting-depth, update-count,
   callable-count, and introduced-object-count limits, including the per-page-render
   introduced-object bound that collections actually exercise.

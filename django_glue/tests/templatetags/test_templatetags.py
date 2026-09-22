@@ -112,16 +112,17 @@ class DjangoGlueInitTagTestCase(TestCase):
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('is_glue_manifest', rendered)
+        self.assertIn('objects', rendered)
+        self.assertNotIn('is_glue_manifest', rendered)
         self.assertEqual(self.registered_policy().name, 'gorilla')
 
-    def test_tag_with_no_manifest_registered(self):
+    def test_tag_with_no_objects_registered(self):
         """Tag should work when no glue objects are registered."""
         template = Template('{% load django_glue %}{% django_glue_init %}{{ DJANGO_GLUE_CONTEXT }}')
         context = Context({'request': self.request})
 
         rendered = template.render(context)
-        self.assertIn('manifest_list', rendered)
+        self.assertIn('objects', rendered)
         self.assertIn('[]', rendered)
 
 

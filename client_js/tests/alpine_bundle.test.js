@@ -20,7 +20,7 @@ describe('bundled Alpine startup', () => {
         const page = createPage()
         page.eval(bundle)
         page.eval(`
-            window.Glue = new GlueClient({manifest_list: []})
+            window.Glue = new GlueClient({objects: []})
             Glue.onMessage(() => {})
             window.mounts = 0
             document.addEventListener('alpine:init', () => {

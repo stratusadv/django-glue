@@ -1,17 +1,27 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import json
+from typing import Any
 
 import pytest
+from django.test import RequestFactory
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
+from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
 from django_glue.glue.attributes import BoundGlueAttribute, GlueAttributeCollector
 from django_glue.glue.component import Component
 from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.policy import GluePolicy
+from django_glue.glue.registry import glue_class_registry
+from django_glue.resolver.attribute_call.context import (
+    AddressedObjectEntry,
+    AttributeCallBatchContext,
+    AttributeCallContextFactory,
+)
+from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 
-if TYPE_CHECKING:
-    from django_glue.glue.policy import GluePolicy
+from django_glue.tests.glue.test_callable_parameters import call_context
 
 
 class GreetingComponent(Glue.Component):
@@ -131,6 +141,10 @@ class DeniedChildOwnerComponent(GreetingComponent):
         return self.child_value
 
 
+class ResolvedChildOwnerComponent(ChildOwnerComponent):
+    namespace = 'resolvedChildOwnerComponent'
+
+
 def test_component_is_exposed_on_glue_shortcut() -> None:
     assert Glue.Component is Component
 
@@ -181,8 +195,8 @@ def test_component_render_is_exposed_as_glue_attribute() -> None:
 
     assert component.get_static_data() == {
         'callables': {
-            'load_state': {'allowed_arguments': []},
-            'render': {'allowed_arguments': []},
+            'load_state': {'allowed_arguments': [], 'returns_glue': False},
+            'render': {'allowed_arguments': [], 'returns_glue': False},
         },
     }
 
@@ -353,3 +367,172 @@ def test_component_rejects_glue_object_from_ordinary_value(result: object) -> No
             definition=attribute,
             owner=owner,
         ).get()
+
+
+def test_callless_reintroduce_entry_resigns_live_child_at_existing_address(
+    mock_request,
+) -> None:
+    component = Glue.object(mock_request, ChildOwnerComponent())
+    policy = component.policy
+    child_address = policy.children['child']
+    original_child_token = component._bound_children[0].glue_object.policy.token
+
+    context = call_context(component, None, reintroduce=['child'])
+    reconstructed = ChildOwnerComponent.from_attribute_call_resolver_context(context)
+    entry, introduced = reconstructed.process_attribute_call(context)
+
+    assert entry['result'] is None
+    assert entry['effects'] == {'messages': []}
+    assert 'policy_token' not in entry
+    assert len(introduced) == 1
+    reintroduction = introduced[0]
+    assert reintroduction['address'] == child_address
+    child_policy = GluePolicy.from_token(reintroduction['policy_token'])
+    assert child_policy.address == child_address
+    assert child_policy.namespace == 'childComponent'
+    assert reintroduction['policy_token'] != original_child_token
+
+
+def test_reintroduce_undeclared_path_fails_admission(mock_request) -> None:
+    component = Glue.object(mock_request, ChildOwnerComponent())
+
+    context = call_context(component, 'load_state', reintroduce=['not_a_slot'])
+    reconstructed = ChildOwnerComponent.from_attribute_call_resolver_context(context)
+
+    with pytest.raises(GlueRequestError) as excinfo:
+        reconstructed.process_attribute_call(context)
+    assert excinfo.value.code == GlueRequestErrorCode.INVALID_REINTRODUCE
+    assert reconstructed.child_factory_calls == 0
+
+
+def test_call_and_reintroduce_advance_together(mock_request) -> None:
+    component = Glue.object(mock_request, ChildOwnerComponent())
+    policy = component.policy
+    child_address = policy.children['child']
+
+    context = call_context(component, 'load_state', reintroduce=['child'])
+    reconstructed = ChildOwnerComponent.from_attribute_call_resolver_context(context)
+    entry, introduced = reconstructed.process_attribute_call(context)
+
+    assert entry['result'] == {}
+    assert len(introduced) == 1
+    assert introduced[0]['address'] == child_address
+
+
+def test_live_child_carries_forward_without_running_factory_on_owner_call(
+    mock_request,
+) -> None:
+    component = Glue.object(mock_request, ChildOwnerComponent())
+    policy = component.policy
+    child_address = policy.children['child']
+
+    context = call_context(component, 'load_state')
+    reconstructed = ChildOwnerComponent.from_attribute_call_resolver_context(context)
+    entry, introduced = reconstructed.process_attribute_call(context)
+
+    assert reconstructed.child_factory_calls == 0
+    assert introduced == []
+    assert 'policy_token' not in entry
+    assert reconstructed.policy.children == {'child': child_address}
+
+
+def test_entry_with_neither_call_nor_reintroduce_is_malformed() -> None:
+    request = RequestFactory().post(
+        '/__dg__/callable_attribute/',
+        {'objects': json.dumps([{'address': 'a#test', 'policy_token': 'token'}])},
+    )
+
+    with pytest.raises(GlueRequestError) as excinfo:
+        AttributeCallContextFactory(request).create()
+    assert excinfo.value.code == GlueRequestErrorCode.MALFORMED_REQUEST
+
+
+def test_callless_reintroduce_entry_parses() -> None:
+    request = RequestFactory().post(
+        '/__dg__/callable_attribute/',
+        {'objects': json.dumps([{
+            'address': 'a#test',
+            'policy_token': 'token',
+            'reintroduce': ['child'],
+        }])},
+    )
+
+    batch = AttributeCallContextFactory(request).create()
+
+    assert batch.entries[0].call is None
+    assert batch.entries[0].reintroduce == ['child']
+
+
+def test_bad_reintroduce_fails_only_its_own_entry(mock_request) -> None:
+    glue_class_registry.register_glue_class(ResolvedChildOwnerComponent)
+    glue_class_registry.register_glue_class(GreetingComponent)
+    try:
+        owner_a = Glue.object(mock_request, ResolvedChildOwnerComponent())
+        owner_b = Glue.object(mock_request, GreetingComponent())
+
+        context = AttributeCallBatchContext.model_construct(
+            request=mock_request,
+            entries=[
+                AddressedObjectEntry(
+                    address=owner_a.address,
+                    policy_token=owner_a.policy.token,
+                    reintroduce=['not_a_slot'],
+                ),
+                AddressedObjectEntry(
+                    address=owner_b.address,
+                    policy_token=owner_b.policy.token,
+                    call={'attribute': 'load_state', 'kwargs': {}},
+                ),
+            ],
+        )
+
+        response = GlueAttributeCallResolver()._resolve_json_response_from_context(context)
+        objects = json.loads(response.content)['objects']
+    finally:
+        glue_class_registry.glue_object_classes.pop(ResolvedChildOwnerComponent.namespace)
+        glue_class_registry.glue_object_classes.pop(GreetingComponent.namespace)
+
+    assert objects[0] == {
+        'address': owner_a.address,
+        'error': {
+            'code': 'invalid_reintroduce',
+            'message': 'reintroduce names a path that is not a declared child slot.',
+        },
+    }
+    assert objects[1]['address'] == owner_b.address
+    assert 'error' not in objects[1]
+    assert objects[1]['result'] == {}
+
+
+def test_independent_child_call_survives_owner_reintroduction(mock_request) -> None:
+    glue_class_registry.register_glue_class(ResolvedChildOwnerComponent)
+    glue_class_registry.register_glue_class(ChildComponent)
+    try:
+        owner = Glue.object(mock_request, ResolvedChildOwnerComponent())
+        owner_policy = owner.policy
+        child_entry = owner._serialized_child_entries()[0]
+        context = AttributeCallBatchContext.model_construct(
+            request=mock_request,
+            entries=[
+                AddressedObjectEntry(
+                    address=owner.address,
+                    policy_token=owner_policy.token,
+                    reintroduce=['child'],
+                ),
+                AddressedObjectEntry(
+                    address=child_entry['address'],
+                    policy_token=child_entry['policy_token'],
+                    call={'attribute': 'load_state', 'kwargs': {}},
+                ),
+            ],
+        )
+
+        response = GlueAttributeCallResolver()._resolve_json_response_from_context(context)
+        objects = json.loads(response.content)['objects']
+    finally:
+        glue_class_registry.glue_object_classes.pop(ResolvedChildOwnerComponent.namespace)
+        glue_class_registry.glue_object_classes.pop(ChildComponent.namespace)
+
+    assert [entry['address'] for entry in objects] == [owner.address, child_entry['address']]
+    assert objects[1]['result'] == {}
+    assert objects[1]['effects'] == {'messages': []}

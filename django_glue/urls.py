@@ -8,7 +8,7 @@ app_name = constants.BASE_URL_NAME
 
 urlpatterns = [
     path(
-        route=f'{constants.CALLABLE_ATTRIBUTE_URL_NAME}/<str:object_name>/<str:attribute_name>/',
+        route=f'{constants.CALLABLE_ATTRIBUTE_URL_NAME}/',
         view=GlueAttributeCallResolver.as_view(),
         name=constants.CALLABLE_ATTRIBUTE_URL_NAME,
     ),

@@ -16,6 +16,16 @@ class GlueProxyError extends Error {
     }
 }
 
+class GlueAddressError extends GlueProxyError {
+    constructor(code, message, address, owner = null) {
+        super(`Glue request for address "${address}" failed: ${message}`)
+        this.name = 'GlueAddressError'
+        this.code = code
+        this.address = address
+        this.owner = owner
+    }
+}
+
 class GlueAlpineError extends Error {
     constructor(message) {
         super(message)
@@ -23,4 +33,4 @@ class GlueAlpineError extends Error {
     }
 }
 
-export {GlueAlpineError, GlueHttpError, GlueProxyError}
+export {GlueAddressError, GlueAlpineError, GlueHttpError, GlueProxyError}

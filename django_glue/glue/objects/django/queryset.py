@@ -368,7 +368,7 @@ class QuerySetGlue(
         }
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW)
-    def get(self, pk: Any) -> dict[str, Any]:
+    def get(self, pk: Any) -> ModelGlue:
         # A pk outside this queryset is a routine client outcome, not a server fault: a
         # row can leave the bound filter between render and refresh. Report it as 404 so
         # callers can tell "not in this collection" apart from a genuine failure.
@@ -380,10 +380,10 @@ class QuerySetGlue(
                 pk=pk,
             ) from error
 
-        return self._build_child_model_payload(instance)
+        return self._row_glue(instance, bind=False)
 
     @DeclaredAttribute(required_access=GlueAccess.ADD)
-    def new(self, initial: dict | None = None) -> dict[str, Any]:
+    def new(self, initial: dict | None = None) -> ModelGlue:
         # ADD admits creating a draft, not expanding it: the fields a client may
         # pre-fill are exactly the fields the signed policy marks editable
         # (state-model.md §3, ADR 010).
@@ -399,7 +399,7 @@ class QuerySetGlue(
                     details={'keys': disallowed},
                 )
         instance = self.queryset.model(**initial) if initial else self.queryset.model()
-        return self._build_child_model_payload(instance=instance)
+        return self._row_glue(instance, bind=False)
 
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return [
@@ -407,15 +407,23 @@ class QuerySetGlue(
             for instance in self._current_batch
         ]
 
-    def _bind_children(self) -> tuple[BoundGlueChild, ...]:
-        row_children = super()._bind_children()
+    def _bind_children(
+        self,
+        *,
+        live_children: Mapping[str, str] | None = None,
+        reintroduce: Iterable[str] = (),
+    ) -> tuple[BoundGlueChild, ...]:
+        row_children = super()._bind_children(
+            live_children=live_children,
+            reintroduce=reintroduce,
+        )
         relation_children = self._bind_relation_children(
             self._current_batch,
             owner_address=self.address,
         )
         return row_children + relation_children
 
-    def _row_glue(self, instance: models.Model) -> ModelGlue:
+    def _row_glue(self, instance: models.Model, *, bind: bool = True) -> ModelGlue:
         child_name = f'{self.name}.{instance.pk}'
         child_forms = {
             # Need to rebuild the form here in order to properly bind instance data!
@@ -481,6 +489,10 @@ class QuerySetGlue(
         # Propagate visited relations for cycle detection in nested objects
         if hasattr(self, '_visited_relations'):
             child_object._visited_relations = self._visited_relations
+
+        if not bind:
+            child_object.request = None
+            child_object.__dict__.pop('policy', None)
 
         return child_object
 

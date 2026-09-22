@@ -37,20 +37,17 @@ class _AttributeRequestMixin:
         self.session = MockSession(session_key='session-1')
 
     def attribute_request(self, object_name, policy, attribute, kwargs=None, updates=None):
+        entry = {
+            'address': policy.address,
+            'policy_token': policy.token,
+            'call': {'attribute': attribute, 'kwargs': kwargs or {}},
+        }
+        if updates is not None:
+            entry['updates'] = updates
         request = self.factory.post(
-            f'/__dg__/callable_attribute/{object_name}/{attribute}/',
-            data={
-                'policy_token': policy.token,
-                'attribute': attribute,
-                'kwargs': json.dumps(kwargs or {}, default=str),
-                **({'updates': json.dumps(updates, default=str)} if updates is not None else {}),
-            },
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry], default=str)},
         )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': object_name, 'attribute_name': attribute}},
-        )()
         request.session = self.session
         request.user = 'TestUser'
         return request
@@ -63,11 +60,16 @@ class _AttributeRequestMixin:
             kwargs=kwargs,
             updates=updates,
         )
-        return glue_attribute_call_view(
-            request,
-            object_name=object_name,
-            attribute_name=attribute,
-        )
+        return glue_attribute_call_view(request)
+
+    @staticmethod
+    def entry(response):
+        return json.loads(response.content)['objects'][0]
+
+    @staticmethod
+    def introduced_entry(response, address):
+        objects = json.loads(response.content)['objects']
+        return next(item for item in objects if item.get('address') == address)
 
     def request_context(self):
         return type('Request', (), {'session': self.session, 'FILES': {}})()
@@ -106,9 +108,10 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
 
         response = self.call('gorillas', glue_object.policy, 'new', kwargs={'initial': {}})
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
+        self.assertEqual(response.status_code, 200)
+        entry = self.entry(response)
+        self.assertEqual(entry['error']['code'], 'not_authorized')
+        self.assertNotIn('policy_token', entry)
 
     def test_add_queryset_new_returns_unsaved_add_draft(self):
         """new(initial) on an ADD queryset introduces an unsaved ADD draft
@@ -123,8 +126,10 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
-        draft = self.decode(data['result']['policy_token'])
+        target = self.entry(response)
+        draft = self.decode(
+            self.introduced_entry(response, target['result'])['policy_token']
+        )
         self.assertEqual(draft.name, 'gorillas.None')
         self.assertEqual(draft.access, GlueAccess.ADD)
         self.assertIsNone(draft.identity['target_pk'])
@@ -142,9 +147,9 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             kwargs={'initial': {'description': 'sneaky'}},
         )
 
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'invalid_kwargs')
+        self.assertEqual(response.status_code, 200)
+        entry = self.entry(response)
+        self.assertEqual(entry['error']['code'], 'invalid_kwargs')
 
     def test_existing_row_of_add_queryset_is_view(self):
         """Persisted rows of an ADD-only queryset are signed VIEW, not ADD."""
@@ -171,9 +176,9 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             updates={'name': 'Hacked'},
         )
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
+        self.assertEqual(response.status_code, 200)
+        entry = self.entry(response)
+        self.assertEqual(entry['error']['code'], 'not_authorized')
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Koko')
 
@@ -188,7 +193,11 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             'new',
             kwargs={'initial': {'name': 'New', 'age': 5}},
         )
-        draft = self.decode(json.loads(new_response.content)['result']['policy_token'])
+        draft = self.decode(
+            self.introduced_entry(
+                new_response, self.entry(new_response)['result']
+            )['policy_token']
+        )
 
         save_response = self.call(
             draft.name,
@@ -199,7 +208,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
 
         self.assertEqual(save_response.status_code, 200)
         saved = Gorilla.objects.get(name='New')
-        successor = self.decode(json.loads(save_response.content)['policy_token'])
+        successor = self.decode(self.entry(save_response)['policy_token'])
         self.assertEqual(successor.name, 'gorillas.None')
         self.assertEqual(successor.access, GlueAccess.VIEW)
         self.assertEqual(successor.identity['target_pk'], saved.pk)
@@ -212,7 +221,8 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             'save',
             updates={'name': 'Edited'},
         )
-        self.assertEqual(second.status_code, 403)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(self.entry(second)['error']['code'], 'not_authorized')
         saved.refresh_from_db()
         self.assertEqual(saved.name, 'New')
 
@@ -226,7 +236,11 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
             'new',
             kwargs={'initial': {'name': 'New', 'age': 5}},
         )
-        draft = self.decode(json.loads(new_response.content)['result']['policy_token'])
+        draft = self.decode(
+            self.introduced_entry(
+                new_response, self.entry(new_response)['result']
+            )['policy_token']
+        )
         self.assertEqual(draft.access, GlueAccess.ADD)
 
         save_response = self.call(
@@ -237,7 +251,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         )
 
         self.assertEqual(save_response.status_code, 200)
-        successor = self.decode(json.loads(save_response.content)['policy_token'])
+        successor = self.decode(self.entry(save_response)['policy_token'])
         self.assertEqual(successor.name, 'gorillas.None')
         self.assertEqual(successor.access, GlueAccess.CHANGE)
 
@@ -305,7 +319,7 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         saved = Gorilla.objects.get(name='Fresh')
-        successor = self.decode(json.loads(response.content)['policy_token'])
+        successor = self.decode(self.entry(response)['policy_token'])
         self.assertEqual(successor.identity['target_pk'], saved.pk)
 
         second = self.call(
@@ -314,7 +328,8 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             'save',
             updates={'name': 'Mutated', 'age': 5},
         )
-        self.assertEqual(second.status_code, 403)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(self.entry(second)['error']['code'], 'not_authorized')
         saved.refresh_from_db()
         self.assertEqual(saved.name, 'Fresh')
 
@@ -330,9 +345,9 @@ class GlueModelSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             updates={'name': 'Mutated'},
         )
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
+        self.assertEqual(response.status_code, 200)
+        entry = self.entry(response)
+        self.assertEqual(entry['error']['code'], 'not_authorized')
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Koko')
 
@@ -389,8 +404,7 @@ class GlueFormSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
-        self.assertTrue(data['result']['valid'])
+        self.assertTrue(self.entry(response)['result']['valid'])
         self.assertTrue(Gorilla.objects.filter(name='Filo').exists())
 
     def test_persisted_model_form_at_add_save_is_denied(self):
@@ -414,8 +428,8 @@ class GlueFormSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
+        self.assertEqual(response.status_code, 200)
+        entry = self.entry(response)
+        self.assertEqual(entry['error']['code'], 'not_authorized')
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Koko')

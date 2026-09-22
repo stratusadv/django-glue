@@ -577,3 +577,41 @@ def test_progressive_form_demo(
     expect(page.get_by_text('Fighter Created!')).to_be_visible()
     expect(page.get_by_text('Fighter "Echo Ember" created!')).to_be_visible()
     assert Gorilla.objects.filter(name='Echo Ember').exists()
+
+
+def test_detail_model_delete_disposes_proxy(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-delete-disposal')
+    demo.title_card(
+        'Glue Model Delete + Address Disposal',
+        kicker='django-glue',
+        subtitle='delete() removes the row, and the response tears the proxy down at the same address.',
+    )
+
+    gamma = seeded_gorillas['gamma']
+    demo.goto('gorilla:detail', pk=gamma.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.narrate('The profile page binds one model proxy', step='1')
+    expect(page.get_by_placeholder('Fighter Name')).to_have_value('Gamma Grove')
+
+    demo.narrate('delete() removes the row and disposes the address', step='2')
+    disposal_state = page.evaluate(
+        """async () => {
+            const proxy = window.Glue.model.gorilla
+            const address = proxy._record.address
+            await proxy.delete()
+            return {
+                address,
+                disposed: proxy._record.disposed,
+                registryTombstone: window.Glue._registry?.getRecord(address)?.disposed ?? null,
+            }
+        }"""
+    )
+
+    assert disposal_state['disposed'] is True
+    assert disposal_state['registryTombstone'] is True
+    assert Gorilla.objects.filter(pk=gamma.pk).count() == 0

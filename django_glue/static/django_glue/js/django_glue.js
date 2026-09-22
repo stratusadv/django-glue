@@ -76,6 +76,16 @@
     }
   }
 
+  class GlueAddressError extends GlueProxyError {
+    constructor(code, message, address, owner = null) {
+      super(`Glue request for address "${address}" failed: ${message}`);
+      this.name = "GlueAddressError";
+      this.code = code;
+      this.address = address;
+      this.owner = owner;
+    }
+  }
+
   class GlueAlpineError extends Error {
     constructor(message) {
       super(message);
@@ -209,13 +219,26 @@
         csrfProtected
       });
     }
-    async sendAttributeRequest({ name, policyToken, updates = {}, attribute, kwargs = {} }) {
+    async sendAttributeRequest({
+      address,
+      policyToken,
+      updates = {},
+      attribute = null,
+      kwargs = {},
+      reintroduce = null
+    }) {
       const formData = new FormData;
       const { files, data } = this._extractFiles(serializeValue(updates));
-      formData.append("policy_token", policyToken);
-      formData.append("updates", JSON.stringify(data));
-      formData.append("attribute", attribute);
-      formData.append("kwargs", JSON.stringify(kwargs));
+      const entry = {
+        address,
+        policy_token: policyToken,
+        updates: data
+      };
+      if (attribute !== null)
+        entry.call = { attribute, kwargs };
+      if (reintroduce)
+        entry.reintroduce = reintroduce;
+      formData.append("objects", JSON.stringify([entry]));
       Object.entries(files).forEach(([key, value]) => {
         if (value instanceof FileList) {
           Array.from(value).forEach((file) => formData.append(key, file));
@@ -225,7 +248,7 @@
           formData.append(key, value);
         }
       });
-      return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData);
+      return await this.postForm(this._config.attributeUrlPath, formData);
     }
     _extractFiles(obj) {
       const files = {};
@@ -4177,26 +4200,15 @@ ${expression ? 'Expression: "' + expression + `"
       const attributeRequest = { attribute, kwargs };
       this._emit("before", attribute, { attributeRequest, object: this });
       return this._record.enqueue(async () => {
-        const requestCapture = this._record.captureRequest();
         try {
-          const response = await this._http.sendAttributeRequest({
-            name: this._name,
-            policyToken: this._record.policyToken,
-            updates: requestCapture.updates,
-            attribute,
-            kwargs
-          });
-          this._client._introduceManifests(response.data?.manifest_list || []);
-          this._client._dispatcher.reconcile(this._record.address, response.data, requestCapture);
-          const result = this._convertResult(response.data?.result);
-          if (response.data)
-            response.data.result = result;
-          this._processMessages(response.data);
+          const { result, response, discarded } = await this._attempt(attribute, kwargs);
+          if (discarded)
+            return;
           this._emit("after", attribute, {
             attributeRequest,
             object: this,
             proxy: this,
-            response: response.data
+            response
           });
           return result;
         } catch (error2) {
@@ -4206,6 +4218,118 @@ ${expression ? 'Expression: "' + expression + `"
           throw error2;
         }
       });
+    }
+    $dispose() {
+      const owner = this._record.owner;
+      if (owner && owner.path !== null) {
+        throw new GlueProxyError(`address "${this._record.address}" is bound to its owner at path "${owner.path}"; ` + "only the owner can remove it (via a successor children map, an effects.dispose, or by disposing the owner).");
+      }
+      this._registry.dispose(this._record.address);
+      return this;
+    }
+    async _attempt(attribute, kwargs) {
+      if (this._record.disposed) {
+        throw new GlueAddressError("disposed", `address "${this._record.address}" has been disposed`, this._record.address, this._ownerReference());
+      }
+      if (this._record.stale) {
+        throw this._staleError();
+      }
+      try {
+        return await this._singleCall(attribute, kwargs);
+      } catch (error2) {
+        if (!(error2 instanceof GlueAddressError && error2.code === "policy_expired")) {
+          throw error2;
+        }
+        if (!await this._reintroduceWithOwner()) {
+          this._record.stale = true;
+          error2.owner = this._ownerReference();
+          throw error2;
+        }
+        return await this._singleCall(attribute, kwargs);
+      }
+    }
+    async _singleCall(attribute, kwargs) {
+      const requestCapture = this._record.captureRequest();
+      const response = await this._http.sendAttributeRequest({
+        address: this._record.address,
+        policyToken: this._record.policyToken,
+        updates: requestCapture.updates,
+        attribute,
+        kwargs
+      });
+      if (this._record.disposed || this._registry.getRecord(this._record.address) !== this._record || requestCapture.generation !== this._record.generation) {
+        return { result: undefined, response: response.data, discarded: true };
+      }
+      const objects = response.data?.objects;
+      if (!Array.isArray(objects)) {
+        throw new GlueProxyError("Glue response is missing the objects envelope.");
+      }
+      const target = objects.find((entry) => entry?.address === this._record.address);
+      if (!target) {
+        throw new GlueProxyError(`Glue response has no entry for address "${this._record.address}".`);
+      }
+      objects.filter((entry) => entry !== target).forEach((entry) => this._registry.introduce(entry));
+      if (target.error) {
+        throw new GlueAddressError(target.error.code, target.error.message, this._record.address);
+      }
+      this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
+      const rawResult = target.result;
+      const result = this._convertResult(rawResult, attribute);
+      if (typeof rawResult === "string" && this._glueResult(attribute)) {
+        const childRecord = this._registry.getRecord(rawResult);
+        if (childRecord && !childRecord.owner) {
+          childRecord.owner = { address: this._record.address, path: null };
+        }
+      }
+      target.result = result;
+      this._processEffects(target);
+      return { result, response: response.data };
+    }
+    async _reintroduceWithOwner() {
+      const owner = this._record.owner;
+      if (!owner?.path)
+        return false;
+      const ownerProxy = this._registry.getProxy(owner.address);
+      const ownerRecord = ownerProxy?._record;
+      if (!ownerRecord || ownerRecord.stale)
+        return false;
+      this._record.stale = true;
+      try {
+        const ownerCapture = ownerRecord.captureRequest();
+        const response = await this._http.sendAttributeRequest({
+          address: owner.address,
+          policyToken: ownerRecord.policyToken,
+          updates: {},
+          reintroduce: [owner.path]
+        });
+        const objects = response.data?.objects;
+        if (!Array.isArray(objects))
+          return false;
+        const ownerEntry = objects.find((entry) => entry?.address === owner.address);
+        if (!ownerEntry || ownerEntry.error)
+          return false;
+        objects.filter((entry) => entry !== ownerEntry).forEach((entry) => this._registry.introduce(entry));
+        this._client._dispatcher.reconcile(owner.address, ownerEntry, ownerCapture);
+        return objects.some((entry) => entry?.address === this._record.address && !entry.error);
+      } catch {
+        return false;
+      }
+    }
+    _staleError() {
+      const owner = this._ownerReference();
+      const slotPath = this._record.owner?.path;
+      const message = owner ? slotPath !== null ? `policy expired; reintroduce it through its owner "${owner.name}" (address "${owner.address}")` : `policy expired; this result was produced by "${owner.name}" (address "${owner.address}"); re-run the call that produced it` : "policy expired; this address cannot be reintroduced through an owner, reload the page or re-run the call that produced it";
+      return new GlueAddressError("policy_expired", message, this._record.address, owner);
+    }
+    _ownerReference() {
+      const owner = this._record.owner;
+      if (!owner)
+        return null;
+      const ownerProxy = this._registry.getProxy(owner.address);
+      return {
+        name: ownerProxy?._name ?? owner.address,
+        address: owner.address
+      };
     }
     _refreshMaterializedInterface() {
       this._registry?.refresh(this._record);
@@ -4218,11 +4342,23 @@ ${expression ? 'Expression: "' + expression + `"
       this._onError = callback;
       return this;
     }
-    _processMessages(data = {}) {
-      if (!data.messages?.length || typeof window === "undefined")
+    _processEffects(entry = {}) {
+      const effects = entry.effects;
+      if (!effects)
+        return;
+      const dispose = effects.dispose;
+      if (dispose?.length) {
+        dispose.forEach((address) => this._registry.dispose(address));
+      }
+      const redirect = effects.redirect;
+      if (redirect?.url && typeof window !== "undefined") {
+        window.location.assign(redirect.url);
+      }
+      const messages = effects.messages;
+      if (!messages?.length || typeof window === "undefined")
         return;
       const handler = this._onMessage || window.Glue?._onMessage;
-      handler?.({ messages: data.messages, proxy: this });
+      handler?.({ messages, proxy: this });
     }
     _emit(when, attribute, payload) {
       const listeners = [
@@ -4231,9 +4367,12 @@ ${expression ? 'Expression: "' + expression + `"
       ];
       listeners.forEach((listener) => listener(payload));
     }
-    _convertResult(result) {
+    _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
-        return result.map((item) => this._convertResult(item));
+        return result.map((item) => this._convertResult(item, attribute));
+      }
+      if (typeof result === "string" && this._glueResult(attribute)) {
+        return this._registry.getProxy(result) ?? result;
       }
       if (!result || typeof result !== "object")
         return result;
@@ -4243,9 +4382,14 @@ ${expression ? 'Expression: "' + expression + `"
         return htmlResultFromResponse(result, this._client);
       }
       Object.keys(result).forEach((key) => {
-        result[key] = this._convertResult(result[key]);
+        result[key] = this._convertResult(result[key], attribute);
       });
       return result;
+    }
+    _glueResult(attribute) {
+      if (!attribute)
+        return false;
+      return Boolean(this._record.staticData?.callables?.[attribute]?.returns_glue);
     }
   }
   var base_default = BaseGlueProxy;
@@ -4682,11 +4826,21 @@ ${expression ? 'Expression: "' + expression + `"
       this.revisions = new Map;
       this.generation = 0;
       this.loadingStrategy = loadingStrategy;
+      this.owner = null;
+      this.stale = false;
+      this.disposed = false;
+      this.boundChildren = {};
+      this.displacedChildren = null;
       this.proxy = null;
       this._queue = Promise.resolve();
       this._suppressMutations = false;
       this.reactiveValues = reactive3({});
       this._replaceReactive(this.canonical);
+    }
+    dispose() {
+      this.disposed = true;
+      this.generation += 1;
+      this._queue = Promise.resolve();
     }
     attachProxy(proxy) {
       this.proxy = proxy;
@@ -4714,7 +4868,8 @@ ${expression ? 'Expression: "' + expression + `"
       return {
         canonical: cloneValue(this.canonical),
         updates: deriveUpdates(this.canonical, this.reactiveValues, this.editablePaths),
-        revisions: new Map(this.revisions)
+        revisions: new Map(this.revisions),
+        generation: this.generation
       };
     }
     enqueue(operation) {
@@ -4725,6 +4880,13 @@ ${expression ? 'Expression: "' + expression + `"
       return queued;
     }
     introduce(entry) {
+      if (this.disposed) {
+        this.disposed = false;
+        this.stale = false;
+        this.generation += 1;
+        this._queue = Promise.resolve();
+      }
+      const wasStale = this.stale;
       this._applyPolicyToken(entry.policy_token);
       this.staticData = cloneValue(entry.static_data || {});
       this.computedData = cloneValue(entry.computed_data || {});
@@ -4733,9 +4895,13 @@ ${expression ? 'Expression: "' + expression + `"
       const previousCanonical = this.canonical;
       this.canonical = authoritative;
       this._applyAuthoritative(previousCanonical, authoritative, null);
+      if (wasStale)
+        this.generation += 1;
       this.proxy?._refreshMaterializedInterface();
     }
     reconcile(entry, requestCapture) {
+      if (requestCapture?.generation !== undefined && requestCapture.generation !== this.generation)
+        return;
       if (entry.policy_token !== undefined)
         this._applyPolicyToken(entry.policy_token);
       if (entry.static_data !== undefined)
@@ -4756,6 +4922,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       this.policyToken = policyToken;
       this.policy = policy;
+      this.stale = false;
     }
     _applyAuthoritative(expected, authoritative, requestCapture) {
       const paths = new Set([
@@ -4849,7 +5016,35 @@ ${expression ? 'Expression: "' + expression + `"
     refresh(record) {
       this.materializer.refresh(record);
       this.childBinder.refresh(record);
+      const displaced = record.displacedChildren;
+      if (displaced) {
+        record.displacedChildren = null;
+        displaced.forEach((address) => this.dispose(address));
+      }
       record.proxy?._afterRecordRefresh?.();
+    }
+    dispose(address) {
+      const record = this.records.get(address);
+      if (!record || record.disposed)
+        return;
+      const doomed = [address];
+      let index = 0;
+      while (index < doomed.length) {
+        const current = doomed[index];
+        this.records.forEach((candidate) => {
+          if (candidate.owner?.address === current && !doomed.includes(candidate.address)) {
+            doomed.push(candidate.address);
+          }
+        });
+        index += 1;
+      }
+      doomed.forEach((doomedAddress) => {
+        const doomedRecord = this.records.get(doomedAddress);
+        if (!doomedRecord || doomedRecord.disposed)
+          return;
+        doomedRecord.dispose();
+        doomedRecord.proxy?._onDispose?.();
+      });
     }
     getRecord(address) {
       return this.records.get(address);
@@ -5326,24 +5521,46 @@ ${expression ? 'Expression: "' + expression + `"
     refresh(record) {
       if (!record.proxy)
         return;
+      record.displacedChildren = this._displacedAddresses(record);
       const paths = new Set([
         ...Object.keys(record.staticData.children || {}),
         ...Object.keys(record.policy.children || {})
       ]);
       paths.forEach((path) => {
+        const childAddress = record.policy.children?.[path];
+        if (childAddress) {
+          const child = this.registry.getProxy(childAddress);
+          if (child)
+            this._link(child, record, path);
+        }
         definePath(record.proxy, path, {
           get: () => {
             const childAddress = record.policy.children?.[path];
             if (!childAddress)
               return null;
             const child = this.registry.getProxy(childAddress);
-            if (child && child._owner !== record.proxy)
-              child._owner = record.proxy;
+            if (child)
+              this._link(child, record, path);
             return child;
           },
           enumerable: true
         });
       });
+      record.boundChildren = { ...record.policy.children || {} };
+    }
+    _displacedAddresses(record) {
+      const current = record.policy.children || {};
+      const displaced = [];
+      Object.entries(record.boundChildren || {}).forEach(([path, oldAddress]) => {
+        if (current[path] !== oldAddress)
+          displaced.push(oldAddress);
+      });
+      return displaced;
+    }
+    _link(child, record, path) {
+      if (child._owner !== record.proxy)
+        child._owner = record.proxy;
+      child._record.owner = { address: record.address, path };
     }
   }
   var childBinder_default = GlueChildBinder;
@@ -5387,7 +5604,7 @@ ${expression ? 'Expression: "' + expression + `"
       });
       this._registry.childBinder = new childBinder_default(this._registry);
       this._dispatcher = new responseDispatcher_default(this._registry);
-      this.loadManifests(context.manifest_list);
+      this._loadEntries(context.objects || []);
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -5405,16 +5622,18 @@ ${expression ? 'Expression: "' + expression + `"
       return new view_default(this.http, url, sharedPayload);
     }
     loadManifests(manifestList = []) {
-      this._introduceManifests(manifestList);
-      const childAddresses = new Set(this._collectManifests(manifestList).flatMap((manifest) => Object.values(policy_default.fromSignedPolicyToken(manifest.policy_token).children || {})));
-      (manifestList || []).filter((manifest) => !childAddresses.has(manifest.address)).forEach((manifest) => this._registerPublicManifest(manifest));
+      this._loadEntries(this._collectManifests(manifestList));
     }
     resolveManifest(manifest) {
-      this._introduceManifests([manifest]);
+      this._introduceEntries([manifest]);
       return this._registry.getProxy(manifest.address);
     }
-    _introduceManifests(manifestList) {
-      const entries = this._collectManifests(manifestList);
+    _loadEntries(entries = []) {
+      this._introduceEntries(entries);
+      const childAddresses = new Set(entries.flatMap((entry) => Object.values(policy_default.fromSignedPolicyToken(entry.policy_token).children || {})));
+      entries.filter((entry) => !childAddresses.has(entry.address)).forEach((entry) => this._registerPublicEntry(entry));
+    }
+    _introduceEntries(entries) {
       this._dispatcher.introduce(entries);
       entries.forEach((entry) => this._registry.refresh(this._registry.getRecord(entry.address)));
     }
@@ -5439,8 +5658,8 @@ ${expression ? 'Expression: "' + expression + `"
       collect(manifestList || []);
       return entries;
     }
-    _registerPublicManifest(manifest) {
-      const policy = policy_default.fromSignedPolicyToken(manifest.policy_token);
+    _registerPublicEntry(entry) {
+      const policy = policy_default.fromSignedPolicyToken(entry.policy_token);
       const { name, namespace } = policy;
       if (!name) {
         throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
@@ -5449,7 +5668,7 @@ ${expression ? 'Expression: "' + expression + `"
         throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`);
       }
       const key = name === namespace ? namespace : `${namespace}.${name}`;
-      this._publicAddresses.set(key, manifest.address);
+      this._publicAddresses.set(key, entry.address);
       if (name === namespace) {
         if (namespace in this && !this._directNamespaces.has(namespace)) {
           throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`);

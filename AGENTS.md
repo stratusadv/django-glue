@@ -1,6 +1,9 @@
 # Django Glue
 
-A library that seamlessly binds Django backend models to frontend JavaScript using the Proxy pattern.
+A library that binds Django models, querysets, forms, and callables to a
+JavaScript client. The server builds **Glue objects** whose state is signed
+into opaque policy tokens; the client holds one live proxy per wire **address**
+and reconciles each response as authoritative.
 
 ## Quick Reference
 
@@ -10,731 +13,269 @@ A library that seamlessly binds Django backend models to frontend JavaScript usi
 | Django | >= 5 |
 | JS Runtime | Bun |
 | License | MIT |
-| Version | 1.0.0a1 |
+| Package version | `django_glue/constants.py` (`__VERSION__`) |
 | Docs | https://django-glue.stratusadv.com |
 | Repo | https://github.com/stratusadv/django-glue |
 
-## Project Structure
+## Design authority
+
+`design/AGENTS.md` governs work on the reactive system (the state-model
+refactor). Before editing `django_glue/` or `client_js/` for that work: read
+the active phase and its gate in `design/reactive-system/roadmap.md`, then the
+governing sections of `design/reactive-system/state-model.md` (and
+`component-system.md` for components). This file describes the tree as it is;
+where it and the design docs disagree about the target architecture, the design
+docs win.
+
+## Project structure
 
 ```
 django-glue/
-├── django_glue/                      # Main Python package
-│   ├── __init__.py                   # Exports: Glue, django_glue_urls, GlueAccess
-│   ├── constants.py                  # String constants, version, session keys
-│   ├── settings.py                   # Default settings (keep-alive interval, etc.)
-│   ├── conf.py                       # Settings loader with Django settings override
-│   ├── maps.py                       # SUBJECT_TYPE_TO_PROXY_TYPE map
-│   ├── encoders.py                   # GlueActionDataJSONEncoder
-│   ├── utils.py                      # Helpers: queryset serialization, class import
-│   │
-│   ├── proxies/                      # Proxy pattern implementation
-│   │   ├── __init__.py               # Exports: BaseGlueProxy, GlueModelProxy, etc.
-│   │   ├── proxy.py                  # BaseGlueProxy abstract base class
-│   │   ├── decorators.py             # @action decorator
-│   │   ├── model/
-│   │   │   ├── base.py               # GlueModelProxyBase (abstract, combines mixins)
-│   │   │   └── proxy.py              # GlueModelProxy (single model instance)
-│   │   ├── queryset/
-│   │   │   └── proxy.py              # GlueQuerySetProxy (queryset collection)
-    │   │   └── form/
-    │   │       ├── mixin.py              # GlueFormProxyMixin (validation, save actions)
-    │   │       └── proxy.py              # GlueFormProxy (Django Form binding)
-    │   │   └── template/
-    │   │       └── proxy.py              # GlueTemplateProxy (Django template rendering)
-    │   │   └── function/
-    │   │       └── proxy.py              # GlueFunctionProxy (Python callable binding)
-    │   │
-│   ├── access/                       # Permission system
-│   │   └── access.py                 # GlueAccess StrEnum (VIEW, CHANGE, DELETE)
-│   │
-│   ├── resolver/                     # Request resolution
-│   │   ├── resolver.py               # BaseResolver abstract base class
-│   │   ├── exceptions.py             # GlueResolverError
-│   │   ├── action/
-│   │   │   ├── resolver.py           # ActionResolver - reconstructs proxy, calls action
-│   │   │   └── schemas.py            # ActionPayloadSchema (Pydantic)
-│   │   └── view/
-│   │       ├── resolver.py           # GlueViewResolver - renders target view
-│   │       ├── request.py            # GlueViewHttpRequest - wraps HttpRequest
-│   │       └── schemas.py            # ViewBodySchema (Pydantic)
-│   │
-│   ├── exceptions.py                 # Custom exceptions (GlueError, etc.)
-│   ├── session.py                    # GlueSession - proxy registration & expiration
-│   ├── views/                        # HTTP endpoints
-│   │   ├── action_views.py           # action_view
-│   │   ├── keep_live_views.py        # keep_live_view
-│   │   ├── session_data_views.py     # session_data_view
-│   │   └── view_views.py             # glue_view_view
-│   ├── shortcuts/                    # Main API entry point
-│   │   ├── glue.py                   # Glue class
-│   │   └── urls.py                   # django_glue_urls()
-│   ├── middleware.py                 # DjangoGlueMiddleware - expired proxy cleanup
-│   ├── urls.py                       # URL patterns (namespace: __dg__)
-│   └── templatetags/
-│       ├── django_glue.py            # {% django_glue_init %} inclusion tag
-│       └── utils.py                  # get_item template filter
-│
-├── client_js/                        # JavaScript client source
-│   ├── django_glue.js                # Entry point - creates singleton, exposes globals
-│   ├── scripts/
-│   │   └── build.js                  # Bun bundler script
+├── django_glue/
+│   ├── glue/                       # The Glue object system
+│   │   ├── base.py                 # BaseGlue: attributes, policy, children, calls
+│   │   ├── policy.py               # GluePolicy: signed token, state_snapshot, children
+│   │   ├── address.py              # Address derivation
+│   │   ├── context.py              # GlueContextManager + GlueManifest (page load)
+│   │   ├── attributes/             # DeclaredAttribute, definitions, collector, adapters
+│   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue, TemplateGlue
+│   │   ├── function.py             # FunctionGlue
+│   │   ├── component.py            # Component (component-system workstream)
+│   │   ├── loading.py              # LoadingStrategy (LAZY/EAGER)
+│   │   └── operation.py            # GlueOperation authorization records
+│   ├── resolver/
+│   │   ├── attribute_call/         # /__dg__/callable_attribute/ endpoint (batch entries)
+│   │   └── view_fragment/          # /__dg__/glue_view/ endpoint (Glue.view)
+│   ├── shortcuts/glue.py           # Glue.model/queryset/form/formset/template/function/...
+│   ├── shortcuts/urls.py           # django_glue_urls()
+│   ├── access.py                   # GlueAccess (VIEW/CHANGE/DELETE)
+│   ├── response.py                 # GlueResponse, GlueTemplateResponse, render helpers
+│   ├── exceptions.py               # GlueError family + closed error-code set
+│   ├── serialization.py            # Serializer registry for field values
+│   ├── encoders.py                 # JSON encoder for wire values
+│   ├── message.py                  # GlueMessage (effects channel)
+│   ├── settings.py / conf.py       # DJANGO_GLUE_* settings + loader
+│   ├── templatetags/django_glue.py # {% django_glue_init %}
+│   ├── templates/django_glue/      # init template (context JSON + client bootstrap)
+│   └── tests/                      # pytest suite (glue/, resolver/, e2e/, security/, ...)
+├── client_js/
+│   ├── django_glue.js              # Entry: globalThis.GlueClient, installs Alpine
+│   ├── scripts/build.js            # Bun bundler → django_glue/static/django_glue/js/
 │   ├── src/
-│   │   ├── client.js                 # GlueClient class - init, keep-alive, proxy creation
-│   │   ├── config.js                 # GlueConfig class - configuration defaults
-│   │   ├── http.js                   # GlueHttp - fetch wrapper, CSRF, timeout
-│   │   ├── view.js                   # GlueView - server-side HTML rendering
-    │   │   └── proxies/
-    │   │       ├── index.js              # SUBJECT_TYPE_TO_PROXY_CLASS, window globals
-    │   │       ├── base.js               # BaseGlueProxy - listeners, _processAttributeEvent
-    │   │       ├── form.js               # GlueFormProxy - field accessors, validation
-    │   │       ├── model.js              # GlueModelProxy - get, delete, _isNew
-    │   │       ├── queryset.js           # GlueQuerySetProxy - filter, child proxies
-    │   │       └── template.js           # GlueTemplateProxy - render methods, sharedPayload
-    │   │       └── function.js           # GlueFunctionProxy - factory callable, param mapping
-│   └── tests/
-│       ├── setup.js                  # Happy-dom global registration
-│       ├── testUtils.js              # Mock fetch, cookie, context data helpers
-│       ├── client.test.js            # GlueClient tests
-│       ├── config.test.js            # Config tests
-│       ├── http.test.js              # HTTP tests
-│       ├── testUtils.test.js         # Test utility function tests
-│       ├── view.test.js              # GlueView tests
-│       └── proxies/                  # Proxy tests (base, form, model, queryset)
-│
-├── test_project/                     # Django test application
-│   ├── settings.py                   # Test settings (SQLite, DEBUG)
-│   ├── urls.py                       # Test URL routing
-│   ├── test_forms.py                 # ContactForm, TestModelForm
-│   ├── gorilla/                      # Primary test app (Gorilla, Skill models)
-│   ├── fight/                        # Secondary test app
-│   ├── comments/                     # Secondary test app
-│   ├── lab/                          # Performance, connection, and volume (Specimen, 100k-row paging) test pages
-│   └── core/                         # Custom template tags
-│
-├── django_glue/tests/                # Python test suite
-│   ├── conftest.py                   # Pytest config, fixtures, MockSession
-│   ├── test_exceptions.py            # Exception class tests
-│   ├── test_maps.py                  # Python/JS subject type sync tests
-│   ├── access/test_access.py         # GlueAccess hierarchy tests
-│   ├── conf/test_conf.py             # Settings loader tests
-│   ├── session/test_session.py       # Session management tests
-│   ├── resolver/                         # Resolver test suite
-│   │   ├── action/
-│   │   │   ├── test_schemas.py           # ActionPayloadSchema tests
-│   │   │   └── test_exceptions.py        # GlueResolverError tests
-│   │   └── view/
-│   │       ├── test_request.py           # GlueViewHttpRequest tests
-│   │       ├── test_resolver.py          # GlueViewResolver tests
-│   │       └── test_schemas.py           # ViewBodySchema tests
-│   ├── encoders/test_encoders.py     # GlueActionDataJSONEncoder tests
-│   ├── middleware/test_middleware.py # DjangoGlueMiddleware tests
-│   ├── shortcuts/test_shortcuts.py   # Glue API entry point tests
-│   ├── templatetags/test_templatetags.py  # Template tag tests
-│   ├── utils/test_utils.py           # Utility function tests
-│   ├── views/test_views.py           # HTTP endpoint tests
-│   └── proxies/
-│       ├── test_base_proxy.py        # BaseGlueProxy process_action tests
-│       ├── test_decorators.py        # @action decorator tests
-│       ├── test_foreign_key_choices.py  # foreign_key_choices action tests
-│       ├── fields/test_mixin_validation.py  # Payload validation tests
-│       ├── model/actions/            # Model proxy action tests
-│       ├── queryset/actions/         # QuerySet proxy action tests
-│       └── form/                     # Form proxy tests
-│           ├── test_form_proxy.py
-│           └── actions/              # Form action tests
-│       └── template/                 # Template proxy tests
-│           └── test_template_proxy.py
-│       └── function/                 # Function proxy tests
-│           └── test_function_proxy.py
-│
-└── docs/                             # MkDocs documentation
-    ├── api/                          # API reference docs
-    ├── guides/                       # Usage guides
-    ├── getting_started/              # Installation guide
-    ├── changelog/                    # Version changelog
-    └── roadmap/                      # Future plans
+│   │   ├── client.js               # GlueClient: namespace getters, manifest registration
+│   │   ├── http.js                 # Multipart attribute requests, file extraction
+│   │   ├── policy.js               # Signed-policy-token client
+│   │   ├── alpine.js               # The only module that references Alpine/morph
+│   │   ├── runtime/                # addressRegistry, addressRecord, attributeMaterializer,
+│   │   │                           # childBinder, responseDispatcher, state
+│   │   ├── proxies/                # base, model, queryset, form, formset, function,
+│   │   │                           # template, sequence, fieldBacked + fields/
+│   │   └── view.js                 # Glue.view (server-rendered fragments)
+│   └── tests/                      # bun test (happy-dom)
+├── test_project/                   # Django app used by all tests (gorilla, fight,
+│                                   # comments, lab, core)
+├── design/                         # Reactive-system design docs (authority)
+├── docs/                           # MkDocs site
+├── justfile                        # All dev commands
+└── STATE_MODEL_HANDOFF.md          # Working handoff for the state-model branch
 ```
 
-## Core Concepts
+## Server: Glue objects
 
-### The Proxy Pattern
-
-Django Glue creates proxy objects that act as transparent interfaces between Django models/querysets/forms and JavaScript. Each proxy:
-
-1. Has a **unique name** identifying it in the session
-2. Wraps a **target** (Model instance, QuerySet, Form, Template, or Function)
-3. Has an **access level** (VIEW, CHANGE, or DELETE)
-4. Exposes **actions** callable from JavaScript
-
-### Proxy Class Hierarchy (Python)
-
-```
-ABC
-  ├── BaseGlueProxy (proxies/proxy.py)
-  │     ├── GlueFormProxyMixin (proxies/form/mixin.py)
-  │     │     ├── GlueModelProxyBase (proxies/model/base.py)
-  │     │     │     ├── GlueModelProxy (proxies/model/proxy.py)
-  │     │     │     └── GlueQuerySetProxy (proxies/queryset/proxy.py)
-  │     │     └── GlueFormProxy (proxies/form/proxy.py)
-   │     └── GlueTemplateProxy (proxies/template/proxy.py)
-   │     └── GlueFunctionProxy (proxies/function/proxy.py)
-```
-
-### Proxy Class Hierarchy (JavaScript)
-
-```
-BaseGlueProxy
-    ├── GlueFormProxy
-    │     └── GlueModelProxy
-    ├── GlueQuerySetProxy
-    ├── GlueTemplateProxy
-    └── GlueFunctionProxy
-```
-
-### Layering Rules (JavaScript client)
-
-These are hard invariants. Breaking one is a design smell, not a shortcut.
-
-**`GlueClient` (`client.js`) must stay namespace-agnostic.** It resolves a
-manifest to a proxy class via `NAMESPACE_TO_PROXY_CLASS` and constructs it. It
-must never hold state, options, or branching that belong to one specific proxy
-type. If you find yourself adding something like a query cache, a form's
-dirty-field set, or a formset's row list to the client, the design is wrong --
-that state belongs on the proxy class that owns the concept, or on a collaborator
-that proxy owns. The one existing namespace check (`namespace === 'function'`,
-for `ProxyClass.create()`) is a wart, not a precedent to extend.
-
-**Alpine.js is glue's frontend framework, and `client_js/src/alpine.js` is the
-only module that references it.** Everything else imports from that module
-(`reactive()` and `morph()`). No other frontend framework is referenced under
-`client_js/src/`, and the Python side stays framework-free. Glue bundles Alpine
-and morph, exposes its runtime as `window.Alpine`, and starts it after page
-parsing and deferred plugin registration. Do not load a separate Alpine core
-or morph script or call `Alpine.start()` in consuming projects. Objects are
-reactive as soon as they are handed out, including during page parsing; every
-write to a handed-out object goes through `reactive()` so Alpine observes it.
-See `design/reactive-system/component-system.md`.
-
-**Proxy-specific behavior lives on the proxy class.** `_applyResponseData()`
-overrides, chaining, caching, and hydration all belong in the subclass
-(`queryset.js`, `formset.js`, `sequence.js`), not in `base.js` and not in
-`client.js`.
-
-### Access Control
+### Registration
 
 ```python
-from django_glue import GlueAccess
+from django_glue import Glue, GlueAccess, DeclaredAttribute
 
-# Permission cascade (higher includes lower):
-# DELETE > CHANGE > VIEW
-
-GlueAccess.VIEW    # Read-only
-GlueAccess.CHANGE  # Read + write (includes VIEW)
-GlueAccess.DELETE  # Read + write + delete (includes CHANGE)
-```
-
-`GlueAccess` inherits from `StrEnum`, serializing cleanly to JSON as `'view'`, `'change'`, `'delete'`. The `has_access()` method compares enum member indices to enforce the cascade.
-
-### The @action Decorator
-
-Defined in `proxies/decorators.py`. Marks proxy methods as callable from JavaScript:
-
-```python
-@action(GlueAccess.VIEW)
-def get(self, action_data):
-    ...
-```
-
-The `@action` decorator sets `_required_glue_access` on the wrapped function. `BaseGlueProxy.__init_subclass__` auto-discovers methods with this attribute and registers them in the class-level `_actions` dict, extracting method parameters and type annotations.
-
-**Convention**: All action methods accept exactly one parameter: `action_data: ActionPayloadSchema`.
-
-### Built-in Actions by Proxy Type
-
-| Proxy | Actions | Required Access |
-|-------|---------|-----------------|
-| `GlueModelProxy` | `get()`, `save()`, `delete()`, `validate()`, `foreign_key_choices()` | VIEW, CHANGE, DELETE |
-| `GlueQuerySetProxy` | `query_with_params()`, `save()`, `delete()`, `get()`, `new()` | VIEW, CHANGE, DELETE |
-| `GlueFormProxy` | `get()`, `validate()`, `save()`, `foreign_key_choices()` | VIEW, CHANGE |
-| `GlueTemplateProxy` | `render_html()` | VIEW |
-| `GlueFunctionProxy` | `execute()` | VIEW |
-
-### Payload Validation
-
-Model and QuerySet proxies validate incoming data using Django's `modelform_factory`. This provides:
-- Full Django form validation (max_length, min_value, max_value, etc.)
-- Custom field validators
-- Type coercion (e.g., string "42" → integer 42)
-- Field filtering (only included fields are validated/saved)
-
-The save pipeline in `GlueModelProxyBase._save()`:
-1. `_set_non_m2m_fields()` - sets non-M2M fields via `field.save_form_data()`
-2. `model_instance.save()` - persists to database
-3. `_set_m2m_fields()` - sets M2M fields (requires saved instance)
-
-File fields are deferred until after other fields so `upload_to` callables can reference other field values.
-
-## Usage
-
-### Backend (Django View)
-
-```python
-from django_glue import Glue, GlueAccess
-from myapp.models import Task
-from myapp.forms import TaskForm, ContactForm
-
-def my_view(request):
-    # Register a single model instance
-    Glue.model(
-        request=request,
-        unique_name='task',
-        target=Task.objects.first(),
-        access=GlueAccess.DELETE,
-    )
-
-    # Register a queryset
+def list_view(request):
     Glue.queryset(
         request=request,
-        unique_name='tasks',
-        target=Task.objects.all(),
-        access=GlueAccess.CHANGE,
-        fields=['id', 'title', 'done'],  # Optional field filtering
+        target=Gorilla.objects.order_by('-updated_at').all(),
+        unique_name='gorillas',
+        access=Glue.Access.DELETE,
+        fields=['id', 'name', 'description', 'age', 'skills__name'],
     )
-
-    # ModelForm registers as GlueModelProxy (not GlueFormProxy)
-    Glue.form(
-        request=request,
-        unique_name='task_form',
-        target=TaskForm(instance=task),
-        access=GlueAccess.CHANGE,
-    )
-
-    # Regular Form registers as GlueFormProxy
-    Glue.form(
-        request=request,
-        unique_name='contact_form',
-        target=ContactForm(),
-        access=GlueAccess.CHANGE,
-    )
-
-    # Register a function
-    Glue.function(
-        request=request,
-         unique_name='calculate_total',
-        target='myapp.utils.calculate_total',
-        access=GlueAccess.VIEW,
-    )
-
-    return render(request, 'page.html')
+    Glue.form(request=request, target=GorillaForm(), unique_name='new_gorilla_form',
+              access=Glue.Access.CHANGE)
+    Glue.model(request=request, target=Gorilla(), unique_name='new_gorilla_model',
+               access=Glue.Access.CHANGE, exclude=['signature'])
+    Glue.function(request=request, unique_name='calculate_total',
+                  target='myapp.utils.calculate_total')
+    return render(request, 'gorilla/page/list_page.html')
 ```
 
-### Alternative: Direct `Glue.glue()` Call
+Each call builds a Glue object and adds it to the request's
+`GlueContextManager`; `{% django_glue_init %}` then serializes every object as
+an addressed manifest into the page. `Glue.object(request, glue=...)` registers
+custom `BaseGlue` subclasses; `Glue.formset`, `Glue.template`, `Glue.sequence`,
+and `Glue.choices` round out the API (`django_glue/shortcuts/glue.py`).
+
+Hierarchy:
+
+```
+BaseGlue (django_glue/glue/base.py)
+├── ModelGlue       (glue/objects/django/model/object.py)
+├── QuerySetGlue    (glue/objects/django/queryset.py)
+├── FormGlue        (glue/objects/django/form/object.py)
+├── FormSetGlue     (glue/objects/django/formset.py, via BaseCollectionGlue)
+├── FunctionGlue    (glue/function.py)
+└── TemplateGlue    (glue/objects/django/template.py)
+```
+
+### Declared attributes
+
+`@DeclaredAttribute` is the only client-callable surface — there is no `@action`
+decorator and no action registry. A Glue class declares:
+
+- **value attributes** with a `GlueValueRole` — `EDITABLE_STATE` (client writes
+  round-trip in `updates`) or `COMPUTED` (down-only `computed_data`),
+- **child attributes** declaring the expected Glue type (and nullability),
+- **callables** with `required_access`, `allowed_arguments`, and an optional
+  Glue return type:
 
 ```python
-from django_glue.proxies import GlueModelProxy
-
-Glue.glue(
-    request=request,
-    unique_name='task',
-    target=task,
-    proxy_class=GlueModelProxy,
-    access=GlueAccess.DELETE,
-)
+@DeclaredAttribute(required_access=GlueAccess.CHANGE)
+def save(self) -> dict[str, Any]:
+    self.instance.full_clean()
+    self.instance.save()
+    return {'pk': self.instance.pk}
 ```
 
-### Template
+### Identity, state, authorization
 
-```html
-{% load django_glue %}
-<!DOCTYPE html>
-<html>
-<head>
-    {% django_glue_init %}
-</head>
-<body>
-    <!-- Your frontend code -->
-</body>
-</html>
+- **Identity** is a signed policy token (`glue/policy.py`): address, name,
+  namespace, access, admitted capabilities, the signed `state_snapshot`, and
+  the signed `children` map. Lifetime is fixed at
+  `DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS` (default 86400, 24 h) from
+  issuance; a successor token with fresh issuance is delivered only when
+  retained values change (ADR 013). The token is session-bound and
+  re-authorized on every request. Nothing about a Glue object lives in the
+  session; there is no keep-alive and no proxy registry.
+- **Down-only data** is split: `static_data` (field descriptors with
+  `value_path` mappings, child slots, callable schemas — client-forgets,
+  stable) and `computed_data` (re-derived output). Responses omit what did not
+  change; **omission means the client's previous value stands** — it never
+  means "empty".
+- **Authorization** is re-checked on every request against the signed policy,
+  using `GlueOperation` records (`glue/operation.py`). `GlueAccess` is a
+  `StrEnum` with the cascade VIEW < CHANGE < DELETE.
+- **Update admission**: incoming `updates` are checked field-by-field against
+  the signed `state_snapshot` and the editable projection before anything is
+  applied.
+
+## Wire format (state-model.md §10)
+
+Two endpoints, namespace `__dg__` (`django_glue/urls.py`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /__dg__/callable_attribute/` | Attribute calls. Multipart body with a JSON `objects` field — `[{address, policy_token, updates, call: {attribute, kwargs}}]` — plus file parts keyed by update path. Response: `{objects: [entry, ...]}`. |
+| `POST /__dg__/glue_view/` | View fragments for `Glue.view`: renders a Django view and returns HTML with the manifests the render touched. |
+
+Response entries:
+
+- the **addressed entry** carries `address` + `policy_token` / `static_data` /
+  `computed_data` (each omitted when unchanged) + `result` +
+  `effects: {messages: [...]}`;
+- **newly introduced children** ride as their own entries;
+- a **failed address** is an entry `{address, error: {code, message}}` that
+  advances nothing while every other entry in the batch advances as if it had
+  travelled alone;
+- an **envelope fault** (malformed `objects`, empty batch, duplicate
+  addresses, outer address that doesn't match its signed policy) is a
+  whole-response error with no `objects`.
+
+A callable that returns a Glue object has a wire `result` that is the
+object's **address** (the callable schema in `static_data` marks it as a Glue
+return); the object's entry is included when newly introduced.
+
+## Client
+
+`window.Glue` is a `GlueClient`, created by the `{% django_glue_init %}`
+template from the page context. It exposes one proxy per registered name and
+`Glue.view(url)`:
+
+```js
+const gorilla = Glue.model.gorilla          // ModelGlue proxy
+gorilla.name = 'Moses'
+await gorilla.save()
+
+const all = await Glue.querySet.gorillas.all()
+await all.items[0].save()
+
+const validation = await Glue.form.new_gorilla_form.validate()
+const total = await Glue.function.calculate_total({a: 1, b: 2})
+await Glue.view('/gorilla/detail/').renderInnerHtml('#panel')
 ```
 
-The `{% django_glue_init %}` tag renders `templates/django_glue/django_glue.html`, which injects:
-1. CSRF token
-2. JS script tag (version cache-busted)
-3. JSON data for proxy registry and context data
-4. Initialization code creating `GlueConfig` and calling `Glue.init()`
-
-### Frontend (JavaScript)
-
-```javascript
-// Model proxy - access fields directly
-const title = Glue.model.task.title       // Auto-fetches if needed
-Glue.model.task.title = 'New Title'       // Updates internal state
-await Glue.model.task.save()              // Persists to Django
-await Glue.model.task.delete()            // Deletes instance
-
-// QuerySet proxy - work with collections
-const allTasks = (await Glue.querySet.tasks.all()).items
-const filtered = await Glue.querySet.tasks
-    .filter({ done: false, title__icontains: 'urgent' })
-    .all()
-
-// Each item is a full GlueModelProxy
-filtered.items[0].done = true
-await filtered.items[0].save()
-
-// Form proxy - validation and submission
-Glue.form.contact_form.name = 'John'
-Glue.form.contact_form.email = 'john@example.com'
-
-const validation = await Glue.form.contact_form.validate()
-if (validation.success) {
-    const result = await Glue.form.contact_form.save()
-}
-
-// Template proxy - render templates with dynamic context
-await Glue.template.card.renderInnerHtml('#card-container', { name: 'John' })
-await Glue.template.card.renderOuterHtml('#card-container', { name: 'Jane' })
-
-// Function proxy - call Python functions with an object matching original function's keyword args
-const total = await Glue.function.calculate_total({kwarg_1: 100, kwarg_2: 0.08, kwarg_3: true})
-```
-
-### GlueView - Server-Side HTML Rendering
-
-```javascript
-const view = Glue.view('/some/url/')
-await view.renderInnerHtml('#target-element', { param: 'value' })
-```
-
-`GlueView` enables server-side rendering of HTML fragments with embedded Glue proxies. The server renders the target URL, registers any new proxies, and returns `{html, proxy_registry_data, proxy_context_data}`. The client calls `Glue.initializeProxies()` to register the new proxies.
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `django_glue/proxies/proxy.py` | BaseGlueProxy - core abstraction, action registration, request processing |
-| `django_glue/proxies/model/base.py` | GlueModelProxyBase - field handling, save pipeline, form class resolution |
-| `django_glue/proxies/model/proxy.py` | GlueModelProxy - single model instance binding |
-| `django_glue/proxies/queryset/proxy.py` | GlueQuerySetProxy - queryset binding with serialization |
-| `django_glue/proxies/form/mixin.py` | GlueFormProxyMixin - validation, save, foreign_key_choices actions |
-| `django_glue/proxies/form/proxy.py` | GlueFormProxy - Django Form binding |
-| `django_glue/proxies/template/proxy.py` | GlueTemplateProxy - Django template rendering |
-| `django_glue/proxies/function/proxy.py` | GlueFunctionProxy - Python callable binding |
-| `django_glue/proxies/decorators.py` | @action decorator |
-| `django_glue/session.py` | GlueSession - proxy registration, expiration, renewal |
-| `django_glue/shortcuts/glue.py` | Glue class - main API entry point |
-| `django_glue/views/action_views.py` | action_view - execute proxy action |
-| `django_glue/views/keep_live_views.py` | keep_live_view - renew proxy expiration |
-| `django_glue/views/session_data_views.py` | session_data_view - get proxy registry |
-| `django_glue/views/view_views.py` | glue_view_view - execute Django view |
-| `django_glue/resolver/action/schemas.py` | ActionPayloadSchema - Pydantic model for request parsing |
-| `django_glue/resolver/action/resolver.py` | ActionResolver - reconstructs proxy and calls action |
-| `django_glue/resolver/view/resolver.py` | GlueViewResolver - renders target view |
-| `django_glue/encoders.py` | GlueActionDataJSONEncoder - handles Model, QuerySet, FieldFile serialization |
-| `django_glue/exceptions.py` | Custom exceptions for error handling |
-| `django_glue/urls.py` | URL configuration (namespace: `__dg__`) |
-| `client_js/src/client.js` | GlueClient singleton - init, keep-alive, proxy creation |
-| `client_js/src/http.js` | GlueHttp - fetch wrapper, CSRF, timeout, action requests |
-| `client_js/src/proxies/base.js` | BaseGlueProxy - listener system, _processAttributeEvent |
-| `client_js/src/proxies/model.js` | GlueModelProxy - field accessors, get, delete |
-| `client_js/src/proxies/queryset.js` | GlueQuerySetProxy - filter, child proxy creation |
-| `client_js/src/proxies/form.js` | GlueFormProxy - field definitions, validation, FormData |
-| `client_js/src/proxies/template.js` | GlueTemplateProxy - render methods, sharedPayload |
-| `client_js/src/proxies/function.js` | GlueFunctionProxy - factory callable, param mapping |
-| `client_js/src/view.js` | GlueView - server-side HTML rendering |
-| `client_js/src/config.js` | GlueConfig - configuration defaults |
-
-## Session Management
-
-### Architecture
-
-Proxies are NOT stored in the session. Only their `unique_name` and `access` level are persisted. The proxy is reconstructed on each request from `context_data` sent by the client.
-
-```python
-request.session['django_glue_proxies'] = {
-    'proxy_unique_name': GlueAccess.VIEW,
-    ...
-}
-request.session['django_glue_keep_live'] = {
-    'proxy_unique_name': 1712345678.0,  # Unix timestamp of expiration
-    ...
-}
-```
-
-### Key Behaviors
-
-- **Keep-alive interval**: 600 seconds default (configurable via `DJANGO_GLUE_KEEP_LIVE_INTERVAL_TIME_SECONDS`)
-- **Expiration buffer**: +60 seconds added beyond the configured interval to account for request processing time
-- **Client polling**: JS client sends keep-alive requests automatically via `setInterval`
-- **Middleware cleanup**: `DjangoGlueMiddleware` purges expired proxies on every non-glue request
-- **Session modification**: `_set_modified()` marks session as modified (required for Django to persist changes)
-
-### Settings (in Django settings.py)
-
-```python
-DJANGO_GLUE_SESSION_PROXY_KEY = 'django_glue_proxies'
-DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400
-DJANGO_GLUE_VIEW_MAX_REDIRECTS = 10
-DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
-DJANGO_GLUE_QUERYSET_BATCH_SIZE = 100  # Rows per batch for Glue.queryset(); None disables batching
-```
-
-Any `django_glue.settings` constant can be overridden by defining the same name in your Django project's `settings.py`. The `Settings` class in `conf.py` checks Django settings first, then falls back to defaults.
-
-## Request/Response Flow
-
-### Registration Flow (Page Load)
-
-1. Django view calls `Glue.model(request, unique_name='task', target=task, access=GlueAccess.DELETE)`
-2. `Glue.glue()` creates `GlueModelProxy` instance
-3. `GlueSession.register_proxy()` stores `{unique_name: access}` in session + sets expiration
-4. `proxy.to_proxy_definition()` serializes proxy metadata (actions, fields, model info)
-5. Context data stored on `request.__glue_context_data__['task']`
-6. Template renders `{% django_glue_init %}` which injects JS with proxy registry and context data
-7. JS client parses context data and creates JavaScript proxy objects
-
-### Action Flow (JS -> Django)
-
-1. JS calls `Glue.model.task.save()`
-2. JS POSTs to `/__dg__/action/task/save/` with body:
-   ```json
-   {
-     "context_data": { "subject_type": "Model", "model_class": "...", "app_label": "...", "target_pk": 1, ... },
-     "post_data": { "name": "New Name", ... },
-     "file_data": {}
-   }
-   ```
-3. `action_view` delegates to `ActionResolver` which parses request into `ActionPayloadSchema`
-4. `GlueSession.get_proxy_access('task')` retrieves access level from session
-5. `SUBJECT_TYPE_TO_PROXY_TYPE['Model'].from_action_request_data(...)` reconstructs `GlueModelProxy`
-6. `proxy.process_action('save', action_data)` validates access and calls the `save` method
-7. Result dict returned as `JsonResponse` with `GlueActionDataJSONEncoder`
-
-### Keep-Alive Flow
-
-1. JS client periodically POSTs to `/__dg__/keep_live/` with `{ "unique_names": ["task", "tasks"] }`
-2. `keep_live_view` calls `GlueSession.renew_proxies()` to update expiration timestamps
-3. Returns current proxy registry
-
-### Expiration Flow
-
-1. On any non-glue request, `DjangoGlueMiddleware` calls `GlueSession.purge_expired_proxies()`
-2. Expired proxies (current time > expiration timestamp) are removed from both registries
-3. Session is marked modified to persist changes
-
-## URLs
-
-Include in your Django urls.py:
-
-```python
-from django_glue import django_glue_urls
-
-urlpatterns = [
-   path('', include(django_glue_urls())),
-   # ...
-]
-```
-
-Endpoints (namespace: `__dg__`):
-| Method | Path | View | Purpose |
-|--------|------|------|---------|
-| POST | `/__dg__/action/<unique_name>/<action>/` | `action_view` | Execute proxy action |
-| POST | `/__dg__/keep_live/` | `keep_live_view` | Renew proxy expiration |
-| GET | `/__dg__/session_data/` | `session_data_view` | Get proxy registry |
-| POST | `/__dg__/glue_view/` | `glue_view_view` | Execute another Django view |
-
-## Exceptions
-
-Custom exceptions in `django_glue/exceptions.py`:
-
-| Exception | When Raised |
-|-----------|-------------|
-| `GlueError` | Base exception for all Glue errors |
-| `GlueProxyNotFoundError` | Proxy not found in session |
-| `GlueAccessError` | Insufficient permissions for action |
-| `GlueMissingActionError` | Action method doesn't exist |
-| `GlueModelInstanceNotFoundError` | Model instance not found (DoesNotExist) |
-| `GlueQuerySetFilterValidationError` | Filter references disallowed field |
-Each exception stores its parameters as instance attributes for programmatic access and generates a descriptive error message.
-
-## JavaScript Client
-
-### Architecture
-
-The JS client is a singleton `GlueClient` exposed as `window.Glue`. It mirrors the Python proxy system:
-
-| Python | JavaScript |
-|--------|------------|
-| `BaseGlueProxy` | `BaseGlueProxy` |
-| `GlueModelProxy` extends `GlueModelProxyBase` | `GlueModelProxy` extends `GlueFormProxy` |
-| `GlueQuerySetProxy` extends `GlueModelProxyBase` | `GlueQuerySetProxy` extends `BaseGlueProxy` |
-| `GlueFormProxy` extends mixin + `BaseGlueProxy` | `GlueFormProxy` extends `BaseGlueProxy` |
-| `GlueTemplateProxy` extends `BaseGlueProxy` | `GlueTemplateProxy` extends `BaseGlueProxy` |
-| `@action` decorator auto-registers methods | Actions come from `contextData.actions` sent from Python |
-| `to_proxy_definition()` serializes proxy state | `contextData` received and used to build proxy |
-| `subject_type.__name__` in context data | `SUBJECT_TYPE_TO_PROXY_CLASS` map by string name |
-
-### Event System
-
-Each JS proxy supports a listener pattern with three event types: `'before'`, `'after'`, `'error'`.
-
-```javascript
-Glue.model.task.addListener('save', (event) => {
-    console.log('Before save:', event.payload)
-}, 'before')
-
-Glue.model.task.addListener('save', (event) => {
-    console.log('After save:', event.result)
-}, 'after')
-```
-
-### Field Access
-
-JS proxies define property getters/setters for each field. Model proxies support lazy loading - accessing a field triggers `get()` if data hasn't been loaded yet.
-
-### Keep-Alive
-
-The JS client starts a `setInterval` on init, collecting all proxy names and sending them to `/__dg__/keep_live/`. On failure, it shows a `confirm()` dialog with the session expiry message and reloads the page if confirmed.
+- `client_js/src/runtime/` owns the state model: the address registry
+  (one `addressRecord` per address), the attribute materializer, the child
+  binder, and the response dispatcher that applies each response as
+  authoritative (capture request → introduce entries → reconcile → bind →
+  resolve result → apply effects).
+- `client_js/src/proxies/` holds the per-namespace proxy classes;
+  proxy-specific behavior (chaining, caching, hydration, row lists) lives on
+  the subclass, never in `base.js` or `client.js`.
+- `GlueClient` stays namespace-agnostic: it resolves a namespace to a proxy
+  class and constructs. The one `namespace === 'function'` check is a known
+  wart, not a precedent.
+- Alpine.js enters through `client_js/src/alpine.js` only; everything else
+  imports `reactive()`/`morph()` from it. The bundle exposes `window.Alpine`
+  and starts it; consuming apps never load a separate Alpine or call
+  `Alpine.start()`.
 
 ## Development
 
-### IMPORTANT: Always Use Justfile
-
-**ALWAYS use `just` commands instead of running commands directly.** The justfile loads environment variables from `development.env` which are required for the project to function correctly.
+**Always use `just`** — it loads `development.env`, which the test settings
+require. `just --list` shows every recipe; the gates are:
 
 | Task | Command |
 |------|---------|
-| Run Python tests | `just run-tests` |
-| Run Python tests with coverage | `just run-coverage` |
-| Run JS tests | `just js-tests` |
-| Run JS tests in watch mode | `just js-tests-watch` |
-| Build JS bundle | `just js-build` |
-| Run dev server | `just run-server` |
-| Migrate and seed DB | `just migrate-and-seed` |
-| Run doc tests | `just run-doc-tests` |
-| Lock dependencies (bun + uv) | `just lock` |
-| Create venv | `just venv` |
+| Python tests (unit) | `just test` (pytest, `-m "not e2e"`) |
+| One test file/pattern | `just test-app django_glue/tests/glue/test_formset.py` |
+| E2E (Playwright via pytest) | `just test-e2e -x -q` (sets `DJANGO_GLUE_RUN_E2E=1`) |
+| JS tests | `just js-tests` (bun test, happy-dom) |
+| Build JS bundle | `just js-build` (outputs to `django_glue/static/django_glue/js/`) |
+| Dev server | `just run-server` |
+| Migrations | `just make-migrations` / `just migrate` |
+| Docs build (strict) | `just docs` |
 
-### Testing After Changes
+**Run the gates after any change, before finishing:** Python changes →
+`just test`; JS changes → `just js-build` then `just js-tests`; both → all
+three. `ruff check` / `ruff format` for Python style (see `ruff.toml`); the
+pre-existing `ruff --select F` findings are a known baseline — don't add new
+ones.
 
-**ALWAYS run tests after making any code changes, before finishing a request.**
+Setup: `.venv` with `pip install -e ".[development]"` (the justfile invokes
+`.venv/bin/python` directly), `just js-install` for Bun dependencies; `uv.lock`
+tracks the uv alternative.
 
-- After changing **Python code**: run `just run-tests`
-- After changing **JavaScript code**: run `just js-build` then `just js-tests`
-- After changing **both**: run `just js-build`, `just js-tests`, and `just run-tests`
-- If tests fail, fix the issue and re-run until all tests pass
+## Testing
 
-### Setup
+- **Python**: pytest + pytest-django, `django.test.TestCase` subclasses,
+  `test_{action}_{condition}` naming. E2E tests are marked `e2e` and only run
+  under `DJANGO_GLUE_RUN_E2E=1` (the justfile recipes set it).
+- **JS**: `bun test` with happy-dom; tests live in `client_js/tests/` with
+  shared fixtures in `testUtils.js`.
+- **Test project**: `test_project/` is a real Django app (gorilla, fight,
+  comments, lab for volume/morph, core for template tags). All E2E and most
+  server tests drive it; its pages and models are fixtures, not examples to
+  copy verbatim.
 
-```bash
-# Install Python dependencies
-pip install -e ".[development]"
+## Security
 
-# Install Bun (https://bun.sh)
-# Then install JS dependencies
-bun install
-```
+- The client never sees Glue object internals: identity is the signed policy
+  token, state travels as the client-computed `updates` diff checked against
+  the signed snapshot, and file uploads ride multipart parts.
+- CSRF protection is enforced on both endpoints; the JS client injects the
+  `X-CSRFToken` header.
+- QuerySet internals may cross the Python boundary via the internal unpickler
+  (`glue/queryset_unpickler.py`); nothing untrusted is deserialized.
 
-### Building JavaScript Client
+## Python value types
 
-```bash
-# Build once
-bun run build
-
-# Watch mode (rebuilds on changes)
-bun run watch
-```
-
-Output goes to `django_glue/static/django_glue/js/django_glue.js` and `django_glue.min.js`.
-
-The build uses Bun's native bundler (`Bun.build()`) with `target: 'browser'` and `format: 'iife'`. No webpack or babel involved.
-
-### Running the Test Project
-
-```bash
-DJANGO_SETTINGS_MODULE=test_project.settings python manage.py runserver
-```
-
-The manage.py lives at `test_project/manage.py`.
-
-### Testing
-
-- **Python**: pytest with pytest-django
-- **JavaScript**: Bun test with Happy-DOM
-
-```bash
-# Run Python tests
-python -m pytest django_glue/tests/ -v
-
-# Run JavaScript tests
-bun test
-
-# Run JavaScript tests with coverage
-bun test --coverage
-```
-
-#### Why Bun + Happy-DOM for JS tests?
-
-The JavaScript client uses browser APIs (`document.cookie` for CSRF tokens, `window.location.reload()` for session expiry, `fetch` for HTTP requests). Bun provides a fast runtime with native bundling and test execution. `@happy-dom/global-registrator` provides a simulated browser environment, allowing tests to access `document`, `window`, and other browser APIs without manual mocking.
-
-### Code Quality
-
-```bash
-# Lint and format Python
-ruff check .
-ruff format .
-
-# Type check Python
-ty check django_glue/
-# or
-pyright django_glue/
-```
-
-### CI/CD
-
-GitHub Actions workflows in `.github/workflows/`:
-- **ci.yml**: Linting (Python 3.11), tests (3.11/3.12/3.13 matrix), JS tests (Bun), security
-- **publish_pypi_package.yml**: Builds and publishes to PyPI on release
-- **uv_lock.yml**: Auto-updates uv.lock on dependency changes
-
-CI uses custom `stratusadv/github-actions` reusable actions and `test_project.settings` as the settings module.
-
-## Test Conventions
-
-### Python Tests
-
-- All tests inherit from `django.test.TestCase`
-- Test classes follow `Glue{Component}{Feature}TestCase` naming
-- Test methods use `test_{action}_{condition}` naming
-- Every action test verifies permission requirements with explicit `GlueAccessError` assertions
-- Uses the `Gorilla` model from `test_project.gorilla.models` as the primary test model
-
-### JavaScript Tests
-
-- Uses `createMockFetch()` to mock HTTP responses
-- Uses `setupCookieMock()` to set cookies for CSRF testing
-- Uses `createMockContextData()` to build proxy context data fixtures
-
-## Known Issues and Dead Code
-
-| File | Issue |
-|------|-------|
-| JS tests | Some tests reference APIs (public properties, methods, module exports) that may not match current source |
-
-## Test Coverage Gaps
-
-The following areas currently have no tests:
-- **Views**: `glue_view_view` (view_views.py)
-- **E2E**: No Playwright tests exist despite `playwright` being a dev dependency
-
-## Security Notes
-
-- QuerySet serialization uses `pickle` + `base64`. This is safe because data is stored in server-side Django sessions (signed and encrypted), never transmitted to the client.
-- CSRF protection is enforced on all POST endpoints via Django's built-in middleware and the JS client's `X-CSRFToken` header injection.
-- Access control is enforced server-side on every action request.
-
-## Python Value Types
-
-- Prefer `@dataclass(frozen=True, slots=True, kw_only=True)` over `NamedTuple` for immutable structured records. This keeps record fields explicit without introducing positional tuple semantics.
-- Prefer `StrEnum` over string `Literal` unions when values form a named runtime domain. This provides runtime validation and discoverability while retaining natural string serialization and comparison.
-- Use `TypedDict` or `Literal` when the contract is intentionally dictionary-shaped or needs static typing only.
+- Prefer `@dataclass(frozen=True, slots=True, kw_only=True)` for immutable
+  structured records.
+- Prefer `StrEnum` over `string` `Literal` unions for named runtime domains.
+- Use `TypedDict` / `Literal` when the contract is intentionally
+  dictionary-shaped or needs static typing only.

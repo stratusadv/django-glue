@@ -32,23 +32,24 @@ class GlueAttributeRequestViewTestCase(TestCase):
         )
 
     def attribute_request(self, object_name, policy, attribute, kwargs=None, updates=None):
+        entry = {
+            'address': policy.address,
+            'policy_token': policy.token,
+            'call': {'attribute': attribute, 'kwargs': kwargs or {}},
+        }
+        if updates is not None:
+            entry['updates'] = updates
         request = self.factory.post(
-            f'/__dg__/callable_attribute/{object_name}/',
-            data={
-                'policy_token': policy.token,
-                'attribute': attribute,
-                'kwargs': json.dumps(kwargs or {}, default=str),
-                **({'updates': json.dumps(updates, default=str)} if updates is not None else {}),
-            },
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry], default=str)},
         )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': object_name, 'attribute_name': attribute}},
-        )()
         request.session = self.session
         request.user = 'TestUser'
         return request
+
+    @staticmethod
+    def entry(response):
+        return json.loads(response.content)['objects'][0]
 
     def test_attribute_request_view_saves_model_state(self):
         glue_object = ModelGlue(
@@ -71,12 +72,12 @@ class GlueAttributeRequestViewTestCase(TestCase):
             },
         )
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 200)
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Updated')
-        data = json.loads(response.content)
+        data = self.entry(response)
         self.assertIn('policy_token', data)
         self.assertIn('computed_data', data)
         self.assertNotIn('static_data', data)
@@ -103,11 +104,12 @@ class GlueAttributeRequestViewTestCase(TestCase):
             updates={'name': 'Updated'},
         )
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_access_denied')
+        self.assertEqual(response.status_code, 200)
+        data = self.entry(response)
+        self.assertEqual(data['error']['code'], 'not_authorized')
+        self.assertNotIn('policy_token', data)
 
     def test_attribute_request_view_rejects_policy_for_different_user(self):
         glue_object = ModelGlue(
@@ -127,29 +129,25 @@ class GlueAttributeRequestViewTestCase(TestCase):
         )
         request.user = type('User', (), {'id': 2})()
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_invalid_user')
+        self.assertEqual(response.status_code, 200)
+        data = self.entry(response)
+        self.assertEqual(data['error']['code'], 'proxy_invalid_user')
 
-    def test_attribute_request_view_missing_policy_returns_400(self):
+    def test_attribute_request_view_missing_objects_returns_400(self):
         request = self.factory.post(
-            '/__dg__/callable_attribute/gorilla/',
+            '/__dg__/callable_attribute/',
             data={'attribute': 'save'},
         )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
-        )()
         request.session = self.session
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
         self.assertEqual(data['result']['error']['code'], 'missing_field')
+        self.assertNotIn('objects', data)
 
     def test_attribute_request_view_rejects_non_object_kwargs(self):
         glue_object = ModelGlue(
@@ -160,26 +158,139 @@ class GlueAttributeRequestViewTestCase(TestCase):
         )
         glue_object.request = self.request_context()
         policy = glue_object.policy
+        entry = {
+            'address': policy.address,
+            'policy_token': policy.token,
+            'call': {'attribute': 'save', 'kwargs': ['not', 'an', 'object']},
+        }
         request = self.factory.post(
-            '/__dg__/callable_attribute/gorilla/',
-            data={
-                'policy_token': policy.token,
-                'attribute': 'save',
-                'kwargs': json.dumps(['not', 'an', 'object']),
-            },
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry])},
         )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
-        )()
         request.session = self.session
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 400)
         data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'invalid_kwargs')
+        self.assertEqual(data['result']['error']['code'], 'malformed_request')
+        self.assertNotIn('objects', data)
+
+    def test_attribute_request_view_duplicate_addresses_fail_the_request(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        glue_object.request = self.request_context()
+        policy = glue_object.policy
+        entry = {
+            'address': policy.address,
+            'policy_token': policy.token,
+            'call': {'attribute': 'save', 'kwargs': {}},
+        }
+        request = self.factory.post(
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry, dict(entry)])},
+        )
+        request.session = self.session
+        request.user = 'TestUser'
+
+        response = glue_attribute_call_view(request)
+
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertEqual(data['result']['error']['code'], 'duplicate_addresses')
+
+    def test_attribute_request_view_address_mismatch_fails_the_request(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        glue_object.request = self.request_context()
+        policy = glue_object.policy
+        entry = {
+            'address': 'some#other-address',
+            'policy_token': policy.token,
+            'call': {'attribute': 'save', 'kwargs': {}},
+        }
+        request = self.factory.post(
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry])},
+        )
+        request.session = self.session
+        request.user = 'TestUser'
+
+        response = glue_attribute_call_view(request)
+
+        self.assertEqual(response.status_code, 400)
+        data = json.loads(response.content)
+        self.assertEqual(data['result']['error']['code'], 'address_mismatch')
+
+    def test_batch_with_one_failed_entry_advances_every_other_entry(self):
+        """Independence invariant (state-model.md §10): a batch with one
+        authorization-denied entry advances every other entry as if it had
+        travelled alone."""
+        first = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        first.request = self.request_context()
+        first_policy = first.policy
+
+        denied = ModelGlue(
+            self.gorilla,
+            name='denied',
+            access=GlueAccess.VIEW,
+            fields=['name'],
+        )
+        denied.request = self.request_context()
+        denied_policy = denied.policy
+
+        entries = [
+            {
+                'address': first_policy.address,
+                'policy_token': first_policy.token,
+                'call': {'attribute': 'save', 'kwargs': {}},
+                'updates': {'name': 'Batched'},
+            },
+            {
+                'address': denied_policy.address,
+                'policy_token': denied_policy.token,
+                'call': {'attribute': 'save', 'kwargs': {}},
+                'updates': {'name': 'Hacked'},
+            },
+        ]
+        request = self.factory.post(
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps(entries)},
+        )
+        request.session = self.session
+        request.user = 'TestUser'
+
+        response = glue_attribute_call_view(request)
+
+        self.assertEqual(response.status_code, 200)
+        objects = json.loads(response.content)['objects']
+        self.assertEqual([item['address'] for item in objects], [
+            first_policy.address,
+            denied_policy.address,
+        ])
+        advanced = objects[0]
+        self.assertEqual(advanced['result']['success'], True)
+        self.assertIn('policy_token', advanced)
+        self.assertNotIn('error', advanced)
+        failed = objects[1]
+        self.assertEqual(failed['error']['code'], 'not_authorized')
+        self.assertNotIn('policy_token', failed)
+        self.assertNotIn('result', failed)
+        self.gorilla.refresh_from_db()
+        self.assertEqual(self.gorilla.name, 'Batched')
 
     def test_attribute_request_view_executes_function(self):
         glue_object = FunctionGlue(
@@ -196,10 +307,10 @@ class GlueAttributeRequestViewTestCase(TestCase):
             {'kwargs': {'amount': 5, 'tax': 2}},
         )
 
-        response = glue_attribute_call_view(request, object_name='sample', attribute_name='execute')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
+        data = self.entry(response)
         self.assertEqual(data['result']['result'], 7)
 
     def test_attribute_request_view_preserves_consumer_glue_response(self):
@@ -218,13 +329,13 @@ class GlueAttributeRequestViewTestCase(TestCase):
             {'intensity': 'normal'},
         )
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='battle_cry')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 200)
-        data = json.loads(response.content)
+        data = self.entry(response)
         self.assertEqual(data['result']['gorilla'], 'Koko')
-        self.assertEqual(len(data['messages']), 1)
-        self.assertIn('Koko beats their chest!', data['messages'][0]['message'])
+        self.assertEqual(len(data['effects']['messages']), 1)
+        self.assertIn('Koko beats their chest!', data['effects']['messages'][0]['message'])
         self.assertNotIn('policy_token', data)
         self.assertNotIn('static_data', data)
         self.assertNotIn('computed_data', data)
@@ -248,8 +359,23 @@ class GlueInvalidSessionErrorTestCase(TestCase):
             height=1.8,
         )
 
-    def test_session_mismatch_raises_glue_invalid_session_error(self):
-        """Policy with a different session_id raises GlueInvalidSessionError, not GlueInvalidPolicyError."""
+    def session_request(self, glue_object, session):
+        entry = {
+            'address': glue_object.policy.address,
+            'policy_token': glue_object.policy.token,
+            'call': {'attribute': 'save', 'kwargs': {}},
+        }
+        request = self.factory.post(
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps([entry])},
+        )
+        request.session = session
+        request.user = 'TestUser'
+        return request
+
+    def test_session_mismatch_fails_the_entry(self):
+        """Policy with a different session_id produces a per-entry error,
+        not a whole-response failure."""
         glue_object = ModelGlue(
             self.gorilla,
             name='gorilla',
@@ -257,59 +383,18 @@ class GlueInvalidSessionErrorTestCase(TestCase):
             fields=['name'],
         )
         glue_object.request = self.request_context('matching-session')
-        policy = glue_object.policy
-        request = self.factory.post(
-            '/__dg__/callable_attribute/gorilla/',
-            data={
-                'policy_token': policy.token,
-                'attribute': 'save',
-                'kwargs': json.dumps({}),
-            },
+        request = self.session_request(
+            glue_object,
+            MockSession(session_key='different-session'),
         )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
-        )()
-        request.session = MockSession(session_key='different-session')
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
-        self.assertEqual(response.status_code, 403)
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['code'], 'proxy_invalid_session')
-        self.assertIn('gorilla', data['result']['error']['message'])
-        self.assertIn('session', data['result']['error']['message'].lower())
-
-    def test_session_mismatch_details_include_proxy_name(self):
-        """Error details include the proxy name for programmatic access."""
-        glue_object = ModelGlue(
-            self.gorilla,
-            name='my_proxy',
-            access=GlueAccess.CHANGE,
-            fields=['name'],
-        )
-        glue_object.request = self.request_context('matching-session')
-        policy = glue_object.policy
-        request = self.factory.post(
-            '/__dg__/callable_attribute/my_proxy/',
-            data={
-                'policy_token': policy.token,
-                'attribute': 'save',
-                'kwargs': json.dumps({}),
-            },
-        )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': 'my_proxy', 'attribute_name': 'save'}},
-        )()
-        request.session = MockSession(session_key='different-session')
-
-        response = glue_attribute_call_view(request, object_name='my_proxy', attribute_name='save')
-
-        data = json.loads(response.content)
-        self.assertEqual(data['result']['error']['details']['proxy'], 'my_proxy')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)['objects'][0]
+        self.assertEqual(data['error']['code'], 'proxy_invalid_session')
+        self.assertIn('gorilla', data['error']['message'])
+        self.assertIn('session', data['error']['message'].lower())
 
     def test_matching_session_allows_request(self):
         """Requests with matching session_id proceed normally."""
@@ -321,25 +406,13 @@ class GlueInvalidSessionErrorTestCase(TestCase):
             fields=['name'],
         )
         glue_object.request = self.request_context('same-session')
-        policy = glue_object.policy
-        request = self.factory.post(
-            '/__dg__/callable_attribute/gorilla/',
-            data={
-                'policy_token': policy.token,
-                'attribute': 'save',
-                'kwargs': json.dumps({}),
-            },
-        )
-        request.resolver_match = type(
-            'ResolverMatch',
-            (),
-            {'kwargs': {'object_name': 'gorilla', 'attribute_name': 'save'}},
-        )()
-        request.session = session
+        request = self.session_request(glue_object, session)
 
-        response = glue_attribute_call_view(request, object_name='gorilla', attribute_name='save')
+        response = glue_attribute_call_view(request)
 
         self.assertEqual(response.status_code, 200)
+        data = json.loads(response.content)['objects'][0]
+        self.assertNotIn('error', data)
 
     def request_context(self, session_key):
         return type('Request', (), {'session': MockSession(session_key=session_key), 'FILES': {}})()

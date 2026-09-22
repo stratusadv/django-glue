@@ -18,7 +18,23 @@ if TYPE_CHECKING:
 TGlue = TypeVar('TGlue', bound='BaseGlue')
 
 
+class GlueObjectEntry(BaseModel):
+    """Addressed wire entry (state-model.md §10): the page-load and
+    attribute-call entry shape, without a result tag or a manifest tag."""
+
+    model_config = ConfigDict(use_enum_values=True)
+
+    address: str = ''
+    policy_token: str
+    static_data: dict[str, Any] = {}
+    computed_data: dict[str, Any] = {}
+    loading_strategy: LoadingStrategy = LoadingStrategy.LAZY
+
+
 class GlueManifest(BaseModel):
+    """Phase-5 tagged manifest for the deferred consumers (view-fragment
+    responses, template-response results, multi-row query items)."""
+
     model_config = ConfigDict(use_enum_values=True)
 
     is_glue_manifest: Literal[True] = True
@@ -44,6 +60,25 @@ class GlueContextManager:
     @property
     def manifests(self) -> list[BaseGlue]:
         return self.glue_objects
+
+    @property
+    def serialized_objects(self) -> list[dict[str, Any]]:
+        """The page's object graph as flat addressed entries (state-model.md
+        §10 "Page load"): roots first, children as flat siblings, deduped by
+        address."""
+        serialized: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for glue in self.glue_objects:
+            if glue.address in seen:
+                continue
+            seen.add(glue.address)
+            serialized.append(glue.entry.model_dump())
+            for child_entry in glue._serialized_child_entries():
+                if child_entry['address'] in seen:
+                    continue
+                seen.add(child_entry['address'])
+                serialized.append(child_entry)
+        return serialized
 
     @property
     def serialized_manifests(self) -> list[dict[str, Any]]:
@@ -79,7 +114,7 @@ class GlueContextManager:
     @property
     def _glue_client_context(self) -> dict[str, Any]:
         return {
-            'manifest_list': self.serialized_manifests,
+            'objects': self.serialized_objects,
             'urls': {
                 constants.CALLABLE_ATTRIBUTE_URL_NAME: (
                     f'/{constants.BASE_URL_NAME}/{constants.CALLABLE_ATTRIBUTE_URL_NAME}/'

@@ -98,14 +98,25 @@ class GlueHttp {
         })
     }
 
-    async sendAttributeRequest({name, policyToken, updates = {}, attribute, kwargs = {}}) {
+    async sendAttributeRequest({
+        address,
+        policyToken,
+        updates = {},
+        attribute = null,
+        kwargs = {},
+        reintroduce = null,
+    }) {
         const formData = new FormData()
         const {files, data} = this._extractFiles(serializeValue(updates))
 
-        formData.append('policy_token', policyToken)
-        formData.append('updates', JSON.stringify(data))
-        formData.append('attribute', attribute)
-        formData.append('kwargs', JSON.stringify(kwargs))
+        const entry = {
+            address,
+            policy_token: policyToken,
+            updates: data,
+        }
+        if (attribute !== null) entry.call = {attribute, kwargs}
+        if (reintroduce) entry.reintroduce = reintroduce
+        formData.append('objects', JSON.stringify([entry]))
 
         Object.entries(files).forEach(([key, value]) => {
             if (value instanceof FileList) {
@@ -117,7 +128,7 @@ class GlueHttp {
             }
         })
 
-        return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData)
+        return await this.postForm(this._config.attributeUrlPath, formData)
     }
 
     _extractFiles(obj) {

@@ -134,7 +134,6 @@ class ModelFieldAdapter(GlueAttributeAdapter):
         if (
             not getattr(self.field, 'is_relation', False)
             or related_model is None
-            or not getattr(self.field, 'concrete', False)
         ):
             return schema
 
@@ -175,7 +174,6 @@ class ModelFieldAdapter(GlueAttributeAdapter):
         if (
             not getattr(field, 'is_relation', False)
             or related_model is None
-            or not getattr(field, 'concrete', False)
         ):
             return output
 

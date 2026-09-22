@@ -26,7 +26,7 @@ from django_glue.glue.attributes.declared import DeclaredAttribute
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.children import GlueChildBinder
-from django_glue.glue.context import GlueManifest
+from django_glue.glue.context import GlueManifest, GlueObjectEntry
 from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     )
     from django_glue.glue.attributes.adapter import GlueAttributeAdapter
     from django_glue.glue.children import BoundGlueChild
-    from django.http import JsonResponse
     from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
 
@@ -64,6 +63,7 @@ class BaseGlue(ABC):
         self.request: HttpRequest | None = None
         self._address: str | None = None
         self._derived_paths: set[str] = set()
+        self._disposed = False
 
     @property
     def resolved_loading_strategy(self) -> LoadingStrategy:
@@ -75,6 +75,14 @@ class BaseGlue(ABC):
     def is_bound(self) -> bool:
         """True if this glue object is bound to a request context."""
         return self.request is not None
+
+    def dispose(self) -> None:
+        """Mark this object as authoritatively removed (state-model.md §6).
+
+        The response to the current attribute call carries ``effects.dispose``
+        for this address, and the client tears the proxy tree down.
+        """
+        self._disposed = True
 
     @cached_property
     def policy(self) -> GluePolicy:
@@ -104,14 +112,14 @@ class BaseGlue(ABC):
         return address.top_level(self.name, self.namespace)
 
     @property
-    def manifest(self) -> GlueManifest:
+    def entry(self) -> GlueObjectEntry:
         static_data = self.get_static_data()
         computed_data = (
             self.get_computed_data(include_all=True)
             if self.resolved_loading_strategy == LoadingStrategy.EAGER
             else {}
         )
-        return GlueManifest(
+        return GlueObjectEntry(
             address=self.address,
             policy_token=self.policy.token,
             static_data=static_data,
@@ -119,7 +127,11 @@ class BaseGlue(ABC):
             loading_strategy=self.resolved_loading_strategy,
         )
 
-    def _serialized_child_manifests(self) -> list[dict[str, Any]]:
+    @property
+    def manifest(self) -> GlueManifest:
+        return GlueManifest(**self.entry.model_dump())
+
+    def _serialized_child_entries(self) -> list[dict[str, Any]]:
         serialized: list[dict[str, Any]] = []
         seen: set[str] = set()
 
@@ -129,11 +141,17 @@ class BaseGlue(ABC):
                     continue
                 seen.add(child.address)
                 child.glue_object._address = child.address
-                serialized.append(child.glue_object.manifest.model_dump())
+                serialized.append(child.glue_object.entry.model_dump())
                 add_children(child.glue_object)
 
         add_children(self)
         return serialized
+
+    def _serialized_child_manifests(self) -> list[dict[str, Any]]:
+        return [
+            {'is_glue_manifest': True, **child_entry}
+            for child_entry in self._serialized_child_entries()
+        ]
 
     @cached_property
     def _attribute_registry(self) -> GlueAttributeRegistry:
@@ -331,6 +349,7 @@ class BaseGlue(ABC):
             elif definition.kind is GlueAttributeKind.CALLABLE:
                 callables[path] = {
                     'allowed_arguments': list(definition.allowed_arguments),
+                    'returns_glue': definition.expected_type is not None,
                 }
         static_data: dict[str, Any] = {}
         if fields:
@@ -531,11 +550,95 @@ class BaseGlue(ABC):
     def load_state(self) -> dict[str, Any]:
         return self.state
 
+    def _admit_reintroduce(self, reintroduce: list[str]) -> None:
+        """Admission for a client-supplied ``reintroduce`` list (state-model.md
+        §10 "Reintroducing an expired child"). Ordinary untrusted input: the
+        only effect it can cause is running a slot factory the owner already
+        declared, so a path that is not a declared child slot fails admission."""
+        if not reintroduce:
+            return
+        declared = {
+            attribute.definition.path
+            for attribute in self._bound_attributes.values()
+            if attribute.definition.kind is GlueAttributeKind.CHILD
+        }
+        unknown = [path for path in reintroduce if path not in declared]
+        if unknown:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_REINTRODUCE,
+                message='reintroduce names a path that is not a declared child slot.',
+                details={'paths': unknown},
+            )
+
+    def _reintroduce_entry(self, policy: GluePolicy) -> dict[str, Any]:
+        """The addressed entry of a call-less reintroduction request: the
+        owner advances nothing of its own (no result, no effects), so only
+        the omitted-when-unchanged token and any re-derived computed data
+        can be present (state-model.md §10)."""
+        entry: dict[str, Any] = {'address': self.address}
+        if not self._retained_values_equal(policy, self.policy):
+            entry['policy_token'] = self.policy.token
+        computed_data = self.get_computed_data()
+        if computed_data:
+            entry['computed_data'] = computed_data
+        entry['result'] = None
+        entry['effects'] = {'messages': []}
+        return entry
+
+    def _introduced_entries(
+        self,
+        policy: GluePolicy,
+        reintroduce: list[str],
+    ) -> list[dict[str, Any]]:
+        """The children that ride this response: every child whose
+        path/address binding changed, or — when the map is otherwise
+        unchanged — exactly the children the request reintroduced at their
+        existing addresses (state-model.md §10 slot-resolution table)."""
+        if self.children != policy.children:
+            return self._serialized_child_entries()
+        if not reintroduce:
+            return []
+        reintroduced_addresses = {policy.children[path] for path in reintroduce}
+        return [
+            child_entry
+            for child_entry in self._serialized_child_entries()
+            if child_entry['address'] in reintroduced_addresses
+        ]
+
     def process_attribute_call(
         self,
         call_context: AttributeCallRequestContext
-    ) -> JsonResponse:
-        """Perform a callable attribute request against a resolved target."""
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Perform a callable attribute request against a resolved target.
+
+        Returns the addressed response entry (``address`` plus
+        omitted-when-unchanged ``policy_token`` / ``static_data`` /
+        ``computed_data``, ``result``, and ``effects``) and the entries of
+        the children it newly introduced (state-model.md §10). A callable
+        returning a Glue object has a wire ``result`` that is the object's
+        address; its entry rides along when the object is not already a
+        live or introduced child.
+
+        Children bind against the incoming token's live set so a live,
+        non-participating child carries forward without running its factory,
+        and a child named in ``reintroduce`` is re-run at its existing
+        address (state-model.md §10 slot-resolution table). Binding happens
+        after the call runs, so children the call added or removed are
+        reflected in the successor token.
+        """
+        policy = call_context.target_glue_policy
+        self._admit_reintroduce(call_context.reintroduce)
+
+        if call_context.target_attribute_name is None:
+            self.__dict__['_bound_children'] = self._bind_children(
+                live_children=policy.children,
+                reintroduce=call_context.reintroduce,
+            )
+            return (
+                self._reintroduce_entry(policy),
+                self._introduced_entries(policy, call_context.reintroduce),
+            )
+
         bound_attribute = self._bound_attributes.get(call_context.target_attribute_name)
         if bound_attribute is None:
             raise GlueMissingAttributeError(call_context.target_attribute_name, self.name)
@@ -583,7 +686,6 @@ class BaseGlue(ABC):
             required_access=required_access,
         ))
 
-        policy = call_context.target_glue_policy
         incoming_static_data = self.get_static_data()
         updates = self._admit_updates(policy, call_context.target_glue_updates)
         retained_state = {
@@ -605,27 +707,80 @@ class BaseGlue(ABC):
             )
         )
 
+        self.__dict__['_bound_children'] = self._bind_children(
+            live_children=policy.children,
+            reintroduce=call_context.reintroduce,
+        )
+
         static_data = self.get_static_data()
-        payload: dict[str, Any] = {}
+        entry: dict[str, Any] = {'address': self.address}
         if not self._retained_values_equal(policy, self.policy):
-            payload['policy_token'] = self.policy.token
+            entry['policy_token'] = self.policy.token
         if static_data != incoming_static_data:
-            payload['static_data'] = static_data
+            entry['static_data'] = static_data
         computed_data = self.get_computed_data()
         if computed_data:
-            payload['computed_data'] = computed_data
-        if self.children != policy.children:
-            manifest_list = self._serialized_child_manifests()
-            if manifest_list:
-                payload['manifest_list'] = manifest_list
+            entry['computed_data'] = computed_data
 
-        return GlueResponse.from_result(
+        introduced = self._introduced_entries(policy, call_context.reintroduce)
+
+        response = GlueResponse.from_result(
             call_result,
             render_as_html=definition.render_as_html,
-        ).to_json_response(
-            glue_object=self,
-            **payload,
         )
+        result = response.result
+        if isinstance(result, BaseGlue):
+            if (
+                result.address not in policy.children.values()
+                and result.address not in {
+                    manifest['address'] for manifest in introduced
+                }
+            ):
+                result._address = address.transient(self.address)
+                result.request = self.request
+                introduced.append(result.entry.model_dump())
+            result = result.address
+        else:
+            GlueResponse._reject_glue_objects(result)
+        entry['result'] = result
+        entry['effects'] = self._effects_payload(response, introduced)
+        return entry, introduced
+
+    def _effects_payload(
+        self,
+        response: GlueResponse,
+        introduced: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Build the response entry's ``effects`` channel (state-model.md §6).
+
+        ``dispose`` carries the responding address when it was marked disposed,
+        plus any owned addresses the callable named; naming an address the
+        object does not own fails the entry. ``redirect`` and ``dispose`` are
+        omitted when empty.
+        """
+        dispose = list(response.dispose or [])
+        if self._disposed and self.address not in dispose:
+            dispose.append(self.address)
+        owned = {
+            self.address,
+            *self.children.values(),
+            *(manifest['address'] for manifest in introduced),
+        }
+        unknown = [item for item in dispose if item not in owned]
+        if unknown:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_DISPOSE,
+                message='effects.dispose names an address the responding object does not own.',
+                details={'addresses': unknown},
+            )
+        effects: dict[str, Any] = {
+            'messages': [message.to_dict() for message in response.messages],
+        }
+        if response.redirect is not None:
+            effects['redirect'] = response.redirect
+        if dispose:
+            effects['dispose'] = dispose
+        return effects
 
     @staticmethod
     def _resolve_callable_arguments(

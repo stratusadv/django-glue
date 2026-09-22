@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -152,10 +151,11 @@ class CallableResultGlue(BaseGlue):
 
 def call_context(
     glue_object: BaseGlue,
-    attribute: str,
+    attribute: str | None,
     *,
     kwargs: dict[str, Any] | None = None,
     updates: dict[str, Any] | None = None,
+    reintroduce: list[str] | None = None,
 ) -> AttributeCallRequestContext:
     assert glue_object.request is not None
     return AttributeCallRequestContext.model_construct(
@@ -164,6 +164,7 @@ def call_context(
         target_glue_updates=updates or {},
         target_attribute_name=attribute,
         target_attribute_call_kwargs=kwargs or {},
+        reintroduce=reintroduce or [],
     )
 
 
@@ -197,8 +198,7 @@ def test_call_injects_request_and_applies_editable_updates(
         updates={'value': 'draft'},
     )
 
-    response = glue_object.process_attribute_call(context)
-    payload = json.loads(response.content)
+    payload, _introduced = glue_object.process_attribute_call(context)
 
     assert payload['result'] == {
         'request_is_bound': True,
@@ -275,13 +275,12 @@ def test_dotted_namespace_call_uses_bound_provider(
         kwargs={'suffix': '?'},
     )
 
-    response = glue_object.process_attribute_call(context)
-    payload = json.loads(response.content)
+    payload, _introduced = glue_object.process_attribute_call(context)
 
     assert payload['result'] == 'echo?'
 
 
-def test_declared_glue_callable_result_is_serialized(
+def test_declared_glue_callable_result_is_the_introduced_address(
     mock_request: HttpRequest,
 ) -> None:
     glue_object = Glue.object(
@@ -289,13 +288,16 @@ def test_declared_glue_callable_result_is_serialized(
         CallableResultGlue(),
     )
 
-    response = glue_object.process_attribute_call(
+    entry, introduced = glue_object.process_attribute_call(
         call_context(glue_object, 'child')
     )
-    payload = json.loads(response.content)
-    result_policy = GluePolicy.from_token(payload['result']['policy_token'])
+    introduction = next(
+        manifest for manifest in introduced if manifest['address'] == entry['result']
+    )
+    result_policy = GluePolicy.from_token(introduction['policy_token'])
 
-    assert payload['result']['is_glue_manifest'] is True
+    assert isinstance(entry['result'], str)
+    assert 'is_glue_manifest' not in introduction
     assert result_policy.namespace == 'callableChild'
 
 
@@ -307,12 +309,12 @@ def test_nullable_glue_callable_result_accepts_none(
         CallableResultGlue(),
     )
 
-    response = glue_object.process_attribute_call(
+    entry, introduced = glue_object.process_attribute_call(
         call_context(glue_object, 'optional_child')
     )
-    payload = json.loads(response.content)
 
-    assert payload['result'] is None
+    assert entry['result'] is None
+    assert introduced == []
 
 
 def test_glue_callable_result_requires_annotation(

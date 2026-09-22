@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -670,10 +669,10 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
         )
         reconstructed = ModelGlue.from_attribute_call_resolver_context(context)
 
-        payload = json.loads(reconstructed.process_attribute_call(context).content)
+        entry, introduced = reconstructed.process_attribute_call(context)
 
-        assert 'manifest_list' not in payload
-        assert 'policy_token' not in payload
+        assert introduced == []
+        assert 'policy_token' not in entry
 
 
 class ProjectedRelationCreationAccessTestCase(TestCase):

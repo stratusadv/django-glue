@@ -9,9 +9,6 @@ await import('../src/alpine')
 globalThis.Alpine = Alpine
 Alpine.start()
 
-global.fetch = async () => new Response(JSON.stringify({
-    result: {},
-    static_data: {},
-    computed_data: {},
-    messages: [],
-}), {status: 200, headers: {'Content-Type': 'application/json'}})
+global.fetch = async () => new Response(JSON.stringify({objects: []}), {
+    status: 200, headers: {'Content-Type': 'application/json'},
+})

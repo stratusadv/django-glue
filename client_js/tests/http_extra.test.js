@@ -113,25 +113,24 @@ describe('GlueHttp edge cases', () => {
         global.fetch = async () => new Response(JSON.stringify({
             result: {
                 error: {
-                    message: 'Policy denied',
-                    code: 'proxy_access_denied',
-                    status: 403,
-                    details: {attribute: 'save'},
+                    message: 'Entry address does not match its signed policy.',
+                    code: 'address_mismatch',
+                    status: 400,
+                    details: {address: 'gorillas#abc', policy_address: 'gorillas#def'},
                 },
             },
-            messages: [],
-        }), {status: 403})
+        }), {status: 400})
 
         await expect(http().sendRequest('/denied')).rejects.toMatchObject({
             name: 'GlueHttpError',
-            status: 403,
-            message: 'Policy denied',
-            code: 'proxy_access_denied',
+            status: 400,
+            message: 'Entry address does not match its signed policy.',
+            code: 'address_mismatch',
             payload: {
-                message: 'Policy denied',
-                code: 'proxy_access_denied',
-                status: 403,
-                details: {attribute: 'save'},
+                message: 'Entry address does not match its signed policy.',
+                code: 'address_mismatch',
+                status: 400,
+                details: {address: 'gorillas#abc', policy_address: 'gorillas#def'},
             },
         })
     })

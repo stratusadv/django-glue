@@ -23,13 +23,15 @@ class GlueRequestErrorCode(StrEnum):
     INVALID_JSON = 'invalid_json'
     INVALID_KWARGS = 'invalid_kwargs'
     INVALID_UPDATES = 'invalid_updates'
+    INVALID_REINTRODUCE = 'invalid_reintroduce'
+    INVALID_DISPOSE = 'invalid_dispose'
 
     # Missing required fields
     MISSING_FIELD = 'missing_field'
 
     # Path/body mismatch errors
-    OBJECT_NAME_MISMATCH = 'object_name_mismatch'
-    ATTRIBUTE_NAME_MISMATCH = 'attribute_name_mismatch'
+    ADDRESS_MISMATCH = 'address_mismatch'
+    DUPLICATE_ADDRESSES = 'duplicate_addresses'
     MISSING_PATH_PARAMETERS = 'missing_path_parameters'
 
     # Pydantic validation
@@ -81,7 +83,7 @@ class GlueRequestError(GlueError):
 class GlueAccessError(GlueError):
     """Raised when a user lacks permission to access a bound attribute on a proxy."""
 
-    code = 'proxy_access_denied'
+    code = 'not_authorized'
     status = 403
 
     def __init__(self, attribute: str, required_access: str, current_access: str) -> None:
@@ -348,7 +350,7 @@ class GlueInvalidUserError(GlueError):
 class GlueExpiredPolicyError(GlueError):
     """Raised when a proxy policy is older than the configured max age."""
 
-    code = 'proxy_policy_expired'
+    code = 'policy_expired'
     status = 419
 
     def __init__(self, unique_name: str) -> None:

@@ -1,9 +1,9 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createManifest, createPolicyToken} from "./testUtils"
+import {attributeResponse, createEntry, createManifest, createPolicyToken, objectsEnvelope} from "./testUtils"
 
 function querysetManifest(overrides = {}) {
-    return createManifest({
+    return createEntry({
         policy: {
             name: 'gorillas', namespace: 'querySet', address: 'gorillas#test',
             attributes: ['query_with_params', 'get', 'new', 'count'], state_snapshot: {},
@@ -11,8 +11,8 @@ function querysetManifest(overrides = {}) {
         },
         staticData: {callables: {
             query_with_params: {allowed_arguments: ['filter', 'order_by', 'slice', 'seek_key', 'with_total']},
-            get: {allowed_arguments: ['pk']},
-            new: {allowed_arguments: ['initial']},
+            get: {allowed_arguments: ['pk'], returns_glue: true},
+            new: {allowed_arguments: ['initial'], returns_glue: true},
             count: {allowed_arguments: ['filter']},
         }},
         loading_strategy: 'lazy',
@@ -36,19 +36,19 @@ describe('queryset proxy facade', () => {
             computedData: {items: [first], seek_key: null, has_next: false, batch_size: null},
             loading_strategy: 'eager',
         })
-        const client = new GlueClient({manifest_list: [manifest]})
+        const client = new GlueClient({objects: [manifest]})
 
         expect(client.querySet.gorillas.items).toEqual([client._registry.getProxy(first.address)])
         expect(client.querySet.gorillas.items[0].name).toBe('Koko')
     })
 
     test('stores pagination data and appends the next batch', async () => {
-        const client = new GlueClient({manifest_list: [querysetManifest()]})
+        const client = new GlueClient({objects: [querysetManifest()]})
         const responses = [
             {items: [row(1, 'Koko')], seek_key: 'next', has_next: true, batch_size: 1, total: 2},
             {items: [row(2, 'Ndume')], seek_key: null, has_next: false, batch_size: 1},
         ]
-        client.http.sendAttributeRequest = async () => ({data: {result: responses.shift()}})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorillas#test', {result: responses.shift()})
         const queryset = client.querySet.gorillas
 
         await queryset.all({withTotal: true})
@@ -64,7 +64,7 @@ describe('queryset proxy facade', () => {
     })
 
     test('merges query parameters and caches canonical views', () => {
-        const queryset = new GlueClient({manifest_list: [querysetManifest()]}).querySet.gorillas
+        const queryset = new GlueClient({objects: [querysetManifest()]}).querySet.gorillas
         const filtered = queryset.filter({active: true})
         const ordered = filtered.orderBy('-rank').slice(0, 10)
 
@@ -75,7 +75,7 @@ describe('queryset proxy facade', () => {
     })
 
     test('bounds the query-view cache', () => {
-        const queryset = new GlueClient({manifest_list: [querysetManifest()]}).querySet.gorillas
+        const queryset = new GlueClient({objects: [querysetManifest()]}).querySet.gorillas
 
         for (let index = 0; index < 80; index++) queryset.filter({id: index})
 
@@ -84,11 +84,11 @@ describe('queryset proxy facade', () => {
     })
 
     test('count sends the current filter only', async () => {
-        const client = new GlueClient({manifest_list: [querysetManifest()]})
+        const client = new GlueClient({objects: [querysetManifest()]})
         let request
         client.http.sendAttributeRequest = async value => {
             request = value
-            return {data: {result: 4}}
+            return attributeResponse('gorillas#test', {result: 4})
         }
 
         const count = await client.querySet.gorillas.filter({active: true}).count()
@@ -99,13 +99,11 @@ describe('queryset proxy facade', () => {
     })
 
     test('get and query results reuse one proxy for the same address', async () => {
-        const client = new GlueClient({manifest_list: [querysetManifest()]})
+        const client = new GlueClient({objects: [querysetManifest()]})
         const first = row(1, 'Koko')
-        client.http.sendAttributeRequest = async request => ({data: {
-            result: request.attribute === 'get'
-                ? {...first, computed_data: {name: 'Ndume'}}
-                : {items: [first]},
-        }})
+        client.http.sendAttributeRequest = async request => request.attribute === 'get'
+            ? attributeResponse('gorillas#test', {result: first.address})
+            : attributeResponse('gorillas#test', {result: {items: [first]}})
         const queryset = client.querySet.gorillas
 
         await queryset.all()
@@ -113,15 +111,17 @@ describe('queryset proxy facade', () => {
         const fromGet = await queryset.get(1)
 
         expect(fromGet).toBe(fromList)
-        expect(fromGet.name).toBe('Ndume')
+        // A row already live in the collection is not re-introduced by get;
+        // its data stands as last acknowledged.
+        expect(fromGet.name).toBe('Koko')
     })
 
     test('an unloaded loadMore call loads the first page', async () => {
-        const client = new GlueClient({manifest_list: [querysetManifest()]})
+        const client = new GlueClient({objects: [querysetManifest()]})
         let calls = 0
         client.http.sendAttributeRequest = async () => {
             calls++
-            return {data: {result: {items: [], has_next: false}}}
+            return attributeResponse('gorillas#test', {result: {items: [], has_next: false}})
         }
 
         await client.querySet.gorillas.loadMore()
@@ -130,15 +130,18 @@ describe('queryset proxy facade', () => {
         expect(client.querySet.gorillas._loaded).toBeTrue()
     })
 
-    test('new returns the model proxy behind the manifest the server responds with', async () => {
-        const client = new GlueClient({manifest_list: [querysetManifest()]})
-        const draft = createManifest({policy: {
+    test('new returns the model proxy at the address the server responds with', async () => {
+        const client = new GlueClient({objects: [querysetManifest()]})
+        const draft = createEntry({policy: {
             name: 'gorillas.draft', address: 'gorillas#test.draft',
             identity: {target_pk: null}, state_snapshot: {name: ''},
         }})
         client.http.sendAttributeRequest = async request => {
             expect(request.kwargs).toEqual({initial: {name: 'Ndume'}})
-            return {data: {result: draft}}
+            return objectsEnvelope([
+                {address: 'gorillas#test', result: draft.address},
+                draft,
+            ])
         }
 
         const created = await client.querySet.gorillas.new({name: 'Ndume'})
@@ -150,11 +153,11 @@ describe('queryset proxy facade', () => {
 
 describe('formset proxy facade', () => {
     test('resolves forms from signed child addresses', () => {
-        const form = createManifest({policy: {
+        const form = createEntry({policy: {
             name: 'contacts.0', namespace: 'form', address: 'contacts#test[0]',
             identity: {target_pk: null}, state_snapshot: {name: 'Ada'},
         }})
-        const formset = createManifest({
+        const formset = createEntry({
             policy: {
                 name: 'contacts', namespace: 'formSet', address: 'contacts#test',
                 identity: {}, attributes: ['append', 'validate'], state_snapshot: {},
@@ -165,34 +168,41 @@ describe('formset proxy facade', () => {
                 callables: {append: {allowed_arguments: ['key', 'initial']}, validate: {allowed_arguments: []}},
             },
         })
-        const client = new GlueClient({manifest_list: [formset, form]})
+        const client = new GlueClient({objects: [formset, form]})
 
         expect(client.formSet.contacts.forms).toEqual([client._registry.getProxy(form.address)])
         expect(client.formSet.contacts.length).toBe(1)
     })
 
     test('append introduces the returned form and advances membership', async () => {
-        const formset = createManifest({
+        const formset = createEntry({
             policy: {
                 name: 'contacts', namespace: 'formSet', address: 'contacts#test',
                 identity: {}, attributes: ['append'], state_snapshot: {}, children: {},
             },
-            staticData: {fields: {}, callables: {append: {allowed_arguments: ['key', 'initial']}}},
+            staticData: {
+                fields: {},
+                children: {'0': {kind: 'form', nullable: false}},
+                callables: {append: {allowed_arguments: ['key', 'initial'], returns_glue: true}},
+            },
         })
-        const client = new GlueClient({manifest_list: [formset]})
-        const form = createManifest({policy: {
+        const client = new GlueClient({objects: [formset]})
+        const form = createEntry({policy: {
             name: 'contacts.0', namespace: 'form', address: 'contacts#test[0]',
             identity: {target_pk: null}, state_snapshot: {name: 'Ada'},
         }})
-        client.http.sendAttributeRequest = async request => ({data: {
-            policy_token: createPolicyToken({
-                name: 'contacts', namespace: 'formSet', address: 'contacts#test',
-                identity: {}, attributes: ['append'], state_snapshot: {},
-                children: {'0': form.address},
-            }),
-            manifest_list: [form],
-            result: form,
-        }})
+        client.http.sendAttributeRequest = async () => objectsEnvelope([
+            {
+                address: 'contacts#test',
+                policy_token: createPolicyToken({
+                    name: 'contacts', namespace: 'formSet', address: 'contacts#test',
+                    identity: {}, attributes: ['append'], state_snapshot: {},
+                    children: {'0': form.address},
+                }),
+                result: form.address,
+            },
+            form,
+        ])
 
         const appended = await client.formSet.contacts.append({name: 'Ada'})
 
@@ -201,17 +211,17 @@ describe('formset proxy facade', () => {
     })
 
     test('validate exposes non-form errors', async () => {
-        const formset = createManifest({
+        const formset = createEntry({
             policy: {
                 name: 'contacts', namespace: 'formSet', address: 'contacts#test',
                 identity: {}, attributes: ['validate'], state_snapshot: {}, children: {},
             },
             staticData: {fields: {}, callables: {validate: {allowed_arguments: []}}},
         })
-        const client = new GlueClient({manifest_list: [formset]})
-        client.http.sendAttributeRequest = async () => ({data: {
+        const client = new GlueClient({objects: [formset]})
+        client.http.sendAttributeRequest = async () => attributeResponse('contacts#test', {
             result: {valid: false, non_form_errors: ['Need another contact']},
-        }})
+        })
 
         const result = await client.formSet.contacts.validate()
 

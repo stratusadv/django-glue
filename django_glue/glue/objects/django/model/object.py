@@ -761,3 +761,4 @@ class ModelGlue(
     @DeclaredAttribute(required_access=GlueAccess.DELETE)
     def delete(self) -> None:
         self.instance.delete()
+        self.dispose()

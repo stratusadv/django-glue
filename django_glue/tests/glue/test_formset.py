@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 
 from django import forms
 from django.test import TestCase
@@ -15,7 +14,6 @@ from test_project.test_forms import ContactForm
 
 from django_glue.tests.glue.test_objects import (
     glue_context,
-    policy_from_manifest,
     request_with_session,
     with_request,
 )
@@ -93,7 +91,7 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertEqual(len(glue_object.get_keyed_items()), 3)
 
-    def test_append_attribute_call_introduces_the_new_child_in_manifest_list(self):
+    def test_append_attribute_call_introduces_the_new_child_as_an_entry(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
         policy = glue_object.policy
         reconstructed = FormSetGlue._reconstruct_from_policy(policy)
@@ -106,16 +104,17 @@ class FormSetGlueTestCase(TestCase):
             target_attribute_call_kwargs={'key': '1', 'initial': {'name': 'Ada'}},
         )
 
-        payload = json.loads(reconstructed.process_attribute_call(context).content)
+        entry, introduced = reconstructed.process_attribute_call(context)
 
-        self.assertEqual(len(payload['manifest_list']), 1)
-        introduction = payload['manifest_list'][0]
-        child_policy = policy_from_manifest(introduction)
+        self.assertEqual(len(introduced), 1)
+        introduction = introduced[0]
+        self.assertNotIn('is_glue_manifest', introduction)
+        child_policy = GluePolicy.from_token(introduction['policy_token'])
         self.assertEqual(child_policy.name, 'contacts.1')
         self.assertEqual(child_policy.namespace, 'form')
         self.assertEqual(child_policy.state_snapshot['name'], 'Ada')
-        self.assertEqual(introduction['address'], payload['result']['address'])
-        successor = GluePolicy.from_token(payload['policy_token'])
+        self.assertEqual(introduction['address'], entry['result'])
+        successor = GluePolicy.from_token(entry['policy_token'])
         self.assertEqual(successor.children, {'1': introduction['address']})
 
     def test_attribute_call_without_child_changes_omits_introductions(self):
@@ -131,11 +130,11 @@ class FormSetGlueTestCase(TestCase):
             target_attribute_call_kwargs={},
         )
 
-        payload = json.loads(reconstructed.process_attribute_call(context).content)
+        entry, introduced = reconstructed.process_attribute_call(context)
 
-        self.assertNotIn('manifest_list', payload)
-        self.assertNotIn('policy_token', payload)
-        self.assertTrue(payload['result']['valid'])
+        self.assertEqual(introduced, [])
+        self.assertNotIn('policy_token', entry)
+        self.assertTrue(entry['result']['valid'])
 
     def test_collection_starts_empty(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))

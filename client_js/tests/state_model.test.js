@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createManifest, createPolicyToken} from "./testUtils"
+import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
 function deferred() {
     let resolve
@@ -13,7 +13,7 @@ function deferred() {
 }
 
 function model() {
-    const client = new GlueClient({manifest_list: [createManifest({
+    const client = new GlueClient({objects: [createEntry({
         computedData: {fields: {name: {errors: []}}},
     })]})
     return {client, proxy: client.model.gorilla}
@@ -43,12 +43,12 @@ describe('address record state model', () => {
         const request = proxy.save()
         await Promise.resolve()
         proxy.name = 'ABC'
-        pending.resolve({data: {
+        pending.resolve(attributeResponse('gorilla#test', {
             policy_token: createPolicyToken({
                 state_snapshot: {id: 1, name: 'AB', birthday: '1971-07-04'},
             }),
             result: {},
-        }})
+        }))
         await request
 
         expect(proxy.name).toBe('ABC')
@@ -58,12 +58,12 @@ describe('address record state model', () => {
 
     test('accepts a same-path server change without a newer mutation', async () => {
         const {client, proxy} = model()
-        client.http.sendAttributeRequest = async () => ({data: {
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
             policy_token: createPolicyToken({
                 state_snapshot: {id: 1, name: 'Normalized', birthday: '1971-07-04'},
             }),
             result: {},
-        }})
+        })
         proxy.name = ' submitted '
         await proxy.save()
         expect(proxy.name).toBe('Normalized')
@@ -72,7 +72,7 @@ describe('address record state model', () => {
     test('retains omitted token and computed halves', async () => {
         const {client, proxy} = model()
         const token = proxy._record.policyToken
-        client.http.sendAttributeRequest = async () => ({data: {result: {ok: true}}})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: {ok: true}})
         await proxy.save()
 
         expect(proxy._record.policyToken).toBe(token)
@@ -82,10 +82,10 @@ describe('address record state model', () => {
     test('patches stable field proxies with fresh computed output', async () => {
         const {client, proxy} = model()
         const field = proxy.$fields.name
-        client.http.sendAttributeRequest = async () => ({data: {
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
             computed_data: {fields: {name: {errors: ['Required']}}},
             result: {},
-        }})
+        })
         await proxy.save()
 
         expect(proxy.$fields.name).toBe(field)
@@ -99,7 +99,7 @@ describe('address record state model', () => {
         const sent = []
         client.http.sendAttributeRequest = request => {
             sent.push(request.updates)
-            return sent.length === 1 ? first.promise : Promise.resolve({data: {result: {}}})
+            return sent.length === 1 ? first.promise : Promise.resolve(attributeResponse('gorilla#test', {result: {}}))
         }
         proxy.name = 'AB'
         const firstCall = proxy.save()
@@ -107,9 +107,12 @@ describe('address record state model', () => {
         const secondCall = proxy.save()
         proxy.name = 'ABC'
         expect(sent).toEqual([{name: 'AB'}])
-        first.resolve({data: {policy_token: createPolicyToken({
-            state_snapshot: {id: 1, name: 'AB', birthday: '1971-07-04'},
-        }), result: {}}})
+        first.resolve(attributeResponse('gorilla#test', {
+            policy_token: createPolicyToken({
+                state_snapshot: {id: 1, name: 'AB', birthday: '1971-07-04'},
+            }),
+            result: {},
+        }))
         await firstCall
         await secondCall
 
@@ -122,7 +125,7 @@ describe('address record state model', () => {
         client.http.sendAttributeRequest = async () => {
             calls += 1
             if (calls === 1) throw new Error('offline')
-            return {data: {result: 'ok'}}
+            return attributeResponse('gorilla#test', {result: 'ok'})
         }
 
         await expect(proxy.save()).rejects.toThrow('offline')

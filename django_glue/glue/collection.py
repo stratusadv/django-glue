@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from functools import cached_property
+from typing import TYPE_CHECKING
 
 from django_glue.glue import address
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.children import BoundGlueChild
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 class BaseCollectionGlue(BaseGlue):
@@ -35,7 +39,13 @@ class BaseCollectionGlue(BaseGlue):
     def _bound_children(self) -> tuple[BoundGlueChild, ...]:
         return self._bind_children()
 
-    def _bind_children(self) -> tuple[BoundGlueChild, ...]:
+    def _bind_children(
+        self,
+        *,
+        live_children: Mapping[str, str] | None = None,
+        reintroduce: Iterable[str] = (),
+    ) -> tuple[BoundGlueChild, ...]:
+        _ = live_children, reintroduce
         if not self.is_bound:
             msg = f"Cannot bind children for unbound Glue object '{self.name}'."
             raise RuntimeError(msg)

@@ -866,8 +866,8 @@ class TemplateResponseAttributeTestCase(TestCase):
             target_attribute_name=attribute_name,
             target_attribute_call_kwargs={},
         )
-        response = glue_object.process_attribute_call(context)
-        return json.loads(response.content)
+        entry, _introduced = glue_object.process_attribute_call(context)
+        return entry
 
     def test_template_response_sent_as_raw_text_without_render_as_html(self):
         payload = self._call(TemplateResponseAttributeGlue(), 'render_plain')
@@ -1127,8 +1127,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
             target_attribute_call_kwargs={'field_name': 'skills'},
         )
 
-        response = glue_object.process_attribute_call(context)
-        payload = json.loads(response.content)
+        payload, _introduced = glue_object.process_attribute_call(context)
 
         self.assertEqual(
             [choice['value'] for choice in payload['result']['results']],
@@ -1481,8 +1480,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
             target_attribute_call_kwargs={'field_name': 'skill'},
         )
 
-        response = glue_object.process_attribute_call(context)
-        payload = json.loads(response.content)
+        payload, _introduced = glue_object.process_attribute_call(context)
 
         self.assertEqual(payload['result']['results'], [{
             'value': skill.pk,
@@ -2334,8 +2332,8 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
             target_attribute_call_kwargs={'letter': 'k'},
         )
 
-        response = glue_object.process_attribute_call(context)
-        result = json.loads(response.content)['result']
+        entry, _introduced = glue_object.process_attribute_call(context)
+        result = entry['result']
 
         # Only Koko matches: Kimba is excluded by the age>=10 filter already
         # applied on `filtered` before it reached QuerySetGlue.
@@ -2604,7 +2602,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         )
         self.assertNotIn('form', row_policy.attributes)
 
-    def test_queryset_get_returns_child_model_proxy_payload(self):
+    def test_queryset_get_returns_the_row_glue_with_a_signed_row_policy(self):
         gorilla = Gorilla.objects.create(name='Koko')
         request = request_with_session()
         glue_object = QuerySetGlue(
@@ -2617,7 +2615,10 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         glue_object.request = request
         row = glue_object.get(pk=gorilla.pk)
 
-        row_policy = policy_from_manifest(row)
+        self.assertIsInstance(row, ModelGlue)
+        self.assertFalse(row.is_bound)
+        row.request = request
+        row_policy = row.policy
         self.assertEqual(row_policy.namespace, 'model')
         self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
         self.assertEqual(row_policy.identity['target_pk'], gorilla.pk)
@@ -2958,6 +2959,24 @@ class RelationProjectionTestCase(TestCase):
             fields=ALL_FIELDS,
         ))
 
-        assert 'skills' not in glue_object.attributes
+        assert glue_object.attributes['skills'].schema()['type'] == 'ManyToManyField'
+        assert 'skills' not in glue_object.policy.children
         assert 'fights_as_red_corner' not in glue_object.attributes
         assert glue_object.policy.children == {}
+
+    def test_many_to_many_is_an_editable_identity_value(self) -> None:
+        from django_glue.glue.objects.django.model.object import ALL_FIELDS
+
+        chest_pound = Skill.objects.create(name='Chest Pound')
+        self.red.skills.set([chest_pound])
+        glue_object = with_request(ModelGlue(
+            self.red,
+            **glue_context(name='gorilla'),
+            fields=ALL_FIELDS,
+        ))
+
+        assert glue_object.state['skills']['value'] == (chest_pound.pk,)
+        assert 'skills' in glue_object.editable
+        schema = glue_object.attributes['skills'].schema()
+        assert schema['choice_model_path'].endswith('.Skill')
+        assert 'choice_model_path' in schema

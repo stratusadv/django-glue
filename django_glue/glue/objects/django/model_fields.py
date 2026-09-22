@@ -340,16 +340,18 @@ class ModelFieldResolutionMixin:
         if self._is_reverse_relation(name):
             return False
         field = self._get_model_field(name)
-        return bool(field.concrete and field.editable)
+        return bool(
+            (field.concrete or getattr(field, 'many_to_many', False))
+            and field.editable
+        )
 
     @cached_property
     def _included_fields(self) -> list[str]:
         all_names = self._all_available_field_names
-        names = (
-            self._default_field_names
-            if self.fields == '__all__' or not self.fields
-            else self.fields
-        )
+        if self.fields == '__all__' or not self.fields:
+            names = self._default_field_names + self._many_to_many_field_names
+        else:
+            names = self.fields
         excluded = set(all_names) if self.exclude == '__all__' else set(self.exclude)
         included = []
         seen = set()
