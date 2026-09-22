@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.17
+### Fixes
+- `django_glue_fetch` aborts a request that has not completed within `DJANGO_GLUE_FETCH_TIMEOUT_SECONDS` (default 30) and rejects with a `TimeoutError`, instead of hanging until the browser gives up. Pass `timeout_milliseconds` to override it for one call.
+
 ## v0.8.13
 ### Fixes
 - Update `DjangoGlueKeepLive` to expire and prompt the user to reload the page if the most recent pulse was longer than the configured keep live interval + 5 seconds.

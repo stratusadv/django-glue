@@ -36,12 +36,15 @@ async function django_glue_fetch(
         content_type = 'application/json',
         response_type = 'json',
         header_options = {},
+        timeout_milliseconds = DJANGO_GLUE_FETCH_TIMEOUT_MILLISECONDS,
     } = {}
 ) {
     const csrf_token = django_glue_get_cookie('csrftoken')
+    const abort_controller = new AbortController()
 
     const request_options = {
         method,
+        signal: abort_controller.signal,
         headers: {
             'Content-Type': content_type,
             'X-CSRFToken': csrf_token,
@@ -54,6 +57,11 @@ async function django_glue_fetch(
     } else {
         url = format_get_url(url, payload)
     }
+
+    const timeout_id = setTimeout(
+        () => abort_controller.abort(new DOMException(`No response from ${url} within ${timeout_milliseconds} ms`, 'TimeoutError')),
+        timeout_milliseconds,
+    )
 
     try {
         const response = await fetch(url, request_options)
@@ -76,5 +84,7 @@ async function django_glue_fetch(
     } catch (error) {
         console.error('Fetch error:', error)
         throw error
+    } finally {
+        clearTimeout(timeout_id)
     }
 }
