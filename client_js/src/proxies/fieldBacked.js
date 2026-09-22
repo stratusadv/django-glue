@@ -51,6 +51,13 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         return this._loadPromise
     }
 
+    // Public seam for consumer code: resolves once this proxy's lazy state
+    // is available, fetching it first if needed. Awaits it before acting on
+    // a lazy proxy's values (e.g. dependent-field wiring in a form modal).
+    load() {
+        return this._ensureLoaded()
+    }
+
     retryLoad() {
         this._loadAttempted = false
         this._loadError = null

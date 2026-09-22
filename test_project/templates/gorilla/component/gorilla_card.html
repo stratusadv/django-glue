@@ -1,0 +1,9 @@
+{# The name can change server-side, so it is both rendered (present on first #}
+{# paint) and bound (updates without a re-render). A value fixed at stamp #}
+{# time needs only the rendered form. #}
+<div class="gorilla-card card">
+    <div class="card-body">
+        <h5 class="card-title" x-text="component.name">{{ component.name }}</h5>
+        <p class="card-text text-muted mb-0">Gorilla #{{ component.gorilla_id }}</p>
+    </div>
+</div>

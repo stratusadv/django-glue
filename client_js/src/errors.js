@@ -16,4 +16,11 @@ class GlueProxyError extends Error {
     }
 }
 
-export {GlueHttpError, GlueProxyError}
+class GlueAlpineError extends Error {
+    constructor(message) {
+        super(message)
+        this.name = 'GlueAlpineError'
+    }
+}
+
+export {GlueAlpineError, GlueHttpError, GlueProxyError}

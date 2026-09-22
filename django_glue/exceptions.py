@@ -369,3 +369,31 @@ class GlueAttributeCallError(GlueError):
             'provided_kwargs': self.provided_kwargs,
             'original_error': str(self.original_error),
         }
+
+
+class GlueComponentParameterError(GlueError):
+    """A component parameter is undeclared, unannotated, missing, or uncoercible."""
+
+    code = 'component_parameter'
+    status = 400
+
+
+class GlueComponentRegistrationError(GlueError):
+    """A component could not be registered or resolved by tag name."""
+
+    code = 'component_registration'
+    status = 500
+
+
+class GlueComponentKeyError(GlueError):
+    """A stamped component's key is missing, unusable, or duplicated."""
+
+    code = 'component_key'
+    status = 500
+
+
+class GlueComponentRootError(GlueError):
+    """A component template did not render exactly one Glue-owned root element."""
+
+    code = 'component_root'
+    status = 500

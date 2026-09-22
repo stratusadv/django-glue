@@ -20,6 +20,7 @@ class DeclaredAttributeOptions:
     takes_client_state: bool | list[str] | tuple[str, ...] = True
     updates_client_state: bool = True
     is_identity: bool = False
+    is_parameter: bool = False
     render_as_html: bool = False
 
 
@@ -62,6 +63,7 @@ class DeclaredAttribute:
         takes_client_state: bool | list[str] | tuple[str, ...] = True,
         updates_client_state: bool = True,
         identity: bool = False,
+        parameter: bool = False,
         render_as_html: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
@@ -76,7 +78,10 @@ class DeclaredAttribute:
         self.required_access = required_access
         self._takes_client_state = takes_client_state
         self._updates_client_state = updates_client_state
-        self._identity = identity
+        # A parameter is what reconstructs its owner, which is exactly what
+        # identity means, so declaring one implies identity.
+        self._identity = identity or parameter
+        self._parameter = parameter
         self._render_as_html = render_as_html
         self.default = default
         self.default_factory = default_factory
@@ -105,6 +110,7 @@ class DeclaredAttribute:
             takes_client_state=self._takes_client_state,
             updates_client_state=self._updates_client_state,
             is_identity=self._identity,
+            is_parameter=self._parameter,
             render_as_html=self._render_as_html,
         )
 

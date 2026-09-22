@@ -1,6 +1,8 @@
 import {getProxyClass} from "./registry"
 import GluePolicy from "../policy"
 import GlueHtmlResult from "../htmlResult"
+import GlueComponentHtmlResult from "../componentHtmlResult"
+import {reactive} from "../alpine"
 
 function isPlainObject(value) {
     if (value === null || typeof value !== 'object') {
@@ -27,7 +29,11 @@ class BaseGlueProxy {
         }
         this._policy = policy
         this._name = policy?.name
-        this._state = state || {}
+        // The state is wrapped in Alpine's reactive proxy so the in-place
+        // merges below are observed by any Alpine effect reading it --
+        // including proxies handed to a modal outside an Alpine scope.
+        // Alpine is a Glue dependency; the client bundles it (see ../alpine).
+        this._state = reactive(state || {})
         this._metadata = metadata || {}
         this._client = client
         this._listeners = {before: {}, after: {}, error: {}}
@@ -169,7 +175,7 @@ class BaseGlueProxy {
     _applyState(state) {
         const nextState = state || {}
         if (!this._state || typeof this._state !== 'object') {
-            this._state = nextState
+            this._state = reactive(nextState)
             return
         }
         this._mergeState(this._state, nextState)
@@ -367,7 +373,7 @@ class BaseGlueProxy {
             },
             set(value) {
                 const root = this.__glue__root || this
-                if (!root._state) root._state = {}
+                if (!root._state) root._state = reactive({})
                 root._state[attributeQualName] = value
             },
             enumerable: true,
@@ -482,6 +488,26 @@ class BaseGlueProxy {
 
         if (this._resultIsTemplateResponse(result)) {
             this._client.loadManifests(result.manifest_list)
+
+            // A component re-render is applied here rather than handed back for
+            // the caller to place: the component owns its root, so there is no
+            // target to choose. Children it stamped are registered above first,
+            // so their proxies exist before the DOM referencing them appears.
+            if (result.glue_component) {
+                const html = new GlueComponentHtmlResult(
+                    result.html,
+                    result.glue_component,
+                ).apply()
+
+                // Children the re-render introduced arrive inside the morphed
+                // HTML carrying their own manifests, so they are registered
+                // from the DOM; then the sweep drops the ones it displaced.
+                this._client.registerComponentsFromDom()
+                this._client.sweepDisposedComponents()
+
+                return html
+            }
+
             return new GlueHtmlResult(result.html)
         }
 

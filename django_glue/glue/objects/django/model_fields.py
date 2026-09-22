@@ -108,6 +108,28 @@ class ModelFieldResolutionMixin:
         )
         return forward_field_names + forward_field_attnames + many_to_many_field_names + reverse_relation_names
 
+    @staticmethod
+    def _reject_nested_all_marker(
+        names: tuple[str, ...], param_name: str, prefix: str = ''
+    ) -> None:
+        """Reject '__all__' passed as an element of a field name list.
+
+        fields=['__all__'] is a common typo of fields='__all__'. Left
+        uncaught, the marker is treated as a literal field name and dies
+        deep in Django with an opaque FieldDoesNotExist.
+        """
+        if '__all__' not in names:
+            return
+        location = f'{prefix}.{param_name}' if prefix else param_name
+        action = 'exclude' if param_name == 'exclude' else 'include'
+        msg = (
+            f'{location} contains \'__all__\' as an element. '
+            f"To {action} every field, pass {param_name}='__all__' "
+            f'(or {param_name}=ALL_FIELDS) as the whole argument, '
+            'not as an item in a list of field names.'
+        )
+        raise ValueError(msg)
+
     def _get_model_field(self, name: str) -> Any:
         for field in self._model_meta.fields:
             if name in {field.name, getattr(field, 'attname', field.name)}:
@@ -156,4 +178,18 @@ class ModelFieldResolutionMixin:
                 continue
             included.append(name)
             seen.add(name)
+
+        # The primary key is always exposed so the client can identify the
+        # instance, unless it is explicitly excluded. It may already be
+        # present under its name or attname (e.g. when the pk is itself an FK).
+        pk_name = self._model_meta.pk.name
+        pk_attname = self._model_meta.pk.attname
+        if (
+            pk_name not in seen
+            and pk_attname not in seen
+            and pk_name not in excluded
+            and pk_attname not in excluded
+        ):
+            included.insert(0, pk_name)
+
         return included

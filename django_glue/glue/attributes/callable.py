@@ -33,6 +33,8 @@ class LoadedAttributeCall:
 
 _VARIADIC_KINDS = (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
 
+_MAX_FORWARD_REF_DEPTH = 3
+
 
 class CallableAttribute(BaseGlueAttribute):
     """
@@ -131,12 +133,66 @@ class CallableAttribute(BaseGlueAttribute):
         return resolved_parameters
 
     def _get_type_hints(self, func: Callable[..., Any]) -> dict[str, Any]:
-        """Get type hints for a function, with HttpRequest available in the namespace."""
-        function_globals = getattr(func, '__globals__', {})
-        return get_type_hints(
-            func,
-            globalns={**function_globals, 'HttpRequest': HttpRequest},
-        )
+        """Resolve parameter annotations, skipping any that cannot be resolved.
+
+        Only parameter hints matter here -- they decide what gets injected. The
+        return annotation is never consulted, so it must not be able to break
+        the call.
+
+        That distinction is load-bearing. `from __future__ import annotations`
+        makes every annotation a string, and a callable returning a configured
+        Glue object is expected to annotate it:
+
+            @Glue.attr(required_access=Glue.Access.CHANGE)
+            def new_entry(self, request: HttpRequest) -> ModelGlue: ...
+
+        If ModelGlue is imported under TYPE_CHECKING -- the idiomatic way to
+        write that -- resolving the whole signature raises NameError and the
+        call fails at runtime. An unresolvable parameter annotation is likewise
+        not an error: it only means that parameter cannot be matched for
+        injection, which the caller already handles.
+        """
+        globalns = {**getattr(func, '__globals__', {}), 'HttpRequest': HttpRequest}
+
+        try:
+            hints = get_type_hints(func, globalns=globalns)
+        except Exception:  # noqa: BLE001 - one bad annotation must not fail the call
+            return self._resolve_parameter_hints(func, globalns)
+
+        hints.pop('return', None)
+
+        return hints
+
+    @staticmethod
+    def _resolve_parameter_hints(
+        func: Callable[..., Any],
+        globalns: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Resolve what can be resolved, one parameter at a time."""
+        hints: dict[str, Any] = {}
+
+        for name, annotation in getattr(func, '__annotations__', {}).items():
+            if name == 'return':
+                continue
+
+            resolved = annotation
+
+            # A forward reference can nest: `x: 'HttpRequest'` under future
+            # annotations is the string "'HttpRequest'", so one eval yields a
+            # string rather than the class.
+            for _ in range(_MAX_FORWARD_REF_DEPTH):
+                if not isinstance(resolved, str):
+                    break
+                try:
+                    resolved = eval(resolved, globalns)  # noqa: S307
+                except Exception:  # noqa: BLE001 - not resolvable, not injectable
+                    resolved = None
+                    break
+
+            if resolved is not None:
+                hints[name] = resolved
+
+        return hints
 
     def _resolve_call_parameter(
         self,
