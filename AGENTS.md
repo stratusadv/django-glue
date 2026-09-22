@@ -204,18 +204,40 @@ that state belongs on the proxy class that owns the concept, or on a collaborato
 that proxy owns. The one existing namespace check (`namespace === 'function'`,
 for `ProxyClass.create()`) is a wart, not a precedent to extend.
 
-**Glue core must not reference any frontend framework.** No `Alpine`, no
-`globalThis.Alpine?.reactive?.()`, no Vue, no framework import anywhere under
-`client_js/src/`. Glue works with Alpine because it *mutates state in place*
-(see `_mergeState` in `base.js`) so a framework's proxy observes the write --
-not because it knows the framework exists. A previous attempt at
-`reactiveSelf()` in `utils.js` violated this and was removed; see
-`docs/roadmap/proxy_instance_management.md`.
+**Alpine is a Glue dependency.** The client bundles Alpine and owns its startup
+(`client_js/src/alpine.js` installs it, registers the morph plugin, and throws
+`GlueAlpineError` if a page loads a second Alpine core). The old rule that the
+core stay framework-agnostic is retired on this branch: proxy state is wrapped
+in `Alpine.reactive` at construction (see `base.js`), so the in-place merges in
+`_mergeState` are observed by Alpine effects -- including proxies handed to a
+modal outside an Alpine scope. The earlier `reactiveSelf()` attempt and its
+removal are recorded in `docs/roadmap/proxy_instance_management.md`; that
+document predates Alpine becoming a dependency.
 
 **Proxy-specific behavior lives on the proxy class.** `_applyResponse()`
 overrides, chaining, caching, and hydration all belong in the subclass
 (`queryset.js`, `formset.js`, `sequence.js`), not in `base.js` and not in
 `client.js`.
+
+### The API Boundary (Python and JavaScript)
+
+This rule is absolute and covers the whole library -- the `django_glue` Python
+package and the `client_js` client alike.
+
+**Application code must never call or read Glue's private members.** Anything
+underscore-prefixed is an internal detail, not an API: in Python, members like
+`BaseGlue._policy`, `GlueResponse._result`, `FormGlue._reconstruct_from_policy`;
+in JS, members like `_state`, `_ensureLoaded`, `_applyResponse`,
+`_initializeAttributes`. Consumer views, templates, and application JS use only
+the public surface -- in Python the `Glue` shortcuts, registered attributes,
+`GlueAccess`, and documented public methods; in JS `$fields`, `$pk`, `load()`,
+`retryLoad()`, `hasErrors()`, `addListener()`, callable attributes, and the
+like.
+
+If consumer code needs behavior that only a private member provides, the change
+is to promote it to a deliberate, documented public API on the proxy or
+shortcut -- never to reach across the boundary, and never to propose doing so
+in any capacity.
 
 ### Access Control
 

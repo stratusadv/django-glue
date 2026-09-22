@@ -1,8 +1,9 @@
 import {describe, expect, test} from "bun:test"
+import GlueClient from "../src/client"
 import GlueConfig from "../src/config"
 import GlueHttp from "../src/http"
 import GlueModelProxy from "../src/proxies/model"
-import {createMetadata, createPolicy} from "./testUtils"
+import {createManifest, createMetadata, createState, createPolicy, mockOperationFetch} from "./testUtils"
 
 describe('state and field edge behavior', () => {
     test('state attributes and recursive state merges preserve the state object', () => {
@@ -27,6 +28,41 @@ describe('state and field edge behavior', () => {
         expect(object._state).toBe(state)
         expect(object.settings.mode).toBe('expanded')
         expect(object._state.settings.nested).toBeUndefined()
+    })
+
+    test('state merges are observed by Alpine effects', async () => {
+        const {default: Alpine} = await import('alpinejs')
+
+        const object = new GlueModelProxy({
+            http: new GlueHttp(new GlueConfig()),
+            policy: createPolicy(),
+            state: createState(),
+            metadata: createMetadata(),
+        })
+        object._loaded = true
+
+        let seen = null
+        Alpine.effect(() => { seen = object.$fields.name?.value })
+        expect(seen).toBe('Koko')
+
+        object._applyState({name: {value: 'Renamed'}})
+        await new Promise(resolve => setTimeout(resolve, 0))
+
+        expect(seen).toBe('Renamed')
+    })
+
+    test('load() fetches lazy state once and resolves when it is applied', async () => {
+        const calls = mockOperationFetch()
+        const client = new GlueClient({manifest_list: [createManifest({state: {}})]})
+        const proxy = client.model.gorilla
+
+        await proxy.load()
+
+        expect(String(proxy.$fields.name)).toBe('Michael')
+        expect(calls.length).toBe(1)
+
+        await proxy.load()
+        expect(calls.length).toBe(1)
     })
 
     test('field proxies convert dates, arrays, nulls, and JSON values', () => {

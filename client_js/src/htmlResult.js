@@ -21,6 +21,7 @@ class GlueHtmlResult {
         return this.html
     }
 
+    // Plain replacement, not morphing -- see the note in view.js.
     async renderInnerHtml(target) {
         resolveElement(target).replaceChildren(htmlToFragment(this.html))
         return this.html
