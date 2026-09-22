@@ -254,6 +254,24 @@ class GlueQuerySetSliceValidationError(GlueError):
         return {'width': self.width, 'loaded_row_count': self.loaded_row_count}
 
 
+class GlueFormSetMaxNumExceededError(GlueError):
+    """Raised when appending a form would exceed the formset's max_num."""
+
+    code = 'formset_max_num_exceeded'
+    status = 422
+
+    def __init__(self, current_count: int, max_num: int) -> None:
+        self.current_count = current_count
+        self.max_num = max_num
+        super().__init__(
+            f'Cannot append a new form: the formset already holds {current_count} '
+            f'form(s) and max_num is {max_num}.'
+        )
+
+    def details(self) -> dict:
+        return {'current_count': self.current_count, 'max_num': self.max_num}
+
+
 class GlueInvalidPolicyError(GlueError):
     """Raised when proxy policy signature doesn't match, indicating tampering."""
 

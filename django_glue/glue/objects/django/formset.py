@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
 from django_glue.access import GlueAccess
+from django_glue.exceptions import GlueFormSetMaxNumExceededError
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.collection import BaseCollectionGlue
 from django_glue.glue.loading import LoadingStrategy
@@ -84,6 +85,8 @@ class FormSetGlue(BaseCollectionGlue):
 
     @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def append(self, key: str, initial: dict[str, Any] | None = None) -> FormGlue:
+        if self.max_num is not None and len(self._forms) >= self.max_num:
+            raise GlueFormSetMaxNumExceededError(len(self._forms), self.max_num)
         form = self.form_class(initial=initial or {})
         form_glue = self._build_form_glue(form, key)
         self._forms.append((key, form_glue))
@@ -94,7 +97,13 @@ class FormSetGlue(BaseCollectionGlue):
         form_glues = [form for _, form in self._forms]
         per_form = [form.validate() for form in form_glues]
         bound_forms = [form._bound_form for form in form_glues]
-        non_form_errors = self.clean(bound_forms)
+        count = len(self._forms)
+        cardinality_errors = []
+        if count < self.min_num:
+            cardinality_errors.append(f'Please submit at least {self.min_num} form(s).')
+        if self.max_num is not None and count > self.max_num:
+            cardinality_errors.append(f'Please submit at most {self.max_num} form(s).')
+        non_form_errors = [*cardinality_errors, *self.clean(bound_forms)]
         valid = all(result['valid'] for result in per_form) and not non_form_errors
         return {
             'valid': valid,

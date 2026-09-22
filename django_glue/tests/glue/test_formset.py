@@ -6,6 +6,7 @@ from django import forms
 from django.test import TestCase
 
 from django_glue import Glue
+from django_glue.exceptions import GlueFormSetMaxNumExceededError
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
@@ -69,6 +70,28 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertEqual(appended.state['name']['value'], 'Ada')
         self.assertEqual(glue_object.get_keyed_items(), [('1', appended)])
+
+    def test_append_rejects_when_max_num_is_reached(self):
+        glue_object = with_request(FormSetGlue(
+            ContactForm, **glue_context(name='contacts'), max_num=2,
+        ))
+        glue_object.append(key='1', initial={})
+        glue_object.append(key='2', initial={})
+
+        with self.assertRaises(GlueFormSetMaxNumExceededError) as caught:
+            glue_object.append(key='3', initial={})
+
+        self.assertEqual(caught.exception.current_count, 2)
+        self.assertEqual(caught.exception.max_num, 2)
+        self.assertEqual(len(glue_object.get_keyed_items()), 2)
+
+    def test_append_is_unbounded_when_max_num_is_none(self):
+        glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
+
+        for key in ('1', '2', '3'):
+            glue_object.append(key=key, initial={})
+
+        self.assertEqual(len(glue_object.get_keyed_items()), 3)
 
     def test_append_attribute_call_introduces_the_new_child_in_manifest_list(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
@@ -196,6 +219,58 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertFalse(result['valid'])
         self.assertEqual(result['non_form_errors'], ['Cross-form constraint failed.'])
+
+    def test_validate_reports_a_min_num_violation(self):
+        glue_object = with_request(FormSetGlue(
+            ContactForm, **glue_context(name='contacts'), min_num=2,
+        ))
+
+        result = glue_object.validate()
+
+        self.assertFalse(result['valid'])
+        self.assertEqual(result['non_form_errors'], ['Please submit at least 2 form(s).'])
+
+    def test_validate_reports_a_max_num_violation(self):
+        glue_object = with_request(FormSetGlue(
+            ContactForm, **glue_context(name='contacts'), min_num=0, max_num=1,
+        ))
+        glue_object._load_client_state({'forms': {
+            '1': {
+                'name': 'Ada',
+                'email': 'ada@example.com',
+                'message': 'Hello',
+                'priority': 'low',
+            },
+            '2': {
+                'name': 'Bee',
+                'email': 'bee@example.com',
+                'message': 'Hi',
+                'priority': 'low',
+            },
+        }})
+
+        result = glue_object.validate()
+
+        self.assertFalse(result['valid'])
+        self.assertEqual(result['non_form_errors'], ['Please submit at most 1 form(s).'])
+
+    def test_validate_passes_cardinality_when_within_bounds(self):
+        glue_object = with_request(FormSetGlue(
+            ContactForm, **glue_context(name='contacts'), min_num=1, max_num=2,
+        ))
+        glue_object._load_client_state({'forms': {
+            '1': {
+                'name': 'Ada',
+                'email': 'ada@example.com',
+                'message': 'Hello',
+                'priority': 'low',
+            },
+        }})
+
+        result = glue_object.validate()
+
+        self.assertTrue(result['valid'])
+        self.assertEqual(result['non_form_errors'], [])
 
     def test_reconstruct_from_policy_rebuilds_an_equivalent_formset(self):
         glue_object = with_request(FormSetGlue(
