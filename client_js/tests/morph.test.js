@@ -63,6 +63,57 @@ describe('Morphing a component root', () => {
         expect(first.textContent).toBe('Changed')
         expect(second.textContent).toBe('Second')
     })
+
+    test('a child keeps its node when its address is unchanged', () => {
+        document.body.innerHTML =
+            '<div data-glue="week_a1"><div data-glue="day_mon">Mon</div></div>'
+        const element = document.querySelector('[data-glue="week_a1"]')
+        const monday = document.querySelector('[data-glue="day_mon"]')
+
+        morphComponentRoot(
+            element,
+            '<div data-glue="week_a1"><div data-glue="day_mon">Mon updated</div></div>',
+        )
+
+        expect(document.querySelector('[data-glue="day_mon"]')).toBe(monday)
+        expect(monday.textContent).toBe('Mon updated')
+    })
+
+    test('a child whose address changed is replaced, not recycled', () => {
+        // A dashboard moving to the next week: same position, different
+        // component. Patching the old node into the new component would carry
+        // over whatever is bound to that node but absent from the server HTML.
+        document.body.innerHTML =
+            '<div data-glue="week_a1"><div data-glue="day_oct_02">Oct 2</div></div>'
+        const element = document.querySelector('[data-glue="week_a1"]')
+        const oldDay = document.querySelector('[data-glue="day_oct_02"]')
+
+        morphComponentRoot(
+            element,
+            '<div data-glue="week_a1"><div data-glue="day_oct_09">Oct 9</div></div>',
+        )
+
+        expect(document.querySelector('[data-glue="day_oct_02"]')).toBeNull()
+        expect(document.querySelector('[data-glue="day_oct_09"]')).not.toBe(oldDay)
+        expect(element.textContent).toBe('Oct 9')
+    })
+
+    test('the key attribute still resolves for ordinary markup', () => {
+        // Supplying `key` replaces Alpine's default resolver, so authored keys
+        // have to keep working.
+        document.body.innerHTML =
+            '<ul data-glue="list_a1"><li key="b">B</li></ul>'
+        const element = document.querySelector('[data-glue="list_a1"]')
+        const itemB = document.querySelector('[key="b"]')
+
+        morphComponentRoot(
+            element,
+            '<ul data-glue="list_a1"><li key="a">A</li><li key="b">B</li></ul>',
+        )
+
+        expect(document.querySelector('[key="b"]')).toBe(itemB)
+        expect(element.textContent).toBe('AB')
+    })
 })
 
 describe('Applying a component render result', () => {

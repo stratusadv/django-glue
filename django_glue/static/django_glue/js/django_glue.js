@@ -4146,6 +4146,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   function morphComponentRoot(element, html) {
     morph2(element, html, {
+      key: (node) => node.getAttribute(ROOT_ATTRIBUTE) || node.getAttribute("key"),
       updating: (current, incoming, childrenOnly, skip) => {
         if (shouldIgnore(current))
           skip();

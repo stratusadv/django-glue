@@ -26,6 +26,17 @@ function shouldIgnore(node) {
 // state across a re-render; replacement destroys all of it.
 function morphComponentRoot(element, html) {
     alpineMorph(element, html, {
+        // Addresses supply the node keys (spec.md §8). Without this, children
+        // are matched positionally: a dashboard moving to the next week would
+        // patch each day card's node into the *next* week's component rather
+        // than replacing it, recycling whatever is bound to that node but not
+        // described by the server HTML. A child whose data-glue changed is a
+        // different component, so it is replaced.
+        //
+        // Falls back to the `key` attribute because passing this option
+        // replaces Alpine's default resolver outright, and authored keys on
+        // ordinary markup have to keep working.
+        key: node => node.getAttribute(ROOT_ATTRIBUTE) || node.getAttribute('key'),
         updating: (current, incoming, childrenOnly, skip) => {
             if (shouldIgnore(current)) skip()
         },
