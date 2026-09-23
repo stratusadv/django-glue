@@ -1,6 +1,6 @@
 # ADR 011: Collections Own Their Item Keys
 
-Status: Accepted for the redesign; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-17
 

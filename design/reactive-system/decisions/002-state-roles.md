@@ -1,6 +1,6 @@
 # ADR 002: Separate Value Roles from Construction Parameters
 
-Status: Accepted for the redesign; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-10
 

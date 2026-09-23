@@ -1,3 +1,33 @@
+<div x-data="{
+    gorilla: Glue.model.gorilla,
+    async saveGorilla() {
+        try {
+            await this.gorilla.save();
+        } catch {
+            $store.notifications.error('Failed to save fighter.');
+            return;
+        }
+        if (this.gorilla.hasErrors()) {
+            $store.notifications.error(`Failed to save fighter. ${this.errorSummary(this.gorilla)}`, 6000);
+        } else {
+            $store.notifications.success('Fighter saved successfully!');
+        }
+    },
+    errorSummary(proxy) {
+        const errors = Object.fromEntries(
+            Object.entries(proxy.$fields || {})
+                .filter(([, field]) => field.hasErrors)
+                .map(([name, field]) => [name, field.errors])
+        );
+        const messages = Object.entries(errors)
+            .map(([field, fieldErrors]) => {
+                const label = proxy.$fields?.[field]?.label || field;
+                const text = Array.isArray(fieldErrors) ? fieldErrors.join(', ') : fieldErrors;
+                return `${label}: ${text}`;
+            });
+        return messages.length ? messages.join(' ') : 'Check form for errors.';
+    }
+}">
 <style>
 .stat-card {
     background: linear-gradient(135deg, var(--gorilla-green) 0%, var(--gorilla-green-dark) 100%);
@@ -18,40 +48,6 @@
     opacity: 0.9;
 }
 </style>
-
-<div x-data="{
-    gorilla: Glue.model.gorilla,
-    init() {
-        this.gorilla.addListener('save', event => {
-            if (event.proxy.hasErrors()) {
-                $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
-            }
-            else {
-                $store.notifications.success('Fighter saved successfully!');
-            }
-        });
-        this.gorilla.addListener('save', () => {
-            $store.notifications.error('Failed to save fighter.');
-        }, 'error');
-        this.gorilla.addListener('delete', () => {
-            $store.notifications.error('Failed to delete fighter.');
-        }, 'error');
-    },
-    errorSummary(proxy) {
-        const errors = Object.fromEntries(
-            Object.entries(proxy._state || {})
-                .filter(([, fieldState]) => fieldState?.errors?.length)
-                .map(([field, fieldState]) => [field, fieldState.errors])
-        );
-        const messages = Object.entries(errors)
-            .map(([field, fieldErrors]) => {
-                const label = proxy.$fields?.[field]?.label || field;
-                const text = Array.isArray(fieldErrors) ? fieldErrors.join(', ') : fieldErrors;
-                return `${label}: ${text}`;
-            });
-        return messages.length ? messages.join(' ') : 'Check form for errors.';
-    }
-}">
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <div class="card card-gorilla">
@@ -163,7 +159,7 @@
 
                 <div class="card-footer bg-gorilla-cream">
                     <div class="d-flex gap-2 justify-content-end">
-                        <button class="btn btn-gorilla px-4" @click="gorilla.save()">
+                        <button class="btn btn-gorilla px-4" @click="saveGorilla()">
                             Save Changes
                         </button>
                     </div>

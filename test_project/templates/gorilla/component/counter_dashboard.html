@@ -1,0 +1,7 @@
+{% load django_glue %}
+<div data-testid="counter-dashboard">
+    <button type="button" data-testid="dashboard-drop" @click="component.drop_first()">Drop first</button>
+    {% for start in starts %}
+        {% glue_component 'counter-card' start=start key=start %}
+    {% endfor %}
+</div>

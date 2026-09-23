@@ -1,67 +1,15 @@
-# Roadmap 2026
-## January
+# Reactive system roadmap
 
-- [X] Wireframe v1
+The state-model redesign is implemented on `v1.1/base`; consumer migration and
+release review remain.
+Its implementation phases are internal checkpoints, not separate releases.
+The repository's `design/reactive-system/roadmap.md` owns the detailed gates.
 
-## February
+The release gate includes the addressed server and client protocol, built-in
+Glue families, component stamping and lifecycle, consumer migration, and
+green Python, JavaScript, E2E, Django check, and documentation builds.
 
-- [X] Prototype v1
-
-## March
-
-- [X] Alpha v1
-- [X] Model Object proxy
-- [X] QuerySet proxy
-- [X] Form proxy
-
-## April
-
-- [X] Alpha v1 continued
-- [X] View (GlueView)
-- [X] Documentation updates
-
-## May
-
-- [X] Alpha v1 continued
-- [X] Template proxy
-- [X] Function proxy
-- [X] Additional proxy features
-- [X] Performance improvements
-- [X] Staging Level Testing in External Projects
-
-## June
-
-- [X] Release candidate v1
-- [X] Policy Based Security
-
-## July
-
-- [X] Beta v1
-- [X] Architecture Refactor
-- [X] Glue Attributes
-- [X] Related Object Management
-
-## August
-
-- [ ] Stable v1
-- [ ] Reverse Foreign Key Support
-- [ ] Documentation
-
-## September
-
-- [ ] Test Project Refactor
-- [ ] Educational Videos
-- [ ] Robust Testing
-
-## October
-
-- [ ] Many to Many Support
-- [ ] Glue Class
-
-## November
-
-- [ ] Fine Attribute Control
-
-## December
-
-- [ ] Large Performance Review
+Later work includes transport status bindings, interval polling, optimized
+collection moves, incremental component rendering, reactive component
+parameters, and optional queryset preload. Security hardening outside the
+state-model release is tracked separately in the design roadmap.

@@ -38,9 +38,9 @@ nav:
       - Quick Start Tutorial: guides/quick_start.md
       - Proxies:
           - Model Proxy: guides/model_object_glue.md
+          - Components: guides/components.md
           - QuerySet Proxy: guides/query_set_glue.md
           - Form Proxy: guides/form_glue.md
-          - Template Proxy: guides/template_glue.md
           - Function Proxy: guides/function_glue.md
       - GlueView:
           - Overview: guides/view_glue/view_glue.md
@@ -56,7 +56,6 @@ nav:
           - DjangoModelGlue: api/glue/model_object_glue.md
           - DjangoQuerySetGlue: api/glue/query_set_glue.md
           - DjangoFormGlue: api/glue/form_glue.md
-          - DjangoTemplateGlue: api/glue/template_glue.md
           - PythonFunctionGlue: api/glue/function_glue.md
       - JavaScript:
           - GlueModelProxy: api/javascript/model_object_glue.md
@@ -65,9 +64,11 @@ nav:
           - GlueView: api/javascript/view_glue.md
           - GlueFunctionProxy: api/javascript/function_glue.md
   - Architecture:
+      - Overview: architecture.md
+      - Codewalk: codewalk.md
       - Choice Sources: decisions/choice-querysets.md
   - Changelog:
-      - v1.0.0: changelog/changelog.md
+      - Current: changelog/changelog.md
       - Archived: changelog/archived_changelog.md
   - Roadmap:
       - Current: roadmap/roadmap_2026.md

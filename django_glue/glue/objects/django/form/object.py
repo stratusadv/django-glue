@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from functools import cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from django import forms
 from django.db.models import QuerySet
 from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import BaseGlueAttribute, DeclaredAttribute
-from django_glue.glue.attributes.django.form import FormFieldAttribute
+from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.objects.django.field_adapter import FormFieldAdapter
 from django_glue.glue.options.django import (
     GlueRelatedModelChoices,
     RelatedModelChoicesResult,
@@ -24,6 +22,17 @@ if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
 
 
+def _required_save_access(glue: FormGlue) -> GlueAccess:
+    """Saving an unsaved instance requires ADD; a persisted target requires
+    CHANGE (state-model.md §3, ADR 010). A plain form has no instance, so it
+    is always create-only.
+    """
+    instance = getattr(glue.form, 'instance', None)
+    if instance is None or instance.pk is None:
+        return GlueAccess.ADD
+    return GlueAccess.CHANGE
+
+
 class FormGlue(BaseGlue):
     namespace = 'form'
 
@@ -31,24 +40,107 @@ class FormGlue(BaseGlue):
         self,
         form: forms.BaseForm,
         *,
-        name: str,
-        access: GlueAccess,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        name: str | None = None,
+        access: GlueAccess = GlueAccess.CHANGE,
+        editable: Sequence[str] | None = None,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         self.form = form
-        self._loaded_state: dict[str, Any] | None = None
+        self.editable = self._normalize_editable(editable)
         self._field_errors: dict[str, list[str]] = {}
+        self._editable_draft: dict[str, Any] = {}
+        self._bound_form: forms.BaseForm | None = None
 
-    def get_attribute_providers(self) -> dict[str, Any]:
-        return {'form': self.form}
+    def get_attribute_providers(self) -> tuple[Any, ...]:
+        return (self.form,)
 
     def get_identity(self) -> dict[str, Any]:
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
             'initial': self._prepared_initial,
+            'editable': self.editable,
         }
+
+    def _normalize_editable(
+        self,
+        editable: Sequence[str] | None,
+    ) -> tuple[str, ...]:
+        if editable is None:
+            selected = tuple(
+                name
+                for name, field in self.form.fields.items()
+                if not field.disabled
+            )
+        else:
+            selected = tuple(dict.fromkeys(editable))
+            unknown = tuple(
+                name
+                for name in selected
+                if name not in self.form.fields
+            )
+            if unknown:
+                msg = f'Editable form fields must be exposed: {unknown!r}.'
+                raise ValueError(msg)
+            disabled = tuple(
+                name
+                for name in selected
+                if self.form.fields[name].disabled
+            )
+            if disabled:
+                msg = f'Disabled form fields cannot be editable: {disabled!r}.'
+                raise ValueError(msg)
+
+        if not self.access.has_access(GlueAccess.ADD):
+            return ()
+        return selected
+
+    def get_extra_attributes(self) -> tuple[tuple[Any, Mapping[str, Any]], ...]:
+        from django_glue import Glue  # noqa: PLC0415
+
+        declarations = {}
+        for name in self.form.fields:
+            if name in self.editable:
+                declarations[name] = Glue.attr(
+                    property(
+                        fget=lambda owner, name=name: owner._get_form_attribute_value(name),
+                        fset=lambda owner, value, name=name: owner._stage_form_attribute_value(
+                            name,
+                            value,
+                        ),
+                    ),
+                    required_access=GlueAccess.CHANGE,
+                    editable=True,
+                )
+            else:
+                declarations[name] = Glue.property(
+                    lambda owner, name=name: owner._get_form_attribute_value(name)
+                )
+        return (
+            (self, declarations),
+        )
+
+    def get_attribute_adapters(self) -> Mapping[str, FormFieldAdapter]:
+        return {
+            name: FormFieldAdapter(
+                owner=self,
+                name=name,
+                field=field,
+            )
+            for name, field in self.form.fields.items()
+        }
+
+    def _get_form_attribute_value(self, name: str) -> Any:
+        if name in self._editable_draft:
+            return self._editable_draft[name]
+        return self.form[name].value()
+
+    def _stage_form_attribute_value(
+        self,
+        name: str,
+        value: Any,
+    ) -> None:
+        self._editable_draft[name] = value
 
     @property
     def _prepared_initial(self) -> dict[str, Any]:
@@ -77,38 +169,13 @@ class FormGlue(BaseGlue):
                 return value
         return value
 
-    @cached_property
-    def attributes(self) -> dict[str, BaseGlueAttribute]:
-        return super().attributes | {
-            name: FormFieldAttribute(
-                owner=self,
-                name=name,
-                field=field,
-                form=self.form,
-                required_access=GlueAccess.VIEW if field.disabled else GlueAccess.CHANGE,
-            )
-            for name, field in self.form.fields.items()
-        }
-
     def get_state(self) -> dict[str, Any]:
         self._populate_field_errors()
-        return {
-            name: attribute.state
-            for name, attribute in self.attributes.items()
-            if hasattr(attribute, 'state')
-        }
+        return super().get_state()
 
     def _populate_field_errors(self) -> None:
         """Populate _field_errors from form errors."""
         self._field_errors = dict(self.form.errors)
-
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
-            },
-        }
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> FormGlue:
@@ -147,7 +214,12 @@ class FormGlue(BaseGlue):
         else:
             form = form_class(initial=initial)
 
-        return cls(form, name=policy.name, access=policy.access)
+        return cls(
+            form,
+            name=policy.name,
+            access=policy.access,
+            editable=policy.identity['editable'],
+        )
 
     @staticmethod
     def _unsaved_instance_from_initial(model_class: type[Model], initial: dict[str, Any]) -> Model:
@@ -174,25 +246,40 @@ class FormGlue(BaseGlue):
         return model_class(**field_kwargs)
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
-        """Bind client-provided state before executing form attributes."""
-        self._loaded_state = state
+        """Bind retained state (signed snapshot plus admitted updates) before
+        executing form attributes (state-model.md §10)."""
+        super()._load_client_state(state)
         self.form = self._bind_form()
+
+    def _retained_state(self) -> dict[str, Any]:
+        retained = super()._retained_state()
+        retained.update({
+            name: self._get_form_attribute_value(name)
+            for name in self.editable
+        })
+        return retained
 
     @DeclaredAttribute(required_access=GlueAccess.CHANGE)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
-        return {'valid': bound_form.is_valid(), 'errors': dict(bound_form.errors)}
+        self._bound_form = bound_form
+        valid = bound_form.is_valid()
+        self._field_errors = dict(bound_form.errors)
+        self._derived_paths.update(self.form.fields)
+        return {'valid': valid, 'errors': dict(bound_form.errors)}
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=_required_save_access)
     def save(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
+        self._field_errors = dict(bound_form.errors)
+        self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     # Choice loading is read-only; returning form state would trigger validation during serialization.
-    @DeclaredAttribute(required_access=GlueAccess.VIEW, takes_client_state=False, updates_client_state=False)
+    @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -211,16 +298,14 @@ class FormGlue(BaseGlue):
             value_field_name=getattr(field, 'to_field_name', None),
         ).load(
             search=search,
+            request=self.request,
         )
 
     def _bind_form(self) -> forms.BaseForm:
-        state = self._loaded_state or {}
         form_class = self.form.__class__
-        # Extract values from new state structure: {field_name: {value: ..., errors: ...}}
         data = {
-            field_name: field_state.get('value') if isinstance(field_state, dict) else field_state
-            for field_name, field_state in state.items()
-            if field_name in self.form.fields
+            field_name: self._editable_draft.get(field_name, self.form[field_name].value())
+            for field_name in self.form.fields
         }
         kwargs = {
             'data': data,

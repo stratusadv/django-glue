@@ -1,0 +1,45 @@
+{# Single root element -- Livewire's constraint, and what both morph libraries need to anchor on. #}
+<div id="morph-region" class="row g-3">
+    {% for card in cards %}
+        {# id for idiomorph's id-set matching, key for Alpine.morph's keyed matching. #}
+        <div class="col-12 col-md-6" id="card-{{ card.key }}" key="{{ card.key }}" data-key="{{ card.key }}"
+             x-data="{
+                 open: false,
+                 note: '',
+                 counter: 0,
+                 init() {
+                     window.__cardInits = (window.__cardInits || 0) + 1
+                     window.__mountSeq = (window.__mountSeq || 0) + 1
+                     $el.__mountSeq = window.__mountSeq
+                 },
+             }">
+            <div class="card card-gorilla h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong data-role="label">{{ card.label }}</strong>
+                    <span class="badge bg-gorilla-green" data-role="server-value">{{ card.server_value }}</span>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-sm btn-gorilla mb-2" data-role="toggle" @click="open = !open">Toggle</button>
+                    <button class="btn btn-sm btn-gorilla-secondary mb-2" data-role="bump" @click="counter++">
+                        Bump <span data-role="counter" x-text="counter"></span>
+                    </button>
+
+                    <div data-role="details" x-show="open" x-cloak class="alert alert-info py-1 mb-2">
+                        open details for {{ card.key }}
+                    </div>
+
+                    <input type="text" class="form-control form-control-gorilla form-control-sm mb-2"
+                           data-role="note" x-model="note" placeholder="local note">
+
+                    {% if card.third_party %}
+                        {% comment %}Stands in for ECharts / flatpickr / a Bootstrap widget:
+                        children are written by imperative JS after mount and appear nowhere
+                        in the server render.{% endcomment %}
+                        <div class="border rounded p-2 mb-2" data-role="third-party-unprotected"></div>
+                        <div class="border rounded p-2" data-role="third-party-protected" data-morph-ignore></div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+</div>

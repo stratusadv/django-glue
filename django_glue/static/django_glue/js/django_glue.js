@@ -50,7 +50,7 @@
     constructor(config = {}) {
       const urls = config.urls || {};
       this.attributeUrlPath = urls.callable_attribute || "/__dg__/callable_attribute/";
-      this.glueViewUrlPath = urls.glue_view || "/__dg__/glue_view/";
+      this.glueViewMediaType = config.glueViewMediaType || "application/vnd.django-glue.view+json";
       this.requestTimeoutSeconds = config.requestTimeoutSeconds || 30;
       this.csrfCookieName = config.csrfCookieName || "csrftoken";
     }
@@ -73,6 +73,23 @@
     constructor(message) {
       super(message);
       this.name = "GlueProxyError";
+    }
+  }
+
+  class GlueAddressError extends GlueProxyError {
+    constructor(code, message, address, owner = null) {
+      super(`Glue request for address "${address}" failed: ${message}`);
+      this.name = "GlueAddressError";
+      this.code = code;
+      this.address = address;
+      this.owner = owner;
+    }
+  }
+
+  class GlueAlpineError extends Error {
+    constructor(message) {
+      super(message);
+      this.name = "GlueAlpineError";
     }
   }
 
@@ -100,14 +117,6 @@
   }
   function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent);
-  }
-  function resolveElement(target) {
-    return typeof target === "string" ? document.querySelector(target) : target;
-  }
-  function htmlToFragment(html) {
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    return template.content;
   }
   function resolveUrl(urlPathTemplate, kwargs = {}) {
     let url = urlPathTemplate;
@@ -147,6 +156,7 @@
       const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds;
       const controller = new AbortController;
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+      requestOptions.signal?.addEventListener("abort", () => controller.abort(), { once: true });
       const headers = { ...requestOptions.headers || {} };
       const method = requestOptions.method || "GET";
       let contentType = requestOptions.contentType;
@@ -176,11 +186,12 @@
         if (!response.ok) {
           throw await this._buildRequestError(response);
         }
+        const isJson = (response.headers.get("Content-Type") || "").includes("json");
         return {
           ok: response.ok,
           payload: await response.clone().text(),
           httpResponse: response,
-          data: await response.json()
+          data: isJson ? await response.json() : null
         };
       } finally {
         clearTimeout(timeoutId);
@@ -201,22 +212,43 @@
         csrfProtected
       });
     }
-    async postForm(url, data, headers = {}, csrfProtected = true) {
+    async postForm(url, data, headers = {}, csrfProtected = true, signal = null) {
       return await this.sendRequest(url, {
         payload: data,
         method: "POST",
         contentType: "multipart/form-data",
         headers,
-        csrfProtected
+        csrfProtected,
+        signal
       });
     }
-    async sendAttributeRequest({ name, policyToken, state = null, attribute, kwargs = {} }) {
+    async sendAttributeRequest({
+      address,
+      policyToken,
+      updates = {},
+      attribute = null,
+      kwargs = {},
+      reintroduce = null,
+      companions = [],
+      signal = null
+    }) {
       const formData = new FormData;
-      const { files, data } = this._extractFiles(serializeValue(state || {}));
-      formData.append("policy_token", policyToken);
-      formData.append("state", JSON.stringify(data));
-      formData.append("attribute", attribute);
-      formData.append("kwargs", JSON.stringify(kwargs));
+      const { files, data } = this._extractFiles(serializeValue(updates));
+      const entry = {
+        address,
+        policy_token: policyToken,
+        updates: data
+      };
+      if (attribute !== null)
+        entry.call = { attribute, kwargs };
+      if (reintroduce)
+        entry.reintroduce = reintroduce;
+      const companionEntries = companions.map((companion) => ({
+        address: companion.address,
+        policy_token: companion.policyToken,
+        updates: {}
+      }));
+      formData.append("objects", JSON.stringify([entry, ...companionEntries]));
       Object.entries(files).forEach(([key, value]) => {
         if (value instanceof FileList) {
           Array.from(value).forEach((file) => formData.append(key, file));
@@ -226,7 +258,7 @@
           formData.append(key, value);
         }
       });
-      return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData);
+      return await this.postForm(this._config.attributeUrlPath, formData, {}, true, signal);
     }
     _extractFiles(obj) {
       const files = {};
@@ -285,11 +317,3824 @@
   }
   var http_default = GlueHttp;
 
+  // node_modules/alpinejs/dist/module.esm.js
+  var flushPending = false;
+  var flushing = false;
+  var queue = [];
+  var lastFlushedIndex = -1;
+  var transactionActive = false;
+  function scheduler(callback) {
+    queueJob(callback);
+  }
+  function startTransaction() {
+    transactionActive = true;
+  }
+  function commitTransaction() {
+    transactionActive = false;
+    queueFlush();
+  }
+  function queueJob(job) {
+    if (!queue.includes(job))
+      queue.push(job);
+    queueFlush();
+  }
+  function dequeueJob(job) {
+    let index = queue.indexOf(job);
+    if (index !== -1 && index > lastFlushedIndex)
+      queue.splice(index, 1);
+  }
+  function queueFlush() {
+    if (!flushing && !flushPending) {
+      if (transactionActive)
+        return;
+      flushPending = true;
+      queueMicrotask(flushJobs);
+    }
+  }
+  function flushJobs() {
+    flushPending = false;
+    flushing = true;
+    for (let i = 0;i < queue.length; i++) {
+      queue[i]();
+      lastFlushedIndex = i;
+    }
+    queue.length = 0;
+    lastFlushedIndex = -1;
+    flushing = false;
+  }
+  var reactive;
+  var effect;
+  var release;
+  var raw;
+  var shouldSchedule = true;
+  function disableEffectScheduling(callback) {
+    shouldSchedule = false;
+    callback();
+    shouldSchedule = true;
+  }
+  function setReactivityEngine(engine) {
+    reactive = engine.reactive;
+    release = engine.release;
+    effect = (callback) => engine.effect(callback, { scheduler: (task) => {
+      if (shouldSchedule) {
+        scheduler(task);
+      } else {
+        task();
+      }
+    } });
+    raw = engine.raw;
+  }
+  function overrideEffect(override) {
+    effect = override;
+  }
+  function elementBoundEffect(el) {
+    let cleanup2 = () => {};
+    let wrappedEffect = (callback) => {
+      let effectReference = effect(callback);
+      if (!el._x_effects) {
+        el._x_effects = /* @__PURE__ */ new Set;
+        el._x_runEffects = () => {
+          el._x_effects.forEach((i) => i());
+        };
+      }
+      el._x_effects.add(effectReference);
+      cleanup2 = () => {
+        if (effectReference === undefined)
+          return;
+        el._x_effects.delete(effectReference);
+        release(effectReference);
+      };
+      return effectReference;
+    };
+    return [wrappedEffect, () => {
+      cleanup2();
+    }];
+  }
+  function watch(getter, callback) {
+    let firstTime = true;
+    let oldValue;
+    let oldValueJSON;
+    let effectReference = effect(() => {
+      let value = getter();
+      let newJSON = JSON.stringify(value);
+      if (!firstTime) {
+        if (typeof value === "object" || value !== oldValue) {
+          let previousValue = typeof oldValue === "object" ? JSON.parse(oldValueJSON) : oldValue;
+          queueMicrotask(() => {
+            callback(value, previousValue);
+          });
+        }
+      }
+      oldValue = value;
+      oldValueJSON = newJSON;
+      firstTime = false;
+    });
+    return () => release(effectReference);
+  }
+  async function transaction(callback) {
+    startTransaction();
+    try {
+      await callback();
+      await Promise.resolve();
+    } finally {
+      commitTransaction();
+    }
+  }
+  var onAttributeAddeds = [];
+  var onElRemoveds = [];
+  var onElAddeds = [];
+  function onElAdded(callback) {
+    onElAddeds.push(callback);
+  }
+  function onElRemoved(el, callback) {
+    if (typeof callback === "function") {
+      if (!el._x_cleanups)
+        el._x_cleanups = [];
+      el._x_cleanups.push(callback);
+    } else {
+      callback = el;
+      onElRemoveds.push(callback);
+    }
+  }
+  function onAttributesAdded(callback) {
+    onAttributeAddeds.push(callback);
+  }
+  function onAttributeRemoved(el, name, callback) {
+    if (!el._x_attributeCleanups)
+      el._x_attributeCleanups = {};
+    if (!el._x_attributeCleanups[name])
+      el._x_attributeCleanups[name] = [];
+    el._x_attributeCleanups[name].push(callback);
+  }
+  function cleanupAttributes(el, names) {
+    if (!el._x_attributeCleanups)
+      return;
+    Object.entries(el._x_attributeCleanups).forEach(([name, value]) => {
+      if (names === undefined || names.includes(name)) {
+        value.forEach((i) => i());
+        delete el._x_attributeCleanups[name];
+      }
+    });
+  }
+  function cleanupElement(el) {
+    el._x_effects?.forEach(dequeueJob);
+    while (el._x_cleanups?.length)
+      el._x_cleanups.pop()();
+  }
+  var observer = new MutationObserver(onMutate);
+  var currentlyObserving = false;
+  function startObservingMutations() {
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeOldValue: true });
+    currentlyObserving = true;
+  }
+  function stopObservingMutations() {
+    flushObserver();
+    observer.disconnect();
+    currentlyObserving = false;
+  }
+  var queuedMutations = [];
+  function flushObserver() {
+    let records = observer.takeRecords();
+    queuedMutations.push(() => records.length > 0 && onMutate(records));
+    let queueLengthWhenTriggered = queuedMutations.length;
+    queueMicrotask(() => {
+      if (queuedMutations.length === queueLengthWhenTriggered) {
+        while (queuedMutations.length > 0)
+          queuedMutations.shift()();
+      }
+    });
+  }
+  function mutateDom(callback) {
+    if (!currentlyObserving)
+      return callback();
+    stopObservingMutations();
+    let result = callback();
+    startObservingMutations();
+    return result;
+  }
+  var isCollecting = false;
+  var deferredMutations = [];
+  function deferMutations() {
+    isCollecting = true;
+  }
+  function flushAndStopDeferringMutations() {
+    isCollecting = false;
+    onMutate(deferredMutations);
+    deferredMutations = [];
+  }
+  function onMutate(mutations) {
+    if (isCollecting) {
+      deferredMutations = deferredMutations.concat(mutations);
+      return;
+    }
+    let addedNodes = [];
+    let removedNodes = /* @__PURE__ */ new Set;
+    let addedAttributes = /* @__PURE__ */ new Map;
+    let removedAttributes = /* @__PURE__ */ new Map;
+    for (let i = 0;i < mutations.length; i++) {
+      if (mutations[i].target._x_ignoreMutationObserver)
+        continue;
+      if (mutations[i].type === "childList") {
+        mutations[i].removedNodes.forEach((node) => {
+          if (node.nodeType !== 1)
+            return;
+          if (!node._x_marker)
+            return;
+          removedNodes.add(node);
+        });
+        mutations[i].addedNodes.forEach((node) => {
+          if (node.nodeType !== 1)
+            return;
+          if (removedNodes.has(node)) {
+            removedNodes.delete(node);
+            return;
+          }
+          if (node._x_marker)
+            return;
+          addedNodes.push(node);
+        });
+      }
+      if (mutations[i].type === "attributes") {
+        let el = mutations[i].target;
+        let name = mutations[i].attributeName;
+        let oldValue = mutations[i].oldValue;
+        let add2 = () => {
+          if (!addedAttributes.has(el))
+            addedAttributes.set(el, []);
+          addedAttributes.get(el).push({ name, value: el.getAttribute(name) });
+        };
+        let remove = () => {
+          if (!removedAttributes.has(el))
+            removedAttributes.set(el, []);
+          removedAttributes.get(el).push(name);
+        };
+        if (el.hasAttribute(name) && oldValue === null) {
+          add2();
+        } else if (el.hasAttribute(name)) {
+          remove();
+          add2();
+        } else {
+          remove();
+        }
+      }
+    }
+    removedAttributes.forEach((attrs, el) => {
+      cleanupAttributes(el, attrs);
+    });
+    addedAttributes.forEach((attrs, el) => {
+      onAttributeAddeds.forEach((i) => i(el, attrs));
+    });
+    for (let node of removedNodes) {
+      if (addedNodes.some((i) => i.contains(node)))
+        continue;
+      onElRemoveds.forEach((i) => i(node));
+    }
+    for (let node of addedNodes) {
+      if (!node.isConnected)
+        continue;
+      onElAddeds.forEach((i) => i(node));
+    }
+    addedNodes = null;
+    removedNodes = null;
+    addedAttributes = null;
+    removedAttributes = null;
+  }
+  function scope(node) {
+    return mergeProxies(closestDataStack(node));
+  }
+  function addScopeToNode(node, data2, referenceNode) {
+    node._x_dataStack = [data2, ...closestDataStack(referenceNode || node)];
+    return () => {
+      node._x_dataStack = node._x_dataStack.filter((i) => i !== data2);
+    };
+  }
+  function closestDataStack(node) {
+    if (node._x_dataStack)
+      return node._x_dataStack;
+    if (typeof ShadowRoot === "function" && node instanceof ShadowRoot) {
+      return closestDataStack(node.host);
+    }
+    if (!node.parentNode) {
+      return [];
+    }
+    return closestDataStack(node.parentNode);
+  }
+  function mergeProxies(objects) {
+    return new Proxy({ objects }, mergeProxyTrap);
+  }
+  function keyInPrototypeChain(obj, key) {
+    if (obj === null || obj === Object.prototype)
+      return null;
+    if (Object.prototype.hasOwnProperty.call(obj, key))
+      return obj;
+    return keyInPrototypeChain(Object.getPrototypeOf(obj), key);
+  }
+  var mergeProxyTrap = {
+    ownKeys({ objects }) {
+      return Array.from(new Set(objects.flatMap((i) => Object.keys(i))));
+    },
+    has({ objects }, name) {
+      if (name == Symbol.unscopables)
+        return false;
+      return objects.some((obj) => Object.prototype.hasOwnProperty.call(obj, name) || Reflect.has(obj, name));
+    },
+    get({ objects }, name, thisProxy) {
+      if (name == "toJSON")
+        return collapseProxies;
+      return Reflect.get(objects.find((obj) => Reflect.has(obj, name)) || {}, name, thisProxy);
+    },
+    set({ objects }, name, value, thisProxy) {
+      let target;
+      for (const obj of objects) {
+        target = keyInPrototypeChain(obj, name);
+        if (target)
+          break;
+      }
+      if (!target)
+        target = objects[objects.length - 1];
+      const descriptor = Object.getOwnPropertyDescriptor(target, name);
+      if (descriptor?.set && descriptor?.get)
+        return descriptor.set.call(thisProxy, value) || true;
+      return Reflect.set(target, name, value);
+    }
+  };
+  function collapseProxies() {
+    let keys = Reflect.ownKeys(this);
+    return keys.reduce((acc, key) => {
+      acc[key] = Reflect.get(this, key);
+      return acc;
+    }, {});
+  }
+  function initInterceptors(data2) {
+    let isObject3 = (val) => typeof val === "object" && !Array.isArray(val) && val !== null;
+    let recurse = (obj, basePath = "") => {
+      Object.entries(Object.getOwnPropertyDescriptors(obj)).forEach(([key, { value, enumerable }]) => {
+        if (enumerable === false || value === undefined)
+          return;
+        if (typeof value === "object" && value !== null && value.__v_skip)
+          return;
+        let path = basePath === "" ? key : `${basePath}.${key}`;
+        if (typeof value === "object" && value !== null && value._x_interceptor) {
+          obj[key] = value.initialize(data2, path, key);
+        } else {
+          if (isObject3(value) && value !== obj && !(value instanceof Element)) {
+            recurse(value, path);
+          }
+        }
+      });
+    };
+    return recurse(data2);
+  }
+  function interceptor(callback, mutateObj = () => {}) {
+    let obj = {
+      initialValue: undefined,
+      _x_interceptor: true,
+      initialize(data2, path, key) {
+        return callback(this.initialValue, () => get(data2, path), (value) => set(data2, path, value), path, key);
+      }
+    };
+    mutateObj(obj);
+    return (initialValue) => {
+      if (typeof initialValue === "object" && initialValue !== null && initialValue._x_interceptor) {
+        let initialize = obj.initialize.bind(obj);
+        obj.initialize = (data2, path, key) => {
+          let innerValue = initialValue.initialize(data2, path, key);
+          obj.initialValue = innerValue;
+          return initialize(data2, path, key);
+        };
+      } else {
+        obj.initialValue = initialValue;
+      }
+      return obj;
+    };
+  }
+  function get(obj, path) {
+    return path.split(".").reduce((carry, segment) => carry[segment], obj);
+  }
+  function set(obj, path, value) {
+    if (typeof path === "string")
+      path = path.split(".");
+    if (path.length === 1)
+      obj[path[0]] = value;
+    else if (path.length === 0)
+      throw error;
+    else {
+      if (obj[path[0]])
+        return set(obj[path[0]], path.slice(1), value);
+      else {
+        obj[path[0]] = {};
+        return set(obj[path[0]], path.slice(1), value);
+      }
+    }
+  }
+  var magics = {};
+  function magic(name, callback) {
+    magics[name] = callback;
+  }
+  function injectMagics(obj, el) {
+    let memoizedUtilities = getUtilities(el);
+    Object.entries(magics).forEach(([name, callback]) => {
+      Object.defineProperty(obj, `$${name}`, {
+        get() {
+          return callback(el, memoizedUtilities);
+        },
+        enumerable: false
+      });
+    });
+    return obj;
+  }
+  function getUtilities(el) {
+    let [utilities, cleanup2] = getElementBoundUtilities(el);
+    let utils = { interceptor, ...utilities };
+    onElRemoved(el, cleanup2);
+    return utils;
+  }
+  function tryCatch(el, expression, callback, ...args) {
+    try {
+      return callback(...args);
+    } catch (e) {
+      handleError(e, el, expression);
+    }
+  }
+  function handleError(...args) {
+    return errorHandler(...args);
+  }
+  var errorHandler = normalErrorHandler;
+  function setErrorHandler(handler4) {
+    errorHandler = handler4;
+  }
+  function normalErrorHandler(error2, el, expression = undefined) {
+    error2 = Object.assign(error2 ?? { message: "No error message given." }, { el, expression });
+    console.warn(`Alpine Expression Error: ${error2.message}
+
+${expression ? 'Expression: "' + expression + `"
+
+` : ""}`, el);
+    setTimeout(() => {
+      throw error2;
+    }, 0);
+  }
+  var shouldAutoEvaluateFunctions = true;
+  function dontAutoEvaluateFunctions(callback) {
+    let cache = shouldAutoEvaluateFunctions;
+    shouldAutoEvaluateFunctions = false;
+    let result = callback();
+    shouldAutoEvaluateFunctions = cache;
+    return result;
+  }
+  function evaluate(el, expression, extras = {}) {
+    let result;
+    evaluateLater(el, expression)((value) => result = value, extras);
+    return result;
+  }
+  function evaluateLater(...args) {
+    return theEvaluatorFunction(...args);
+  }
+  var theEvaluatorFunction = () => {};
+  function setEvaluator(newEvaluator) {
+    theEvaluatorFunction = newEvaluator;
+  }
+  var theRawEvaluatorFunction;
+  function setRawEvaluator(newEvaluator) {
+    theRawEvaluatorFunction = newEvaluator;
+  }
+  function normalEvaluator(el, expression) {
+    let overriddenMagics = {};
+    injectMagics(overriddenMagics, el);
+    let dataStack = [overriddenMagics, ...closestDataStack(el)];
+    let evaluator = typeof expression === "function" ? generateEvaluatorFromFunction(dataStack, expression) : generateEvaluatorFromString(dataStack, expression, el);
+    return tryCatch.bind(null, el, expression, evaluator);
+  }
+  function generateEvaluatorFromFunction(dataStack, func) {
+    return (receiver = () => {}, { scope: scope2 = {}, params = [], context } = {}) => {
+      if (!shouldAutoEvaluateFunctions) {
+        runIfTypeOfFunction(receiver, func, mergeProxies([scope2, ...dataStack]), params);
+        return;
+      }
+      let result = func.apply(mergeProxies([scope2, ...dataStack]), params);
+      runIfTypeOfFunction(receiver, result);
+    };
+  }
+  var evaluatorMemo = {};
+  function generateFunctionFromString(expression, el) {
+    if (evaluatorMemo[expression]) {
+      return evaluatorMemo[expression];
+    }
+    let AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+    let rightSideSafeExpression = /^[\n\s]*if.*\(.*\)/.test(expression.trim()) || /^(let|const)\s/.test(expression.trim()) ? `(async()=>{ ${expression} })()` : expression;
+    const safeAsyncFunction = () => {
+      try {
+        let func2 = new AsyncFunction(["__self", "scope"], `with (scope) { __self.result = ${rightSideSafeExpression} }; __self.finished = true; return __self.result;`);
+        Object.defineProperty(func2, "name", {
+          value: `[Alpine] ${expression}`
+        });
+        return func2;
+      } catch (error2) {
+        handleError(error2, el, expression);
+        return Promise.resolve();
+      }
+    };
+    let func = safeAsyncFunction();
+    evaluatorMemo[expression] = func;
+    return func;
+  }
+  function generateEvaluatorFromString(dataStack, expression, el) {
+    let func = generateFunctionFromString(expression, el);
+    return (receiver = () => {}, { scope: scope2 = {}, params = [], context } = {}) => {
+      func.result = undefined;
+      func.finished = false;
+      let completeScope = mergeProxies([scope2, ...dataStack]);
+      if (typeof func === "function") {
+        let promise = func.call(context, func, completeScope).catch((error2) => handleError(error2, el, expression));
+        if (func.finished) {
+          runIfTypeOfFunction(receiver, func.result, completeScope, params, el);
+          func.result = undefined;
+        } else {
+          promise.then((result) => {
+            runIfTypeOfFunction(receiver, result, completeScope, params, el);
+          }).catch((error2) => handleError(error2, el, expression)).finally(() => func.result = undefined);
+        }
+      }
+    };
+  }
+  function runIfTypeOfFunction(receiver, value, scope2, params, el) {
+    if (shouldAutoEvaluateFunctions && typeof value === "function") {
+      let result = value.apply(scope2, params);
+      if (result instanceof Promise) {
+        result.then((i) => runIfTypeOfFunction(receiver, i, scope2, params)).catch((error2) => handleError(error2, el, value));
+      } else {
+        receiver(result);
+      }
+    } else if (typeof value === "object" && value instanceof Promise) {
+      value.then((i) => receiver(i));
+    } else {
+      receiver(value);
+    }
+  }
+  function evaluateRaw(...args) {
+    return theRawEvaluatorFunction(...args);
+  }
+  function normalRawEvaluator(el, expression, extras = {}) {
+    let overriddenMagics = {};
+    injectMagics(overriddenMagics, el);
+    let dataStack = [overriddenMagics, ...closestDataStack(el)];
+    let scope2 = mergeProxies([extras.scope ?? {}, ...dataStack]);
+    let params = extras.params ?? [];
+    if (expression.includes("await")) {
+      let AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+      let rightSideSafeExpression = /^[\n\s]*if.*\(.*\)/.test(expression.trim()) || /^(let|const)\s/.test(expression.trim()) ? `(async()=>{ ${expression} })()` : expression;
+      let func = new AsyncFunction(["scope"], `with (scope) { let __result = ${rightSideSafeExpression}; return __result }`);
+      let result = func.call(extras.context, scope2);
+      return result;
+    } else {
+      let rightSideSafeExpression = /^[\n\s]*if.*\(.*\)/.test(expression.trim()) || /^(let|const)\s/.test(expression.trim()) ? `(()=>{ ${expression} })()` : expression;
+      let func = new Function(["scope"], `with (scope) { let __result = ${rightSideSafeExpression}; return __result }`);
+      let result = func.call(extras.context, scope2);
+      if (typeof result === "function" && shouldAutoEvaluateFunctions) {
+        return result.apply(scope2, params);
+      }
+      return result;
+    }
+  }
+  var prefixAsString = "x-";
+  function prefix(subject = "") {
+    return prefixAsString + subject;
+  }
+  function setPrefix(newPrefix) {
+    prefixAsString = newPrefix;
+  }
+  var directiveHandlers = {};
+  function directive(name, callback) {
+    directiveHandlers[name] = callback;
+    return {
+      before(directive2) {
+        if (!directiveHandlers[directive2]) {
+          console.warn(String.raw`Cannot find directive \`${directive2}\`. \`${name}\` will use the default order of execution`);
+          return;
+        }
+        const pos = directiveOrder.indexOf(directive2);
+        directiveOrder.splice(pos >= 0 ? pos : directiveOrder.indexOf("DEFAULT"), 0, name);
+      }
+    };
+  }
+  function directiveExists(name) {
+    return Object.keys(directiveHandlers).includes(name);
+  }
+  function directives(el, attributes, originalAttributeOverride) {
+    attributes = Array.from(attributes);
+    if (el._x_virtualDirectives) {
+      let vAttributes = Object.entries(el._x_virtualDirectives).map(([name, value]) => ({ name, value }));
+      let staticAttributes = attributesOnly(vAttributes);
+      vAttributes = vAttributes.map((attribute) => {
+        if (staticAttributes.find((attr) => attr.name === attribute.name)) {
+          return {
+            name: `x-bind:${attribute.name}`,
+            value: `"${attribute.value}"`
+          };
+        }
+        return attribute;
+      });
+      attributes = attributes.concat(vAttributes);
+    }
+    let transformedAttributeMap = {};
+    let directives2 = attributes.map(toTransformedAttributes((newName, oldName) => transformedAttributeMap[newName] = oldName)).filter(outNonAlpineAttributes).map(toParsedDirectives(transformedAttributeMap, originalAttributeOverride)).sort(byPriority);
+    return directives2.map((directive2) => {
+      return getDirectiveHandler(el, directive2);
+    });
+  }
+  function attributesOnly(attributes) {
+    return Array.from(attributes).map(toTransformedAttributes()).filter((attr) => !outNonAlpineAttributes(attr));
+  }
+  var isDeferringHandlers = false;
+  var directiveHandlerStacks = /* @__PURE__ */ new Map;
+  var currentHandlerStackKey = Symbol();
+  function deferHandlingDirectives(callback) {
+    isDeferringHandlers = true;
+    let key = Symbol();
+    currentHandlerStackKey = key;
+    directiveHandlerStacks.set(key, []);
+    let flushHandlers = () => {
+      while (directiveHandlerStacks.get(key).length)
+        directiveHandlerStacks.get(key).shift()();
+      directiveHandlerStacks.delete(key);
+    };
+    let stopDeferring = () => {
+      isDeferringHandlers = false;
+      flushHandlers();
+    };
+    callback(flushHandlers);
+    stopDeferring();
+  }
+  function getElementBoundUtilities(el) {
+    let cleanups = [];
+    let cleanup2 = (callback) => cleanups.push(callback);
+    let [effect3, cleanupEffect] = elementBoundEffect(el);
+    cleanups.push(cleanupEffect);
+    let utilities = {
+      Alpine: alpine_default,
+      effect: effect3,
+      cleanup: cleanup2,
+      evaluateLater: evaluateLater.bind(evaluateLater, el),
+      evaluate: evaluate.bind(evaluate, el)
+    };
+    let doCleanup = () => cleanups.forEach((i) => i());
+    return [utilities, doCleanup];
+  }
+  function getDirectiveHandler(el, directive2) {
+    let noop = () => {};
+    let handler4 = directiveHandlers[directive2.type] || noop;
+    let [utilities, cleanup2] = getElementBoundUtilities(el);
+    onAttributeRemoved(el, directive2.original, cleanup2);
+    let fullHandler = () => {
+      if (el._x_ignore || el._x_ignoreSelf)
+        return;
+      handler4.inline && handler4.inline(el, directive2, utilities);
+      handler4 = handler4.bind(handler4, el, directive2, utilities);
+      isDeferringHandlers ? directiveHandlerStacks.get(currentHandlerStackKey).push(handler4) : handler4();
+    };
+    fullHandler.runCleanups = cleanup2;
+    return fullHandler;
+  }
+  var startingWith = (subject, replacement) => ({ name, value }) => {
+    if (name.startsWith(subject))
+      name = name.replace(subject, replacement);
+    return { name, value };
+  };
+  var into = (i) => i;
+  function toTransformedAttributes(callback = () => {}) {
+    return ({ name, value }) => {
+      let { name: newName, value: newValue } = attributeTransformers.reduce((carry, transform) => {
+        return transform(carry);
+      }, { name, value });
+      if (newName !== name)
+        callback(newName, name);
+      return { name: newName, value: newValue };
+    };
+  }
+  var attributeTransformers = [];
+  function mapAttributes(callback) {
+    attributeTransformers.push(callback);
+  }
+  function outNonAlpineAttributes({ name }) {
+    return alpineAttributeRegex().test(name);
+  }
+  var alpineAttributeRegex = () => new RegExp(`^${prefixAsString}([^:^.]+)\\b`);
+  function toParsedDirectives(transformedAttributeMap, originalAttributeOverride) {
+    return ({ name, value }) => {
+      if (name === value)
+        value = "";
+      let typeMatch = name.match(alpineAttributeRegex());
+      let valueMatch = name.match(/:([a-zA-Z0-9\-_:]+)/);
+      let modifiers = name.match(/\.[^.\]]+(?=[^\]]*$)/g) || [];
+      let original = originalAttributeOverride || transformedAttributeMap[name] || name;
+      return {
+        type: typeMatch ? typeMatch[1] : null,
+        value: valueMatch ? valueMatch[1] : null,
+        modifiers: modifiers.map((i) => i.replace(".", "")),
+        expression: value,
+        original
+      };
+    };
+  }
+  var DEFAULT = "DEFAULT";
+  var directiveOrder = [
+    "ignore",
+    "ref",
+    "id",
+    "data",
+    "anchor",
+    "bind",
+    "init",
+    "for",
+    "model",
+    "modelable",
+    "transition",
+    "show",
+    "if",
+    DEFAULT,
+    "teleport"
+  ];
+  function byPriority(a, b) {
+    let typeA = directiveOrder.indexOf(a.type) === -1 ? DEFAULT : a.type;
+    let typeB = directiveOrder.indexOf(b.type) === -1 ? DEFAULT : b.type;
+    return directiveOrder.indexOf(typeA) - directiveOrder.indexOf(typeB);
+  }
+  function dispatch(el, name, detail = {}, options = {}) {
+    return el.dispatchEvent(new CustomEvent(name, {
+      detail,
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+      ...options
+    }));
+  }
+  function walk(el, callback) {
+    if (typeof ShadowRoot === "function" && el instanceof ShadowRoot) {
+      Array.from(el.children).forEach((el2) => walk(el2, callback));
+      return;
+    }
+    let skip = false;
+    callback(el, () => skip = true);
+    if (skip)
+      return;
+    let node = el.firstElementChild;
+    while (node) {
+      walk(node, callback, false);
+      node = node.nextElementSibling;
+    }
+  }
+  function warn(message, ...args) {
+    console.warn(`Alpine Warning: ${message}`, ...args);
+  }
+  var started = false;
+  function start() {
+    if (started)
+      warn("Alpine has already been initialized on this page. Calling Alpine.start() more than once can cause problems.");
+    started = true;
+    if (!document.body)
+      warn("Unable to initialize. Trying to load Alpine before `<body>` is available. Did you forget to add `defer` in Alpine's `<script>` tag?");
+    dispatch(document, "alpine:init");
+    dispatch(document, "alpine:initializing");
+    startObservingMutations();
+    onElAdded((el) => initTree(el, walk));
+    onElRemoved((el) => destroyTree(el));
+    onAttributesAdded((el, attrs) => {
+      directives(el, attrs).forEach((handle) => handle());
+    });
+    let outNestedComponents = (el) => !closestRoot(el.parentElement, true);
+    Array.from(document.querySelectorAll(allSelectors().join(","))).filter(outNestedComponents).forEach((el) => {
+      initTree(el);
+    });
+    dispatch(document, "alpine:initialized");
+    setTimeout(() => {
+      warnAboutMissingPlugins();
+    });
+  }
+  var rootSelectorCallbacks = [];
+  var initSelectorCallbacks = [];
+  function rootSelectors() {
+    return rootSelectorCallbacks.map((fn) => fn());
+  }
+  function allSelectors() {
+    return rootSelectorCallbacks.concat(initSelectorCallbacks).map((fn) => fn());
+  }
+  function addRootSelector(selectorCallback) {
+    rootSelectorCallbacks.push(selectorCallback);
+  }
+  function addInitSelector(selectorCallback) {
+    initSelectorCallbacks.push(selectorCallback);
+  }
+  function closestRoot(el, includeInitSelectors = false) {
+    return findClosest(el, (element) => {
+      const selectors = includeInitSelectors ? allSelectors() : rootSelectors();
+      if (selectors.some((selector) => element.matches(selector)))
+        return true;
+    });
+  }
+  function findClosest(el, callback) {
+    if (!el)
+      return;
+    if (callback(el))
+      return el;
+    if (el._x_teleportBack)
+      return findClosest(el._x_teleportBack, callback);
+    if (el.parentNode instanceof ShadowRoot) {
+      return findClosest(el.parentNode.host, callback);
+    }
+    if (!el.parentElement)
+      return;
+    return findClosest(el.parentElement, callback);
+  }
+  function isRoot(el) {
+    return rootSelectors().some((selector) => el.matches(selector));
+  }
+  var initInterceptors2 = [];
+  function interceptInit(callback) {
+    initInterceptors2.push(callback);
+  }
+  var markerDispenser = 1;
+  function initTree(el, walker = walk, intercept = () => {}) {
+    if (findClosest(el, (i) => i._x_ignore))
+      return;
+    deferHandlingDirectives(() => {
+      walker(el, (el2, skip) => {
+        if (el2._x_marker)
+          return;
+        intercept(el2, skip);
+        initInterceptors2.forEach((i) => i(el2, skip));
+        directives(el2, el2.attributes).forEach((handle) => handle());
+        if (!el2._x_ignore)
+          el2._x_marker = markerDispenser++;
+        el2._x_ignore && skip();
+      });
+    });
+  }
+  function destroyTree(root, walker = walk) {
+    walker(root, (el) => {
+      cleanupElement(el);
+      cleanupAttributes(el);
+      delete el._x_marker;
+    });
+  }
+  function warnAboutMissingPlugins() {
+    let pluginDirectives = [
+      ["ui", "dialog", ["[x-dialog], [x-popover]"]],
+      ["anchor", "anchor", ["[x-anchor]"]],
+      ["sort", "sort", ["[x-sort]"]]
+    ];
+    pluginDirectives.forEach(([plugin2, directive2, selectors]) => {
+      if (directiveExists(directive2))
+        return;
+      selectors.some((selector) => {
+        if (document.querySelector(selector)) {
+          warn(`found "${selector}", but missing ${plugin2} plugin`);
+          return true;
+        }
+      });
+    });
+  }
+  var tickStack = [];
+  var isHolding = false;
+  function nextTick(callback = () => {}) {
+    queueMicrotask(() => {
+      isHolding || setTimeout(() => {
+        releaseNextTicks();
+      });
+    });
+    return new Promise((res) => {
+      tickStack.push(() => {
+        callback();
+        res();
+      });
+    });
+  }
+  function releaseNextTicks() {
+    isHolding = false;
+    while (tickStack.length)
+      tickStack.shift()();
+  }
+  function holdNextTicks() {
+    isHolding = true;
+  }
+  function setClasses(el, value) {
+    if (Array.isArray(value)) {
+      return setClassesFromString(el, value.join(" "));
+    } else if (typeof value === "object" && value !== null) {
+      return setClassesFromObject(el, value);
+    } else if (typeof value === "function") {
+      return setClasses(el, value());
+    }
+    return setClassesFromString(el, value);
+  }
+  function splitClasses(classString) {
+    return classString.split(/\s/).filter(Boolean);
+  }
+  function setClassesFromString(el, classString) {
+    let missingClasses = (classString2) => splitClasses(classString2).filter((i) => !el.classList.contains(i)).filter(Boolean);
+    let addClassesAndReturnUndo = (classes) => {
+      el.classList.add(...classes);
+      return () => {
+        el.classList.remove(...classes);
+      };
+    };
+    classString = classString === true ? classString = "" : classString || "";
+    return addClassesAndReturnUndo(missingClasses(classString));
+  }
+  function setClassesFromObject(el, classObject) {
+    let forAdd = Object.entries(classObject).flatMap(([classString, bool]) => bool ? splitClasses(classString) : false).filter(Boolean);
+    let forRemove = Object.entries(classObject).flatMap(([classString, bool]) => !bool ? splitClasses(classString) : false).filter(Boolean);
+    let added = [];
+    let removed = [];
+    forRemove.forEach((i) => {
+      if (el.classList.contains(i)) {
+        el.classList.remove(i);
+        removed.push(i);
+      }
+    });
+    forAdd.forEach((i) => {
+      if (!el.classList.contains(i)) {
+        el.classList.add(i);
+        added.push(i);
+      }
+    });
+    return () => {
+      removed.forEach((i) => el.classList.add(i));
+      added.forEach((i) => el.classList.remove(i));
+    };
+  }
+  function setStyles(el, value) {
+    if (typeof value === "object" && value !== null) {
+      return setStylesFromObject(el, value);
+    }
+    return setStylesFromString(el, value);
+  }
+  function setStylesFromObject(el, value) {
+    let previousStyles = {};
+    Object.entries(value).forEach(([key, value2]) => {
+      previousStyles[key] = el.style[key];
+      if (!key.startsWith("--")) {
+        key = kebabCase(key);
+      }
+      el.style.setProperty(key, value2);
+    });
+    setTimeout(() => {
+      if (el.style.length === 0) {
+        el.removeAttribute("style");
+      }
+    });
+    return () => {
+      setStyles(el, previousStyles);
+    };
+  }
+  function setStylesFromString(el, value) {
+    let cache = el.getAttribute("style", value);
+    el.setAttribute("style", value);
+    return () => {
+      el.setAttribute("style", cache || "");
+    };
+  }
+  function kebabCase(subject) {
+    return subject.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  }
+  function once(callback, fallback = () => {}) {
+    let called = false;
+    return function() {
+      if (!called) {
+        called = true;
+        callback.apply(this, arguments);
+      } else {
+        fallback.apply(this, arguments);
+      }
+    };
+  }
+  directive("transition", (el, { value, modifiers, expression }, { evaluate: evaluate2 }) => {
+    if (typeof expression === "function")
+      expression = evaluate2(expression);
+    if (expression === false)
+      return;
+    if (!expression || typeof expression === "boolean") {
+      registerTransitionsFromHelper(el, modifiers, value);
+    } else {
+      registerTransitionsFromClassString(el, expression, value);
+    }
+  });
+  function registerTransitionsFromClassString(el, classString, stage) {
+    registerTransitionObject(el, setClasses, "");
+    let directiveStorageMap = {
+      enter: (classes) => {
+        el._x_transition.enter.during = classes;
+      },
+      "enter-start": (classes) => {
+        el._x_transition.enter.start = classes;
+      },
+      "enter-end": (classes) => {
+        el._x_transition.enter.end = classes;
+      },
+      leave: (classes) => {
+        el._x_transition.leave.during = classes;
+      },
+      "leave-start": (classes) => {
+        el._x_transition.leave.start = classes;
+      },
+      "leave-end": (classes) => {
+        el._x_transition.leave.end = classes;
+      }
+    };
+    directiveStorageMap[stage](classString);
+  }
+  function registerTransitionsFromHelper(el, modifiers, stage) {
+    registerTransitionObject(el, setStyles);
+    let doesntSpecify = !modifiers.includes("in") && !modifiers.includes("out") && !stage;
+    let transitioningIn = doesntSpecify || modifiers.includes("in") || ["enter"].includes(stage);
+    let transitioningOut = doesntSpecify || modifiers.includes("out") || ["leave"].includes(stage);
+    if (modifiers.includes("in") && !doesntSpecify) {
+      modifiers = modifiers.filter((i, index) => index < modifiers.indexOf("out"));
+    }
+    if (modifiers.includes("out") && !doesntSpecify) {
+      modifiers = modifiers.filter((i, index) => index > modifiers.indexOf("out"));
+    }
+    let wantsAll = !modifiers.includes("opacity") && !modifiers.includes("scale");
+    let wantsOpacity = wantsAll || modifiers.includes("opacity");
+    let wantsScale = wantsAll || modifiers.includes("scale");
+    let opacityValue = wantsOpacity ? 0 : 1;
+    let scaleValue = wantsScale ? modifierValue(modifiers, "scale", 95) / 100 : 1;
+    let delay = modifierValue(modifiers, "delay", 0) / 1000;
+    let origin = modifierValue(modifiers, "origin", "center");
+    let property = "opacity, transform";
+    let durationIn = modifierValue(modifiers, "duration", 150) / 1000;
+    let durationOut = modifierValue(modifiers, "duration", 75) / 1000;
+    let easing = `cubic-bezier(0.4, 0.0, 0.2, 1)`;
+    if (transitioningIn) {
+      el._x_transition.enter.during = {
+        transformOrigin: origin,
+        transitionDelay: `${delay}s`,
+        transitionProperty: property,
+        transitionDuration: `${durationIn}s`,
+        transitionTimingFunction: easing
+      };
+      el._x_transition.enter.start = {
+        opacity: opacityValue,
+        transform: `scale(${scaleValue})`
+      };
+      el._x_transition.enter.end = {
+        opacity: 1,
+        transform: `scale(1)`
+      };
+    }
+    if (transitioningOut) {
+      el._x_transition.leave.during = {
+        transformOrigin: origin,
+        transitionDelay: `${delay}s`,
+        transitionProperty: property,
+        transitionDuration: `${durationOut}s`,
+        transitionTimingFunction: easing
+      };
+      el._x_transition.leave.start = {
+        opacity: 1,
+        transform: `scale(1)`
+      };
+      el._x_transition.leave.end = {
+        opacity: opacityValue,
+        transform: `scale(${scaleValue})`
+      };
+    }
+  }
+  function registerTransitionObject(el, setFunction, defaultValue = {}) {
+    if (!el._x_transition)
+      el._x_transition = {
+        enter: { during: defaultValue, start: defaultValue, end: defaultValue },
+        leave: { during: defaultValue, start: defaultValue, end: defaultValue },
+        in(before = () => {}, after = () => {}) {
+          transition(el, setFunction, {
+            during: this.enter.during,
+            start: this.enter.start,
+            end: this.enter.end
+          }, before, after);
+        },
+        out(before = () => {}, after = () => {}) {
+          transition(el, setFunction, {
+            during: this.leave.during,
+            start: this.leave.start,
+            end: this.leave.end
+          }, before, after);
+        }
+      };
+  }
+  window.Element.prototype._x_toggleAndCascadeWithTransitions = function(el, value, show, hide) {
+    const nextTick2 = document.visibilityState === "visible" ? requestAnimationFrame : setTimeout;
+    let clickAwayCompatibleShow = () => nextTick2(show);
+    if (value) {
+      if (el._x_transition && (el._x_transition.enter || el._x_transition.leave)) {
+        el._x_transition.enter && (Object.entries(el._x_transition.enter.during).length || Object.entries(el._x_transition.enter.start).length || Object.entries(el._x_transition.enter.end).length) ? el._x_transition.in(show) : clickAwayCompatibleShow();
+      } else {
+        el._x_transition ? el._x_transition.in(show) : clickAwayCompatibleShow();
+      }
+      return;
+    }
+    el._x_hidePromise = el._x_transition ? new Promise((resolve, reject) => {
+      el._x_transition.out(() => {}, () => resolve(hide));
+      el._x_transitioning && el._x_transitioning.beforeCancel(() => reject({ isFromCancelledTransition: true }));
+    }) : Promise.resolve(hide);
+    queueMicrotask(() => {
+      let closest = closestHide(el);
+      if (closest) {
+        if (!closest._x_hideChildren)
+          closest._x_hideChildren = [];
+        closest._x_hideChildren.push(el);
+      } else {
+        nextTick2(() => {
+          let hideAfterChildren = (el2) => {
+            let carry = Promise.all([
+              el2._x_hidePromise,
+              ...(el2._x_hideChildren || []).map(hideAfterChildren)
+            ]).then(([i]) => i?.());
+            delete el2._x_hidePromise;
+            delete el2._x_hideChildren;
+            return carry;
+          };
+          hideAfterChildren(el).catch((e) => {
+            if (!e.isFromCancelledTransition)
+              throw e;
+          });
+        });
+      }
+    });
+  };
+  function closestHide(el) {
+    let parent = el.parentNode;
+    if (!parent)
+      return;
+    return parent._x_hidePromise ? parent : closestHide(parent);
+  }
+  function transition(el, setFunction, { during, start: start2, end } = {}, before = () => {}, after = () => {}) {
+    if (el._x_transitioning)
+      el._x_transitioning.cancel();
+    if (Object.keys(during).length === 0 && Object.keys(start2).length === 0 && Object.keys(end).length === 0) {
+      before();
+      after();
+      return;
+    }
+    let undoStart, undoDuring, undoEnd;
+    performTransition(el, {
+      start() {
+        undoStart = setFunction(el, start2);
+      },
+      during() {
+        undoDuring = setFunction(el, during);
+      },
+      before,
+      end() {
+        undoStart();
+        undoEnd = setFunction(el, end);
+      },
+      after,
+      cleanup() {
+        undoDuring();
+        undoEnd();
+      }
+    });
+  }
+  function performTransition(el, stages) {
+    let interrupted, reachedBefore, reachedEnd;
+    let finish = once(() => {
+      mutateDom(() => {
+        interrupted = true;
+        if (!reachedBefore)
+          stages.before();
+        if (!reachedEnd) {
+          stages.end();
+          releaseNextTicks();
+        }
+        stages.after();
+        if (el.isConnected)
+          stages.cleanup();
+        delete el._x_transitioning;
+      });
+    });
+    el._x_transitioning = {
+      beforeCancels: [],
+      beforeCancel(callback) {
+        this.beforeCancels.push(callback);
+      },
+      cancel: once(function() {
+        while (this.beforeCancels.length) {
+          this.beforeCancels.shift()();
+        }
+        finish();
+      }),
+      finish
+    };
+    mutateDom(() => {
+      stages.start();
+      stages.during();
+    });
+    holdNextTicks();
+    requestAnimationFrame(() => {
+      if (interrupted)
+        return;
+      let duration = Number(getComputedStyle(el).transitionDuration.replace(/,.*/, "").replace("s", "")) * 1000;
+      let delay = Number(getComputedStyle(el).transitionDelay.replace(/,.*/, "").replace("s", "")) * 1000;
+      if (duration === 0)
+        duration = Number(getComputedStyle(el).animationDuration.replace("s", "")) * 1000;
+      mutateDom(() => {
+        stages.before();
+      });
+      reachedBefore = true;
+      requestAnimationFrame(() => {
+        if (interrupted)
+          return;
+        mutateDom(() => {
+          stages.end();
+        });
+        releaseNextTicks();
+        setTimeout(el._x_transitioning.finish, duration + delay);
+        reachedEnd = true;
+      });
+    });
+  }
+  function modifierValue(modifiers, key, fallback) {
+    if (modifiers.indexOf(key) === -1)
+      return fallback;
+    const rawValue = modifiers[modifiers.indexOf(key) + 1];
+    if (!rawValue)
+      return fallback;
+    if (key === "scale") {
+      if (isNaN(rawValue))
+        return fallback;
+    }
+    if (key === "duration" || key === "delay") {
+      let match = rawValue.match(/([0-9]+)ms/);
+      if (match)
+        return match[1];
+    }
+    if (key === "origin") {
+      if (["top", "right", "left", "center", "bottom"].includes(modifiers[modifiers.indexOf(key) + 2])) {
+        return [rawValue, modifiers[modifiers.indexOf(key) + 2]].join(" ");
+      }
+    }
+    return rawValue;
+  }
+  var isCloning = false;
+  function skipDuringClone(callback, fallback = () => {}) {
+    return (...args) => isCloning ? fallback(...args) : callback(...args);
+  }
+  function onlyDuringClone(callback) {
+    return (...args) => isCloning && callback(...args);
+  }
+  var interceptors = [];
+  function interceptClone(callback) {
+    interceptors.push(callback);
+  }
+  function cloneNode(from, to) {
+    interceptors.forEach((i) => i(from, to));
+    isCloning = true;
+    dontRegisterReactiveSideEffects(() => {
+      initTree(to, (el, callback) => {
+        callback(el, () => {});
+      });
+    });
+    isCloning = false;
+  }
+  var isCloningLegacy = false;
+  function clone(oldEl, newEl) {
+    if (!newEl._x_dataStack)
+      newEl._x_dataStack = oldEl._x_dataStack;
+    isCloning = true;
+    isCloningLegacy = true;
+    dontRegisterReactiveSideEffects(() => {
+      cloneTree(newEl);
+    });
+    isCloning = false;
+    isCloningLegacy = false;
+  }
+  function cloneTree(el) {
+    let hasRunThroughFirstEl = false;
+    let shallowWalker = (el2, callback) => {
+      walk(el2, (el3, skip) => {
+        if (hasRunThroughFirstEl && isRoot(el3))
+          return skip();
+        hasRunThroughFirstEl = true;
+        callback(el3, skip);
+      });
+    };
+    initTree(el, shallowWalker);
+  }
+  function dontRegisterReactiveSideEffects(callback) {
+    let cache = effect;
+    overrideEffect((callback2, el) => {
+      let storedEffect = cache(callback2);
+      release(storedEffect);
+      return () => {};
+    });
+    callback();
+    overrideEffect(cache);
+  }
+  function bind(el, name, value, modifiers = []) {
+    if (!el._x_bindings)
+      el._x_bindings = reactive({});
+    el._x_bindings[name] = value;
+    name = modifiers.includes("camel") ? camelCase(name) : name;
+    switch (name) {
+      case "value":
+        bindInputValue(el, value);
+        break;
+      case "style":
+        bindStyles(el, value);
+        break;
+      case "class":
+        bindClasses(el, value);
+        break;
+      case "selected":
+      case "checked":
+        bindAttributeAndProperty(el, name, value);
+        break;
+      default:
+        bindAttribute(el, name, value);
+        break;
+    }
+  }
+  function bindInputValue(el, value) {
+    if (isRadio(el)) {
+      if (el.attributes.value === undefined) {
+        el.value = value;
+      }
+    } else if (isCheckbox(el)) {
+      if (Number.isInteger(value)) {
+        el.value = value;
+      } else if (!Array.isArray(value) && typeof value !== "boolean" && ![null, undefined].includes(value)) {
+        el.value = String(value);
+      } else {
+        if (Array.isArray(value)) {
+          el.checked = value.some((val) => checkedAttrLooseCompare(val, el.value));
+        } else {
+          el.checked = !!value;
+        }
+      }
+    } else if (el.tagName === "SELECT") {
+      updateSelect(el, value);
+    } else {
+      if (el.value === value)
+        return;
+      el.value = value === undefined ? "" : value;
+    }
+  }
+  function bindClasses(el, value) {
+    if (el._x_undoAddedClasses)
+      el._x_undoAddedClasses();
+    el._x_undoAddedClasses = setClasses(el, value);
+  }
+  function bindStyles(el, value) {
+    if (el._x_undoAddedStyles)
+      el._x_undoAddedStyles();
+    el._x_undoAddedStyles = setStyles(el, value);
+  }
+  function bindAttributeAndProperty(el, name, value) {
+    bindAttribute(el, name, value);
+    setPropertyIfChanged(el, name, value);
+  }
+  function bindAttribute(el, name, value) {
+    if ([null, undefined, false].includes(value) && attributeShouldntBePreservedIfFalsy(name)) {
+      el.removeAttribute(name);
+    } else {
+      if (isBooleanAttr(name))
+        value = name;
+      setIfChanged(el, name, value);
+    }
+  }
+  function setIfChanged(el, attrName, value) {
+    if (el.getAttribute(attrName) != value) {
+      el.setAttribute(attrName, value);
+    }
+  }
+  function setPropertyIfChanged(el, propName, value) {
+    if (el[propName] !== value) {
+      el[propName] = value;
+    }
+  }
+  function updateSelect(el, value) {
+    const arrayWrappedValue = [].concat(value).map((value2) => {
+      return value2 + "";
+    });
+    Array.from(el.options).forEach((option) => {
+      option.selected = arrayWrappedValue.includes(option.value);
+    });
+  }
+  function camelCase(subject) {
+    return subject.toLowerCase().replace(/-(\w)/g, (match, char) => char.toUpperCase());
+  }
+  function checkedAttrLooseCompare(valueA, valueB) {
+    return valueA == valueB;
+  }
+  function safeParseBoolean(rawValue) {
+    if ([1, "1", "true", "on", "yes", true].includes(rawValue)) {
+      return true;
+    }
+    if ([0, "0", "false", "off", "no", false].includes(rawValue)) {
+      return false;
+    }
+    return rawValue ? Boolean(rawValue) : null;
+  }
+  var booleanAttributes = /* @__PURE__ */ new Set([
+    "allowfullscreen",
+    "async",
+    "autofocus",
+    "autoplay",
+    "checked",
+    "controls",
+    "default",
+    "defer",
+    "disabled",
+    "formnovalidate",
+    "inert",
+    "ismap",
+    "itemscope",
+    "loop",
+    "multiple",
+    "muted",
+    "nomodule",
+    "novalidate",
+    "open",
+    "playsinline",
+    "readonly",
+    "required",
+    "reversed",
+    "selected",
+    "shadowrootclonable",
+    "shadowrootdelegatesfocus",
+    "shadowrootserializable"
+  ]);
+  function isBooleanAttr(attrName) {
+    return booleanAttributes.has(attrName);
+  }
+  function attributeShouldntBePreservedIfFalsy(name) {
+    return !["aria-pressed", "aria-checked", "aria-expanded", "aria-selected"].includes(name);
+  }
+  function getBinding(el, name, fallback) {
+    if (el._x_bindings && el._x_bindings[name] !== undefined)
+      return el._x_bindings[name];
+    return getAttributeBinding(el, name, fallback);
+  }
+  function extractProp(el, name, fallback, extract = true) {
+    if (el._x_bindings && el._x_bindings[name] !== undefined)
+      return el._x_bindings[name];
+    if (el._x_inlineBindings && el._x_inlineBindings[name] !== undefined) {
+      let binding = el._x_inlineBindings[name];
+      binding.extract = extract;
+      return dontAutoEvaluateFunctions(() => {
+        return evaluate(el, binding.expression);
+      });
+    }
+    return getAttributeBinding(el, name, fallback);
+  }
+  function getAttributeBinding(el, name, fallback) {
+    let attr = el.getAttribute(name);
+    if (attr === null)
+      return typeof fallback === "function" ? fallback() : fallback;
+    if (attr === "")
+      return true;
+    if (isBooleanAttr(name)) {
+      return !![name, "true"].includes(attr);
+    }
+    return attr;
+  }
+  function isCheckbox(el) {
+    return el.type === "checkbox" || el.localName === "ui-checkbox" || el.localName === "ui-switch";
+  }
+  function isRadio(el) {
+    return el.type === "radio" || el.localName === "ui-radio";
+  }
+  function debounce(func, wait) {
+    let timeout;
+    return function() {
+      const context = this, args = arguments;
+      const later = function() {
+        timeout = null;
+        func.apply(context, args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+  function throttle(func, limit) {
+    let inThrottle;
+    return function() {
+      let context = this, args = arguments;
+      if (!inThrottle) {
+        func.apply(context, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    };
+  }
+  function entangle({ get: outerGet, set: outerSet }, { get: innerGet, set: innerSet }) {
+    let firstRun = true;
+    let outerHash;
+    let innerHash;
+    let reference = effect(() => {
+      let outer = outerGet();
+      let inner = innerGet();
+      if (firstRun) {
+        innerSet(cloneIfObject(outer));
+        firstRun = false;
+      } else {
+        let outerHashLatest = JSON.stringify(outer);
+        let innerHashLatest = JSON.stringify(inner);
+        if (outerHashLatest !== outerHash) {
+          innerSet(cloneIfObject(outer));
+        } else if (outerHashLatest !== innerHashLatest) {
+          outerSet(cloneIfObject(inner));
+        }
+      }
+      outerHash = JSON.stringify(outerGet());
+      innerHash = JSON.stringify(innerGet());
+    });
+    return () => {
+      release(reference);
+    };
+  }
+  function cloneIfObject(value) {
+    return typeof value === "object" ? JSON.parse(JSON.stringify(value)) : value;
+  }
+  function plugin(callback) {
+    let callbacks = Array.isArray(callback) ? callback : [callback];
+    callbacks.forEach((i) => i(alpine_default));
+  }
+  var stores = {};
+  var isReactive = false;
+  function store(name, value) {
+    if (!isReactive) {
+      stores = reactive(stores);
+      isReactive = true;
+    }
+    if (value === undefined) {
+      return stores[name];
+    }
+    stores[name] = value;
+    initInterceptors(stores[name]);
+    if (typeof value === "object" && value !== null && value.hasOwnProperty("init") && typeof value.init === "function") {
+      stores[name].init();
+    }
+  }
+  function getStores() {
+    return stores;
+  }
+  var binds = {};
+  function bind2(name, bindings) {
+    let getBindings = typeof bindings !== "function" ? () => bindings : bindings;
+    if (name instanceof Element) {
+      return applyBindingsObject(name, getBindings());
+    } else {
+      binds[name] = getBindings;
+    }
+    return () => {};
+  }
+  function injectBindingProviders(obj) {
+    Object.entries(binds).forEach(([name, callback]) => {
+      Object.defineProperty(obj, name, {
+        get() {
+          return (...args) => {
+            return callback(...args);
+          };
+        }
+      });
+    });
+    return obj;
+  }
+  function applyBindingsObject(el, obj, original) {
+    let cleanupRunners = [];
+    while (cleanupRunners.length)
+      cleanupRunners.pop()();
+    let attributes = Object.entries(obj).map(([name, value]) => ({ name, value }));
+    let staticAttributes = attributesOnly(attributes);
+    attributes = attributes.map((attribute) => {
+      if (staticAttributes.find((attr) => attr.name === attribute.name)) {
+        return {
+          name: `x-bind:${attribute.name}`,
+          value: `"${attribute.value}"`
+        };
+      }
+      return attribute;
+    });
+    directives(el, attributes, original).map((handle) => {
+      cleanupRunners.push(handle.runCleanups);
+      handle();
+    });
+    return () => {
+      while (cleanupRunners.length)
+        cleanupRunners.pop()();
+    };
+  }
+  var datas = {};
+  function data(name, callback) {
+    datas[name] = callback;
+  }
+  function injectDataProviders(obj, context) {
+    Object.entries(datas).forEach(([name, callback]) => {
+      Object.defineProperty(obj, name, {
+        get() {
+          return (...args) => {
+            return callback.bind(context)(...args);
+          };
+        },
+        enumerable: false
+      });
+    });
+    return obj;
+  }
+  var Alpine = {
+    get reactive() {
+      return reactive;
+    },
+    get release() {
+      return release;
+    },
+    get effect() {
+      return effect;
+    },
+    get raw() {
+      return raw;
+    },
+    get transaction() {
+      return transaction;
+    },
+    version: "3.15.12",
+    flushAndStopDeferringMutations,
+    dontAutoEvaluateFunctions,
+    disableEffectScheduling,
+    startObservingMutations,
+    stopObservingMutations,
+    setReactivityEngine,
+    onAttributeRemoved,
+    onAttributesAdded,
+    closestDataStack,
+    skipDuringClone,
+    onlyDuringClone,
+    addRootSelector,
+    addInitSelector,
+    setErrorHandler,
+    interceptClone,
+    addScopeToNode,
+    deferMutations,
+    mapAttributes,
+    evaluateLater,
+    interceptInit,
+    initInterceptors,
+    injectMagics,
+    setEvaluator,
+    setRawEvaluator,
+    mergeProxies,
+    extractProp,
+    findClosest,
+    onElRemoved,
+    closestRoot,
+    destroyTree,
+    interceptor,
+    transition,
+    setStyles,
+    mutateDom,
+    directive,
+    entangle,
+    throttle,
+    debounce,
+    evaluate,
+    evaluateRaw,
+    initTree,
+    nextTick,
+    prefixed: prefix,
+    prefix: setPrefix,
+    plugin,
+    magic,
+    store,
+    start,
+    clone,
+    cloneNode,
+    bound: getBinding,
+    $data: scope,
+    watch,
+    walk,
+    data,
+    bind: bind2
+  };
+  var alpine_default = Alpine;
+  function makeMap(str, expectsLowerCase) {
+    const map = /* @__PURE__ */ Object.create(null);
+    const list = str.split(",");
+    for (let i = 0;i < list.length; i++) {
+      map[list[i]] = true;
+    }
+    return expectsLowerCase ? (val) => !!map[val.toLowerCase()] : (val) => !!map[val];
+  }
+  var specialBooleanAttrs = `itemscope,allowfullscreen,formnovalidate,ismap,nomodule,novalidate,readonly`;
+  var isBooleanAttr2 = /* @__PURE__ */ makeMap(specialBooleanAttrs + `,async,autofocus,autoplay,controls,default,defer,disabled,hidden,loop,open,required,reversed,scoped,seamless,checked,muted,multiple,selected`);
+  var EMPTY_OBJ = Object.freeze({});
+  var EMPTY_ARR = Object.freeze([]);
+  var hasOwnProperty = Object.prototype.hasOwnProperty;
+  var hasOwn = (val, key) => hasOwnProperty.call(val, key);
+  var isArray = Array.isArray;
+  var isMap = (val) => toTypeString(val) === "[object Map]";
+  var isString = (val) => typeof val === "string";
+  var isSymbol = (val) => typeof val === "symbol";
+  var isObject = (val) => val !== null && typeof val === "object";
+  var objectToString = Object.prototype.toString;
+  var toTypeString = (value) => objectToString.call(value);
+  var toRawType = (value) => {
+    return toTypeString(value).slice(8, -1);
+  };
+  var isIntegerKey = (key) => isString(key) && key !== "NaN" && key[0] !== "-" && "" + parseInt(key, 10) === key;
+  var cacheStringFunction = (fn) => {
+    const cache = /* @__PURE__ */ Object.create(null);
+    return (str) => {
+      const hit = cache[str];
+      return hit || (cache[str] = fn(str));
+    };
+  };
+  var camelizeRE = /-(\w)/g;
+  var camelize = cacheStringFunction((str) => {
+    return str.replace(camelizeRE, (_, c) => c ? c.toUpperCase() : "");
+  });
+  var hyphenateRE = /\B([A-Z])/g;
+  var hyphenate = cacheStringFunction((str) => str.replace(hyphenateRE, "-$1").toLowerCase());
+  var capitalize = cacheStringFunction((str) => str.charAt(0).toUpperCase() + str.slice(1));
+  var toHandlerKey = cacheStringFunction((str) => str ? `on${capitalize(str)}` : ``);
+  var hasChanged = (value, oldValue) => value !== oldValue && (value === value || oldValue === oldValue);
+  var targetMap = /* @__PURE__ */ new WeakMap;
+  var effectStack = [];
+  var activeEffect;
+  var ITERATE_KEY = Symbol("iterate");
+  var MAP_KEY_ITERATE_KEY = Symbol("Map key iterate");
+  function isEffect(fn) {
+    return fn && fn._isEffect === true;
+  }
+  function effect2(fn, options = EMPTY_OBJ) {
+    if (isEffect(fn)) {
+      fn = fn.raw;
+    }
+    const effect3 = createReactiveEffect(fn, options);
+    if (!options.lazy) {
+      effect3();
+    }
+    return effect3;
+  }
+  function stop(effect3) {
+    if (effect3.active) {
+      cleanup(effect3);
+      if (effect3.options.onStop) {
+        effect3.options.onStop();
+      }
+      effect3.active = false;
+    }
+  }
+  var uid = 0;
+  function createReactiveEffect(fn, options) {
+    const effect3 = function reactiveEffect() {
+      if (!effect3.active) {
+        return fn();
+      }
+      if (!effectStack.includes(effect3)) {
+        cleanup(effect3);
+        try {
+          enableTracking();
+          effectStack.push(effect3);
+          activeEffect = effect3;
+          return fn();
+        } finally {
+          effectStack.pop();
+          resetTracking();
+          activeEffect = effectStack[effectStack.length - 1];
+        }
+      }
+    };
+    effect3.id = uid++;
+    effect3.allowRecurse = !!options.allowRecurse;
+    effect3._isEffect = true;
+    effect3.active = true;
+    effect3.raw = fn;
+    effect3.deps = [];
+    effect3.options = options;
+    return effect3;
+  }
+  function cleanup(effect3) {
+    const { deps } = effect3;
+    if (deps.length) {
+      for (let i = 0;i < deps.length; i++) {
+        deps[i].delete(effect3);
+      }
+      deps.length = 0;
+    }
+  }
+  var shouldTrack = true;
+  var trackStack = [];
+  function pauseTracking() {
+    trackStack.push(shouldTrack);
+    shouldTrack = false;
+  }
+  function enableTracking() {
+    trackStack.push(shouldTrack);
+    shouldTrack = true;
+  }
+  function resetTracking() {
+    const last = trackStack.pop();
+    shouldTrack = last === undefined ? true : last;
+  }
+  function track(target, type, key) {
+    if (!shouldTrack || activeEffect === undefined) {
+      return;
+    }
+    let depsMap = targetMap.get(target);
+    if (!depsMap) {
+      targetMap.set(target, depsMap = /* @__PURE__ */ new Map);
+    }
+    let dep = depsMap.get(key);
+    if (!dep) {
+      depsMap.set(key, dep = /* @__PURE__ */ new Set);
+    }
+    if (!dep.has(activeEffect)) {
+      dep.add(activeEffect);
+      activeEffect.deps.push(dep);
+      if (activeEffect.options.onTrack) {
+        activeEffect.options.onTrack({
+          effect: activeEffect,
+          target,
+          type,
+          key
+        });
+      }
+    }
+  }
+  function trigger(target, type, key, newValue, oldValue, oldTarget) {
+    const depsMap = targetMap.get(target);
+    if (!depsMap) {
+      return;
+    }
+    const effects = /* @__PURE__ */ new Set;
+    const add2 = (effectsToAdd) => {
+      if (effectsToAdd) {
+        effectsToAdd.forEach((effect3) => {
+          if (effect3 !== activeEffect || effect3.allowRecurse) {
+            effects.add(effect3);
+          }
+        });
+      }
+    };
+    if (type === "clear") {
+      depsMap.forEach(add2);
+    } else if (key === "length" && isArray(target)) {
+      depsMap.forEach((dep, key2) => {
+        if (key2 === "length" || key2 >= newValue) {
+          add2(dep);
+        }
+      });
+    } else {
+      if (key !== undefined) {
+        add2(depsMap.get(key));
+      }
+      switch (type) {
+        case "add":
+          if (!isArray(target)) {
+            add2(depsMap.get(ITERATE_KEY));
+            if (isMap(target)) {
+              add2(depsMap.get(MAP_KEY_ITERATE_KEY));
+            }
+          } else if (isIntegerKey(key)) {
+            add2(depsMap.get("length"));
+          }
+          break;
+        case "delete":
+          if (!isArray(target)) {
+            add2(depsMap.get(ITERATE_KEY));
+            if (isMap(target)) {
+              add2(depsMap.get(MAP_KEY_ITERATE_KEY));
+            }
+          }
+          break;
+        case "set":
+          if (isMap(target)) {
+            add2(depsMap.get(ITERATE_KEY));
+          }
+          break;
+      }
+    }
+    const run = (effect3) => {
+      if (effect3.options.onTrigger) {
+        effect3.options.onTrigger({
+          effect: effect3,
+          target,
+          key,
+          type,
+          newValue,
+          oldValue,
+          oldTarget
+        });
+      }
+      if (effect3.options.scheduler) {
+        effect3.options.scheduler(effect3);
+      } else {
+        effect3();
+      }
+    };
+    effects.forEach(run);
+  }
+  var isNonTrackableKeys = /* @__PURE__ */ makeMap(`__proto__,__v_isRef,__isVue`);
+  var builtInSymbols = new Set(Object.getOwnPropertyNames(Symbol).map((key) => Symbol[key]).filter(isSymbol));
+  var get2 = /* @__PURE__ */ createGetter();
+  var readonlyGet = /* @__PURE__ */ createGetter(true);
+  var arrayInstrumentations = /* @__PURE__ */ createArrayInstrumentations();
+  function createArrayInstrumentations() {
+    const instrumentations = {};
+    ["includes", "indexOf", "lastIndexOf"].forEach((key) => {
+      instrumentations[key] = function(...args) {
+        const arr = toRaw(this);
+        for (let i = 0, l = this.length;i < l; i++) {
+          track(arr, "get", i + "");
+        }
+        const res = arr[key](...args);
+        if (res === -1 || res === false) {
+          return arr[key](...args.map(toRaw));
+        } else {
+          return res;
+        }
+      };
+    });
+    ["push", "pop", "shift", "unshift", "splice"].forEach((key) => {
+      instrumentations[key] = function(...args) {
+        pauseTracking();
+        const res = toRaw(this)[key].apply(this, args);
+        resetTracking();
+        return res;
+      };
+    });
+    return instrumentations;
+  }
+  function createGetter(isReadonly = false, shallow = false) {
+    return function get3(target, key, receiver) {
+      if (key === "__v_isReactive") {
+        return !isReadonly;
+      } else if (key === "__v_isReadonly") {
+        return isReadonly;
+      } else if (key === "__v_raw" && receiver === (isReadonly ? shallow ? shallowReadonlyMap : readonlyMap : shallow ? shallowReactiveMap : reactiveMap).get(target)) {
+        return target;
+      }
+      const targetIsArray = isArray(target);
+      if (!isReadonly && targetIsArray && hasOwn(arrayInstrumentations, key)) {
+        return Reflect.get(arrayInstrumentations, key, receiver);
+      }
+      const res = Reflect.get(target, key, receiver);
+      if (isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)) {
+        return res;
+      }
+      if (!isReadonly) {
+        track(target, "get", key);
+      }
+      if (shallow) {
+        return res;
+      }
+      if (isRef(res)) {
+        const shouldUnwrap = !targetIsArray || !isIntegerKey(key);
+        return shouldUnwrap ? res.value : res;
+      }
+      if (isObject(res)) {
+        return isReadonly ? readonly(res) : reactive2(res);
+      }
+      return res;
+    };
+  }
+  var set2 = /* @__PURE__ */ createSetter();
+  function createSetter(shallow = false) {
+    return function set3(target, key, value, receiver) {
+      let oldValue = target[key];
+      if (!shallow) {
+        value = toRaw(value);
+        oldValue = toRaw(oldValue);
+        if (!isArray(target) && isRef(oldValue) && !isRef(value)) {
+          oldValue.value = value;
+          return true;
+        }
+      }
+      const hadKey = isArray(target) && isIntegerKey(key) ? Number(key) < target.length : hasOwn(target, key);
+      const result = Reflect.set(target, key, value, receiver);
+      if (target === toRaw(receiver)) {
+        if (!hadKey) {
+          trigger(target, "add", key, value);
+        } else if (hasChanged(value, oldValue)) {
+          trigger(target, "set", key, value, oldValue);
+        }
+      }
+      return result;
+    };
+  }
+  function deleteProperty(target, key) {
+    const hadKey = hasOwn(target, key);
+    const oldValue = target[key];
+    const result = Reflect.deleteProperty(target, key);
+    if (result && hadKey) {
+      trigger(target, "delete", key, undefined, oldValue);
+    }
+    return result;
+  }
+  function has(target, key) {
+    const result = Reflect.has(target, key);
+    if (!isSymbol(key) || !builtInSymbols.has(key)) {
+      track(target, "has", key);
+    }
+    return result;
+  }
+  function ownKeys(target) {
+    track(target, "iterate", isArray(target) ? "length" : ITERATE_KEY);
+    return Reflect.ownKeys(target);
+  }
+  var mutableHandlers = {
+    get: get2,
+    set: set2,
+    deleteProperty,
+    has,
+    ownKeys
+  };
+  var readonlyHandlers = {
+    get: readonlyGet,
+    set(target, key) {
+      if (true) {
+        console.warn(`Set operation on key "${String(key)}" failed: target is readonly.`, target);
+      }
+      return true;
+    },
+    deleteProperty(target, key) {
+      if (true) {
+        console.warn(`Delete operation on key "${String(key)}" failed: target is readonly.`, target);
+      }
+      return true;
+    }
+  };
+  var toReactive = (value) => isObject(value) ? reactive2(value) : value;
+  var toReadonly = (value) => isObject(value) ? readonly(value) : value;
+  var toShallow = (value) => value;
+  var getProto = (v) => Reflect.getPrototypeOf(v);
+  function get$1(target, key, isReadonly = false, isShallow = false) {
+    target = target["__v_raw"];
+    const rawTarget = toRaw(target);
+    const rawKey = toRaw(key);
+    if (key !== rawKey) {
+      !isReadonly && track(rawTarget, "get", key);
+    }
+    !isReadonly && track(rawTarget, "get", rawKey);
+    const { has: has2 } = getProto(rawTarget);
+    const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive;
+    if (has2.call(rawTarget, key)) {
+      return wrap(target.get(key));
+    } else if (has2.call(rawTarget, rawKey)) {
+      return wrap(target.get(rawKey));
+    } else if (target !== rawTarget) {
+      target.get(key);
+    }
+  }
+  function has$1(key, isReadonly = false) {
+    const target = this["__v_raw"];
+    const rawTarget = toRaw(target);
+    const rawKey = toRaw(key);
+    if (key !== rawKey) {
+      !isReadonly && track(rawTarget, "has", key);
+    }
+    !isReadonly && track(rawTarget, "has", rawKey);
+    return key === rawKey ? target.has(key) : target.has(key) || target.has(rawKey);
+  }
+  function size(target, isReadonly = false) {
+    target = target["__v_raw"];
+    !isReadonly && track(toRaw(target), "iterate", ITERATE_KEY);
+    return Reflect.get(target, "size", target);
+  }
+  function add(value) {
+    value = toRaw(value);
+    const target = toRaw(this);
+    const proto = getProto(target);
+    const hadKey = proto.has.call(target, value);
+    if (!hadKey) {
+      target.add(value);
+      trigger(target, "add", value, value);
+    }
+    return this;
+  }
+  function set$1(key, value) {
+    value = toRaw(value);
+    const target = toRaw(this);
+    const { has: has2, get: get3 } = getProto(target);
+    let hadKey = has2.call(target, key);
+    if (!hadKey) {
+      key = toRaw(key);
+      hadKey = has2.call(target, key);
+    } else if (true) {
+      checkIdentityKeys(target, has2, key);
+    }
+    const oldValue = get3.call(target, key);
+    target.set(key, value);
+    if (!hadKey) {
+      trigger(target, "add", key, value);
+    } else if (hasChanged(value, oldValue)) {
+      trigger(target, "set", key, value, oldValue);
+    }
+    return this;
+  }
+  function deleteEntry(key) {
+    const target = toRaw(this);
+    const { has: has2, get: get3 } = getProto(target);
+    let hadKey = has2.call(target, key);
+    if (!hadKey) {
+      key = toRaw(key);
+      hadKey = has2.call(target, key);
+    } else if (true) {
+      checkIdentityKeys(target, has2, key);
+    }
+    const oldValue = get3 ? get3.call(target, key) : undefined;
+    const result = target.delete(key);
+    if (hadKey) {
+      trigger(target, "delete", key, undefined, oldValue);
+    }
+    return result;
+  }
+  function clear() {
+    const target = toRaw(this);
+    const hadItems = target.size !== 0;
+    const oldTarget = isMap(target) ? new Map(target) : new Set(target);
+    const result = target.clear();
+    if (hadItems) {
+      trigger(target, "clear", undefined, undefined, oldTarget);
+    }
+    return result;
+  }
+  function createForEach(isReadonly, isShallow) {
+    return function forEach(callback, thisArg) {
+      const observed = this;
+      const target = observed["__v_raw"];
+      const rawTarget = toRaw(target);
+      const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive;
+      !isReadonly && track(rawTarget, "iterate", ITERATE_KEY);
+      return target.forEach((value, key) => {
+        return callback.call(thisArg, wrap(value), wrap(key), observed);
+      });
+    };
+  }
+  function createIterableMethod(method, isReadonly, isShallow) {
+    return function(...args) {
+      const target = this["__v_raw"];
+      const rawTarget = toRaw(target);
+      const targetIsMap = isMap(rawTarget);
+      const isPair = method === "entries" || method === Symbol.iterator && targetIsMap;
+      const isKeyOnly = method === "keys" && targetIsMap;
+      const innerIterator = target[method](...args);
+      const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive;
+      !isReadonly && track(rawTarget, "iterate", isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY);
+      return {
+        next() {
+          const { value, done } = innerIterator.next();
+          return done ? { value, done } : {
+            value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
+            done
+          };
+        },
+        [Symbol.iterator]() {
+          return this;
+        }
+      };
+    };
+  }
+  function createReadonlyMethod(type) {
+    return function(...args) {
+      if (true) {
+        const key = args[0] ? `on key "${args[0]}" ` : ``;
+        console.warn(`${capitalize(type)} operation ${key}failed: target is readonly.`, toRaw(this));
+      }
+      return type === "delete" ? false : this;
+    };
+  }
+  function createInstrumentations() {
+    const mutableInstrumentations2 = {
+      get(key) {
+        return get$1(this, key);
+      },
+      get size() {
+        return size(this);
+      },
+      has: has$1,
+      add,
+      set: set$1,
+      delete: deleteEntry,
+      clear,
+      forEach: createForEach(false, false)
+    };
+    const shallowInstrumentations2 = {
+      get(key) {
+        return get$1(this, key, false, true);
+      },
+      get size() {
+        return size(this);
+      },
+      has: has$1,
+      add,
+      set: set$1,
+      delete: deleteEntry,
+      clear,
+      forEach: createForEach(false, true)
+    };
+    const readonlyInstrumentations2 = {
+      get(key) {
+        return get$1(this, key, true);
+      },
+      get size() {
+        return size(this, true);
+      },
+      has(key) {
+        return has$1.call(this, key, true);
+      },
+      add: createReadonlyMethod("add"),
+      set: createReadonlyMethod("set"),
+      delete: createReadonlyMethod("delete"),
+      clear: createReadonlyMethod("clear"),
+      forEach: createForEach(true, false)
+    };
+    const shallowReadonlyInstrumentations2 = {
+      get(key) {
+        return get$1(this, key, true, true);
+      },
+      get size() {
+        return size(this, true);
+      },
+      has(key) {
+        return has$1.call(this, key, true);
+      },
+      add: createReadonlyMethod("add"),
+      set: createReadonlyMethod("set"),
+      delete: createReadonlyMethod("delete"),
+      clear: createReadonlyMethod("clear"),
+      forEach: createForEach(true, true)
+    };
+    const iteratorMethods = ["keys", "values", "entries", Symbol.iterator];
+    iteratorMethods.forEach((method) => {
+      mutableInstrumentations2[method] = createIterableMethod(method, false, false);
+      readonlyInstrumentations2[method] = createIterableMethod(method, true, false);
+      shallowInstrumentations2[method] = createIterableMethod(method, false, true);
+      shallowReadonlyInstrumentations2[method] = createIterableMethod(method, true, true);
+    });
+    return [
+      mutableInstrumentations2,
+      readonlyInstrumentations2,
+      shallowInstrumentations2,
+      shallowReadonlyInstrumentations2
+    ];
+  }
+  var [mutableInstrumentations, readonlyInstrumentations, shallowInstrumentations, shallowReadonlyInstrumentations] = /* @__PURE__ */ createInstrumentations();
+  function createInstrumentationGetter(isReadonly, shallow) {
+    const instrumentations = shallow ? isReadonly ? shallowReadonlyInstrumentations : shallowInstrumentations : isReadonly ? readonlyInstrumentations : mutableInstrumentations;
+    return (target, key, receiver) => {
+      if (key === "__v_isReactive") {
+        return !isReadonly;
+      } else if (key === "__v_isReadonly") {
+        return isReadonly;
+      } else if (key === "__v_raw") {
+        return target;
+      }
+      return Reflect.get(hasOwn(instrumentations, key) && key in target ? instrumentations : target, key, receiver);
+    };
+  }
+  var mutableCollectionHandlers = {
+    get: /* @__PURE__ */ createInstrumentationGetter(false, false)
+  };
+  var readonlyCollectionHandlers = {
+    get: /* @__PURE__ */ createInstrumentationGetter(true, false)
+  };
+  function checkIdentityKeys(target, has2, key) {
+    const rawKey = toRaw(key);
+    if (rawKey !== key && has2.call(target, rawKey)) {
+      const type = toRawType(target);
+      console.warn(`Reactive ${type} contains both the raw and reactive versions of the same object${type === `Map` ? ` as keys` : ``}, which can lead to inconsistencies. Avoid differentiating between the raw and reactive versions of an object and only use the reactive version if possible.`);
+    }
+  }
+  var reactiveMap = /* @__PURE__ */ new WeakMap;
+  var shallowReactiveMap = /* @__PURE__ */ new WeakMap;
+  var readonlyMap = /* @__PURE__ */ new WeakMap;
+  var shallowReadonlyMap = /* @__PURE__ */ new WeakMap;
+  function targetTypeMap(rawType) {
+    switch (rawType) {
+      case "Object":
+      case "Array":
+        return 1;
+      case "Map":
+      case "Set":
+      case "WeakMap":
+      case "WeakSet":
+        return 2;
+      default:
+        return 0;
+    }
+  }
+  function getTargetType(value) {
+    return value["__v_skip"] || !Object.isExtensible(value) ? 0 : targetTypeMap(toRawType(value));
+  }
+  function reactive2(target) {
+    if (target && target["__v_isReadonly"]) {
+      return target;
+    }
+    return createReactiveObject(target, false, mutableHandlers, mutableCollectionHandlers, reactiveMap);
+  }
+  function readonly(target) {
+    return createReactiveObject(target, true, readonlyHandlers, readonlyCollectionHandlers, readonlyMap);
+  }
+  function createReactiveObject(target, isReadonly, baseHandlers, collectionHandlers, proxyMap) {
+    if (!isObject(target)) {
+      if (true) {
+        console.warn(`value cannot be made reactive: ${String(target)}`);
+      }
+      return target;
+    }
+    if (target["__v_raw"] && !(isReadonly && target["__v_isReactive"])) {
+      return target;
+    }
+    const existingProxy = proxyMap.get(target);
+    if (existingProxy) {
+      return existingProxy;
+    }
+    const targetType = getTargetType(target);
+    if (targetType === 0) {
+      return target;
+    }
+    const proxy = new Proxy(target, targetType === 2 ? collectionHandlers : baseHandlers);
+    proxyMap.set(target, proxy);
+    return proxy;
+  }
+  function toRaw(observed) {
+    return observed && toRaw(observed["__v_raw"]) || observed;
+  }
+  function isRef(r) {
+    return Boolean(r && r.__v_isRef === true);
+  }
+  magic("nextTick", () => nextTick);
+  magic("dispatch", (el) => dispatch.bind(dispatch, el));
+  magic("watch", (el, { evaluateLater: evaluateLater2, cleanup: cleanup2 }) => (key, callback) => {
+    let evaluate2 = evaluateLater2(key);
+    let getter = () => {
+      let value;
+      evaluate2((i) => value = i);
+      return value;
+    };
+    let unwatch = watch(getter, callback);
+    cleanup2(unwatch);
+  });
+  magic("store", getStores);
+  magic("data", (el) => scope(el));
+  magic("root", (el) => closestRoot(el));
+  magic("refs", (el) => {
+    if (el._x_refs_proxy)
+      return el._x_refs_proxy;
+    el._x_refs_proxy = mergeProxies(getArrayOfRefObject(el));
+    return el._x_refs_proxy;
+  });
+  function getArrayOfRefObject(el) {
+    let refObjects = [];
+    findClosest(el, (i) => {
+      if (i._x_refs)
+        refObjects.push(i._x_refs);
+    });
+    return refObjects;
+  }
+  var globalIdMemo = {};
+  function findAndIncrementId(name) {
+    if (!globalIdMemo[name])
+      globalIdMemo[name] = 0;
+    return ++globalIdMemo[name];
+  }
+  function closestIdRoot(el, name) {
+    return findClosest(el, (element) => {
+      if (element._x_ids && element._x_ids[name])
+        return true;
+    });
+  }
+  function setIdRoot(el, name) {
+    if (!el._x_ids)
+      el._x_ids = {};
+    if (!el._x_ids[name])
+      el._x_ids[name] = findAndIncrementId(name);
+  }
+  magic("id", (el, { cleanup: cleanup2 }) => (name, key = null) => {
+    let cacheKey = `${name}${key ? `-${key}` : ""}`;
+    return cacheIdByNameOnElement(el, cacheKey, cleanup2, () => {
+      let root = closestIdRoot(el, name);
+      let id = root ? root._x_ids[name] : findAndIncrementId(name);
+      return key ? `${name}-${id}-${key}` : `${name}-${id}`;
+    });
+  });
+  interceptClone((from, to) => {
+    if (from._x_id) {
+      to._x_id = from._x_id;
+    }
+  });
+  function cacheIdByNameOnElement(el, cacheKey, cleanup2, callback) {
+    if (!el._x_id)
+      el._x_id = {};
+    if (el._x_id[cacheKey])
+      return el._x_id[cacheKey];
+    let output = callback();
+    el._x_id[cacheKey] = output;
+    cleanup2(() => {
+      delete el._x_id[cacheKey];
+    });
+    return output;
+  }
+  magic("el", (el) => el);
+  warnMissingPluginMagic("Focus", "focus", "focus");
+  warnMissingPluginMagic("Persist", "persist", "persist");
+  function warnMissingPluginMagic(name, magicName, slug) {
+    magic(magicName, (el) => warn(`You can't use [$${magicName}] without first installing the "${name}" plugin here: https://alpinejs.dev/plugins/${slug}`, el));
+  }
+  directive("modelable", (el, { expression }, { effect: effect3, evaluateLater: evaluateLater2, cleanup: cleanup2 }) => {
+    let func = evaluateLater2(expression);
+    let innerGet = () => {
+      let result;
+      func((i) => result = i);
+      return result;
+    };
+    let evaluateInnerSet = evaluateLater2(`${expression} = __placeholder`);
+    let innerSet = (val) => evaluateInnerSet(() => {}, { scope: { __placeholder: val } });
+    let initialValue = innerGet();
+    innerSet(initialValue);
+    queueMicrotask(() => {
+      if (!el._x_model)
+        return;
+      el._x_removeModelListeners["default"]();
+      let outerGet = el._x_model.get;
+      let outerSet = el._x_model.setWithModifiers;
+      let releaseEntanglement = entangle({
+        get() {
+          return outerGet();
+        },
+        set(value) {
+          outerSet(value);
+        }
+      }, {
+        get() {
+          return innerGet();
+        },
+        set(value) {
+          innerSet(value);
+        }
+      });
+      cleanup2(releaseEntanglement);
+    });
+  });
+  directive("teleport", (el, { modifiers, expression }, { cleanup: cleanup2 }) => {
+    if (el.tagName.toLowerCase() !== "template")
+      warn("x-teleport can only be used on a <template> tag", el);
+    let target = getTarget(expression);
+    let clone2 = el.content.cloneNode(true).firstElementChild;
+    el._x_teleport = clone2;
+    clone2._x_teleportBack = el;
+    el.setAttribute("data-teleport-template", true);
+    clone2.setAttribute("data-teleport-target", true);
+    if (el._x_forwardEvents) {
+      el._x_forwardEvents.forEach((eventName) => {
+        clone2.addEventListener(eventName, (e) => {
+          e.stopPropagation();
+          el.dispatchEvent(new e.constructor(e.type, e));
+        });
+      });
+    }
+    addScopeToNode(clone2, {}, el);
+    let placeInDom = (clone3, target2, modifiers2) => {
+      if (modifiers2.includes("prepend")) {
+        target2.parentNode.insertBefore(clone3, target2);
+      } else if (modifiers2.includes("append")) {
+        target2.parentNode.insertBefore(clone3, target2.nextSibling);
+      } else {
+        target2.appendChild(clone3);
+      }
+    };
+    mutateDom(() => {
+      skipDuringClone(() => {
+        placeInDom(clone2, target, modifiers);
+        initTree(clone2);
+      })();
+    });
+    el._x_teleportPutBack = () => {
+      let target2 = getTarget(expression);
+      mutateDom(() => {
+        placeInDom(el._x_teleport, target2, modifiers);
+      });
+    };
+    cleanup2(() => mutateDom(() => {
+      clone2.remove();
+      destroyTree(clone2);
+    }));
+  });
+  var teleportContainerDuringClone = document.createElement("div");
+  function getTarget(expression) {
+    let target = skipDuringClone(() => {
+      return document.querySelector(expression);
+    }, () => {
+      return teleportContainerDuringClone;
+    })();
+    if (!target)
+      warn(`Cannot find x-teleport element for selector: "${expression}"`);
+    return target;
+  }
+  var handler = () => {};
+  handler.inline = (el, { modifiers }, { cleanup: cleanup2 }) => {
+    modifiers.includes("self") ? el._x_ignoreSelf = true : el._x_ignore = true;
+    cleanup2(() => {
+      modifiers.includes("self") ? delete el._x_ignoreSelf : delete el._x_ignore;
+    });
+  };
+  directive("ignore", handler);
+  directive("effect", skipDuringClone((el, { expression }, { effect: effect3 }) => {
+    effect3(evaluateLater(el, expression));
+  }));
+  function on(el, event, modifiers, callback) {
+    let listenerTarget = el;
+    let handler4 = (e) => callback(e);
+    let options = {};
+    let wrapHandler = (callback2, wrapper) => (e) => wrapper(callback2, e);
+    if (modifiers.includes("dot"))
+      event = dotSyntax(event);
+    if (modifiers.includes("camel"))
+      event = camelCase2(event);
+    if (modifiers.includes("capture"))
+      options.capture = true;
+    if (modifiers.includes("window"))
+      listenerTarget = window;
+    if (modifiers.includes("document"))
+      listenerTarget = document;
+    if (modifiers.includes("passive")) {
+      options.passive = modifiers[modifiers.indexOf("passive") + 1] !== "false";
+    }
+    handler4 = addDebounceOrThrottle(modifiers, handler4);
+    if (modifiers.includes("prevent"))
+      handler4 = wrapHandler(handler4, (next, e) => {
+        e.preventDefault();
+        next(e);
+      });
+    if (modifiers.includes("stop"))
+      handler4 = wrapHandler(handler4, (next, e) => {
+        e.stopPropagation();
+        next(e);
+      });
+    if (modifiers.includes("once")) {
+      handler4 = wrapHandler(handler4, (next, e) => {
+        next(e);
+        listenerTarget.removeEventListener(event, handler4, options);
+      });
+    }
+    if (modifiers.includes("away") || modifiers.includes("outside")) {
+      listenerTarget = document;
+      handler4 = wrapHandler(handler4, (next, e) => {
+        if (el.contains(e.target))
+          return;
+        if (e.target.isConnected === false)
+          return;
+        if (el.offsetWidth < 1 && el.offsetHeight < 1)
+          return;
+        if (el._x_isShown === false)
+          return;
+        next(e);
+      });
+    }
+    if (modifiers.includes("self"))
+      handler4 = wrapHandler(handler4, (next, e) => {
+        e.target === el && next(e);
+      });
+    if (event === "submit") {
+      handler4 = wrapHandler(handler4, (next, e) => {
+        if (e.target._x_pendingModelUpdates) {
+          e.target._x_pendingModelUpdates.forEach((fn) => fn());
+        }
+        next(e);
+      });
+    }
+    if (isKeyEvent(event) || isClickEvent(event)) {
+      handler4 = wrapHandler(handler4, (next, e) => {
+        if (isListeningForASpecificKeyThatHasntBeenPressed(e, modifiers)) {
+          return;
+        }
+        next(e);
+      });
+    }
+    listenerTarget.addEventListener(event, handler4, options);
+    return () => {
+      listenerTarget.removeEventListener(event, handler4, options);
+    };
+  }
+  function addDebounceOrThrottle(modifiers, handler4) {
+    if (modifiers.includes("debounce")) {
+      let nextModifier = modifiers[modifiers.indexOf("debounce") + 1] || "invalid-wait";
+      let wait = isNumeric(nextModifier.split("ms")[0]) ? Number(nextModifier.split("ms")[0]) : 250;
+      handler4 = debounce(handler4, wait);
+    }
+    if (modifiers.includes("throttle")) {
+      let nextModifier = modifiers[modifiers.indexOf("throttle") + 1] || "invalid-wait";
+      let wait = isNumeric(nextModifier.split("ms")[0]) ? Number(nextModifier.split("ms")[0]) : 250;
+      handler4 = throttle(handler4, wait);
+    }
+    return handler4;
+  }
+  function dotSyntax(subject) {
+    return subject.replace(/-/g, ".");
+  }
+  function camelCase2(subject) {
+    return subject.toLowerCase().replace(/-(\w)/g, (match, char) => char.toUpperCase());
+  }
+  function isNumeric(subject) {
+    return !Array.isArray(subject) && !isNaN(subject);
+  }
+  function kebabCase2(subject) {
+    if ([" ", "_"].includes(subject))
+      return subject;
+    return subject.replace(/([a-z])([A-Z])/g, "$1-$2").replace(/[_\s]/, "-").toLowerCase();
+  }
+  function isKeyEvent(event) {
+    return ["keydown", "keyup"].includes(event);
+  }
+  function isClickEvent(event) {
+    return ["contextmenu", "click", "mouse"].some((i) => event.includes(i));
+  }
+  function isListeningForASpecificKeyThatHasntBeenPressed(e, modifiers) {
+    let keyModifiers = modifiers.filter((i) => {
+      return !["window", "document", "prevent", "stop", "once", "capture", "self", "away", "outside", "passive", "preserve-scroll", "blur", "change", "lazy"].includes(i);
+    });
+    if (keyModifiers.includes("debounce")) {
+      let debounceIndex = keyModifiers.indexOf("debounce");
+      keyModifiers.splice(debounceIndex, isNumeric((keyModifiers[debounceIndex + 1] || "invalid-wait").split("ms")[0]) ? 2 : 1);
+    }
+    if (keyModifiers.includes("throttle")) {
+      let debounceIndex = keyModifiers.indexOf("throttle");
+      keyModifiers.splice(debounceIndex, isNumeric((keyModifiers[debounceIndex + 1] || "invalid-wait").split("ms")[0]) ? 2 : 1);
+    }
+    if (keyModifiers.length === 0)
+      return false;
+    if (keyModifiers.length === 1 && keyToModifiers(e.key).includes(keyModifiers[0]))
+      return false;
+    const systemKeyModifiers = ["ctrl", "shift", "alt", "meta", "cmd", "super"];
+    const selectedSystemKeyModifiers = systemKeyModifiers.filter((modifier) => keyModifiers.includes(modifier));
+    keyModifiers = keyModifiers.filter((i) => !selectedSystemKeyModifiers.includes(i));
+    if (selectedSystemKeyModifiers.length > 0) {
+      const activelyPressedKeyModifiers = selectedSystemKeyModifiers.filter((modifier) => {
+        if (modifier === "cmd" || modifier === "super")
+          modifier = "meta";
+        return e[`${modifier}Key`];
+      });
+      if (activelyPressedKeyModifiers.length === selectedSystemKeyModifiers.length) {
+        if (isClickEvent(e.type))
+          return false;
+        if (keyToModifiers(e.key).includes(keyModifiers[0]))
+          return false;
+      }
+    }
+    return true;
+  }
+  function keyToModifiers(key) {
+    if (!key)
+      return [];
+    key = kebabCase2(key);
+    let modifierToKeyMap = {
+      ctrl: "control",
+      slash: "/",
+      space: " ",
+      spacebar: " ",
+      cmd: "meta",
+      esc: "escape",
+      up: "arrow-up",
+      down: "arrow-down",
+      left: "arrow-left",
+      right: "arrow-right",
+      period: ".",
+      comma: ",",
+      equal: "=",
+      minus: "-",
+      underscore: "_"
+    };
+    modifierToKeyMap[key] = key;
+    return Object.keys(modifierToKeyMap).map((modifier) => {
+      if (modifierToKeyMap[modifier] === key)
+        return modifier;
+    }).filter((modifier) => modifier);
+  }
+  directive("model", (el, { modifiers, expression }, { effect: effect3, cleanup: cleanup2 }) => {
+    let scopeTarget = el;
+    if (modifiers.includes("parent")) {
+      scopeTarget = findClosest(el, (element) => element !== el);
+    }
+    let evaluateGet = evaluateLater(scopeTarget, expression);
+    let evaluateSet;
+    if (typeof expression === "string") {
+      evaluateSet = evaluateLater(scopeTarget, `${expression} = __placeholder`);
+    } else if (typeof expression === "function" && typeof expression() === "string") {
+      evaluateSet = evaluateLater(scopeTarget, `${expression()} = __placeholder`);
+    } else {
+      evaluateSet = () => {};
+    }
+    let getValue = () => {
+      let result;
+      evaluateGet((value) => result = value);
+      return isGetterSetter(result) ? result.get() : result;
+    };
+    let setValue = (value) => {
+      let result;
+      evaluateGet((value2) => result = value2);
+      if (isGetterSetter(result)) {
+        result.set(value);
+      } else {
+        evaluateSet(() => {}, {
+          scope: { __placeholder: value }
+        });
+      }
+    };
+    if (typeof expression === "string" && el.type === "radio") {
+      mutateDom(() => {
+        if (!el.hasAttribute("name"))
+          el.setAttribute("name", expression);
+      });
+    }
+    let hasChangeModifier = modifiers.includes("change") || modifiers.includes("lazy");
+    let hasBlurModifier = modifiers.includes("blur");
+    let hasEnterModifier = modifiers.includes("enter");
+    let hasExplicitEventModifiers = hasChangeModifier || hasBlurModifier || hasEnterModifier;
+    let removeListener;
+    if (isCloning) {
+      removeListener = () => {};
+    } else if (hasExplicitEventModifiers) {
+      let listeners = [];
+      let syncValue = (e) => setValue(getInputValue(el, modifiers, e, getValue()));
+      if (hasChangeModifier) {
+        listeners.push(on(el, "change", modifiers, syncValue));
+      }
+      if (hasBlurModifier) {
+        listeners.push(on(el, "blur", modifiers, syncValue));
+        if (el.form) {
+          let form = el.form;
+          let syncCallback = () => syncValue({ target: el });
+          if (!form._x_pendingModelUpdates)
+            form._x_pendingModelUpdates = [];
+          form._x_pendingModelUpdates.push(syncCallback);
+          cleanup2(() => {
+            if (form._x_pendingModelUpdates) {
+              form._x_pendingModelUpdates.splice(form._x_pendingModelUpdates.indexOf(syncCallback), 1);
+            }
+          });
+        }
+      }
+      if (hasEnterModifier) {
+        listeners.push(on(el, "keydown", modifiers, (e) => {
+          if (e.key === "Enter")
+            syncValue(e);
+        }));
+      }
+      removeListener = () => listeners.forEach((remove) => remove());
+    } else {
+      let event = el.tagName.toLowerCase() === "select" || ["checkbox", "radio"].includes(el.type) ? "change" : "input";
+      removeListener = on(el, event, modifiers, (e) => {
+        setValue(getInputValue(el, modifiers, e, getValue()));
+      });
+    }
+    if (modifiers.includes("fill")) {
+      if ([undefined, null, ""].includes(getValue()) || isCheckbox(el) && Array.isArray(getValue()) || el.tagName.toLowerCase() === "select" && el.multiple) {
+        setValue(getInputValue(el, modifiers, { target: el }, getValue()));
+      }
+    }
+    if (!el._x_removeModelListeners)
+      el._x_removeModelListeners = {};
+    el._x_removeModelListeners["default"] = removeListener;
+    cleanup2(() => el._x_removeModelListeners["default"]());
+    if (el.form) {
+      let removeResetListener = on(el.form, "reset", [], (e) => {
+        nextTick(() => el._x_model && el._x_model.set(getInputValue(el, modifiers, { target: el }, getValue())));
+      });
+      cleanup2(() => removeResetListener());
+    }
+    el._x_model = {
+      get() {
+        return getValue();
+      },
+      set(value) {
+        setValue(value);
+      },
+      setWithModifiers: addDebounceOrThrottle(modifiers, setValue)
+    };
+    el._x_forceModelUpdate = (value) => {
+      if (value === undefined && typeof expression === "string" && expression.match(/\./))
+        value = "";
+      mutateDom(() => {
+        if (isCheckbox(el)) {
+          if (Array.isArray(value)) {
+            el.checked = value.some((val) => val == el.value);
+          } else {
+            el.checked = !!value;
+          }
+        } else if (isRadio(el)) {
+          if (typeof value === "boolean") {
+            el.checked = safeParseBoolean(el.value) === value;
+          } else {
+            el.checked = el.value == value;
+          }
+        } else {
+          bind(el, "value", value);
+        }
+      });
+    };
+    effect3(() => {
+      let value = getValue();
+      if (modifiers.includes("unintrusive") && document.activeElement.isSameNode(el))
+        return;
+      el._x_forceModelUpdate(value);
+    });
+  });
+  function getInputValue(el, modifiers, event, currentValue) {
+    return mutateDom(() => {
+      if (event instanceof CustomEvent && event.detail !== undefined)
+        return event.detail !== null && event.detail !== undefined ? event.detail : event.target.value;
+      else if (isCheckbox(el)) {
+        if (Array.isArray(currentValue)) {
+          let newValue = null;
+          if (modifiers.includes("number")) {
+            newValue = safeParseNumber(event.target.value);
+          } else if (modifiers.includes("boolean")) {
+            newValue = safeParseBoolean(event.target.value);
+          } else {
+            newValue = event.target.value;
+          }
+          return event.target.checked ? currentValue.includes(newValue) ? currentValue : currentValue.concat([newValue]) : currentValue.filter((el2) => !checkedAttrLooseCompare2(el2, newValue));
+        } else {
+          return event.target.checked;
+        }
+      } else if (el.tagName.toLowerCase() === "select" && el.multiple) {
+        if (modifiers.includes("number")) {
+          return Array.from(event.target.selectedOptions).map((option) => {
+            let rawValue = option.value || option.text;
+            return safeParseNumber(rawValue);
+          });
+        } else if (modifiers.includes("boolean")) {
+          return Array.from(event.target.selectedOptions).map((option) => {
+            let rawValue = option.value || option.text;
+            return safeParseBoolean(rawValue);
+          });
+        }
+        return Array.from(event.target.selectedOptions).map((option) => {
+          return option.value || option.text;
+        });
+      } else {
+        let newValue;
+        if (isRadio(el)) {
+          if (event.target.checked) {
+            newValue = event.target.value;
+          } else {
+            newValue = currentValue;
+          }
+        } else {
+          newValue = event.target.value;
+        }
+        if (modifiers.includes("number")) {
+          return safeParseNumber(newValue);
+        } else if (modifiers.includes("boolean")) {
+          return safeParseBoolean(newValue);
+        } else if (modifiers.includes("trim")) {
+          return newValue.trim();
+        } else {
+          return newValue;
+        }
+      }
+    });
+  }
+  function safeParseNumber(rawValue) {
+    let number = rawValue ? parseFloat(rawValue) : null;
+    return isNumeric2(number) ? number : rawValue;
+  }
+  function checkedAttrLooseCompare2(valueA, valueB) {
+    return valueA == valueB;
+  }
+  function isNumeric2(subject) {
+    return !Array.isArray(subject) && !isNaN(subject);
+  }
+  function isGetterSetter(value) {
+    return value !== null && typeof value === "object" && typeof value.get === "function" && typeof value.set === "function";
+  }
+  directive("cloak", (el) => queueMicrotask(() => mutateDom(() => el.removeAttribute(prefix("cloak")))));
+  addInitSelector(() => `[${prefix("init")}]`);
+  directive("init", skipDuringClone((el, { expression }, { evaluate: evaluate2 }) => {
+    if (typeof expression === "string") {
+      return !!expression.trim() && evaluate2(expression, {}, false);
+    }
+    return evaluate2(expression, {}, false);
+  }));
+  directive("text", (el, { expression }, { effect: effect3, evaluateLater: evaluateLater2 }) => {
+    let evaluate2 = evaluateLater2(expression);
+    effect3(() => {
+      evaluate2((value) => {
+        mutateDom(() => {
+          el.textContent = value;
+        });
+      });
+    });
+  });
+  directive("html", (el, { expression }, { effect: effect3, evaluateLater: evaluateLater2 }) => {
+    let evaluate2 = evaluateLater2(expression);
+    effect3(() => {
+      evaluate2((value) => {
+        mutateDom(() => {
+          el.innerHTML = value ?? "";
+          el._x_ignoreSelf = true;
+          initTree(el);
+          delete el._x_ignoreSelf;
+        });
+      });
+    });
+  });
+  mapAttributes(startingWith(":", into(prefix("bind:"))));
+  var handler2 = (el, { value, modifiers, expression, original }, { effect: effect3, cleanup: cleanup2 }) => {
+    if (!value) {
+      let bindingProviders = {};
+      injectBindingProviders(bindingProviders);
+      let getBindings = evaluateLater(el, expression);
+      getBindings((bindings) => {
+        applyBindingsObject(el, bindings, original);
+      }, { scope: bindingProviders });
+      return;
+    }
+    if (value === "key")
+      return storeKeyForXFor(el, expression);
+    if (el._x_inlineBindings && el._x_inlineBindings[value] && el._x_inlineBindings[value].extract) {
+      return;
+    }
+    let evaluate2 = evaluateLater(el, expression);
+    effect3(() => evaluate2((result) => {
+      if (result === undefined && typeof expression === "string" && expression.match(/\./)) {
+        result = "";
+      }
+      mutateDom(() => bind(el, value, result, modifiers));
+    }));
+    cleanup2(() => {
+      el._x_undoAddedClasses && el._x_undoAddedClasses();
+      el._x_undoAddedStyles && el._x_undoAddedStyles();
+    });
+  };
+  handler2.inline = (el, { value, modifiers, expression }) => {
+    if (!value)
+      return;
+    if (!el._x_inlineBindings)
+      el._x_inlineBindings = {};
+    el._x_inlineBindings[value] = { expression, extract: false };
+  };
+  directive("bind", handler2);
+  function storeKeyForXFor(el, expression) {
+    el._x_keyExpression = expression;
+  }
+  addRootSelector(() => `[${prefix("data")}]`);
+  directive("data", (el, { expression }, { cleanup: cleanup2 }) => {
+    if (shouldSkipRegisteringDataDuringClone(el))
+      return;
+    expression = expression === "" ? "{}" : expression;
+    let magicContext = {};
+    injectMagics(magicContext, el);
+    let dataProviderContext = {};
+    injectDataProviders(dataProviderContext, magicContext);
+    let data2 = evaluate(el, expression, { scope: dataProviderContext });
+    if (data2 === undefined || data2 === true)
+      data2 = {};
+    injectMagics(data2, el);
+    let reactiveData = reactive(data2);
+    initInterceptors(reactiveData);
+    let undo = addScopeToNode(el, reactiveData);
+    reactiveData["init"] && evaluate(el, reactiveData["init"]);
+    cleanup2(() => {
+      reactiveData["destroy"] && evaluate(el, reactiveData["destroy"]);
+      undo();
+    });
+  });
+  interceptClone((from, to) => {
+    if (from._x_dataStack) {
+      to._x_dataStack = from._x_dataStack;
+      to.setAttribute("data-has-alpine-state", true);
+    }
+  });
+  function shouldSkipRegisteringDataDuringClone(el) {
+    if (!isCloning)
+      return false;
+    if (isCloningLegacy)
+      return true;
+    return el.hasAttribute("data-has-alpine-state");
+  }
+  directive("show", (el, { modifiers, expression }, { effect: effect3 }) => {
+    let evaluate2 = evaluateLater(el, expression);
+    if (!el._x_doHide)
+      el._x_doHide = () => {
+        mutateDom(() => {
+          el.style.setProperty("display", "none", modifiers.includes("important") ? "important" : undefined);
+        });
+      };
+    if (!el._x_doShow)
+      el._x_doShow = () => {
+        mutateDom(() => {
+          if (el.style.length === 1 && el.style.display === "none") {
+            el.removeAttribute("style");
+          } else {
+            el.style.removeProperty("display");
+          }
+        });
+      };
+    let hide = () => {
+      el._x_doHide();
+      el._x_isShown = false;
+    };
+    let show = () => {
+      el._x_doShow();
+      el._x_isShown = true;
+    };
+    let clickAwayCompatibleShow = () => setTimeout(show);
+    let toggle = once((value) => value ? show() : hide(), (value) => {
+      if (typeof el._x_toggleAndCascadeWithTransitions === "function") {
+        el._x_toggleAndCascadeWithTransitions(el, value, show, hide);
+      } else {
+        value ? clickAwayCompatibleShow() : hide();
+      }
+    });
+    let oldValue;
+    let firstTime = true;
+    effect3(() => evaluate2((value) => {
+      if (!firstTime && value === oldValue)
+        return;
+      if (modifiers.includes("immediate"))
+        value ? clickAwayCompatibleShow() : hide();
+      toggle(value);
+      oldValue = value;
+      firstTime = false;
+    }));
+  });
+  directive("for", (el, { expression }, { effect: effect3, cleanup: cleanup2 }) => {
+    let iteratorNames = parseForExpression(expression);
+    let evaluateItems = evaluateLater(el, iteratorNames.items);
+    let evaluateKey = evaluateLater(el, el._x_keyExpression || "index");
+    el._x_lookup = /* @__PURE__ */ new Map;
+    effect3(() => loop(el, iteratorNames, evaluateItems, evaluateKey));
+    cleanup2(() => {
+      el._x_lookup.forEach((el2) => mutateDom(() => {
+        destroyTree(el2);
+        el2.remove();
+      }));
+      delete el._x_lookup;
+    });
+  });
+  function refreshScope(scope2) {
+    return (newScope) => {
+      Object.entries(newScope).forEach(([key, value]) => {
+        scope2[key] = value;
+      });
+    };
+  }
+  function loop(templateEl, iteratorNames, evaluateItems, evaluateKey) {
+    evaluateItems((items) => {
+      if (isNumeric3(items))
+        items = Array.from({ length: items }, (_, i) => i + 1);
+      if (items === undefined || items === null)
+        items = [];
+      if (items instanceof Set)
+        items = Array.from(items);
+      if (items instanceof Map)
+        items = Array.from(items);
+      let oldLookup = templateEl._x_lookup;
+      let lookup = /* @__PURE__ */ new Map;
+      templateEl._x_lookup = lookup;
+      let hasStringKeys = isObject2(items);
+      let scopeEntries = Object.entries(items).map(([index, item]) => {
+        if (!hasStringKeys)
+          index = parseInt(index);
+        let scope2 = getIterationScopeVariables(iteratorNames, item, index, items);
+        let key;
+        evaluateKey((innerKey) => {
+          if (typeof innerKey === "object")
+            warn("x-for key cannot be an object, it must be a string or an integer", templateEl);
+          if (oldLookup.has(innerKey)) {
+            lookup.set(innerKey, oldLookup.get(innerKey));
+            oldLookup.delete(innerKey);
+          }
+          key = innerKey;
+        }, { scope: { index, ...scope2 } });
+        return [key, scope2];
+      });
+      mutateDom(() => {
+        oldLookup.forEach((el) => {
+          destroyTree(el);
+          el.remove();
+        });
+        let added = /* @__PURE__ */ new Set;
+        let prev = templateEl;
+        scopeEntries.forEach(([key, scope2]) => {
+          if (lookup.has(key)) {
+            let el = lookup.get(key);
+            el._x_refreshXForScope(scope2);
+            if (prev.nextElementSibling !== el) {
+              if (prev.nextElementSibling)
+                el.replaceWith(prev.nextElementSibling);
+              prev.after(el);
+            }
+            prev = el;
+            if (el._x_currentIfEl) {
+              if (el.nextElementSibling !== el._x_currentIfEl)
+                prev.after(el._x_currentIfEl);
+              prev = el._x_currentIfEl;
+            }
+            return;
+          }
+          if (templateEl.content.children.length > 1)
+            warn("x-for templates require a single root element, additional elements will be ignored.", templateEl);
+          let clone2 = document.importNode(templateEl.content, true).firstElementChild;
+          let reactiveScope = reactive(scope2);
+          addScopeToNode(clone2, reactiveScope, templateEl);
+          clone2._x_refreshXForScope = refreshScope(reactiveScope);
+          lookup.set(key, clone2);
+          added.add(clone2);
+          prev.after(clone2);
+          prev = clone2;
+        });
+        skipDuringClone(() => added.forEach((clone2) => initTree(clone2)))();
+      });
+    });
+  }
+  function parseForExpression(expression) {
+    let forIteratorRE = /,([^,\}\]]*)(?:,([^,\}\]]*))?$/;
+    let stripParensRE = /^\s*\(|\)\s*$/g;
+    let forAliasRE = /([\s\S]*?)\s+(?:in|of)\s+([\s\S]*)/;
+    let inMatch = expression.match(forAliasRE);
+    if (!inMatch)
+      return;
+    let res = {};
+    res.items = inMatch[2].trim();
+    let item = inMatch[1].replace(stripParensRE, "").trim();
+    let iteratorMatch = item.match(forIteratorRE);
+    if (iteratorMatch) {
+      res.item = item.replace(forIteratorRE, "").trim();
+      res.index = iteratorMatch[1].trim();
+      if (iteratorMatch[2]) {
+        res.collection = iteratorMatch[2].trim();
+      }
+    } else {
+      res.item = item;
+    }
+    return res;
+  }
+  function getIterationScopeVariables(iteratorNames, item, index, items) {
+    let scopeVariables = {};
+    if (/^\[.*\]$/.test(iteratorNames.item) && Array.isArray(item)) {
+      let names = iteratorNames.item.replace("[", "").replace("]", "").split(",").map((i) => i.trim());
+      names.forEach((name, i) => {
+        scopeVariables[name] = item[i];
+      });
+    } else if (/^\{.*\}$/.test(iteratorNames.item) && !Array.isArray(item) && typeof item === "object") {
+      let names = iteratorNames.item.replace("{", "").replace("}", "").split(",").map((i) => i.trim());
+      names.forEach((name) => {
+        scopeVariables[name] = item[name];
+      });
+    } else {
+      scopeVariables[iteratorNames.item] = item;
+    }
+    if (iteratorNames.index)
+      scopeVariables[iteratorNames.index] = index;
+    if (iteratorNames.collection)
+      scopeVariables[iteratorNames.collection] = items;
+    return scopeVariables;
+  }
+  function isNumeric3(subject) {
+    return typeof subject !== "object" && !isNaN(subject);
+  }
+  function isObject2(subject) {
+    return typeof subject === "object" && !Array.isArray(subject);
+  }
+  function handler3() {}
+  handler3.inline = (el, { expression }, { cleanup: cleanup2 }) => {
+    let root = closestRoot(el);
+    if (!root)
+      return;
+    if (!root._x_refs)
+      root._x_refs = {};
+    root._x_refs[expression] = el;
+    cleanup2(() => delete root._x_refs[expression]);
+  };
+  directive("ref", handler3);
+  directive("if", (el, { expression }, { effect: effect3, cleanup: cleanup2 }) => {
+    if (el.tagName.toLowerCase() !== "template")
+      warn("x-if can only be used on a <template> tag", el);
+    let evaluate2 = evaluateLater(el, expression);
+    let show = () => {
+      if (el._x_currentIfEl)
+        return el._x_currentIfEl;
+      let clone2 = el.content.cloneNode(true).firstElementChild;
+      addScopeToNode(clone2, {}, el);
+      mutateDom(() => {
+        el.after(clone2);
+        skipDuringClone(() => initTree(clone2))();
+      });
+      el._x_currentIfEl = clone2;
+      el._x_undoIf = () => {
+        mutateDom(() => {
+          destroyTree(clone2);
+          clone2.remove();
+        });
+        delete el._x_currentIfEl;
+      };
+      return clone2;
+    };
+    let hide = () => {
+      if (!el._x_undoIf)
+        return;
+      el._x_undoIf();
+      delete el._x_undoIf;
+    };
+    effect3(() => evaluate2((value) => {
+      value ? show() : hide();
+    }));
+    cleanup2(() => el._x_undoIf && el._x_undoIf());
+  });
+  directive("id", (el, { expression }, { evaluate: evaluate2 }) => {
+    let names = evaluate2(expression);
+    names.forEach((name) => setIdRoot(el, name));
+  });
+  interceptClone((from, to) => {
+    if (from._x_ids) {
+      to._x_ids = from._x_ids;
+    }
+  });
+  mapAttributes(startingWith("@", into(prefix("on:"))));
+  directive("on", skipDuringClone((el, { value, modifiers, expression }, { cleanup: cleanup2 }) => {
+    let evaluate2 = expression ? evaluateLater(el, expression) : () => {};
+    if (el.tagName.toLowerCase() === "template") {
+      if (!el._x_forwardEvents)
+        el._x_forwardEvents = [];
+      if (!el._x_forwardEvents.includes(value))
+        el._x_forwardEvents.push(value);
+    }
+    let removeListener = on(el, value, modifiers, (e) => {
+      evaluate2(() => {}, { scope: { $event: e }, params: [e] });
+    });
+    cleanup2(() => removeListener());
+  }));
+  warnMissingPluginDirective("Collapse", "collapse", "collapse");
+  warnMissingPluginDirective("Intersect", "intersect", "intersect");
+  warnMissingPluginDirective("Focus", "trap", "focus");
+  warnMissingPluginDirective("Mask", "mask", "mask");
+  function warnMissingPluginDirective(name, directiveName, slug) {
+    directive(directiveName, (el) => warn(`You can't use [x-${directiveName}] without first installing the "${name}" plugin here: https://alpinejs.dev/plugins/${slug}`, el));
+  }
+  alpine_default.setEvaluator(normalEvaluator);
+  alpine_default.setRawEvaluator(normalRawEvaluator);
+  alpine_default.setReactivityEngine({ reactive: reactive2, effect: effect2, release: stop, raw: toRaw });
+  var src_default = alpine_default;
+  var module_default = src_default;
+
+  // node_modules/@alpinejs/morph/dist/module.esm.js
+  function morph(from, toHtml, options) {
+    monkeyPatchDomSetAttributeToAllowAtSymbols();
+    let context = createMorphContext(options);
+    let toEl = typeof toHtml === "string" ? createElement(toHtml) : toHtml;
+    if (window.Alpine && window.Alpine.closestDataStack && !from._x_dataStack) {
+      toEl._x_dataStack = window.Alpine.closestDataStack(from);
+      toEl._x_dataStack && window.Alpine.cloneNode(from, toEl);
+    }
+    context.patch(from, toEl);
+    return from;
+  }
+  function morphBetween(startMarker, endMarker, toHtml, options = {}) {
+    monkeyPatchDomSetAttributeToAllowAtSymbols();
+    let context = createMorphContext(options);
+    let fromContainer = startMarker.parentNode;
+    let fromBlock = new Block(startMarker, endMarker);
+    let toContainer = typeof toHtml === "string" ? (() => {
+      let container = document.createElement("div");
+      container.insertAdjacentHTML("beforeend", toHtml);
+      return container;
+    })() : toHtml;
+    let toStartMarker = document.createComment("[morph-start]");
+    let toEndMarker = document.createComment("[morph-end]");
+    toContainer.insertBefore(toStartMarker, toContainer.firstChild);
+    toContainer.appendChild(toEndMarker);
+    let toBlock = new Block(toStartMarker, toEndMarker);
+    if (window.Alpine && window.Alpine.closestDataStack) {
+      toContainer._x_dataStack = window.Alpine.closestDataStack(fromContainer);
+      toContainer._x_dataStack && window.Alpine.cloneNode(fromContainer, toContainer);
+    }
+    context.patchChildren(fromBlock, toBlock);
+  }
+  function createMorphContext(options = {}) {
+    let defaultGetKey = (el) => el.getAttribute("key");
+    let noop = () => {};
+    let context = {
+      key: options.key || defaultGetKey,
+      lookahead: options.lookahead || false,
+      updating: options.updating || noop,
+      updated: options.updated || noop,
+      removing: options.removing || noop,
+      removed: options.removed || noop,
+      adding: options.adding || noop,
+      added: options.added || noop
+    };
+    context.patch = function(from, to) {
+      if (context.differentElementNamesTypesOrKeys(from, to)) {
+        return context.swapElements(from, to);
+      }
+      let updateChildrenOnly = false;
+      let skipChildren = false;
+      let skipUntil = (predicate) => context.skipUntilCondition = predicate;
+      if (shouldSkipChildren(context.updating, () => skipChildren = true, skipUntil, from, to, () => updateChildrenOnly = true))
+        return;
+      if (from.nodeType === 1 && window.Alpine) {
+        window.Alpine.cloneNode(from, to);
+        if (from._x_teleport && to._x_teleport) {
+          context.patch(from._x_teleport, to._x_teleport);
+        }
+      }
+      if (textOrComment(to)) {
+        context.patchNodeValue(from, to);
+        context.updated(from, to);
+        return;
+      }
+      if (!updateChildrenOnly) {
+        context.patchAttributes(from, to);
+      }
+      context.updated(from, to);
+      if (!skipChildren) {
+        context.patchChildren(from, to);
+      }
+    };
+    context.differentElementNamesTypesOrKeys = function(from, to) {
+      return from.nodeType != to.nodeType || from.nodeName != to.nodeName || context.getKey(from) != context.getKey(to);
+    };
+    context.swapElements = function(from, to) {
+      if (shouldSkip(context.removing, from))
+        return;
+      let toCloned = to.cloneNode(true);
+      if (shouldSkip(context.adding, toCloned))
+        return;
+      from.replaceWith(toCloned);
+      context.removed(from);
+      context.added(toCloned);
+    };
+    context.patchNodeValue = function(from, to) {
+      let value = to.nodeValue;
+      if (from.nodeValue !== value) {
+        from.nodeValue = value;
+      }
+    };
+    context.patchAttributes = function(from, to) {
+      if (from._x_transitioning)
+        return;
+      if (from._x_isShown && !to._x_isShown) {
+        return;
+      }
+      if (!from._x_isShown && to._x_isShown) {
+        return;
+      }
+      let domAttributes = Array.from(from.attributes);
+      let toAttributes = Array.from(to.attributes);
+      for (let i = domAttributes.length - 1;i >= 0; i--) {
+        let name = domAttributes[i].name;
+        if (!to.hasAttribute(name)) {
+          if (name === "open" && from.nodeName === "DIALOG" && from.open) {
+            from.close();
+          } else {
+            from.removeAttribute(name);
+          }
+        }
+      }
+      for (let i = toAttributes.length - 1;i >= 0; i--) {
+        let name = toAttributes[i].name;
+        let value = toAttributes[i].value;
+        if (from.getAttribute(name) !== value) {
+          from.setAttribute(name, value);
+        }
+      }
+    };
+    context.patchChildren = function(from, to) {
+      let fromKeys = context.keyToMap(from.children);
+      let fromKeyHoldovers = {};
+      let currentTo = getFirstNode(to);
+      let currentFrom = getFirstNode(from);
+      while (currentTo) {
+        seedingMatchingId(currentTo, currentFrom);
+        let toKey = context.getKey(currentTo);
+        let fromKey = context.getKey(currentFrom);
+        if (context.skipUntilCondition) {
+          let fromDone = !currentFrom || context.skipUntilCondition(currentFrom);
+          let toDone = !currentTo || context.skipUntilCondition(currentTo);
+          if (fromDone && toDone) {
+            context.skipUntilCondition = null;
+          } else {
+            if (!fromDone)
+              currentFrom = currentFrom && getNextSibling(from, currentFrom);
+            if (!toDone)
+              currentTo = currentTo && getNextSibling(to, currentTo);
+            continue;
+          }
+        }
+        if (!currentFrom) {
+          if (toKey && fromKeyHoldovers[toKey]) {
+            let holdover = fromKeyHoldovers[toKey];
+            from.appendChild(holdover);
+            currentFrom = holdover;
+            fromKey = context.getKey(currentFrom);
+          } else {
+            if (!shouldSkip(context.adding, currentTo)) {
+              let clone = currentTo.cloneNode(true);
+              from.appendChild(clone);
+              context.added(clone);
+            }
+            currentTo = getNextSibling(to, currentTo);
+            continue;
+          }
+        }
+        let isIf = (node) => node && node.nodeType === 8 && node.textContent === "[if BLOCK]><![endif]";
+        let isEnd = (node) => node && node.nodeType === 8 && node.textContent === "[if ENDBLOCK]><![endif]";
+        if (isIf(currentTo) && isIf(currentFrom)) {
+          let nestedIfCount = 0;
+          let fromBlockStart = currentFrom;
+          while (currentFrom) {
+            let next = getNextSibling(from, currentFrom);
+            if (isIf(next)) {
+              nestedIfCount++;
+            } else if (isEnd(next) && nestedIfCount > 0) {
+              nestedIfCount--;
+            } else if (isEnd(next) && nestedIfCount === 0) {
+              currentFrom = next;
+              break;
+            }
+            currentFrom = next;
+          }
+          let fromBlockEnd = currentFrom;
+          nestedIfCount = 0;
+          let toBlockStart = currentTo;
+          while (currentTo) {
+            let next = getNextSibling(to, currentTo);
+            if (isIf(next)) {
+              nestedIfCount++;
+            } else if (isEnd(next) && nestedIfCount > 0) {
+              nestedIfCount--;
+            } else if (isEnd(next) && nestedIfCount === 0) {
+              currentTo = next;
+              break;
+            }
+            currentTo = next;
+          }
+          let toBlockEnd = currentTo;
+          let fromBlock = new Block(fromBlockStart, fromBlockEnd);
+          let toBlock = new Block(toBlockStart, toBlockEnd);
+          context.patchChildren(fromBlock, toBlock);
+          continue;
+        }
+        if (currentFrom.nodeType === 1 && context.lookahead && !currentFrom.isEqualNode(currentTo)) {
+          let nextToElementSibling = getNextSibling(to, currentTo);
+          let found = false;
+          while (!found && nextToElementSibling) {
+            if (nextToElementSibling.nodeType === 1 && currentFrom.isEqualNode(nextToElementSibling)) {
+              found = true;
+              currentFrom = context.addNodeBefore(from, currentTo, currentFrom);
+              fromKey = context.getKey(currentFrom);
+            }
+            nextToElementSibling = getNextSibling(to, nextToElementSibling);
+          }
+        }
+        if (toKey !== fromKey) {
+          if (!toKey && fromKey) {
+            fromKeyHoldovers[fromKey] = currentFrom;
+            currentFrom = context.addNodeBefore(from, currentTo, currentFrom);
+            fromKeyHoldovers[fromKey].remove();
+            currentFrom = getNextSibling(from, currentFrom);
+            currentTo = getNextSibling(to, currentTo);
+            continue;
+          }
+          if (toKey && !fromKey) {
+            if (fromKeys[toKey]) {
+              currentFrom.replaceWith(fromKeys[toKey]);
+              currentFrom = fromKeys[toKey];
+              fromKey = context.getKey(currentFrom);
+            }
+          }
+          if (toKey && fromKey) {
+            let fromKeyNode = fromKeys[toKey];
+            if (fromKeyNode) {
+              fromKeyHoldovers[fromKey] = currentFrom;
+              currentFrom.replaceWith(fromKeyNode);
+              currentFrom = fromKeyNode;
+              fromKey = context.getKey(currentFrom);
+            } else {
+              fromKeyHoldovers[fromKey] = currentFrom;
+              currentFrom = context.addNodeBefore(from, currentTo, currentFrom);
+              fromKeyHoldovers[fromKey].remove();
+              currentFrom = getNextSibling(from, currentFrom);
+              currentTo = getNextSibling(to, currentTo);
+              continue;
+            }
+          }
+        }
+        let currentFromNext = currentFrom && getNextSibling(from, currentFrom);
+        context.patch(currentFrom, currentTo);
+        currentTo = currentTo && getNextSibling(to, currentTo);
+        currentFrom = currentFromNext;
+      }
+      let removals = [];
+      while (currentFrom) {
+        if (!shouldSkip(context.removing, currentFrom))
+          removals.push(currentFrom);
+        currentFrom = getNextSibling(from, currentFrom);
+      }
+      while (removals.length) {
+        let domForRemoval = removals.shift();
+        domForRemoval.remove();
+        context.removed(domForRemoval);
+      }
+    };
+    context.getKey = function(el) {
+      return el && el.nodeType === 1 && context.key(el);
+    };
+    context.keyToMap = function(els) {
+      let map = {};
+      for (let el of els) {
+        let theKey = context.getKey(el);
+        if (theKey) {
+          map[theKey] = el;
+        }
+      }
+      return map;
+    };
+    context.addNodeBefore = function(parent, node, beforeMe) {
+      if (!shouldSkip(context.adding, node)) {
+        let clone = node.cloneNode(true);
+        parent.insertBefore(clone, beforeMe);
+        context.added(clone);
+        return clone;
+      }
+      return node;
+    };
+    return context;
+  }
+  morph.step = () => {};
+  morph.log = () => {};
+  function shouldSkip(hook, ...args) {
+    let skip = false;
+    hook(...args, () => skip = true);
+    return skip;
+  }
+  function shouldSkipChildren(hook, skipChildren, skipUntil, ...args) {
+    let skip = false;
+    hook(...args, () => skip = true, skipChildren, skipUntil);
+    return skip;
+  }
+  var patched = false;
+  function createElement(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    return template.content.firstElementChild;
+  }
+  function textOrComment(el) {
+    return el.nodeType === 3 || el.nodeType === 8;
+  }
+  var Block = class {
+    constructor(start, end) {
+      this.startComment = start;
+      this.endComment = end;
+    }
+    get children() {
+      let children = [];
+      let currentNode = this.startComment.nextSibling;
+      while (currentNode && currentNode !== this.endComment) {
+        children.push(currentNode);
+        currentNode = currentNode.nextSibling;
+      }
+      return children;
+    }
+    appendChild(child) {
+      this.endComment.before(child);
+    }
+    get firstChild() {
+      let first = this.startComment.nextSibling;
+      if (first === this.endComment)
+        return;
+      return first;
+    }
+    nextNode(reference) {
+      let next = reference.nextSibling;
+      if (next === this.endComment)
+        return;
+      return next;
+    }
+    insertBefore(newNode, reference) {
+      reference.before(newNode);
+      return newNode;
+    }
+  };
+  function getFirstNode(parent) {
+    return parent.firstChild;
+  }
+  function getNextSibling(parent, reference) {
+    let next;
+    if (parent instanceof Block) {
+      next = parent.nextNode(reference);
+    } else {
+      next = reference.nextSibling;
+    }
+    return next;
+  }
+  function monkeyPatchDomSetAttributeToAllowAtSymbols() {
+    if (patched)
+      return;
+    patched = true;
+    let original = Element.prototype.setAttribute;
+    let hostDiv = document.createElement("div");
+    Element.prototype.setAttribute = function newSetAttribute(name, value) {
+      if (!name.includes("@")) {
+        return original.call(this, name, value);
+      }
+      let escapedValue = value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+      hostDiv.innerHTML = `<span ${name}="${escapedValue}"></span>`;
+      let attr = hostDiv.firstElementChild.getAttributeNode(name);
+      hostDiv.firstElementChild.removeAttributeNode(attr);
+      this.setAttributeNode(attr);
+    };
+  }
+  function seedingMatchingId(to, from) {
+    let fromId = from && from._x_bindings && from._x_bindings.id;
+    if (!fromId)
+      return;
+    if (!to.setAttribute)
+      return;
+    to.setAttribute("id", fromId);
+    to.id = fromId;
+  }
+  function src_default2(Alpine) {
+    Alpine.morph = morph;
+    Alpine.morphBetween = morphBetween;
+  }
+  var module_default2 = src_default2;
+
+  // client_js/src/alpine.js
+  module_default.plugin(module_default2);
+  module_default.magic("glue", (element) => globalThis.Glue?.from(element) || null);
+  var installed = false;
+  var started2 = false;
+  function installAlpine() {
+    if (globalThis.Alpine && globalThis.Alpine !== module_default) {
+      throw new GlueAlpineError("Glue bundles Alpine.js. Remove the separate Alpine core script from this page.");
+    }
+    if (installed)
+      return;
+    installed = true;
+    globalThis.Alpine = module_default;
+    const start = () => {
+      if (started2)
+        return;
+      if (globalThis.Alpine !== module_default) {
+        throw new GlueAlpineError("Another script replaced Glue's Alpine.js. Remove the separate Alpine core script.");
+      }
+      started2 = true;
+      module_default.start();
+    };
+    if (document.readyState === "complete") {
+      queueMicrotask(start);
+    } else {
+      document.addEventListener("DOMContentLoaded", start, { once: true });
+      globalThis.addEventListener("load", start, { once: true });
+    }
+  }
+  function reactive3(object) {
+    if (object === null || typeof object !== "object")
+      return object;
+    return module_default.reactive(object);
+  }
+  function morph2(element, html, options = {}) {
+    return module_default.morph(element, html, options);
+  }
+  function addScopeToNode2(element, scope) {
+    module_default.addScopeToNode(element, scope);
+  }
+
+  // client_js/src/htmlRenderer.js
+  function htmlToFragment(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    return template.content;
+  }
+  function resolveElement(target) {
+    return typeof target === "string" ? document.querySelector(target) : target;
+  }
+  var HtmlRenderer = (Base = class {
+  }) => class extends Base {
+    async renderInnerHtml(target, payload = {}) {
+      const element = this._resolveHtmlTarget(target);
+      const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
+      const next = element.cloneNode(false);
+      next.innerHTML = html;
+      this._morphHtml(element, next, true);
+      return html;
+    }
+    async renderOuterHtml(target, payload = {}) {
+      const element = this._resolveHtmlTarget(target);
+      const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
+      const fragment = htmlToFragment(html);
+      const nodes = [...fragment.childNodes].filter((node) => node.nodeType !== Node.COMMENT_NODE && !(node.nodeType === Node.TEXT_NODE && !node.textContent.trim()));
+      if (nodes.length !== 1 || nodes[0].nodeType !== Node.ELEMENT_NODE) {
+        throw new GlueProxyError("renderOuterHtml requires exactly one root element.");
+      }
+      this._morphHtml(element, nodes[0]);
+      return html;
+    }
+    _morphHtml(element, next, inner = false) {
+      const client = this._client;
+      const previousAddresses = client ? [
+        ...element.matches?.("[data-glue-address]") ? [element] : [],
+        ...element.querySelectorAll("[data-glue-address]")
+      ].map((node) => node.getAttribute("data-glue-address")) : [];
+      morph2(element, next, {
+        key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
+        updating(node, to, childrenOnly, skip) {
+          if (node.hasAttribute?.("data-morph-ignore"))
+            return skip();
+          if (inner && node === element)
+            childrenOnly();
+        }
+      });
+      client?.registerComponentsFromDom(document);
+      previousAddresses.forEach((address) => {
+        if (![...document.querySelectorAll("[data-glue-address]")].some((node) => node.getAttribute("data-glue-address") === address))
+          client._registry.dispose(address);
+      });
+    }
+    _resolveHtmlTarget(target) {
+      const element = resolveElement(target);
+      if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+        throw new GlueProxyError(`HTML target was not found or is not an element: ${target}`);
+      }
+      return element;
+    }
+    async _renderInsertAdjacentHtml(target, position, payload = {}) {
+      if (!["beforebegin", "afterbegin", "beforeend", "afterend"].includes(position)) {
+        throw new GlueProxyError(`Invalid insert position: ${position}`);
+      }
+      const element = this._resolveHtmlTarget(target);
+      const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
+      const fragment = htmlToFragment(html);
+      if (position === "beforebegin")
+        element.before(fragment);
+      else if (position === "afterbegin")
+        element.prepend(fragment);
+      else if (position === "beforeend")
+        element.append(fragment);
+      else
+        element.after(fragment);
+      this._client?.registerComponentsFromDom(document);
+      return html;
+    }
+    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
+      return this._renderInsertAdjacentHtml(target, "beforebegin", payload);
+    }
+    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
+      return this._renderInsertAdjacentHtml(target, "afterbegin", payload);
+    }
+    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
+      return this._renderInsertAdjacentHtml(target, "beforeend", payload);
+    }
+    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
+      return this._renderInsertAdjacentHtml(target, "afterend", payload);
+    }
+  };
+
+  class HtmlResult extends HtmlRenderer() {
+    constructor(html, client = null) {
+      super();
+      this.html = html;
+      this._client = client;
+    }
+    toString() {
+      return this.html;
+    }
+    async _getHtml() {
+      return this.html;
+    }
+  }
+  function htmlResultFromResponse(data, client) {
+    client?.loadObjects(data?.objects || []);
+    return new HtmlResult(data?.html || "", client);
+  }
+  var htmlRenderer_default = HtmlRenderer;
+
   // client_js/src/view.js
-  class GlueView {
+  function toQueryString(data) {
+    const params = new URLSearchParams;
+    Object.entries(data).forEach(([key, value]) => {
+      const values = Array.isArray(value) ? value : [value];
+      values.forEach((item) => params.append(key, item !== null && typeof item === "object" ? JSON.stringify(item) : String(item)));
+    });
+    return params;
+  }
+
+  class GlueView extends htmlRenderer_default() {
     constructor(http, url, sharedPayload = {}) {
+      super();
       this.http = http;
-      this.url = new URL(url, window.location.origin).pathname;
+      const resolved = new URL(url, window.location.origin);
+      this.url = `${resolved.pathname}${resolved.search}`;
       this.sharedPayload = sharedPayload;
     }
     async get(payload = {}) {
@@ -298,75 +4143,32 @@
     async post(payload = {}) {
       return await this._fetchView(payload, "POST");
     }
-    async renderInnerHtml(target, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      element.replaceChildren(htmlToFragment(html));
-      return html;
-    }
-    async renderOuterHtml(target, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      element.replaceWith(htmlToFragment(html));
-      return html;
-    }
-    async _renderInsertAdjacentHtml(target, position, payload = {}) {
-      const element = resolveElement(target);
-      const html = await this.post(payload);
-      const fragment = htmlToFragment(html);
-      if (position === "beforebegin") {
-        element.before(fragment);
-      } else if (position === "afterbegin") {
-        element.prepend(fragment);
-      } else if (position === "beforeend") {
-        element.append(fragment);
-      } else if (position === "afterend") {
-        element.after(fragment);
-      } else {
-        throw new Error(`Invalid insert position: ${position}`);
-      }
-      return html;
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "afterbegin", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
-      return await this._renderInsertAdjacentHtml(target, "afterend", payload);
+    async _getHtml(payload = {}) {
+      return this.post(payload);
     }
     async _fetchView(payload = {}, method = "POST") {
-      const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
-        method: "POST",
-        contentType: "application/json",
-        csrfProtected: true,
-        body: JSON.stringify({
-          url_path: this.url,
-          method,
-          view_payload: {
-            ...this.sharedPayload,
-            ...payload
-          }
-        })
-      });
-      globalThis.Glue.loadManifests(response.data?.manifest_list || []);
-      return response.data?.html || "";
+      const data = { ...this.sharedPayload, ...payload };
+      const headers = { Accept: this.http._config.glueViewMediaType };
+      let response;
+      if (method === "GET") {
+        const target = new URL(this.url, window.location.origin);
+        toQueryString(data).forEach((value, key) => target.searchParams.append(key, value));
+        response = await this.http.sendRequest(`${target.pathname}${target.search}`, { method: "GET", headers });
+      } else {
+        response = await this.http.sendRequest(this.url, {
+          method: "POST",
+          headers,
+          contentType: "application/json",
+          csrfProtected: true,
+          body: JSON.stringify(data)
+        });
+      }
+      if (response.data?.is_glue_template_response !== true)
+        return null;
+      return htmlResultFromResponse(response.data, globalThis.Glue).html;
     }
   }
   var view_default = GlueView;
-
-  // client_js/src/proxies/registry.js
-  var NAMESPACE_TO_PROXY_CLASS = {};
-  function registerProxyClass(namespace, proxyClass) {
-    NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
-  }
-  function getProxyClass(namespace) {
-    return NAMESPACE_TO_PROXY_CLASS[namespace];
-  }
 
   // client_js/src/policy.js
   class GluePolicy {
@@ -399,405 +4201,216 @@
   }
   var policy_default = GluePolicy;
 
-  // client_js/src/htmlResult.js
-  class GlueHtmlResult {
-    constructor(html) {
-      this.html = html;
-    }
-    toString() {
-      return this.html;
-    }
-    async renderInnerHtml(target) {
-      resolveElement(target).replaceChildren(htmlToFragment(this.html));
-      return this.html;
-    }
-    async renderOuterHtml(target) {
-      resolveElement(target).replaceWith(htmlToFragment(this.html));
-      return this.html;
-    }
-    async _renderInsertAdjacentHtml(target, position) {
-      const element = resolveElement(target);
-      const fragment = htmlToFragment(this.html);
-      if (position === "beforebegin") {
-        element.before(fragment);
-      } else if (position === "afterbegin") {
-        element.prepend(fragment);
-      } else if (position === "beforeend") {
-        element.append(fragment);
-      } else if (position === "afterend") {
-        element.after(fragment);
-      } else {
-        throw new Error(`Invalid insert position: ${position}`);
-      }
-      return this.html;
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(target) {
-      return await this._renderInsertAdjacentHtml(target, "beforebegin");
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target) {
-      return await this._renderInsertAdjacentHtml(target, "afterbegin");
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target) {
-      return await this._renderInsertAdjacentHtml(target, "beforeend");
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target) {
-      return await this._renderInsertAdjacentHtml(target, "afterend");
-    }
-  }
-  var htmlResult_default = GlueHtmlResult;
-
   // client_js/src/proxies/base.js
-  function isPlainObject2(value) {
-    if (value === null || typeof value !== "object") {
-      return false;
-    }
-    const prototype = Object.getPrototypeOf(value);
-    return prototype === Object.prototype || prototype === null;
-  }
-
   class BaseGlueProxy {
-    constructor({
-      http,
-      policy,
-      state = {},
-      metadata = {},
-      owner = null,
-      client = null,
-      loadingStrategy = "lazy"
-    }) {
-      this._http = http;
-      if (!(policy instanceof policy_default)) {
-        throw new TypeError("Glue proxies require a decoded GluePolicy instance.");
-      }
-      this._policy = policy;
-      this._name = policy?.name;
-      this._state = state || {};
-      this._metadata = metadata || {};
-      this._client = client;
-      this._listeners = { before: {}, after: {}, error: {} };
+    constructor({ http, record, registry, client = null, owner = null }) {
+      Object.defineProperties(this, {
+        _http: { value: http, enumerable: false, configurable: true },
+        _record: { value: record, enumerable: false, configurable: true },
+        _registry: { value: registry, enumerable: false, configurable: true },
+        _client: { value: client, enumerable: false, configurable: true }
+      });
+      this._eventListeners = new Map;
       this._onMessage = null;
       this._onError = null;
-      this._loadingStrategy = loadingStrategy;
-      this._loaded = loadingStrategy === "eager" || this._hasPopulatedState;
       Object.defineProperty(this, "_owner", {
         value: owner,
         writable: true,
         enumerable: false,
         configurable: true
       });
-      this._initializeAttributes();
+    }
+    get _policy() {
+      return this._record.policy;
+    }
+    get _name() {
+      return this._record.policy.name;
     }
     get $owner() {
       return this._owner;
     }
-    addListener(attribute, callback, when = "after") {
-      if (!this._listeners[when]) {
-        this._listeners[when] = {};
+    $on(name, callback) {
+      if (!(this._record.staticData?.events || []).includes(name)) {
+        throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`);
       }
-      if (!this._listeners[when][attribute]) {
-        this._listeners[when][attribute] = [];
-      }
-      this._listeners[when][attribute].push(callback);
+      const listeners = this._eventListeners.get(name) || new Set;
+      listeners.add(callback);
+      this._eventListeners.set(name, listeners);
+      return () => listeners.delete(callback);
+    }
+    _onDispose() {
+      this._eventListeners.clear();
+    }
+    async $refresh({ submit = false } = {}) {
+      await this._callAttribute(null, {}, { submit });
       return this;
     }
-    removeListener(attribute, callback, when = "after") {
-      const listeners = this._listeners[when]?.[attribute];
-      if (!listeners) {
-        return this;
-      }
-      this._listeners[when][attribute] = listeners.filter((listener) => listener !== callback);
-      return this;
-    }
-    async _callAttribute(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}, options = {}) {
       const attributeRequest = { attribute, kwargs };
-      const attributeMetadata = this._metadata?.attributes?.[attribute] || {};
-      this._emit("before", attribute, { attributeRequest, object: this });
+      return this._record.enqueue(async () => {
+        try {
+          const { result, discarded } = await this._attempt(attribute, kwargs, options);
+          if (discarded)
+            return;
+          return result;
+        } catch (error2) {
+          const errorHandler = this._onError || globalThis.Glue?._onError;
+          errorHandler?.({ error: error2, attribute, attributeRequest, proxy: this });
+          throw error2;
+        }
+      });
+    }
+    $dispose() {
+      const owner = this._record.owner;
+      if (owner && owner.path !== null) {
+        throw new GlueProxyError(`address "${this._record.address}" is bound to its owner at path "${owner.path}"; ` + "only the owner can remove it (via a successor children map, an effects.dispose, or by disposing the owner).");
+      }
+      this._registry.dispose(this._record.address);
+      return this;
+    }
+    async _attempt(attribute, kwargs, options) {
+      if (this._record.disposed) {
+        throw new GlueAddressError("disposed", `address "${this._record.address}" has been disposed`, this._record.address, this._ownerReference());
+      }
+      if (this._record.stale) {
+        throw this._staleError();
+      }
       try {
-        const response = await this._http.sendAttributeRequest({
-          name: this._name,
-          policyToken: this._policy.token,
-          state: this._stateForAttribute(attributeMetadata.takes_client_state),
+        return await this._singleCall(attribute, kwargs, options);
+      } catch (error2) {
+        if (!(error2 instanceof GlueAddressError && error2.code === "policy_expired")) {
+          throw error2;
+        }
+        if (!await this._reintroduceWithOwner()) {
+          this._record.stale = true;
+          error2.owner = this._ownerReference();
+          throw error2;
+        }
+        return await this._singleCall(attribute, kwargs, options);
+      }
+    }
+    async _singleCall(attribute, kwargs, { submit = true, companions = [] } = {}) {
+      const requestCapture = this._record.captureRequest();
+      if (!submit)
+        requestCapture.updates = {};
+      const companionCaptures = companions.map((record) => {
+        const capture = record.captureRequest();
+        capture.updates = {};
+        return { record, capture };
+      });
+      const controller = companions.length ? null : new AbortController;
+      this._record.inFlightController = controller;
+      let response;
+      try {
+        response = await this._http.sendAttributeRequest({
+          address: this._record.address,
+          policyToken: this._record.policyToken,
+          updates: requestCapture.updates,
           attribute,
-          kwargs
+          kwargs,
+          companions,
+          signal: controller?.signal ?? null
         });
-        this._applyResponse(response.data);
-        const result = this._convertResultManifestsToProxies(response.data?.result);
-        if (response.data) {
-          response.data.result = result;
+      } catch (error2) {
+        if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+          return { result: undefined, response: null, discarded: true };
         }
-        this._processMessages(response.data);
-        this._emit("after", attribute, {
-          attributeRequest,
-          object: this,
-          proxy: this,
-          response: response.data
+        throw error2;
+      } finally {
+        if (this._record.inFlightController === controller)
+          this._record.inFlightController = null;
+      }
+      if (this._record.disposed || this._registry.getRecord(this._record.address) !== this._record || requestCapture.generation !== this._record.generation) {
+        return { result: undefined, response: response.data, discarded: true };
+      }
+      const objects = response.data?.objects;
+      if (!Array.isArray(objects)) {
+        throw new GlueProxyError("Glue response is missing the objects envelope.");
+      }
+      const target = objects.find((entry) => entry?.address === this._record.address);
+      if (!target) {
+        throw new GlueProxyError(`Glue response has no entry for address "${this._record.address}".`);
+      }
+      const companionAddresses = new Set(companions.map((record) => record.address));
+      const introduced = objects.filter((entry) => entry !== target && !companionAddresses.has(entry?.address));
+      if (target.error) {
+        throw new GlueAddressError(target.error.code, target.error.message, this._record.address);
+      }
+      if (target.html !== undefined) {
+        this._client.loadObjects(introduced);
+      } else {
+        introduced.forEach((entry) => this._registry.introduce(entry));
+      }
+      companionCaptures.forEach(({ record, capture }) => {
+        const entry = objects.find((candidate) => candidate?.address === record.address);
+        if (!entry || entry.error || record.disposed)
+          return;
+        this._client._dispatcher.reconcile(record.address, entry, capture);
+      });
+      this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
+      const rawResult = target.result;
+      const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
+      if (target.html !== undefined && this._policy.namespace === "component" && this.$el) {
+        await result.renderOuterHtml(this.$el);
+      }
+      if (typeof rawResult === "string" && this._glueResult(attribute)) {
+        const childRecord = this._registry.getRecord(rawResult);
+        if (childRecord && !childRecord.owner) {
+          childRecord.owner = { address: this._record.address, path: null };
+        }
+      }
+      target.result = result;
+      this._processEffects(target);
+      return { result, response: response.data };
+    }
+    async _reintroduceWithOwner() {
+      const owner = this._record.owner;
+      if (!owner?.path)
+        return false;
+      const ownerProxy = this._registry.getProxy(owner.address);
+      const ownerRecord = ownerProxy?._record;
+      if (!ownerRecord || ownerRecord.stale)
+        return false;
+      this._record.stale = true;
+      try {
+        const ownerCapture = ownerRecord.captureRequest();
+        const response = await this._http.sendAttributeRequest({
+          address: owner.address,
+          policyToken: ownerRecord.policyToken,
+          updates: {},
+          reintroduce: [owner.path]
         });
-        return result;
-      } catch (error) {
-        this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error });
-        const errorHandler = this._onError || window.Glue?._onError;
-        if (errorHandler) {
-          errorHandler({ error, attribute, attributeRequest, proxy: this });
-        }
-        throw error;
+        const objects = response.data?.objects;
+        if (!Array.isArray(objects))
+          return false;
+        const ownerEntry = objects.find((entry) => entry?.address === owner.address);
+        if (!ownerEntry || ownerEntry.error)
+          return false;
+        objects.filter((entry) => entry !== ownerEntry).forEach((entry) => this._registry.introduce(entry));
+        this._client._dispatcher.reconcile(owner.address, ownerEntry, ownerCapture);
+        return objects.some((entry) => entry?.address === this._record.address && !entry.error);
+      } catch {
+        return false;
       }
     }
-    _stateForAttribute(takesClientState) {
-      if (takesClientState === false) {
+    _staleError() {
+      const owner = this._ownerReference();
+      const slotPath = this._record.owner?.path;
+      const message = owner ? slotPath !== null ? `policy expired; reintroduce it through its owner "${owner.name}" (address "${owner.address}")` : `policy expired; this result was produced by "${owner.name}" (address "${owner.address}"); re-run the call that produced it` : "policy expired; this address cannot be reintroduced through an owner, reload the page or re-run the call that produced it";
+      return new GlueAddressError("policy_expired", message, this._record.address, owner);
+    }
+    _ownerReference() {
+      const owner = this._record.owner;
+      if (!owner)
         return null;
-      }
-      if (Array.isArray(takesClientState)) {
-        return Object.fromEntries(takesClientState.filter((key) => Object.prototype.hasOwnProperty.call(this._state || {}, key)).map((key) => [key, this._state[key]]));
-      }
-      return this._state;
-    }
-    _applyResponse(data = {}) {
-      const shouldRefreshGlueObjectAttributes = Boolean(data.policy_token || data.metadata);
-      if (data.policy_token) {
-        this._policy = policy_default.fromSignedPolicyToken(data.policy_token);
-      }
-      if (data.metadata !== undefined) {
-        this._metadata = data.metadata || {};
-      }
-      if (data.state !== undefined) {
-        this._applyState(data.state || {});
-        this._loaded = true;
-      }
-      if (data.loading_strategy !== undefined) {
-        this._loadingStrategy = data.loading_strategy;
-        this._loaded = data.loading_strategy === "eager" || this._hasPopulatedState;
-      }
-      if (shouldRefreshGlueObjectAttributes) {
-        this._refreshGlueObjectAttributes();
-      }
-    }
-    _invalidateGlueObjectCache() {
-      Object.keys(this).forEach((key) => {
-        if (key.startsWith("__glue_object__")) {
-          delete this[key];
-        }
-      });
-    }
-    _applyState(state) {
-      const nextState = state || {};
-      if (!this._state || typeof this._state !== "object") {
-        this._state = nextState;
-        return;
-      }
-      this._mergeState(this._state, nextState);
-    }
-    _mergeState(target, source) {
-      Object.keys(target).forEach((key) => {
-        if (!(key in source)) {
-          delete target[key];
-        }
-      });
-      Object.keys(source).forEach((key) => {
-        const sourceValue = source[key];
-        if (isPlainObject2(sourceValue)) {
-          if (!isPlainObject2(target[key])) {
-            target[key] = {};
-          }
-          this._mergeState(target[key], sourceValue);
-        } else {
-          target[key] = sourceValue;
-        }
-      });
-    }
-    get _hasPopulatedState() {
-      return this._state && typeof this._state === "object" && Object.keys(this._state).length > 0;
-    }
-    _configureAttributeInitializers() {
-      this._attributeBuilders = {
-        composite: (owner, name, qualName, meta) => this._initializeCompositeAttribute(owner, name, qualName, meta),
-        callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
-        readonly: (owner, name, qualName, meta) => this._initializeReadOnlyAttribute(owner, name, qualName, meta),
-        state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta)
+      const ownerProxy = this._registry.getProxy(owner.address);
+      return {
+        name: ownerProxy?._name ?? owner.address,
+        address: owner.address
       };
     }
-    _initializeAttributes() {
-      this._configureAttributeInitializers();
-      (this._policy?.attributes || []).forEach((attribute) => {
-        if (typeof attribute === "string") {
-          const attributeMetadata = this._metadata?.attributes?.[attribute];
-          if (attributeMetadata) {
-            this._initializeAttribute(attribute, attributeMetadata);
-          }
-        } else if (attribute?.name) {
-          const parentPrefix = this._name ? `${this._name}.` : "";
-          const relativeName = attribute.name.startsWith(parentPrefix) ? attribute.name.slice(parentPrefix.length) : attribute.name;
-          const attributeMetadata = this._metadata?.attributes?.[relativeName] || {};
-          this._initializeGlueObjectAttribute(attribute, attributeMetadata);
-        }
-      });
-      this._initializeGlueObjectAliases();
-    }
-    _initializeGlueObjectAliases() {
-      const metadataAttrs = this._metadata?.attributes || {};
-      for (const [attrKey, attrMeta] of Object.entries(metadataAttrs)) {
-        if (attrMeta.namespace !== "glue")
-          continue;
-        const targetName = attrMeta.name;
-        if (!targetName || targetName === attrKey)
-          continue;
-        const parts = attrKey.split(".");
-        const aliasName = parts.pop();
-        const owner = this._resolveAttributeOwner(parts);
-        if (owner[aliasName] !== undefined)
-          continue;
-        const targetParts = targetName.split(".");
-        const targetAttrName = targetParts.pop();
-        const targetOwner = this._resolveAttributeOwner(targetParts);
-        Object.defineProperty(owner, aliasName, {
-          get() {
-            return targetOwner[targetAttrName];
-          },
-          enumerable: true,
-          configurable: true
-        });
-      }
-    }
-    _initializeAttribute(attributeQualName, attributeMetadata) {
-      const parts = attributeQualName.split(".");
-      const attributeName = parts.pop();
-      const owner = this._resolveAttributeOwner(parts);
-      if (owner[attributeName] !== undefined) {
-        return;
-      }
-      const initializeAttribute = this._attributeBuilders[attributeMetadata.namespace];
-      if (initializeAttribute) {
-        initializeAttribute(owner, attributeName, attributeQualName, attributeMetadata);
-      }
-    }
-    _initializeCompositeAttribute(owner, attributeName) {
-      this._defineCompositeAttribute(owner, attributeName);
-    }
-    _initializeCallableAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-      Object.defineProperty(owner, attributeName, {
-        value: async function(kwargs = {}) {
-          const root = owner.__glue__root || this;
-          return await root._callAttribute(attributeQualName, kwargs);
-        },
-        enumerable: false,
-        configurable: true
-      });
-    }
-    _initializeGlueObjectAttribute(attributePolicy, attributeMetadata) {
-      const attributeQualName = attributePolicy.name;
-      const parentPrefix = this._name ? `${this._name}.` : "";
-      const relativeName = attributeQualName.startsWith(parentPrefix) ? attributeQualName.slice(parentPrefix.length) : attributeQualName;
-      const parts = relativeName.split(".");
-      const attributeName = parts.pop();
-      const owner = this._resolveAttributeOwner(parts);
-      const existingDescriptor = Object.getOwnPropertyDescriptor(owner, attributeName);
-      if (existingDescriptor?.configurable) {
-        delete owner[attributeName];
-      } else if (existingDescriptor) {
-        return;
-      }
-      const nestedMetadata = attributeMetadata.metadata || {};
-      const nestedNamespace = attributeMetadata.glue_namespace || attributePolicy.namespace;
-      const ProxyClass = getProxyClass(nestedNamespace);
-      if (!ProxyClass) {
-        return;
-      }
-      const proxy = this;
-      const cacheKey = `__glue_object__${attributePolicy.name}`;
-      const nestedState = proxy._state?.[relativeName] || {};
-      const nestedLoadingStrategy = typeof attributeMetadata.lazy === "boolean" ? attributeMetadata.lazy ? "lazy" : "eager" : proxy._loadingStrategy;
-      if (proxy[cacheKey]) {
-        proxy[cacheKey]._policy = attributePolicy;
-        proxy[cacheKey]._applyResponse({
-          state: nestedState,
-          metadata: nestedMetadata
-        });
-      }
-      Object.defineProperty(owner, attributeName, {
-        get() {
-          if (!proxy[cacheKey]) {
-            const nestedProxy = new ProxyClass({
-              http: proxy._http,
-              policy: attributePolicy,
-              state: nestedState,
-              metadata: nestedMetadata,
-              owner: proxy,
-              client: proxy._client,
-              loadingStrategy: nestedLoadingStrategy
-            });
-            proxy[cacheKey] = nestedProxy;
-          }
-          return proxy[cacheKey];
-        },
-        enumerable: true,
-        configurable: true
-      });
-    }
-    _initializeStateAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-      Object.defineProperty(owner, attributeName, {
-        get() {
-          const root = this.__glue__root || this;
-          return root._state?.[attributeQualName];
-        },
-        set(value) {
-          const root = this.__glue__root || this;
-          if (!root._state)
-            root._state = {};
-          root._state[attributeQualName] = value;
-        },
-        enumerable: true,
-        configurable: true
-      });
-    }
-    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
-      Object.defineProperty(owner, attributeName, {
-        get() {
-          const root = this.__glue__root || this;
-          return root._state?.[attributeQualName]?.value;
-        },
-        enumerable: true,
-        configurable: true
-      });
-    }
-    _resolveAttributeOwner(parts) {
-      return parts.reduce((current, part) => {
-        if (current[part] === undefined) {
-          this._defineCompositeAttribute(current, part);
-        }
-        return current[part];
-      }, this);
-    }
-    _defineCompositeAttribute(owner, attributeName) {
-      const cacheKey = Symbol(`__glue__${attributeName}`);
-      Object.defineProperty(owner, attributeName, {
-        get: function() {
-          if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
-            Object.defineProperty(this, cacheKey, {
-              value: {},
-              enumerable: false,
-              configurable: true
-            });
-          }
-          Object.defineProperty(this[cacheKey], "__glue__root", {
-            value: this.__glue__root || this,
-            enumerable: false,
-            configurable: true
-          });
-          return this[cacheKey];
-        },
-        enumerable: false,
-        configurable: true
-      });
-    }
-    _refreshGlueObjectAttributes() {
-      (this._policy?.attributes || []).forEach((attribute) => {
-        if (!attribute?.name || typeof attribute === "string") {
-          return;
-        }
-        const parentPrefix = this._name ? `${this._name}.` : "";
-        const relativeName = attribute.name.startsWith(parentPrefix) ? attribute.name.slice(parentPrefix.length) : attribute.name;
-        const attributeMetadata = this._metadata?.attributes?.[relativeName] || {};
-        this._initializeGlueObjectAttribute(attribute, attributeMetadata);
-      });
+    _refreshMaterializedInterface() {
+      this._registry?.refresh(this._record);
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -807,114 +4420,740 @@
       this._onError = callback;
       return this;
     }
-    _processMessages(data = {}) {
-      if (!data.messages?.length || typeof window === "undefined") {
+    _processEffects(entry = {}) {
+      const effects = entry.effects;
+      if (!effects)
         return;
+      const dispose = effects.dispose;
+      if (dispose?.length) {
+        dispose.forEach((address) => this._registry.dispose(address));
       }
-      const handler = this._onMessage || window.Glue?._onMessage;
-      handler?.({ messages: data.messages, proxy: this });
-    }
-    _emit(when, attribute, payload) {
-      const listeners = [
-        ...this._listeners[when]?.[attribute] || [],
-        ...this._listeners[when]?.["*"] || []
-      ];
-      listeners.forEach((listener) => listener(payload));
-    }
-    _convertResultManifestsToProxies(result) {
-      if (!this._client) {
-        return result;
+      const redirect = effects.redirect;
+      if (redirect?.url && typeof window !== "undefined") {
+        window.location.assign(redirect.url);
       }
+      const messages = effects.messages;
+      if (messages?.length && typeof window !== "undefined") {
+        const handler = this._onMessage || window.Glue?._onMessage;
+        handler?.({ messages, proxy: this });
+      }
+      effects.events?.forEach(({ name, detail }) => {
+        const event = {
+          type: name,
+          detail: { ...detail, $address: this._record.address },
+          source: this
+        };
+        this._eventListeners.get(name)?.forEach((listener) => listener(event));
+        if (this.$el && typeof CustomEvent !== "undefined") {
+          const domEvent = new CustomEvent(name, { detail: event.detail, bubbles: true });
+          domEvent.source = this;
+          this.$el.dispatchEvent(domEvent);
+        }
+      });
+    }
+    _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
-        return result.map((item) => this._convertResultManifestsToProxies(item));
+        return result.map((item) => this._convertResult(item, attribute));
       }
-      if (!result || typeof result !== "object") {
+      if (typeof result === "string" && this._glueResult(attribute)) {
+        return this._registry.getProxy(result) ?? result;
+      }
+      if (!result || typeof result !== "object")
         return result;
-      }
-      if (this._resultIsManifest(result)) {
-        return this._client._createProxyFromManifest(result);
-      }
-      if (this._resultIsTemplateResponse(result)) {
-        this._client.loadManifests(result.manifest_list);
-        return new htmlResult_default(result.html);
-      }
       Object.keys(result).forEach((key) => {
-        result[key] = this._convertResultManifestsToProxies(result[key]);
+        result[key] = this._convertResult(result[key], attribute);
       });
       return result;
     }
-    _resultIsManifest(result) {
-      return result?.is_glue_manifest === true;
-    }
-    _resultIsTemplateResponse(result) {
-      return result?.is_glue_template_response === true;
+    _glueResult(attribute) {
+      if (!attribute)
+        return false;
+      return Boolean(this._record.staticData?.callables?.[attribute]?.returns_glue);
     }
   }
   var base_default = BaseGlueProxy;
 
   // client_js/src/proxies/sequence.js
   class GlueSequenceProxy extends base_default {
-    constructor(options) {
-      super(options);
-      this._itemProxies = new Map;
-      this._syncItemsFromState();
-    }
     get items() {
-      return Array.from(this._itemProxies.values());
+      const keys = this._policy.identity?.item_keys || Object.keys(this._policy.children || {});
+      return keys.map((key) => this._registry.getProxy(this._policy.children?.[key])).filter(Boolean);
     }
     get length() {
-      return this._itemProxies.size;
+      return this.items.length;
     }
     at(index) {
       return this.items.at(index);
     }
     [Symbol.iterator]() {
-      return this._itemProxies.values();
-    }
-    _applyResponse(data = {}) {
-      super._applyResponse(data);
-      if (data.state !== undefined) {
-        this._syncItemsFromState();
-      }
-    }
-    _syncItemsFromState() {
-      const manifests = this._state?.items || [];
-      const oldProxies = this._itemProxies;
-      const nextProxies = new Map;
-      manifests.forEach((manifest, index) => {
-        const policy = policy_default.fromSignedPolicyToken(manifest.policy_token);
-        const key = policy.name || `${this._name}.${index}`;
-        const existing = oldProxies.get(key);
-        if (existing) {
-          existing._policy = policy;
-          existing._applyResponse({
-            state: manifest.state,
-            metadata: manifest.metadata,
-            loading_strategy: manifest.loading_strategy
-          });
-          nextProxies.set(key, existing);
-          return;
-        }
-        const ProxyClass = getProxyClass(policy.namespace) || base_default;
-        nextProxies.set(key, new ProxyClass({
-          http: this._http,
-          policy,
-          state: manifest.state,
-          metadata: manifest.metadata,
-          owner: this,
-          client: this._client,
-          loadingStrategy: manifest.loading_strategy || this._loadingStrategy
-        }));
-      });
-      this._itemProxies = nextProxies;
+      return this.items[Symbol.iterator]();
     }
   }
   var sequence_default = GlueSequenceProxy;
 
+  // client_js/src/proxies/fieldBacked.js
+  class FieldBackedGlueProxy extends base_default {
+    constructor(options) {
+      super(options);
+      this._fields = {};
+    }
+    get $fields() {
+      return this._fields;
+    }
+    get $pk() {
+      const pkField = this._policy?.identity?.pk_field_name || "id";
+      return this._policy?.identity?.target_pk ?? this._record.getValue(pkField);
+    }
+    get $key() {
+      return this.$pk ?? this._name;
+    }
+    hasErrors(fieldName = null) {
+      if (fieldName) {
+        return Boolean(this._record.getFieldComputed(fieldName).errors?.length);
+      }
+      return Object.values(this._record.computedData.fields || {}).some((fieldData) => fieldData?.errors?.length > 0);
+    }
+  }
+  var fieldBacked_default = FieldBackedGlueProxy;
+
+  // client_js/src/proxies/form.js
+  class GlueFormProxy extends fieldBacked_default {
+  }
+  var form_default = GlueFormProxy;
+
+  // client_js/src/proxies/formset.js
+  class GlueFormSetProxy extends base_default {
+    constructor(options) {
+      super(options);
+      this.nonFormErrors = [];
+      this._removedKeys = new Set;
+      this._nextKey = Object.keys(this._policy.children || {}).length;
+    }
+    get forms() {
+      return Object.entries(this._policy.children || {}).filter(([key]) => !this._removedKeys.has(key)).map(([, address]) => this._registry.getProxy(address)).filter(Boolean);
+    }
+    get length() {
+      return this.forms.length;
+    }
+    async append(initial = {}) {
+      const key = String(this._nextKey++);
+      const form = await this._callAttribute("append", { key, initial });
+      this._removedKeys.delete(key);
+      return form;
+    }
+    pop(key) {
+      const entry = Object.entries(this._policy.children || {}).find(([, address]) => this._registry.getProxy(address)?.$key === key);
+      if (!entry)
+        return;
+      this._removedKeys.add(entry[0]);
+      return this._registry.getProxy(entry[1]);
+    }
+    async validate() {
+      const result = await this._callAttribute("validate");
+      this._removedKeys.clear();
+      this.nonFormErrors = result?.non_form_errors || [];
+      return result;
+    }
+  }
+  var formset_default = GlueFormSetProxy;
+
+  // client_js/src/proxies/function.js
+  class GlueFunctionProxy extends base_default {
+    static create(options) {
+      const object = new GlueFunctionProxy(options);
+      const callable = async (kwargs = {}) => await object.execute(kwargs);
+      return new Proxy(callable, {
+        get(target, prop) {
+          if (prop in object) {
+            const value = object[prop];
+            return typeof value === "function" ? value.bind(object) : value;
+          }
+          return target[prop];
+        },
+        set(target, prop, value) {
+          object[prop] = value;
+          return true;
+        }
+      });
+    }
+    async execute(kwargs = {}) {
+      const result = await this._callAttribute("execute", this._filterKwargs(kwargs));
+      return result?.result ?? result;
+    }
+    _filterKwargs(kwargs) {
+      const params = this._normalizeParams(this._record.staticData.params || []);
+      if (!params.length) {
+        return kwargs;
+      }
+      return Object.fromEntries(Object.entries(kwargs).filter(([key]) => params.includes(key)));
+    }
+    _normalizeParams(params) {
+      return params.map((param) => typeof param === "string" ? param : param.name).filter(Boolean);
+    }
+  }
+  var function_default = GlueFunctionProxy;
+
+  // client_js/src/proxies/model.js
+  class GlueModelProxy extends fieldBacked_default {
+    _singleCall(attribute, kwargs, options = {}) {
+      const producer = this._record.owner;
+      const producerRecord = attribute === "save" && this._policy.identity?.relation && producer?.path === null ? this._registry.getRecord(producer.address) : null;
+      if (!producerRecord || producerRecord.disposed || producerRecord.stale) {
+        return super._singleCall(attribute, kwargs, options);
+      }
+      return super._singleCall(attribute, kwargs, { ...options, companions: [producerRecord] });
+    }
+  }
+  var model_default = GlueModelProxy;
+
+  // client_js/src/proxies/queryset.js
+  var QUERY_CACHE_LIMIT = 64;
+
+  class GlueQuerySetProxy extends base_default {
+    constructor(options) {
+      super(options);
+      this._modelProxies = new Map;
+      this._loaded = false;
+      this._queryParams = {};
+      this._queryCache = new Map([["{}", this]]);
+      this._seekKey = null;
+      this._hasNext = false;
+      this._batchSize = null;
+      this._total = null;
+      this.loading = false;
+    }
+    get items() {
+      return Array.from(this._modelProxies.values());
+    }
+    get batchSize() {
+      return this._batchSize;
+    }
+    get hasNext() {
+      return this._hasNext;
+    }
+    get total() {
+      return this._total;
+    }
+    [Symbol.iterator]() {
+      if (!this._loaded && !this.loading) {
+        this.loading = true;
+        this.all().finally(() => {
+          this.loading = false;
+        });
+      }
+      return this._modelProxies.values();
+    }
+    async all({ withTotal = false } = {}) {
+      if (this._loaded)
+        return this;
+      const params = withTotal ? { ...this._queryParams, with_total: true } : this._queryParams;
+      this._syncFromResult(await this._callAttribute("query_with_params", params));
+      this._loaded = true;
+      return this;
+    }
+    async refresh() {
+      for (const proxy of this._queryCache.values())
+        proxy._loaded = false;
+      return this.all();
+    }
+    async loadMore() {
+      if (this.loading || !this.hasNext)
+        return this._loaded ? this : this.all();
+      this.loading = true;
+      try {
+        const result = await this._callAttribute("query_with_params", {
+          ...this._queryParams,
+          seek_key: this._seekKey
+        });
+        this._syncFromResult(result, { append: true });
+      } finally {
+        this.loading = false;
+      }
+      return this;
+    }
+    async get(pk) {
+      return await this._callAttribute("get", { pk });
+    }
+    async new(initial = {}) {
+      return await this._callAttribute("new", { initial });
+    }
+    async count() {
+      return await this._callAttribute("count", { filter: this._queryParams.filter });
+    }
+    query(params = {}) {
+      const queryParams = this._mergeQueryParams(params);
+      const key = JSON.stringify(queryParams);
+      if (!this._queryCache.has(key)) {
+        const view = Object.create(Object.getPrototypeOf(this));
+        Object.defineProperties(view, Object.getOwnPropertyDescriptors(this));
+        view._modelProxies = new Map(this._modelProxies);
+        view._queryParams = queryParams;
+        view._loaded = false;
+        this._queryCache.set(key, view);
+        for (const cacheKey of this._queryCache.keys()) {
+          if (this._queryCache.size <= QUERY_CACHE_LIMIT)
+            break;
+          if (cacheKey !== "{}")
+            this._queryCache.delete(cacheKey);
+        }
+      }
+      return this._queryCache.get(key);
+    }
+    filter(filter = {}) {
+      return this.query({ filter });
+    }
+    orderBy(orderBy) {
+      return this.query({ order_by: orderBy });
+    }
+    slice(start, stop) {
+      return this.query({ slice: { start, stop } });
+    }
+    async $refresh(options = {}) {
+      if (this._viewForSignedQuery() !== this) {
+        this._loaded = false;
+        return this.all();
+      }
+      await super.$refresh(options);
+      return this;
+    }
+    _afterRecordRefresh() {
+      const received = this._record.receivedComputedData;
+      if (!Array.isArray(received?.items))
+        return;
+      const view = this._viewForSignedQuery();
+      if (!view)
+        return;
+      view._syncFromResult(received);
+      view._loaded = true;
+    }
+    _viewForSignedQuery() {
+      const querySignature = ({ filter, order_by: orderBy } = {}) => JSON.stringify([
+        filter && Object.keys(filter).length ? filter : null,
+        orderBy ?? null
+      ]);
+      const signed = querySignature(this._record.policy?.state_snapshot?.last_query_params || {});
+      return Array.from(this._queryCache.values()).find((view) => !(view._queryParams.slice && Object.keys(view._queryParams.slice).length) && querySignature(view._queryParams) === signed);
+    }
+    _syncFromResult(result = {}, { append = false } = {}) {
+      const next = append ? new Map(this._modelProxies) : new Map;
+      (result.items || []).forEach((item, index) => {
+        const proxy = typeof item === "string" ? this._registry.getProxy(item) : item;
+        if (proxy)
+          next.set(proxy._record?.address || String(index), proxy);
+      });
+      this._modelProxies = next;
+      this._seekKey = result.seek_key ?? null;
+      this._hasNext = result.has_next ?? false;
+      this._batchSize = result.batch_size ?? null;
+      if ("total" in result)
+        this._total = result.total;
+    }
+    _mergeQueryParams(params = {}) {
+      const filter = { ...this._queryParams.filter || {}, ...params.filter || {} };
+      const slice = { ...this._queryParams.slice || {}, ...params.slice || {} };
+      const merged = {};
+      if (Object.keys(filter).length)
+        merged.filter = filter;
+      const orderBy = params.order_by ?? this._queryParams.order_by;
+      if (orderBy)
+        merged.order_by = orderBy;
+      if (Object.keys(slice).length)
+        merged.slice = slice;
+      return merged;
+    }
+    _removeModelProxy(proxy) {
+      this._modelProxies.delete(proxy._record.address);
+    }
+    _updateModelProxy(proxy) {
+      this._modelProxies.set(proxy._record.address, proxy);
+    }
+  }
+  var queryset_default = GlueQuerySetProxy;
+
+  // client_js/src/proxies/component.js
+  class GlueComponentProxy extends htmlRenderer_default(base_default) {
+    get $el() {
+      if (this._record.disposed || typeof document === "undefined")
+        return null;
+      return [...document.querySelectorAll("[data-glue-address]")].find((element) => element.getAttribute("data-glue-address") === this._record.address) || null;
+    }
+    async _getHtml(payload = {}) {
+      const result = await this._callAttribute("render", payload);
+      return result?.html ?? result;
+    }
+  }
+  var component_default = GlueComponentProxy;
+
+  // client_js/src/proxies/registry.js
+  var NAMESPACE_TO_PROXY_CLASS = {};
+  function registerProxyClass(namespace, proxyClass) {
+    NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
+  }
+
+  // client_js/src/proxies/index.js
+  var NAMESPACE_TO_PROXY_CLASS2 = {
+    sequence: sequence_default,
+    form: form_default,
+    formSet: formset_default,
+    function: function_default,
+    model: model_default,
+    querySet: queryset_default,
+    component: component_default
+  };
+  Object.entries(NAMESPACE_TO_PROXY_CLASS2).forEach(([namespace, proxyClass]) => {
+    registerProxyClass(namespace, proxyClass);
+  });
+
+  // client_js/src/runtime/state.js
+  function isPlainObject2(value) {
+    if (value === null || typeof value !== "object")
+      return false;
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+  function cloneValue(value) {
+    if (value === null || value === undefined)
+      return value;
+    if (value instanceof Date)
+      return new Date(value);
+    if (Array.isArray(value))
+      return value.map((item) => cloneValue(item));
+    if (isPlainObject2(value)) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
+    }
+    return value;
+  }
+  function valuesEqual(left, right) {
+    if (Object.is(left, right))
+      return true;
+    if (left instanceof Date && right instanceof Date) {
+      return left.valueOf() === right.valueOf();
+    }
+    if (Array.isArray(left) && Array.isArray(right)) {
+      return left.length === right.length && left.every((item, index) => valuesEqual(item, right[index]));
+    }
+    if (isPlainObject2(left) && isPlainObject2(right)) {
+      const leftKeys = Object.keys(left);
+      const rightKeys = Object.keys(right);
+      return leftKeys.length === rightKeys.length && leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && valuesEqual(left[key], right[key]));
+    }
+    return false;
+  }
+  function observeValue(value, onMutation, cache = new WeakMap) {
+    if (!Array.isArray(value) && !isPlainObject2(value))
+      return value;
+    if (cache.has(value))
+      return cache.get(value);
+    Object.keys(value).forEach((key) => {
+      value[key] = observeValue(value[key], onMutation, cache);
+    });
+    const observed = new Proxy(value, {
+      set(target, key, nextValue) {
+        const changed = !valuesEqual(target[key], nextValue);
+        target[key] = observeValue(nextValue, onMutation, cache);
+        if (changed)
+          onMutation();
+        return true;
+      },
+      deleteProperty(target, key) {
+        if (!Object.prototype.hasOwnProperty.call(target, key))
+          return true;
+        delete target[key];
+        onMutation();
+        return true;
+      }
+    });
+    cache.set(value, observed);
+    return observed;
+  }
+  function assembleAuthoritative(policy, computedData) {
+    const values = cloneValue(policy?.state_snapshot || {});
+    Object.entries(computedData || {}).forEach(([path, value]) => {
+      if (path !== "fields")
+        values[path] = cloneValue(value);
+    });
+    return values;
+  }
+  function deriveUpdates(canonical, reactiveValues, editablePaths) {
+    return Object.fromEntries(Array.from(editablePaths).filter((path) => !valuesEqual(canonical[path], reactiveValues[path])).map((path) => [path, cloneValue(reactiveValues[path])]));
+  }
+  function applyUpdates(canonical, updates) {
+    return {
+      ...cloneValue(canonical),
+      ...cloneValue(updates)
+    };
+  }
+  function mergeComputedData(current, incoming) {
+    const merged = cloneValue(current || {});
+    Object.entries(incoming || {}).forEach(([path, value]) => {
+      if (path !== "fields") {
+        merged[path] = cloneValue(value);
+        return;
+      }
+      merged.fields = merged.fields || {};
+      Object.entries(value || {}).forEach(([fieldPath, fieldData]) => {
+        merged.fields[fieldPath] = cloneValue(fieldData);
+      });
+    });
+    return merged;
+  }
+
+  // client_js/src/runtime/addressRecord.js
+  class GlueAddressRecord {
+    constructor({ address, policyToken, staticData = {}, computedData = {} }) {
+      this.address = address;
+      this.policyToken = policyToken;
+      this.policy = policy_default.fromSignedPolicyToken(policyToken);
+      this.staticData = cloneValue(staticData);
+      this.computedData = cloneValue(computedData);
+      this.receivedComputedData = computedData;
+      this.canonical = assembleAuthoritative(this.policy, this.computedData);
+      this.editablePaths = new Set;
+      this.revisions = new Map;
+      this.generation = 0;
+      this.owner = null;
+      this.stale = false;
+      this.disposed = false;
+      this.boundChildren = {};
+      this.displacedChildren = null;
+      this.proxy = null;
+      this._queue = Promise.resolve();
+      this.inFlightController = null;
+      this._suppressMutations = false;
+      this.reactiveValues = reactive3({});
+      this._replaceReactive(this.canonical);
+    }
+    dispose() {
+      this.disposed = true;
+      this.generation += 1;
+      this._queue = Promise.resolve();
+      this.inFlightController?.abort();
+      this.inFlightController = null;
+    }
+    attachProxy(proxy) {
+      this.proxy = proxy;
+      proxy._refreshMaterializedInterface();
+    }
+    setEditablePaths(paths) {
+      this.editablePaths = new Set(paths);
+      paths.forEach((path) => {
+        if (!this.revisions.has(path))
+          this.revisions.set(path, 0);
+      });
+    }
+    getValue(path) {
+      return this.reactiveValues[path];
+    }
+    setValue(path, value) {
+      this.reactiveValues[path] = this._observe(path, cloneValue(value));
+      if (!this._suppressMutations)
+        this._incrementRevision(path);
+    }
+    getFieldComputed(path) {
+      return this.computedData?.fields?.[path] || {};
+    }
+    captureRequest() {
+      return {
+        canonical: cloneValue(this.canonical),
+        updates: deriveUpdates(this.canonical, this.reactiveValues, this.editablePaths),
+        revisions: new Map(this.revisions),
+        generation: this.generation
+      };
+    }
+    enqueue(operation) {
+      const queued = this._queue.then(operation, operation);
+      this._queue = queued.catch(() => {
+        return;
+      });
+      return queued;
+    }
+    introduce(entry) {
+      const wasStale = this.stale;
+      this._applyPolicyToken(entry.policy_token);
+      this.staticData = cloneValue(entry.static_data || {});
+      this.computedData = cloneValue(entry.computed_data || {});
+      this.receivedComputedData = entry.computed_data ?? null;
+      const authoritative = assembleAuthoritative(this.policy, this.computedData);
+      const previousCanonical = this.canonical;
+      this.canonical = authoritative;
+      this._applyAuthoritative(previousCanonical, authoritative, null);
+      if (wasStale)
+        this.generation += 1;
+      this.proxy?._refreshMaterializedInterface();
+    }
+    reconcile(entry, requestCapture) {
+      if (requestCapture?.generation !== undefined && requestCapture.generation !== this.generation)
+        return;
+      if (entry.policy_token !== undefined)
+        this._applyPolicyToken(entry.policy_token);
+      if (entry.static_data !== undefined)
+        this.staticData = cloneValue(entry.static_data || {});
+      this.receivedComputedData = entry.computed_data ?? null;
+      if (entry.computed_data !== undefined) {
+        this.computedData = mergeComputedData(this.computedData, entry.computed_data || {});
+      }
+      const authoritative = assembleAuthoritative(this.policy, this.computedData);
+      const expected = applyUpdates(requestCapture.canonical, requestCapture.updates);
+      this.canonical = authoritative;
+      this._applyAuthoritative(expected, authoritative, requestCapture);
+      this.proxy?._refreshMaterializedInterface();
+    }
+    _applyPolicyToken(policyToken) {
+      const policy = policy_default.fromSignedPolicyToken(policyToken);
+      if (policy.address !== this.address) {
+        throw new Error(`Glue response address "${policy.address}" does not match "${this.address}".`);
+      }
+      this.policyToken = policyToken;
+      this.policy = policy;
+      this.stale = false;
+    }
+    _applyAuthoritative(expected, authoritative, requestCapture) {
+      const paths = new Set([
+        ...Object.keys(expected || {}),
+        ...Object.keys(authoritative || {})
+      ]);
+      this._suppressMutations = true;
+      try {
+        paths.forEach((path) => {
+          if (valuesEqual(expected?.[path], authoritative?.[path]))
+            return;
+          if (this._hasNewerEditableMutation(path, requestCapture, expected))
+            return;
+          if (!Object.prototype.hasOwnProperty.call(authoritative, path)) {
+            delete this.reactiveValues[path];
+            return;
+          }
+          this.reactiveValues[path] = this._observe(path, cloneValue(authoritative[path]));
+        });
+      } finally {
+        this._suppressMutations = false;
+      }
+    }
+    _hasNewerEditableMutation(path, requestCapture, expected) {
+      if (!this.editablePaths.has(path))
+        return false;
+      if (requestCapture) {
+        return (this.revisions.get(path) || 0) > (requestCapture.revisions.get(path) || 0);
+      }
+      return !valuesEqual(this.reactiveValues[path], expected?.[path]);
+    }
+    _replaceReactive(values) {
+      this._suppressMutations = true;
+      try {
+        Object.keys(this.reactiveValues).forEach((path) => delete this.reactiveValues[path]);
+        Object.entries(values || {}).forEach(([path, value]) => {
+          this.reactiveValues[path] = this._observe(path, cloneValue(value));
+        });
+      } finally {
+        this._suppressMutations = false;
+      }
+    }
+    _observe(path, value) {
+      return observeValue(value, () => {
+        if (!this._suppressMutations)
+          this._incrementRevision(path);
+      });
+    }
+    _incrementRevision(path) {
+      if (!this.editablePaths.has(path))
+        return;
+      this.revisions.set(path, (this.revisions.get(path) || 0) + 1);
+    }
+  }
+  var addressRecord_default = GlueAddressRecord;
+
+  // client_js/src/runtime/addressRegistry.js
+  class GlueAddressRegistry {
+    constructor({ client, http, materializer, childBinder }) {
+      this.client = client;
+      this.http = http;
+      this.materializer = materializer;
+      this.childBinder = childBinder;
+      this.records = new Map;
+    }
+    introduce(entry) {
+      if (!entry?.address || !entry?.policy_token) {
+        throw new GlueProxyError("Glue entries require address and policy_token.");
+      }
+      const policy = policy_default.fromSignedPolicyToken(entry.policy_token);
+      if (policy.address !== entry.address) {
+        throw new GlueProxyError(`Glue entry address "${entry.address}" does not match its policy.`);
+      }
+      let record = this.records.get(entry.address);
+      if (!record) {
+        record = new addressRecord_default({
+          address: entry.address,
+          policyToken: entry.policy_token,
+          staticData: entry.static_data,
+          computedData: entry.computed_data
+        });
+        this.records.set(entry.address, record);
+        record.attachProxy(this._createProxy(record));
+      } else {
+        record.introduce(entry);
+      }
+      this.refresh(record);
+      return record.proxy;
+    }
+    refresh(record) {
+      this.materializer.refresh(record);
+      this.childBinder.refresh(record);
+      const displaced = record.displacedChildren;
+      if (displaced) {
+        record.displacedChildren = null;
+        displaced.forEach((address) => this.dispose(address));
+      }
+      record.proxy?._afterRecordRefresh?.();
+    }
+    dispose(address) {
+      const record = this.records.get(address);
+      if (!record || record.disposed)
+        return;
+      const doomed = [address];
+      let index = 0;
+      while (index < doomed.length) {
+        const current = doomed[index];
+        this.records.forEach((candidate) => {
+          if (candidate.owner?.address === current && !doomed.includes(candidate.address)) {
+            doomed.push(candidate.address);
+          }
+        });
+        index += 1;
+      }
+      doomed.forEach((doomedAddress) => {
+        const doomedRecord = this.records.get(doomedAddress);
+        if (!doomedRecord || doomedRecord.disposed)
+          return;
+        doomedRecord.dispose();
+        this.records.delete(doomedAddress);
+        doomedRecord.proxy?._onDispose?.();
+      });
+    }
+    getRecord(address) {
+      return this.records.get(address);
+    }
+    getProxy(address) {
+      return this.records.get(address)?.proxy || null;
+    }
+    _createProxy(record) {
+      const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[record.policy.namespace] || base_default;
+      const options = {
+        http: this.http,
+        record,
+        registry: this,
+        client: this.client
+      };
+      const proxy = record.policy.namespace === "function" ? ProxyClass.create(options) : new ProxyClass(options);
+      return reactive3(proxy);
+    }
+  }
+  var addressRegistry_default = GlueAddressRegistry;
+
   // client_js/src/proxies/fields/base.js
   class FieldGlue {
-    constructor({ owner, name, stateKey, metadata = {} }) {
+    constructor({ owner, name, fieldPath = name, stateKey, metadata = {} }) {
       this.name = name;
+      this.fieldPath = fieldPath;
       this.stateKey = stateKey || name;
       Object.defineProperty(this, "owner", {
         value: owner,
@@ -929,20 +5168,13 @@
       });
     }
     get value() {
-      this.owner._ensureLoaded?.();
-      return this.owner._state?.[this.stateKey]?.value;
+      return this.owner._record.getValue(this.stateKey);
     }
     set value(value) {
-      if (!this.owner._state) {
-        this.owner._state = {};
-      }
-      if (!this.owner._state[this.stateKey]) {
-        this.owner._state[this.stateKey] = {};
-      }
-      this.owner._state[this.stateKey].value = value;
+      this.owner._record.setValue(this.stateKey, value);
     }
     get errors() {
-      return this.owner._state?.[this.stateKey]?.errors || [];
+      return this.owner._record.getFieldComputed(this.fieldPath).errors || [];
     }
     get hasErrors() {
       return Boolean(this.errors?.length);
@@ -951,7 +5183,11 @@
       return this.errors.join(", ");
     }
     updateMetadata(metadata = {}) {
-      Object.assign(this, metadata);
+      for (const key of this._metadataKeys || [])
+        delete this[key];
+      const assignable = Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "errors"));
+      Object.assign(this, assignable);
+      this._metadataKeys = Object.keys(assignable);
     }
     primitiveValue(hint = "default") {
       const value = this.value;
@@ -985,6 +5221,16 @@
   class ChoiceFieldGlue extends base_default2 {
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
+    }
+    choiceLabelHtml(choice) {
+      const label = String(choice?.label ?? "");
+      if (choice?.has_html_label) {
+        return label;
+      }
+      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    choiceLabelText(choice) {
+      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
     }
   }
   var choice_default = ChoiceFieldGlue;
@@ -1086,7 +5332,7 @@
         return Promise.resolve(this._choices || []);
       }
       cache.promise = this.owner.foreign_key_choices({
-        field_name: this.name
+        field_name: this.choice_field || this.name
       }).then((result) => {
         const { results = [] } = result || {};
         this._mergeChoices(results);
@@ -1106,7 +5352,7 @@
       const searchGeneration = this._searchGeneration;
       this._searchQuery = query;
       const searchPromise = this.owner.foreign_key_choices({
-        field_name: this.name,
+        field_name: this.choice_field || this.name,
         search: query
       }).then((result) => {
         if (searchGeneration !== this._searchGeneration || query !== this._searchQuery) {
@@ -1227,14 +5473,15 @@
   var manyRelation_default = ManyRelationFieldGlue;
 
   // client_js/src/proxies/fields/index.js
-  function createFieldGlue({ owner, name, stateKey, metadata = {}, existingField = null }) {
+  function createFieldGlue({ owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null }) {
     if (existingField?.__glue__isFieldProxy) {
       existingField.updateMetadata(metadata);
       existingField.name = name;
+      existingField.fieldPath = fieldPath;
       existingField.stateKey = stateKey;
       return existingField;
     }
-    const options = { owner, name, stateKey, metadata };
+    const options = { owner, name, fieldPath, stateKey, metadata };
     if (metadata.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(metadata.type)) {
       return new manyRelation_default(options);
     }
@@ -1242,7 +5489,7 @@
       return new relation_default(options);
     }
     if (Array.isArray(metadata.choices)) {
-      const stateValue = owner._state?.[stateKey]?.value;
+      const stateValue = owner._record.getValue(stateKey);
       const multipleChoiceTypes = ["MultipleChoiceField", "TypedMultipleChoiceField"];
       const multipleChoiceWidgets = ["CheckboxSelectMultiple", "SelectMultiple"];
       if (Array.isArray(stateValue) || multipleChoiceTypes.includes(metadata.type) || multipleChoiceWidgets.includes(metadata.widget)) {
@@ -1253,542 +5500,180 @@
     return new base_default2(options);
   }
 
-  // client_js/src/proxies/fieldBacked.js
-  class FieldBackedGlueProxy extends base_default {
-    constructor(options) {
-      super(options);
-      this.loading = false;
-      this._loadAttempted = false;
-      this._loadError = null;
-      this._loadPromise = null;
-    }
-    get $fields() {
-      return this._fields;
-    }
-    get $pk() {
-      const pkField = this._policy?.identity?.pk_field_name || "id";
-      return this._policy?.identity?.target_pk ?? this._state?.[pkField]?.value;
-    }
-    get $key() {
-      return this.$pk ?? this._name;
-    }
-    hasErrors(fieldName = null) {
-      if (fieldName) {
-        return Boolean(this._state?.[fieldName]?.errors?.length);
-      }
-      return Object.values(this._state || {}).some((fieldState) => fieldState?.errors?.length > 0);
-    }
-    _ensureLoaded() {
-      if (this._loaded || this._loadAttempted) {
-        return this._loadPromise;
-      }
-      this._loadAttempted = true;
-      this.loading = true;
-      this._loadPromise = this._callAttribute("load_state").catch((error) => {
-        this._loadError = error;
-      }).finally(() => {
-        this.loading = false;
-      });
-      return this._loadPromise;
-    }
-    retryLoad() {
-      this._loadAttempted = false;
-      this._loadError = null;
-      return this._ensureLoaded();
-    }
-    _configureAttributeInitializers() {
-      super._configureAttributeInitializers();
-      this._fields = {};
-      this._attributeBuilders.field = (owner, name, qualName, meta) => this._initializeFieldAttribute(owner, name, qualName, meta);
-      this._attributeBuilders.related_field = (owner, name, qualName, meta) => this._initializeRelatedFieldAttribute(owner, name, qualName, meta);
-    }
-    _initializeFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-      this._fields[attributeName] = createFieldGlue({
-        owner: this,
-        name: attributeName,
-        stateKey: attributeQualName,
-        metadata: attributeMetadata,
-        existingField: this._fields[attributeName]
-      });
-      Object.defineProperty(this, attributeName, {
-        get() {
-          this._ensureLoaded();
-          return this._state?.[attributeQualName]?.value;
-        },
-        set(value) {
-          this._fields[attributeName].value = value?.__glue__isFieldProxy ? value.value : value;
-        },
-        enumerable: true,
-        configurable: true
-      });
-    }
-    _initializeRelatedFieldAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-      const proxy = this;
-      const cacheKey = `__glue_object__${this._name}.${attributeQualName}`;
-      if (!(attributeName in this)) {
-        Object.defineProperty(this, attributeName, {
-          get() {
-            return proxy[cacheKey] || null;
-          },
-          enumerable: true,
+  // client_js/src/runtime/attributeMaterializer.js
+  function resolveOwner(root, path) {
+    return path.reduce((owner, segment) => {
+      if (!Object.prototype.hasOwnProperty.call(owner, segment)) {
+        Object.defineProperty(owner, segment, {
+          value: {},
+          enumerable: false,
           configurable: true
         });
       }
-    }
+      return owner[segment];
+    }, root);
   }
-  var fieldBacked_default = FieldBackedGlueProxy;
-
-  // client_js/src/proxies/form.js
-  class GlueFormProxy extends fieldBacked_default {
+  function definePath(root, path, descriptor) {
+    const segments = path.split(".");
+    const name = segments.pop();
+    const owner = resolveOwner(root, segments);
+    const existing = Object.getOwnPropertyDescriptor(owner, name);
+    if (existing?.configurable === false)
+      return;
+    Object.defineProperty(owner, name, {
+      ...descriptor,
+      configurable: true
+    });
   }
-  var form_default = GlueFormProxy;
 
-  // client_js/src/proxies/formset.js
-  class GlueFormSetProxy extends base_default {
-    constructor(options) {
-      super(options);
-      this._formProxyCache = new Map;
-      this._formProxies = this._initialForms();
-      this._nextKey = this._formProxies.size;
-      this.nonFormErrors = [];
-      this._hasPendingLocalEdit = false;
+  class GlueAttributeMaterializer {
+    constructor() {
+      this.pathsByRecord = new WeakMap;
     }
-    get forms() {
-      return Array.from(this._formProxies.values());
-    }
-    get length() {
-      return this._formProxies.size;
-    }
-    async append(initial = {}) {
-      const key = String(this._nextKey++);
-      const form = await this._callAttribute("append", { key, initial });
-      this._formProxies = new Map(this._formProxies).set(key, form);
-      this._hasPendingLocalEdit = true;
-      return form;
-    }
-    pop(key) {
-      const entry = Array.from(this._formProxies.entries()).find(([, form]) => form.$key === key);
-      if (!entry)
+    refresh(record) {
+      const proxy = record.proxy;
+      if (!proxy)
         return;
-      const [mapKey, removed] = entry;
-      const nextEntries = Array.from(this._formProxies.entries()).filter(([existingKey]) => existingKey !== mapKey);
-      this._formProxies = new Map(nextEntries);
-      this._hasPendingLocalEdit = true;
-      return removed;
-    }
-    async validate() {
-      const result = await this._callAttribute("validate");
-      this._formProxies = new Map((result?.form_list || []).map((form, index) => [String(index), form]));
-      this._hasPendingLocalEdit = false;
-      this.nonFormErrors = result?.non_form_errors || [];
-      return result;
-    }
-    _stateForAttribute(takesClientState) {
-      if (takesClientState === false) {
-        return null;
+      const fields = record.staticData.fields || {};
+      const childPaths = new Set(Object.keys(record.staticData.children || {}));
+      const callablePaths = Object.keys(record.staticData.callables || {});
+      const paths = new Set([
+        ...Object.keys(fields),
+        ...childPaths,
+        ...callablePaths
+      ]);
+      for (const previousPath of this.pathsByRecord.get(record) || []) {
+        if (paths.has(previousPath))
+          continue;
+        const segments = previousPath.split(".");
+        const name = segments.pop();
+        let owner = proxy;
+        for (const segment of segments)
+          owner = owner?.[segment];
+        if (owner)
+          delete owner[name];
       }
-      return { form_list: this.forms.map((form) => form._state) };
-    }
-    _applyResponse(data = {}) {
-      super._applyResponse(data);
-      if (this._hasPendingLocalEdit || !(data.policy_token || data.metadata || data.state))
-        return;
-      this._formProxies = this._initialForms();
-    }
-    _initialForms() {
-      if (!this._formProxyCache) {
-        this._formProxyCache = new Map;
-      }
-      const formPolicies = (this._policy?.attributes || []).filter((attribute) => typeof attribute !== "string" && attribute.namespace === "form");
-      const currentKeys = new Set(formPolicies.map((policy, index) => policy.name || `${this._name}.${index}`));
-      Array.from(this._formProxyCache.keys()).forEach((key) => {
-        if (!currentKeys.has(key)) {
-          this._formProxyCache.delete(key);
+      this.pathsByRecord.set(record, paths);
+      proxy._fields ||= {};
+      Object.entries(fields).forEach(([fieldPath, staticData]) => {
+        const valuePath = staticData.value_path || fieldPath;
+        const fieldName = fieldPath.split(".").at(-1);
+        const current = proxy._fields[fieldPath];
+        const field = createFieldGlue({
+          owner: proxy,
+          name: fieldName,
+          fieldPath,
+          stateKey: valuePath,
+          metadata: {
+            ...staticData,
+            ...record.getFieldComputed(fieldPath)
+          },
+          existingField: current
+        });
+        proxy._fields[fieldPath] = field;
+        if (!childPaths.has(fieldPath)) {
+          definePath(proxy, fieldPath, {
+            get() {
+              return record.getValue(valuePath);
+            },
+            ...staticData.editable ? {
+              set(value) {
+                field.value = value?.__glue__isFieldProxy ? value.value : value;
+              }
+            } : {},
+            enumerable: true
+          });
         }
       });
-      return new Map(formPolicies.map((policy, index) => [String(index), this._buildFormProxy(policy, index)]));
-    }
-    _buildFormProxy(policy, index) {
-      const attributeKey = `form_list.${index}`;
-      const metadata = this._metadata?.attributes?.[attributeKey]?.metadata || {};
-      const state = this._state?.[attributeKey] || {};
-      const ProxyClass = getProxyClass(policy.namespace) || base_default;
-      const cacheKey = policy.name || `${this._name}.${index}`;
-      const cachedForm = this._formProxyCache.get(cacheKey);
-      if (cachedForm) {
-        if (cachedForm.policy !== policy || cachedForm.state !== state || cachedForm.metadata !== metadata) {
-          cachedForm.proxy._policy = policy;
-          cachedForm.proxy._applyResponse({ state, metadata, loading_strategy: this._loadingStrategy });
-          cachedForm.policy = policy;
-          cachedForm.state = state;
-          cachedForm.metadata = metadata;
-        }
-        return cachedForm.proxy;
-      }
-      const proxy = new ProxyClass({
-        http: this._http,
-        policy,
-        state,
-        metadata,
-        owner: this,
-        client: this._client,
-        loadingStrategy: this._loadingStrategy
-      });
-      this._formProxyCache.set(cacheKey, {
-        proxy,
-        policy,
-        state,
-        metadata
-      });
-      return proxy;
-    }
-  }
-  var formset_default = GlueFormSetProxy;
-
-  // client_js/src/proxies/function.js
-  class GlueFunctionProxy extends base_default {
-    static create(options) {
-      const object = new GlueFunctionProxy(options);
-      const callable = async (kwargs = {}) => await object.execute(kwargs);
-      return new Proxy(callable, {
-        get(target, prop) {
-          if (prop in object) {
-            const value = object[prop];
-            return typeof value === "function" ? value.bind(object) : value;
-          }
-          return target[prop];
-        },
-        set(target, prop, value) {
-          object[prop] = value;
-          return true;
+      Object.keys(proxy._fields).forEach((path) => {
+        if (!Object.prototype.hasOwnProperty.call(fields, path)) {
+          delete proxy._fields[path];
         }
       });
-    }
-    async execute(kwargs = {}) {
-      const result = await this._callAttribute("execute", this._filterKwargs(kwargs));
-      return result?.result ?? result;
-    }
-    _filterKwargs(kwargs) {
-      const params = this._normalizeParams(this._metadata?.params || this._policy?.identity?.params || []);
-      if (!params.length) {
-        return kwargs;
-      }
-      return Object.fromEntries(Object.entries(kwargs).filter(([key]) => params.includes(key)));
-    }
-    _normalizeParams(params) {
-      return params.map((param) => typeof param === "string" ? param : param.name).filter(Boolean);
-    }
-  }
-  var function_default = GlueFunctionProxy;
-
-  // client_js/src/proxies/model.js
-  class GlueModelProxy extends fieldBacked_default {
-    _configureAttributeInitializers() {
-      super._configureAttributeInitializers();
-      this._attributeBuilders.readonly = (owner, name, qualName) => {
-        this._initializeReadOnlyAttribute(owner, name, qualName);
-      };
-    }
-    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
-      Object.defineProperty(owner, attributeName, {
-        get() {
-          const root = this.__glue__root || this;
-          return root._state?.[attributeQualName]?.value;
-        },
-        enumerable: true,
-        configurable: true
-      });
-    }
-  }
-  var model_default = GlueModelProxy;
-
-  // client_js/src/proxies/queryset.js
-  var QUERY_CACHE_LIMIT = 64;
-
-  class GlueQuerySetProxy extends base_default {
-    constructor(options) {
-      super(options);
-      this._modelProxies = new Map;
-      this._queryParams = options.queryParams || {};
-      this._queryCache = options.queryCache || new Map([[JSON.stringify(this._queryParams), this]]);
-      this._seekKey = null;
-      this._hasNext = false;
-      this._batchSize = null;
-      this._total = null;
-      this.loading = false;
-      if (options.seed) {
-        this._seedFrom(options.seed);
-      }
-      if (this._canHydrateFromState()) {
-        this._syncFromResult(this._state);
-      }
-    }
-    get items() {
-      return Array.from(this);
-    }
-    get batchSize() {
-      return this._batchSize;
-    }
-    get hasNext() {
-      return this._hasNext;
-    }
-    get total() {
-      return this._total;
-    }
-    [Symbol.iterator]() {
-      if (!this._loaded && !this.loading) {
-        this.loading = true;
-        this.all().then(() => {
-          this._loaded = true;
-        }).finally(() => {
-          this.loading = false;
-        });
-      }
-      return this._modelProxies.values();
-    }
-    async all({ withTotal = false } = {}) {
-      if (this._loaded) {
-        return this;
-      }
-      const params = withTotal ? { ...this._queryParams, with_total: true } : this._queryParams;
-      const result = await this.query_with_params(params);
-      this._syncFromResult(result);
-      this._loaded = true;
-      return this;
-    }
-    async refresh() {
-      for (const proxy of this._queryCache.values()) {
-        proxy._loaded = false;
-      }
-      return this.all();
-    }
-    async loadMore() {
-      if (this.loading) {
-        return this;
-      }
-      if (!this._loaded) {
-        return this.all();
-      }
-      if (!this.hasNext) {
-        return this;
-      }
-      this.loading = true;
-      try {
-        const result = await this.query_with_params({ ...this._queryParams, seek_key: this._seekKey });
-        this._syncFromResult(result, { append: true });
-      } finally {
-        this.loading = false;
-      }
-      return this;
-    }
-    async get(pk) {
-      const row = await this._callAttribute("get", { pk });
-      const policy = this._policyForRow(row);
-      const name = row._name || policy.name || `${this._name}.${pk}`;
-      const proxy = this._buildModelProxy(row, this._modelProxies.get(name), policy);
-      this._modelProxies.set(name, proxy);
-      return proxy;
-    }
-    async new(initial = {}) {
-      const newItem = await this._callAttribute("new", { initial });
-      const proxy = this._buildModelProxy(newItem);
-      return proxy;
-    }
-    async count() {
-      return this._callAttribute("count", { filter: this._queryParams.filter });
-    }
-    _applyResponse(data = {}) {
-      super._applyResponse(data);
-      if (data.state !== undefined && this._canHydrateFromState()) {
-        this._syncFromResult(this._state);
-      }
-    }
-    _seedFrom(source) {
-      this._modelProxies = new Map(source._modelProxies);
-      this._batchSize = source._batchSize;
-    }
-    _syncFromResult(result = {}, { append = false } = {}) {
-      const items = result.items || [];
-      const oldProxies = this._modelProxies;
-      this._modelProxies = append ? new Map(oldProxies) : new Map;
-      this._seekKey = result.seek_key ?? null;
-      this._hasNext = result.has_next ?? false;
-      this._batchSize = result.batch_size ?? null;
-      if ("total" in result) {
-        this._total = result.total;
-      }
-      items.forEach((row, index) => {
-        const policy = this._policyForRow(row);
-        const name = row._name || policy.name || `${this._name}.${index}`;
-        const proxy = this._buildModelProxy(row, oldProxies.get(name), policy);
-        this._modelProxies.set(name, proxy);
-      });
-    }
-    _policyForRow(row) {
-      if (row instanceof model_default) {
-        return row._policy;
-      }
-      return policy_default.fromSignedPolicyToken(row.policy_token);
-    }
-    _buildModelProxy(row, existingProxy = null, policy = this._policyForRow(row)) {
-      if (row instanceof model_default) {
-        row._loaded = true;
-        return row;
-      }
-      const rowLoadingStrategy = row.loading_strategy || this._loadingStrategy;
-      let proxy = existingProxy;
-      if (proxy) {
-        proxy._applyResponse({
-          policy_token: row.policy_token,
-          state: row.state,
-          metadata: row.metadata || this._metadata,
-          loading_strategy: rowLoadingStrategy
-        });
-      } else {
-        proxy = new model_default({
-          http: this._http,
-          policy,
-          state: row.state,
-          metadata: row.metadata || this._metadata,
-          client: this._client,
-          owner: this,
-          loadingStrategy: rowLoadingStrategy
-        });
-      }
-      proxy._loaded = true;
-      return proxy;
-    }
-    query(params = {}) {
-      const queryParams = this._mergeQueryParams(params);
-      const key = JSON.stringify(queryParams);
-      if (!this._queryCache.has(key)) {
-        this._queryCache.set(key, this._cloneWithQueryParams(queryParams));
-        this._evictQueryCache();
-      }
-      return this._queryCache.get(key);
-    }
-    _evictQueryCache() {
-      for (const key of this._queryCache.keys()) {
-        if (this._queryCache.size <= QUERY_CACHE_LIMIT) {
+      callablePaths.forEach((path) => {
+        if (!path.includes(".") && !Object.prototype.hasOwnProperty.call(proxy, path) && typeof proxy[path] === "function")
           return;
-        }
-        if (key !== "{}" && this._queryCache.get(key) !== this) {
-          this._queryCache.delete(key);
-        }
-      }
-    }
-    filter(filter = {}) {
-      return this.query({ filter });
-    }
-    orderBy(orderBy) {
-      return this.query({ order_by: orderBy });
-    }
-    slice(start, stop) {
-      return this.query({ slice: { start, stop } });
-    }
-    _cloneWithQueryParams(queryParams = {}) {
-      return new this.constructor({
-        http: this._http,
-        policy: this._policy,
-        state: {},
-        metadata: this._metadata,
-        client: this._client,
-        owner: this._owner,
-        queryParams,
-        queryCache: this._queryCache,
-        seed: this,
-        loadingStrategy: "lazy"
+        definePath(proxy, path, {
+          value: async (kwargs) => await proxy._callAttribute(path, kwargs || {}),
+          enumerable: false,
+          writable: false
+        });
       });
-    }
-    _canHydrateFromState() {
-      return Boolean(this._loaded && Array.isArray(this._state?.items) && !this._hasQueryParams());
-    }
-    _hasQueryParams() {
-      return Object.keys(this._queryParams).length > 0;
-    }
-    _mergeQueryParams(params = {}) {
-      const filter = {
-        ...this._queryParams.filter || {},
-        ...params.filter || {}
-      };
-      const orderBy = params.order_by ?? this._queryParams.order_by;
-      const slice = {
-        ...this._queryParams.slice || {},
-        ...params.slice || {}
-      };
-      const mergedParams = {};
-      if (Object.keys(filter).length) {
-        mergedParams.filter = filter;
-      }
-      if (orderBy) {
-        mergedParams.order_by = orderBy;
-      }
-      if (Object.keys(slice).length) {
-        mergedParams.slice = slice;
-      }
-      return mergedParams;
-    }
-    _removeModelProxy(proxy) {
-      this._modelProxies.delete(proxy._name);
-    }
-    _updateModelProxy(proxy) {
-      this._modelProxies.set(proxy._name, proxy);
+      record.setEditablePaths(Object.entries(fields).filter(([, descriptor]) => descriptor.editable === true).map(([, descriptor]) => descriptor.value_path));
     }
   }
-  var queryset_default = GlueQuerySetProxy;
+  var attributeMaterializer_default = GlueAttributeMaterializer;
 
-  // client_js/src/proxies/template.js
-  class GlueTemplateProxy extends base_default {
-    async renderHtml(payload = {}) {
-      const result = await this._callAttribute("render_html", payload);
-      return result?.html ?? result;
+  // client_js/src/runtime/childBinder.js
+  class GlueChildBinder {
+    constructor(registry) {
+      this.registry = registry;
     }
-    async renderInnerHtml(selector, payload = {}) {
-      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
-      const html = await this.renderHtml(payload);
-      element.innerHTML = html;
-      return html;
+    refresh(record) {
+      if (!record.proxy)
+        return;
+      record.displacedChildren = this._displacedAddresses(record);
+      const paths = new Set([
+        ...Object.keys(record.staticData.children || {}),
+        ...Object.keys(record.policy.children || {})
+      ]);
+      paths.forEach((path) => {
+        const childAddress = record.policy.children?.[path];
+        if (childAddress) {
+          const child = this.registry.getProxy(childAddress);
+          if (child)
+            this._link(child, record, path);
+        }
+        definePath(record.proxy, path, {
+          get: () => {
+            const childAddress = record.policy.children?.[path];
+            if (!childAddress)
+              return null;
+            const child = this.registry.getProxy(childAddress);
+            if (child)
+              this._link(child, record, path);
+            return child;
+          },
+          enumerable: true
+        });
+      });
+      record.boundChildren = { ...record.policy.children || {} };
     }
-    async renderOuterHtml(selector, payload = {}) {
-      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
-      const html = await this.renderHtml(payload);
-      element.outerHTML = html;
-      return html;
+    _displacedAddresses(record) {
+      const current = record.policy.children || {};
+      const displaced = [];
+      Object.entries(record.boundChildren || {}).forEach(([path, oldAddress]) => {
+        if (current[path] !== oldAddress)
+          displaced.push(oldAddress);
+      });
+      return displaced;
     }
-    async _renderInsertAdjacentHtml(selector, position, payload = {}) {
-      const element = typeof selector === "string" ? document.querySelector(selector) : selector;
-      const html = await this.renderHtml(payload);
-      element.insertAdjacentHTML(position, html);
-      return html;
-    }
-    async renderInsertAdjacentHtmlBeforeBegin(selector, payload = {}) {
-      return await this._renderInsertAdjacentHtml(selector, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(selector, payload = {}) {
-      return await this._renderInsertAdjacentHtml(selector, "afterbegin", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(selector, payload = {}) {
-      return await this._renderInsertAdjacentHtml(selector, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(selector, payload = {}) {
-      return await this._renderInsertAdjacentHtml(selector, "afterend", payload);
+    _link(child, record, path) {
+      if (child._owner !== record.proxy)
+        child._owner = record.proxy;
+      child._record.owner = { address: record.address, path };
     }
   }
-  var template_default = GlueTemplateProxy;
+  var childBinder_default = GlueChildBinder;
 
-  // client_js/src/proxies/index.js
-  var NAMESPACE_TO_PROXY_CLASS2 = {
-    sequence: sequence_default,
-    form: form_default,
-    formSet: formset_default,
-    function: function_default,
-    model: model_default,
-    querySet: queryset_default,
-    template: template_default
-  };
-  Object.entries(NAMESPACE_TO_PROXY_CLASS2).forEach(([namespace, proxyClass]) => {
-    registerProxyClass(namespace, proxyClass);
-  });
+  // client_js/src/runtime/responseDispatcher.js
+  class GlueResponseDispatcher {
+    constructor(registry) {
+      this.registry = registry;
+    }
+    introduce(entries = []) {
+      return entries.map((entry) => this.registry.introduce(entry));
+    }
+    reconcile(address, data, requestCapture) {
+      const record = this.registry.getRecord(address);
+      if (!record)
+        throw new Error(`Unknown Glue address "${address}".`);
+      record.reconcile(data || {}, requestCapture);
+      this.registry.refresh(record);
+      return record.proxy;
+    }
+  }
+  var responseDispatcher_default = GlueResponseDispatcher;
 
   // client_js/src/client.js
   class GlueClient {
@@ -1796,12 +5681,22 @@
       this._onMessage = null;
       this._onError = null;
       this._directNamespaces = new Set;
+      this._publicAddresses = new Map;
       this._config = new config_default({
         ...context.config || {},
         urls: context.urls || {}
       });
       this.http = new http_default(this._config);
-      this.loadManifests(context.manifest_list);
+      const materializer = new attributeMaterializer_default;
+      this._registry = new addressRegistry_default({
+        client: this,
+        http: this.http,
+        materializer
+      });
+      this._registry.childBinder = new childBinder_default(this._registry);
+      this._dispatcher = new responseDispatcher_default(this._registry);
+      this.loadObjects(context.objects || []);
+      this._registerComponentsWhenParsed();
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -1818,52 +5713,69 @@
     view(url, sharedPayload = {}) {
       return new view_default(this.http, url, sharedPayload);
     }
-    loadManifests(manifest_list = []) {
-      (manifest_list || []).forEach((manifest) => {
-        this._registerManifest(manifest);
-      });
+    loadObjects(entries = []) {
+      this._dispatcher.introduce(entries);
+      entries.forEach((entry) => this._registry.refresh(this._registry.getRecord(entry.address)));
+      const childAddresses = new Set(entries.flatMap((entry) => Object.values(policy_default.fromSignedPolicyToken(entry.policy_token).children || {})));
+      entries.filter((entry) => !childAddresses.has(entry.address)).forEach((entry) => this._registerPublicEntry(entry));
     }
-    _createProxy({ policy, metadata = {}, state = {}, loading_strategy = "lazy" }) {
-      const namespace = policy?.namespace || metadata?.namespace;
-      const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[namespace] || base_default;
-      if (namespace === "function") {
-        return ProxyClass.create({ http: this.http, policy, metadata });
-      }
-      return new ProxyClass({
-        http: this.http,
-        policy,
-        state,
-        metadata,
-        client: this,
-        loadingStrategy: loading_strategy
-      });
+    _registerComponentsWhenParsed() {
+      if (typeof document === "undefined")
+        return;
+      document.addEventListener("alpine:init", () => this.registerComponentsFromDom(), { once: true });
+      if (document.readyState !== "loading")
+        this.registerComponentsFromDom();
     }
-    _createProxyFromManifest({ policy_token, metadata = {}, state = {}, loading_strategy = "lazy" }) {
-      return this._createProxy({
-        policy: policy_default.fromSignedPolicyToken(policy_token),
-        metadata,
-        state,
-        loading_strategy
+    registerComponentsFromDom(root = document) {
+      const nodes = [
+        ...root.matches?.("[data-glue-address]") ? [root] : [],
+        ...root.querySelectorAll("[data-glue-address]")
+      ];
+      nodes.forEach((node) => {
+        const address = node.getAttribute("data-glue-address");
+        const objects = node.getAttribute("data-glue-objects");
+        if (objects && !this._registry.getRecord(address)) {
+          this.loadObjects(JSON.parse(objects).filter((entry) => !this._registry.getRecord(entry.address)));
+        }
+        const proxy = this._registry.getProxy(address);
+        if (!proxy)
+          return;
+        const parent = node.parentElement?.closest("[data-glue-address]");
+        if (parent) {
+          const record = this._registry.getRecord(address);
+          record.owner ||= { address: parent.getAttribute("data-glue-address"), path: null };
+        }
+        if (!node.hasAttribute("x-data"))
+          node.setAttribute("x-data", "{}");
+        addScopeToNode2(node, { component: proxy });
       });
+      return nodes;
     }
-    _registerManifest({ policy_token, metadata = {}, state = {}, loading_strategy = "lazy" }) {
-      const policy = policy_default.fromSignedPolicyToken(policy_token);
-      const name = policy?.name;
-      const namespace = policy?.namespace || metadata?.namespace;
+    from(element) {
+      const root = element?.closest?.("[data-glue-address]");
+      const record = root && this._registry.getRecord(root.getAttribute("data-glue-address"));
+      return record && !record.disposed ? record.proxy : null;
+    }
+    _registerPublicEntry(entry) {
+      const policy = policy_default.fromSignedPolicyToken(entry.policy_token);
+      const { name, namespace } = policy;
+      if (namespace === "component")
+        return;
       if (!name) {
         throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
       }
       if (!namespace) {
         throw new GlueProxyError(`No Glue proxy class registered for namespace "${namespace}".`);
       }
-      const manifest = { policy, metadata, state, loading_strategy };
+      const key = name === namespace ? namespace : `${namespace}.${name}`;
+      this._publicAddresses.set(key, entry.address);
       if (name === namespace) {
         if (namespace in this && !this._directNamespaces.has(namespace)) {
           throw new GlueProxyError(`Cannot register direct Glue proxy "${namespace}" because that namespace is already registered.`);
         }
         this._directNamespaces.add(namespace);
         Object.defineProperty(this, namespace, {
-          get: () => this._createProxy(manifest),
+          get: () => this._registry.getProxy(this._publicAddresses.get(key)),
           enumerable: true,
           configurable: true
         });
@@ -1872,11 +5784,10 @@
       if (this._directNamespaces.has(namespace)) {
         throw new GlueProxyError(`Cannot register named Glue proxy "${namespace}.${name}" because that namespace is already registered directly.`);
       }
-      if (!(namespace in this)) {
+      if (!(namespace in this))
         this[namespace] = {};
-      }
       Object.defineProperty(this[namespace], name, {
-        get: () => this._createProxy(manifest),
+        get: () => this._registry.getProxy(this._publicAddresses.get(key)),
         enumerable: true,
         configurable: true
       });
@@ -1888,4 +5799,5 @@
   globalThis.GlueClient = client_default;
   globalThis.parseJsonScriptById = parseJsonScriptById;
   globalThis.resolveUrl = resolveUrl;
+  installAlpine();
 })();

@@ -1,154 +1,65 @@
-# Guides
+# Core concepts
 
-## Before You Get Started
+## Register an object
 
-- Make sure you have a solid understanding of how Django works.
-- Familiarity with JavaScript async/await patterns is recommended.
-
-!!! warning
-
-    Follow the [installation instructions](../getting_started/installation.md) before using these guides.
-
-## What These Guides Cover
-
-Each guide demonstrates:
-
-- The purpose of the feature and when to use it.
-- How to use the feature in both the backend (Python) and frontend (JavaScript).
-- Practical examples with code.
-
-!!! note
-
-    These guides focus on the core concepts and common patterns. For complete API references, see the [API documentation](../api/glue/shortcuts.md).
-
-## Core Concepts
-
-### The Proxy Pattern
-
-Django Glue creates proxy objects that act as transparent interfaces between Django objects and JavaScript. Each proxy:
-
-1. Has a **unique name** identifying it in the session
-2. Wraps a **target** (Model instance, QuerySet, Form, Template, or Function)
-3. Has an **access level** (VIEW, CHANGE, or DELETE)
-4. Exposes **actions** callable from JavaScript
-
-### The Glue Shortcut API
-
-All proxy registration goes through the `Glue` class:
+A Django view registers a configured Glue object with a unique page name:
 
 ```python
-from django_glue import Glue, GlueAccess
+from django_glue import Glue
+
+
+def task_page(request):
+    Glue.model(
+        request=request,
+        target=task,
+        unique_name='task',
+        access=Glue.Access.CHANGE,
+        fields=['id', 'title', 'done'],
+    )
+    return render(request, 'tasks/detail.html')
 ```
 
-| Method | Proxy Type | Wraps |
-|--------|------------|-------|
-| `Glue.model()` | `GlueModelProxy` | Single Django model instance |
-| `Glue.queryset()` | `GlueQuerySetProxy` | Django QuerySet collection |
-| `Glue.sequence()` | `GlueSequenceProxy` | Group of Glue objects |
-| `Glue.form()` | `GlueModelProxy` or `GlueFormProxy` | Django ModelForm or regular Form |
-| `Glue.template()` | `GlueTemplateProxy` | Django template by name |
-| `Glue.function()` | `GlueFunctionProxy` | Python callable by dotted path |
+`{% django_glue_init %}` sends the page's addressed objects to the browser.
+The client exposes named roots under `Glue.model`, `Glue.querySet`,
+`Glue.form`, and `Glue.function`. A `Glue.Component` is mounted through
+`{% glue_component %}` and is addressed by its rendered root.
 
-On the frontend, proxies are accessed through the global `Glue` object:
-
-| Namespace | Proxy Type | Example |
-|-----------|------------|---------|
-| `Glue.model` | Model proxies | `Glue.model.task` |
-| `Glue.querySet` | QuerySet proxies | `Glue.querySet.tasks` |
-| `Glue.sequence` | Sequence proxies | `Glue.sequence.days` |
-| `Glue.form` | Form proxies | `Glue.form.contact_form` |
-| `Glue.template` | Template proxies | `Glue.template.card` |
-| `Glue.function` | Function proxies | `await Glue.function.calculate(10, 20)` |
-
-### Access Control
-
-```python
-from django_glue import Glue, GlueAccess
-
-# Permission cascade: DELETE > CHANGE > VIEW
-GlueAccess.VIEW    # Read-only access
-GlueAccess.CHANGE  # Read + write (includes VIEW)
-GlueAccess.DELETE  # Read + write + delete (includes CHANGE)
-```
-
-Access is enforced server-side on every action request. A proxy registered with `CHANGE` can perform any `VIEW` action, and a proxy with `DELETE` can perform any `CHANGE` or `VIEW` action.
-
-### Frontend Access
-
-Proxies are accessed as properties of the global `Glue` object:
+## Work with a proxy
 
 ```javascript
-// Model proxy
-Glue.model.task.title = 'New Title'
-await Glue.model.task.save()
+const task = Glue.model.task
+task.title = 'Prepare report'
+await task.save()
 
-// QuerySet proxy
-const tasks = await Glue.querySet.tasks.all()
-
-// Form proxy
-Glue.form.contact_form.name = 'John'
-const result = await Glue.form.contact_form.validate()
-
-// Template proxy
-await Glue.template.card.renderInnerHtml(document.getElementById('card'), { name: 'John' })
-
-// Function proxy
-const total = await Glue.function.calculate_total(100, 0.08, true)
+const rows = await Glue.querySet.tasks.filter({done: false}).all()
+for (const row of rows.items) console.log(row.title)
 ```
 
-### GlueView
+An address identifies one live proxy. A model's projected relation is a
+separate addressed child; its raw foreign-key value remains a field on the
+model. Queryset rows and component children also have their own addresses.
 
-For dynamically loading HTML fragments from Django views:
+## State and calls
 
-```javascript
-const view = Glue.view('/path/to/view/')
-await view.renderInnerHtml(document.getElementById('target'), { param: 'value' })
-```
+The signed policy token holds authority, reconstruction parameters, retained
+state, and shallow child addresses. Stable field and callable descriptions
+arrive in `static_data`; derived output and validation errors arrive in
+`computed_data`. The browser sends only the difference between its editable
+draft and the last acknowledged state. The server admits those updates,
+runs the call, and returns the successor snapshot.
 
-See the [GlueView Guide](view_glue/view_glue.md) for details.
+Every object arrives complete when introduced. Queryset rows arrive in answer
+to a query. Call `$refresh()` to re-derive an object's server output.
 
-## How Requests Flow
+## Access and lifecycle
 
-Understanding the request lifecycle helps with debugging:
+`VIEW < ADD < CHANGE < DELETE` is the access cascade. `ADD` can create an
+unsaved draft without granting edits to persisted rows. The server checks
+authorization at introduction, reconstruction, and invocation.
 
-1. **Page load**: Your Django view calls `Glue.model()` (etc.) to register proxies. The `{% django_glue_init %}` template tag injects the JS client with proxy metadata.
-2. **Keep-alive**: The JS client periodically pings the server to keep proxies alive in the session.
-3. **Actions**: When JS calls `Glue.model.task.save()`, a POST request is sent to `/__dg__/action/task/save/`. The server reconstructs the proxy from session data, validates permissions, executes the action, and returns the result.
-4. **Expiration**: If the keep-alive stops (e.g., user closes the tab), `DjangoGlueMiddleware` purges expired proxies on the next request.
+Removing a child or collection item disposes its proxy. Existing references
+then reject calls; reintroducing the same address creates a new proxy.
 
-## Nested Glue Attributes
-
-Glue attributes use flat, qualified names for policies and requests. For example,
-a nested service callable is represented as `services.increment_age`.
-
-The frontend metadata distinguishes the attribute kinds:
-
-```json
-{
-  "attributes": {
-    "services": {"namespace": "container"},
-    "services.increment_age": {"namespace": "callable"}
-  }
-}
-```
-
-Containers are structural objects and are not callable or state-bearing
-attributes themselves. They allow custom `BaseGlue` objects to expose nested
-state and callable attributes while the policy continues to use flat qualified
-paths. A nested attribute call still sends its complete qualified name:
-
-```javascript
-await gorilla.services.increment_age()
-```
-
-## Next Steps
-
-- Follow the [Quick Start Tutorial](quick_start.md) for a hands-on walkthrough
-- Read the individual proxy guides for in-depth coverage:
-  - [Model Proxy](model_object_glue.md)
-  - [QuerySet Proxy](query_set_glue.md)
-  - [Form Proxy](form_glue.md)
-  - [Template Proxy](template_glue.md)
-  - [Function Proxy](function_glue.md)
-  - [GlueView](view_glue/view_glue.md)
-- Explore the [Advanced Topics](advanced/access_control.md) section for access control, events, field filtering, and configuration
+Continue with the [model](model_object_glue.md),
+[queryset](query_set_glue.md), [form](form_glue.md), or
+[component](components.md) guide.

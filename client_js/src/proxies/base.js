@@ -1,440 +1,254 @@
-import {getProxyClass} from "./registry"
-import GluePolicy from "../policy"
-import GlueHtmlResult from "../htmlResult"
-
-function isPlainObject(value) {
-    if (value === null || typeof value !== 'object') {
-        return false
-    }
-
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
-}
+import {GlueAddressError, GlueProxyError} from "../errors"
+import {htmlResultFromResponse} from "../htmlRenderer"
 
 class BaseGlueProxy {
-    constructor({
-        http,
-        policy,
-        state = {},
-        metadata = {},
-        owner = null,
-        client = null,
-        loadingStrategy = 'lazy'
-    }) {
-        this._http = http
-        if (!(policy instanceof GluePolicy)) {
-            throw new TypeError('Glue proxies require a decoded GluePolicy instance.')
-        }
-        this._policy = policy
-        this._name = policy?.name
-        this._state = state || {}
-        this._metadata = metadata || {}
-        this._client = client
-        this._listeners = {before: {}, after: {}, error: {}}
+    constructor({http, record, registry, client = null, owner = null}) {
+        Object.defineProperties(this, {
+            _http: {value: http, enumerable: false, configurable: true},
+            _record: {value: record, enumerable: false, configurable: true},
+            _registry: {value: registry, enumerable: false, configurable: true},
+            _client: {value: client, enumerable: false, configurable: true},
+        })
+        this._eventListeners = new Map()
         this._onMessage = null
         this._onError = null
-        this._loadingStrategy = loadingStrategy
-        this._loaded = loadingStrategy === 'eager' || this._hasPopulatedState
 
-        // Non-enumerable to prevent circular reference issues during serialization
         Object.defineProperty(this, '_owner', {
             value: owner,
             writable: true,
             enumerable: false,
             configurable: true,
         })
+    }
 
-        this._initializeAttributes()
+    get _policy() {
+        return this._record.policy
+    }
+
+    get _name() {
+        return this._record.policy.name
     }
 
     get $owner() {
         return this._owner
     }
 
-    addListener(attribute, callback, when = 'after') {
-        if (!this._listeners[when]) {
-            this._listeners[when] = {}
+    $on(name, callback) {
+        if (!(this._record.staticData?.events || []).includes(name)) {
+            throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`)
         }
-        if (!this._listeners[when][attribute]) {
-            this._listeners[when][attribute] = []
-        }
-        this._listeners[when][attribute].push(callback)
+        const listeners = this._eventListeners.get(name) || new Set()
+        listeners.add(callback)
+        this._eventListeners.set(name, listeners)
+        return () => listeners.delete(callback)
+    }
+
+    _onDispose() {
+        this._eventListeners.clear()
+    }
+
+    async $refresh({submit = false} = {}) {
+        await this._callAttribute(null, {}, {submit})
         return this
     }
 
-    removeListener(attribute, callback, when = 'after') {
-        const listeners = this._listeners[when]?.[attribute]
-        if (!listeners) {
-            return this
-        }
-
-        this._listeners[when][attribute] = listeners.filter(listener => listener !== callback)
-        return this
-    }
-
-    async _callAttribute(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}, options = {}) {
         const attributeRequest = {attribute, kwargs}
-        const attributeMetadata = this._metadata?.attributes?.[attribute] || {}
-        this._emit('before', attribute, {attributeRequest, object: this})
 
-        try {
-            const response = await this._http.sendAttributeRequest({
-                name: this._name,
-                policyToken: this._policy.token,
-                state: this._stateForAttribute(attributeMetadata.takes_client_state),
-                attribute,
-                kwargs,
-            })
-
-            this._applyResponse(response.data)
-
-            const result = this._convertResultManifestsToProxies(response.data?.result)
-            if (response.data) {
-                response.data.result = result
+        return this._record.enqueue(async () => {
+            try {
+                const {result, discarded} = await this._attempt(attribute, kwargs, options)
+                if (discarded) return undefined
+                return result
+            } catch (error) {
+                const errorHandler = this._onError || globalThis.Glue?._onError
+                errorHandler?.({error, attribute, attributeRequest, proxy: this})
+                throw error
             }
-
-            this._processMessages(response.data)
-
-            this._emit('after', attribute, {
-                attributeRequest,
-                object: this,
-                proxy: this,
-                response: response.data,
-            })
-
-            return result
-        } catch (error) {
-            this._emit('error', attribute, {attributeRequest, object: this, proxy: this, error})
-            const errorHandler = this._onError || window.Glue?._onError
-
-            if (errorHandler) {
-                errorHandler({error, attribute, attributeRequest, proxy: this})
-            }
-
-            // Always rethrow, even when an onError handler ran: onError is an
-            // observation hook (logging, toasts), not a way to swallow the
-            // failure. Callers rely on await/try-catch to know whether the
-            // call actually succeeded -- silently resolving to undefined here
-            // would make a failed call indistinguishable from one that
-            // legitimately returned nothing.
-            throw error
-        }
+        })
     }
 
-    _stateForAttribute(takesClientState) {
-        if (takesClientState === false) {
-            return null
-        }
-
-        if (Array.isArray(takesClientState)) {
-            return Object.fromEntries(
-                takesClientState
-                    .filter(key => Object.prototype.hasOwnProperty.call(this._state || {}, key))
-                    .map(key => [key, this._state[key]])
+    $dispose() {
+        const owner = this._record.owner
+        if (owner && owner.path !== null) {
+            throw new GlueProxyError(
+                `address "${this._record.address}" is bound to its owner at path "${owner.path}"; ` +
+                'only the owner can remove it (via a successor children map, an effects.dispose, or by disposing the owner).',
             )
         }
-
-        return this._state
+        this._registry.dispose(this._record.address)
+        return this
     }
 
-    _applyResponse(data = {}) {
-        const shouldRefreshGlueObjectAttributes = Boolean(data.policy_token || data.metadata)
-        if (data.policy_token) {
-            this._policy = GluePolicy.fromSignedPolicyToken(data.policy_token)
+    async _attempt(attribute, kwargs, options) {
+        if (this._record.disposed) {
+            throw new GlueAddressError(
+                'disposed',
+                `address "${this._record.address}" has been disposed`,
+                this._record.address,
+                this._ownerReference(),
+            )
         }
-        if (data.metadata !== undefined) {
-            this._metadata = data.metadata || {}
+        if (this._record.stale) {
+            throw this._staleError()
         }
-        if (data.state !== undefined) {
-            this._applyState(data.state || {})
-            this._loaded = true
-        }
-        if (data.loading_strategy !== undefined) {
-            this._loadingStrategy = data.loading_strategy
-            this._loaded = data.loading_strategy === 'eager' || this._hasPopulatedState
-        }
-        if (shouldRefreshGlueObjectAttributes) {
-            this._refreshGlueObjectAttributes()
-        }
-    }
-
-    _invalidateGlueObjectCache() {
-        Object.keys(this).forEach(key => {
-            if (key.startsWith('__glue_object__')) {
-                delete this[key]
+        try {
+            return await this._singleCall(attribute, kwargs, options)
+        } catch (error) {
+            if (!(error instanceof GlueAddressError && error.code === 'policy_expired')) {
+                throw error
             }
-        })
-    }
-
-    _applyState(state) {
-        const nextState = state || {}
-        if (!this._state || typeof this._state !== 'object') {
-            this._state = nextState
-            return
-        }
-        this._mergeState(this._state, nextState)
-    }
-
-    // We merge new state recursively here to trigger Alpine's reactivity.
-    _mergeState(target, source) {
-        // Remove keys not in source
-        Object.keys(target).forEach(key => {
-            if (!(key in source)) {
-                delete target[key]
+            if (!await this._reintroduceWithOwner()) {
+                this._record.stale = true
+                error.owner = this._ownerReference()
+                throw error
             }
-        })
-
-        // Merge source into target
-        Object.keys(source).forEach(key => {
-            const sourceValue = source[key]
-
-            if (isPlainObject(sourceValue)) {
-                if (!isPlainObject(target[key])) {
-                    target[key] = {}
-                }
-                this._mergeState(target[key], sourceValue)
-            } else {
-                target[key] = sourceValue
-            }
-        })
-    }
-
-    get _hasPopulatedState() {
-        return this._state && typeof this._state === 'object' && Object.keys(this._state).length > 0
-    }
-
-    _configureAttributeInitializers() {
-        this._attributeBuilders = {
-            composite: (owner, name, qualName, meta) => this._initializeCompositeAttribute(owner, name, qualName, meta),
-            callable: (owner, name, qualName, meta) => this._initializeCallableAttribute(owner, name, qualName, meta),
-            readonly: (owner, name, qualName, meta) => this._initializeReadOnlyAttribute(owner, name, qualName, meta),
-            state: (owner, name, qualName, meta) => this._initializeStateAttribute(owner, name, qualName, meta),
+            return await this._singleCall(attribute, kwargs, options)
         }
     }
 
-    _initializeAttributes() {
-        this._configureAttributeInitializers();
-
-        (this._policy?.attributes || []).forEach(attribute => {
-            if (typeof attribute === 'string') {
-                const attributeMetadata = this._metadata?.attributes?.[attribute]
-                if (attributeMetadata) {
-                    this._initializeAttribute(attribute, attributeMetadata)
-                }
-            } else if (attribute?.name) {
-                // Nested policy object - look up metadata by relative name
-                const parentPrefix = this._name ? `${this._name}.` : ''
-                const relativeName = attribute.name.startsWith(parentPrefix)
-                    ? attribute.name.slice(parentPrefix.length)
-                    : attribute.name
-                const attributeMetadata = this._metadata?.attributes?.[relativeName] || {}
-                this._initializeGlueObjectAttribute(attribute, attributeMetadata)
-            }
+    async _singleCall(attribute, kwargs, {submit = true, companions = []} = {}) {
+        const requestCapture = this._record.captureRequest()
+        if (!submit) requestCapture.updates = {}
+        const companionCaptures = companions.map(record => {
+            const capture = record.captureRequest()
+            capture.updates = {}
+            return {record, capture}
         })
-
-        // Set up aliases for glue object attributes (e.g., 'form' -> 'forms.default')
-        this._initializeGlueObjectAliases()
-    }
-
-    _initializeGlueObjectAliases() {
-        const metadataAttrs = this._metadata?.attributes || {}
-        for (const [attrKey, attrMeta] of Object.entries(metadataAttrs)) {
-            if (attrMeta.namespace !== 'glue') continue
-            // If metadata.name differs from the attribute key, it's an alias
-            const targetName = attrMeta.name
-            if (!targetName || targetName === attrKey) continue
-
-            const parts = attrKey.split('.')
-            const aliasName = parts.pop()
-            const owner = this._resolveAttributeOwner(parts)
-
-            if (owner[aliasName] !== undefined) continue
-
-            const targetParts = targetName.split('.')
-            const targetAttrName = targetParts.pop()
-            const targetOwner = this._resolveAttributeOwner(targetParts)
-
-            // Create alias property that returns the same proxy
-            Object.defineProperty(owner, aliasName, {
-                get() {
-                    return targetOwner[targetAttrName]
-                },
-                enumerable: true,
-                configurable: true,
+        const controller = companions.length ? null : new AbortController()
+        this._record.inFlightController = controller
+        let response
+        try {
+            response = await this._http.sendAttributeRequest({
+                address: this._record.address,
+                policyToken: this._record.policyToken,
+                updates: requestCapture.updates,
+                attribute,
+                kwargs,
+                companions,
+                signal: controller?.signal ?? null,
             })
+        } catch (error) {
+            if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+                return {result: undefined, response: null, discarded: true}
+            }
+            throw error
+        } finally {
+            if (this._record.inFlightController === controller) this._record.inFlightController = null
         }
-    }
-
-    _initializeAttribute(attributeQualName, attributeMetadata) {
-        const parts = attributeQualName.split('.')
-        const attributeName = parts.pop()
-        const owner = this._resolveAttributeOwner(parts)
-
-        if (owner[attributeName] !== undefined) {
-            return
+        if (
+            this._record.disposed ||
+            this._registry.getRecord(this._record.address) !== this._record ||
+            requestCapture.generation !== this._record.generation
+        ) {
+            return {result: undefined, response: response.data, discarded: true}
         }
-
-        const initializeAttribute = this._attributeBuilders[attributeMetadata.namespace]
-        if (initializeAttribute) {
-            initializeAttribute(owner, attributeName, attributeQualName, attributeMetadata)
+        const objects = response.data?.objects
+        if (!Array.isArray(objects)) {
+            throw new GlueProxyError('Glue response is missing the objects envelope.')
         }
-    }
-
-    _initializeCompositeAttribute(owner, attributeName) {
-        this._defineCompositeAttribute(owner, attributeName)
-    }
-
-    _initializeCallableAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-        Object.defineProperty(owner, attributeName, {
-            value: async function(kwargs = {}) {
-                const root = owner.__glue__root || this
-                return await root._callAttribute(attributeQualName, kwargs)
-            },
-            enumerable: false,
-            configurable: true,
+        const target = objects.find(entry => entry?.address === this._record.address)
+        if (!target) {
+            throw new GlueProxyError(
+                `Glue response has no entry for address "${this._record.address}".`
+            )
+        }
+        const companionAddresses = new Set(companions.map(record => record.address))
+        const introduced = objects.filter(
+            entry => entry !== target && !companionAddresses.has(entry?.address),
+        )
+        if (target.error) {
+            throw new GlueAddressError(
+                target.error.code,
+                target.error.message,
+                this._record.address
+            )
+        }
+        if (target.html !== undefined) {
+            this._client.loadObjects(introduced)
+        } else {
+            introduced.forEach(entry => this._registry.introduce(entry))
+        }
+        companionCaptures.forEach(({record, capture}) => {
+            const entry = objects.find(candidate => candidate?.address === record.address)
+            if (!entry || entry.error || record.disposed) return
+            this._client._dispatcher.reconcile(record.address, entry, capture)
         })
+        this._client._dispatcher.reconcile(
+            this._record.address,
+            target,
+            requestCapture,
+        )
+        const rawResult = target.result
+        const result = target.html === undefined
+            ? this._convertResult(rawResult, attribute)
+            : htmlResultFromResponse(target, this._client)
+        if (target.html !== undefined && this._policy.namespace === 'component' && this.$el) {
+            await result.renderOuterHtml(this.$el)
+        }
+        if (typeof rawResult === 'string' && this._glueResult(attribute)) {
+            const childRecord = this._registry.getRecord(rawResult)
+            if (childRecord && !childRecord.owner) {
+                childRecord.owner = {address: this._record.address, path: null}
+            }
+        }
+        target.result = result
+        this._processEffects(target)
+        return {result, response: response.data}
     }
 
-    _initializeGlueObjectAttribute(attributePolicy, attributeMetadata) {
-        const attributeQualName = attributePolicy.name
-        // Strip parent name prefix if present (e.g., 'gorilla.forms.default' -> 'forms.default')
-        const parentPrefix = this._name ? `${this._name}.` : ''
-        const relativeName = attributeQualName.startsWith(parentPrefix)
-            ? attributeQualName.slice(parentPrefix.length)
-            : attributeQualName
-
-        const parts = relativeName.split('.')
-        const attributeName = parts.pop()
-        const owner = this._resolveAttributeOwner(parts)
-
-        const existingDescriptor = Object.getOwnPropertyDescriptor(owner, attributeName)
-        if (existingDescriptor?.configurable) {
-            delete owner[attributeName]
-        } else if (existingDescriptor) {
-            return
-        }
-
-        const nestedMetadata = attributeMetadata.metadata || {}
-        const nestedNamespace = attributeMetadata.glue_namespace || attributePolicy.namespace
-        const ProxyClass = getProxyClass(nestedNamespace)
-
-        if (!ProxyClass) {
-            return
-        }
-
-        const proxy = this
-        const cacheKey = `__glue_object__${attributePolicy.name}`
-        const nestedState = proxy._state?.[relativeName] || {}
-        const nestedLoadingStrategy = typeof attributeMetadata.lazy === 'boolean'
-            ? (attributeMetadata.lazy ? 'lazy' : 'eager')
-            : proxy._loadingStrategy
-
-        if (proxy[cacheKey]) {
-            proxy[cacheKey]._policy = attributePolicy
-            proxy[cacheKey]._applyResponse({
-                state: nestedState,
-                metadata: nestedMetadata,
+    async _reintroduceWithOwner() {
+        const owner = this._record.owner
+        if (!owner?.path) return false
+        const ownerProxy = this._registry.getProxy(owner.address)
+        const ownerRecord = ownerProxy?._record
+        if (!ownerRecord || ownerRecord.stale) return false
+        this._record.stale = true
+        try {
+            const ownerCapture = ownerRecord.captureRequest()
+            const response = await this._http.sendAttributeRequest({
+                address: owner.address,
+                policyToken: ownerRecord.policyToken,
+                updates: {},
+                reintroduce: [owner.path],
             })
+            const objects = response.data?.objects
+            if (!Array.isArray(objects)) return false
+            const ownerEntry = objects.find(entry => entry?.address === owner.address)
+            if (!ownerEntry || ownerEntry.error) return false
+            objects
+                .filter(entry => entry !== ownerEntry)
+                .forEach(entry => this._registry.introduce(entry))
+            this._client._dispatcher.reconcile(owner.address, ownerEntry, ownerCapture)
+            return objects.some(entry => entry?.address === this._record.address && !entry.error)
+        } catch {
+            return false
         }
-
-        Object.defineProperty(owner, attributeName, {
-            get() {
-                if (!proxy[cacheKey]) {
-                    const nestedProxy = new ProxyClass({
-                        http: proxy._http,
-                        policy: attributePolicy,
-                        state: nestedState,
-                        metadata: nestedMetadata,
-                        owner: proxy,
-                        client: proxy._client,
-                        loadingStrategy: nestedLoadingStrategy,
-                    })
-                    proxy[cacheKey] = nestedProxy
-                }
-
-                return proxy[cacheKey]
-            },
-            enumerable: true,
-            configurable: true,
-        })
     }
 
-    _initializeStateAttribute(owner, attributeName, attributeQualName, attributeMetadata) {
-        Object.defineProperty(owner, attributeName, {
-            get() {
-                const root = this.__glue__root || this
-                return root._state?.[attributeQualName]
-            },
-            set(value) {
-                const root = this.__glue__root || this
-                if (!root._state) root._state = {}
-                root._state[attributeQualName] = value
-            },
-            enumerable: true,
-            configurable: true,
-        })
+    _staleError() {
+        const owner = this._ownerReference()
+        const slotPath = this._record.owner?.path
+        const message = owner
+            ? (slotPath !== null
+                ? `policy expired; reintroduce it through its owner "${owner.name}" (address "${owner.address}")`
+                : `policy expired; this result was produced by "${owner.name}" (address "${owner.address}"); re-run the call that produced it`)
+            : 'policy expired; this address cannot be reintroduced through an owner, reload the page or re-run the call that produced it'
+        return new GlueAddressError('policy_expired', message, this._record.address, owner)
     }
 
-    _initializeReadOnlyAttribute(owner, attributeName, attributeQualName) {
-        Object.defineProperty(owner, attributeName, {
-            get() {
-                const root = this.__glue__root || this
-                return root._state?.[attributeQualName]?.value
-            },
-            enumerable: true,
-            configurable: true,
-        })
+    _ownerReference() {
+        const owner = this._record.owner
+        if (!owner) return null
+        const ownerProxy = this._registry.getProxy(owner.address)
+        return {
+            name: ownerProxy?._name ?? owner.address,
+            address: owner.address,
+        }
     }
 
-    _resolveAttributeOwner(parts) {
-        return parts.reduce((current, part) => {
-            if (current[part] === undefined) {
-                this._defineCompositeAttribute(current, part)
-            }
-
-            return current[part]
-        }, this)
-    }
-
-    _defineCompositeAttribute(owner, attributeName) {
-        const cacheKey = Symbol(`__glue__${attributeName}`)
-
-        Object.defineProperty(owner, attributeName, {
-            get: function() {
-                if (!Object.prototype.hasOwnProperty.call(this, cacheKey)) {
-                    Object.defineProperty(this, cacheKey, {
-                        value: {},
-                        enumerable: false,
-                        configurable: true,
-                    })
-                }
-
-                Object.defineProperty(this[cacheKey], '__glue__root', {
-                    value: this.__glue__root || this,
-                    enumerable: false,
-                    configurable: true,
-                })
-
-                return this[cacheKey]
-            },
-            enumerable: false,
-            configurable: true,
-        })
-    }
-
-    _refreshGlueObjectAttributes() {
-        (this._policy?.attributes || []).forEach(attribute => {
-            if (!attribute?.name || typeof attribute === 'string') {
-                return
-            }
-
-            const parentPrefix = this._name ? `${this._name}.` : ''
-            const relativeName = attribute.name.startsWith(parentPrefix)
-                ? attribute.name.slice(parentPrefix.length)
-                : attribute.name
-            const attributeMetadata = this._metadata?.attributes?.[relativeName] || {}
-            this._initializeGlueObjectAttribute(attribute, attributeMetadata)
-        })
+    _refreshMaterializedInterface() {
+        this._registry?.refresh(this._record)
     }
 
     onMessage(callback) {
@@ -447,56 +261,54 @@ class BaseGlueProxy {
         return this
     }
 
-    _processMessages(data = {}) {
-        if (!data.messages?.length || typeof window === 'undefined') {
-            return
+    _processEffects(entry = {}) {
+        const effects = entry.effects
+        if (!effects) return
+        const dispose = effects.dispose
+        if (dispose?.length) {
+            dispose.forEach(address => this._registry.dispose(address))
         }
-        const handler = this._onMessage || window.Glue?._onMessage
-        handler?.({messages: data.messages, proxy: this})
+        const redirect = effects.redirect
+        if (redirect?.url && typeof window !== 'undefined') {
+            window.location.assign(redirect.url)
+        }
+        const messages = effects.messages
+        if (messages?.length && typeof window !== 'undefined') {
+            const handler = this._onMessage || window.Glue?._onMessage
+            handler?.({messages, proxy: this})
+        }
+        effects.events?.forEach(({name, detail}) => {
+            const event = {
+                type: name,
+                detail: {...detail, $address: this._record.address},
+                source: this,
+            }
+            this._eventListeners.get(name)?.forEach(listener => listener(event))
+            if (this.$el && typeof CustomEvent !== 'undefined') {
+                const domEvent = new CustomEvent(name, {detail: event.detail, bubbles: true})
+                domEvent.source = this
+                this.$el.dispatchEvent(domEvent)
+            }
+        })
     }
 
-    _emit(when, attribute, payload) {
-        const listeners = [
-            ...(this._listeners[when]?.[attribute] || []),
-            ...(this._listeners[when]?.['*'] || []),
-        ]
-        listeners.forEach(listener => listener(payload))
-    }
-
-    _convertResultManifestsToProxies(result) {
-        if (!this._client) {
-            return result
-        }
-
+    _convertResult(result, attribute = null) {
         if (Array.isArray(result)) {
-            return result.map(item => this._convertResultManifestsToProxies(item))
+            return result.map(item => this._convertResult(item, attribute))
         }
-
-        if (!result || typeof result !== 'object') {
-            return result
+        if (typeof result === 'string' && this._glueResult(attribute)) {
+            return this._registry.getProxy(result) ?? result
         }
-
-        if (this._resultIsManifest(result)) {
-            return this._client._createProxyFromManifest(result)
-        }
-
-        if (this._resultIsTemplateResponse(result)) {
-            this._client.loadManifests(result.manifest_list)
-            return new GlueHtmlResult(result.html)
-        }
-
+        if (!result || typeof result !== 'object') return result
         Object.keys(result).forEach(key => {
-            result[key] = this._convertResultManifestsToProxies(result[key])
+            result[key] = this._convertResult(result[key], attribute)
         })
         return result
     }
 
-    _resultIsManifest(result) {
-        return result?.is_glue_manifest === true
-    }
-
-    _resultIsTemplateResponse(result) {
-        return result?.is_glue_template_response === true
+    _glueResult(attribute) {
+        if (!attribute) return false
+        return Boolean(this._record.staticData?.callables?.[attribute]?.returns_glue)
     }
 }
 

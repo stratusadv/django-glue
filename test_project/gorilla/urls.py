@@ -5,6 +5,7 @@ from test_project.gorilla import views
 app_name = 'gorilla'
 
 urlpatterns = [
+    path('components/', views.component_view, name='components'),
     path('', views.list_view, name='list'),
     path('<int:pk>/', views.detail_view, name='detail'),
     path('<int:pk>/template/', views.detail_template_view, name='detail_template'),

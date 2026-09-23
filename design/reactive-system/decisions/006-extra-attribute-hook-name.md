@@ -1,6 +1,6 @@
 # ADR 006: Name the BaseGlue Hook `get_extra_attributes`
 
-Status: Accepted for the redesign; implementation in progress
+Status: Accepted; implemented on branch
 
 Date: 2026-09-14
 

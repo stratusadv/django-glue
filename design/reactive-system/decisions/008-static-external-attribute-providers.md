@@ -1,6 +1,6 @@
 # ADR 008: Separate Static External Providers from Extra Declarations
 
-Status: Accepted for the redesign; implementation in progress
+Status: Accepted; implemented on branch
 
 Date: 2026-09-15
 

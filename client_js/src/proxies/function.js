@@ -26,7 +26,7 @@ class GlueFunctionProxy extends BaseGlueProxy {
     }
 
     _filterKwargs(kwargs) {
-        const params = this._normalizeParams(this._metadata?.params || this._policy?.identity?.params || [])
+        const params = this._normalizeParams(this._record.staticData.params || [])
         if (!params.length) {
             return kwargs
         }

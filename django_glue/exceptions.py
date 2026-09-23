@@ -5,9 +5,14 @@ These exceptions provide clear, specific error types for different failure modes
 making it easier to handle errors appropriately in views and client code.
 """
 
+from __future__ import annotations
+
 import inspect
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from django_glue.glue.operation import GlueOperation
 
 
 class GlueRequestErrorCode(StrEnum):
@@ -17,27 +22,20 @@ class GlueRequestErrorCode(StrEnum):
     INVALID_CONTENT_TYPE = 'invalid_content_type'
     INVALID_JSON = 'invalid_json'
     INVALID_KWARGS = 'invalid_kwargs'
+    INVALID_UPDATES = 'invalid_updates'
+    INVALID_REINTRODUCE = 'invalid_reintroduce'
+    INVALID_DISPOSE = 'invalid_dispose'
 
     # Missing required fields
     MISSING_FIELD = 'missing_field'
 
     # Path/body mismatch errors
-    OBJECT_NAME_MISMATCH = 'object_name_mismatch'
-    ATTRIBUTE_NAME_MISMATCH = 'attribute_name_mismatch'
+    ADDRESS_MISMATCH = 'address_mismatch'
+    DUPLICATE_ADDRESSES = 'duplicate_addresses'
     MISSING_PATH_PARAMETERS = 'missing_path_parameters'
 
     # Pydantic validation
     MALFORMED_REQUEST = 'malformed_request'
-
-    # View fragment request errors
-    MISSING_VIEW_TARGET = 'missing_view_target'
-    VIEW_URL_NAME_NOT_FOUND = 'view_url_name_not_found'
-    VIEW_URL_PATH_NOT_FOUND = 'view_url_path_not_found'
-    VIEW_REDIRECT_URL_NOT_FOUND = 'view_redirect_url_not_found'
-    EXTERNAL_VIEW_REDIRECT_NOT_SUPPORTED = 'external_view_redirect_not_supported'
-    TOO_MANY_VIEW_REDIRECTS = 'too_many_view_redirects'
-    UNSUPPORTED_VIEW_RESPONSE_TYPE = 'unsupported_view_response_type'
-    VIEW_CALL_FAILED = 'view_call_failed'
 
 
 class GlueError(Exception):
@@ -48,6 +46,26 @@ class GlueError(Exception):
 
     def details(self) -> dict:
         return {}
+
+
+class GlueComponentRegistrationError(GlueError):
+    code = 'component_not_registered'
+    status = 400
+
+
+class GlueComponentParameterError(GlueError):
+    code = 'invalid_component_parameter'
+    status = 400
+
+
+class GlueComponentKeyError(GlueError):
+    code = 'invalid_component_key'
+    status = 400
+
+
+class GlueComponentRootError(GlueError):
+    code = 'invalid_component_root'
+    status = 500
 
 
 class GlueRequestError(GlueError):
@@ -75,7 +93,7 @@ class GlueRequestError(GlueError):
 class GlueAccessError(GlueError):
     """Raised when a user lacks permission to access a bound attribute on a proxy."""
 
-    code = 'proxy_access_denied'
+    code = 'not_authorized'
     status = 403
 
     def __init__(self, attribute: str, required_access: str, current_access: str) -> None:
@@ -92,6 +110,35 @@ class GlueAccessError(GlueError):
             'attribute': self.attribute,
             'required_access': self.required_access,
             'current_access': self.current_access,
+        }
+
+
+class GlueAuthorizationError(GlueError):
+    code = 'not_authorized'
+    status = 403
+
+    def __init__(
+        self,
+        object_name: str,
+        operation: GlueOperation,
+    ) -> None:
+        self.object_name = object_name
+        self.operation = operation
+        attribute = (
+            f" attribute '{operation.attribute}'"
+            if operation.attribute
+            else ''
+        )
+        super().__init__(
+            f"Authorization denied for{attribute} on Glue object '{object_name}'."
+        )
+
+    def details(self) -> dict:
+        return {
+            'object': self.object_name,
+            'kind': self.operation.kind.value,
+            'attribute': self.operation.attribute,
+            'required_access': self.operation.required_access.value,
         }
 
 
@@ -219,6 +266,24 @@ class GlueQuerySetSliceValidationError(GlueError):
         return {'width': self.width, 'loaded_row_count': self.loaded_row_count}
 
 
+class GlueFormSetMaxNumExceededError(GlueError):
+    """Raised when appending a form would exceed the formset's max_num."""
+
+    code = 'formset_max_num_exceeded'
+    status = 422
+
+    def __init__(self, current_count: int, max_num: int) -> None:
+        self.current_count = current_count
+        self.max_num = max_num
+        super().__init__(
+            f'Cannot append a new form: the formset already holds {current_count} '
+            f'form(s) and max_num is {max_num}.'
+        )
+
+    def details(self) -> dict:
+        return {'current_count': self.current_count, 'max_num': self.max_num}
+
+
 class GlueInvalidPolicyError(GlueError):
     """Raised when proxy policy signature doesn't match, indicating tampering."""
 
@@ -295,7 +360,7 @@ class GlueInvalidUserError(GlueError):
 class GlueExpiredPolicyError(GlueError):
     """Raised when a proxy policy is older than the configured max age."""
 
-    code = 'proxy_policy_expired'
+    code = 'policy_expired'
     status = 419
 
     def __init__(self, unique_name: str) -> None:
@@ -306,8 +371,8 @@ class GlueExpiredPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
-class GlueCalledStateAttributeError(GlueError):
-    code = 'called_state_attribute'
+class GlueCalledNonCallableAttributeError(GlueError):
+    code = 'called_non_callable_attribute'
     status = 404
 
     def __init__(self, attribute: str, proxy_name: str, reason: str | None = None) -> None:
@@ -315,7 +380,7 @@ class GlueCalledStateAttributeError(GlueError):
         self.proxy_name = proxy_name
         self.reason = reason
         message = (
-            f"Invalid attribute target {attribute}. Only CallableAttributes can be called."
+            f"Invalid attribute target {attribute}. Only callable attributes can be called."
         )
         if reason:
             message += f': {reason}'

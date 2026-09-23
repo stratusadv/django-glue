@@ -1,6 +1,6 @@
 # ADR 004: Compose Addressed Objects Through Explicit Children
 
-Status: Accepted for the redesign; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-12
 

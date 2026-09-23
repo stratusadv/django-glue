@@ -1,6 +1,6 @@
 # ADR 003: Dispatch Glue Views Through Their Actual Django Route
 
-Status: Accepted for the redesign; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-11
 

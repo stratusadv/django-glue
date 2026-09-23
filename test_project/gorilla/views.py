@@ -11,6 +11,10 @@ from test_project.gorilla.models import Gorilla, Skill
 from test_project.gorilla.forms import GorillaForm
 
 
+def component_view(request: HttpRequest) -> HttpResponse:
+    return render(request, 'gorilla/page/component_page.html')
+
+
 def list_view(request: HttpRequest) -> HttpResponse:
     Glue.queryset(
         request=request,
@@ -29,7 +33,8 @@ def list_view(request: HttpRequest) -> HttpResponse:
             'fighting_stats',
             'created_at',
             'updated_at',
-            'skills',
+            'skills__id',
+            'skills__name',
         ],
     )
 
@@ -107,10 +112,6 @@ def arena_view(request: HttpRequest, pk: int) -> HttpResponse:
         unique_name='gorilla',
         access=Glue.Access.CHANGE,
         exclude=['signature'],
-    )
-
-    Glue.template(
-        request=request, target='gorilla/component/fighter_rank_card.html', unique_name='rank_card'
     )
 
     Glue.function(

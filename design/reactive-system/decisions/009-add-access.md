@@ -1,6 +1,6 @@
 # ADR 009: Model Creation as an ADD Capability
 
-Status: Accepted for the redesign; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-16
 

@@ -1,212 +1,167 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {createManifest, createPolicy, createPolicyToken, createMetadata, createState} from "./testUtils"
+import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
-describe('GlueClient', () => {
-    test('exposes client-level callbacks, fetch, and view helpers', async () => {
-        happyDOM.setURL('http://localhost/')
-        const client = new GlueClient({manifest_list: []})
-        const onMessage = () => {}
-        const onError = () => {}
-        let fetchedUrl
-        global.fetch = async url => {
-            fetchedUrl = url
-            return new Response(JSON.stringify({type: 'success'}), {status: 200})
-        }
-
-        expect(client.onMessage(onMessage)).toBe(client)
-        expect(client.onError(onError)).toBe(client)
-        expect(await client.fetch('/health')).toEqual({type: 'success'})
-        expect(fetchedUrl).toBe('/health')
-        expect(client.view('/partial/').url).toBe('/partial/')
-    })
-
-    test('registers proxies by name and policy namespace', () => {
-        const client = new GlueClient({
-            urls: {
-                callable_attribute: '/custom/attribute/',
-                glue_view: '/custom/view/',
-            },
-            config: {
-                requestTimeoutSeconds: 45,
-            },
-            manifest_list: [
-                {
-                    is_glue_manifest: true,
-                    policy_token: createPolicyToken(),
-                    state: createState(),
-                    metadata: createMetadata(),
-                },
-            ],
-        })
-
-        expect(client.http._config.attributeUrlPath).toBe('/custom/attribute/')
-        expect(client.http._config.glueViewUrlPath).toBe('/custom/view/')
-        expect(client.http._config.requestTimeoutSeconds).toBe(45)
-        expect(client.model.gorilla._name).toBe('gorilla')
-    })
-
-    test('registers namespace-named proxies directly on the namespace', () => {
-        const client = new GlueClient({
-            manifest_list: [
-                {
-                    is_glue_manifest: true,
-                    policy_token: createPolicyToken({
-                        name: 'timeEntryDashboard',
-                        namespace: 'timeEntryDashboard',
-                        attributes: [],
-                    }),
-                    state: {},
-                    metadata: {attributes: {}},
-                },
-            ],
-        })
-
-        expect(client.timeEntryDashboard._name).toBe('timeEntryDashboard')
-    })
-
-    test('rejects direct and named proxies sharing a namespace', () => {
-        const directManifest = {
-            is_glue_manifest: true,
-            policy_token: createPolicyToken({
-                name: 'timeEntryDashboard',
-                namespace: 'timeEntryDashboard',
-                attributes: [],
-            }),
-            state: {},
-            metadata: {attributes: {}},
-        }
-        const namedManifest = {
-            is_glue_manifest: true,
-            policy_token: createPolicyToken({
+describe('GlueClient registry', () => {
+    test('registers named and direct proxies from addressed entries', () => {
+        const named = createEntry()
+        const direct = createEntry({
+            policy: {
                 name: 'dashboard',
-                namespace: 'timeEntryDashboard',
+                namespace: 'dashboard',
+                address: 'dashboard#test',
                 attributes: [],
-            }),
-            state: {},
-            metadata: {attributes: {}},
-        }
-
-        expect(() => new GlueClient({
-            manifest_list: [directManifest, namedManifest],
-        })).toThrow('already registered directly')
-
-        expect(() => new GlueClient({
-            manifest_list: [namedManifest, directManifest],
-        })).toThrow('already registered')
-    })
-
-    test('creates proxy from manifest without registering', () => {
-        const client = new GlueClient({manifest_list: []})
-        const proxy = client._createProxy({
-            policy: createPolicy({
-                name: 'time_entry_days',
-                namespace: 'sequence',
-                identity: {},
-                attributes: [],
-            }),
-            state: {},
-            metadata: {attributes: {}},
+                state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {}},
         })
+        const client = new GlueClient({objects: [named, direct]})
 
-        expect(proxy._name).toBe('time_entry_days')
-        // Should NOT be registered on the client namespace
-        expect(client.sequence).toBeUndefined()
+        expect(client.model.gorilla._record.address).toBe('gorilla#test')
+        expect(client.dashboard._record.address).toBe('dashboard#test')
+        expect(client.model.gorilla).toBe(client.model.gorilla)
     })
 
-    test('registers function proxies as callables', async () => {
-        let capturedAttribute = null
-        let capturedKwargs = null
-        global.fetch = async (_, options) => {
-            capturedAttribute = options.body.get('attribute')
-            capturedKwargs = JSON.parse(options.body.get('kwargs'))
-            return new Response(JSON.stringify({
-                result: {result: 12},
-                state: {},
-                policy_token: createPolicyToken({
-                    namespace: 'function',
-                    identity: {params: ['left', 'right']},
-                    attributes: ['execute'],
-                }),
-                metadata: {
-                    namespace: 'function',
-                    params: ['left', 'right'],
-                    attributes: {execute: {namespace: 'callable'}},
-                },
-                messages: [],
-            }))
-        }
-
-        const client = new GlueClient({
-            manifest_list: [
-                {
-                    is_glue_manifest: true,
-                    policy_token: createPolicyToken({
-                        name: 'add',
-                        namespace: 'function',
-                        identity: {params: ['left', 'right']},
-                        attributes: ['execute'],
-                    }),
-                    state: {},
-                    metadata: {
-                        namespace: 'function',
-                        params: ['left', 'right'],
-                        attributes: {execute: {namespace: 'callable'}},
-                    },
-                },
-            ],
-        })
-
-        const result = await client.function.add({left: 5, right: 7, ignored: true})
-
-        expect(result).toBe(12)
-        expect(capturedAttribute).toBe('execute')
-        expect(capturedKwargs).toEqual({left: 5, right: 7})
-    })
-})
-
-describe('GlueClient proxy identity', () => {
-    function manifest(overrides = {}) {
-        return {
-            is_glue_manifest: true,
-            policy_token: createPolicyToken(),
-            state: createState(),
-            metadata: createMetadata(),
-            ...overrides,
-        }
-    }
-
-    test('named proxies are constructed per access', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-
-        // Proxies are built on every property access so they are constructed
-        // after Alpine's initTree and get wrapped in Alpine's reactive proxy.
-        // The intended idiom is to resolve once into x-data and hold that
-        // reference. See docs/roadmap/proxy_instance_management.md.
-        expect(client.model.gorilla).not.toBe(client.model.gorilla)
+    test('rejects an entry whose outer and signed addresses differ', () => {
+        const entry = createEntry()
+        entry.address = 'wrong#address'
+        expect(() => new GlueClient({objects: [entry]})).toThrow('does not match')
     })
 
-    test('re-registering a name is picked up by the next access', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-        const before = client.model.gorilla.name
-
-        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
-
-        expect(before).not.toBe('Renamed')
-        expect(client.model.gorilla.name).toBe('Renamed')
-    })
-
-    test('a proxy resolved before re-registration keeps its old state (GLUE-93)', () => {
-        const client = new GlueClient({manifest_list: [manifest()]})
-        // What an x-data scope holds: resolved once, kept for the scope's life.
+    test('reintroducing an address patches the stable proxy', () => {
+        const client = new GlueClient({objects: [createEntry()]})
         const held = client.model.gorilla
+        client.loadObjects([createEntry({
+            policy: {state_snapshot: {id: 1, name: 'Michael', birthday: '1973-03-01'}},
+        })])
 
-        client.loadManifests([manifest({state: createState({instance_data: {id: 1, name: 'Renamed'}})})])
+        expect(client.model.gorilla).toBe(held)
+        expect(held.name).toBe('Michael')
+    })
 
-        // Known gap: _registerManifest only replaces the manifest captured by
-        // the accessor's getter, so an already-handed-out proxy is never
-        // updated. Tracked as GLUE-93; flip this to 'Renamed' when it is fixed.
-        expect(held.name).toBe('Koko')
-        expect(client.model.gorilla.name).toBe('Renamed')
+    test('binds child paths through the address registry', () => {
+        const child = createEntry({
+            policy: {
+                name: 'parent',
+                address: 'gorilla#test.parent',
+                state_snapshot: {id: 2, name: 'Matata'},
+                attributes: ['id', 'name'],
+            },
+            staticData: {fields: {
+                id: {value_path: 'id', editable: false},
+                name: {value_path: 'name', editable: false},
+            }, callables: {}},
+        })
+        const parent = createEntry({
+            policy: {children: {parent: child.address}},
+            staticData: {children: {parent: {kind: 'model', nullable: true}}},
+        })
+        const client = new GlueClient({objects: [parent, child]})
+
+        expect(client.model.gorilla.parent).toBe(client._registry.getProxy(child.address))
+        expect(client.model.gorilla.parent.$owner).toBe(client.model.gorilla)
+    })
+
+    test('keeps function proxies callable and filters declared parameters', async () => {
+        const manifest = createEntry({
+            policy: {
+                name: 'add',
+                namespace: 'function',
+                address: 'add#test',
+                attributes: ['execute'],
+                state_snapshot: {},
+            },
+            staticData: {
+                fields: {},
+                callables: {execute: {allowed_arguments: ['kwargs']}},
+                params: [{name: 'left'}, {name: 'right'}],
+            },
+        })
+        const client = new GlueClient({objects: [manifest]})
+        let sent
+        client.http.sendAttributeRequest = async request => {
+            sent = request
+            return attributeResponse('add#test', {result: {result: 12}})
+        }
+
+        expect(await client.function.add({left: 5, right: 7, ignored: true})).toBe(12)
+        expect(sent.kwargs).toEqual({left: 5, right: 7})
+    })
+
+    test('rejects direct and named registrations sharing a namespace', () => {
+        const direct = createEntry({policy: {
+            name: 'custom', namespace: 'custom', address: 'custom#test', attributes: [], state_snapshot: {},
+        }})
+        const named = createEntry({policy: {
+            name: 'named', namespace: 'custom', address: 'named#test', attributes: [], state_snapshot: {},
+        }})
+        expect(() => new GlueClient({objects: [direct, named]})).toThrow('already registered directly')
+    })
+
+    test('requires addressed entries with a signed token', () => {
+        expect(() => new GlueClient({objects: [{
+            policy_token: createPolicyToken(),
+            state: {},
+            metadata: {},
+        }]})).toThrow('address and policy_token')
+    })
+
+    test('resolves a stamped component through its root address', () => {
+        const entry = createEntry({
+            policy: {
+                name: 'card_123', namespace: 'component', address: 'dashboard#test[card]',
+                attributes: ['render'], state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {render: {allowed_arguments: []}}},
+        })
+        const client = new GlueClient({objects: []})
+        document.body.innerHTML = '<div data-glue-address="dashboard#test[card]"><span id="inside"></span></div>'
+        document.body.firstElementChild.setAttribute('data-glue-objects', JSON.stringify([entry]))
+
+        client.registerComponentsFromDom()
+
+        const proxy = client.from(document.querySelector('#inside'))
+        expect(proxy).toBe(client._registry.getProxy(entry.address))
+        expect(proxy.$el).toBe(document.body.firstElementChild)
+        expect(client.component).toBeUndefined()
+    })
+
+    test('a stamped root introduces its children entries', () => {
+        const child = createEntry({policy: {name: 'card_form', address: 'card#test.form'}})
+        const entry = createEntry({
+            policy: {
+                name: 'card', namespace: 'component', address: 'card#test',
+                attributes: ['form'], state_snapshot: {}, children: {form: child.address},
+            },
+            staticData: {fields: {}, callables: {}, children: {form: {kind: 'model', nullable: false}}},
+        })
+        const client = new GlueClient({objects: []})
+        document.body.innerHTML = '<div data-glue-address="card#test"></div>'
+        document.body.firstElementChild.setAttribute('data-glue-objects', JSON.stringify([entry, child]))
+
+        client.registerComponentsFromDom()
+
+        const proxy = client.from(document.body.firstElementChild)
+        expect(proxy.form).toBe(client._registry.getProxy(child.address))
+        expect(proxy.form.name).toBe('Koko')
+    })
+
+    test('declared events reach source listeners and the component root', () => {
+        const entry = createEntry({
+            policy: {name: 'card_123', namespace: 'component', address: 'card#test', attributes: []},
+            staticData: {fields: {}, callables: {}, events: ['saved']},
+        })
+        const client = new GlueClient({objects: [entry]})
+        document.body.innerHTML = '<div data-glue-address="card#test"></div>'
+        const proxy = client.from(document.body.firstElementChild)
+        const seen = []
+        const stop = proxy.$on('saved', event => seen.push(event.detail.pk))
+        document.body.firstElementChild.addEventListener('saved', event => seen.push(event.detail.pk))
+
+        proxy._processEffects({effects: {events: [{name: 'saved', detail: {pk: 7}}]}})
+        stop()
+        proxy._processEffects({effects: {events: [{name: 'saved', detail: {pk: 8}}]}})
+
+        expect(seen).toEqual([7, 7, 8])
     })
 })

@@ -1,26 +1,30 @@
-from typing import Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
+from typing import Callable, Literal, Mapping, Sequence, TypeVar, Union
 
 from django.db.models import Model, QuerySet
-from django.forms import BaseForm, BaseFormSet, ModelForm
+from django.forms import BaseForm, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
-from django_glue.glue.base import BaseGlue
-from django_glue.glue.context import GlueContextManager
+from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+from django_glue.glue.attributes.definition import (
+    GlueValueRole,
+    _resolve_glue_result_annotation,
+)
+from django_glue.glue.attributes.namespace import GlueNamespace
+from django_glue.glue.component import Component
+from django_glue.glue.event import GlueEvent
+from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
-from django_glue.glue.objects.django.model.object import ModelGlue, RelatedFieldConfig
+from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import DEFAULT_BATCH_SIZE, QuerySetGlue
-from django_glue.glue.objects.django.template import TemplateGlue
 from django_glue.glue.options.django import (
     DEFAULT_SEARCH_LIMIT,
     configure_choices,
 )
-from django_glue.glue.sequence import SequenceGlue
 from django_glue.response import GlueRedirectResponse, GlueResponse
 
 
@@ -32,42 +36,20 @@ class _GluePropertyDescriptor:
         @Glue.property
         def total_hours(self) -> float:
             return sum(e.hours for e in self.entries)
-
-        @Glue.property(identity=True)
-        def date(self) -> datetime.date:
-            return self._date
-
-    Properties marked with identity=True are included in the auto-generated
-    identity dict and used for reconstructing the Glue object from a policy.
     """
 
-    def __init__(self, func: Callable | None = None, *, identity: bool = False) -> None:
-        self._identity = identity
-        self._func: Callable | None = None
-        self._property: property | None = None
-        self._name: str | None = None
-
-        if func is not None:
-            self._bind(func)
-
-    def _bind(self, func: Callable) -> '_GluePropertyDescriptor':
-        """Bind the function to this descriptor."""
+    def __init__(self, func: Callable) -> None:
         self._func = func
         self._property = property(func)
-        # Attach glue options for GlueAttributeCollector to discover
-        from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+        self._name: str | None = None
+        expected_type, is_nullable = _resolve_glue_result_annotation(func)
         self.__glue_options__ = DeclaredAttributeOptions(
             required_access=GlueAccess.VIEW,
             is_callable=False,
-            takes_client_state=True,
-            updates_client_state=True,
-            is_identity=self._identity,
+            value_role=GlueValueRole.DERIVED_OUTPUT,
+            expected_type=expected_type,
+            is_nullable=is_nullable,
         )
-        return self
-
-    def __call__(self, func: Callable) -> '_GluePropertyDescriptor':
-        """Support @Glue.property(identity=True) syntax."""
-        return self._bind(func)
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name
@@ -75,8 +57,6 @@ class _GluePropertyDescriptor:
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
-        if self._property is None:
-            raise RuntimeError('GluePropertyDescriptor not properly initialized')
         return self._property.__get__(instance, owner)
 
 def _html_attr(*args, **kwargs) -> DeclaredAttribute:
@@ -108,13 +88,42 @@ ChoiceSource = TypeVar('ChoiceSource')
 
 class Glue:
     Access = GlueAccess
-    LoadingStrategy = LoadingStrategy
+    Component = Component
+    FormSet = FormSetGlue
     attribute = DeclaredAttribute
     attr = DeclaredAttribute
+    event = GlueEvent
     html_attr = _html_attr
+    namespace = GlueNamespace
     property = _GluePropertyDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
+
+    @staticmethod
+    def fields(*paths: str, **relations: Sequence[str]) -> tuple[str, ...]:
+        """Build a field selection from leaf names and per-relation subfields,
+        normalized to the canonical ``relation__leaf`` paths ``fields`` and
+        ``exclude`` already accept (state-model.md §9). Nest a ``Glue.fields()``
+        result as a relation's value for deeper projections."""
+        selection: list[str] = []
+        for path in paths:
+            if not isinstance(path, str) or not path:
+                msg = 'Glue.fields paths must be non-empty strings.'
+                raise TypeError(msg)
+            selection.append(path)
+        for relation_name, subpaths in relations.items():
+            if isinstance(subpaths, str) or not subpaths:
+                msg = (
+                    f'Glue.fields({relation_name}=...) must be a non-empty sequence '
+                    'of subfield names, not a string.'
+                )
+                raise TypeError(msg)
+            for subpath in subpaths:
+                if not isinstance(subpath, str) or not subpath:
+                    msg = f'Glue.fields({relation_name}=...) subfields must be non-empty strings.'
+                    raise TypeError(msg)
+                selection.append(f'{relation_name}__{subpath}')
+        return tuple(dict.fromkeys(selection))
 
     @staticmethod
     def choices(
@@ -123,153 +132,154 @@ class Glue:
         search_fields: Sequence[str] = (),
         fields: Sequence[str] = (),
         search_limit: int = DEFAULT_SEARCH_LIMIT,
+        label_formatter: Callable | str | None = None,
     ) -> ChoiceSource:
         return configure_choices(
             source=source,
             search_fields=search_fields,
             fields=fields,
             search_limit=search_limit,
+            label_formatter=label_formatter,
         )
 
     @staticmethod
     def object(
         request: HttpRequest,
-        glue: BaseGlue,
-    ) -> BaseGlue:
+        glue: TGlue,
+    ) -> TGlue:
+        return Glue._add_to_context(
+            request,
+            glue,
+        )
+
+    @staticmethod
+    def _add_to_context(
+        request: HttpRequest | None,
+        glue: TGlue,
+    ) -> TGlue:
+        if request is None:
+            return glue
         return GlueContextManager(request).add_glue(glue)
 
     @staticmethod
-    def sequence(
-        request: HttpRequest,
-        unique_name: str,
-        items: Iterable[BaseGlue],
-        access: GlueAccess = GlueAccess.VIEW,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
-    ) -> SequenceGlue:
-        return Glue.object(request, SequenceGlue(
-            list(items),
-            name=unique_name,
-            access=access,
-            loading_strategy=loading_strategy,
-        ))
-
-    @staticmethod
     def model(
-        request: HttpRequest,
-        unique_name: str,
         target: Model,
+        *,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
+        editable: Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        choices: Mapping[str, QuerySet] | None = None,
     ) -> ModelGlue:
-        return Glue.object(
-            request=request,
-            glue=ModelGlue(
-                instance=target,
-                name=unique_name,
-                access=access,
-                fields=fields,
-                exclude=exclude,
-                form=form,
-                forms=forms,
-                select_related=select_related,
-                computed_attributes=computed_attributes,
-                related_field_config=related_field_config,
-                loading_strategy=loading_strategy,
-            ),
+        glue_object = ModelGlue(
+            instance=target,
+            name=unique_name,
+            access=access,
+            fields=fields,
+            exclude=exclude,
+            editable=editable,
+            form=form,
+            forms=forms,
+            select_related=select_related,
+            computed_attributes=computed_attributes,
+            choices=choices,
+        )
+        return Glue._add_to_context(
+            request,
+            glue_object,
         )
 
     @staticmethod
     def queryset(
-        request: HttpRequest,
-        unique_name: str,
         target: QuerySet,
+        *,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
+        editable: Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        choices: Mapping[str, QuerySet] | None = None,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
     ) -> QuerySetGlue:
-        return Glue.object(
-            request=request,
-            glue=QuerySetGlue(
-                queryset=target,
-                name=unique_name,
-                access=access,
-                fields=fields,
-                exclude=exclude,
-                form=form,
-                forms=forms,
-                computed_attributes=computed_attributes,
-                related_field_config=related_field_config,
-                loading_strategy=loading_strategy,
-                batch_size=batch_size,
-            ),
+        glue_object = QuerySetGlue(
+            queryset=target,
+            name=unique_name,
+            access=access,
+            fields=fields,
+            exclude=exclude,
+            editable=editable,
+            form=form,
+            forms=forms,
+            computed_attributes=computed_attributes,
+            choices=choices,
+            batch_size=batch_size,
+        )
+        return Glue._add_to_context(
+            request,
+            glue_object,
         )
 
     @staticmethod
     def form(
-        request: HttpRequest,
-        unique_name: str,
         target: BaseForm,
+        *,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        editable: Sequence[str] | None = None,
     ) -> FormGlue:
-        return Glue.object(
-            request=request,
-            glue=FormGlue(
-                form=target,
-                name=unique_name,
-                access=access,
-                loading_strategy=loading_strategy,
-            ),
+        glue_object = FormGlue(
+            form=target,
+            name=unique_name,
+            access=access,
+            editable=editable,
+        )
+        return Glue._add_to_context(
+            request,
+            glue_object,
         )
 
     @staticmethod
     def formset(
-        request: HttpRequest,
-        unique_name: str,
-        target: BaseFormSet,
+        target: type[FormSetGlue] | type[BaseForm],
+        *,
+        request: HttpRequest | None = None,
+        unique_name: str | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
-        loading_strategy: LoadingStrategy = LoadingStrategy.EAGER,
+        min_num: int | None = None,
+        max_num: int | None = None,
+        can_delete: bool | None = None,
     ) -> FormSetGlue:
-        return Glue.object(
-            request=request,
-            glue=FormSetGlue(
-                formset=target,
+        if isinstance(target, type) and issubclass(target, FormSetGlue):
+            glue_object = target(
                 name=unique_name,
                 access=access,
-                loading_strategy=loading_strategy,
-            ),
-        )
-
-    @staticmethod
-    def template(
-        request: HttpRequest,
-        unique_name: str,
-        target: str,
-        initial_context_data: dict | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
-    ) -> TemplateGlue:
-        return Glue.object(
-            request=request,
-            glue=TemplateGlue(
+                min_num=min_num,
+                max_num=max_num,
+                can_delete=can_delete,
+            )
+        else:
+            glue_object = FormSetGlue(
                 target,
                 name=unique_name,
-                access=GlueAccess.VIEW,
-                initial_context_data=initial_context_data,
-                loading_strategy=loading_strategy,
-            ),
+                access=access,
+                min_num=min_num,
+                max_num=max_num,
+                can_delete=can_delete,
+            )
+        return Glue._add_to_context(
+            request,
+            glue_object,
         )
 
     @staticmethod
@@ -277,7 +287,6 @@ class Glue:
         request: HttpRequest,
         unique_name: str,
         target: str,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> FunctionGlue:
         return Glue.object(
             request=request,
@@ -285,6 +294,5 @@ class Glue:
                 target,
                 name=unique_name,
                 access=GlueAccess.VIEW,
-                loading_strategy=loading_strategy,
             ),
         )

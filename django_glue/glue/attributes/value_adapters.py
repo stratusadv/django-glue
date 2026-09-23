@@ -13,7 +13,7 @@ class GlueValueAdapter(Protocol):
     DEFAULT_VALUE_ADAPTERS); the first whose applies_to() matches wins.
     """
 
-    def applies_to(self, value: Any) -> bool:
+    def applies_to(self, value: Any, *, attribute: DeclaredAttribute) -> bool:
         """Whether this adapter should handle the given assigned value."""
         ...
 
@@ -30,17 +30,28 @@ class GlueValueAdapter(Protocol):
 
 
 class SequenceAdapter:
-    """Adapts a plain, non-empty list assignment into a SequenceGlue.
+    """Adapts a non-empty list of proxy-exposed items into a SequenceGlue.
 
-    Items already glued (BaseGlue instances) are used as-is; raw items are
-    converted via the owning attribute's glue_factory. The sequence and
-    its raw items inherit the owning instance's runtime access (instance.access)
-    so permissions propagate the same way they did when this was hand-built
-    (e.g. TimeEntryDayGlue used to pass self.access to each ModelGlue it built).
+    A list applies only when it holds Glue objects or its attribute declares
+    a glue_factory; any other list stays plain data. Items already glued
+    (BaseGlue instances) are used as-is; raw items are converted via the
+    owning attribute's glue_factory. The sequence and its raw items inherit
+    the owning instance's runtime access (instance.access) so permissions
+    propagate the same way they did when this was hand-built (e.g.
+    TimeEntryDayGlue used to pass self.access to each ModelGlue it built).
     """
 
-    def applies_to(self, value: Any) -> bool:
-        return isinstance(value, list) and len(value) > 0
+    def applies_to(self, value: Any, *, attribute: DeclaredAttribute) -> bool:
+        from django_glue.glue.base import BaseGlue  # noqa: PLC0415
+
+        return (
+            isinstance(value, list)
+            and len(value) > 0
+            and (
+                attribute.glue_factory is not None
+                or any(isinstance(item, BaseGlue) for item in value)
+            )
+        )
 
     def adapt(self, value: Any, *, attribute: DeclaredAttribute, instance: Any) -> Any:
         from django_glue.glue.sequence import SequenceGlue  # noqa: PLC0415

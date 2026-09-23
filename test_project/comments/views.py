@@ -13,7 +13,10 @@ def comments_partial_view(request: HttpRequest, content_type_id: int, object_id:
 
     Glue.queryset(
         request=request,
-        target=FanComment.objects.filter(content_type=content_type, object_id=object_id),
+        target=FanComment.objects.filter(
+            content_type=content_type,
+            object_id=object_id,
+        ),
         unique_name='comments',
         access=Glue.Access.DELETE,
         fields=['content_type', 'object_id', 'fan_name', 'comment', 'rating', 'created_at'],

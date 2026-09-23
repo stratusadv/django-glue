@@ -14,6 +14,7 @@ from django_glue.exceptions import (
     GlueError,
     GlueRequestError,
     GlueAccessError,
+    GlueFormSetMaxNumExceededError,
     GlueInvalidAttributeError,
     GlueMissingAttributeError,
     GlueModelInstanceNotFoundError,
@@ -33,6 +34,7 @@ class GlueExceptionsTestCase(TestCase):
             GlueMissingAttributeError,
             GlueModelInstanceNotFoundError,
             GlueQuerySetFilterValidationError,
+            GlueFormSetMaxNumExceededError,
         ]
         for exc_class in exception_classes:
             self.assertTrue(
@@ -124,3 +126,13 @@ class GlueExceptionsTestCase(TestCase):
         self.assertEqual(exc.details()['field'], 'password')
         self.assertIn('password', str(exc))
         self.assertIn('id', str(exc))
+
+    def test_glue_formset_max_num_exceeded_error(self):
+        """GlueFormSetMaxNumExceededError should contain current_count and max_num."""
+        exc = GlueFormSetMaxNumExceededError(current_count=2, max_num=2)
+
+        self.assertEqual(exc.current_count, 2)
+        self.assertEqual(exc.max_num, 2)
+        self.assertEqual(exc.status, 422)
+        self.assertEqual(exc.details(), {'current_count': 2, 'max_num': 2})
+        self.assertIn('2', str(exc))

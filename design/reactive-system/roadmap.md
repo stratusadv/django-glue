@@ -1,6 +1,6 @@
 # Reactive System Roadmap
 
-Status: Design gates complete; runtime implementation pending
+Status: Design gates complete; runtime implemented on `v1.1/base`, consumer migration pending
 
 This document does not itself authorize runtime implementation.
 
@@ -15,7 +15,7 @@ belong in the living design documents.
 | Apply the model to every established Glue family | Complete at contract level | `state-model.md` §4 covers models, forms, querysets, formsets, sequences, functions, views, and custom objects |
 | Re-check the concrete security findings | Complete at design level | identity locking, callable injection, query controls, TemplateGlue removal, and target-path middleware are settled |
 | Walk the thirteen production escape-hatch sites | Complete at design level | questionnaire workflow, chat and notification entity operations, persisted ordering, polling reads, Editor.js integration, and polymorphic notification rendering all fit the shared contracts without retaining a raw transport |
-| Resolve state-dependent component questions | Complete at design level | independent policies, transport-only batching, shared-derivation ownership, lifecycle, disposal, configured transient Glue-object results, DOM-bridged declared events, addressed refresh, HTML-like stamping, explicit parameter sources, lazy mount authority, and bounded per-address policy ownership are settled |
+| Resolve state-dependent component questions | Complete at design level | independent policies, transport-only batching, shared-derivation ownership, lifecycle, disposal, configured transient Glue-object results, DOM-bridged declared events, addressed refresh, Django template-tag stamping, typed parameter sources, and bounded per-address policy ownership are settled |
 | Name the application authorization contract | Complete at design level | `state-model.md` §3 defines `authorize()` as a pure predicate at three call points, its permissive default, and its per-address denial shape |
 | Separate write exposure from read exposure | Complete at design level | `state-model.md` §9 adds the `editable=` projection for model and form adapters, following the established `filters` / `ordering` default contract |
 | Separate creation from persisted mutation | Complete at design level | ADR 009 and `state-model.md` §§3–4 add `ADD`, define create-only queryset rows, and preserve secure creation through projected relation querysets without an `allow_create` flag |
@@ -52,7 +52,7 @@ Sequencing consequences:
 | 3 | Replace the attribute hierarchy with attribute definitions, explicit namespaces, and addressed children | No attribute subclasses `BaseGlue`; every built-in uses one server pipeline; fluent dotted call paths and non-component children are covered; a projected to-one relation resolves to one shared addressed child across rows; a projected to-many relation preserves the `QuerySetGlue` surface; `ADD` permits creation without mutation of persisted rows; a non-nullable child factory does not run on an owner interaction that does not address it |
 | 4 | Introduce schema and split downward data by lifetime | Unchanged field/interface metadata is not resent |
 | 5 | Replace the client attribute/proxy caches with one address registry, attribute materializer, child binder, response dispatcher, and role-aware reconciliation | One proxy exists per live address; `ABC` survives when `A -> AB` was sent and `AB` returns; namespace and child paths route to the correct token |
-| 6 | Replace response diffs with authoritative addressed snapshots and the flat `objects` envelope | Legacy-object and component E2E tests share the envelope; child entries register before binding; stable child drafts survive owner refresh; replacement/removal disposal passes; a batch with one failing entry advances every other entry unchanged; an unchanged token or `unsigned_data` is omitted and the client holds its previous value |
+| 6 | Replace response diffs with authoritative addressed snapshots and the flat `objects` envelope | Legacy-object and component E2E tests share the envelope; child entries register before binding; stable child drafts survive owner refresh; replacement/removal disposal passes; a batch with one failing entry advances every other entry unchanged; an unchanged token or `computed_data` is omitted and the client holds its previous value. After consumer migration, the real `stratusadv-portal` time-entry dashboard E2Es cover keyed week navigation and the add-entry modal; no dashboard copy is required in `test_project` |
 
 Phase 1 is independently valuable as a security correction, but runtime work
 starts only with explicit implementation authorization.
@@ -82,6 +82,11 @@ starts only with explicit implementation authorization.
   rendering may be added later as performance strategies, but must preserve
   address ownership, introduced-object registration, response ordering, and keyed DOM
   reconciliation.
+- **Client-evaluated parameters and delayed mounting.** `{% glue_component %}`
+  resolves parameters on the server and mounts during the stamping render. An
+  Alpine-evaluated parameter source, or `lazy`/`defer` mounting, would each need
+  a server-authored capability naming what the client may supply; neither is
+  designed yet.
 - **Reactive parameter bindings.** Parameters are initially explicit and
   non-reactive. A later declaration may opt a child into propagation from a
   direct parent using selective batching of their independent object entries,
@@ -95,6 +100,14 @@ starts only with explicit implementation authorization.
   model and not a replacement for server-side request/service injection.
 
 ## Deferred Glue-family extensions
+
+- **Queryset preload.** A queryset introduces no rows; rows answer its queries
+  (`state-model.md` §10). A later, explicitly opted-in option such as
+  `Glue.queryset(..., preload=True)` may place the first window of rows in the
+  introduction for a page that must render them without a round trip. It
+  applies only to the queryset that declares it, never to projected relation
+  querysets. No consumer needs it as of the 2026-09-22 audit (55 queryset
+  registrations across six projects, none eager), so it is not built.
 
 - **Addressed dictionaries.** A future `Glue.dict(...)` shortcut may construct
   a configured, addressed keyed object from a Python mapping. Ordinary values
@@ -112,11 +125,12 @@ starts only with explicit implementation authorization.
 These defence-in-depth and operational improvements do not alter the state
 roles or wire format and do not gate the redesign:
 
-- [ ] Choose and document one policy-token lifetime. Code currently uses a
-  rolling 24-hour lifetime while older docs also name 10 minutes and 1 hour.
-  This is no longer purely operational: the child-reintroduction contract in
-  `state-model.md` §10 depends on a known expiry, so the number must be chosen
-  before that path is implemented.
+- [x] Choose and document one policy-token lifetime. **Chosen: 24 hours from
+  issuance** (`DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400`), fixed rather
+  than rolling; a successor token with fresh issuance is delivered only when
+  retained values change. See [ADR 013](decisions/013-policy-token-lifetime.md).
+  This unblocks the child-reintroduction contract in `state-model.md` §10,
+  which depends on a known expiry.
 - [ ] Add configurable total-payload, nesting-depth, update-count,
   callable-count, and introduced-object-count limits, including the per-page-render
   introduced-object bound that collections actually exercise.
@@ -134,7 +148,11 @@ Authenticated queryset continuation is not deferred here. Token and
 encoded-query size limits before unpickling protect the deserialization boundary
 directly and remain part of the state-model implementation.
 
-## Open implementation constraints
+## Implementation verification checklist
+
+The branch implementation and conformance records for these contracts are in
+`STATE_MODEL_HANDOFF.md`. The production-shaped payload measurement and the
+security-hardening items above remain separate follow-up work.
 
 - Measure production-shaped policy tokens with retained drafts, queryset
   continuations, and signed collection membership, plus aggregate request size
@@ -162,25 +180,16 @@ directly and remain part of the state-model implementation.
   produced; and `effects.dispose` must still tear one down on demand.
 - Implement the allowlisting queryset unpickler and verify it rejects a payload
   naming a class outside the published allowlist even when the signature is valid.
-- Implement the component compiler as a `DjangoTemplates` subclass with an
-  unchanged no-`<glue:` fast path. Preserve cached, filesystem, app-directory,
-  and custom loaders; inheritance/includes; `from_string()`; template origins;
-  and source line diagnostics. Benchmark compilation of unchanged templates
-  and component-heavy templates, and verify repeated renders do not rescan
-  source.
-- Parse multiline `<glue:... />` elements with an HTML-context- and
-  quote-aware scanner rather than regular expressions. Comments, scripts,
-  styles, and Django `verbatim` regions must not produce component nodes.
-- A mount-only lazy/defer policy must fix its component target, parent/stamp
-  address, server-resolved parameters, and allowed Alpine parameter names.
-  Reject extra names and invalid types before construction, and authorize every
-  mount independently; do not expose an unrestricted client component factory.
+- Port the existing `{% glue_component %}` tag to the addressed wire. Verify
+  typed Django `FilterExpression` parameters, loop keys, duplicate rejection,
+  inherited and included templates, ordinary Django loaders, and stable child
+  addresses. Rendered component roots carry address markers; introduced entries
+  join the flat `objects` collection.
 - Verify declared event delivery after reconciliation and morphing through both
   the source proxy's `$on()` and a rendered component's bubbling `CustomEvent`.
-  Stamp-level Alpine handlers must run in the composing scope, filter to the
-  exact child source, survive root-preserving morphs, and disappear on disposal.
   `Glue.from(element)`, `$glue`, and `component.$el` must all resolve the same
-  canonical proxy generation.
+  canonical proxy generation. The tag adds no special event-handler grammar;
+  source-scoped `$on()` and ordinary DOM listeners supply event handling.
 - Normalize ordinary nested field-path lists and optional `Glue.fields()`
   selections into one signed projection tree for both models and querysets.
   Verify that `__all__`, `select_related()`, and `prefetch_related()` never

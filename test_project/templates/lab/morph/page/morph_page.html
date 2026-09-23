@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Morph Lab{% endblock %}
+
+{% block content %}
+<div x-data="morphLab()" x-init="paintThirdParty()">
+    <div class="card card-gorilla mb-4">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label mb-0 small">Strategy</label>
+                    <select class="form-select form-select-sm" data-role="strategy" x-model="strategy">
+                        <option value="replace">replace (current glue behaviour)</option>
+                        <option value="idiomorph">idiomorph</option>
+                        <option value="alpine">Alpine.morph</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-gorilla" data-role="rerender"
+                            @click="apply()">Re-render</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-gorilla" data-role="reorder"
+                            @click="apply({order: 'reversed'})">Reorder</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-gorilla-danger" data-role="drop"
+                            @click="apply({count: 3})">Drop last card</button>
+                </div>
+                <div class="col-auto">
+                    <span class="small text-muted">applied: <span data-role="applied" x-text="applied"></span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% include 'lab/morph/region.html' %}
+</div>
+
+<script src="{% static 'vendor/idiomorph.min.js' %}"></script>
+<script>
+    // Stands in for third-party JS that owns a subtree: it writes content the
+    // server render knows nothing about, so any strategy that rebuilds those
+    // nodes from server HTML wipes it.
+    function paintThirdParty() {
+        document.querySelectorAll('[data-role^="third-party"]').forEach(node => {
+            if (!node.textContent.trim()) {
+                node.textContent = 'PAINTED-BY-JS'
+            }
+        })
+    }
+
+    function shouldIgnore(node) {
+        return node.nodeType === 1 && node.hasAttribute('data-morph-ignore')
+    }
+
+    function morphLab() {
+        return {
+            strategy: 'replace',
+            applied: 0,
+
+            init() { window.__morphLab = this },
+
+            async apply({order = 'normal', count = 4, version = 2} = {}) {
+                const url = `{% url 'lab:morph:morph_region' %}?order=${order}&count=${count}&version=${version}`
+                const html = (await (await fetch(url)).text()).trim()
+                const element = document.getElementById('morph-region')
+
+                if (this.strategy === 'replace') {
+                    // What GlueHtmlResult / GlueView do today.
+                    element.outerHTML = html
+                } else if (this.strategy === 'idiomorph') {
+                    Idiomorph.morph(element, html, {
+                        callbacks: {
+                            beforeNodeMorphed: (oldNode) => !shouldIgnore(oldNode),
+                        },
+                    })
+                } else if (this.strategy === 'alpine') {
+                    Alpine.morph(element, html, {
+                        updating: (el, toEl, childrenOnly, skip) => {
+                            if (shouldIgnore(el)) skip()
+                        },
+                    })
+                }
+
+                this.applied++
+                window.__morphApplied = this.applied
+            },
+        }
+    }
+</script>
+{% endblock %}

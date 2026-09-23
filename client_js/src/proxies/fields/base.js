@@ -1,6 +1,7 @@
 class FieldGlue {
-    constructor({owner, name, stateKey, metadata = {}}) {
+    constructor({owner, name, fieldPath = name, stateKey, metadata = {}}) {
         this.name = name
+        this.fieldPath = fieldPath
         this.stateKey = stateKey || name
 
         Object.defineProperty(this, 'owner', {
@@ -19,22 +20,15 @@ class FieldGlue {
     }
 
     get value() {
-        this.owner._ensureLoaded?.()
-        return this.owner._state?.[this.stateKey]?.value
+        return this.owner._record.getValue(this.stateKey)
     }
 
     set value(value) {
-        if (!this.owner._state) {
-            this.owner._state = {}
-        }
-        if (!this.owner._state[this.stateKey]) {
-            this.owner._state[this.stateKey] = {}
-        }
-        this.owner._state[this.stateKey].value = value
+        this.owner._record.setValue(this.stateKey, value)
     }
 
     get errors() {
-        return this.owner._state?.[this.stateKey]?.errors || []
+        return this.owner._record.getFieldComputed(this.fieldPath).errors || []
     }
 
     get hasErrors() {
@@ -46,7 +40,12 @@ class FieldGlue {
     }
 
     updateMetadata(metadata = {}) {
-        Object.assign(this, metadata)
+        for (const key of this._metadataKeys || []) delete this[key]
+        const assignable = Object.fromEntries(
+            Object.entries(metadata).filter(([key]) => key !== 'errors')
+        )
+        Object.assign(this, assignable)
+        this._metadataKeys = Object.keys(assignable)
     }
 
     primitiveValue(hint = 'default') {

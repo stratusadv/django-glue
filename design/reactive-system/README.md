@@ -1,21 +1,10 @@
 # Reactive System Design
 
-Status: **Deferred.** Design complete; implementation paused mid-phase-3.
+Status: Design complete; runtime implemented on `v1.1/base`, consumer migration pending
 
 This directory is the internal source of truth for Django Glue's reactive
-state-management redesign. It is intentionally separate from the published MkDocs
-site.
-
-> **This workstream is not active.** Its in-progress runtime is shelved on
-> `v1.1/state-model`; see [`../REINTEGRATION.md`](../REINTEGRATION.md) for where
-> it stands and how it comes back. The active work is
-> [`../components/`](../components/), which is built on the **current** wire and
-> is governed by [`../components/spec.md`](../components/spec.md).
->
-> [`component-system.md`](component-system.md) in this directory describes the
-> component system as it will exist *on the redesigned wire*. It does not govern
-> the component prototype. The rules in [`AGENTS.md`](AGENTS.md) apply to this
-> directory only.
+component and state-management redesign. It is intentionally separate from the
+published MkDocs site.
 
 ## Reading order
 
