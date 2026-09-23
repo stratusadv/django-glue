@@ -73,7 +73,6 @@ class GlueAttributeMaterializer {
             if (!childPaths.has(fieldPath)) {
                 definePath(proxy, fieldPath, {
                     get() {
-                        proxy._ensureLoaded?.()
                         return record.getValue(valuePath)
                     },
                     ...(staticData.editable ? {

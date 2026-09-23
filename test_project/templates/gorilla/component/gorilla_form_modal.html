@@ -1,11 +1,6 @@
 <div class="modal fade" id="{{ modal_id }}" tabindex="-1" x-data="{
     gorilla: Glue.{{ glue_type }}.{{ glue_name }},
     saving: false,
-    init() {
-        this.gorilla.addListener('save', () => {
-            $store.notifications.error('Failed to create fighter.');
-        }, 'error');
-    },
     async submit() {
         this.saving = true;
         try {
@@ -18,6 +13,8 @@
                 $dispatch('gorillas-changed');
                 bootstrap.Modal.getInstance(document.getElementById('{{ modal_id }}')).hide();
             }
+        } catch {
+            $store.notifications.error('Failed to create fighter.');
         } finally {
             this.saving = false;
         }

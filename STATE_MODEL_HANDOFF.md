@@ -2,7 +2,7 @@
 
 ## Objective
 
-Finish the reactive-system redesign described by the roadmap. Phases 1–5 and phase 6 slices A1–A4 are complete. A1–A4 were reviewed, corrected, and committed on 2026-09-22. A5, the component port and consumer migration, remains unstarted and needs separate authorization.
+Finish the reactive-system redesign described by the roadmap. Phases 1–5 and phase 6 slices A1–A4 are complete. A1–A4 were reviewed, corrected, and committed on 2026-09-22. A5, the component port and consumer migration, is authorized and in progress.
 
 The current branch is intentionally making a clean break from the legacy runtime. Do not add a compatibility envelope for old metadata, state, or `manifest_list` shapes.
 
@@ -286,6 +286,13 @@ Review target resolutions (2026-09-21):
 
 ## Phase 6 — IN PROGRESS: authoritative addressed snapshots, the flat `objects` envelope, and lifecycle
 
+### A5 conformance record (pre-edit, 2026-09-22)
+
+1. **Phase and gate.** Phase 6 slice A5 is authorized. The remaining gate is shared `objects` transport and E2E coverage for components and established Glue families, including child registration before binding, stable drafts, disposal, per-address batch failure, and omitted unchanged data.
+2. **Governing contract.** `state-model.md` §§5, 6, 10 govern addressed state, responses, effects, refresh, and the flat envelope. `component-system.md` §§3–8 govern declared parameters, mount, Django template-tag stamping, keyed addresses, morphing, DOM identity, events, and lifecycle, as corrected by the current component implementation and its `design/components/spec.md` §3 on `e6f204b`. `roadmap.md` phase 6 owns the gate. The component workstream supplies the stamp grammar and behavior examples but targets the removed wire format.
+3. **Legacy mechanisms removed.** The `glue_view` fragment, template-response result, and multi-row query-item `manifest_list` shapes must move to `objects`; component root manifests and global component names from the old branch must not become the new contract. The three-event `before`/`after`/`error` listener API gives way to declared semantic events. No compatibility envelope is introduced. The superseded `<glue:... />` compiler is not to be ported.
+4. **Mapping.** Component registration and reconstruction stay behind the `component` namespace of `glue_class_registry`; declared parameters feed the generated constructor and signed target. The existing `{% glue_component 'tag-name' parameter=value key=value %}` Django template tag resolves typed filter expressions and stamps keyed components; no custom template backend is introduced. Initial and later renders produce addressed entries plus an `html` channel; the client registry associates component roots with their addresses, morphs after reconciliation, and disposes removed roots. `Glue.event()` declarations produce `effects.events`, delivered through source-scoped `$on()` and component DOM events. Remaining view/template/query consumers share the `objects` entry pipeline. `docs/` and E2E tests record the public contract.
+
 ### Conformance record (pre-edit, per design/AGENTS.md)
 
 1. **Active roadmap phase and gate.** Phase 6, authorized 2026-09-21. Gate (roadmap.md line 55): legacy-object and component E2E tests share the envelope; child entries register before binding; stable child drafts survive owner refresh; replacement/removal disposal passes; a batch with one failing entry advances every other entry unchanged; an unchanged token or `computed_data` is omitted and the client holds its previous value.
@@ -505,48 +512,880 @@ Focused tests:
 - Identity is `{form_class_path, formset_class_path, min_num, max_num, can_delete}`. Prefix, management form, and `extra` are not part of identity.
 - Reconstruction resolves the concrete formset class and reads its `form_class`; only the base FormSetGlue case falls back to signed `form_class_path`.
 
-## Handoff warning
+## A5 handoff — 2026-09-22, interrupted for agent transfer
 
-The committed history contains the wider reactive-system branch, including client and documentation edits outside this server task. `docs/` still references the removed attribute hierarchy (`architecture.md`, `codewalk.md`, `changelog.md`, `docs/future/attribute-glue-unification.md`) and was deliberately left untouched — it is rewritten with the phase 6 consumer migration. Treat the existing tree as user-owned; inspect every overlapping diff before editing.
+The user authorized A5, then corrected the stamp syntax: **use the current
+component branch in `./django-glue` (`e6f204b`) as the source for the Django
+`{% glue_component %}` templatetag. Do not implement `<glue:... />` elements or
+a custom `DjangoTemplates` compiler.** The component branch targets the old
+manifest wire, so port behavior onto this branch's addressed `objects` wire;
+do not merge it mechanically. The old syntax remains inside a collapsed
+historical section of `component-system.md`; the active section, `design.md`,
+and `roadmap.md` now specify the tag. `design/components/spec.md` exists in
+the `./django-glue` worktree, not in this worktree.
+
+Current uncommitted A5 edits cover:
+
+- `glue_view`, template-response results, queryset multi-row results, and
+  sequences moved toward `{html, objects}` and address-only item references;
+  Python and JS tests were updated for those surfaces.
+- Component registration, typed declared parameters, signed reconstruction,
+  mount on introduction, recursive component module discovery, collision
+  checking, stable typed keys, `{% glue_component %}`, one-root injection,
+  and per-root addressed entry data for pages whose Glue init renders before
+  component content. Stamped components are excluded from global client names.
+- Client DOM lookup (`Glue.from(element)`, `$glue`, `component.$el`), address-keyed
+  morphs, removal disposal, and a component render path that morphs before
+  delivering `effects.events`.
+- `Glue.event()` and source-scoped `$on()` with a bubbling component DOM event;
+  the old `addListener`/`removeListener` runtime API was removed. A new
+  component guide and event guide were written; legacy event sections in five
+  family guides now point to the new guide.
+- A `CounterDashboard`/`CounterCard` browser fixture and E2E test demonstrate
+  typed keyed tags, independent state, event delivery, parent morph, disposal,
+  and identity preservation.
+
+Verified after these edits: `just test` **557 passed, 43 deselected**;
+`just js-tests` **111 passed**; `just js-build` green (26.4 KB);
+`just test-e2e django_glue/tests/e2e/test_component_page.py -q` **1 passed**;
+`.venv/bin/python manage.py check` green; `git diff --check` clean. A later
+full `just test-e2e -q` was **interrupted by the user** for this handoff, so
+the full E2E gate is unknown. `just docs` failed only because mkdocstrings
+could not fetch Python's inventory under network restriction. The broad Ruff
+check reported pre-existing and new style findings; run focused Ruff on new
+files, fix substantive findings, and distinguish baseline findings.
+
+**Full E2E resumed (2026-09-22, next session).** The interrupted full run was
+red: 14 errors + 1 failure, all from `test_project` templates still calling the
+removed `addListener` API (the E2E JavaScript error guard fails every test on
+those pages). Migrated those consumers to call-site promise handling per the
+event guide ("Loading and transport errors remain normal promise behavior"):
+`gorilla/page/{detail_page,detail_page_partial,list_page}.html`,
+`fight/page/list_page.html`, `gorilla/component/gorilla_form_modal.html`. The
+fight list's listeners were attached to the queryset proxy while the buttons
+act on rows, so they never fired; their notifications now sit on the row
+save/delete handlers. No built-in `saved` event was added (component-system.md
+permits one, it is not required; open question). Full `just test-e2e -q`:
+**33 passed, 10 xfailed**. Do not run `just test` concurrently with E2E — they
+share the test database and produce spurious setup errors.
+
+**Legacy manifest removal conformance record (pre-edit, 2026-09-22).**
+
+1. *Phase and gate.* Phase 6 A5, gate line "legacy-object and component E2E
+   tests share the envelope" — no surface may still speak the tagged shape.
+2. *Governing sections.* state-model.md §10 "Wire format" (page load and
+   attribute calls carry `{objects: [...]}`; "no entry carries a result tag or
+   an `is_glue_manifest` tag"; a Glue-returning callable's wire `result` is the
+   address); roadmap.md "There is no compatibility envelope".
+3. *Legacy removed.* `GlueManifest`, `BaseGlue.manifest`,
+   `BaseGlue._serialized_child_manifests`, `GlueContextManager.serialized_manifests`,
+   `GlueResponse._serialize_glue_values`/`_serialize_result` (the result path
+   now lives in `process_attribute_call`; `to_json_response` only serves
+   envelope-fault errors), client `loadManifests`/`resolveManifest`/
+   `_collectManifests`, and the `is_glue_manifest`/`is_glue_template_response`
+   branches of `_convertResult` (no server path emits either).
+4. *Mapping.* No new field, class, or public method. `GlueClient.loadObjects`
+   absorbs the single-caller `_loadEntries`/`_introduceEntries`. Tests move to
+   `BaseGlue.entry`; nested-Glue result rejection is tested through
+   `process_attribute_call` instead of the removed serializer; assertions whose
+   only purpose was that the tag is absent are dropped (design/AGENTS.md: no
+   historical tests).
+
+*Result.* Done as mapped (plus `test_model_related_state.py` moved to
+`_serialized_child_entries`, `sequence.py` and `addressRegistry.js` messages
+say "entry"). Gates: `just test` 555 passed (four legacy serializer tests
+removed, one parametrized call-path rejection test added), `just js-tests` 111
+passed, `just js-build` 26.2 KB, `just test-e2e -q` 33 passed / 10 xfailed.
+Item 2 below is complete.
+
+**Component contract audit (2026-09-22).** Done without a decision (the spec
+settles them): the component class now has a `__signature__` generated from its
+declared parameters (skipped for classes that still hand-write `__init__`);
+`event.py`'s DOM collision list is now the WHATWG HTML global event handlers
+plus the UI Events, Pointer, Touch, CSS animation/transition, and window
+lifecycle events (component-system.md: "a published list").
+
+**User decision — list adaptation (2026-09-22).** `SequenceAdapter` wraps a list
+into a `SequenceGlue` only when the list's items are meant to be proxies: it
+holds `BaseGlue` objects, or its declaration names a `glue_factory` that turns
+raw items (model instances, forms) into them. Any other list stays plain data;
+a mixed Glue/raw list with no factory still raises. This narrows the audit's
+`glue_factory` "REPLACE" and `value_adapters` "COLLAPSE" rulings: the adapter
+and `glue_factory` stay. The design text (state-model.md's hard composition
+boundary routes and the audit table) must record this in the docs pass. The
+`CounterDashboard` `value_adapters=[]` workaround is gone.
+
+**User decision — one introduction step (2026-09-22), conformance record.**
+
+1. *Phase and gate.* Phase 6 A5, component half of the gate.
+2. *Governing sections.* component-system.md §4 "Mount" (`mount()` is the single
+   initial-introduction hook, called after parameters/defaults and request
+   binding, before the first policy token and initial HTML; not on
+   reconstruction or token advance); state-model.md §4 hard composition
+   boundary (four introduction routes); the user's Liskov rule (no subtype
+   branching in the general layer, no no-op base members).
+3. *Legacy removed.* The `isinstance(glue, Component)` mount branches in
+   `GlueContextManager.add_glue` and `GlueChildBinder`.
+4. *Mapping.* `BaseGlue.introduce(request)` — binds the request and requires
+   `INTRODUCE` authorization (raises `GlueAuthorizationError`); true of every
+   family. `Component.introduce` extends it with `mount()`. Callers: page roots
+   (`add_glue`, denial raises), child slots (`GlueChildBinder`, denial omits
+   the child), callable results (`process_attribute_call`, denial is the
+   entry's `not_authorized` fault). The last closes a gap: a component
+   returned as a transient result was never mounted or authorized for
+   introduction.
+
+*Result.* Done as mapped. `introduce()` authorizes against the given request
+and binds only when authorized, so a denied child stays unbound. New test:
+`test_component_returned_from_a_callable_is_mounted_at_introduction`. Gates:
+`just test` 562 passed, `just test-e2e -q` 33 passed / 10 xfailed.
+
+**Spec gap audit (2026-09-22) — implement ALL of these before the `docs/`
+rewrite.** The user ruled that docs describe the finished contract, so every
+spec requirement lands first. Design-doc edits already made in this session
+(component-system.md, state-model.md, design.md, roadmap.md) record decisions
+and stay; the partial `docs/api/glue/shortcuts.md` edit is on hold until the
+gaps close. Sources: state-model.md "Consequences", roadmap.md "Open
+implementation constraints", ADR statuses (headers are stale; each was checked
+against code), the component workstream spec's deferrals.
+
+A. Spec-mandated removals still in code:
+1. `TemplateGlue`, `Glue.template()`, `initial_context_data`, the client template
+   proxy/namespace, their tests, fixtures, and nav entries.
+2. `Glue.sequence()` entrypoint (the `SequenceGlue` class stays; list adaptation
+   per the user decision above).
+3. `LoadingStrategy.INHERIT`.
+4. `identity=` (`Glue.property(identity=...)` and remaining `identity=True` sites).
+   *A2–A4 done (2026-09-22):* `Glue.sequence()` removed (its registration test
+   now uses `Glue.object(request, SequenceGlue(...))`); `LoadingStrategy.INHERIT`
+   and the single-purpose `resolved_loading_strategy` removed; `identity=` removed
+   from `Glue.attr`/`Glue.property`, `DeclaredAttributeOptions`, the definition,
+   and the collector — `BaseGlue.get_identity()` defaults to `{}` (custom objects
+   sign reconstructors through `_retained_state`), and `_GluePropertyDescriptor`
+   lost its `__call__`/`_bind` (only the removed `identity=` form used them).
+5. `related_field_config` → nested `fields`/`exclude` relation paths, optional
+   `Glue.fields()` sugar, and a separate `choices` mapping for relation choice
+   sources (state-model.md "Consequences"; roadmap constraint "Normalize ordinary
+   nested field-path lists…").
+   *A5 conformance record (pre-edit, 2026-09-22).* (1) Phase 6 gap closure.
+   (2) state-model.md §9 "`ModelGlue` and `QuerySetGlue` use one explicit
+   field-projection graph" through "Configuring `Glue.choices(...)` opts into the
+   server-side path" (lines ~1370–1524), Consequences "`related_field_config` is
+   removed", §10 "The same path carries choice-source continuations".
+   (3) Removed: `related_field_config` and its `RelatedFieldConfig` /
+   `NormalizedRelatedFieldConfig` / `RelatedFieldPolicyConfig` shapes. Its
+   per-relation `fields`/`exclude` are already dead (projection comes from nested
+   `fields` paths via `_projected_relations`); only `choice_queryset` is live.
+   (4) Mapping: `choices: Mapping[str, QuerySet]` on `ModelGlue`, `QuerySetGlue`
+   (forwarded to rows), and the `Glue.model`/`Glue.queryset` shortcuts — each key
+   must name an exposed relation (an included field or projected relation) and
+   query its related model; signed as encoded querysets decoded through
+   `unpickle_query`. Implicit source (no `choices` entry): `{value, label}` from
+   `__str__`, no server search, capped at `DEFAULT_SEARCH_LIMIT`; a related table
+   over the cap raises a declaration error naming the relation and pointing to
+   `Glue.choices(..., search_fields=...)` (today it loads every row, unbounded).
+   `Glue.fields(*paths, **relations)`: immutable selection normalizing to the
+   same canonical `a__b` path tuple, nestable, accepted by `fields` and `exclude`.
+   Consumer migration outside this repo (portal `TIME_ENTRY_RELATED_FIELDS`) is
+   recorded for the consumer-migration pass, not edited here.
+   *A5 done (2026-09-22).* `choices=` replaces `related_field_config` on
+   `ModelGlue`/`QuerySetGlue` (forwarded to rows) and the shortcuts; validation,
+   signing, and allowlisted decoding live in `ModelFieldResolutionMixin`
+   (`_normalize_choices`/`_serialize_choices`/`_deserialize_choices`); a key must
+   name an exposed relation. Implicit sources over `DEFAULT_SEARCH_LIMIT` (25)
+   rows raise `ImproperlyConfigured` naming the relation — **consumer-visible:**
+   any implicit relation over a larger table now needs
+   `choices={...: Glue.choices(..., search_fields=[...])}`. `Glue.fields()`
+   returns the canonical path tuple (no second representation). New
+   `prefetch_related` no-traversal test. Gates: 591 Python, 106 JS, 34 E2E /
+   10 xfailed, `git diff --check` clean.
+
+   *A1 done (2026-09-22):* deleted `glue/objects/django/template.py` and
+   `client_js/src/proxies/template.js` (via `rm`), the `Glue.template()`
+   shortcut, exports, and registry entry. The arena page (its only consumer)
+   now calls a `Gorilla.rank_card` `@Glue.html_attr` that computes the rank
+   server-side, so the client supplies no template context; its stale
+   `this.gorilla.get()` init (pre-existing break) is removed. New E2E
+   `test_arena_rank_card_renders_through_model_html_attribute`. Test fixtures that
+   used the template namespace as a generic owner use their own namespaces.
+
+6. `LoadingStrategy` (added 2026-09-22 at the user's request; ADR 002 removes
+   "the existing loading-strategy state semantics"): the enum, every
+   `loading_strategy` option, the entry's `loading_strategy` field, the
+   `load_state` callable, `SequenceLazyLoadNotSupportedError`, and the client's
+   first-access fetch (`fieldBacked._ensureLoaded`/`retryLoad`, the
+   materializer and field hooks that call it, `record.loadingStrategy`,
+   `base.js` `_loaded` seeding). state-model.md now says every introduced entry
+   is a complete first snapshot and on-demand re-derivation is `$refresh()`.
+   *Load-bearing audit (user asked that nothing load-bearing be lost):*
+   - **Nested collection fan-out — load-bearing, needs a decision before
+     removal.** Rows are queryset derived output (state-model.md §4 family
+     table), so an eager queryset runs its query at render and ships its first
+     page as signed row entries. Projected to-many relations
+     (`model_fields.py` builds a `QuerySetGlue` per row) default to `LAZY`
+     today, which is the only thing stopping a 100-row queryset from running
+     100 relation queries at render and shipping every related row as its own
+     signed entry, recursively through `_serialized_child_entries`. The spec
+     does not say how collection rows avoid this once lazy loading is gone.
+   - Unused querysets (search/typeahead-only registrations) pay a query at
+     render instead of on first read.
+   - Sequences: `LAZY` is already unusable (reconstructed sequences have no
+     items); removal deletes that failure mode.
+   - Models/forms: `LAZY` only withholds derived output (computed attributes,
+     read-only persisted fields, adapter output); retained state is in the
+     token regardless. Cost moves to render time.
+   - Client: `queryset.js` `_loaded` doubles as "this query has run" for
+     `all()`/`refresh()` caching, seeded from the strategy in `base.js`.
+   - Components and formsets already default to `EAGER`.
+   *User decision (2026-09-22): option (a).* Every object introduces complete;
+   a queryset introduces no rows and rows answer its query callables
+   (state-model.md §10). Consumer audit: one explicit `loading_strategy`
+   (portal `time_entry_day.py:146`, `EAGER` — satisfied by the new default), 55
+   `Glue.queryset` registrations all on default `LAZY` (unchanged under (a)),
+   `computed_attributes` only on querysets. Queryset `preload` is a deferred
+   roadmap extension. A6 implementation must:
+   - drop rows from `QuerySetGlue.get_computed_data(include_all=True)` and
+     rewrite the tests asserting eager queryset rows at introduction;
+   - make the client queryset proxy start unqueried at introduction instead of
+     seeding `_loaded` from the strategy (`base.js`); cover with E2E;
+   - migrate spire showcase `load_state()` calls (`live_model_card.html`,
+     `form.html`, the showcase E2E, `knowledge` form-view test) and the portal
+     `scope_of_work` test to `$refresh()`, and the portal deal E2E that awaits
+     `deal._loadPromise`;
+   - depends on B7 (`load_state` is removed only once `$refresh()` exists).
+   *A6 done (2026-09-23):* deleted `glue/loading.py` (via `rm`),
+   `loading_strategy` from `BaseGlue`, every family, `Component` (and its
+   generated signature), and the shortcuts, `Glue.LoadingStrategy`, the
+   `GlueObjectEntry.loading_strategy` field, `BaseGlue.load_state`, and
+   `SequenceGlue`'s `load_state`/`SequenceLazyLoadNotSupportedError`/
+   `_reconstructed`. `BaseGlue.entry` always carries `get_computed_data(include_all=True)`.
+   Rows: `BaseGlue._refreshed_output()` is the refresh's re-derived output;
+   `QuerySetGlue` extends it with `_loaded_window()`, so introduction carries no
+   rows while a refresh does. Client: removed `_ensureLoaded`/`retryLoad`/
+   `_loadPromise`/`_loadError`/`loading` from `FieldBackedGlueProxy`, the field
+   and materializer hooks, `record.loadingStrategy`, and `base.js`'s
+   strategy-seeded `_loaded` (the queryset proxy owns its own `_loaded = false`).
+   Tests migrated: callables that only used `load_state` as a neutral call now
+   use a refresh or a fixture `ping`; `IntroductionTestCase` replaces the lazy
+   cases. Gates: 596 Python, 111 JS, 35 E2E / 10 xfailed. `AGENTS.md` still
+   lists `loading.py`/`LoadingStrategy`/`TemplateGlue` — updated in the docs pass.
+7. Queryset bookkeeping (`_last_query_params`, `_loaded_row_count`) is signed in
+   `get_identity()` (`queryset.py:136`); the audit rules "MOVE out of identity"
+   and state-model.md §2 names `loaded_row_count` a non-parameterized
+   reconstructor, i.e. `state_snapshot`. Prerequisite for B7's queryset refresh.
+   *A7 done (2026-09-22):* `QuerySetGlue._retained_state()` adds
+   `last_query_params`/`loaded_row_count`; `get_identity()` no longer carries
+   them; reconstruction reads them from `state_snapshot`. Test
+   `test_cursor_memory_is_signed_as_retained_state_not_identity`. Gates: 592
+   Python, 34 E2E / 10 xfailed.
+
+E. 1.0.2 features missing from this branch (found 2026-09-22). `v1.0.2/base`
+   has 23 commits that are not ancestors of `v1.1/state-model`. Eleven are the
+   component workstream (A5 ports them by behavior). Of the other eleven:
+   - **Missing, must port:** `label_formatter` on `Glue.choices` with request
+     plumbing, per-choice label flag, and client `choiceLabelHtml` (`868ebf7`,
+     `c346634`, `0116b4e`, `8c7f216`) — it needs each choice's `obj`, which
+     therefore stays on every choice, implicit sources included (`obj` = `pk` +
+     `__str__` there); searchable choice sources return their first
+     `search_limit` rows when unfiltered and `search_fields` defaults to `fields`
+     (`1ea1ad1`; the branch still returns `[]` and a test asserts it); model pk
+     always exposed unless excluded (`495c427`); reject `'__all__'` as an element
+     of `fields`/`exclude` (`b8a4026`).
+   - **Verify behaviorally:** `9aebaf8` (callable return annotation breaking the
+     call — fix targets code this branch rewrote); `6029209` (public `load()`
+     seam — confirm no consumer calls `.load()`; superseded by `$refresh()`).
+   - **Equivalent / superseded:** `f5d8b96` (shortcuts already accept
+     `request=None`), `bf7df07` (redirect moved to `effects.redirect` in A4).
+   A5's `state-model.md` implicit-source text ("label and value only") must say
+   `obj` carries `pk` and `__str__` for the label formatter.
+   *Progress (2026-09-22):* ported `label_formatter` (stored as a dotted path so
+   only a string crosses the allowlisting unpickler; lambdas/closures rejected),
+   request plumbing, `has_html_label`, client `choiceLabelHtml`/`choiceLabelText`,
+   `1ea1ad1` (the fight page's two searchable-choice E2Es now expect the
+   unfiltered first page after a cleared search — 1.0.2 kept the stale `count(0)`
+   assertion), pk always exposed, `'__all__'`-as-element rejection. New tests:
+   `test_choice_labels.py` (15), `choice_label.test.js` (4), pk/`__all__` cases
+   in `AllFieldsTestCase`. **Security fix found while porting `495c427`:** a
+   primary key listed in `fields` was in the derived editable projection
+   (`BigAutoField.editable` is `True`), so a client could submit `{'id': <other
+   pk>}` and retarget the row a save writes; the pk is now never editable
+   (derived set skips it; explicit `editable=['id']` is a declaration error).
+   Regression test `test_exposed_primary_key_is_never_client_editable`.
+   Gates: 582 Python, 106 JS, 34 E2E / 10 xfailed.
+   *Behavioral checks:* `9aebaf8` reproduced here in a different form — a Glue
+   return annotation imported only under `TYPE_CHECKING` was silently classified
+   as non-Glue (`returns_glue: False`) and the call then failed. Fixed in
+   `_resolve_glue_result_annotation`: an unresolved return annotation is
+   evaluated against every loaded `BaseGlue` subclass by name (ambiguous names
+   skipped); unresolvable non-Glue annotations stay ordinary results. Tests:
+   `test_callable_return_annotations.py` (3). `6029209`'s public `load()` does
+   not exist on this branch and is superseded by complete introduction plus
+   `$refresh()` (see B7 for the two call sites).
+
+**Order (user-approved 2026-09-22):** A4, A5, A7, B7, A6, then B6, B13, B8,
+B9–B12. `docs/` rewrite last.
+
+B. Spec contracts not implemented:
+6. ADR 003 `Glue.view` dispatch: same-origin request to the real URL with a Glue
+   `Accept` media type, a response middleware producing the `{html, objects}`
+   envelope, `Vary: Accept`, HTML-only negotiation, the system check that the
+   middleware is present and last; delete `/__dg__/glue_view/`, the request
+   wrapper, and the redirect loop. (Security: closes the middleware bypass.)
+7. `$refresh()` (§6/§7) with `{submit: true}`; call-less refresh entries
+   authorized as `refresh`. A queryset refresh re-runs its signed last query
+   over the loaded window (state-model.md §10), which needs A7 first. Replaces
+   every `load_state()` consumer call before A6 deletes it. Also: the fight list
+   `saveFight` should `await fight.$refresh()` after the row form saves (it
+   called a nonexistent `fight.load()` in the committed tree; the call was
+   removed pending B7), and the portal's
+   `time_entry_form_field_content.html` `await {{ glue_form }}.load()` (1.0.2's
+   public `load()` seam, `6029209`) is deleted in the consumer migration since
+   every object now introduces complete.
+   *B7 conformance record (pre-edit, 2026-09-22).* (1) Phase 6 gap closure.
+   (2) state-model.md §6 "`$refresh()` itself remains an ordinary addressed
+   request" through "Neither form is a reset"; §3 authorization point 2
+   ("with `kind='refresh'`, `'update'` or `'call'` as the interaction
+   requires"); §10 "A queryset's rows ... `$refresh()` on a queryset re-runs its
+   signed last query over the window already loaded". (3) Removed: the A3 rule
+   that an entry with neither `call` nor `reintroduce` is malformed — that exact
+   shape is the spec's refresh. (4) Mapping: a call-less entry is a refresh;
+   reconstruction authorizes `call` / `update` (call-less with `updates`) /
+   `refresh`; the call-less path hydrates the token's canonical draft plus any
+   admitted `updates` (shared with the call path), re-derives all downward
+   output, and returns the entry with `result: None`; the queryset re-derives
+   rows from its signed last query over its loaded window (first batch before
+   any query) without advancing its cursor; client `$refresh({submit})` on
+   every proxy sends that entry through the per-address queue and resolves to
+   the proxy.
+   *B7 progress (2026-09-22):* server side done — `_hydrate` (shared by call and
+   call-less paths), `_refresh_entry`, reconstruction kinds, queryset
+   `_loaded_window()`; `test_refresh.py` (6). **Blocking finding — model lost
+   update:** `ModelGlue._load_client_state` treats every signed editable value
+   that differs from the *current* row as a draft, so a stale baseline (row
+   changed out of band) is indistinguishable from a user edit. A refresh keeps
+   the stale value instead of refetching it (spec: "a model keeps its editable
+   overlay while refetching persisted data"), and an ordinary save writes the
+   stale value back over the other writer's change. `test_refresh_re_reads_
+   persisted_data_without_a_result` fails on purpose until this is fixed.
+   *User decision (2026-09-22): option (a) — sign the drafted paths.*
+   Conformance: state-model.md §4 family table (`ModelGlue` signs "exposed
+   editable values (row baseline plus acknowledged draft overlay)") and §6 ("a
+   model keeps its editable overlay while refetching persisted data"). Mapping:
+   `ModelGlue._retained_state()` adds `'$draft': [paths]` when the overlay is
+   non-empty; `BaseGlue._retained_draft(policy)` is the token's acknowledged
+   draft (every signed editable value) and `ModelGlue` narrows it to the `$draft`
+   paths; `_hydrate` uses it, so every other editable field comes from the
+   freshly fetched row. A drafted field still wins over a changed row
+   (conflict detection is the separate opt-in version contract).
+   *Done:* `$draft` signed when non-empty; `_retained_draft` hook; a successful
+   save clears the overlay (`_rebase_draft` removed — the saved row is the
+   baseline, so the successor snapshot is unchanged in value and drops
+   `$draft`). Tests: out-of-band row change supersedes an undrafted baseline;
+   saving one field keeps a concurrent change to another (the lost-update
+   regression); save changing nothing omits the token; saving a signed draft
+   re-signs it as baseline. Client properties come from schema only, so
+   `$draft` never surfaces on a proxy. Gates: 601 Python, 34 E2E / 10 xfailed.
+   *Client done:* `$refresh({submit = false} = {})` on `BaseGlueProxy` runs the
+   ordinary queued pipeline (`_callAttribute(null, {}, {submit})`); an
+   unsubmitted refresh sends no `updates` and blanks the capture's updates so
+   reconciliation keeps pending edits. `refresh.test.js` (3); E2E
+   `test_model_refresh_re_reads_a_row_changed_out_of_band`; the fight list
+   `saveFight` now awaits `fight.$refresh()`. Gates: 601 Python, 109 JS, 35 E2E
+   / 10 xfailed.
+   **Queryset views — user decision (2026-09-23): option 1, the last query
+   wins.** Client `filter()`/`orderBy()`/`slice()` views share one address and
+   one signed cursor. A queryset refresh re-runs the signed last query; the
+   client routes the rows only to the view whose filter/order match the signed
+   `last_query_params` (sliced views never match). `$refresh()` on any other
+   view marks it unloaded and re-queries it (pages beyond the first batch are
+   not restored — same as switching views today). Rows route only when the
+   latest entry carried them: `addressRecord.receivedComputedData` is the
+   `computed_data` the latest entry carried (null when omitted). **Fixed
+   alongside:** `_afterRecordRefresh` used the merged `computedData`, so after
+   any later queryset call it re-synced the base view from stale page-load rows
+   (two `loadMore()`s lost the middle batch). Tests: `queryset_refresh.test.js`
+   (3). **B7 done.** Gates: 601 Python, 112 JS, 35 E2E / 10 xfailed.
+   Consumer note: spire's scroll widget calls the queryset's legacy `refresh()`
+   (reset every view and re-query the first page), which stays; it is not
+   `$refresh()` (keep the window) and must not be silently swapped.
+   *B6 conformance record (pre-edit, 2026-09-23).* (1) Phase 6 gap closure,
+   security. (2) ADR 003; state-model.md §6 "`Glue.view` is an HTML transport"
+   through "existing `Glue.view(url)` ergonomics remain intact". (3) Removed:
+   `/__dg__/glue_view/`, `resolver/view_fragment/` (`GlueViewFragmentResolver`,
+   `ViewFragmentRequestContext`, `ViewFragmentHttpRequest`), the manual redirect
+   loop, `DJANGO_GLUE_VIEW_MAX_REDIRECTS`, the view-only error codes,
+   `GlueContextManager`'s `glue_context_request` indirection, and the client's
+   `glueViewUrlPath`. (4) Mapping: `GlueViewMiddleware` (`django_glue/middleware.py`)
+   negotiates `Accept: application/vnd.django-glue.view+json` on 2xx,
+   non-streaming HTML responses into `{is_glue_template_response: true, html,
+   objects}`, sets `Vary: Accept` on every HTML response, passes everything
+   else through; a Django system check (`django_glue.E002`) fails startup when
+   it is absent or not last in `MIDDLEWARE`; client `GlueView` requests the
+   real URL (GET payload → query string, POST → CSRF-protected JSON), follows
+   redirects natively, and treats a response without the marker as a
+   non-fragment outcome; `sendRequest` parses JSON only for JSON responses.
+   *B6 done (2026-09-23):* as mapped; `resolver/view_fragment/` and its three
+   test modules deleted (via `rm`); renderers return `null` without touching the
+   DOM when a view response is not a fragment. The test project lists the
+   middleware last. Tests: `test_view_middleware.py` (envelope + `Vary`,
+   pass-through for non-HTML/redirect/non-2xx/streaming without materializing,
+   real-route dispatch, **a path-scoped middleware blocks a negotiated view
+   request** — the ADR's security property — and the `django_glue.E002` check);
+   `test_html_response.py` and the JS view tests rewritten for the real URL.
+   Gates: 573 Python, 113 JS, 35 E2E / 10 xfailed. **Consumer migration:**
+   every project must add `django_glue.middleware.GlueViewMiddleware` as the
+   last `MIDDLEWARE` entry (startup fails otherwise).
+8. `authorize()` at all three points: reconstruction uses `refresh`/`update`/
+   `call` as the interaction requires (today always `call`), and each admitted
+   draft is authorized as `update` with its attribute path before applying.
+   *B8 conformance record (pre-edit, 2026-09-23).* (1) Phase 6 gap closure.
+   (2) state-model.md §3 authorization point 3 ("before each authorized callable
+   runs and before each admitted draft is applied, with `attribute` naming the
+   exact path") and roadmap "Implement `authorize()` as a pure predicate called
+   at introduction, reconstruction, and attribute invocation". Point 2
+   (reconstruction kinds) was done in B7. (3) Nothing removed. (4) Mapping:
+   `_hydrate` — shared by the call and refresh paths — authorizes each admitted
+   update as `GlueOperation(kind=UPDATE, attribute=path, required_access=<the
+   path's declared access>)` after admission and before any draft is applied; a
+   denial is `GlueAuthorizationError` (`not_authorized`, per-address).
+   *B8 done (2026-09-23):* as mapped. Tests: `DraftAuthorizationTestCase` (each
+   admitted draft authorized with its path; a denied draft fails before any
+   draft applies). Gates: 582 Python, 35 E2E / 10 xfailed.
+9. Transient callable-result capability capping at issuance.
+   *B9 conformance record (pre-edit, 2026-09-23).* (1) Phase 6 gap closure,
+   security. (2) state-model.md §10 "The introduced capability cannot exceed
+   the caller's effective capability" and the transient-result table ("Enforced
+   at issuance, baked into the child's signed policy, and re-intersected with
+   current authorization on every request"). (3) Removed: a returned object
+   keeping its own configured access regardless of the caller. (4) Mapping:
+   `BaseGlue.cap_access(ceiling)` lowers `access` to the ceiling when it is
+   higher; `ModelFieldResolutionMixin` extends it to re-derive `editable` from
+   the stored declaration (its derived default is access-gated);
+   `process_attribute_call` caps a newly issued result to the caller's access
+   before `introduce()`, so the child's first signed policy carries the capped
+   access. Current authorization is already re-checked on every request.
+   *B9 done (2026-09-23):* as mapped (`ModelGlue`/`QuerySetGlue` store
+   `_editable_declaration`). Tests: a `VIEW` caller's `DELETE` result is issued
+   at `VIEW` with no editable paths; a lower-access result is never raised to
+   the caller's. Gates: 580 Python, 35 E2E / 10 xfailed.
+10. Keyed-collection item reintroduction, and the row-2 factory skip for live
+    collection items.
+    *Finding (2026-09-23):* collections ignore `live_children`, so the successor
+    `children` map is only what this request produced. After a non-query
+    queryset call (`count()`) it is empty; after `loadMore()` it holds only the
+    new batch; a reconstructed sequence has no items at all. The client then
+    disposes every dropped row — rows stay rendered as tombstones but reject
+    calls (`save()` on a first-batch row fails after `loadMore()`).
+    *B10 conformance record (pre-edit).* (1) Phase 6 gap closure. (2)
+    state-model.md §10 slot table (row 2: live, non-participating → factory does
+    not run, address copied forward; row 4: live and listed in `reintroduce` →
+    factory runs, same address), "Reintroducing an expired child", §8 keyed
+    membership; ADR 011 (collection owns item keys). (3) Removed: the A3 scope
+    note that collection keys are not reintroducible; collection items bound
+    without `introduce()` (so a sequence of components was never mounted).
+    (4) Mapping: `BaseCollectionGlue._bind_children` binds the keys returned by
+    `_membership(live_children, produced)` — produced items introduce through
+    `introduce()`, a live key listed in `reintroduce` is rebuilt by
+    `_rebuild_item(key)`, any other live member carries forward by address with
+    no factory. Membership per family: formset — its produced forms
+    (authoritative signed membership); sequence — its signed `item_keys` (items
+    cannot be rebuilt, so `_rebuild_item` is None and reintroducing an item fails
+    admission); queryset — its loaded window: a new or restarted query replaces
+    it, a continuation (`seek_key`) appends to it, a refresh re-derives it, any
+    other call carries it (and its relation children) forward. `_admit_reintroduce`
+    takes the incoming policy; a collection also admits live item keys when its
+    family can rebuild items. A queryset rebuilds a row by re-fetching its pk
+    from the signed base queryset (a row gone from the queryset is dropped).
+    *B10 done (2026-09-23):* as mapped. The queryset tracks the window change
+    (`WindowChange.REPLACED`/`EXTENDED`) for the request: a query with no
+    `seek_key` replaces membership, and a continuation extends it.
+    `loaded_row_count` resets only when the query parameters change, so a
+    restart over the same parameters can still slice as wide as the rows
+    already loaded. Rows that answer a query this request ride as introduced
+    entries even when the address map is unchanged (`_introduced_entries`
+    override), so a refresh re-syncs row data. Tests:
+    `test_collection_membership.py` covers:
+    - a non-query call keeps the rows;
+    - a continuation keeps earlier rows at the same addresses;
+    - a restart replaces the window;
+    - reintroducing a live row re-fetches it at its address;
+    - reintroducing a deleted row drops it;
+    - a sequence refresh carries its items forward;
+    - reintroducing a sequence item fails admission;
+    - an item refused `INTRODUCE` is left out.
+
+    Gates: 590 Python, 113 JS, 35 E2E / 10 xfailed.
+11. Relation-owned drafts: atomic save + attach through the signed reverse-FK /
+    M2M relation, relation membership/count reconciliation in the same response,
+    reject an unsaved owner.
+    *Finding (2026-09-23):* a relation queryset already gets `ADD`, and gets
+    `VIEW` when its model owner is unsaved. Its `new()` builds a bare
+    `model(**initial)`, though, and `save()` never attaches: a reverse-FK draft
+    fails validation on the missing owner, and an M2M draft saves unattached.
+    *B11 conformance record, attach part (pre-edit).* (1) Phase 6 gap closure.
+    (2) state-model.md §4 "Relation membership" (`relation.new(initial)`
+    introduces one unsaved member; on first save a reverse FK injects the owner
+    identity server-side; an M2M relation saves and adds in one transaction; an
+    unsaved owner cannot expose `new`; a custom through model needs an explicit
+    callable) and §4 "Creation is an ADD operation" ("that transaction also
+    attaches the object to the exact signed relation"). (3) Removed: the
+    `hasattr(self, 'instance')` unsaved-owner check in
+    `_construct_relation_child`. (4) Mapping:
+    - New `OwningRelation` (`objects/django/relation.py`) holds the owner model
+      path, the owner pk and the relation accessor name. It is built only for a
+      saved owner and a reverse FK or auto-through M2M, so it is None exactly
+      when generic creation is unavailable.
+    - `_construct_relation_child` takes the owner and relation name. A to-many
+      child gets `ADD` only when the introducer has `ADD` and the relation
+      exists.
+    - `QuerySetGlue` signs `relation` in its identity, and `_row_glue` passes it
+      to a draft.
+    - `ModelGlue` signs `relation` while `target_pk` is null. `save()` runs in
+      `transaction.atomic()`: it fetches the owner, sets the reverse FK before
+      `full_clean`, and does the M2M `add` after saving.
+
+    Membership reconciliation in the same exchange is a separate decision,
+    brought to the user.
+    *B11 attach part done (2026-09-23):* as mapped. The work surfaced three bugs
+    that predate B11, all fixed:
+    - A reverse-FK relation queryset could not be reconstructed. Its related
+      manager filters on the owner instance, which the unpickler allowlist
+      refuses (a datetime field). The new `_related_queryset` filters on the
+      owner pk.
+    - `new(initial)` values were lost on the next request: they sat on the
+      instance, not in `$draft`. An unsaved instance now retains its whole
+      signed editable state as draft.
+    - `new(initial)` could not take a foreign-key pk. `new()` now applies
+      `initial` through the draft's `_load_client_state`, the same decode path
+      as client updates.
+
+    Tests in `RelationDraftAttachTestCase`:
+    - an M2M draft is added to the owner relation, and its `relation` leaves the
+      identity after saving;
+    - a reverse-FK draft gets the signed owner, overriding a client-supplied FK;
+    - an invalid draft attaches nothing;
+    - a deleted owner fails the save and rolls back.
+
+    No custom-through fixture exists, so `creatable` returning None for a
+    custom-through M2M is untested. Gates: 594 Python, 35 E2E / 10 xfailed.
+    *B11 reconciliation (user decision, 2026-09-23): co-batched producer
+    refresh.*
+    - A relation draft's first `save` carries a call-less entry for its
+      producing relation in the same batch. The draft's record `owner` has
+      `path: null` and its signed identity has `relation`.
+    - The resolver runs entries in order, so the refresh sees the committed
+      attach and re-runs the relation's last query. Ordinary query semantics
+      win, as the spec says.
+    - Each entry is authorized by its own token, and the server gained nothing.
+    - Client: `sendAttributeRequest({companions})` appends call-less entries.
+      `_singleCall` captures each companion without updates, and reconciles
+      its entry after introductions (an error entry or a disposed record is
+      ignored). `GlueModelProxy._singleCall` adds the producer.
+      `_callAttribute` now passes its options through.
+    - Known consequence, accepted: the saved row also appears at its pk address
+      in the relation, beside the draft's transient proxy, until the next
+      refresh. This matches root `new()` behavior today. A general rule that a
+      collection adopts a live draft's address for its pk could come later
+      without changing the wire format.
+
+    Tests:
+    - `test_relation_refreshed_in_the_same_batch_sees_the_new_member`
+      (resolver-level);
+    - `client_js/tests/relation_draft.test.js` (a companion is sent and the
+      relation's items reconcile; a root draft saves alone).
+
+    *B11 done.* Gates: 595 Python, 115 JS, 35 E2E / 10 xfailed.
+12. Abort a single-address in-flight request on disposal where possible.
+    *B12 conformance record (pre-edit, 2026-09-23).* (1) Phase 6 gap closure.
+    (2) component-system.md "Disposal" ("Disposal cancels queued calls,
+    aborts a single-address in-flight request where possible … A shared
+    batched request is not aborted; response entries for disposed generations
+    are discarded individually"). Queued-call cancellation and per-generation
+    discard already exist. (3) Nothing removed. (4) Mapping:
+    - `sendRequest` accepts a caller `signal` and chains it into its timeout
+      controller.
+    - `sendAttributeRequest` forwards `signal`.
+    - `_singleCall` gives a request that carries only its own address (no
+      companions) an `AbortController`, held on the record as
+      `inFlightController` while the request is in flight.
+    - `GlueAddressRecord.dispose()` aborts it.
+    - An abort caused by disposal resolves as a discarded call (`undefined`),
+      the same outcome as a late response for a disposed generation, rather than
+      an error.
+    - A request that carries companions is shared, so it is never aborted.
+
+    *B12 done (2026-09-23):* as mapped. Tests in
+    `client_js/tests/disposal_abort.test.js`:
+    - disposing during a single-address call aborts it, and the call resolves
+      `undefined`;
+    - a call with companions gets no signal;
+    - the transport chains a caller signal into its own controller.
+
+    Gates: 595 Python, 118 JS, 35 E2E / 10 xfailed.
+13. Token and encoded-query size limits before queryset unpickling (roadmap: "not
+    deferred").
+    *B13 done (2026-09-23):* state-model.md §10 bounds 1–3 (bounds 4–5, batch
+    and page aggregates, are group C). `GluePolicy.from_token` refuses a token
+    over `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` (128 KiB) before signature
+    verification; the token serializer refuses a decoded envelope over
+    `DJANGO_GLUE_MAX_POLICY_DECODED_BYTES` (128 KiB) before parsing (both
+    `GlueInvalidPolicyError`); `unpickle_query` refuses a continuation over
+    `DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES` (64 KiB) before base64 decoding and
+    checks the decoded query's model against the signed `model_class_path` (the
+    spec's "must immediately match that signed identifier") — `choices=`
+    sources now sign their model path too. New `pickle_query` enforces the
+    continuation bound at issuance (loud render-time failure instead of an
+    unreadable token) and replaces `QuerySetGlue._encode_queryset_query`.
+    Defaults are provisional pending the roadmap's production measurement.
+    Tests: 3 continuation-bound tests, 2 token-bound tests. Gates: 578 Python,
+    35 E2E / 10 xfailed.
+
+C. Roadmap "Security hardening" (roadmap says these do not gate the redesign —
+   user to rule on scope): payload/nesting/count limits, invalid-token throttling,
+   anonymous-session avoidance, session-rotation recovery, CSP-compatible init,
+   DOM-event-name startup check (the collision check exists at class creation).
+
+D. Open questions, not spec gaps: the component workstream's gate names a
+   time-entry dashboard ported into `test_project` (absent on both branches);
+   tombstone GC; ADR status headers need updating after implementation.
+
+*Dashboard gate decision (2026-09-23):* The user dropped the `test_project`
+port requirement. The dashboard belongs in `stratusadv-portal`, where
+`TimeEntryDashboard` is already stamped on the dashboard page. Portal has an
+E2E for its add-entry modal and project choices
+(`app/time_tracker/tests/test_e2e/test_time_entry_form.py`) and a dashboard
+URL smoke test, but no dashboard week-navigation E2E was found. The component
+consumer gate should cite portal E2E coverage after the portal migrates to
+the state-model branch; the portal's current branch uses the older component
+runtime.
+
+*Portal dashboard E2E conformance record (pre-edit).* (1) Phase 6 consumer
+gate, in the actual portal rather than a duplicate `test_project` fixture.
+(2) component-system.md §4 (server-resolved component parameters and retained
+address across parameter transitions), §5 (Django template-tag stamping and
+keyed day children), and §6 (morphing after structural week changes).
+(3) The removed gate asked for an artificial dashboard port; the existing
+portal E2E only opens an add-entry modal. (4) No runtime field, class, or
+public method is added. A portal browser test will assert the requested week
+renders seven day components and that Previous/Next advance the rendered
+dates and URL without a full-page navigation. This pins the real consumer's
+component behavior and remains useful after its Glue dependency migrates.
+
+*Done:* Added
+`stratusadv-portal/app/time_tracker/tests/test_e2e/test_time_entry_dashboard.py`
+on the portal component branch. It verifies seven keyed day cards, Previous
+and Next updating dates and URL, and no full-page navigation. The new E2E
+passed alone (1 passed, 38.70s); the complete portal time-tracker E2E folder
+passed (2 passed, 55.33s), including the existing add-entry modal test.
+Portal Ruff on the new file and `git diff --check` passed. The portal branch
+still depends on the older Glue component runtime; rerun these E2Es after
+its dependency migrates to the state-model branch before treating portal
+consumer compatibility as verified. The roadmap phase-6 gate now names this
+real portal suite and no longer asks for a `test_project` dashboard copy.
+
+**Component audit leftovers (2026-09-23).** Item 2 below (legacy manifest
+API) is verified clean by search. Of item 1's list, `__signature__`, the
+event-name list, `value_adapters`, and mount/authorization order
+(`introduce()`) were done earlier.
+
+The tag already enforces the Keys rules:
+- a loop needs a key;
+- a direct `forloop.counter` or `forloop.counter0` key is rejected;
+- duplicate target/key pairs under one parent fail, including outside a loop;
+- keys are canonicalized with their types.
+
+The registry enforces tag-name collisions (`E001`) and discovery.
+
+*Root scanner finding.* The scanner had no tests. The probe found three
+defects:
+1. Omitted optional end tags (`<li>a<li>b`, `<p>`, `<td>`/`<tr>`) broke the
+   depth count, so valid single-root HTML was rejected.
+2. A stray end tag (`</p>`) was misreported as text outside the root.
+3. An entity outside the root passed as if it were not text.
+
+The injection offset was also computed with `str.splitlines()`, while
+`HTMLParser.getpos()` counts `\n` only, so a form feed or ` ` before the
+root shifted the injection point.
+
+*Conformance record (pre-edit).* (1) A5 component audit. (2)
+component-system.md §5 ("registered components with a single root element")
+and §6 ("A component template has a single root element"). (3) Removed: the
+depth counter. (4) Mapping:
+- The scanner keeps a stack of open elements. An end tag closes up to its
+  matching open element and is ignored when nothing matches.
+- The root must end closed, since a still-open root at the end means sibling
+  content may belong to it or follow it ambiguously.
+- An entity or character reference at depth 0 is text outside the root.
+- The offset is computed from `\n`-split lines.
+
+*Done:* as mapped. `test_component_root.py` has 19 cases.
+
+*Bootstrap finding.* `{% django_glue_init %}` renders in `<head>`
+(`test_project/templates/base.html:220`), before any body stamp. A stamped
+component reaches the client only through its root's `data-glue-entry`, which
+carries the component's own entry. Its children (a child-slot form, a queryset
+property) are serialized nowhere at page load, which contradicts the page-load
+contract (state-model.md §10: every introduced entry and its children arrive
+as flat addressed entries). HTML responses are unaffected: they serialize the
+context manager after rendering.
+
+*Conformance record (pre-edit).* (1) A5 component audit. (2) state-model.md
+§10 "Page load" and "there is likewise no lazy loading"; component-system.md
+§4 "Mount" (the first token and initial HTML carry the introduced object).
+(3) Removed: the single-entry `data-glue-entry` attribute. (4) Mapping:
+- The stamp's root carries `data-glue-objects`: a JSON array of the
+  component's entry followed by `_serialized_child_entries()`, the same flat
+  shape as an `objects` envelope.
+- `registerComponentsFromDom` loads the entries whose address has no record
+  yet through `loadObjects`. Existing records keep being advanced by response
+  `objects`.
+
+*Done:* as mapped. `Component.render()` injects the same subtree list. Tests:
+- `test_stamped_component_root_carries_its_children_entries` (red before the
+  fix);
+- JS: "a stamped root introduces its children entries".
+
+The 10 xfailed E2Es were reviewed: they are the strict-xfail morph-spike
+evidence in `test_lab_morph.py` (the `replace`/`idiomorph` state losses), by
+design. Nothing to fix. Gates: 615 Python, 119 JS, 35 E2E / 10 xfailed.
+
+*Events and disposal checked against component-system.md §7, no change
+needed:*
+- declared-only emission;
+- the DOM-name collision check at class creation;
+- `$address` rejected at emit;
+- a Glue object in the detail is rejected by the encoder (now pinned by
+  `test_event_detail_rejects_a_glue_object`);
+- events dispatch after reconcile and after the component morph, from `$el`,
+  which follows the address and is null after disposal;
+- `Glue.from()` fails after disposal;
+- `$on` listeners are cleared on disposal.
+
+**The component audit (item 1) is complete.**
+
+*Tombstone finding (D item, 2026-09-23).* Disposed records stay in the
+registry forever. Reintroducing a disposed address calls
+`GlueAddressRecord.introduce`, which resets `disposed`, so every held
+reference to the old proxy revives and targets the new incarnation. The test
+`disposal.test.js` "a response for a disposed-and-reintroduced address is
+discarded" asserts that revival.
+
+*Conformance record (pre-edit).* (1) A5 / D tombstone GC. (2)
+component-system.md "Disposal follows address ownership": "Existing references
+to the disposed proxy become tombstones and reject later calls rather than
+silently targeting a future object. Reintroducing the same canonical address
+creates a new proxy generation and calls `mount()` again." (3) Removed: the
+disposed-revival branch in `GlueAddressRecord.introduce`, and the revival
+assertion. (4) Mapping:
+- `GlueAddressRegistry.dispose` deletes each doomed record from `records`
+  after disposing it. The old proxy keeps its own disposed record as its
+  tombstone, which also releases it for GC.
+- A later introduction of the address builds a fresh record and proxy.
+- In-flight responses for the old record are already discarded by the
+  `getRecord(address) !== this._record` check in `_singleCall`.
+
+*Done:* `GlueAddressRegistry.dispose` removes disposed records, and a later
+introduction creates a new proxy while held references remain tombstones.
+The updated `test_detail_model_delete_disposes_proxy` passes. JS gate: 119
+passed. `just test-e2e -q`: 35 passed, 10 xfailed, 2 teardown errors.
+The errors are JavaScript null dereferences (`items` and `loading`) in the
+gorilla list demo during `test_queryset_filter_order_slice_demo` and
+`test_create_model_modal_demo`; neither is in the tombstone test. The same
+filter demo error reproduces alone (1 passed, 1 teardown error). Track and
+resolve these before recording the final E2E gate green.
+
+*Gorilla list teardown errors — conformance record (pre-edit).* (1) A5
+component/consumer migration gate: the E2E demo must remain error-free while
+queryset results replace rows. (2) state-model.md §4 and §10 make projected
+relations independently addressed children, and component-system.md §7 says
+removed collection children are disposed and old references become tombstones.
+(3) The legacy list template assumes every row's `skills` child remains live
+through Alpine's render of a departing card. (4) No new field, class, or public
+method is needed. The two list expressions that read `gorilla.skills.items`
+and `gorilla.skills.loading` will tolerate the brief null child lookup during
+row replacement. The focused filter E2E is the red-capable check.
+
+*Done:* the gorilla list's projected-skills expressions tolerate a disposed
+child while Alpine removes an old row. The two focused E2Es pass (2 passed).
+The full `just test-e2e -q` gate is green: 35 passed, 10 xfailed, 2 existing
+pytest collection warnings; no JavaScript teardown errors.
+
+Required remaining A5 work:
+
+1. Audit and finish the component contract. The generated constructor still
+   has a generic `**parameters` Python signature; there is no dedicated
+   `__signature__`. Review root-entry/bootstrap semantics, duplicate names,
+   mount/authorization order, root scanner edge cases, event names/details,
+   and source-scoped event delivery through morph/disposal. The E2E fixture
+   currently sets `value_adapters=[]` for a plain list because the legacy
+   sequence adapter otherwise converts it; the spec says ordinary serializable
+   lists should remain plain data.
+2. Remove remaining legacy manifest API and tests, especially
+   `GlueManifest`/`BaseGlue.manifest`, `serialized_manifests`,
+   `GlueResponse._serialize_result`, `client.loadManifests`/
+   `resolveManifest`/`_collectManifests`, and old result-shape branches in
+   `client_js/src/proxies/base.js`. Search `manifest_list`,
+   `is_glue_manifest`, and `is_glue_template_response`, excluding built assets
+   and historical docs. This is not a compatibility release.
+3. Complete the docs rewrite beyond the new component/event guides; old
+   architecture, codewalk, changelog, and some family pages remain stale.
+   Remove stale element-compiler text fully from `component-system.md`, and
+   resolve remaining active design text about lazy/defer mount and stamp-level
+   handlers in favor of the user's templatetag direction.
+4. Run the complete Python, JS, build, Django check, docs, and E2E gates.
+   Build JS before E2E. The `just python` recipe quotes all arguments into
+   one path and fails for `manage.py check`; use `.venv/bin/python` directly.
+   The docs strict build may need approved network access for the Python
+   inventory. Review Ruff and `git diff --check`. Do not commit until asked.
+
+*ADR and docs pass (2026-09-23):* ADR 002–009, 011, and 013 headers and the
+decision index now reflect their branch implementation. The repo-root
+`AGENTS.md` no longer lists the removed manifest, template, loading, or view
+resolver surfaces. The active `docs/` pages were rewritten for the addressed
+protocol, current installation, projections, access levels, families,
+components, and `Glue.view`; removed template-proxy and superseded future
+roadmap pages were deleted with the editor tool. Historical v1.0 changelog
+entries remain labeled as history. The stale HTML-envelope transition and
+element-compiler text was removed from `component-system.md`. Final gates
+were run after the pass: `just test` 616 passed / 45 deselected;
+`just js-build` passed (26.8 KB); `just js-tests` 119 passed;
+`just test-e2e -q` 35 passed / 10 xfailed / 2 existing pytest collection
+warnings; `.venv/bin/python manage.py check` found no issues; `just docs`
+strict built successfully (network access was needed for the Python inventory);
+`git diff --check` clean. Ruff on all 68 touched Python files reports the
+repository's broad pre-existing style noise. A focused `--select F` check
+found only two F401 imports already present at `HEAD` in `glue/function.py`
+and `test_queryset_pagination.py`; no new F findings.
+The design README and roadmap status lines now distinguish branch
+implementation from release review; the roadmap's former open-constraints
+list is labeled a verification checklist. The dashboard gate is resolved in
+favor of portal E2E coverage, recorded above; the portal tests must be rerun
+against the state-model dependency during consumer migration.
+
+`client_js/dbg_tmp.mjs` is an existing untracked user debug script: leave it
+alone. All file edits must use the editor/patch tool, not shell scripts or
+redirection. Do not add code comments unless asked. Do not stage, commit,
+push, reset, or rebase without the user's request.
 
 ## Agent handoff prompt (ready to paste)
 
 ```text
-You are continuing the django-glue reactive-system state-model refactor in the
-worktree /home/chasemossing/stratus-dev/django-glue-state-model (branch
-v1.1/state-model). Read STATE_MODEL_HANDOFF.md at the worktree root first —
-it is canonical — then the design docs in the order it gives
-(design/reactive-system/design.md, state-model.md, component-system.md,
-roadmap.md). state-model.md is the primary spec.
+Continue A5 in /home/chasemossing/stratus-dev/django-glue-state-model on
+branch v1.1/state-model. First read STATE_MODEL_HANDOFF.md, especially its
+"A5 handoff — 2026-09-22" section, then design/AGENTS.md and the reactive
+system design docs in the order the handoff gives. A1–A4 are committed as
+0edc83a; A5 is authorized, uncommitted, and partially implemented.
 
-State: phases 1–5 and phase 6 slices A1–A4 are complete. A1–A4 were
-reviewed, corrected, and committed on 2026-09-22. Gates:
-- `just test`: 553 passed, 42 deselected
-- `just test-e2e -x -q`: 32 passed, 10 xfailed, 553 deselected
-- `just js-tests`: 109 passed, 0 failed
-- `just js-build`: green (25.9 KB bundle)
-- `ruff check django_glue --select F`: exactly 6 pre-existing findings
-  (function.py:5, cursor.py:176, form/mixin.py Any/MutableMapping/BaseModel,
-  test_queryset_pagination.py:7); add none
-- `git diff --check`: clean
+The user corrected the design: component stamps are the Django
+{% glue_component %} templatetag from the current ./django-glue worktree
+(commit e6f204b), not <glue:... /> elements. The old component branch uses
+the removed manifest wire; port its behavior onto this branch's addressed
+objects wire. Do not build an HTML-element compiler or merge the branch.
 
-`client_js/dbg_tmp.mjs` is untracked local debug work and was excluded from
-the commit. Follow the working rules in this
-handoff: do not stage/commit/push/reset without a user request; use Edit/Write
-tools for every file edit; add no code comments unless requested; use `just`
-for environment-dependent commands; add no legacy wire compatibility.
-
-If asked to verify the tree before a commit, rerun the full gate set:
-just test-app django_glue/tests/glue/<touched file> -q   (focused first)
-just test
-just test-e2e -x -q
-just js-tests && just js-build          (only if JavaScript changed)
-ruff check django_glue --select F
-git diff --check
-
-A5 is not yet authorized. It ports `v1.1/components` onto the settled state
-model, migrates the remaining tagged-manifest consumers, and rewrites `docs/`.
-Do not merge the component branch mechanically; it targets the old wire format.
-Recorded follow-ups include tombstone GC, transient capability capping at
-issuance, `$refresh()`, network abort, and keyed-collection reintroduction.
+Continue the unfinished A5 work listed in the handoff, inspect the current
+uncommitted diff before editing, and preserve client_js/dbg_tmp.mjs. Focused
+component E2E, Python, JS, build, Django check, and diff-check gates passed;
+full E2E was interrupted for this transfer, docs strict build hit blocked
+Python inventory access, and Ruff needs follow-up. Use editor/patch tools for
+all file edits. Do not stage, commit, push, reset, or rebase without a request.
 ```

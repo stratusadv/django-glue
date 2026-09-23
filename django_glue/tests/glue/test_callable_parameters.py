@@ -8,6 +8,7 @@ from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueRequestError
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
@@ -127,6 +128,14 @@ class CallableResultGlue(BaseGlue):
         return CallableChildGlue()
 
     @Glue.attr
+    def nested_in_dict(self) -> dict:
+        return {'child': CallableChildGlue()}
+
+    @Glue.attr
+    def nested_in_list(self) -> list:
+        return [CallableChildGlue()]
+
+    @Glue.attr
     def wrong_child_family(self) -> CallableChildGlue:
         return OtherCallableChildGlue()
 
@@ -147,6 +156,29 @@ class CallableResultGlue(BaseGlue):
     ) -> CallableResultGlue:
         _ = policy
         return cls()
+
+
+class IssuingGlue(BaseGlue):
+    namespace = 'issuing'
+
+    def __init__(self, access: GlueAccess = GlueAccess.VIEW, issued_access: GlueAccess = GlueAccess.DELETE) -> None:
+        super().__init__(access=access)
+        self.issued_access = issued_access
+
+    @Glue.attr
+    def issue_model(self) -> ModelGlue:
+        from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+        return ModelGlue(
+            Gorilla.objects.get(name='Issued'),
+            name='issued',
+            access=self.issued_access,
+            fields=['name', 'age'],
+        )
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> IssuingGlue:
+        return cls(access=policy.access)
 
 
 def call_context(
@@ -292,12 +324,13 @@ def test_declared_glue_callable_result_is_the_introduced_address(
         call_context(glue_object, 'child')
     )
     introduction = next(
-        manifest for manifest in introduced if manifest['address'] == entry['result']
+        introduced_entry
+        for introduced_entry in introduced
+        if introduced_entry['address'] == entry['result']
     )
     result_policy = GluePolicy.from_token(introduction['policy_token'])
 
     assert isinstance(entry['result'], str)
-    assert 'is_glue_manifest' not in introduction
     assert result_policy.namespace == 'callableChild'
 
 
@@ -328,6 +361,22 @@ def test_glue_callable_result_requires_annotation(
     with pytest.raises(TypeError, match='without a Glue-object return annotation'):
         glue_object.process_attribute_call(
             call_context(glue_object, 'ordinary_result')
+        )
+
+
+@pytest.mark.parametrize('attribute', ['nested_in_dict', 'nested_in_list'])
+def test_callable_result_rejects_nested_glue_objects(
+    mock_request: HttpRequest,
+    attribute: str,
+) -> None:
+    glue_object = Glue.object(
+        mock_request,
+        CallableResultGlue(),
+    )
+
+    with pytest.raises(TypeError, match='return it directly as the result'):
+        glue_object.process_attribute_call(
+            call_context(glue_object, attribute)
         )
 
 
@@ -394,3 +443,28 @@ def test_reserved_request_name_rejects_conflicting_annotation() -> None:
 
     with pytest.raises(TypeError, match="reserves argument 'request'"):
         _ = InvalidCallableGlue()._attribute_registry
+
+
+def _issued_policy(mock_request: HttpRequest, caller_access: GlueAccess, issued_access: GlueAccess) -> GluePolicy:
+    from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+    Gorilla.objects.create(name='Issued')
+    caller = Glue.object(mock_request, IssuingGlue(access=caller_access, issued_access=issued_access))
+    entry, introduced = caller.process_attribute_call(call_context(caller, 'issue_model'))
+    issued = next(item for item in introduced if item['address'] == entry['result'])
+    return GluePolicy.from_token(issued['policy_token'])
+
+
+def test_callable_result_capability_is_capped_to_the_caller(mock_request: HttpRequest, db) -> None:
+    del db
+    issued = _issued_policy(mock_request, GlueAccess.VIEW, GlueAccess.DELETE)
+
+    assert issued.access == GlueAccess.VIEW
+    assert list(issued.identity['editable']) == []
+
+
+def test_callable_result_capability_is_never_raised_to_the_caller(mock_request: HttpRequest, db) -> None:
+    del db
+    issued = _issued_policy(mock_request, GlueAccess.DELETE, GlueAccess.VIEW)
+
+    assert issued.access == GlueAccess.VIEW

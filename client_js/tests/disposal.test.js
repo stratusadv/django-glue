@@ -3,7 +3,7 @@ import GlueClient from "../src/client"
 import {createEntry, createPolicyToken, createStaticData} from "./testUtils"
 
 const rootPolicy = {
-    name: 'root', namespace: 'template', address: 'root#test',
+    name: 'root', namespace: 'root', address: 'root#test',
     attributes: ['save'], children: {form: 'form#test'}, state_snapshot: {},
 }
 const formPolicy = {
@@ -35,7 +35,7 @@ function tree() {
         createEntry({policy: nestedPolicy}),
     ]})
     globalThis.Glue = client
-    const root = client.template.root
+    const root = client.root
     return {client, root, form: root.form, nested: root.form.nested}
 }
 
@@ -90,7 +90,7 @@ describe('replacement and removal disposal', () => {
 
         expect(root.form).not.toBe(oldForm)
         expect(root.form._record.address).toBe('form#other')
-        expect(client._registry.getRecord('form#test').disposed).toBe(true)
+        expect(client._registry.getRecord('form#test')).toBeUndefined()
         expect(oldForm._record.disposed).toBe(true)
         expect(root.form.nested).toBe(nested)
         expect(nested._record.owner).toEqual({address: 'form#other', path: 'nested'})
@@ -124,7 +124,7 @@ describe('replacement and removal disposal', () => {
         await form.validate()
 
         expect(form.nested).toBeNull()
-        expect(client._registry.getRecord('nested#test').disposed).toBe(true)
+        expect(client._registry.getRecord('nested#test')).toBeUndefined()
         expect(nested._record.disposed).toBe(true)
         expect(client._registry.getRecord('form#test')).toBeDefined()
         expect(root.form).toBe(form)
@@ -135,13 +135,13 @@ describe('replacement and removal disposal', () => {
 
         root.$dispose()
 
-        expect(client._registry.getRecord('root#test').disposed).toBe(true)
-        expect(client._registry.getRecord('form#test').disposed).toBe(true)
-        expect(client._registry.getRecord('nested#test').disposed).toBe(true)
+        expect(client._registry.getRecord('root#test')).toBeUndefined()
+        expect(client._registry.getRecord('form#test')).toBeUndefined()
+        expect(client._registry.getRecord('nested#test')).toBeUndefined()
         expect(root._record.disposed).toBe(true)
         expect(form._record.disposed).toBe(true)
         expect(nested._record.disposed).toBe(true)
-        expect(client.template.root).toBe(root)
+        expect(client.root).toBeNull()
     })
 
     test('a slot-bound child refuses client-side disposal', () => {
@@ -163,8 +163,8 @@ describe('replacement and removal disposal', () => {
 
         await root.save()
 
-        expect(client._registry.getRecord('form#test').disposed).toBe(true)
-        expect(client._registry.getRecord('nested#test').disposed).toBe(true)
+        expect(client._registry.getRecord('form#test')).toBeUndefined()
+        expect(client._registry.getRecord('nested#test')).toBeUndefined()
         expect(form._record.disposed).toBe(true)
         expect(nested._record.disposed).toBe(true)
         expect(client._registry.getRecord('root#test')).toBeDefined()
@@ -174,7 +174,7 @@ describe('replacement and removal disposal', () => {
 
 describe('transient callable results', () => {
     const dashboardPolicy = {
-        name: 'dashboard', namespace: 'template', address: 'dashboard#test',
+        name: 'dashboard', namespace: 'dashboard', address: 'dashboard#test',
         attributes: ['spawn'], state_snapshot: {},
     }
 
@@ -188,7 +188,7 @@ describe('transient callable results', () => {
             }),
         ]})
         globalThis.Glue = client
-        return {client, dashboard: client.template.dashboard}
+        return {client, dashboard: client.dashboard}
     }
 
     function spawnResponse(address, note) {
@@ -248,7 +248,7 @@ describe('transient callable results', () => {
         const second = await dashboard.spawn()
         first.$dispose()
 
-        expect(client._registry.getRecord(first._record.address).disposed).toBe(true)
+        expect(client._registry.getRecord(first._record.address)).toBeUndefined()
         expect(first._record.disposed).toBe(true)
         expect(client._registry.getRecord(second._record.address)).toBeDefined()
         expect(dashboard._record.disposed).toBe(false)
@@ -266,8 +266,8 @@ describe('transient callable results', () => {
         const second = await dashboard.spawn()
         dashboard.$dispose()
 
-        expect(client._registry.getRecord(first._record.address).disposed).toBe(true)
-        expect(client._registry.getRecord(second._record.address).disposed).toBe(true)
+        expect(client._registry.getRecord(first._record.address)).toBeUndefined()
+        expect(client._registry.getRecord(second._record.address)).toBeUndefined()
         expect(first._record.disposed).toBe(true)
         expect(second._record.disposed).toBe(true)
         expect(dashboard._record.disposed).toBe(true)
@@ -337,7 +337,7 @@ describe('late responses for disposed generations', () => {
         expect(root.form).toBe(form)
     })
 
-    test('a response for a disposed-and-reintroduced address is discarded', async () => {
+    test('reintroducing a disposed address creates a new proxy and discards the old response', async () => {
         const {client, root, form} = tree()
         let gateResolve
         const gate = new Promise(resolve => {gateResolve = resolve})
@@ -365,10 +365,18 @@ describe('late responses for disposed generations', () => {
         expect(root.form).toBeNull()
         expect(oldForm._record.disposed).toBe(true)
         await root.save()
-        expect(root.form).toBe(oldForm)
-        expect(oldForm._record.disposed).toBe(false)
+        expect(root.form).not.toBe(oldForm)
+        expect(root.form._record.disposed).toBe(false)
+        expect(oldForm._record.disposed).toBe(true)
         gateResolve()
         expect(await validatePromise).toBeUndefined()
+        let tombstoneError
+        try {
+            await oldForm.validate()
+        } catch (error) {
+            tombstoneError = error
+        }
+        expect(tombstoneError.code).toBe('disposed')
     })
 
     test('queued calls reject against the tombstone after disposal', async () => {
@@ -396,7 +404,7 @@ describe('late responses for disposed generations', () => {
 
         gateResolve()
         expect(await validatePromise).toBeUndefined()
-        expect(client._registry.getRecord('form#test').disposed).toBe(true)
+        expect(client._registry.getRecord('form#test')).toBeUndefined()
     })
 })
 

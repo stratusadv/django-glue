@@ -1,6 +1,6 @@
 # Reactive System Design
 
-Status: Design complete; implementation pending
+Status: Design complete; runtime implemented on the state-model branch, release gate under review
 
 This directory is the internal source of truth for Django Glue's reactive
 component and state-management redesign. It is intentionally separate from the

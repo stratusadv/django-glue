@@ -72,8 +72,7 @@ class GlueTemplateResponseTestCase(TestCase):
         )
 
         self.assertIsInstance(response, GlueResponse)
-        self.assertTrue(response.result['is_glue_template_response'])
-        self.assertIn('Hello, Grappler!', response.result['html'])
+        self.assertIn('Hello, Grappler!', response.html)
 
     def test_renders_with_request_context_so_request_dependent_tags_work(self):
         # render_to_string must be given request= (not just context=) or
@@ -102,8 +101,7 @@ class GlueTemplateResponseTestCase(TestCase):
         response = GlueTemplateResponse.from_template_response(template_response)
 
         self.assertIsInstance(response, GlueResponse)
-        self.assertTrue(response.result['is_glue_template_response'])
-        self.assertIn('From a view', response.result['html'])
+        self.assertIn('From a view', response.html)
 
     def test_from_result_sends_template_response_as_raw_text_by_default(self):
         template_response = TemplateResponse(
@@ -126,5 +124,4 @@ class GlueTemplateResponseTestCase(TestCase):
 
         response = GlueResponse.from_result(template_response, render_as_html=True)
 
-        self.assertTrue(response.result['is_glue_template_response'])
-        self.assertIn('Coerced', response.result['html'])
+        self.assertIn('Coerced', response.html)

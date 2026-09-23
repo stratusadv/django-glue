@@ -9,7 +9,6 @@ from django.forms.models import model_to_dict
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.field_adapter import FormFieldAdapter
 from django_glue.glue.options.django import (
     GlueRelatedModelChoices,
@@ -44,9 +43,8 @@ class FormGlue(BaseGlue):
         name: str | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         editable: Sequence[str] | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         self.form = form
         self.editable = self._normalize_editable(editable)
         self._field_errors: dict[str, list[str]] = {}
@@ -300,6 +298,7 @@ class FormGlue(BaseGlue):
             value_field_name=getattr(field, 'to_field_name', None),
         ).load(
             search=search,
+            request=self.request,
         )
 
     def _bind_form(self) -> forms.BaseForm:

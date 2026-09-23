@@ -155,8 +155,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         """Persisted rows of an ADD-only queryset are signed VIEW, not ADD."""
         glue_object = self.bound_queryset(GlueAccess.ADD)
 
-        payload = glue_object._build_child_model_payload(self.gorilla)
-        row = self.decode(payload['policy_token'])
+        row = glue_object._row_glue(self.gorilla).policy
 
         self.assertEqual(row.name, f'gorillas.{self.gorilla.pk}')
         self.assertEqual(row.access, GlueAccess.VIEW)
@@ -166,8 +165,7 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         """A persisted VIEW row of an ADD queryset cannot be saved: saving a
         signed persisted target requires CHANGE."""
         glue_object = self.bound_queryset(GlueAccess.ADD)
-        payload = glue_object._build_child_model_payload(self.gorilla)
-        row = self.decode(payload['policy_token'])
+        row = glue_object._row_glue(self.gorilla).policy
 
         response = self.call(
             row.name,

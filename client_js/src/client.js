@@ -7,6 +7,7 @@ import GlueAddressRegistry from "./runtime/addressRegistry"
 import GlueAttributeMaterializer from "./runtime/attributeMaterializer"
 import GlueChildBinder from "./runtime/childBinder"
 import GlueResponseDispatcher from "./runtime/responseDispatcher"
+import {addScopeToNode} from "./alpine"
 
 class GlueClient {
     constructor(context) {
@@ -27,7 +28,8 @@ class GlueClient {
         })
         this._registry.childBinder = new GlueChildBinder(this._registry)
         this._dispatcher = new GlueResponseDispatcher(this._registry)
-        this._loadEntries(context.objects || [])
+        this.loadObjects(context.objects || [])
+        this._registerComponentsWhenParsed()
     }
 
     onMessage(callback) {
@@ -49,17 +51,11 @@ class GlueClient {
         return new GlueView(this.http, url, sharedPayload)
     }
 
-    loadManifests(manifestList = []) {
-        this._loadEntries(this._collectManifests(manifestList))
-    }
-
-    resolveManifest(manifest) {
-        this._introduceEntries([manifest])
-        return this._registry.getProxy(manifest.address)
-    }
-
-    _loadEntries(entries = []) {
-        this._introduceEntries(entries)
+    loadObjects(entries = []) {
+        this._dispatcher.introduce(entries)
+        entries.forEach(entry => this._registry.refresh(
+            this._registry.getRecord(entry.address)
+        ))
         const childAddresses = new Set(
             entries.flatMap(entry => (
                 Object.values(GluePolicy.fromSignedPolicyToken(entry.policy_token).children || {})
@@ -70,37 +66,48 @@ class GlueClient {
             .forEach(entry => this._registerPublicEntry(entry))
     }
 
-    _introduceEntries(entries) {
-        this._dispatcher.introduce(entries)
-        entries.forEach(entry => this._registry.refresh(
-            this._registry.getRecord(entry.address)
-        ))
+    _registerComponentsWhenParsed() {
+        if (typeof document === 'undefined') return
+        document.addEventListener('alpine:init', () => this.registerComponentsFromDom(), {once: true})
+        if (document.readyState !== 'loading') this.registerComponentsFromDom()
     }
 
-    _collectManifests(manifestList) {
-        const entries = []
-        const seen = new Set()
-        const collect = value => {
-            if (Array.isArray(value)) {
-                value.forEach(collect)
-                return
+    registerComponentsFromDom(root = document) {
+        const nodes = [
+            ...(root.matches?.('[data-glue-address]') ? [root] : []),
+            ...root.querySelectorAll('[data-glue-address]'),
+        ]
+        nodes.forEach(node => {
+            const address = node.getAttribute('data-glue-address')
+            const objects = node.getAttribute('data-glue-objects')
+            if (objects && !this._registry.getRecord(address)) {
+                this.loadObjects(JSON.parse(objects).filter(
+                    entry => !this._registry.getRecord(entry.address),
+                ))
             }
-            if (!value || typeof value !== 'object') return
-            if (value.is_glue_manifest === true) {
-                if (!seen.has(value.address)) {
-                    seen.add(value.address)
-                    entries.push(value)
-                }
+            const proxy = this._registry.getProxy(address)
+            if (!proxy) return
+            const parent = node.parentElement?.closest('[data-glue-address]')
+            if (parent) {
+                const record = this._registry.getRecord(address)
+                record.owner ||= {address: parent.getAttribute('data-glue-address'), path: null}
             }
-            Object.values(value).forEach(collect)
-        }
-        collect(manifestList || [])
-        return entries
+            if (!node.hasAttribute('x-data')) node.setAttribute('x-data', '{}')
+            addScopeToNode(node, {component: proxy})
+        })
+        return nodes
+    }
+
+    from(element) {
+        const root = element?.closest?.('[data-glue-address]')
+        const record = root && this._registry.getRecord(root.getAttribute('data-glue-address'))
+        return record && !record.disposed ? record.proxy : null
     }
 
     _registerPublicEntry(entry) {
         const policy = GluePolicy.fromSignedPolicyToken(entry.policy_token)
         const {name, namespace} = policy
+        if (namespace === 'component') return
         if (!name) {
             throw new GlueProxyError('Cannot register a Glue proxy without policy.name.')
         }

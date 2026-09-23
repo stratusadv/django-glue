@@ -10,6 +10,8 @@ from typing import Any, ClassVar
 from django.apps import apps
 from django.db.models import QuerySet
 
+from django_glue.conf import settings as glue_settings
+
 
 class QuerySetUnpickler(pickle.Unpickler):
     """Allowlisting unpickler for signed queryset continuations.
@@ -85,15 +87,41 @@ class QuerySetUnpickler(pickle.Unpickler):
         )
 
 
-def unpickle_query(encoded: str) -> Any:
+def model_class_path(model: type[Any]) -> str:
+    return f'{model.__module__}.{model.__name__}'
+
+
+def pickle_query(queryset: QuerySet) -> str:
+    """Encode a queryset's ``Query`` as a signed continuation, refusing one
+    larger than the continuation bound it would later be rejected by."""
+    encoded = base64.b64encode(pickle.dumps(queryset.query)).decode('ascii')
+    if len(encoded) > glue_settings.DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES:
+        msg = (
+            f'The {model_class_path(queryset.model)} queryset encodes to {len(encoded)} bytes, '
+            'over DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES.'
+        )
+        raise ValueError(msg)
+    return encoded
+
+
+def unpickle_query(encoded: str, expected_model_path: str) -> Any:
     """Base64-decode and unpickle a signed queryset continuation.
 
     Used by every queryset deserialization route (the queryset continuation
-    and ``choices=`` sources) so both travel through the same allowlisting
-    unpickler rather than a second deserialization path
-    (state-model.md: "The same path carries choice-source continuations").
+    and ``choices=`` sources) so both travel through the same size bound and
+    allowlisting unpickler (state-model.md: "The same path carries
+    choice-source continuations"). The encoded size is checked before
+    decoding, and the query's model must match the signed identifier before
+    the query is used.
     """
-    return QuerySetUnpickler(io.BytesIO(base64.b64decode(encoded))).load()
+    if len(encoded) > glue_settings.DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES:
+        msg = 'Queryset continuation exceeds DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES.'
+        raise pickle.UnpicklingError(msg)
+    query = QuerySetUnpickler(io.BytesIO(base64.b64decode(encoded))).load()
+    if model_class_path(query.model) != expected_model_path:
+        msg = f'Queryset continuation model does not match the signed {expected_model_path!r}.'
+        raise pickle.UnpicklingError(msg)
+    return query
 
 
 def _queryset_class_path(queryset: QuerySet) -> str:

@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
+from django_glue.glue.objects.django.relation import OwningRelation
+from django_glue.glue.queryset_unpickler import (
+    _queryset_class_path,
+    _resolve_queryset_class,
+    model_class_path,
+    pickle_query,
+    unpickle_query,
+)
 
 if TYPE_CHECKING:
     from django.db import models
@@ -38,6 +46,72 @@ class ModelFieldResolutionMixin:
     def _model_meta(self) -> Options[Any]:
         """Return the Django model's _meta options."""
         ...
+
+    @staticmethod
+    def _reject_nested_all_marker(names: Sequence[str] | str, param_name: str) -> None:
+        """``fields=['__all__']`` is a common typo of ``fields='__all__'``; left
+        uncaught, the marker dies deep in Django as an opaque FieldDoesNotExist."""
+        if isinstance(names, str) or '__all__' not in names:
+            return
+        action = 'exclude' if param_name == 'exclude' else 'include'
+        msg = (
+            f"{param_name} contains '__all__' as an element. "
+            f"To {action} every field, pass {param_name}='__all__' "
+            f'(or {param_name}=ALL_FIELDS) as the whole argument, '
+            'not as an item in a list of field names.'
+        )
+        raise ValueError(msg)
+
+    def _normalize_choices(
+        self,
+        choices: Mapping[str, QuerySet] | None,
+    ) -> dict[str, QuerySet]:
+        """Validate relation choice sources (state-model.md §9): each key names
+        an exposed relation and its queryset queries that relation's model."""
+        exposed = set(self._included_fields) | {
+            relation_name for relation_name, _subfields in self._projected_relations
+        }
+        normalized: dict[str, QuerySet] = {}
+        for field_name, queryset in (choices or {}).items():
+            if field_name not in exposed:
+                msg = f'choices names {field_name!r}, which is not an exposed relation.'
+                raise ValueError(msg)
+            related_model = getattr(self._model_meta.get_field(field_name), 'related_model', None)
+            if related_model is None:
+                msg = f'choices names {field_name!r}, which is not a relation.'
+                raise ValueError(msg)
+            if not isinstance(queryset, QuerySet):
+                msg = f'choices[{field_name!r}] must be a QuerySet.'
+                raise TypeError(msg)
+            if queryset.model is not related_model:
+                msg = (
+                    f'choices[{field_name!r}] must query {related_model._meta.label}, '
+                    f'not {queryset.model._meta.label}.'
+                )
+                raise ValueError(msg)
+            normalized[field_name] = queryset.all()
+        return normalized
+
+    @staticmethod
+    def _serialize_choices(choices: Mapping[str, QuerySet]) -> dict[str, dict[str, str]]:
+        return {
+            field_name: {
+                'encoded_queryset': pickle_query(queryset),
+                'model_class_path': model_class_path(queryset.model),
+                'queryset_class_path': _queryset_class_path(queryset),
+            }
+            for field_name, queryset in choices.items()
+        }
+
+    @staticmethod
+    def _deserialize_choices(serialized: Mapping[str, Mapping[str, str]]) -> dict[str, QuerySet]:
+        choices: dict[str, QuerySet] = {}
+        for field_name, source in serialized.items():
+            query = unpickle_query(source['encoded_queryset'], source['model_class_path'])
+            queryset = _resolve_queryset_class(source.get('queryset_class_path'))(model=query.model)
+            queryset.query = query
+            choices[field_name] = queryset
+        return choices
 
     @cached_property
     def _forward_field_names(self) -> tuple[str, ...]:
@@ -241,10 +315,24 @@ class ModelFieldResolutionMixin:
             or getattr(field, 'one_to_many', False)
         )
 
+    def _related_queryset(self, instance: models.Model, relation_name: str) -> QuerySet:
+        """The members of a saved instance's to-many relation. A reverse
+        foreign key filters on the owner's pk: its related manager filters on
+        the owner instance itself, which the signed query cannot carry
+        through the queryset unpickler."""
+        relation = self._get_reverse_relation(relation_name)
+        if relation is not None and relation.one_to_many:
+            return relation.related_model._default_manager.filter(
+                **{relation.field.name: instance.pk},
+            )
+        return getattr(instance, relation_name).all()
+
     def _construct_relation_child(
         self,
         related: models.Model | QuerySet,
         *,
+        owner: models.Model,
+        relation_name: str,
         name: str,
         subfields: tuple[str, ...],
     ) -> ModelGlue | QuerySetGlue:
@@ -257,11 +345,11 @@ class ModelFieldResolutionMixin:
 
         To-one children default to ``VIEW`` -- editing a shared address must
         be explicit. A to-many child also defaults to ``VIEW``, but when the
-        introducing model or queryset has ``ADD`` or stronger access it
+        introducing model or queryset has ``ADD`` or stronger access and the
+        relation can attach a new member (``OwningRelation.creatable``) it
         receives exactly ``ADD`` (never implicit ``CHANGE`` or ``DELETE``), so
         ``relation.new()`` is available while persisted members stay
-        read-only (ADR 009). An unsaved model owner has no stable identity to
-        attach a new member to, so it cannot expose creation.
+        read-only (ADR 009).
         """
         from django_glue.glue.objects.django.model.object import (  # noqa: PLC0415
             ModelGlue,
@@ -272,15 +360,19 @@ class ModelFieldResolutionMixin:
                 QuerySetGlue,
             )
 
-            can_create = self.access.has_access(GlueAccess.ADD)
-            if hasattr(self, 'instance') and self.instance.pk is None:
-                can_create = False
-            return QuerySetGlue(
+            relation = (
+                OwningRelation.creatable(owner, relation_name)
+                if self.access.has_access(GlueAccess.ADD)
+                else None
+            )
+            child = QuerySetGlue(
                 related,
                 name=name,
-                access=GlueAccess.ADD if can_create else GlueAccess.VIEW,
+                access=GlueAccess.VIEW if relation is None else GlueAccess.ADD,
                 fields=tuple(subfields),
             )
+            child._relation = relation
+            return child
 
         return ModelGlue(
             related,
@@ -288,6 +380,13 @@ class ModelFieldResolutionMixin:
             access=GlueAccess.VIEW,
             fields=tuple(subfields),
         )
+
+    def cap_access(self, ceiling: GlueAccess) -> None:
+        """The derived editable projection is access-gated, so a capped object
+        re-derives it from its declaration."""
+        super().cap_access(ceiling)  # type: ignore[misc]
+        self.editable = self._normalize_editable(self._editable_declaration, self.access)
+        self._invalidate_attributes()  # type: ignore[attr-defined]
 
     def _normalize_editable(
         self,
@@ -323,6 +422,13 @@ class ModelFieldResolutionMixin:
             if unexposed:
                 msg = f'Editable fields must be exposed: {unexposed!r}.'
                 raise ValueError(msg)
+            primary_keys = {self._model_meta.pk.name, self._model_meta.pk.attname}
+            if primary_keys & set(selected):
+                msg = (
+                    'The primary key is the signed target identity and is never '
+                    'client-editable.'
+                )
+                raise ValueError(msg)
             invalid = tuple(
                 name
                 for name in selected
@@ -343,6 +449,7 @@ class ModelFieldResolutionMixin:
         return bool(
             (field.concrete or getattr(field, 'many_to_many', False))
             and field.editable
+            and not getattr(field, 'primary_key', False)
         )
 
     @cached_property
@@ -378,4 +485,8 @@ class ModelFieldResolutionMixin:
                 continue
             included.append(identity_name)
             seen.add(identity_name)
+        pk_name = self._model_meta.pk.name
+        pk_attname = self._model_meta.pk.attname
+        if not {pk_name, pk_attname} & (seen | excluded):
+            included.insert(0, pk_name)
         return included

@@ -110,7 +110,10 @@ class FormFieldAdapter(GlueAttributeAdapter):
 
         is_multiple = isinstance(self.field, ModelMultipleChoiceField)
         values = list(current_value) if is_multiple else [current_value]
-        selected_choices = related_choices.serialize_selected_values(values)
+        selected_choices = related_choices.serialize_selected_values(
+            values,
+            request=self.owner.request,
+        )
         if is_multiple:
             output['selected_choices'] = selected_choices
         elif selected_choices:
@@ -196,7 +199,10 @@ class ModelFieldAdapter(GlueAttributeAdapter):
             if getattr(field, 'many_to_many', False)
             else [selected_value]
         )
-        selected_choices = related_choices.serialize_selected_values(selected_values)
+        selected_choices = related_choices.serialize_selected_values(
+            selected_values,
+            request=self.owner.request,
+        )
         if getattr(field, 'many_to_many', False):
             output['selected_choices'] = selected_choices
         elif selected_choices:

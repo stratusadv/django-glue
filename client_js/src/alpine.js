@@ -3,6 +3,7 @@ import morphPlugin from "@alpinejs/morph"
 import {GlueAlpineError} from "./errors"
 
 Alpine.plugin(morphPlugin)
+Alpine.magic('glue', element => globalThis.Glue?.from(element) || null)
 
 let installed = false
 let started = false
@@ -42,4 +43,8 @@ function morph(element, html, options = {}) {
     return Alpine.morph(element, html, options)
 }
 
-export {installAlpine, reactive, morph}
+function addScopeToNode(element, scope) {
+    Alpine.addScopeToNode(element, scope)
+}
+
+export {installAlpine, reactive, morph, addScopeToNode}

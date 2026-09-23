@@ -1,167 +1,34 @@
-# Access Control
+# Access control
 
-## Overview
+Every addressed Glue object has a signed access level:
 
-Django Glue enforces permissions server-side on every action request. Each proxy is registered with an access level that determines which actions can be performed from the frontend.
+| Level | Allows |
+| --- | --- |
+| `VIEW` | Read and permitted read actions |
+| `ADD` | `VIEW` plus creation of an unsaved draft |
+| `CHANGE` | `ADD` plus edits to a persisted target |
+| `DELETE` | `CHANGE` plus deletion |
 
-## Access Levels
-
-The `GlueAccess` enum defines three permission levels with a cascade:
-
-| Level | Value | Can Perform |
-|-------|-------|-------------|
-| `VIEW` | `'view'` | Read-only actions (`get()`, `foreign_key_choices()`) |
-| `CHANGE` | `'change'` | Read + write actions (`validate()`, `save()`) |
-| `DELETE` | `'delete'` | All actions, including `delete()` |
-
-The cascade means that a higher level includes all permissions from lower levels:
-- `DELETE` includes `CHANGE` and `VIEW`
-- `CHANGE` includes `VIEW`
-- `VIEW` is read-only
-
-## Registering Proxies with Access
+Choose the minimum level at registration:
 
 ```python
-from django_glue import Glue, GlueAccess
-
-# Read-only — frontend can only call get()
-Glue.model(
+Glue.queryset(
     request=request,
-    unique_name='task_readonly',
-    target=task,
-    access=GlueAccess.VIEW,
-)
-
-# Read + write — frontend can call get(), save(), validate()
-Glue.model(
-    request=request,
-    unique_name='task_editable',
-    target=task,
-    access=GlueAccess.CHANGE,
-)
-
-# Full access — frontend can call get(), save(), validate(), delete()
-Glue.model(
-    request=request,
-    unique_name='task_full',
-    target=task,
-    access=GlueAccess.DELETE,
+    target=Task.objects.filter(team=request.user.team),
+    unique_name='tasks',
+    access=Glue.Access.ADD,
+    fields=['id', 'title'],
+    editable=['title'],
 )
 ```
 
-## Per-Action Access Requirements
+Here existing rows are `VIEW`; `new(initial)` creates an `ADD` draft that can
+be saved once. After creation it becomes `VIEW`. Use `CHANGE` if saved rows
+must stay editable.
 
-Each action method has a minimum required access level:
-
-### Model Proxy
-
-| Action | Required Access |
-|--------|----------------|
-| `get()` | `VIEW` |
-| `validate()` | `CHANGE` |
-| `save()` | `CHANGE` |
-| `delete()` | `DELETE` |
-| `foreign_key_choices()` | `VIEW` |
-
-### QuerySet Proxy
-
-| Action | Required Access |
-|--------|----------------|
-| `query_with_params()` | `VIEW` |
-| `get()` | `VIEW` |
-| `new()` | `VIEW` |
-| `validate()` | `CHANGE` |
-| `save()` | `CHANGE` |
-| `delete()` | `DELETE` |
-| `foreign_key_choices()` | `VIEW` |
-
-### Form Proxy
-
-| Action | Required Access |
-|--------|----------------|
-| `get()` | `VIEW` |
-| `validate()` | `CHANGE` |
-| `save()` | `CHANGE` |
-| `foreign_key_choices()` | `VIEW` |
-
-## What Happens on Access Violation
-
-When the frontend attempts an action without sufficient access, the server raises a `GlueAccessError`. The error is returned as a JSON response with the error details:
-
-```javascript
-try {
-    await Glue.model.task_readonly.save()
-} catch (error) {
-    // error contains details about the access violation
-    console.error('Access denied:', error)
-}
-```
-
-## Combining Access Control with Field Filtering
-
-For fine-grained control, combine access levels with field filtering. A proxy with `CHANGE` access and a restricted `fields` list can only modify the specified fields:
-
-```python
-# User can edit title and done, but not priority or internal fields
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'done'],
-)
-```
-
-## Dynamic Access Based on User
-
-You can set the access level dynamically based on the requesting user:
-
-```python
-from django_glue import Glue, GlueAccess
-
-def task_view(request, pk):
-    task = Task.objects.get(pk=pk)
-
-    # Owner gets full access, others get read-only
-    if task.owner == request.user:
-        access = GlueAccess.DELETE
-    else:
-        access = GlueAccess.VIEW
-
-    Glue.model(
-        request=request,
-        unique_name='task',
-        target=task,
-        access=access,
-    )
-
-    return render(request, 'task.html')
-```
-
-## Using Glue.Access Shortcut
-
-The `Glue` class provides `Glue.Access` as a convenience alias for `GlueAccess`:
-
-```python
-from django_glue import Glue
-
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=Glue.Access.CHANGE,
-)
-```
-
-This is equivalent to:
-
-```python
-from django_glue import Glue, GlueAccess
-
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-)
-```
+Access is only one boundary. `fields` determines readable projection,
+`editable` narrows writable fields, callable declarations set their own
+required access, and `authorize()` can deny an object for the current request.
+The server intersects the current declaration, signed capability, and current
+authorization at introduction, reconstruction, and invocation. Denying one
+address in a batch leaves other addresses able to advance.

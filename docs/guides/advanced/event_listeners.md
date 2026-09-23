@@ -1,153 +1,57 @@
-# Event Listeners
+# Declared events
 
-## Overview
+A Glue object can emit a named outcome from an authorized action. Declare the
+event on its class and emit it while handling the action:
 
-Every JavaScript proxy supports an event listener system that lets you react to actions before they execute, after they succeed, or when they fail. This is useful for showing loading states, handling errors, or triggering side effects.
+```python
+from django_glue import Glue
 
-## Event Types
 
-Each action supports three event types:
+class EntryEditor(Glue.Component):
+    template = 'entry/editor.html'
+    saved = Glue.event()
 
-| Type | When It Fires | Event Object Contains |
-|------|--------------|----------------------|
-| `'before'` | Before the HTTP request is sent | `action`, `proxy`, `payload` |
-| `'after'` | After a successful response | `action`, `proxy`, `result` |
-| `'error'` | When the request fails | `action`, `proxy`, `error` |
-
-## Adding Listeners
-
-Use `addListener(actionName, callback, type)`:
-
-```javascript
-Glue.model.task.addListener('save', (event) => {
-    console.log('About to save:', event.payload)
-}, 'before')
-
-Glue.model.task.addListener('save', (event) => {
-    console.log('Saved successfully:', event.result)
-}, 'after')
-
-Glue.model.task.addListener('save', (event) => {
-    console.error('Save failed:', event.error)
-}, 'error')
+    @Glue.attr
+    def save(self):
+        entry = save_entry()
+        self.saved(pk=entry.pk)
+        return entry.pk
 ```
 
-The default event type is `'after'`, so you can omit it:
+The event appears in that address's `effects.events` only when the action
+succeeds. Its detail must be serializable. `$address` is reserved for the source
+address and cannot be supplied by the action.
+
+Subscribe to the source proxy with `$on(name, callback)`:
 
 ```javascript
-Glue.model.task.addListener('save', (event) => {
-    console.log('Result:', event.result)
+const stop = editor.$on('saved', event => {
+    console.log(event.detail.pk)
 })
+
+stop()
 ```
 
-## Chaining
+`$on()` rejects names the object did not declare and returns an unsubscribe
+function. Disposal removes its listeners. Each event is delivered after the
+response has reconciled the source state and introduced objects.
 
-`addListener` returns the proxy instance, so you can chain multiple listeners:
-
-```javascript
-Glue.model.task
-    .addListener('save', showLoading, 'before')
-    .addListener('save', hideLoading, 'after')
-    .addListener('save', showError, 'error')
-    .addListener('delete', onDeleted, 'after')
-```
-
-## Removing Listeners
-
-Remove a specific listener:
-
-```javascript
-const onSave = (event) => { /* ... */ }
-
-Glue.model.task.addListener('save', onSave, 'after')
-// Later...
-Glue.model.task.removeListener('save', onSave, 'after')
-```
-
-Clear all listeners on a proxy:
-
-```javascript
-Glue.model.task.clearListeners()
-```
-
-## Practical Example: Loading State
+When the source is a rendered component, Glue also dispatches a bubbling DOM
+`CustomEvent` from its current root. Its `detail` contains the declared values
+and `$address`; `event.source` is the source proxy. Ordinary Alpine or DOM
+listeners can observe it:
 
 ```html
-<div x-data="{
-    saving: false,
-    saveError: null,
-
-    async saveTask() {
-        this.saving = true
-        this.saveError = null
-
-        try {
-            const result = await Glue.model.task.save()
-            if (result.success) {
-                alert('Saved!')
-            }
-        } catch (error) {
-            this.saveError = error.message
-        } finally {
-            this.saving = false
-        }
-    }
-}">
-    <input x-model="Glue.model.task.title">
-    <button @click="saveTask()" :disabled="saving">
-        <span x-text="saving ? 'Saving...' : 'Save'"></span>
-    </button>
-    <template x-if="saveError">
-        <p class="error" x-text="saveError"></p>
-    </template>
+<div @saved="console.log($event.detail.pk)">
+    {% glue_component 'entry-editor' entry_id=entry.pk key=entry.pk %}
 </div>
 ```
 
-## Practical Example: Toast Notifications
+The `{% glue_component %}` tag takes Django expressions for parameters, `key`,
+and `access`. Event handlers belong on ordinary markup or on the source proxy.
+An ancestor DOM listener sees bubbling events from every descendant, so inspect
+`$event.detail.$address` when it needs a specific child. `$on()` is always
+source-scoped, including for non-rendered models, forms, and querysets.
 
-```javascript
-// Register a global notification handler
-function showToast(message, type = 'info') {
-    // Your toast implementation
-    console.log(`[${type}] ${message}`)
-}
-
-Glue.model.task
-    .addListener('save', (event) => {
-        showToast('Saving task...', 'info')
-    }, 'before')
-    .addListener('save', (event) => {
-        showToast('Task saved successfully', 'success')
-    }, 'after')
-    .addListener('save', (event) => {
-        showToast('Failed to save task', 'error')
-    }, 'error')
-```
-
-## QuerySet Event Bubbling
-
-Events from child model proxies automatically bubble up to the parent queryset's listeners:
-
-```javascript
-// Listen for any save on any item in the queryset
-Glue.querySet.tasks.addListener('save', (event) => {
-    console.log('An item was saved')
-}, 'after')
-
-// Listen for any delete
-Glue.querySet.tasks.addListener('delete', (event) => {
-    console.log('An item was deleted')
-}, 'after')
-```
-
-This means you can attach a single listener to the queryset to track all CRUD operations on its items, without having to attach listeners to each individual model proxy.
-
-## Available Actions
-
-You can attach listeners to any action that the proxy supports:
-
-| Proxy | Actions You Can Listen To |
-|-------|--------------------------|
-| Model Proxy | `get`, `save`, `delete`, `validate`, `foreign_key_choices` |
-| QuerySet Proxy | `query_with_params`, `save`, `delete`, `get`, `new`, `foreign_key_choices` |
-| Form Proxy | `get`, `save`, `validate`, `foreign_key_choices` |
+Loading and transport errors remain normal promise behavior: set local loading
+state before `await`, catch errors, and clear loading state in `finally`.

@@ -4,17 +4,37 @@
 
 ### Breaking
 
-- **Alpine.js and its morph plugin are bundled at 3.15.12.** Consuming projects must remove separate Alpine core and morph scripts and must not call `Alpine.start()`. Optional plugins can remain as deferred scripts and existing `alpine:init` registrations continue to run before DOM mounting.
-- **`renderOuterHtml()` requires exactly one root element.** Empty, text-only, or multi-root output now raises an error before changing the DOM.
+- The state-model release removes the `metadata`/`state`/`manifest_list`
+  envelopes, `TemplateGlue`, `Glue.template()`, `Glue.sequence()`, loading
+  strategies, `load_state()`, and `related_field_config`.
+- Attribute requests use a flat addressed `objects` envelope with editable
+  `updates`; responses return authoritative addressed entries and independent
+  per-address failures.
+- Alpine.js and its morph plugin are bundled. Applications remove separate
+  Alpine core and morph scripts and application calls to `Alpine.start()`.
+- `Glue.view(url)` requests the real Django route. Install
+  `GlueViewMiddleware` last in `MIDDLEWARE`; the redispatch endpoint is gone.
+- `renderOuterHtml()` requires exactly one root element.
 
 ### Features
 
-- **Component base class.** Define server-backed components with `class MyComponent(Glue.Component)`, a class-owned `template`, overridable render context, and unified HTML rendering. Components load eagerly by default so their initial Alpine state accompanies server-rendered markup.
-- **Stable reactive Glue proxy identity.** Each registered name resolves to one Alpine-reactive instance. Later manifests patch held references in place, resolving GLUE-93. Action-returned Glue manifests remain transient proxies and do not join the global registry.
-- **Unified HTML responses and rendering.** Glue views, template proxies, and HTML-returning attributes share `{is_glue_template_response, html, manifest_list}` and one Alpine morph renderer. Replacements preserve matching keyed nodes, Alpine state, focus, and caret position; `data-morph-ignore` protects third-party widget roots. Adjacent insertion retains its existing behavior.
-- **Template proxy rendering uses request context** and carries manifests registered during rendering.
+- Components mount through `{% glue_component %}` with typed Django
+  parameters, stable keys, server HTML, Alpine morphing, and declared events.
+- One live proxy exists per address. Disposed references become tombstones;
+  reintroduction creates a new proxy generation.
+- Model and form state is split into signed retained state, stable interface
+  data, and derived output. `$refresh()` re-derives an object's output.
+- Queryset rows and relation children have independent addresses. `ADD`
+  permits creation without granting edits to persisted rows.
+- `Glue.fields()` and nested `fields` paths configure relation projection;
+  `choices=` supplies trusted relation choice sources.
+- HTML responses register introduced objects before morphing. Matching keyed
+  nodes preserve Alpine state, focus, and caret position.
 
 ## v1.0.1
+
+The entries below describe historical releases. Use the guides above for the
+current API.
 
 ### Fixes
 

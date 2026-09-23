@@ -3,23 +3,26 @@ import GlueClient from "../src/client"
 import {attributeResponse, createEntry} from "./testUtils"
 
 function modelClient() {
-    const client = new GlueClient({objects: [createEntry()]})
+    const client = new GlueClient({objects: [createEntry({staticData: {events: ['saved']}})]})
     globalThis.Glue = client
     return client
 }
 
 describe('proxy lifecycle', () => {
-    test('emits before and after listeners with the stable proxy', async () => {
+    test('delivers declared events after the addressed response applies', async () => {
         const client = modelClient()
         const proxy = client.model.gorilla
         const events = []
-        proxy.addListener('save', event => events.push(['before', event.object]), 'before')
-        proxy.addListener('save', event => events.push(['after', event.proxy]))
-        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: {ok: true}})
+        proxy.$on('saved', event => events.push([event.source, proxy.name]))
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
+            result: {ok: true},
+            computed_data: {name: 'Updated'},
+            effects: {events: [{name: 'saved', detail: {pk: 1}}]},
+        })
 
         await proxy.save()
 
-        expect(events).toEqual([['before', proxy], ['after', proxy]])
+        expect(events).toEqual([[proxy, 'Updated']])
     })
 
     test('removes registered listeners', async () => {
@@ -27,8 +30,12 @@ describe('proxy lifecycle', () => {
         const proxy = client.model.gorilla
         let calls = 0
         const listener = () => calls++
-        proxy.addListener('save', listener).removeListener('save', listener)
-        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: null})
+        const stop = proxy.$on('saved', listener)
+        stop()
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
+            result: null,
+            effects: {events: [{name: 'saved', detail: {}}]},
+        })
 
         await proxy.save()
 
@@ -54,18 +61,17 @@ describe('proxy lifecycle', () => {
         expect(global).toEqual([])
     })
 
-    test('notifies error listeners and keeps the operation rejected', async () => {
+    test('does not deliver events when an operation fails', async () => {
         const client = modelClient()
         const proxy = client.model.gorilla
         const events = []
-        proxy.addListener('save', event => events.push(event), 'error')
+        proxy.$on('saved', event => events.push(event))
         client.http.sendAttributeRequest = async () => {
             throw new Error('offline')
         }
 
         await expect(proxy.save()).rejects.toThrow('offline')
-        expect(events).toHaveLength(1)
-        expect(events[0].proxy).toBe(proxy)
+        expect(events).toHaveLength(0)
     })
 
     test('does not treat untagged result objects as manifests', async () => {

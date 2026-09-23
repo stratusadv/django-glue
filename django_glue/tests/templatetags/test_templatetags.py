@@ -48,9 +48,8 @@ class DjangoGlueInitTagTestCase(TestCase):
         self.request.session = MockSession()
 
     def registered_policy(self):
-        manifest = GlueContextManager(self.request).serialized_manifests[0]
-        self.assertTrue(manifest['is_glue_manifest'])
-        return GluePolicy.from_token(manifest['policy_token'])
+        entry = GlueContextManager(self.request).serialized_objects[0]
+        return GluePolicy.from_token(entry['policy_token'])
 
     def test_tag_includes_version(self):
         """Tag should include the Django Glue version."""
@@ -69,7 +68,7 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('callable_attribute', rendered)
         self.assertIn('/__dg__/callable_attribute/', rendered)
-        self.assertIn('/__dg__/glue_view/', rendered)
+        self.assertIn('application/vnd.django-glue.view+json', rendered)
 
     @override_settings(DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS=45)
     def test_tag_includes_server_defined_client_config(self):
@@ -113,7 +112,6 @@ class DjangoGlueInitTagTestCase(TestCase):
 
         rendered = template.render(context)
         self.assertIn('objects', rendered)
-        self.assertNotIn('is_glue_manifest', rendered)
         self.assertEqual(self.registered_policy().name, 'gorilla')
 
     def test_tag_with_no_objects_registered(self):

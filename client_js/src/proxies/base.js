@@ -9,10 +9,9 @@ class BaseGlueProxy {
             _registry: {value: registry, enumerable: false, configurable: true},
             _client: {value: client, enumerable: false, configurable: true},
         })
-        this._listeners = {before: {}, after: {}, error: {}}
+        this._eventListeners = new Map()
         this._onMessage = null
         this._onError = null
-        this._loaded = record.loadingStrategy === 'eager'
 
         Object.defineProperty(this, '_owner', {
             value: owner,
@@ -34,38 +33,34 @@ class BaseGlueProxy {
         return this._owner
     }
 
-    addListener(attribute, callback, when = 'after') {
-        this._listeners[when] ||= {}
-        this._listeners[when][attribute] ||= []
-        this._listeners[when][attribute].push(callback)
-        return this
-    }
-
-    removeListener(attribute, callback, when = 'after') {
-        const listeners = this._listeners[when]?.[attribute]
-        if (listeners) {
-            this._listeners[when][attribute] = listeners.filter(listener => listener !== callback)
+    $on(name, callback) {
+        if (!(this._record.staticData?.events || []).includes(name)) {
+            throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`)
         }
+        const listeners = this._eventListeners.get(name) || new Set()
+        listeners.add(callback)
+        this._eventListeners.set(name, listeners)
+        return () => listeners.delete(callback)
+    }
+
+    _onDispose() {
+        this._eventListeners.clear()
+    }
+
+    async $refresh({submit = false} = {}) {
+        await this._callAttribute(null, {}, {submit})
         return this
     }
 
-    async _callAttribute(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}, options = {}) {
         const attributeRequest = {attribute, kwargs}
-        this._emit('before', attribute, {attributeRequest, object: this})
 
         return this._record.enqueue(async () => {
             try {
-                const {result, response, discarded} = await this._attempt(attribute, kwargs)
+                const {result, discarded} = await this._attempt(attribute, kwargs, options)
                 if (discarded) return undefined
-                this._emit('after', attribute, {
-                    attributeRequest,
-                    object: this,
-                    proxy: this,
-                    response,
-                })
                 return result
             } catch (error) {
-                this._emit('error', attribute, {attributeRequest, object: this, proxy: this, error})
                 const errorHandler = this._onError || globalThis.Glue?._onError
                 errorHandler?.({error, attribute, attributeRequest, proxy: this})
                 throw error
@@ -85,7 +80,7 @@ class BaseGlueProxy {
         return this
     }
 
-    async _attempt(attribute, kwargs) {
+    async _attempt(attribute, kwargs, options) {
         if (this._record.disposed) {
             throw new GlueAddressError(
                 'disposed',
@@ -98,7 +93,7 @@ class BaseGlueProxy {
             throw this._staleError()
         }
         try {
-            return await this._singleCall(attribute, kwargs)
+            return await this._singleCall(attribute, kwargs, options)
         } catch (error) {
             if (!(error instanceof GlueAddressError && error.code === 'policy_expired')) {
                 throw error
@@ -108,19 +103,39 @@ class BaseGlueProxy {
                 error.owner = this._ownerReference()
                 throw error
             }
-            return await this._singleCall(attribute, kwargs)
+            return await this._singleCall(attribute, kwargs, options)
         }
     }
 
-    async _singleCall(attribute, kwargs) {
+    async _singleCall(attribute, kwargs, {submit = true, companions = []} = {}) {
         const requestCapture = this._record.captureRequest()
-        const response = await this._http.sendAttributeRequest({
-            address: this._record.address,
-            policyToken: this._record.policyToken,
-            updates: requestCapture.updates,
-            attribute,
-            kwargs,
+        if (!submit) requestCapture.updates = {}
+        const companionCaptures = companions.map(record => {
+            const capture = record.captureRequest()
+            capture.updates = {}
+            return {record, capture}
         })
+        const controller = companions.length ? null : new AbortController()
+        this._record.inFlightController = controller
+        let response
+        try {
+            response = await this._http.sendAttributeRequest({
+                address: this._record.address,
+                policyToken: this._record.policyToken,
+                updates: requestCapture.updates,
+                attribute,
+                kwargs,
+                companions,
+                signal: controller?.signal ?? null,
+            })
+        } catch (error) {
+            if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+                return {result: undefined, response: null, discarded: true}
+            }
+            throw error
+        } finally {
+            if (this._record.inFlightController === controller) this._record.inFlightController = null
+        }
         if (
             this._record.disposed ||
             this._registry.getRecord(this._record.address) !== this._record ||
@@ -138,9 +153,10 @@ class BaseGlueProxy {
                 `Glue response has no entry for address "${this._record.address}".`
             )
         }
-        objects
-            .filter(entry => entry !== target)
-            .forEach(entry => this._registry.introduce(entry))
+        const companionAddresses = new Set(companions.map(record => record.address))
+        const introduced = objects.filter(
+            entry => entry !== target && !companionAddresses.has(entry?.address),
+        )
         if (target.error) {
             throw new GlueAddressError(
                 target.error.code,
@@ -148,13 +164,28 @@ class BaseGlueProxy {
                 this._record.address
             )
         }
+        if (target.html !== undefined) {
+            this._client.loadObjects(introduced)
+        } else {
+            introduced.forEach(entry => this._registry.introduce(entry))
+        }
+        companionCaptures.forEach(({record, capture}) => {
+            const entry = objects.find(candidate => candidate?.address === record.address)
+            if (!entry || entry.error || record.disposed) return
+            this._client._dispatcher.reconcile(record.address, entry, capture)
+        })
         this._client._dispatcher.reconcile(
             this._record.address,
             target,
             requestCapture,
         )
         const rawResult = target.result
-        const result = this._convertResult(rawResult, attribute)
+        const result = target.html === undefined
+            ? this._convertResult(rawResult, attribute)
+            : htmlResultFromResponse(target, this._client)
+        if (target.html !== undefined && this._policy.namespace === 'component' && this.$el) {
+            await result.renderOuterHtml(this.$el)
+        }
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
             const childRecord = this._registry.getRecord(rawResult)
             if (childRecord && !childRecord.owner) {
@@ -242,17 +273,23 @@ class BaseGlueProxy {
             window.location.assign(redirect.url)
         }
         const messages = effects.messages
-        if (!messages?.length || typeof window === 'undefined') return
-        const handler = this._onMessage || window.Glue?._onMessage
-        handler?.({messages, proxy: this})
-    }
-
-    _emit(when, attribute, payload) {
-        const listeners = [
-            ...(this._listeners[when]?.[attribute] || []),
-            ...(this._listeners[when]?.['*'] || []),
-        ]
-        listeners.forEach(listener => listener(payload))
+        if (messages?.length && typeof window !== 'undefined') {
+            const handler = this._onMessage || window.Glue?._onMessage
+            handler?.({messages, proxy: this})
+        }
+        effects.events?.forEach(({name, detail}) => {
+            const event = {
+                type: name,
+                detail: {...detail, $address: this._record.address},
+                source: this,
+            }
+            this._eventListeners.get(name)?.forEach(listener => listener(event))
+            if (this.$el && typeof CustomEvent !== 'undefined') {
+                const domEvent = new CustomEvent(name, {detail: event.detail, bubbles: true})
+                domEvent.source = this
+                this.$el.dispatchEvent(domEvent)
+            }
+        })
     }
 
     _convertResult(result, attribute = null) {
@@ -263,10 +300,6 @@ class BaseGlueProxy {
             return this._registry.getProxy(result) ?? result
         }
         if (!result || typeof result !== 'object') return result
-        if (result.is_glue_manifest === true) return this._client.resolveManifest(result)
-        if (result.is_glue_template_response === true) {
-            return htmlResultFromResponse(result, this._client)
-        }
         Object.keys(result).forEach(key => {
             result[key] = this._convertResult(result[key], attribute)
         })

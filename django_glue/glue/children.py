@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from django_glue.glue import address
 from django_glue.glue.attributes.definition import GlueAttributeKind
-from django_glue.glue.operation import GlueOperation, GlueOperationKind
+from django_glue.exceptions import GlueAuthorizationError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -86,18 +86,10 @@ class GlueChildBinder:
                 ),
             )
 
-        request = self.owner.request
-        if not glue_object.authorize(
-            request,
-            GlueOperation(
-                kind=GlueOperationKind.INTRODUCE,
-                attribute=None,
-                required_access=glue_object.access,
-            ),
-        ):
+        try:
+            glue_object.introduce(self.owner.request)
+        except GlueAuthorizationError:
             return ()
-
-        glue_object.request = request
         return (
             BoundGlueChild(
                 path=definition.path,

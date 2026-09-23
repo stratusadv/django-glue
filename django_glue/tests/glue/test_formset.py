@@ -37,7 +37,6 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertIn('append', glue_object.attributes)
         self.assertIn('validate', glue_object.attributes)
-        self.assertIn('load_state', glue_object.attributes)
         # Keyed children are addressed by their key, not a positional attribute.
         self.assertIn('1', glue_object.children)
 
@@ -108,7 +107,6 @@ class FormSetGlueTestCase(TestCase):
 
         self.assertEqual(len(introduced), 1)
         introduction = introduced[0]
-        self.assertNotIn('is_glue_manifest', introduction)
         child_policy = GluePolicy.from_token(introduction['policy_token'])
         self.assertEqual(child_policy.name, 'contacts.1')
         self.assertEqual(child_policy.namespace, 'form')

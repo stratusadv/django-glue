@@ -1,33 +1,16 @@
 import {describe, expect, test} from "bun:test"
 import {htmlResultFromResponse} from "../src/htmlRenderer"
 import GlueView from "../src/view"
-import GlueClient from "../src/client"
-import {attributeResponse, createEntry} from "./testUtils"
-
-function templateRenderer(html) {
-    const client = new GlueClient({objects: [createEntry({
-        policy: {
-            name: 'panel', namespace: 'template', address: 'panel#test',
-            attributes: ['render_html'], state_snapshot: {},
-        },
-        staticData: {fields: {}, callables: {render_html: {allowed_arguments: []}}},
-    })]})
-    client.http.sendAttributeRequest = async () => attributeResponse('panel#test', {
-        result: {is_glue_template_response: true, html, manifest_list: []},
-    })
-    return client.template.panel
-}
 
 const renderers = {
     result: html => htmlResultFromResponse({html}),
     view: html => {
         happyDOM.setURL('http://localhost/')
         return new GlueView({
-            _config: {glueViewUrlPath: '/view/'},
-            sendRequest: async () => ({data: {is_glue_template_response: true, html, manifest_list: []}}),
+            _config: {glueViewMediaType: 'application/vnd.django-glue.view+json'},
+            sendRequest: async () => ({data: {is_glue_template_response: true, html, objects: []}}),
         }, '/fragment/')
     },
-    template: templateRenderer,
 }
 
 for (const [name, createRenderer] of Object.entries(renderers)) {

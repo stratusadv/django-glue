@@ -5,7 +5,10 @@ from django.test import TestCase
 
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
+from django_glue.glue.queryset_unpickler import pickle_query
 from test_project.fight.models import Fight
+
+FIGHT_PATH = 'test_project.fight.models.Fight'
 
 
 class TrackedQuerySet(QuerySet):
@@ -22,10 +25,11 @@ class TrackedQuerySet(QuerySet):
 class QuerySetReconstructionTestCase(TestCase):
     def test_default_queryset_round_trips_through_its_class_path(self):
         queryset = Fight.objects.filter(name__icontains='bout')
-        encoded = QuerySetGlue._encode_queryset_query(queryset)
+        encoded = pickle_query(queryset)
 
         rebuilt = QuerySetGlue._decode_queryset_query(
             encoded,
+            FIGHT_PATH,
             queryset_class_path=f'{type(queryset).__module__}.{type(queryset).__qualname__}',
         )
 
@@ -36,10 +40,11 @@ class QuerySetReconstructionTestCase(TestCase):
 
     def test_custom_queryset_class_is_restored_through(self):
         queryset = TrackedQuerySet(model=Fight).filter(name__icontains='b')
-        encoded = QuerySetGlue._encode_queryset_query(queryset)
+        encoded = pickle_query(queryset)
 
         rebuilt = QuerySetGlue._decode_queryset_query(
             encoded,
+            FIGHT_PATH,
             queryset_class_path=f'{type(queryset).__module__}.{type(queryset).__qualname__}',
         )
         before = TrackedQuerySet.filters_applied
@@ -50,22 +55,22 @@ class QuerySetReconstructionTestCase(TestCase):
         assert after == before + 1
 
     def test_unresolvable_class_path_fails_loudly(self):
-        encoded = QuerySetGlue._encode_queryset_query(Fight.objects.all())
+        encoded = pickle_query(Fight.objects.all())
 
         with self.assertRaisesRegex(
             ValueError,
             'Cannot resolve queryset class',
         ):
-            QuerySetGlue._decode_queryset_query(encoded, 'no.such.module.BogusQueryset')
+            QuerySetGlue._decode_queryset_query(encoded, FIGHT_PATH, 'no.such.module.BogusQueryset')
 
     def test_non_queryset_class_path_fails_loudly(self):
-        encoded = QuerySetGlue._encode_queryset_query(Fight.objects.all())
+        encoded = pickle_query(Fight.objects.all())
 
         with self.assertRaisesRegex(
             TypeError,
             'does not name a QuerySet subclass',
         ):
-            QuerySetGlue._decode_queryset_query(encoded, 'test_project.fight.models.Fight')
+            QuerySetGlue._decode_queryset_query(encoded, FIGHT_PATH, 'test_project.fight.models.Fight')
 
     def test_identity_carries_the_queryset_class_path(self):
         queryset = Fight.objects.filter(name__icontains='bout')
@@ -81,12 +86,10 @@ class QuerySetReconstructionTestCase(TestCase):
 
     def test_choice_source_reconstructs_through_its_queryset_class(self):
         choice = TrackedQuerySet(model=Fight).filter(name__icontains='b')
-        serialized = ModelGlue._serialize_related_field_config(
-            {'red_corner': {'choice_queryset': choice}}
-        )
+        serialized = ModelGlue._serialize_choices({'red_corner': choice})
 
-        deserialized = ModelGlue._deserialize_related_field_config(serialized)
-        rebuilt = deserialized['red_corner']['choice_queryset']
+        deserialized = ModelGlue._deserialize_choices(serialized)
+        rebuilt = deserialized['red_corner']
 
         assert type(rebuilt) is TrackedQuerySet
         assert rebuilt.query.model is Fight

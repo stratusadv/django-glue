@@ -28,6 +28,9 @@ class GluePolicyTokenSerializer:
         ).encode('latin-1')
 
     def loads(self, data: bytes) -> Any:
+        if len(data) > glue_settings.DJANGO_GLUE_MAX_POLICY_DECODED_BYTES:
+            from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
+            raise GlueInvalidPolicyError('policy')
         return json.loads(data.decode('latin-1'))
 
 
@@ -121,6 +124,9 @@ class GluePolicy(BaseModel):
     @classmethod
     def from_token(cls, token: str) -> Self:
         """Verify and reconstruct a policy from its opaque token."""
+        if len(token.encode()) > glue_settings.DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES:
+            from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
+            raise GlueInvalidPolicyError('policy')
         try:
             # Expiry is intentionally validated from the signed ``created_at`` field
             # below instead of with Django's ``max_age`` argument. ``max_age`` rejects

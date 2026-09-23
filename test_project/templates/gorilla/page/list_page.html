@@ -208,23 +208,27 @@
 
             <template x-for="gorilla in gorillaArray" :key="gorilla.$key">
                 <div class="col-md-6" x-data="{
-                    init() {
-                        gorilla.addListener('save', event => {
-                            if (event.proxy.hasErrors()) {
-                                $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
-                            } else {
-                                $store.notifications.success('Fighter saved successfully!');
-                            }
-                        });
-                        gorilla.addListener('save', () => {
+                    async saveGorilla() {
+                        try {
+                            await gorilla.save();
+                        } catch {
                             $store.notifications.error('Failed to save fighter.');
-                        }, 'error');
-                        gorilla.addListener('delete', () => {
-                            $store.notifications.success('Fighter deleted.');
-                        });
-                        gorilla.addListener('delete', () => {
+                            return;
+                        }
+                        if (gorilla.hasErrors()) {
+                            $store.notifications.error(`Failed to save fighter. ${this.errorSummary(gorilla)}`, 6000);
+                        } else {
+                            $store.notifications.success('Fighter saved successfully!');
+                        }
+                    },
+                    async deleteGorilla() {
+                        try {
+                            await gorilla.delete();
+                        } catch {
                             $store.notifications.error('Failed to delete fighter.');
-                        }, 'error');
+                            return;
+                        }
+                        $store.notifications.success('Fighter deleted.');
                     },
                     errorSummary(proxy) {
                         const errors = Object.fromEntries(
@@ -275,10 +279,10 @@
                             <div class="mt-3">
                                 <label class="form-label fw-bold">Skills</label>
                                 <div class="d-flex flex-wrap gap-1">
-                                    <template x-for="skill in gorilla.skills.items" :key="skill.$key">
+                                    <template x-for="skill in (gorilla.skills?.items || [])" :key="skill.$key">
                                         <span class="badge bg-gorilla-green" x-text="skill.name"></span>
                                     </template>
-                                    <small class="text-muted" x-show="!gorilla.skills.loading && gorilla.skills.items.length === 0">No skills yet</small>
+                                    <small class="text-muted" x-show="gorilla.skills && !gorilla.skills.loading && gorilla.skills.items.length === 0">No skills yet</small>
                                 </div>
                             </div>
                         </div>
@@ -298,10 +302,10 @@
                                 <a :href="gorillaArenaUrl(gorilla.$pk)" class="btn btn-gorilla-secondary btn-sm flex-grow-1">
                                     Arena
                                 </a>
-                                <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="gorilla.save()">
+                                <button type="button" class="btn btn-gorilla btn-sm flex-grow-1" @click="saveGorilla()">
                                     Save
                                 </button>
-                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) gorilla.delete()">
+                                <button type="button" class="btn btn-gorilla-danger btn-sm flex-grow-1" @click="if (confirm('Delete this fighter?')) deleteGorilla()">
                                     Delete
                                 </button>
                             </div>

@@ -6,7 +6,6 @@ from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueFormSetMaxNumExceededError
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.collection import BaseCollectionGlue
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.utils import get_attr_from_path_string
 
@@ -45,10 +44,9 @@ class FormSetGlue(BaseCollectionGlue):
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.EAGER,
         _reconstructed: bool = False,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         cls = self.__class__
         self.form_class = form_class if form_class is not None else cls.form_class
         if self.form_class is None:
@@ -117,12 +115,7 @@ class FormSetGlue(BaseCollectionGlue):
         return {'valid': all(result['valid'] for result in results)}
 
     def _build_form_glue(self, form: forms.BaseForm, key: str) -> FormGlue:
-        return FormGlue(
-            form,
-            name=f'{self.name}.{key}',
-            access=self.access,
-            loading_strategy=LoadingStrategy.EAGER,
-        )
+        return FormGlue(form, name=f'{self.name}.{key}', access=self.access)
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         self._forms = []

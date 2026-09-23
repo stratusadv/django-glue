@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import base64
 import builtins
-import pickle
+from enum import StrEnum
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
@@ -19,7 +18,6 @@ from django_glue.glue import address
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.children import BoundGlueChild
 from django_glue.glue.collection import BaseCollectionGlue
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
@@ -32,13 +30,15 @@ from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.model.object import (
     ALL_FIELDS,
     ModelGlue,
-    RelatedFieldConfig,
 )
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
+from django_glue.glue.objects.django.relation import OwningRelation
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.queryset_unpickler import (
     _queryset_class_path,
     _resolve_queryset_class,
+    model_class_path,
+    pickle_query,
     unpickle_query,
 )
 
@@ -52,6 +52,13 @@ if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
 
 DEFAULT_BATCH_SIZE = '__default__'
+
+
+class WindowChange(StrEnum):
+    """How this request changed the loaded row window."""
+
+    REPLACED = 'replaced'
+    EXTENDED = 'extended'
 
 
 class QuerySetGlue(
@@ -75,13 +82,12 @@ class QuerySetGlue(
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        choices: Mapping[str, models.QuerySet] | None = None,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
         last_query_params: dict[str, Any] | None = None,
         loaded_row_count: int = 0,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         self.queryset = queryset
         self.batch_size = self._resolve_batch_size(batch_size)
         self.fields = (
@@ -91,16 +97,17 @@ class QuerySetGlue(
             exclude if exclude == ALL_FIELDS else tuple(exclude)
         )
 
+        self._reject_nested_all_marker(self.fields, 'fields')
+        self._reject_nested_all_marker(self.exclude, 'exclude')
+
         if not self.fields and not self.exclude:
             msg = 'QuerySetGlue requires at least one of fields or exclude.'
             raise ValueError(msg)
 
         self.forms = self.normalize_forms(form, forms)
-        self.related_field_config = ModelGlue._normalize_related_field_config(
-            related_field_config=related_field_config,
-            model_class=self.queryset.model,
-        )
         self._select_related = self._get_select_related_fields()
+        self.choices = self._normalize_choices(choices)
+        self._editable_declaration = editable
         self.editable = self._normalize_editable(
             editable,
             self.access,
@@ -109,6 +116,10 @@ class QuerySetGlue(
         self._last_query_params = last_query_params
         self._loaded_row_count = loaded_row_count
         self._current_batch: list[models.Model] = []
+        self._window_change: WindowChange | None = None
+        # Internal, signed for a projected to-many relation that can attach a
+        # new member: drafts from new() save into exactly this relation.
+        self._relation: OwningRelation | None = None
 
     @staticmethod
     def _resolve_batch_size(batch_size: int | None | Literal['__default__']) -> int | None:
@@ -126,25 +137,23 @@ class QuerySetGlue(
 
     def get_identity(self) -> dict[str, Any]:
         identity = {
-            'model_class_path': f'{self.queryset.model.__module__}.{self.queryset.model.__name__}',
-            'encoded_queryset': self._encode_queryset_query(self.queryset),
+            'model_class_path': model_class_path(self.queryset.model),
+            'encoded_queryset': pickle_query(self.queryset),
             'queryset_class_path': _queryset_class_path(self.queryset),
             'pk_field_name': self.queryset.model._meta.pk.name,
             'fields': self.fields,
             'exclude': self.exclude,
             'batch_size': self.batch_size,
-            'last_query_params': self._last_query_params,
-            'loaded_row_count': self._loaded_row_count,
             'editable': self.editable,
         }
         if self.forms:
             identity['form_identities'] = self.serialize_forms(self.forms)
-        if self.related_field_config:
-            identity['related_field_config'] = ModelGlue._serialize_related_field_config(
-                self.related_field_config
-            )
+        if self.choices:
+            identity['choices'] = self._serialize_choices(self.choices)
         if self._projected_field_paths:
             identity['projected_fields'] = self._projected_field_paths
+        if self._relation is not None:
+            identity['relation'] = self._relation.serialize()
         identity |= self.computed_attributes_identity()
 
         return identity
@@ -169,17 +178,48 @@ class QuerySetGlue(
             return set(select_related.keys())
         return set()
 
+    def _retained_state(self) -> dict[str, Any]:
+        """Query cursor memory is a non-parameterized reconstructor: the next
+        batch needs it, and only the server advances it (state-model.md §2)."""
+        retained = super()._retained_state()
+        retained.update({
+            'last_query_params': self._last_query_params,
+            'loaded_row_count': self._loaded_row_count,
+        })
+        return retained
+
     def get_state(self) -> dict[str, Any]:
         return self._query()
 
-    def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
-        """The current page rides the introduction surface: rows, annotations,
-        counts, and keyed child references are the family's down-only half
-        (state-model.md §4 family table)."""
-        computed = super().get_computed_data(include_all=include_all)
-        if include_all:
-            computed.update(self.get_state())
-        return computed
+    def _refreshed_output(self) -> dict[str, Any]:
+        """Rows answer a query, so a queryset's introduction carries none; a
+        refresh re-derives the loaded window alongside the rest of its output
+        (state-model.md §10)."""
+        return {**super()._refreshed_output(), **self._loaded_window()}
+
+    def _loaded_window(self) -> dict[str, Any]:
+        """Re-run the signed last query over the rows already loaded (at least
+        one batch) without advancing the cursor, so a refresh neither shrinks
+        nor resets a scrolled or paged list (state-model.md §10)."""
+        params = self._last_query_params or {}
+        queryset = self._filtered_and_ordered(params.get('filter'), params.get('order_by'))
+        self._window_change = WindowChange.REPLACED
+        if self.batch_size is None:
+            self._current_batch = list(queryset)
+            return {
+                'items': [self._row_address(instance) for instance in self._current_batch],
+                'seek_key': None,
+                'has_next': False,
+                'batch_size': None,
+            }
+        window = GlueCollectionCursor(queryset, max(self._loaded_row_count, self.batch_size)).seek()
+        self._current_batch = list(window.items)
+        return {
+            'items': [self._row_address(instance) for instance in self._current_batch],
+            'seek_key': window.next_seek_key,
+            'has_next': window.has_next,
+            'batch_size': self.batch_size,
+        }
 
     @cached_property
     def _orm_annotation_names(self) -> tuple[str, ...]:
@@ -189,6 +229,7 @@ class QuerySetGlue(
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> QuerySetGlue:
         queryset = cls._decode_queryset_query(
             policy.identity['encoded_queryset'],
+            policy.identity['model_class_path'],
             policy.identity.get('queryset_class_path'),
         )
         forms = cls.deserialize_form_classes(
@@ -204,27 +245,23 @@ class QuerySetGlue(
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
             batch_size=policy.identity.get('batch_size'),
-            last_query_params=policy.identity.get('last_query_params'),
-            loaded_row_count=policy.identity.get('loaded_row_count', 0),
+            last_query_params=policy.state_snapshot.get('last_query_params'),
+            loaded_row_count=policy.state_snapshot.get('loaded_row_count', 0),
         )
-        # Restored post-construction from the signed (already-validated) policy:
-        # _deserialize_related_field_config yields the normalized internal shape,
+        # Restored post-construction from the signed (already-validated) policy,
         # so it does not go back through __init__ normalization.
-        glue_object.related_field_config = ModelGlue._deserialize_related_field_config(
-            policy.identity.get('related_field_config', {})
-        )
+        glue_object.choices = cls._deserialize_choices(policy.identity.get('choices', {}))
+        if 'relation' in policy.identity:
+            glue_object._relation = OwningRelation.deserialize(policy.identity['relation'])
         return glue_object
-
-    @staticmethod
-    def _encode_queryset_query(queryset: models.QuerySet) -> str:
-        return base64.b64encode(pickle.dumps(queryset.query)).decode('utf-8')
 
     @staticmethod
     def _decode_queryset_query(
         encoded_query: str,
+        expected_model_path: str,
         queryset_class_path: str | None = None,
     ) -> models.QuerySet:
-        query = unpickle_query(encoded_query)
+        query = unpickle_query(encoded_query, expected_model_path)
         queryset = _resolve_queryset_class(queryset_class_path)(model=query.model)
         queryset.query = query
         return queryset
@@ -297,6 +334,7 @@ class QuerySetGlue(
         if query_params != self._last_query_params:
             self._last_query_params = query_params
             self._loaded_row_count = 0
+        self._window_change = WindowChange.REPLACED if seek_key is None else WindowChange.EXTENDED
 
         queryset = self._filtered_and_ordered(filter, order_by)
         total = queryset.count() if with_total else None
@@ -350,7 +388,7 @@ class QuerySetGlue(
     ) -> dict[str, Any]:
         if self.batch_size is None:
             self._current_batch = list(objects)
-            items = [self._build_child_model_payload(instance) for instance in self._current_batch]
+            items = [self._row_address(instance) for instance in self._current_batch]
             self._loaded_row_count += len(items)
 
             return {'items': items, 'seek_key': None, 'has_next': False, 'batch_size': None}
@@ -361,7 +399,7 @@ class QuerySetGlue(
         self._loaded_row_count += len(batch.items)
 
         return {
-            'items': [self._build_child_model_payload(instance) for instance in batch.items],
+            'items': [self._row_address(instance) for instance in batch.items],
             'seek_key': batch.next_seek_key,
             'has_next': batch.has_next,
             'batch_size': self.batch_size,
@@ -398,14 +436,48 @@ class QuerySetGlue(
                     ),
                     details={'keys': disallowed},
                 )
-        instance = self.queryset.model(**initial) if initial else self.queryset.model()
-        return self._row_glue(instance, bind=False)
+        draft = self._row_glue(self.queryset.model(), bind=False)
+        if initial:
+            draft._load_client_state(initial)
+            draft._invalidate_attributes()
+        return draft
 
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return [
             (str(instance.pk), self._row_glue(instance))
             for instance in self._current_batch
         ]
+
+    def _membership(
+        self,
+        live_children: Mapping[str, str],
+        produced: Mapping[str, BaseGlue],
+    ) -> list[str]:
+        """The loaded window: a new, restarted, or refreshed query replaces it;
+        a continuation appends to it; any other call carries it forward."""
+        if self._window_change is WindowChange.REPLACED:
+            return list(produced)
+        return [*(key for key in live_children if key not in produced), *produced]
+
+    def _introduced_entries(
+        self,
+        policy: GluePolicy,
+        reintroduce: list[str],
+    ) -> list[dict[str, Any]]:
+        """Rows answering a query this request participate, so their entries
+        ride even when the window's address map is unchanged (state-model.md
+        §10 slot table, row 3)."""
+        entries = super()._introduced_entries(policy, reintroduce)
+        if self._window_change is None:
+            return entries
+        sent = {entry['address'] for entry in entries}
+        return entries + [
+            entry for entry in self._serialized_child_entries() if entry['address'] not in sent
+        ]
+
+    def _rebuild_item(self, key: str) -> BaseGlue | None:
+        instance = self.queryset.filter(pk=key).first()
+        return self._row_glue(instance) if instance is not None else None
 
     def _bind_children(
         self,
@@ -421,7 +493,10 @@ class QuerySetGlue(
             self._current_batch,
             owner_address=self.address,
         )
-        return row_children + relation_children
+        relation_paths = {child.path for child in relation_children}
+        return tuple(
+            child for child in row_children if child.path not in relation_paths
+        ) + relation_children
 
     def _row_glue(self, instance: models.Model, *, bind: bool = True) -> ModelGlue:
         child_name = f'{self.name}.{instance.pk}'
@@ -441,7 +516,6 @@ class QuerySetGlue(
             else self.access
         )
         child_access = GlueAccess.ADD if instance.pk is None else row_access
-        # Child models in query results are always eager - they contain the fetched data
         child_object = ModelGlue(
             instance,
             name=child_name,
@@ -452,12 +526,13 @@ class QuerySetGlue(
             forms=child_forms,
             select_related=self._select_related,
             computed_attributes=self.computed_attributes,
-            related_field_config=self.related_field_config,
-            loading_strategy=LoadingStrategy.EAGER,
+            choices=self.choices,
         )
         child_object._row_access = row_access
         child_object.request = self.request
-        if instance.pk is not None:
+        if instance.pk is None:
+            child_object._relation = self._relation
+        else:
             child_object._address = address.item(self.address, str(instance.pk))
 
         relation_paths = {
@@ -496,9 +571,8 @@ class QuerySetGlue(
 
         return child_object
 
-    def _build_child_model_payload(self, instance: models.Model) -> dict[str, Any]:
-        child = self._row_glue(instance)
-        return child.manifest.model_dump()
+    def _row_address(self, instance: models.Model) -> str:
+        return address.item(self.address, str(instance.pk))
 
     def _bind_relation_children(
         self,
@@ -521,7 +595,7 @@ class QuerySetGlue(
         for relation_name, subfields in self._projected_relations:
             for instance in instances:
                 if self._relation_is_to_many(relation_name):
-                    related = getattr(instance, relation_name).all()
+                    related = self._related_queryset(instance, relation_name)
                     related_key = instance.pk
                 else:
                     related = getattr(instance, relation_name)
@@ -533,6 +607,8 @@ class QuerySetGlue(
                     continue
                 child = self._construct_relation_child(
                     related,
+                    owner=instance,
+                    relation_name=relation_name,
                     name=f'{self.name}.{relation_name}.{related_key}',
                     subfields=subfields,
                 )

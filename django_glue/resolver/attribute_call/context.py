@@ -100,15 +100,9 @@ class AttributeCallContextFactory:
             except ValidationError as error:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.MALFORMED_REQUEST,
-                    message='Each objects entry needs an address, a policy_token, and a call.',
+                    message='Each objects entry needs an address and a policy_token.',
                     details={'field': 'objects', 'errors': error.errors()},
                 ) from error
-            if entry.call is None and not entry.reintroduce:
-                raise GlueRequestError(
-                    code=GlueRequestErrorCode.MALFORMED_REQUEST,
-                    message='Each objects entry needs a call or a reintroduce list.',
-                    details={'field': 'objects', 'address': entry.address},
-                )
             entries.append(entry)
 
         addresses = [entry.address for entry in entries]

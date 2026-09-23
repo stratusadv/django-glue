@@ -17,7 +17,10 @@ describe('GlueHttp edge cases', () => {
         let request
         global.fetch = async (_url, options) => {
             request = options
-            return new Response(JSON.stringify({ok: true}), {status: 200})
+            return new Response(JSON.stringify({ok: true}), {
+                status: 200,
+                headers: {'Content-Type': 'application/json'},
+            })
         }
 
         const result = await http().sendRequest('/endpoint', {

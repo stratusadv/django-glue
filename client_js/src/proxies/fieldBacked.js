@@ -3,10 +3,6 @@ import BaseGlueProxy from "./base"
 class FieldBackedGlueProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
-        this.loading = false
-        this._loadAttempted = false
-        this._loadError = null
-        this._loadPromise = null
         this._fields = {}
     }
 
@@ -30,30 +26,6 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
         return Object.values(this._record.computedData.fields || {}).some(
             fieldData => fieldData?.errors?.length > 0
         )
-    }
-
-    _ensureLoaded() {
-        if (this._loaded || this._loadAttempted) return this._loadPromise
-        this._loadAttempted = true
-        this.loading = true
-        this._loadPromise = this._callAttribute('load_state')
-            .then(result => {
-                this._loaded = true
-                return result
-            })
-            .catch(error => {
-                this._loadError = error
-            })
-            .finally(() => {
-                this.loading = false
-            })
-        return this._loadPromise
-    }
-
-    retryLoad() {
-        this._loadAttempted = false
-        this._loadError = null
-        return this._ensureLoaded()
     }
 }
 

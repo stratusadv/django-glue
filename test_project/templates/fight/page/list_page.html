@@ -147,19 +147,24 @@
             }
             return null;
         },
-        async init() {
-            this.fights.addListener('save', () => {
-                $store.notifications.success('Fight saved successfully!');
-            });
-            this.fights.addListener('save', () => {
+        async saveFight(fight) {
+            try {
+                await fight.form.save();
+            } catch {
                 $store.notifications.error('Failed to save fight.');
-            }, 'error');
-            this.fights.addListener('delete', () => {
-                $store.notifications.success('Fight deleted.');
-            });
-            this.fights.addListener('delete', () => {
+                return;
+            }
+            $store.notifications.success('Fight saved successfully!');
+            await fight.$refresh();
+        },
+        async deleteFight(fight) {
+            try {
+                await fight.delete();
+            } catch {
                 $store.notifications.error('Failed to delete fight.');
-            }, 'error');
+                return;
+            }
+            $store.notifications.success('Fight deleted.');
         }
     }">
         <!-- Search -->
@@ -299,10 +304,10 @@
                         </div>
                         <div class="card-footer bg-gorilla-cream">
                             <div class="d-flex gap-2">
-                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="fight.form.save().then(() => fight.load())">
+                                <button class="btn btn-gorilla btn-sm flex-grow-1" @click="saveFight(fight)">
                                     Save
                                 </button>
-                                <button class="btn btn-gorilla-danger btn-sm" @click="fight.delete()">
+                                <button class="btn btn-gorilla-danger btn-sm" @click="deleteFight(fight)">
                                     Delete
                                 </button>
                             </div>

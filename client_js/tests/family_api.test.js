@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {attributeResponse, createEntry, createManifest} from "./testUtils"
+import {attributeResponse, createEntry, objectsEnvelope} from "./testUtils"
 
 describe('family proxy facades', () => {
     test('sequence items resolve from signed child addresses', () => {
@@ -20,22 +20,24 @@ describe('family proxy facades', () => {
         expect(client.sequence.days.at(0).name).toBe('Monday')
     })
 
-    test('queryset result manifests enter the shared registry', async () => {
+    test('queryset item addresses resolve through the shared registry', async () => {
         const queryset = createEntry({
             policy: {
                 name: 'gorillas', namespace: 'querySet', address: 'gorillas#test',
                 attributes: ['query_with_params'], state_snapshot: {},
             },
             staticData: {fields: {}, callables: {query_with_params: {allowed_arguments: []}}},
-            loading_strategy: 'lazy',
         })
-        const row = createManifest({policy: {
+        const row = createEntry({policy: {
             name: 'gorillas.1', address: 'gorillas#test[1]', state_snapshot: {id: 1, name: 'Koko'},
         }})
         const client = new GlueClient({objects: [queryset]})
-        client.http.sendAttributeRequest = async () => attributeResponse('gorillas#test', {
-            result: {items: [row], seek_key: null, has_next: false, batch_size: null},
-        })
+        client.http.sendAttributeRequest = async () => objectsEnvelope([
+            {address: 'gorillas#test', result: {
+                items: [row.address], seek_key: null, has_next: false, batch_size: null,
+            }},
+            row,
+        ])
 
         await client.querySet.gorillas.all()
         expect(client.querySet.gorillas.items[0]).toBe(client._registry.getProxy(row.address))

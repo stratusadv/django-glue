@@ -15,11 +15,11 @@ class GlueAddressRegistry {
 
     introduce(entry) {
         if (!entry?.address || !entry?.policy_token) {
-            throw new GlueProxyError('Glue manifests require address and policy_token.')
+            throw new GlueProxyError('Glue entries require address and policy_token.')
         }
         const policy = GluePolicy.fromSignedPolicyToken(entry.policy_token)
         if (policy.address !== entry.address) {
-            throw new GlueProxyError(`Glue manifest address "${entry.address}" does not match its policy.`)
+            throw new GlueProxyError(`Glue entry address "${entry.address}" does not match its policy.`)
         }
 
         let record = this.records.get(entry.address)
@@ -29,7 +29,6 @@ class GlueAddressRegistry {
                 policyToken: entry.policy_token,
                 staticData: entry.static_data,
                 computedData: entry.computed_data,
-                loadingStrategy: entry.loading_strategy,
             })
             this.records.set(entry.address, record)
             record.attachProxy(this._createProxy(record))
@@ -69,6 +68,7 @@ class GlueAddressRegistry {
             const doomedRecord = this.records.get(doomedAddress)
             if (!doomedRecord || doomedRecord.disposed) return
             doomedRecord.dispose()
+            this.records.delete(doomedAddress)
             doomedRecord.proxy?._onDispose?.()
         })
     }

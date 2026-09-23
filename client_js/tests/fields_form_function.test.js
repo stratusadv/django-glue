@@ -1,7 +1,7 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
 import {RelationFieldGlue} from "../src/proxies/fields"
-import {attributeResponse, createEntry, createManifest, createPolicyToken} from "./testUtils"
+import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
 describe('field-backed proxy facades', () => {
     test('exposes field errors, primitive conversion, and stable identity', () => {
@@ -129,43 +129,10 @@ describe('field-backed proxy facades', () => {
         expect(field.selectedChoice).toEqual({value: 2, label: 'Drumming'})
     })
 
-    test('lazy value access starts one load attempt and retry starts another', async () => {
-        const manifest = createEntry({
-            policy: {
-                attributes: ['rank', 'load_state'],
-                state_snapshot: {},
-            },
-            staticData: {
-                fields: {rank: {value_path: 'rank', type: 'IntegerField', editable: false}},
-                callables: {load_state: {allowed_arguments: []}},
-            },
-            loading_strategy: 'lazy',
-        })
-        const client = new GlueClient({objects: [manifest]})
-        let calls = 0
-        client.http.sendAttributeRequest = async () => {
-            calls++
-            if (calls === 1) throw new Error('offline')
-            return attributeResponse('gorilla#test', {computed_data: {rank: 700}, result: {}})
-        }
-        const proxy = client.model.gorilla
-
-        void proxy.rank
-        void proxy.rank
-        await proxy._loadPromise
-        expect(calls).toBe(1)
-        expect(proxy._loadError.message).toBe('offline')
-
-        await proxy.retryLoad()
-        expect(calls).toBe(2)
-        expect(proxy.rank).toBe(700)
-    })
-
     test('static replacement removes obsolete fields and callables', () => {
         const client = new GlueClient({objects: [createEntry()]})
         const proxy = client.model.gorilla
         const replacement = {
-            is_glue_manifest: true,
             address: 'gorilla#test',
             policy_token: createPolicyToken({
                 address: 'gorilla#test', attributes: ['name'], state_snapshot: {name: 'Koko'},
@@ -174,10 +141,9 @@ describe('field-backed proxy facades', () => {
                 fields: {name: {value_path: 'name', type: 'CharField', editable: true}},
             },
             computed_data: {},
-            loading_strategy: 'eager',
         }
 
-        client.loadManifests([replacement])
+        client.loadObjects([replacement])
 
         expect('birthday' in proxy).toBeFalse()
         expect('save' in proxy).toBeFalse()

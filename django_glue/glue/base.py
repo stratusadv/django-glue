@@ -22,12 +22,11 @@ from django_glue.exceptions import (
 )
 from django_glue.glue import address
 from django_glue.glue.attributes.collector import GlueAttributeCollector
-from django_glue.glue.attributes.declared import DeclaredAttribute
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.children import GlueChildBinder
-from django_glue.glue.context import GlueManifest, GlueObjectEntry
-from django_glue.glue.loading import LoadingStrategy
+from django_glue.glue.context import GlueObjectEntry
+from django_glue.glue.event import GlueEvent
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
@@ -55,21 +54,14 @@ class BaseGlue(ABC):
         *,
         name: str | None = None,
         access: GlueAccess,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
         self.name = name or self.namespace
         self.access = access
-        self.loading_strategy = LoadingStrategy(loading_strategy)
         self.request: HttpRequest | None = None
         self._address: str | None = None
         self._derived_paths: set[str] = set()
         self._disposed = False
-
-    @property
-    def resolved_loading_strategy(self) -> LoadingStrategy:
-        if self.loading_strategy == LoadingStrategy.INHERIT:
-            return LoadingStrategy.LAZY
-        return self.loading_strategy
+        self._pending_events: list[dict[str, Any]] = []
 
     @property
     def is_bound(self) -> bool:
@@ -113,23 +105,13 @@ class BaseGlue(ABC):
 
     @property
     def entry(self) -> GlueObjectEntry:
-        static_data = self.get_static_data()
-        computed_data = (
-            self.get_computed_data(include_all=True)
-            if self.resolved_loading_strategy == LoadingStrategy.EAGER
-            else {}
-        )
+        """A complete first snapshot (state-model.md §10 "Page load")."""
         return GlueObjectEntry(
             address=self.address,
             policy_token=self.policy.token,
-            static_data=static_data,
-            computed_data=computed_data,
-            loading_strategy=self.resolved_loading_strategy,
+            static_data=self.get_static_data(),
+            computed_data=self.get_computed_data(include_all=True),
         )
-
-    @property
-    def manifest(self) -> GlueManifest:
-        return GlueManifest(**self.entry.model_dump())
 
     def _serialized_child_entries(self) -> list[dict[str, Any]]:
         serialized: list[dict[str, Any]] = []
@@ -146,12 +128,6 @@ class BaseGlue(ABC):
 
         add_children(self)
         return serialized
-
-    def _serialized_child_manifests(self) -> list[dict[str, Any]]:
-        return [
-            {'is_glue_manifest': True, **child_entry}
-            for child_entry in self._serialized_child_entries()
-        ]
 
     @cached_property
     def _attribute_registry(self) -> GlueAttributeRegistry:
@@ -248,6 +224,23 @@ class BaseGlue(ABC):
         _ = request, operation
         return True
 
+    def cap_access(self, ceiling: GlueAccess) -> None:
+        """Lower this object's access to ``ceiling`` when it exceeds it
+        (state-model.md §10: an introduced capability cannot exceed the
+        caller's)."""
+        if not ceiling.has_access(self.access):
+            self.access = ceiling
+
+    def introduce(self, request: HttpRequest) -> None:
+        operation = GlueOperation(
+            kind=GlueOperationKind.INTRODUCE,
+            attribute=None,
+            required_access=self.access,
+        )
+        if not self.authorize(request, operation):
+            raise GlueAuthorizationError(object_name=self.name, operation=operation)
+        self.request = request
+
     def _require_authorization(self, operation: GlueOperation) -> None:
         if self.request is None:
             msg = f"Cannot authorize unbound Glue object '{self.name}'."
@@ -276,32 +269,13 @@ class BaseGlue(ABC):
 
     @property
     def identity(self) -> dict[str, Any]:
-        """
-        Object-specific target identity for the policy.
-
-        By default, auto-generates identity from attributes marked with
-        identity=True (e.g., @Glue.property(identity=True) or
-        @Glue.attr(required_access=..., identity=True)).
-
-        Override in subclasses for custom behavior.
-        """
+        """Object-specific target identity for the policy. Families that
+        reconstruct from configuration (model class, target PK, encoded
+        query) override ``get_identity()``."""
         return self.get_identity()
 
     def get_identity(self) -> dict[str, Any]:
-        return self._build_identity_from_attributes()
-
-    def _build_identity_from_attributes(self) -> dict[str, Any]:
-        """Build identity dict from collected identity attributes."""
-        identity_data: dict[str, Any] = {}
-
-        for path, attribute in self._bound_attributes.items():
-            if not attribute.definition.is_identity:
-                continue
-            identity_data[path] = json.loads(
-                json.dumps(attribute.get(), cls=GlueResponseJSONEncoder)
-            )
-
-        return identity_data
+        return {}
 
     @cached_property
     def state(self) -> dict[str, Any]:
@@ -358,6 +332,12 @@ class BaseGlue(ABC):
             static_data['children'] = children
         if callables:
             static_data['callables'] = callables
+        events = [
+            name for name, declaration in inspect.getmembers_static(type(self))
+            if isinstance(declaration, GlueEvent)
+        ]
+        if events:
+            static_data['events'] = events
         return static_data
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
@@ -427,8 +407,14 @@ class BaseGlue(ABC):
             if attribute is not None
             else GlueAccess.VIEW
         )
+        if context.target_attribute_name is not None:
+            kind = GlueOperationKind.CALL
+        elif context.target_glue_updates:
+            kind = GlueOperationKind.UPDATE
+        else:
+            kind = GlueOperationKind.REFRESH
         glue_object._require_authorization(GlueOperation(
-            kind=GlueOperationKind.CALL,
+            kind=kind,
             attribute=None,
             required_access=required_access,
         ))
@@ -546,11 +532,7 @@ class BaseGlue(ABC):
     def _invalidate_state(self) -> None:
         self.__dict__.pop('state', None)
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
-    def load_state(self) -> dict[str, Any]:
-        return self.state
-
-    def _admit_reintroduce(self, reintroduce: list[str]) -> None:
+    def _admit_reintroduce(self, policy: GluePolicy, reintroduce: list[str]) -> None:
         """Admission for a client-supplied ``reintroduce`` list (state-model.md
         §10 "Reintroducing an expired child"). Ordinary untrusted input: the
         only effect it can cause is running a slot factory the owner already
@@ -570,20 +552,58 @@ class BaseGlue(ABC):
                 details={'paths': unknown},
             )
 
-    def _reintroduce_entry(self, policy: GluePolicy) -> dict[str, Any]:
-        """The addressed entry of a call-less reintroduction request: the
-        owner advances nothing of its own (no result, no effects), so only
-        the omitted-when-unchanged token and any re-derived computed data
-        can be present (state-model.md §10)."""
+    def _refreshed_output(self) -> dict[str, Any]:
+        """All downward output, re-derived for a refresh (state-model.md §6)."""
+        return self.get_computed_data(include_all=True)
+
+    def _refresh_entry(
+        self,
+        policy: GluePolicy,
+        computed_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """The addressed entry of a call-less request — a refresh, optionally
+        reintroducing children (state-model.md §6, §10): no result or effects,
+        the omitted-when-unchanged token, and all downward output re-derived."""
         entry: dict[str, Any] = {'address': self.address}
         if not self._retained_values_equal(policy, self.policy):
             entry['policy_token'] = self.policy.token
-        computed_data = self.get_computed_data()
         if computed_data:
             entry['computed_data'] = computed_data
         entry['result'] = None
         entry['effects'] = {'messages': []}
         return entry
+
+    def _hydrate(self, policy: GluePolicy, raw_updates: Any) -> None:
+        """Restore the token's canonical editable draft and apply the admitted
+        client ``updates`` over it (state-model.md §5)."""
+        updates = self._admit_updates(policy, raw_updates)
+        for path in updates:
+            self._require_authorization(GlueOperation(
+                kind=GlueOperationKind.UPDATE,
+                attribute=path,
+                required_access=self._resolve_required_access(
+                    self._bound_attributes[path].definition.required_access,
+                ),
+            ))
+        retained_draft = {
+            path: value
+            for path, value in self._retained_draft(policy).items()
+            if path not in updates
+        }
+        self._load_client_state({**retained_draft, **updates})
+        self._invalidate_attributes()
+
+    def _retained_draft(self, policy: GluePolicy) -> dict[str, Any]:
+        """The acknowledged editable draft the verified token carries: every
+        signed editable-state value."""
+        return {
+            path: attribute.decode_retained(policy.state_snapshot[path])
+            for path, attribute in self._bound_attributes.items()
+            if (
+                attribute.definition.value_role == GlueValueRole.EDITABLE_STATE
+                and path in policy.state_snapshot
+            )
+        }
 
     def _introduced_entries(
         self,
@@ -627,15 +647,17 @@ class BaseGlue(ABC):
         reflected in the successor token.
         """
         policy = call_context.target_glue_policy
-        self._admit_reintroduce(call_context.reintroduce)
+        self._admit_reintroduce(policy, call_context.reintroduce)
 
         if call_context.target_attribute_name is None:
+            self._hydrate(policy, call_context.target_glue_updates)
+            computed_data = self._refreshed_output()
             self.__dict__['_bound_children'] = self._bind_children(
                 live_children=policy.children,
                 reintroduce=call_context.reintroduce,
             )
             return (
-                self._reintroduce_entry(policy),
+                self._refresh_entry(policy, computed_data),
                 self._introduced_entries(policy, call_context.reintroduce),
             )
 
@@ -687,18 +709,7 @@ class BaseGlue(ABC):
         ))
 
         incoming_static_data = self.get_static_data()
-        updates = self._admit_updates(policy, call_context.target_glue_updates)
-        retained_state = {
-            path: attribute.decode_retained(policy.state_snapshot[path])
-            for path, attribute in self._bound_attributes.items()
-            if (
-                attribute.definition.value_role == GlueValueRole.EDITABLE_STATE
-                and path in policy.state_snapshot
-                and path not in updates
-            )
-        }
-        self._load_client_state({**retained_state, **updates})
-        self._invalidate_attributes()
+        self._hydrate(policy, call_context.target_glue_updates)
         bound_attribute = self._bound_attributes[call_context.target_attribute_name]
         call_result = bound_attribute.call(
             **self._resolve_callable_arguments(
@@ -728,21 +739,25 @@ class BaseGlue(ABC):
             call_result,
             render_as_html=definition.render_as_html,
         )
+        introduced.extend(response.objects)
         result = response.result
         if isinstance(result, BaseGlue):
             if (
                 result.address not in policy.children.values()
                 and result.address not in {
-                    manifest['address'] for manifest in introduced
+                    introduced_entry['address'] for introduced_entry in introduced
                 }
             ):
                 result._address = address.transient(self.address)
-                result.request = self.request
+                result.cap_access(self.access)
+                result.introduce(self.request)
                 introduced.append(result.entry.model_dump())
             result = result.address
         else:
             GlueResponse._reject_glue_objects(result)
         entry['result'] = result
+        if response.html is not None:
+            entry['html'] = response.html
         entry['effects'] = self._effects_payload(response, introduced)
         return entry, introduced
 
@@ -764,7 +779,7 @@ class BaseGlue(ABC):
         owned = {
             self.address,
             *self.children.values(),
-            *(manifest['address'] for manifest in introduced),
+            *(introduced_entry['address'] for introduced_entry in introduced),
         }
         unknown = [item for item in dispose if item not in owned]
         if unknown:
@@ -780,6 +795,8 @@ class BaseGlue(ABC):
             effects['redirect'] = response.redirect
         if dispose:
             effects['dispose'] = dispose
+        if self._pending_events:
+            effects['events'] = self._pending_events
         return effects
 
     @staticmethod

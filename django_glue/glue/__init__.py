@@ -6,7 +6,6 @@ from django_glue.glue.objects.django import (
     FormSetGlue,
     ModelGlue,
     QuerySetGlue,
-    TemplateGlue,
 )
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.policy import GluePolicy
@@ -23,6 +22,5 @@ __all__ = [
     'ModelGlue',
     'QuerySetGlue',
     'SequenceGlue',
-    'TemplateGlue',
     'glue_class_registry',
 ]

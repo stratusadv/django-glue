@@ -1,85 +1,41 @@
-# renderInnerHtml Guide
+# `renderInnerHtml`
 
-## Purpose
-
-`renderInnerHtml` is the most common GlueView method. It morphs the contents of a DOM element with HTML rendered by a Django view while preserving the container element.
-
-### When to Use
-
-- When you want to update a section of a page without replacing the container element.
-- When the container element has event handlers or Alpine.js bindings you want to preserve.
-
-### When Not to Use
-
-- When you need to replace the container element itself. Use `renderOuterHtml` instead.
-- When you need to insert content without removing existing content. Use `renderInsertAdjacentHtml*` methods.
-
-## How It Works
+`renderInnerHtml(target, payload)` replaces a target's contents with HTML
+from an ordinary Django view while retaining the target element:
 
 ```javascript
-await view.renderInnerHtml(targetElement, payload)
+const view = Glue.view('/dashboard/content/')
+await view.renderInnerHtml(document.getElementById('dashboard-content'), {
+    taskId: selectedTaskId,
+})
 ```
 
-The response uses the shared HTML envelope. Its manifests are registered first, then bundled Alpine morph updates the target's children. Matching keyed nodes retain Alpine state, focus, and local input state. Use `data-morph-ignore` on roots owned by third-party JavaScript.
-
-## Example: Dynamic Dashboard Content
-
-### Backend
+Render methods send a JSON POST to the target URL. The Django view reads the
+payload from `request.body`:
 
 ```python
-from django.template.response import TemplateResponse
-from django_glue import Glue, GlueAccess
-from myapp.models import Task
+import json
+
+from django.shortcuts import render
+from django_glue import Glue
+
 
 def dashboard_content_view(request):
-    """Renders dashboard content based on selected task."""
-    body = json.loads(request.body) if request.body else {}
-    task_id = body.get('view_payload', {}).get('taskId')
-
-    if task_id:
-        task = Task.objects.get(pk=task_id)
-        Glue.model(
-            request=request,
-            unique_name='dashboard_task',
-            target=task,
-            access=GlueAccess.CHANGE,
-        )
-
-    return TemplateResponse(request, 'tasks/_dashboard_content.html', {'taskId': task_id})
+    payload = json.loads(request.body or '{}')
+    task = Task.objects.get(pk=payload['taskId'])
+    Glue.model(
+        request=request,
+        target=task,
+        unique_name='dashboard_task',
+        access=Glue.Access.VIEW,
+        fields=['id', 'title'],
+    )
+    return render(request, 'tasks/_dashboard_content.html', {'task': task})
 ```
 
-### Frontend
+The response's objects are registered before Alpine morphs the target's
+children. `renderInnerHtml` accepts multiple roots or empty HTML. Use
+`renderOuterHtml` when the response should replace the target itself; that
+method requires one root element.
 
-```html
-<div x-data="{
-    selectedTaskId: 1,
-    async reloadContent() {
-        const view = Glue.view('/dashboard/content/')
-        await view.renderInnerHtml(
-            document.getElementById('dashboard-content'),
-            { taskId: this.selectedTaskId }
-        )
-    }
-}" x-init="reloadContent()">
-    <select x-model.number="selectedTaskId" @change="reloadContent()">
-        <option value="1">Task 1</option>
-        <option value="2">Task 2</option>
-        <option value="3">Task 3</option>
-    </select>
-
-    <div id="dashboard-content">
-        <!-- Content will be loaded here -->
-    </div>
-</div>
-```
-
-## renderInnerHtml vs renderOuterHtml
-
-| Method | Behavior | Use When |
-|--------|----------|----------|
-| `renderInnerHtml` | Morphs element's **contents** | Container element defines the boundary |
-| `renderOuterHtml` | Morphs the **element and contents** | Response HTML defines one root element |
-
-## See Also
-
-For a complete overview of all GlueView methods, see the [GlueView Guide](view_glue.md).
+See [rendering a Django view](view_glue.md) for the other methods.

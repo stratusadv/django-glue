@@ -89,11 +89,10 @@ use. The same admission, validation, and authorization obligations apply as for
 any other editable value.
 
 "Client may write" describes an already-issued object's normal interaction
-policy. A server-authored lazy stamp may separately authorize named,
-client-supplied **construction inputs**. Those inputs are untrusted and
-validated before the component exists; once admitted, a parameter enters
-`target.parameters`. Whether later client updates are allowed is determined by
-its independent editable role, not by how it was constructed.
+policy. Construction inputs always come from the server: a Django construction
+site or `{% glue_component %}` resolves every parameter before the object is
+introduced, and the client never supplies one. Whether later client updates are
+allowed is determined by the value's independent editable role.
 
 **The reconstructor role is the default.** A bare `Glue.attr(x)` survives in the
 signed policy token's `state_snapshot` and cannot be changed by the client.
@@ -492,6 +491,15 @@ is constructed directly; the existing `Glue.object(request, glue)` helper only
 registers an already-configured page root and is not a composite-object
 constructor. Arbitrary containers containing Glue objects are rejected
 initially; keyed Glue collections use their dedicated addressed adapter.
+
+A list assigned to a `Glue.attr` is route 3 only when its items are meant to be
+proxies: it holds Glue objects, or its declaration names a `glue_factory` that
+turns raw items such as model instances into Glue objects. Either case becomes
+an addressed `SequenceGlue`. Every other list is ordinary serializable state
+and never changes kind; a list mixing Glue objects with raw items and no
+factory fails loudly. (User decision, 2026-09-22; it narrows the audit's
+`glue_factory` "replace" and `value_adapters` "collapse" rulings — the adapter
+and `glue_factory` stay.)
 
 Every live address has exactly one lifecycle owner. A page owns its roots; an
 addressed object owns children it introduces. Another JavaScript or Python
@@ -1490,10 +1498,11 @@ available for direct model editing and deliberate overrides.
 exposed, editable relation with no entry in `choices` gets an implicit source
 with three properties:
 
-1. **Label and value only.** The wire carries `{value, label}` per choice, where
-   `value` is the relation's exposed raw identity and `label` is the related
-   instance's `__str__`. No other related field is projected, so the implicit
-   source cannot leak a field that `fields` did not expose.
+1. **Label and identity only.** The wire carries `{value, label, obj}` per
+   choice, where `value` is the relation's exposed raw identity, `label` is the
+   related instance's `__str__`, and `obj` is `{pk, __str__}`. No other related
+   field is projected, so the implicit source cannot leak a field that `fields`
+   did not expose.
 2. **No server-side search.** The implicit source accepts no search argument.
    The server returns one bounded page of choices and the client filters the
    labels it already holds. Because no client string reaches the ORM, the
@@ -1513,7 +1522,22 @@ explicitly configured hidden filter path.
 
 Configuring `Glue.choices(...)` opts into the server-side path and its
 allowlisted `search_fields`, which remain validated against the related model's
-exposed leaves on every request.
+exposed leaves on every request. `search_fields` defaults to `fields` when
+omitted, and an unfiltered load of a searchable source returns its first
+`search_limit` rows in queryset order, so a plain select populates without a
+search. Each choice's `obj` carries `pk`, `__str__`, and the configured
+`fields`.
+
+`Glue.choices(..., label_formatter=...)` renders each choice's `label`
+server-side from a function taking `(instance)` or `(request, instance)` and
+returning a string (rendered as a Django template) or a `TemplateResponse`. The
+formatter is accepted as a callable or dotted path but always stored as its
+dotted path, so only a string travels inside the signed choice query and the
+allowlisting unpickler never admits a function reference; a callable that
+cannot be re-imported from its own path, such as a lambda or closure, is a
+declaration error. Formatted choices carry `has_html_label: true`, and the
+client's `choiceLabelHtml()` passes those labels through while escaping every
+other label; `choiceLabelText()` strips markup for text-only contexts.
 
 `Glue.event()` declares a semantic server-to-client output on any `BaseGlue`
 family. Calling the bound descriptor appends an event to the current successful
@@ -1667,31 +1691,31 @@ them. A changed parent expression therefore does not rewrite the child's
 token. Reactive parameter propagation and ambient ancestor lookup are separate
 future composition features, not hidden behavior of `parameter=True`.
 
-A delayed component introduction has a two-stage form of the same contract.
-The initial render may issue a mount-only policy that signs the subject,
-component reconstruction target, parent/stamp address, parameter values resolved
-from Django context, the exact names of permitted client-supplied parameters,
-and temporal constraints. It grants mounting only: it contains no application
-callables or retained state and cannot be changed into a policy for another
-component or parameter name. The resulting object's declaration independently
-determines which of those parameters are editable after mounting.
+There is no delayed introduction. An object is introduced complete, during the
+server render or response that constructs it, and no global client API may
+construct an arbitrary registered component. Client-evaluated construction
+inputs and `lazy`/`defer` mounting would each need a server-authored capability
+naming what the client may supply; neither is designed (`roadmap.md`, deferred
+component-model extensions).
 
-At a `lazy` or `defer` trigger, the client submits that policy plus the current
-values of the authorized Alpine expressions. Those values are ordinary
-untrusted inputs, not signed continuity. Before constructing the component the
-server verifies the mount policy, rejects every unlisted name, applies the
-declared parameter serializers and validators, and checks current application
-authorization. It then performs the one-time `mount()` and returns the normal
-addressed object entry. Its successor policy signs every admitted parameter under
-`target.parameters`; the initial client-supplied value is construction, not a
-later exception to parameter immutability.
+There is likewise no lazy loading. Every introduced entry is a complete first
+snapshot: its signed token carries parameters and retained state, and its
+`computed_data` carries the object's derived output. No per-object loading
+strategy withholds `computed_data` at page load, and no separate `load_state`
+fetch fills it in later. Re-deriving an object's output on demand is
+`$refresh()` (§6), an ordinary addressed request.
 
-The mount-only policy is server-authored even when its placeholder is cloned by
-an Alpine `x-for`: it fixes the target and allowed input surface while each
-admitted, typed key determines a child address. Signing still does not provide
-replay prevention or request throttling, and every mount must independently
-authorize the resulting data. No global client API may construct an arbitrary
-registered component without an applicable server-issued mount capability.
+A queryset's rows are the one output that waits, and they wait by the family's
+contract rather than by a loading option: rows are the answer to a query. A
+queryset's introduction carries its token, schema, callables, and query
+controls but no rows; its query callables return rows (with their annotations,
+counts, and keyed child references) and introduce each row as a child entry.
+This bounds page-load work where it matters: a projected to-many relation is
+itself a queryset, so a list of rows does not run and ship every row's related
+rows at render. `$refresh()` on a queryset re-runs its signed last query over
+the window already loaded, so a refresh never silently shrinks or resets a
+scrolled or paged list. Formset forms and sequence items are not query answers
+and ship with their collection.
 
 Page load:
 
@@ -1959,6 +1983,14 @@ address, canonical attribute path, family and key, none of which the expiry touc
 — so the existing rule that *the same path with the same address preserves the
 existing proxy, editable draft, Alpine scope, and request queue* applies. The
 client keeps the user's work and receives a fresh token for it.
+
+The reintroduced object is a new introduction on the server: its retained
+state comes from the factory and, for a component, from `mount()`, never from
+the expired token. Retained state the client cannot edit therefore restarts,
+and the client's editable draft reaches the fresh object as ordinary `updates`
+on its next call. Reading state out of the expired token would honor it past
+its fixed lifetime (ADR 013); `component-system.md` §4 "Mount" records the
+comparison with Livewire's equivalent boundary.
 
 Client-side, an address whose entry returned `policy_expired` is marked stale
 rather than disposed. Its proxy rejects further calls with a recoverable error
@@ -2425,6 +2457,11 @@ compression is introduced.
   contract is not a preservation of those hooks: it carries declared server
   output, not client transport observations named `before`, `after`, and
   `error`.
+- **`loading_strategy` is removed, not renamed.** `LoadingStrategy`, the
+  per-object `loading_strategy` option, the page-load entry's
+  `loading_strategy` field, the `load_state` callable, and the client's
+  first-access lazy fetch all go (ADR 002). Every introduced entry is a complete
+  first snapshot (§10 "Page load"); on-demand re-derivation is `$refresh()`.
 - **`Glue.function` stays.** It is live in spire's chart contrib via
   `window.Glue?.function?.[this._glue_name]`, driving five chart classes.
   Replacing it with `Glue.attr` on an object is a migration, not a deletion.

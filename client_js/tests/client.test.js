@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {attributeResponse, createEntry, createManifest, createPolicyToken} from "./testUtils"
+import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
 describe('GlueClient registry', () => {
     test('registers named and direct proxies from addressed entries', () => {
@@ -31,7 +31,7 @@ describe('GlueClient registry', () => {
     test('reintroducing an address patches the stable proxy', () => {
         const client = new GlueClient({objects: [createEntry()]})
         const held = client.model.gorilla
-        client.loadManifests([createManifest({
+        client.loadObjects([createEntry({
             policy: {state_snapshot: {id: 1, name: 'Michael', birthday: '1973-03-01'}},
         })])
 
@@ -104,5 +104,64 @@ describe('GlueClient registry', () => {
             state: {},
             metadata: {},
         }]})).toThrow('address and policy_token')
+    })
+
+    test('resolves a stamped component through its root address', () => {
+        const entry = createEntry({
+            policy: {
+                name: 'card_123', namespace: 'component', address: 'dashboard#test[card]',
+                attributes: ['render'], state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {render: {allowed_arguments: []}}},
+        })
+        const client = new GlueClient({objects: []})
+        document.body.innerHTML = '<div data-glue-address="dashboard#test[card]"><span id="inside"></span></div>'
+        document.body.firstElementChild.setAttribute('data-glue-objects', JSON.stringify([entry]))
+
+        client.registerComponentsFromDom()
+
+        const proxy = client.from(document.querySelector('#inside'))
+        expect(proxy).toBe(client._registry.getProxy(entry.address))
+        expect(proxy.$el).toBe(document.body.firstElementChild)
+        expect(client.component).toBeUndefined()
+    })
+
+    test('a stamped root introduces its children entries', () => {
+        const child = createEntry({policy: {name: 'card_form', address: 'card#test.form'}})
+        const entry = createEntry({
+            policy: {
+                name: 'card', namespace: 'component', address: 'card#test',
+                attributes: ['form'], state_snapshot: {}, children: {form: child.address},
+            },
+            staticData: {fields: {}, callables: {}, children: {form: {kind: 'model', nullable: false}}},
+        })
+        const client = new GlueClient({objects: []})
+        document.body.innerHTML = '<div data-glue-address="card#test"></div>'
+        document.body.firstElementChild.setAttribute('data-glue-objects', JSON.stringify([entry, child]))
+
+        client.registerComponentsFromDom()
+
+        const proxy = client.from(document.body.firstElementChild)
+        expect(proxy.form).toBe(client._registry.getProxy(child.address))
+        expect(proxy.form.name).toBe('Koko')
+    })
+
+    test('declared events reach source listeners and the component root', () => {
+        const entry = createEntry({
+            policy: {name: 'card_123', namespace: 'component', address: 'card#test', attributes: []},
+            staticData: {fields: {}, callables: {}, events: ['saved']},
+        })
+        const client = new GlueClient({objects: [entry]})
+        document.body.innerHTML = '<div data-glue-address="card#test"></div>'
+        const proxy = client.from(document.body.firstElementChild)
+        const seen = []
+        const stop = proxy.$on('saved', event => seen.push(event.detail.pk))
+        document.body.firstElementChild.addEventListener('saved', event => seen.push(event.detail.pk))
+
+        proxy._processEffects({effects: {events: [{name: 'saved', detail: {pk: 7}}]}})
+        stop()
+        proxy._processEffects({effects: {events: [{name: 'saved', detail: {pk: 8}}]}})
+
+        expect(seen).toEqual([7, 7, 8])
     })
 })

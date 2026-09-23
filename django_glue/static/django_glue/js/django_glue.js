@@ -50,7 +50,7 @@
     constructor(config = {}) {
       const urls = config.urls || {};
       this.attributeUrlPath = urls.callable_attribute || "/__dg__/callable_attribute/";
-      this.glueViewUrlPath = urls.glue_view || "/__dg__/glue_view/";
+      this.glueViewMediaType = config.glueViewMediaType || "application/vnd.django-glue.view+json";
       this.requestTimeoutSeconds = config.requestTimeoutSeconds || 30;
       this.csrfCookieName = config.csrfCookieName || "csrftoken";
     }
@@ -156,6 +156,7 @@
       const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds;
       const controller = new AbortController;
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+      requestOptions.signal?.addEventListener("abort", () => controller.abort(), { once: true });
       const headers = { ...requestOptions.headers || {} };
       const method = requestOptions.method || "GET";
       let contentType = requestOptions.contentType;
@@ -185,11 +186,12 @@
         if (!response.ok) {
           throw await this._buildRequestError(response);
         }
+        const isJson = (response.headers.get("Content-Type") || "").includes("json");
         return {
           ok: response.ok,
           payload: await response.clone().text(),
           httpResponse: response,
-          data: await response.json()
+          data: isJson ? await response.json() : null
         };
       } finally {
         clearTimeout(timeoutId);
@@ -210,13 +212,14 @@
         csrfProtected
       });
     }
-    async postForm(url, data, headers = {}, csrfProtected = true) {
+    async postForm(url, data, headers = {}, csrfProtected = true, signal = null) {
       return await this.sendRequest(url, {
         payload: data,
         method: "POST",
         contentType: "multipart/form-data",
         headers,
-        csrfProtected
+        csrfProtected,
+        signal
       });
     }
     async sendAttributeRequest({
@@ -225,7 +228,9 @@
       updates = {},
       attribute = null,
       kwargs = {},
-      reintroduce = null
+      reintroduce = null,
+      companions = [],
+      signal = null
     }) {
       const formData = new FormData;
       const { files, data } = this._extractFiles(serializeValue(updates));
@@ -238,7 +243,12 @@
         entry.call = { attribute, kwargs };
       if (reintroduce)
         entry.reintroduce = reintroduce;
-      formData.append("objects", JSON.stringify([entry]));
+      const companionEntries = companions.map((companion) => ({
+        address: companion.address,
+        policy_token: companion.policyToken,
+        updates: {}
+      }));
+      formData.append("objects", JSON.stringify([entry, ...companionEntries]));
       Object.entries(files).forEach(([key, value]) => {
         if (value instanceof FileList) {
           Array.from(value).forEach((file) => formData.append(key, file));
@@ -248,7 +258,7 @@
           formData.append(key, value);
         }
       });
-      return await this.postForm(this._config.attributeUrlPath, formData);
+      return await this.postForm(this._config.attributeUrlPath, formData, {}, true, signal);
     }
     _extractFiles(obj) {
       const files = {};
@@ -3955,6 +3965,7 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/alpine.js
   module_default.plugin(module_default2);
+  module_default.magic("glue", (element) => globalThis.Glue?.from(element) || null);
   var installed = false;
   var started2 = false;
   function installAlpine() {
@@ -3989,6 +4000,9 @@ ${expression ? 'Expression: "' + expression + `"
   function morph2(element, html, options = {}) {
     return module_default.morph(element, html, options);
   }
+  function addScopeToNode2(element, scope) {
+    module_default.addScopeToNode(element, scope);
+  }
 
   // client_js/src/htmlRenderer.js
   function htmlToFragment(html) {
@@ -4004,6 +4018,8 @@ ${expression ? 'Expression: "' + expression + `"
     async renderInnerHtml(target, payload = {}) {
       const element = this._resolveHtmlTarget(target);
       const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
       const next = element.cloneNode(false);
       next.innerHTML = html;
       this._morphHtml(element, next, true);
@@ -4012,6 +4028,8 @@ ${expression ? 'Expression: "' + expression + `"
     async renderOuterHtml(target, payload = {}) {
       const element = this._resolveHtmlTarget(target);
       const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
       const fragment = htmlToFragment(html);
       const nodes = [...fragment.childNodes].filter((node) => node.nodeType !== Node.COMMENT_NODE && !(node.nodeType === Node.TEXT_NODE && !node.textContent.trim()));
       if (nodes.length !== 1 || nodes[0].nodeType !== Node.ELEMENT_NODE) {
@@ -4021,14 +4039,24 @@ ${expression ? 'Expression: "' + expression + `"
       return html;
     }
     _morphHtml(element, next, inner = false) {
+      const client = this._client;
+      const previousAddresses = client ? [
+        ...element.matches?.("[data-glue-address]") ? [element] : [],
+        ...element.querySelectorAll("[data-glue-address]")
+      ].map((node) => node.getAttribute("data-glue-address")) : [];
       morph2(element, next, {
-        key: (node) => node.getAttribute?.("key") || node.id,
+        key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
         updating(node, to, childrenOnly, skip) {
           if (node.hasAttribute?.("data-morph-ignore"))
             return skip();
           if (inner && node === element)
             childrenOnly();
         }
+      });
+      client?.registerComponentsFromDom(document);
+      previousAddresses.forEach((address) => {
+        if (![...document.querySelectorAll("[data-glue-address]")].some((node) => node.getAttribute("data-glue-address") === address))
+          client._registry.dispose(address);
       });
     }
     _resolveHtmlTarget(target) {
@@ -4044,6 +4072,8 @@ ${expression ? 'Expression: "' + expression + `"
       }
       const element = this._resolveHtmlTarget(target);
       const html = await this._getHtml(payload);
+      if (html === null)
+        return null;
       const fragment = htmlToFragment(html);
       if (position === "beforebegin")
         element.before(fragment);
@@ -4053,6 +4083,7 @@ ${expression ? 'Expression: "' + expression + `"
         element.append(fragment);
       else
         element.after(fragment);
+      this._client?.registerComponentsFromDom(document);
       return html;
     }
     async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
@@ -4070,9 +4101,10 @@ ${expression ? 'Expression: "' + expression + `"
   };
 
   class HtmlResult extends HtmlRenderer() {
-    constructor(html) {
+    constructor(html, client = null) {
       super();
       this.html = html;
+      this._client = client;
     }
     toString() {
       return this.html;
@@ -4082,17 +4114,27 @@ ${expression ? 'Expression: "' + expression + `"
     }
   }
   function htmlResultFromResponse(data, client) {
-    client?.loadManifests(data?.manifest_list || []);
-    return new HtmlResult(data?.html || "");
+    client?.loadObjects(data?.objects || []);
+    return new HtmlResult(data?.html || "", client);
   }
   var htmlRenderer_default = HtmlRenderer;
 
   // client_js/src/view.js
+  function toQueryString(data) {
+    const params = new URLSearchParams;
+    Object.entries(data).forEach(([key, value]) => {
+      const values = Array.isArray(value) ? value : [value];
+      values.forEach((item) => params.append(key, item !== null && typeof item === "object" ? JSON.stringify(item) : String(item)));
+    });
+    return params;
+  }
+
   class GlueView extends htmlRenderer_default() {
     constructor(http, url, sharedPayload = {}) {
       super();
       this.http = http;
-      this.url = new URL(url, window.location.origin).pathname;
+      const resolved = new URL(url, window.location.origin);
+      this.url = `${resolved.pathname}${resolved.search}`;
       this.sharedPayload = sharedPayload;
     }
     async get(payload = {}) {
@@ -4105,19 +4147,24 @@ ${expression ? 'Expression: "' + expression + `"
       return this.post(payload);
     }
     async _fetchView(payload = {}, method = "POST") {
-      const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
-        method: "POST",
-        contentType: "application/json",
-        csrfProtected: true,
-        body: JSON.stringify({
-          url_path: this.url,
-          method,
-          view_payload: {
-            ...this.sharedPayload,
-            ...payload
-          }
-        })
-      });
+      const data = { ...this.sharedPayload, ...payload };
+      const headers = { Accept: this.http._config.glueViewMediaType };
+      let response;
+      if (method === "GET") {
+        const target = new URL(this.url, window.location.origin);
+        toQueryString(data).forEach((value, key) => target.searchParams.append(key, value));
+        response = await this.http.sendRequest(`${target.pathname}${target.search}`, { method: "GET", headers });
+      } else {
+        response = await this.http.sendRequest(this.url, {
+          method: "POST",
+          headers,
+          contentType: "application/json",
+          csrfProtected: true,
+          body: JSON.stringify(data)
+        });
+      }
+      if (response.data?.is_glue_template_response !== true)
+        return null;
       return htmlResultFromResponse(response.data, globalThis.Glue).html;
     }
   }
@@ -4163,10 +4210,9 @@ ${expression ? 'Expression: "' + expression + `"
         _registry: { value: registry, enumerable: false, configurable: true },
         _client: { value: client, enumerable: false, configurable: true }
       });
-      this._listeners = { before: {}, after: {}, error: {} };
+      this._eventListeners = new Map;
       this._onMessage = null;
       this._onError = null;
-      this._loaded = record.loadingStrategy === "eager";
       Object.defineProperty(this, "_owner", {
         value: owner,
         writable: true,
@@ -4183,36 +4229,31 @@ ${expression ? 'Expression: "' + expression + `"
     get $owner() {
       return this._owner;
     }
-    addListener(attribute, callback, when = "after") {
-      this._listeners[when] ||= {};
-      this._listeners[when][attribute] ||= [];
-      this._listeners[when][attribute].push(callback);
-      return this;
-    }
-    removeListener(attribute, callback, when = "after") {
-      const listeners = this._listeners[when]?.[attribute];
-      if (listeners) {
-        this._listeners[when][attribute] = listeners.filter((listener) => listener !== callback);
+    $on(name, callback) {
+      if (!(this._record.staticData?.events || []).includes(name)) {
+        throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`);
       }
+      const listeners = this._eventListeners.get(name) || new Set;
+      listeners.add(callback);
+      this._eventListeners.set(name, listeners);
+      return () => listeners.delete(callback);
+    }
+    _onDispose() {
+      this._eventListeners.clear();
+    }
+    async $refresh({ submit = false } = {}) {
+      await this._callAttribute(null, {}, { submit });
       return this;
     }
-    async _callAttribute(attribute, kwargs = {}) {
+    async _callAttribute(attribute, kwargs = {}, options = {}) {
       const attributeRequest = { attribute, kwargs };
-      this._emit("before", attribute, { attributeRequest, object: this });
       return this._record.enqueue(async () => {
         try {
-          const { result, response, discarded } = await this._attempt(attribute, kwargs);
+          const { result, discarded } = await this._attempt(attribute, kwargs, options);
           if (discarded)
             return;
-          this._emit("after", attribute, {
-            attributeRequest,
-            object: this,
-            proxy: this,
-            response
-          });
           return result;
         } catch (error2) {
-          this._emit("error", attribute, { attributeRequest, object: this, proxy: this, error: error2 });
           const errorHandler = this._onError || globalThis.Glue?._onError;
           errorHandler?.({ error: error2, attribute, attributeRequest, proxy: this });
           throw error2;
@@ -4227,7 +4268,7 @@ ${expression ? 'Expression: "' + expression + `"
       this._registry.dispose(this._record.address);
       return this;
     }
-    async _attempt(attribute, kwargs) {
+    async _attempt(attribute, kwargs, options) {
       if (this._record.disposed) {
         throw new GlueAddressError("disposed", `address "${this._record.address}" has been disposed`, this._record.address, this._ownerReference());
       }
@@ -4235,7 +4276,7 @@ ${expression ? 'Expression: "' + expression + `"
         throw this._staleError();
       }
       try {
-        return await this._singleCall(attribute, kwargs);
+        return await this._singleCall(attribute, kwargs, options);
       } catch (error2) {
         if (!(error2 instanceof GlueAddressError && error2.code === "policy_expired")) {
           throw error2;
@@ -4245,18 +4286,40 @@ ${expression ? 'Expression: "' + expression + `"
           error2.owner = this._ownerReference();
           throw error2;
         }
-        return await this._singleCall(attribute, kwargs);
+        return await this._singleCall(attribute, kwargs, options);
       }
     }
-    async _singleCall(attribute, kwargs) {
+    async _singleCall(attribute, kwargs, { submit = true, companions = [] } = {}) {
       const requestCapture = this._record.captureRequest();
-      const response = await this._http.sendAttributeRequest({
-        address: this._record.address,
-        policyToken: this._record.policyToken,
-        updates: requestCapture.updates,
-        attribute,
-        kwargs
+      if (!submit)
+        requestCapture.updates = {};
+      const companionCaptures = companions.map((record) => {
+        const capture = record.captureRequest();
+        capture.updates = {};
+        return { record, capture };
       });
+      const controller = companions.length ? null : new AbortController;
+      this._record.inFlightController = controller;
+      let response;
+      try {
+        response = await this._http.sendAttributeRequest({
+          address: this._record.address,
+          policyToken: this._record.policyToken,
+          updates: requestCapture.updates,
+          attribute,
+          kwargs,
+          companions,
+          signal: controller?.signal ?? null
+        });
+      } catch (error2) {
+        if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+          return { result: undefined, response: null, discarded: true };
+        }
+        throw error2;
+      } finally {
+        if (this._record.inFlightController === controller)
+          this._record.inFlightController = null;
+      }
       if (this._record.disposed || this._registry.getRecord(this._record.address) !== this._record || requestCapture.generation !== this._record.generation) {
         return { result: undefined, response: response.data, discarded: true };
       }
@@ -4268,13 +4331,28 @@ ${expression ? 'Expression: "' + expression + `"
       if (!target) {
         throw new GlueProxyError(`Glue response has no entry for address "${this._record.address}".`);
       }
-      objects.filter((entry) => entry !== target).forEach((entry) => this._registry.introduce(entry));
+      const companionAddresses = new Set(companions.map((record) => record.address));
+      const introduced = objects.filter((entry) => entry !== target && !companionAddresses.has(entry?.address));
       if (target.error) {
         throw new GlueAddressError(target.error.code, target.error.message, this._record.address);
       }
+      if (target.html !== undefined) {
+        this._client.loadObjects(introduced);
+      } else {
+        introduced.forEach((entry) => this._registry.introduce(entry));
+      }
+      companionCaptures.forEach(({ record, capture }) => {
+        const entry = objects.find((candidate) => candidate?.address === record.address);
+        if (!entry || entry.error || record.disposed)
+          return;
+        this._client._dispatcher.reconcile(record.address, entry, capture);
+      });
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
-      const result = this._convertResult(rawResult, attribute);
+      const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
+      if (target.html !== undefined && this._policy.namespace === "component" && this.$el) {
+        await result.renderOuterHtml(this.$el);
+      }
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);
         if (childRecord && !childRecord.owner) {
@@ -4355,17 +4433,23 @@ ${expression ? 'Expression: "' + expression + `"
         window.location.assign(redirect.url);
       }
       const messages = effects.messages;
-      if (!messages?.length || typeof window === "undefined")
-        return;
-      const handler = this._onMessage || window.Glue?._onMessage;
-      handler?.({ messages, proxy: this });
-    }
-    _emit(when, attribute, payload) {
-      const listeners = [
-        ...this._listeners[when]?.[attribute] || [],
-        ...this._listeners[when]?.["*"] || []
-      ];
-      listeners.forEach((listener) => listener(payload));
+      if (messages?.length && typeof window !== "undefined") {
+        const handler = this._onMessage || window.Glue?._onMessage;
+        handler?.({ messages, proxy: this });
+      }
+      effects.events?.forEach(({ name, detail }) => {
+        const event = {
+          type: name,
+          detail: { ...detail, $address: this._record.address },
+          source: this
+        };
+        this._eventListeners.get(name)?.forEach((listener) => listener(event));
+        if (this.$el && typeof CustomEvent !== "undefined") {
+          const domEvent = new CustomEvent(name, { detail: event.detail, bubbles: true });
+          domEvent.source = this;
+          this.$el.dispatchEvent(domEvent);
+        }
+      });
     }
     _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
@@ -4376,11 +4460,6 @@ ${expression ? 'Expression: "' + expression + `"
       }
       if (!result || typeof result !== "object")
         return result;
-      if (result.is_glue_manifest === true)
-        return this._client.resolveManifest(result);
-      if (result.is_glue_template_response === true) {
-        return htmlResultFromResponse(result, this._client);
-      }
       Object.keys(result).forEach((key) => {
         result[key] = this._convertResult(result[key], attribute);
       });
@@ -4416,10 +4495,6 @@ ${expression ? 'Expression: "' + expression + `"
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
-      this.loading = false;
-      this._loadAttempted = false;
-      this._loadError = null;
-      this._loadPromise = null;
       this._fields = {};
     }
     get $fields() {
@@ -4437,26 +4512,6 @@ ${expression ? 'Expression: "' + expression + `"
         return Boolean(this._record.getFieldComputed(fieldName).errors?.length);
       }
       return Object.values(this._record.computedData.fields || {}).some((fieldData) => fieldData?.errors?.length > 0);
-    }
-    _ensureLoaded() {
-      if (this._loaded || this._loadAttempted)
-        return this._loadPromise;
-      this._loadAttempted = true;
-      this.loading = true;
-      this._loadPromise = this._callAttribute("load_state").then((result) => {
-        this._loaded = true;
-        return result;
-      }).catch((error2) => {
-        this._loadError = error2;
-      }).finally(() => {
-        this.loading = false;
-      });
-      return this._loadPromise;
-    }
-    retryLoad() {
-      this._loadAttempted = false;
-      this._loadError = null;
-      return this._ensureLoaded();
     }
   }
   var fieldBacked_default = FieldBackedGlueProxy;
@@ -4540,6 +4595,14 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/proxies/model.js
   class GlueModelProxy extends fieldBacked_default {
+    _singleCall(attribute, kwargs, options = {}) {
+      const producer = this._record.owner;
+      const producerRecord = attribute === "save" && this._policy.identity?.relation && producer?.path === null ? this._registry.getRecord(producer.address) : null;
+      if (!producerRecord || producerRecord.disposed || producerRecord.stale) {
+        return super._singleCall(attribute, kwargs, options);
+      }
+      return super._singleCall(attribute, kwargs, { ...options, companions: [producerRecord] });
+    }
   }
   var model_default = GlueModelProxy;
 
@@ -4550,6 +4613,7 @@ ${expression ? 'Expression: "' + expression + `"
     constructor(options) {
       super(options);
       this._modelProxies = new Map;
+      this._loaded = false;
       this._queryParams = {};
       this._queryCache = new Map([["{}", this]]);
       this._seekKey = null;
@@ -4644,17 +4708,36 @@ ${expression ? 'Expression: "' + expression + `"
     slice(start, stop) {
       return this.query({ slice: { start, stop } });
     }
-    _afterRecordRefresh() {
-      const result = this._record.computedData;
-      if (Array.isArray(result.items) && Object.keys(this._queryParams).length === 0) {
-        this._syncFromResult(result);
-        this._loaded = true;
+    async $refresh(options = {}) {
+      if (this._viewForSignedQuery() !== this) {
+        this._loaded = false;
+        return this.all();
       }
+      await super.$refresh(options);
+      return this;
+    }
+    _afterRecordRefresh() {
+      const received = this._record.receivedComputedData;
+      if (!Array.isArray(received?.items))
+        return;
+      const view = this._viewForSignedQuery();
+      if (!view)
+        return;
+      view._syncFromResult(received);
+      view._loaded = true;
+    }
+    _viewForSignedQuery() {
+      const querySignature = ({ filter, order_by: orderBy } = {}) => JSON.stringify([
+        filter && Object.keys(filter).length ? filter : null,
+        orderBy ?? null
+      ]);
+      const signed = querySignature(this._record.policy?.state_snapshot?.last_query_params || {});
+      return Array.from(this._queryCache.values()).find((view) => !(view._queryParams.slice && Object.keys(view._queryParams.slice).length) && querySignature(view._queryParams) === signed);
     }
     _syncFromResult(result = {}, { append = false } = {}) {
       const next = append ? new Map(this._modelProxies) : new Map;
       (result.items || []).forEach((item, index) => {
-        const proxy = item?.is_glue_manifest ? this._client.resolveManifest(item) : item;
+        const proxy = typeof item === "string" ? this._registry.getProxy(item) : item;
         if (proxy)
           next.set(proxy._record?.address || String(index), proxy);
       });
@@ -4687,17 +4770,19 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var queryset_default = GlueQuerySetProxy;
 
-  // client_js/src/proxies/template.js
-  class GlueTemplateProxy extends htmlRenderer_default(base_default) {
-    async renderHtml(payload = {}) {
-      const result = await this._callAttribute("render_html", payload);
-      return result?.html ?? result;
+  // client_js/src/proxies/component.js
+  class GlueComponentProxy extends htmlRenderer_default(base_default) {
+    get $el() {
+      if (this._record.disposed || typeof document === "undefined")
+        return null;
+      return [...document.querySelectorAll("[data-glue-address]")].find((element) => element.getAttribute("data-glue-address") === this._record.address) || null;
     }
     async _getHtml(payload = {}) {
-      return this.renderHtml(payload);
+      const result = await this._callAttribute("render", payload);
+      return result?.html ?? result;
     }
   }
-  var template_default = GlueTemplateProxy;
+  var component_default = GlueComponentProxy;
 
   // client_js/src/proxies/registry.js
   var NAMESPACE_TO_PROXY_CLASS = {};
@@ -4713,7 +4798,7 @@ ${expression ? 'Expression: "' + expression + `"
     function: function_default,
     model: model_default,
     querySet: queryset_default,
-    template: template_default
+    component: component_default
   };
   Object.entries(NAMESPACE_TO_PROXY_CLASS2).forEach(([namespace, proxyClass]) => {
     registerProxyClass(namespace, proxyClass);
@@ -4815,17 +4900,17 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/runtime/addressRecord.js
   class GlueAddressRecord {
-    constructor({ address, policyToken, staticData = {}, computedData = {}, loadingStrategy = "lazy" }) {
+    constructor({ address, policyToken, staticData = {}, computedData = {} }) {
       this.address = address;
       this.policyToken = policyToken;
       this.policy = policy_default.fromSignedPolicyToken(policyToken);
       this.staticData = cloneValue(staticData);
       this.computedData = cloneValue(computedData);
+      this.receivedComputedData = computedData;
       this.canonical = assembleAuthoritative(this.policy, this.computedData);
       this.editablePaths = new Set;
       this.revisions = new Map;
       this.generation = 0;
-      this.loadingStrategy = loadingStrategy;
       this.owner = null;
       this.stale = false;
       this.disposed = false;
@@ -4833,6 +4918,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.displacedChildren = null;
       this.proxy = null;
       this._queue = Promise.resolve();
+      this.inFlightController = null;
       this._suppressMutations = false;
       this.reactiveValues = reactive3({});
       this._replaceReactive(this.canonical);
@@ -4841,6 +4927,8 @@ ${expression ? 'Expression: "' + expression + `"
       this.disposed = true;
       this.generation += 1;
       this._queue = Promise.resolve();
+      this.inFlightController?.abort();
+      this.inFlightController = null;
     }
     attachProxy(proxy) {
       this.proxy = proxy;
@@ -4880,17 +4968,11 @@ ${expression ? 'Expression: "' + expression + `"
       return queued;
     }
     introduce(entry) {
-      if (this.disposed) {
-        this.disposed = false;
-        this.stale = false;
-        this.generation += 1;
-        this._queue = Promise.resolve();
-      }
       const wasStale = this.stale;
       this._applyPolicyToken(entry.policy_token);
       this.staticData = cloneValue(entry.static_data || {});
       this.computedData = cloneValue(entry.computed_data || {});
-      this.loadingStrategy = entry.loading_strategy || this.loadingStrategy;
+      this.receivedComputedData = entry.computed_data ?? null;
       const authoritative = assembleAuthoritative(this.policy, this.computedData);
       const previousCanonical = this.canonical;
       this.canonical = authoritative;
@@ -4906,6 +4988,7 @@ ${expression ? 'Expression: "' + expression + `"
         this._applyPolicyToken(entry.policy_token);
       if (entry.static_data !== undefined)
         this.staticData = cloneValue(entry.static_data || {});
+      this.receivedComputedData = entry.computed_data ?? null;
       if (entry.computed_data !== undefined) {
         this.computedData = mergeComputedData(this.computedData, entry.computed_data || {});
       }
@@ -4990,11 +5073,11 @@ ${expression ? 'Expression: "' + expression + `"
     }
     introduce(entry) {
       if (!entry?.address || !entry?.policy_token) {
-        throw new GlueProxyError("Glue manifests require address and policy_token.");
+        throw new GlueProxyError("Glue entries require address and policy_token.");
       }
       const policy = policy_default.fromSignedPolicyToken(entry.policy_token);
       if (policy.address !== entry.address) {
-        throw new GlueProxyError(`Glue manifest address "${entry.address}" does not match its policy.`);
+        throw new GlueProxyError(`Glue entry address "${entry.address}" does not match its policy.`);
       }
       let record = this.records.get(entry.address);
       if (!record) {
@@ -5002,8 +5085,7 @@ ${expression ? 'Expression: "' + expression + `"
           address: entry.address,
           policyToken: entry.policy_token,
           staticData: entry.static_data,
-          computedData: entry.computed_data,
-          loadingStrategy: entry.loading_strategy
+          computedData: entry.computed_data
         });
         this.records.set(entry.address, record);
         record.attachProxy(this._createProxy(record));
@@ -5043,6 +5125,7 @@ ${expression ? 'Expression: "' + expression + `"
         if (!doomedRecord || doomedRecord.disposed)
           return;
         doomedRecord.dispose();
+        this.records.delete(doomedAddress);
         doomedRecord.proxy?._onDispose?.();
       });
     }
@@ -5085,7 +5168,6 @@ ${expression ? 'Expression: "' + expression + `"
       });
     }
     get value() {
-      this.owner._ensureLoaded?.();
       return this.owner._record.getValue(this.stateKey);
     }
     set value(value) {
@@ -5139,6 +5221,16 @@ ${expression ? 'Expression: "' + expression + `"
   class ChoiceFieldGlue extends base_default2 {
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
+    }
+    choiceLabelHtml(choice) {
+      const label = String(choice?.label ?? "");
+      if (choice?.has_html_label) {
+        return label;
+      }
+      return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    choiceLabelText(choice) {
+      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
     }
   }
   var choice_default = ChoiceFieldGlue;
@@ -5482,7 +5574,6 @@ ${expression ? 'Expression: "' + expression + `"
         if (!childPaths.has(fieldPath)) {
           definePath(proxy, fieldPath, {
             get() {
-              proxy._ensureLoaded?.();
               return record.getValue(valuePath);
             },
             ...staticData.editable ? {
@@ -5604,7 +5695,8 @@ ${expression ? 'Expression: "' + expression + `"
       });
       this._registry.childBinder = new childBinder_default(this._registry);
       this._dispatcher = new responseDispatcher_default(this._registry);
-      this._loadEntries(context.objects || []);
+      this.loadObjects(context.objects || []);
+      this._registerComponentsWhenParsed();
     }
     onMessage(callback) {
       this._onMessage = callback;
@@ -5621,46 +5713,54 @@ ${expression ? 'Expression: "' + expression + `"
     view(url, sharedPayload = {}) {
       return new view_default(this.http, url, sharedPayload);
     }
-    loadManifests(manifestList = []) {
-      this._loadEntries(this._collectManifests(manifestList));
-    }
-    resolveManifest(manifest) {
-      this._introduceEntries([manifest]);
-      return this._registry.getProxy(manifest.address);
-    }
-    _loadEntries(entries = []) {
-      this._introduceEntries(entries);
+    loadObjects(entries = []) {
+      this._dispatcher.introduce(entries);
+      entries.forEach((entry) => this._registry.refresh(this._registry.getRecord(entry.address)));
       const childAddresses = new Set(entries.flatMap((entry) => Object.values(policy_default.fromSignedPolicyToken(entry.policy_token).children || {})));
       entries.filter((entry) => !childAddresses.has(entry.address)).forEach((entry) => this._registerPublicEntry(entry));
     }
-    _introduceEntries(entries) {
-      this._dispatcher.introduce(entries);
-      entries.forEach((entry) => this._registry.refresh(this._registry.getRecord(entry.address)));
+    _registerComponentsWhenParsed() {
+      if (typeof document === "undefined")
+        return;
+      document.addEventListener("alpine:init", () => this.registerComponentsFromDom(), { once: true });
+      if (document.readyState !== "loading")
+        this.registerComponentsFromDom();
     }
-    _collectManifests(manifestList) {
-      const entries = [];
-      const seen = new Set;
-      const collect = (value) => {
-        if (Array.isArray(value)) {
-          value.forEach(collect);
-          return;
+    registerComponentsFromDom(root = document) {
+      const nodes = [
+        ...root.matches?.("[data-glue-address]") ? [root] : [],
+        ...root.querySelectorAll("[data-glue-address]")
+      ];
+      nodes.forEach((node) => {
+        const address = node.getAttribute("data-glue-address");
+        const objects = node.getAttribute("data-glue-objects");
+        if (objects && !this._registry.getRecord(address)) {
+          this.loadObjects(JSON.parse(objects).filter((entry) => !this._registry.getRecord(entry.address)));
         }
-        if (!value || typeof value !== "object")
+        const proxy = this._registry.getProxy(address);
+        if (!proxy)
           return;
-        if (value.is_glue_manifest === true) {
-          if (!seen.has(value.address)) {
-            seen.add(value.address);
-            entries.push(value);
-          }
+        const parent = node.parentElement?.closest("[data-glue-address]");
+        if (parent) {
+          const record = this._registry.getRecord(address);
+          record.owner ||= { address: parent.getAttribute("data-glue-address"), path: null };
         }
-        Object.values(value).forEach(collect);
-      };
-      collect(manifestList || []);
-      return entries;
+        if (!node.hasAttribute("x-data"))
+          node.setAttribute("x-data", "{}");
+        addScopeToNode2(node, { component: proxy });
+      });
+      return nodes;
+    }
+    from(element) {
+      const root = element?.closest?.("[data-glue-address]");
+      const record = root && this._registry.getRecord(root.getAttribute("data-glue-address"));
+      return record && !record.disposed ? record.proxy : null;
     }
     _registerPublicEntry(entry) {
       const policy = policy_default.fromSignedPolicyToken(entry.policy_token);
       const { name, namespace } = policy;
+      if (namespace === "component")
+        return;
       if (!name) {
         throw new GlueProxyError("Cannot register a Glue proxy without policy.name.");
       }

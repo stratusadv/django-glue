@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from django_glue.conf import settings
 
 from django_glue import constants
 from django_glue.assets import asset_version
 from django_glue.constants import DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY
-from django_glue.glue.loading import LoadingStrategy
-from django_glue.glue.operation import GlueOperation, GlueOperationKind
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -20,46 +18,21 @@ TGlue = TypeVar('TGlue', bound='BaseGlue')
 
 class GlueObjectEntry(BaseModel):
     """Addressed wire entry (state-model.md §10): the page-load and
-    attribute-call entry shape, without a result tag or a manifest tag."""
-
-    model_config = ConfigDict(use_enum_values=True)
+    attribute-call entry shape, without a result tag."""
 
     address: str = ''
     policy_token: str
     static_data: dict[str, Any] = {}
     computed_data: dict[str, Any] = {}
-    loading_strategy: LoadingStrategy = LoadingStrategy.LAZY
-
-
-class GlueManifest(BaseModel):
-    """Phase-5 tagged manifest for the deferred consumers (view-fragment
-    responses, template-response results, multi-row query items)."""
-
-    model_config = ConfigDict(use_enum_values=True)
-
-    is_glue_manifest: Literal[True] = True
-    address: str = ''
-    policy_token: str
-    static_data: dict[str, Any] = {}
-    computed_data: dict[str, Any] = {}
-    loading_strategy: LoadingStrategy = LoadingStrategy.LAZY
 
 
 class GlueContextManager:
     def __init__(self, request: HttpRequest) -> None:
         self.request = request
-
-        # Glue View requests are wrappers; their Glue objects belong to the
-        # underlying request so the outer GlueViewFragmentResolver can serialize them.
-        context_request = getattr(request, 'glue_context_request', request)
-        self.glue_objects: list[BaseGlue] = context_request.__dict__.setdefault(
+        self.glue_objects: list[BaseGlue] = request.__dict__.setdefault(
             DJANGO_GLUE_MANIFEST_REQUEST_ATTR_KEY,
             [],
         )
-
-    @property
-    def manifests(self) -> list[BaseGlue]:
-        return self.glue_objects
 
     @property
     def serialized_objects(self) -> list[dict[str, Any]]:
@@ -80,29 +53,8 @@ class GlueContextManager:
                 serialized.append(child_entry)
         return serialized
 
-    @property
-    def serialized_manifests(self) -> list[dict[str, Any]]:
-        serialized: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for glue in self.glue_objects:
-            if glue.address in seen:
-                continue
-            seen.add(glue.address)
-            serialized.append(glue.manifest.model_dump())
-            for child_manifest in glue._serialized_child_manifests():
-                if child_manifest['address'] in seen:
-                    continue
-                seen.add(child_manifest['address'])
-                serialized.append(child_manifest)
-        return serialized
-
     def add_glue(self, glue: TGlue) -> TGlue:
-        glue.request = self.request
-        glue._require_authorization(GlueOperation(
-            kind=GlueOperationKind.INTRODUCE,
-            attribute=None,
-            required_access=glue.access,
-        ))
+        glue.introduce(self.request)
 
         # Ensure session exists (Django creates sessions lazily)
         if not self.request.session.session_key:
@@ -119,13 +71,11 @@ class GlueContextManager:
                 constants.CALLABLE_ATTRIBUTE_URL_NAME: (
                     f'/{constants.BASE_URL_NAME}/{constants.CALLABLE_ATTRIBUTE_URL_NAME}/'
                 ),
-                constants.GLUE_VIEW_URL_NAME: (
-                    f'/{constants.BASE_URL_NAME}/{constants.GLUE_VIEW_URL_NAME}/'
-                ),
             },
             'config': {
                 'requestTimeoutSeconds': settings.DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS,
                 'csrfCookieName': settings.CSRF_COOKIE_NAME,
+                'glueViewMediaType': constants.GLUE_VIEW_MEDIA_TYPE,
             },
         }
 

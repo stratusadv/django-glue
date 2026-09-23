@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from django.test import TestCase, override_settings
 
 from django_glue import Glue, GlueSerializerHandler, GlueSerializerRegistry
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
+from django_glue.exceptions import GlueAuthorizationError, GlueRequestError, GlueRequestErrorCode
 from django_glue.glue.base import BaseGlue
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.policy import GluePolicy
@@ -51,6 +52,48 @@ class AdmissionProbeGlue(BaseGlue):
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> AdmissionProbeGlue:
         _ = policy
         return cls()
+
+
+class UpdateGuardedProbeGlue(AdmissionProbeGlue):
+    namespace = 'updateGuardedProbe'
+    operations: ClassVar[list[GlueOperation]] = []
+
+    def authorize(self, request, operation: GlueOperation) -> bool:
+        type(self).operations.append(operation)
+        return not (operation.kind == GlueOperationKind.UPDATE and operation.attribute == 'other')
+
+
+class DraftAuthorizationTestCase(TestCase):
+    def setUp(self):
+        UpdateGuardedProbeGlue.operations = []
+        self.glue_object = UpdateGuardedProbeGlue()
+        self.glue_object.request = request_with_session()
+
+    def _call(self, updates):
+        context = AttributeCallRequestContext.model_construct(
+            request=self.glue_object.request,
+            target_glue_policy=self.glue_object.policy,
+            target_glue_updates=updates,
+            target_attribute_name='echo',
+            target_attribute_call_kwargs={},
+            reintroduce=[],
+        )
+        return self.glue_object.process_attribute_call(context)
+
+    def test_each_admitted_draft_is_authorized_with_its_path(self):
+        entry, _introduced = self._call({'value': 'typed'})
+
+        self.assertEqual(entry['result'], 'typed')
+        self.assertIn(
+            (GlueOperationKind.UPDATE, 'value'),
+            [(operation.kind, operation.attribute) for operation in UpdateGuardedProbeGlue.operations],
+        )
+
+    def test_a_denied_draft_fails_before_any_draft_is_applied(self):
+        with self.assertRaises(GlueAuthorizationError):
+            self._call({'value': 'typed', 'other': 'denied'})
+
+        self.assertEqual(self.glue_object.value, 'canonical')
 
 
 class ProtocolAdmissionTestCase(TestCase):
@@ -180,6 +223,18 @@ class ModelRelationLeafAdmissionTestCase(TestCase):
         self.assertEqual(context.exception.code, GlueRequestErrorCode.INVALID_UPDATES)
         self.assertEqual(context.exception.details()['attribute'], 'red_corner')
 
+    def test_exposed_primary_key_is_never_client_editable(self):
+        glue_object = self._glue(self.alpha, ['id', 'name'])
+
+        self.assertNotIn('id', glue_object.editable)
+        with self.assertRaises(GlueRequestError) as context:
+            glue_object._admit_updates(glue_object.policy, {'id': self.beta.pk, 'name': 'Taken'})
+
+        self.assertEqual(context.exception.code, GlueRequestErrorCode.INVALID_UPDATES)
+        self.assertEqual(context.exception.details()['attribute'], 'id')
+        with self.assertRaisesRegex(ValueError, 'primary key'):
+            ModelGlue(self.alpha, name='target', access=GlueAccess.CHANGE, fields=['id'], editable=['id'])
+
     def test_flat_foreign_key_identity_is_admitted(self):
         glue_object = self._glue(self.fight, ['name', 'red_corner'])
 
@@ -230,7 +285,7 @@ class ModelRelationLeafAdmissionTestCase(TestCase):
             request=reconstructed.request,
             target_glue_policy=policy,
             target_glue_updates={},
-            target_attribute_name='load_state',
+            target_attribute_name=None,
             target_attribute_call_kwargs={},
         )
 
@@ -356,7 +411,23 @@ class ModelStateSnapshotTestCase(TestCase):
     def test_acknowledged_draft_overrides_the_baseline_in_the_snapshot(self):
         self.glue_object._load_client_state({'name': 'Draft'})
 
-        self.assertEqual(self.glue_object.policy.state_snapshot, {'name': 'Draft', 'age': 18})
+        self.assertEqual(
+            self.glue_object.policy.state_snapshot,
+            {'name': 'Draft', 'age': 18, '$draft': ['name']},
+        )
+
+    def test_row_changed_out_of_band_supersedes_an_undrafted_baseline(self):
+        self.glue_object._load_client_state({'name': 'Draft'})
+        policy = self.glue_object.policy
+        Gorilla.objects.filter(pk=self.gorilla.pk).update(name='Changed', age=40)
+        reconstructed = ModelGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+
+        reconstructed._hydrate(policy, {})
+
+        self.assertEqual(reconstructed._editable_draft, {'name': 'Draft'})
+        self.assertEqual(reconstructed.instance.age, 40)
+        self.assertEqual(reconstructed.policy.state_snapshot['age'], 40)
 
     def test_re_request_without_edits_keeps_the_draft_empty(self):
         policy = self.glue_object.policy
@@ -409,7 +480,7 @@ class ModelStateSnapshotTestCase(TestCase):
         )
 
         self.assertFalse(payload['result']['success'])
-        self.assertEqual(successor.state_snapshot, {'name': 'Koko', 'age': 0})
+        self.assertEqual(successor.state_snapshot, {'name': 'Koko', 'age': 0, '$draft': ['age']})
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.age, 18)
 
@@ -439,7 +510,26 @@ class ModelStateSnapshotTestCase(TestCase):
         self.gorilla.refresh_from_db()
         assert self.gorilla.age == 26
 
-    def test_save_matching_the_signed_snapshot_omits_the_successor_token(self):
+    def test_saving_one_field_keeps_a_concurrent_change_to_another(self):
+        policy = self.glue_object.policy
+        Gorilla.objects.filter(pk=self.gorilla.pk).update(age=30)
+        reconstructed = ModelGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+
+        payload, _successor = self._save(reconstructed, policy, {'name': 'Renamed'})
+
+        self.assertTrue(payload['result']['success'])
+        self.gorilla.refresh_from_db()
+        self.assertEqual((self.gorilla.name, self.gorilla.age), ('Renamed', 30))
+
+    def test_save_changing_nothing_omits_the_successor_token(self):
+        payload, successor = self._save(self.glue_object, self.glue_object.policy, {})
+
+        self.assertTrue(payload['result']['success'])
+        self.assertNotIn('policy_token', payload)
+        self.assertIsNone(successor)
+
+    def test_saving_a_signed_draft_re_signs_it_as_the_baseline(self):
         self.glue_object._load_client_state({'name': 'Ndume', 'age': 22})
         payload, successor = self._save(
             self.glue_object,
@@ -448,7 +538,6 @@ class ModelStateSnapshotTestCase(TestCase):
         )
 
         self.assertTrue(payload['result']['success'])
-        self.assertNotIn('policy_token', payload)
-        self.assertIsNone(successor)
+        self.assertEqual(successor.state_snapshot, {'name': 'Ndume', 'age': 22})
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.age, 22)

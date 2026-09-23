@@ -257,7 +257,7 @@ def test_searchable_choice_retains_selection_after_search_clears_demo(
 
     expect(search).to_have_value('')
     expect(selected).to_have_text('Gamma Grove')
-    expect(page.get_by_test_id('fighter-choice-results').get_by_role('button')).to_have_count(0)
+    expect(page.get_by_test_id('fighter-choice-results').get_by_role('button')).to_have_count(2)
 
 
 def test_searchable_multiple_choices_hydrate_and_retain_selections_demo(
@@ -296,7 +296,7 @@ def test_searchable_multiple_choices_hydrate_and_retain_selections_demo(
     expect(selected).to_contain_text('Gamma Grove')
     expect(
         page.get_by_test_id('multiple-fighter-choice-results').get_by_role('button')
-    ).to_have_count(0)
+    ).to_have_count(2)
 
 
 def test_saving_a_foreign_key_through_the_field_facade_persists_it_demo(
@@ -607,11 +607,66 @@ def test_detail_model_delete_disposes_proxy(
             return {
                 address,
                 disposed: proxy._record.disposed,
-                registryTombstone: window.Glue._registry?.getRecord(address)?.disposed ?? null,
+                registryForgot: window.Glue._registry.getRecord(address) === undefined,
+                publicLookup: window.Glue.model.gorilla ?? null,
             }
         }"""
     )
 
     assert disposal_state['disposed'] is True
-    assert disposal_state['registryTombstone'] is True
+    assert disposal_state['registryForgot'] is True
+    assert disposal_state['publicLookup'] is None
     assert Gorilla.objects.filter(pk=gamma.pk).count() == 0
+
+
+def test_model_refresh_re_reads_a_row_changed_out_of_band(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-model-refresh')
+    demo.title_card(
+        'Glue $refresh()',
+        kicker='django-glue',
+        subtitle='A refresh re-reads persisted data without submitting pending edits.',
+    )
+
+    beta = seeded_gorillas['beta']
+    demo.goto('gorilla:detail', pk=beta.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+    name_input = page.get_by_placeholder('Fighter Name')
+    expect(name_input).to_have_value(beta.name)
+
+    demo.narrate('Another writer renames the fighter; the page refreshes', step='1')
+    Gorilla.objects.filter(pk=beta.pk).update(name='Renamed Elsewhere')
+    page.evaluate('() => window.Glue.model.gorilla.$refresh()')
+
+    expect(name_input).to_have_value('Renamed Elsewhere')
+
+
+def test_arena_rank_card_renders_through_model_html_attribute(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-arena-rank-card')
+    demo.title_card(
+        'Glue HTML Attribute',
+        kicker='django-glue',
+        subtitle='A model attribute renders the rank card server-side; the client morphs it in.',
+    )
+
+    alpha = seeded_gorillas['alpha']
+    demo.goto('gorilla:arena', pk=alpha.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.narrate('rank_card() renders the card into the assessment panel', step='1')
+    page.get_by_role('button', name='Render Card').click()
+    assessment = page.locator('#rankCardAssessment .rank-card')
+    expect(assessment).to_be_visible()
+    expect(assessment).to_contain_text(alpha.name)
+
+    demo.narrate('renderOuterHtml replaces the target element itself', step='2')
+    page.get_by_role('button', name='Outer HTML').click()
+    expect(page.locator('.rank-card')).to_have_count(2)
+    expect(page.locator('#rankCardModes')).to_have_count(0)

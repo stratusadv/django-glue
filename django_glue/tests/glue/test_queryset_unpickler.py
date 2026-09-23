@@ -4,8 +4,10 @@ import base64
 import io
 import pickle
 
+from unittest.mock import patch
+
 import pytest
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
@@ -13,9 +15,12 @@ from django_glue.glue.options.django.choices import (
     QUERYSET_CHOICE_OPTIONS_ATTRIBUTE,
     QuerySetChoiceOptions,
 )
-from django_glue.glue.queryset_unpickler import QuerySetUnpickler, unpickle_query
+from django_glue.glue.queryset_unpickler import QuerySetUnpickler, pickle_query, unpickle_query
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla
+
+FIGHT_PATH = 'test_project.fight.models.Fight'
+GORILLA_PATH = 'test_project.gorilla.models.Gorilla'
 
 
 class AllowlistedPickleMarker:
@@ -38,7 +43,7 @@ class QuerySetUnpicklerTestCase(TestCase):
             )
         ).decode()
 
-        query = unpickle_query(encoded)
+        query = unpickle_query(encoded, FIGHT_PATH)
 
         assert query.model is Fight
         assert str(query)  # a fully reconstructed Query is functional
@@ -59,7 +64,7 @@ class QuerySetUnpicklerTestCase(TestCase):
         )
         encoded = base64.b64encode(pickle.dumps(queryset.query)).decode()
 
-        query = unpickle_query(encoded)
+        query = unpickle_query(encoded, FIGHT_PATH)
 
         assert query.model is Fight
         options = getattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE)
@@ -91,23 +96,45 @@ class QuerySetUnpicklerWiringTestCase(TestCase):
         self.alpha = Gorilla.objects.create(name='Alpha', age=12)
 
     def test_queryset_continuation_decodes_through_the_allowlist(self):
-        encoded = QuerySetGlue._encode_queryset_query(
-            Fight.objects.filter(name__icontains='bout')
-        )
+        encoded = pickle_query(Fight.objects.filter(name__icontains='bout'))
 
-        queryset = QuerySetGlue._decode_queryset_query(encoded)
+        queryset = QuerySetGlue._decode_queryset_query(encoded, FIGHT_PATH)
 
         assert queryset.model is Fight
         assert queryset.query.model is Fight
 
     def test_choice_source_decodes_through_the_allowlist(self):
-        encoded = base64.b64encode(
-            pickle.dumps(Gorilla.objects.all().query)
-        ).decode()
+        encoded = pickle_query(Gorilla.objects.all())
 
-        deserialized = ModelGlue._deserialize_related_field_config(
-            {'red_corner': {'encoded_choice_queryset': encoded}}
+        deserialized = ModelGlue._deserialize_choices(
+            {'red_corner': {'encoded_queryset': encoded, 'model_class_path': GORILLA_PATH}}
         )
 
-        choice_queryset = deserialized['red_corner']['choice_queryset']
+        choice_queryset = deserialized['red_corner']
         assert choice_queryset.model is Gorilla
+
+
+class QuerySetContinuationBoundTestCase(TestCase):
+    def test_oversized_continuation_is_refused_before_decoding(self):
+        encoded = pickle_query(Fight.objects.all())
+
+        with (
+            override_settings(DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES=len(encoded) - 1),
+            patch('django_glue.glue.queryset_unpickler.base64.b64decode') as decode,
+            pytest.raises(pickle.UnpicklingError, match='DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES'),
+        ):
+            unpickle_query(encoded, FIGHT_PATH)
+        decode.assert_not_called()
+
+    def test_continuation_for_another_model_is_refused(self):
+        with pytest.raises(pickle.UnpicklingError, match='does not match the signed'):
+            unpickle_query(pickle_query(Gorilla.objects.all()), FIGHT_PATH)
+
+    def test_oversized_continuation_is_refused_at_issuance(self):
+        encoded = pickle_query(Fight.objects.all())
+
+        with (
+            override_settings(DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES=len(encoded) - 1),
+            pytest.raises(ValueError, match='DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES'),
+        ):
+            pickle_query(Fight.objects.all())

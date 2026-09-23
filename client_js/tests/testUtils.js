@@ -53,29 +53,20 @@ function createStaticData(overrides = {}) {
             ...(overrides.callables || {}),
         },
         ...(overrides.params ? {params: overrides.params} : {}),
+        ...(overrides.events ? {events: overrides.events} : {}),
         ...(overrides.children ? {children: overrides.children} : {}),
     }
 }
 
-function createManifest({policy = {}, staticData = {}, computedData = {}, ...overrides} = {}) {
+function createEntry({policy = {}, staticData = {}, computedData = {}, ...overrides} = {}) {
     const normalizedPolicy = policyData(policy)
     return {
-        is_glue_manifest: true,
         address: normalizedPolicy.address,
         policy_token: createPolicyToken(normalizedPolicy),
         static_data: createStaticData(staticData),
         computed_data: computedData,
-        loading_strategy: 'eager',
         ...overrides,
     }
-}
-
-// Page-load wire entry (state-model.md §10): the manifest shape without the
-// phase-5 result tag.
-function createEntry(overrides = {}) {
-    const manifest = createManifest(overrides)
-    const {is_glue_manifest, ...entry} = manifest
-    return entry
 }
 
 function createState(overrides = {}) {
@@ -118,7 +109,6 @@ function attributeResponse(address, fields = {}) {
 export {
     attributeResponse,
     createEntry,
-    createManifest,
     createPolicy,
     createPolicyToken,
     createState,

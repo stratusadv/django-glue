@@ -1,61 +1,32 @@
-<p align="center">
-    <a href="https://django-glue.stratusadv.com">
-        <img alt="Django Glue Logo" src="https://django-glue.stratusadv.com/static/img/django_glue_logo_256.png"/>
-    </a>
-</p>
-
 # Django Glue
 
-![Build](https://img.shields.io/github/actions/workflow/status/stratusadv/django-glue/ci.yml)
-![Python Versions](https://img.shields.io/pypi/pyversions/django-glue)
-![PyPI Version](https://img.shields.io/pypi/v/django-glue)
-![Downloads](https://img.shields.io/pypi/dm/django-glue)
+Django Glue connects Django models, forms, querysets, functions, and rendered
+components to a reactive Alpine.js client. A Django view registers Glue objects;
+the page receives one client proxy for each live address. Calls return
+authoritative state and any newly introduced objects.
 
-### Seamlessly Connect Django to your Frontend.
+## Start here
 
-## Features
+1. [Install Django Glue](getting_started/installation.md).
+2. [Register and use your first model](guides/quick_start.md).
+3. Read the [core concepts](guides/introduction.md) before adding relations,
+   components, or custom objects.
 
-- **Proxy Pattern Architecture**
-  - Transparently bind Django models, querysets, forms, templates, and functions to JavaScript objects.
-  - Access model fields as native properties with automatic change tracking.
-  - Built-in lazy loading fetches data on first access.
+## What it provides
 
-- **Simple, Declarative API**
-  - Register proxies in your Django views with `Glue.model()`, `Glue.queryset()`, `Glue.form()`, `Glue.template()`, and `Glue.function()`.
-  - Access proxies on the frontend as properties of the global `Glue` object (e.g., `Glue.model.task`, `Glue.querySet.tasks`, `Glue.function.calculate`).
+- Model and form fields with editable drafts, validation errors, and typed
+  field descriptions.
+- Querysets with server-side filtering, ordering, and pagination. Rows are
+  independently addressed model proxies.
+- Django template components with declared parameters, server-rendered HTML,
+  Alpine morphing, and declared events.
+- Access levels `VIEW`, `ADD`, `CHANGE`, and `DELETE`, checked by the server
+  when objects are introduced and called.
+- `Glue.view(url)` for HTML from an ordinary Django route, including objects
+  introduced by that render.
 
-- **Unintrusive Integration**
-  - Works with your existing Django views and templates with minimal setup.
-  - No need to rewrite your application to adopt Django Glue.
+The client includes Alpine.js and its morph plugin. Every introduced object
+arrives with a complete first snapshot; queryset rows arrive when queried.
 
-- **Reactive Alpine Frontend**
-  - The included client bundles pinned Alpine.js and morph versions.
-  - Server-rendered updates preserve matching keyed nodes, local Alpine state, focus, and caret position.
-
-- **Granular Access Control**
-  - Secure per-proxy permission levels: `VIEW`, `CHANGE`, and `DELETE`.
-  - Permissions cascade — `DELETE` includes `CHANGE`, which includes `VIEW`.
-  - All access checks enforced server-side on every action request.
-
-- **Rich QuerySet Support**
-  - Items returned from querysets are full model proxies with their own `save()` and `delete()`.
-  - Chainable query building with `filter()`, `orderBy()`, and `slice()`.
-  - Automatic parent refresh when child items are modified or deleted.
-
-- **Form Proxy Support**
-  - Bind Django Forms and ModelForms to JavaScript with full validation.
-  - Automatic FormData handling for file uploads.
-  - Per-field error tracking with `hasErrors()` helper.
-
-- **Event Listener System**
-  - Attach `before`, `after`, and `error` listeners to any proxy action.
-  - Chainable listener management for reactive UI patterns.
-
-- **Function Proxy Support**
-  - Call Python functions from JavaScript with `Glue.function()`.
-  - Functions are identified by dotted import path and called with keyword arguments via fields in a single object arguments.
-  - Function signatures are automatically extracted and sent to the client.
-
-- **Server-Side HTML Rendering**
-  - Use `GlueView` to dynamically render HTML fragments from Django views.
-  - New proxies registered during rendering are automatically initialized on the client.
+The [architecture guide](architecture.md) explains the signed policy token,
+address registry, request envelope, and object lifecycle.

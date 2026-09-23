@@ -15,6 +15,7 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
     async renderInnerHtml(target, payload = {}) {
         const element = this._resolveHtmlTarget(target)
         const html = await this._getHtml(payload)
+        if (html === null) return null
         const next = element.cloneNode(false)
         next.innerHTML = html
         this._morphHtml(element, next, true)
@@ -24,6 +25,7 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
     async renderOuterHtml(target, payload = {}) {
         const element = this._resolveHtmlTarget(target)
         const html = await this._getHtml(payload)
+        if (html === null) return null
         const fragment = htmlToFragment(html)
         const nodes = [...fragment.childNodes].filter(node =>
             node.nodeType !== Node.COMMENT_NODE
@@ -37,12 +39,23 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
     }
 
     _morphHtml(element, next, inner = false) {
+        const client = this._client
+        const previousAddresses = client ? [
+            ...(element.matches?.('[data-glue-address]') ? [element] : []),
+            ...element.querySelectorAll('[data-glue-address]'),
+        ].map(node => node.getAttribute('data-glue-address')) : []
         morph(element, next, {
-            key: node => node.getAttribute?.('key') || node.id,
+            key: node => node.getAttribute?.('data-glue-address') || node.getAttribute?.('key') || node.id,
             updating(node, to, childrenOnly, skip) {
                 if (node.hasAttribute?.('data-morph-ignore')) return skip()
                 if (inner && node === element) childrenOnly()
             },
+        })
+        client?.registerComponentsFromDom(document)
+        previousAddresses.forEach(address => {
+            if (![...document.querySelectorAll('[data-glue-address]')].some(
+                node => node.getAttribute('data-glue-address') === address
+            )) client._registry.dispose(address)
         })
     }
 
@@ -60,11 +73,13 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
         }
         const element = this._resolveHtmlTarget(target)
         const html = await this._getHtml(payload)
+        if (html === null) return null
         const fragment = htmlToFragment(html)
         if (position === 'beforebegin') element.before(fragment)
         else if (position === 'afterbegin') element.prepend(fragment)
         else if (position === 'beforeend') element.append(fragment)
         else element.after(fragment)
+        this._client?.registerComponentsFromDom(document)
         return html
     }
 
@@ -86,9 +101,10 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
 }
 
 class HtmlResult extends HtmlRenderer() {
-    constructor(html) {
+    constructor(html, client = null) {
         super()
         this.html = html
+        this._client = client
     }
 
     toString() {
@@ -101,8 +117,8 @@ class HtmlResult extends HtmlRenderer() {
 }
 
 function htmlResultFromResponse(data, client) {
-    client?.loadManifests(data?.manifest_list || [])
-    return new HtmlResult(data?.html || '')
+    client?.loadObjects(data?.objects || [])
+    return new HtmlResult(data?.html || '', client)
 }
 
 export {htmlResultFromResponse}

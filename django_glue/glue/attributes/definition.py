@@ -56,6 +56,26 @@ class GlueAttributeKind(StrEnum):
     CHILD = 'child'
 
 
+def _loaded_glue_classes_by_name() -> dict[str, type[Any]]:
+    """Every loaded ``BaseGlue`` subclass by class name, so a return annotation
+    imported only under ``TYPE_CHECKING`` still resolves; a name shared by two
+    classes is ambiguous and left out."""
+    from django_glue.glue.base import BaseGlue  # noqa: PLC0415
+
+    classes: dict[str, type[Any]] = {}
+    ambiguous: set[str] = set()
+    pending: list[type[Any]] = [BaseGlue]
+    while pending:
+        for subclass in pending.pop().__subclasses__():
+            pending.append(subclass)
+            existing = classes.setdefault(subclass.__name__, subclass)
+            if existing is not subclass:
+                ambiguous.add(subclass.__name__)
+    for name in ambiguous:
+        classes.pop(name)
+    return classes
+
+
 def _resolve_glue_result_annotation(
     target: Callable[..., Any] | None,
 ) -> tuple[type[Any] | None, bool]:
@@ -72,6 +92,14 @@ def _resolve_glue_result_annotation(
             target,
             globalns=getattr(target, '__globals__', None),
         ).get('return', annotation)
+
+    if isinstance(annotation, str):
+        with suppress(NameError, SyntaxError, TypeError):
+            annotation = eval(  # noqa: S307
+                annotation,
+                dict(getattr(target, '__globals__', {})),
+                _loaded_glue_classes_by_name(),
+            )
 
     is_nullable = False
     if get_origin(annotation) in {Union, UnionType}:
@@ -100,7 +128,6 @@ class GlueAttributeDefinition:
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess]
     value_role: GlueValueRole | None = None
     is_parameter: bool = False
-    is_identity: bool = False
     provider_type: type[Any] | None = None
     value_type: Any | None = None
     expected_type: type[Any] | None = None

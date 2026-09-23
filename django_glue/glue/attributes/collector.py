@@ -206,7 +206,6 @@ class GlueAttributeCollector:
                 value_role=options.value_role,
                 value_type=value_type if kind == GlueAttributeKind.VALUE else None,
                 is_parameter=options.is_parameter,
-                is_identity=options.is_identity,
                 allowed_arguments=allowed_arguments,
                 injected_arguments=injected_arguments,
                 render_as_html=options.render_as_html,

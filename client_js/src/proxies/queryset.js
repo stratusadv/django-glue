@@ -6,6 +6,7 @@ class GlueQuerySetProxy extends BaseGlueProxy {
     constructor(options) {
         super(options)
         this._modelProxies = new Map()
+        this._loaded = false
         this._queryParams = {}
         this._queryCache = new Map([['{}', this]])
         this._seekKey = null
@@ -111,19 +112,41 @@ class GlueQuerySetProxy extends BaseGlueProxy {
         return this.query({slice: {start, stop}})
     }
 
-    _afterRecordRefresh() {
-        const result = this._record.computedData
-        if (Array.isArray(result.items) && Object.keys(this._queryParams).length === 0) {
-            this._syncFromResult(result)
-            this._loaded = true
+    async $refresh(options = {}) {
+        if (this._viewForSignedQuery() !== this) {
+            this._loaded = false
+            return this.all()
         }
+        await super.$refresh(options)
+        return this
+    }
+
+    _afterRecordRefresh() {
+        const received = this._record.receivedComputedData
+        if (!Array.isArray(received?.items)) return
+        const view = this._viewForSignedQuery()
+        if (!view) return
+        view._syncFromResult(received)
+        view._loaded = true
+    }
+
+    _viewForSignedQuery() {
+        const querySignature = ({filter, order_by: orderBy} = {}) => JSON.stringify([
+            filter && Object.keys(filter).length ? filter : null,
+            orderBy ?? null,
+        ])
+        const signed = querySignature(this._record.policy?.state_snapshot?.last_query_params || {})
+        return Array.from(this._queryCache.values()).find(view => (
+            !(view._queryParams.slice && Object.keys(view._queryParams.slice).length) &&
+            querySignature(view._queryParams) === signed
+        ))
     }
 
     _syncFromResult(result = {}, {append = false} = {}) {
         const next = append ? new Map(this._modelProxies) : new Map()
         ;(result.items || []).forEach((item, index) => {
-            const proxy = item?.is_glue_manifest
-                ? this._client.resolveManifest(item)
+            const proxy = typeof item === 'string'
+                ? this._registry.getProxy(item)
                 : item
             if (proxy) next.set(proxy._record?.address || String(index), proxy)
         })

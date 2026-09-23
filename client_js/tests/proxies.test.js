@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {attributeResponse, createEntry, createManifest, createPolicyToken, objectsEnvelope} from "./testUtils"
+import {attributeResponse, createEntry, createPolicyToken, objectsEnvelope} from "./testUtils"
 
 function querysetManifest(overrides = {}) {
     return createEntry({
@@ -15,13 +15,12 @@ function querysetManifest(overrides = {}) {
             new: {allowed_arguments: ['initial'], returns_glue: true},
             count: {allowed_arguments: ['filter']},
         }},
-        loading_strategy: 'lazy',
         ...overrides,
     })
 }
 
 function row(id, name) {
-    return createManifest({policy: {
+    return createEntry({policy: {
         name: `gorillas.${id}`,
         address: `gorillas#test[${id}]`,
         identity: {target_pk: id, pk_field_name: 'id'},
@@ -33,10 +32,9 @@ describe('queryset proxy facade', () => {
     test('hydrates eager initial items through the shared registry', () => {
         const first = row(1, 'Koko')
         const manifest = querysetManifest({
-            computedData: {items: [first], seek_key: null, has_next: false, batch_size: null},
-            loading_strategy: 'eager',
+            computedData: {items: [first.address], seek_key: null, has_next: false, batch_size: null},
         })
-        const client = new GlueClient({objects: [manifest]})
+        const client = new GlueClient({objects: [manifest, first]})
 
         expect(client.querySet.gorillas.items).toEqual([client._registry.getProxy(first.address)])
         expect(client.querySet.gorillas.items[0].name).toBe('Koko')
@@ -48,7 +46,14 @@ describe('queryset proxy facade', () => {
             {items: [row(1, 'Koko')], seek_key: 'next', has_next: true, batch_size: 1, total: 2},
             {items: [row(2, 'Ndume')], seek_key: null, has_next: false, batch_size: 1},
         ]
-        client.http.sendAttributeRequest = async () => attributeResponse('gorillas#test', {result: responses.shift()})
+        client.http.sendAttributeRequest = async () => {
+            const page = responses.shift()
+            const entries = page.items
+            return objectsEnvelope([
+                {address: 'gorillas#test', result: {...page, items: entries.map(entry => entry.address)}},
+                ...entries,
+            ])
+        }
         const queryset = client.querySet.gorillas
 
         await queryset.all({withTotal: true})
@@ -103,7 +108,10 @@ describe('queryset proxy facade', () => {
         const first = row(1, 'Koko')
         client.http.sendAttributeRequest = async request => request.attribute === 'get'
             ? attributeResponse('gorillas#test', {result: first.address})
-            : attributeResponse('gorillas#test', {result: {items: [first]}})
+            : objectsEnvelope([
+                {address: 'gorillas#test', result: {items: [first.address]}},
+                first,
+            ])
         const queryset = client.querySet.gorillas
 
         await queryset.all()

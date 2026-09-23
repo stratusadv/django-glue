@@ -36,40 +36,39 @@ django-glue/
 │   │   ├── base.py                 # BaseGlue: attributes, policy, children, calls
 │   │   ├── policy.py               # GluePolicy: signed token, state_snapshot, children
 │   │   ├── address.py              # Address derivation
-│   │   ├── context.py              # GlueContextManager + GlueManifest (page load)
+│   │   ├── context.py              # GlueContextManager (page load)
 │   │   ├── attributes/             # DeclaredAttribute, definitions, collector, adapters
-│   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue, TemplateGlue
+│   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue
 │   │   ├── function.py             # FunctionGlue
-│   │   ├── component.py            # Component (component-system workstream)
-│   │   ├── loading.py              # LoadingStrategy (LAZY/EAGER)
+│   │   ├── component.py            # Component rendering and lifecycle
 │   │   └── operation.py            # GlueOperation authorization records
 │   ├── resolver/
 │   │   ├── attribute_call/         # /__dg__/callable_attribute/ endpoint (batch entries)
-│   │   └── view_fragment/          # /__dg__/glue_view/ endpoint (Glue.view)
-│   ├── shortcuts/glue.py           # Glue.model/queryset/form/formset/template/function/...
+│   ├── middleware.py               # Glue.view response middleware
+│   ├── shortcuts/glue.py           # Glue.model/queryset/form/formset/function/...
 │   ├── shortcuts/urls.py           # django_glue_urls()
-│   ├── access.py                   # GlueAccess (VIEW/CHANGE/DELETE)
+│   ├── access.py                   # GlueAccess (VIEW/ADD/CHANGE/DELETE)
 │   ├── response.py                 # GlueResponse, GlueTemplateResponse, render helpers
 │   ├── exceptions.py               # GlueError family + closed error-code set
 │   ├── serialization.py            # Serializer registry for field values
 │   ├── encoders.py                 # JSON encoder for wire values
 │   ├── message.py                  # GlueMessage (effects channel)
 │   ├── settings.py / conf.py       # DJANGO_GLUE_* settings + loader
-│   ├── templatetags/django_glue.py # {% django_glue_init %}
+│   ├── templatetags/django_glue.py # {% django_glue_init %}, {% glue_component %}
 │   ├── templates/django_glue/      # init template (context JSON + client bootstrap)
 │   └── tests/                      # pytest suite (glue/, resolver/, e2e/, security/, ...)
 ├── client_js/
 │   ├── django_glue.js              # Entry: globalThis.GlueClient, installs Alpine
 │   ├── scripts/build.js            # Bun bundler → django_glue/static/django_glue/js/
 │   ├── src/
-│   │   ├── client.js               # GlueClient: namespace getters, manifest registration
+│   │   ├── client.js               # GlueClient: namespace getters, addressed entry registration
 │   │   ├── http.js                 # Multipart attribute requests, file extraction
 │   │   ├── policy.js               # Signed-policy-token client
 │   │   ├── alpine.js               # The only module that references Alpine/morph
 │   │   ├── runtime/                # addressRegistry, addressRecord, attributeMaterializer,
 │   │   │                           # childBinder, responseDispatcher, state
 │   │   ├── proxies/                # base, model, queryset, form, formset, function,
-│   │   │                           # template, sequence, fieldBacked + fields/
+│   │   │                           # component, sequence, fieldBacked + fields/
 │   │   └── view.js                 # Glue.view (server-rendered fragments)
 │   └── tests/                      # bun test (happy-dom)
 ├── test_project/                   # Django app used by all tests (gorilla, fight,
@@ -105,10 +104,10 @@ def list_view(request):
 ```
 
 Each call builds a Glue object and adds it to the request's
-`GlueContextManager`; `{% django_glue_init %}` then serializes every object as
-an addressed manifest into the page. `Glue.object(request, glue=...)` registers
-custom `BaseGlue` subclasses; `Glue.formset`, `Glue.template`, `Glue.sequence`,
-and `Glue.choices` round out the API (`django_glue/shortcuts/glue.py`).
+`GlueContextManager`; `{% django_glue_init %}` then serializes addressed
+entries into the page. `Glue.object(request, glue=...)` registers custom
+`BaseGlue` subclasses. `Glue.formset` and `Glue.choices` cover keyed forms
+and choice sources (`django_glue/shortcuts/glue.py`).
 
 Hierarchy:
 
@@ -119,7 +118,7 @@ BaseGlue (django_glue/glue/base.py)
 ├── FormGlue        (glue/objects/django/form/object.py)
 ├── FormSetGlue     (glue/objects/django/formset.py, via BaseCollectionGlue)
 ├── FunctionGlue    (glue/function.py)
-└── TemplateGlue    (glue/objects/django/template.py)
+└── Component       (glue/component.py)
 ```
 
 ### Declared attributes
@@ -158,19 +157,22 @@ def save(self) -> dict[str, Any]:
   means "empty".
 - **Authorization** is re-checked on every request against the signed policy,
   using `GlueOperation` records (`glue/operation.py`). `GlueAccess` is a
-  `StrEnum` with the cascade VIEW < CHANGE < DELETE.
+  `StrEnum` with the cascade VIEW < ADD < CHANGE < DELETE.
 - **Update admission**: incoming `updates` are checked field-by-field against
   the signed `state_snapshot` and the editable projection before anything is
   applied.
 
 ## Wire format (state-model.md §10)
 
-Two endpoints, namespace `__dg__` (`django_glue/urls.py`):
+One Glue endpoint, namespace `__dg__` (`django_glue/urls.py`):
 
 | Endpoint | Purpose |
 |---|---|
 | `POST /__dg__/callable_attribute/` | Attribute calls. Multipart body with a JSON `objects` field — `[{address, policy_token, updates, call: {attribute, kwargs}}]` — plus file parts keyed by update path. Response: `{objects: [entry, ...]}`. |
-| `POST /__dg__/glue_view/` | View fragments for `Glue.view`: renders a Django view and returns HTML with the manifests the render touched. |
+
+`Glue.view(url)` requests the real Django URL with Glue content negotiation;
+`django_glue.middleware.GlueViewResponseMiddleware` packages the rendered
+response and its introduced entries.
 
 Response entries:
 

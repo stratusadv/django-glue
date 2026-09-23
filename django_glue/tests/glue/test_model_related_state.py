@@ -1,10 +1,12 @@
+import json
 from types import SimpleNamespace
 
 import pytest
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
+from django_glue.exceptions import GlueModelInstanceNotFoundError
 from django_glue.glue.attributes import (
     BoundGlueAttribute,
     GlueAttributeKind,
@@ -15,6 +17,10 @@ from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
+from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
+from django_glue.tests.conftest import MockSession
+from django_glue.tests.glue.addressed_rows import addressed_row_entries
+from django_glue.tests.glue.test_refresh import request_entry
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.test_forms import TestModelForm as GorillaModelForm
@@ -155,7 +161,7 @@ class RelatedStateTestCase(TestCase):
 
         assert policy.identity['editable'] == ('name',)
         assert reconstructed.editable == ('name',)
-        assert set(reconstructed._included_fields) == {'name', 'description'}
+        assert set(reconstructed._included_fields) == {'id', 'name', 'description'}
 
     def test_model_default_form_is_an_addressed_child(self):
         glue_object = ModelGlue(
@@ -472,20 +478,20 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
         result = glue_object.query_with_params()
         row_policies = [
             GluePolicy.from_token(row['policy_token'])
-            for row in result['items']
+            for row in addressed_row_entries(glue_object, result)
         ]
         relation_address = glue_object.policy.children[
             f'red_corner.{self.alpha.pk}'
         ]
-        serialized = glue_object._serialized_child_manifests()
+        serialized = glue_object._serialized_child_entries()
 
         assert all(
             policy.children['red_corner'] == relation_address
             for policy in row_policies
         )
         assert sum(
-            manifest['address'] == relation_address
-            for manifest in serialized
+            entry['address'] == relation_address
+            for entry in serialized
         ) == 1
 
     def test_projected_to_many_rows_reference_collection_owned_querysets(self):
@@ -500,20 +506,20 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
         glue_object.request = request_with_session()
 
         result = glue_object.query_with_params()
-        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        row_policy = GluePolicy.from_token(addressed_row_entries(glue_object, result)[0]['policy_token'])
         relation_address = glue_object.policy.children[
             f'skills.{self.alpha.pk}'
         ]
-        serialized = glue_object._serialized_child_manifests()
-        relation_manifest = next(
-            manifest
-            for manifest in serialized
-            if manifest['address'] == relation_address
+        serialized = glue_object._serialized_child_entries()
+        relation_entry = next(
+            entry
+            for entry in serialized
+            if entry['address'] == relation_address
         )
 
         assert row_policy.children['skills'] == relation_address
         assert GluePolicy.from_token(
-            relation_manifest['policy_token']
+            relation_entry['policy_token']
         ).namespace == 'querySet'
 
     def test_row_exposes_raw_identity_not_the_shared_child(self):
@@ -612,7 +618,7 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
             fields=['name', 'red_corner__id', 'red_corner__name']
         )
         result = glue_object.query_with_params()
-        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        row_policy = GluePolicy.from_token(addressed_row_entries(glue_object, result)[0]['policy_token'])
         relation_address = glue_object.policy.children[
             f'red_corner.{self.alpha.pk}'
         ]
@@ -639,7 +645,7 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
         )
         glue_object.request = request_with_session()
         result = glue_object.query_with_params()
-        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        row_policy = GluePolicy.from_token(addressed_row_entries(glue_object, result)[0]['policy_token'])
         relation_address = glue_object.policy.children[
             f'skills.{self.alpha.pk}'
         ]
@@ -659,12 +665,12 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
             fields=['name', 'red_corner__id', 'red_corner__name']
         )
         result = glue_object.query_with_params()
-        row_policy = GluePolicy.from_token(result['items'][0]['policy_token'])
+        row_policy = GluePolicy.from_token(addressed_row_entries(glue_object, result)[0]['policy_token'])
         context = AttributeCallRequestContext.model_construct(
             request=request_with_session(),
             target_glue_policy=row_policy,
             target_glue_updates={},
-            target_attribute_name='load_state',
+            target_attribute_name=None,
             target_attribute_call_kwargs={},
         )
         reconstructed = ModelGlue.from_attribute_call_resolver_context(context)
@@ -673,6 +679,57 @@ class QuerySetGlueProjectedRelationChildrenTestCase(TestCase):
 
         assert introduced == []
         assert 'policy_token' not in entry
+
+
+class GlueFieldsSelectionTestCase(TestCase):
+    def setUp(self):
+        self.alpha = Gorilla.objects.create(name='Alpha', age=12)
+        self.beta = Gorilla.objects.create(name='Beta', age=24)
+        self.fight = Fight.objects.create(name='Bout', red_corner=self.alpha, blue_corner=self.beta)
+
+    def test_selection_normalizes_to_canonical_paths(self):
+        assert Glue.fields('id', 'name', red_corner=('id', 'name')) == (
+            'id', 'name', 'red_corner__id', 'red_corner__name',
+        )
+
+    def test_nested_selection_prefixes_deeper_paths(self):
+        assert Glue.fields('name', red_corner=Glue.fields('name', skills=('name',))) == (
+            'name', 'red_corner__name', 'red_corner__skills__name',
+        )
+
+    def test_selection_and_ordinary_list_project_identically(self):
+        helper = ModelGlue(
+            self.fight,
+            name='fight',
+            access=GlueAccess.VIEW,
+            fields=Glue.fields('name', red_corner=('name',)),
+        )
+        ordinary = ModelGlue(
+            self.fight,
+            name='fight',
+            access=GlueAccess.VIEW,
+            fields=['name', 'red_corner__name'],
+        )
+
+        assert helper._included_fields == ordinary._included_fields
+        assert helper._projected_field_paths == ordinary._projected_field_paths
+
+    def test_selection_is_accepted_by_exclude(self):
+        glue_object = ModelGlue(
+            self.fight,
+            name='fight',
+            access=GlueAccess.VIEW,
+            fields=['name', 'red_corner'],
+            exclude=Glue.fields('red_corner'),
+        )
+
+        assert 'red_corner' not in glue_object._included_fields
+
+    def test_relation_value_must_be_a_sequence_of_names(self):
+        with pytest.raises(TypeError, match='not a string'):
+            Glue.fields(red_corner='name')
+        with pytest.raises(TypeError, match='non-empty strings'):
+            Glue.fields('')
 
 
 class ProjectedRelationCreationAccessTestCase(TestCase):
@@ -744,17 +801,114 @@ class ProjectedRelationCreationAccessTestCase(TestCase):
         skills = self._model(GlueAccess.ADD)._bind_children()[0].glue_object
         skills.request = request_with_session()
 
-        row_policy = GluePolicy.from_token(
-            skills._build_child_model_payload(self.grappling)['policy_token']
-        )
-        draft_policy = GluePolicy.from_token(
-            skills._build_child_model_payload(
-                Skill(name='Draft')
-            )['policy_token']
-        )
+        row_policy = skills._row_glue(self.grappling).policy
+        draft_policy = skills._row_glue(Skill(name='Draft')).policy
 
         assert skills.access == GlueAccess.ADD
         assert row_policy.access == GlueAccess.VIEW
         assert row_policy.identity['target_pk'] == self.grappling.pk
         assert draft_policy.access == GlueAccess.ADD
         assert draft_policy.identity['target_pk'] is None
+
+
+class RelationDraftAttachTestCase(TestCase):
+    """A draft from ``relation.new()`` saves and attaches to the exact signed
+    relation in one transaction (state-model.md §4 "Relation membership")."""
+
+    def setUp(self):
+        self.alpha = Gorilla.objects.create(name='Alpha', age=12)
+        self.beta = Gorilla.objects.create(name='Beta', age=24)
+        self.request = request_with_session()
+
+    def _relation_policy(self, fields):
+        glue_object = ModelGlue(self.alpha, name='alpha', access=GlueAccess.CHANGE, fields=fields)
+        glue_object.request = self.request
+        relation = glue_object._bind_children()[0].glue_object
+        relation.request = self.request
+        return relation.policy
+
+    def _new_draft(self, relation_policy, initial):
+        entry, introduced, _successor = request_entry(
+            QuerySetGlue, relation_policy, self.request, attribute='new', kwargs={'initial': initial},
+        )
+        draft_entry = next(item for item in introduced if item['address'] == entry['result'])
+        return GluePolicy.from_token(draft_entry['policy_token'])
+
+    def _save(self, draft_policy):
+        entry, _introduced, successor = request_entry(
+            ModelGlue, draft_policy, self.request, attribute='save',
+        )
+        return entry['result'], successor
+
+    def test_many_to_many_draft_is_added_to_the_owner_relation(self):
+        relation_policy = self._relation_policy(['skills__id', 'skills__name'])
+        draft_policy = self._new_draft(relation_policy, {'name': 'Foraging'})
+
+        result, successor = self._save(draft_policy)
+
+        assert result['success'] is True
+        assert list(self.alpha.skills.values_list('name', flat=True)) == ['Foraging']
+        assert successor.identity['target_pk'] == Skill.objects.get(name='Foraging').pk
+        assert 'relation' not in successor.identity
+
+    def test_reverse_foreign_key_draft_gets_the_signed_owner(self):
+        relation_policy = self._relation_policy([
+            'fights_as_red_corner__name',
+            'fights_as_red_corner__description',
+            'fights_as_red_corner__red_corner',
+            'fights_as_red_corner__blue_corner',
+        ])
+        draft_policy = self._new_draft(
+            relation_policy,
+            {
+                'name': 'Rematch',
+                'description': 'Round two',
+                'red_corner': self.beta.pk,
+                'blue_corner': self.beta.pk,
+            },
+        )
+
+        result, _successor = self._save(draft_policy)
+
+        assert result['success'] is True
+        fight = Fight.objects.get(name='Rematch')
+        assert fight.red_corner == self.alpha
+
+    def test_invalid_draft_attaches_nothing(self):
+        relation_policy = self._relation_policy(['skills__id', 'skills__name'])
+        draft_policy = self._new_draft(relation_policy, {'name': ''})
+
+        result, _successor = self._save(draft_policy)
+
+        assert result['success'] is False
+        assert not Skill.objects.exists()
+        assert not self.alpha.skills.exists()
+
+    def test_relation_refreshed_in_the_same_batch_sees_the_new_member(self):
+        relation_policy = self._relation_policy(['skills__id', 'skills__name'])
+        draft_policy = self._new_draft(relation_policy, {'name': 'Foraging'})
+        request = RequestFactory().post('/__dg__/callable_attribute/', data={'objects': json.dumps([
+            {
+                'address': draft_policy.address,
+                'policy_token': draft_policy.token,
+                'call': {'attribute': 'save', 'kwargs': {}},
+            },
+            {'address': relation_policy.address, 'policy_token': relation_policy.token},
+        ])})
+        request.session = MockSession()
+
+        objects = json.loads(GlueAttributeCallResolver.as_view()(request).content)['objects']
+
+        relation_entry = next(item for item in objects if item['address'] == relation_policy.address)
+        skill = Skill.objects.get(name='Foraging')
+        assert relation_entry['computed_data']['items'] == [f'{relation_policy.address}[{skill.pk}]']
+
+    def test_deleted_owner_fails_the_save(self):
+        relation_policy = self._relation_policy(['skills__id', 'skills__name'])
+        draft_policy = self._new_draft(relation_policy, {'name': 'Foraging'})
+        self.alpha.delete()
+
+        with pytest.raises(GlueModelInstanceNotFoundError):
+            self._save(draft_policy)
+
+        assert not Skill.objects.exists()

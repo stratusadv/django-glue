@@ -37,16 +37,6 @@ class GlueRequestErrorCode(StrEnum):
     # Pydantic validation
     MALFORMED_REQUEST = 'malformed_request'
 
-    # View fragment request errors
-    MISSING_VIEW_TARGET = 'missing_view_target'
-    VIEW_URL_NAME_NOT_FOUND = 'view_url_name_not_found'
-    VIEW_URL_PATH_NOT_FOUND = 'view_url_path_not_found'
-    VIEW_REDIRECT_URL_NOT_FOUND = 'view_redirect_url_not_found'
-    EXTERNAL_VIEW_REDIRECT_NOT_SUPPORTED = 'external_view_redirect_not_supported'
-    TOO_MANY_VIEW_REDIRECTS = 'too_many_view_redirects'
-    UNSUPPORTED_VIEW_RESPONSE_TYPE = 'unsupported_view_response_type'
-    VIEW_CALL_FAILED = 'view_call_failed'
-
 
 class GlueError(Exception):
     """Base exception for all Django Glue errors."""
@@ -56,6 +46,26 @@ class GlueError(Exception):
 
     def details(self) -> dict:
         return {}
+
+
+class GlueComponentRegistrationError(GlueError):
+    code = 'component_not_registered'
+    status = 400
+
+
+class GlueComponentParameterError(GlueError):
+    code = 'invalid_component_parameter'
+    status = 400
+
+
+class GlueComponentKeyError(GlueError):
+    code = 'invalid_component_key'
+    status = 400
+
+
+class GlueComponentRootError(GlueError):
+    code = 'invalid_component_root'
+    status = 500
 
 
 class GlueRequestError(GlueError):

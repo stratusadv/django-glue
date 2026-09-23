@@ -22,7 +22,6 @@ class DeclaredAttributeOptions:
 
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
     is_callable: bool = True
-    is_identity: bool = False
     render_as_html: bool = False
     is_parameter: bool = False
     value_role: GlueValueRole | None = None
@@ -62,7 +61,6 @@ class DeclaredAttribute:
         value: Any = _MISSING,
         *,
         required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW,
-        identity: bool = False,
         parameter: bool = False,
         editable: bool = False,
         render_as_html: bool = False,
@@ -77,7 +75,6 @@ class DeclaredAttribute:
             raise TypeError('DeclaredAttribute received both default and default_factory.')
 
         self.required_access = required_access
-        self._identity = identity
         self._parameter = parameter
         self._editable = editable
         self._render_as_html = render_as_html
@@ -105,7 +102,6 @@ class DeclaredAttribute:
         self.__glue_options__ = DeclaredAttributeOptions(
             required_access=self.required_access,
             is_callable=self._is_callable,
-            is_identity=self._identity,
             render_as_html=self._render_as_html,
             is_parameter=self._parameter,
             value_role=self._resolve_value_role(),
@@ -166,7 +162,7 @@ class DeclaredAttribute:
     def _adapt_value(self, value: Any, instance: Any) -> Any:
         """Run value through the first matching GlueValueAdapter, if any."""
         for adapter in self.value_adapters:
-            if adapter.applies_to(value):
+            if adapter.applies_to(value, attribute=self):
                 return adapter.adapt(value, attribute=self, instance=instance)
         return value
 

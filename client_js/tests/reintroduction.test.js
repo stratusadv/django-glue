@@ -8,7 +8,7 @@ const formPolicy = {
     identity: {target_pk: null},
 }
 const ownerPolicy = {
-    name: 'dashboard', namespace: 'template', address: 'dashboard#test',
+    name: 'dashboard', namespace: 'dashboard', address: 'dashboard#test',
     attributes: ['save'], children: {entry_form: 'form#test'}, state_snapshot: {},
 }
 const formStaticData = createStaticData({callables: {validate: {allowed_arguments: []}}})
@@ -27,7 +27,6 @@ function reintroducedFormEntry(policyToken) {
         policy_token: policyToken,
         static_data: formStaticData,
         computed_data: {},
-        loading_strategy: 'eager',
     }
 }
 
@@ -43,7 +42,7 @@ function dashboardAndForm() {
         formEntry(),
     ]})
     globalThis.Glue = client
-    const dashboard = client.template.dashboard
+    const dashboard = client.dashboard
     return {client, dashboard, form: dashboard.entry_form}
 }
 

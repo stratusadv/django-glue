@@ -1,6 +1,6 @@
 # ADR 013: The Policy-Token Lifetime Is 24 Hours From Issuance
 
-Status: Accepted; implementation pending
+Status: Accepted; implemented on branch
 
 Date: 2026-09-22
 

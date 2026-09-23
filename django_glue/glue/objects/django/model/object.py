@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import base64
 import json
-import pickle
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping, Sequence, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping, Sequence, cast
 
-from django.core.exceptions import FieldDoesNotExist, ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist, ValidationError
+from django.db import transaction
 from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
@@ -14,7 +13,6 @@ from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.children import BoundGlueChild
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
@@ -23,17 +21,13 @@ from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.field_adapter import ModelFieldAdapter
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
+from django_glue.glue.objects.django.relation import OwningRelation
 from django_glue.glue.options.django import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
+    DEFAULT_SEARCH_LIMIT,
     GlueRelatedModelChoices,
     RelatedModelChoicesResult,
 )
-from django_glue.glue.queryset_unpickler import (
-    _queryset_class_path,
-    _resolve_queryset_class,
-    unpickle_query,
-)
-
 # Runtime import required: Glue.Attribute method annotations are resolved with
 # typing.get_type_hints() when building callable kwargs.
 from django_glue.glue.policy import GluePolicy  # noqa: TC001
@@ -45,25 +39,7 @@ if TYPE_CHECKING:
     from django.db.models import Model
 
 ALL_FIELDS: Literal['__all__'] = '__all__'
-
-
-class RelatedFieldConfig(TypedDict, total=False):
-    fields: Sequence[str] | Literal['__all__']
-    exclude: Sequence[str] | Literal['__all__']
-    choice_queryset: QuerySet
-
-
-class NormalizedRelatedFieldConfig(TypedDict, total=False):
-    fields: tuple[str, ...] | Literal['__all__']
-    exclude: tuple[str, ...] | Literal['__all__']
-    choice_queryset: QuerySet
-
-
-class RelatedFieldPolicyConfig(TypedDict, total=False):
-    fields: Sequence[str] | Literal['__all__']
-    exclude: Sequence[str] | Literal['__all__']
-    encoded_choice_queryset: str
-    choice_queryset_class_path: str
+DRAFTED_PATHS_KEY = '$draft'
 
 
 def _required_save_access(glue: ModelGlue) -> GlueAccess:
@@ -97,10 +73,9 @@ class ModelGlue(
         forms: Mapping[str, forms.ModelForm] | None = None,
         select_related: Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        related_field_config: Mapping[str, RelatedFieldConfig] | None = None,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
+        choices: Mapping[str, QuerySet] | None = None,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         self.instance = instance
         self.fields = (
             fields if fields == ALL_FIELDS else tuple(fields)
@@ -108,6 +83,9 @@ class ModelGlue(
         self.exclude = (
             exclude if exclude == ALL_FIELDS else tuple(exclude)
         )
+
+        self._reject_nested_all_marker(self.fields, 'fields')
+        self._reject_nested_all_marker(self.exclude, 'exclude')
 
         if not self.fields and not self.exclude:
             msg = 'ModelGlue requires at least one of fields or exclude.'
@@ -132,14 +110,12 @@ class ModelGlue(
 
         self.annotations = annotations
         self._select_related = set(select_related or ())
+        self._editable_declaration = editable
         self.editable = self._normalize_editable(
             editable,
             self.access,
         )
-        self.related_field_config = self._normalize_related_field_config(
-            related_field_config=related_field_config,
-            model_class=self.instance.__class__,
-        )
+        self.choices = self._normalize_choices(choices)
         self.initialize_computed_attributes(computed_attributes)
 
         self.forms = self.normalize_forms(form, forms)
@@ -148,6 +124,9 @@ class ModelGlue(
         # Internal, signed for collection children: the access a row settles to
         # after its first save (None for top-level model bindings).
         self._row_access: GlueAccess | None = None
+        # Internal, signed while unsaved for a draft created through a
+        # relation: its first save attaches to that relation.
+        self._relation: OwningRelation | None = None
 
     def get_attribute_providers(self) -> tuple[Any, ...]:
         return (self.instance,)
@@ -166,14 +145,14 @@ class ModelGlue(
             identity['form_identities'] = self.serialize_forms(self.forms)
         if self._select_related:
             identity['select_related'] = list(self._select_related)
-        if self.related_field_config:
-            identity['related_field_config'] = self._serialize_related_field_config(
-                self.related_field_config
-            )
+        if self.choices:
+            identity['choices'] = self._serialize_choices(self.choices)
         if self._projected_field_paths:
             identity['projected_fields'] = self._projected_field_paths
         if self._row_access is not None:
             identity['row_access'] = self._row_access
+        if self._relation is not None and instance.pk is None:
+            identity['relation'] = self._relation.serialize()
         identity |= self.computed_attributes_identity()
 
         return identity
@@ -265,12 +244,7 @@ class ModelGlue(
             instance=self.instance,
             initial=configured_form.initial,
         )
-        return FormGlue(
-            form=form,
-            name=f'{self.name}.{path}',
-            access=self.access,
-            loading_strategy=self.resolved_loading_strategy,
-        )
+        return FormGlue(form=form, name=f'{self.name}.{path}', access=self.access)
 
     def _relation_child_factory(
         self,
@@ -312,7 +286,7 @@ class ModelGlue(
                 field = self._get_model_field(relation_name)
                 related = field.related_model._default_manager.none()
             else:
-                related = getattr(self.instance, relation_name).all()
+                related = self._related_queryset(self.instance, relation_name)
         else:
             try:
                 related = getattr(self.instance, relation_name)
@@ -322,6 +296,8 @@ class ModelGlue(
             return None
         return self._construct_relation_child(
             related,
+            owner=self.instance,
+            relation_name=relation_name,
             name=f'{self.name}.{relation_name}',
             subfields=subfields,
         )
@@ -366,7 +342,23 @@ class ModelGlue(
             field_name: self._get_model_attribute_value(field_name)
             for field_name in self.editable
         })
+        drafted = sorted(path for path in self._editable_draft if path in self.editable)
+        if drafted:
+            retained[DRAFTED_PATHS_KEY] = drafted
         return retained
+
+    def _retained_draft(self, policy: GluePolicy) -> dict[str, Any]:
+        """Only the signed overlay is draft; every other editable value is the
+        row baseline, which the freshly fetched row supersedes. An unsaved
+        instance has no row, so its whole signed editable state is draft."""
+        if policy.identity.get('target_pk') is None:
+            return super()._retained_draft(policy)
+        drafted = set(policy.state_snapshot.get(DRAFTED_PATHS_KEY, ()))
+        return {
+            path: value
+            for path, value in super()._retained_draft(policy).items()
+            if path in drafted
+        }
 
     def _get_derived_attribute_value(self, name: str) -> Any:
         if name in self.computed_attributes:
@@ -377,109 +369,6 @@ class ModelGlue(
     def _annotation_names(self) -> tuple[str, ...]:
         return tuple(self.annotations)
 
-    @staticmethod
-    def _normalize_related_field_config(
-        related_field_config: Mapping[str, RelatedFieldConfig] | None,
-        model_class: type[Model],
-    ) -> dict[str, NormalizedRelatedFieldConfig]:
-        normalized: dict[str, NormalizedRelatedFieldConfig] = {}
-        for field_name, config in (related_field_config or {}).items():
-            # Every key must name a relation on the model -- related_field_config
-            # only ever configures related objects, so a non-relation (or typo'd)
-            # key is a mistake worth surfacing rather than silently dropping.
-            try:
-                related_field = model_class._meta.get_field(field_name)
-            except FieldDoesNotExist as exception:
-                msg = f'related_field_config contains an unknown field: {field_name!r}.'
-                raise ValueError(msg) from exception
-            related_model = getattr(related_field, 'related_model', None)
-            if related_model is None:
-                msg = f'related_field_config field {field_name!r} is not a relation.'
-                raise ValueError(msg)
-
-            normalized_config = NormalizedRelatedFieldConfig()
-            fields = config.get('fields')
-            if fields:
-                normalized_config['fields'] = (
-                    fields if fields == ALL_FIELDS else tuple(fields)
-                )
-            exclude = config.get('exclude')
-            if exclude:
-                normalized_config['exclude'] = (
-                    exclude if exclude == ALL_FIELDS else tuple(exclude)
-                )
-            choice_queryset = config.get('choice_queryset')
-            if choice_queryset is not None:
-                if not isinstance(choice_queryset, QuerySet):
-                    msg = (
-                        f'related_field_config[{field_name!r}].choice_queryset '
-                        'must be a QuerySet.'
-                    )
-                    raise TypeError(msg)
-                if choice_queryset.model is not related_model:
-                    msg = (
-                        f'related_field_config[{field_name!r}].choice_queryset must query '
-                        f'{related_model._meta.label}, not {choice_queryset.model._meta.label}.'
-                    )
-                    raise ValueError(msg)
-                normalized_config['choice_queryset'] = choice_queryset.all()
-            normalized[field_name] = normalized_config
-        return normalized
-
-    @staticmethod
-    def _serialize_related_field_config(
-        related_field_config: Mapping[str, NormalizedRelatedFieldConfig],
-    ) -> dict[str, RelatedFieldPolicyConfig]:
-        serialized: dict[str, RelatedFieldPolicyConfig] = {}
-        for field_name, config in related_field_config.items():
-            serialized_config = RelatedFieldPolicyConfig()
-            fields = config.get('fields')
-            if fields:
-                serialized_config['fields'] = fields
-            exclude = config.get('exclude')
-            if exclude:
-                serialized_config['exclude'] = exclude
-            choice_queryset = config.get('choice_queryset')
-            if choice_queryset is not None:
-                serialized_config['encoded_choice_queryset'] = base64.b64encode(
-                    pickle.dumps(choice_queryset.query)
-                ).decode('utf-8')
-                serialized_config['choice_queryset_class_path'] = (
-                    _queryset_class_path(choice_queryset)
-                )
-            serialized[field_name] = serialized_config
-        return serialized
-
-    @staticmethod
-    def _deserialize_related_field_config(
-        related_field_config: Mapping[str, RelatedFieldPolicyConfig],
-    ) -> dict[str, NormalizedRelatedFieldConfig]:
-        # The exact inverse of _serialize_related_field_config: the policy is
-        # signed, so its contents are already validated -- reconstruct the
-        # normalized internal shape directly, no re-validation needed.
-        deserialized: dict[str, NormalizedRelatedFieldConfig] = {}
-        for field_name, config in related_field_config.items():
-            deserialized_config = NormalizedRelatedFieldConfig()
-            fields = config.get('fields')
-            if fields:
-                deserialized_config['fields'] = (
-                    fields if fields == ALL_FIELDS else tuple(fields)
-                )
-            exclude = config.get('exclude')
-            if exclude:
-                deserialized_config['exclude'] = (
-                    exclude if exclude == ALL_FIELDS else tuple(exclude)
-                )
-            encoded_queryset = config.get('encoded_choice_queryset')
-            if encoded_queryset is not None:
-                query = unpickle_query(encoded_queryset)
-                choice_queryset = _resolve_queryset_class(
-                    config.get('choice_queryset_class_path')
-                )(model=query.model)
-                choice_queryset.query = query
-                deserialized_config['choice_queryset'] = choice_queryset
-            deserialized[field_name] = deserialized_config
-        return deserialized
 
     @property
     def _model_meta(self) -> Any:
@@ -557,12 +446,11 @@ class ModelGlue(
         glue_object._row_access = row_access
         if row_access is not None:
             glue_object._signed_row_children = policy.children
-        # Restored post-construction from the signed (already-validated) policy:
-        # _deserialize_related_field_config yields the normalized internal shape,
+        # Restored post-construction from the signed (already-validated) policy,
         # so it does not go back through __init__ normalization.
-        glue_object.related_field_config = cls._deserialize_related_field_config(
-            policy.identity.get('related_field_config', {})
-        )
+        glue_object.choices = cls._deserialize_choices(policy.identity.get('choices', {}))
+        if 'relation' in policy.identity:
+            glue_object._relation = OwningRelation.deserialize(policy.identity['relation'])
         return glue_object
 
     def _bind_children(
@@ -652,11 +540,21 @@ class ModelGlue(
 
     @DeclaredAttribute(required_access=_required_save_access)
     def save(self) -> dict[str, Any]:
+        """Persist the draft. A draft created through a relation attaches to
+        that exact relation in the same transaction (state-model.md §4)."""
+        relation = self._relation if self.instance.pk is None else None
         try:
-            self.instance.full_clean()
-            self.instance.save()
-            self._apply_m2m_state(self._editable_draft)
-            self._rebase_draft()
+            with transaction.atomic():
+                owner = None
+                if relation is not None:
+                    owner = relation.owner()
+                    relation.assign_owner(owner, self.instance)
+                self.instance.full_clean()
+                self.instance.save()
+                self._apply_m2m_state(self._editable_draft)
+                if relation is not None:
+                    relation.attach(owner, self.instance)
+            self._editable_draft.clear()
             # A collection draft settles to its signed row access on first save:
             # this re-signs the successor response at the settled access, so the
             # client's next request carries the persisted-row permission
@@ -693,20 +591,6 @@ class ModelGlue(
             ]
             getattr(self.instance, field_name).set(pks)
 
-    def _rebase_draft(self) -> None:
-        """Rebase the draft onto the values the saved instance now holds
-        (state-model.md §4)."""
-        for field_name in tuple(self._editable_draft):
-            field = self._get_model_field(field_name)
-            if getattr(field, 'many_to_many', False):
-                self._editable_draft[field_name] = tuple(
-                    getattr(self.instance, field_name).values_list('pk', flat=True)
-                )
-            elif getattr(field, 'many_to_one', False) or getattr(field, 'one_to_one', False):
-                self._editable_draft[field_name] = getattr(self.instance, field.attname)
-            else:
-                self._editable_draft[field_name] = getattr(self.instance, field_name)
-
     @staticmethod
     def _pk_from_related_value(value: Any) -> Any:
         if isinstance(value, dict):
@@ -732,11 +616,22 @@ class ModelGlue(
         if queryset is None:
             return GlueRelatedModelChoices.empty()
 
+        if field_name not in self.choices and (
+            queryset[:DEFAULT_SEARCH_LIMIT + 1].count() > DEFAULT_SEARCH_LIMIT
+        ):
+            msg = (
+                f'Relation {field_name!r} has more than {DEFAULT_SEARCH_LIMIT} choices and no '
+                f'configured choice source. Pass choices={{{field_name!r}: Glue.choices(..., '
+                'search_fields=[...])}} to make it searchable.'
+            )
+            raise ImproperlyConfigured(msg)
+
         return GlueRelatedModelChoices(
             queryset,
             value_field_name=self._choice_value_field_name_for_field(field_name),
         ).load(
             search=search,
+            request=self.request,
         )
 
     def _choice_value_field_name_for_field(self, field_name: str) -> str:
@@ -751,9 +646,7 @@ class ModelGlue(
         related_model = getattr(field, 'related_model', None)
         if related_model is None:
             return None
-        configured_queryset = self.related_field_config.get(field_name, {}).get(
-            'choice_queryset'
-        )
+        configured_queryset = self.choices.get(field_name)
         if configured_queryset is not None:
             return configured_queryset
         return related_model.objects.all()

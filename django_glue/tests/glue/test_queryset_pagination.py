@@ -13,8 +13,8 @@ from django_glue.exceptions import (
 )
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.tests.glue.addressed_rows import addressed_row_entries
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 
@@ -42,15 +42,15 @@ class QuerySetPaginationTestCase(TestCase):
         for index in range(7):
             Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index, weight=100.0, height=1.5)
 
-    def _names(self, result):
-        return [row['computed_data']['name'] for row in result['items']]
+    def _names(self, glue_object, result):
+        return [row['computed_data']['name'] for row in addressed_row_entries(glue_object, result)]
 
     def _all_names_via_cursor(self, glue_object, **params):
         names = []
         seek_key = None
         for _ in range(20):  # generous upper bound so a broken loop fails fast, not forever
             result = glue_object.query_with_params(seek_key=seek_key, **params)
-            names.extend(self._names(result))
+            names.extend(self._names(glue_object, result))
             if not result['has_next']:
                 return names
             seek_key = result['seek_key']
@@ -61,22 +61,18 @@ class QuerySetPaginationTestCase(TestCase):
         Skill.objects.create(name='Hidden')
         glue_object = build_glue(
             fields=['id', 'name', 'skills'],
-            related_field_config={
-                'skills': {
-                    'choice_queryset': Glue.choices(
-                        Skill.objects.filter(name='Visible'),
-                        fields=['name'],
-                    ),
-                },
+            choices={
+                'skills': Glue.choices(
+                    Skill.objects.filter(name='Visible'),
+                    fields=['name'],
+                ),
             },
         )
 
         restored_queryset = QuerySetGlue._reconstruct_from_policy(glue_object.policy)
         restored_queryset.request = request_with_session()
-        child_payload = restored_queryset._build_child_model_payload(
-            restored_queryset.queryset.first()
-        )
-        child_policy = GluePolicy.from_token(child_payload['policy_token'])
+        child = restored_queryset._row_glue(restored_queryset.queryset.first())
+        child_policy = child.policy
         child = ModelGlue._reconstruct_from_policy(child_policy)
 
         result = child.foreign_key_choices(field_name='skills')
@@ -113,10 +109,28 @@ class QuerySetPaginationTestCase(TestCase):
 
         result = glue_object.query_with_params()
 
-        self.assertEqual(self._names(result), ['Gorilla 00', 'Gorilla 01', 'Gorilla 02'])
+        self.assertEqual(self._names(glue_object, result), ['Gorilla 00', 'Gorilla 01', 'Gorilla 02'])
         self.assertTrue(result['has_next'])
         self.assertIsNotNone(result['seek_key'])
         self.assertEqual(result['batch_size'], 3)
+
+    def test_cursor_memory_is_signed_as_retained_state_not_identity(self):
+        from django_glue.tests.glue.test_callable_parameters import call_context
+
+        glue_object = build_glue(batch_size=3)
+        context = call_context(glue_object, 'query_with_params', kwargs={'order_by': ['name']})
+        reconstructed = QuerySetGlue.from_attribute_call_resolver_context(context)
+
+        entry, _introduced = reconstructed.process_attribute_call(context)
+        successor = GluePolicy.from_token(entry['policy_token'])
+
+        self.assertNotIn('loaded_row_count', successor.identity)
+        self.assertNotIn('last_query_params', successor.identity)
+        self.assertEqual(successor.state_snapshot['loaded_row_count'], 3)
+        self.assertEqual(
+            QuerySetGlue._reconstruct_from_policy(successor)._loaded_row_count,
+            3,
+        )
 
     def test_following_the_cursor_reaches_the_partial_last_page(self):
         glue_object = build_glue(batch_size=3)
@@ -125,9 +139,9 @@ class QuerySetPaginationTestCase(TestCase):
         second = glue_object.query_with_params(seek_key=first['seek_key'])
         third = glue_object.query_with_params(seek_key=second['seek_key'])
 
-        self.assertEqual(self._names(second), ['Gorilla 03', 'Gorilla 04', 'Gorilla 05'])
+        self.assertEqual(self._names(glue_object, second), ['Gorilla 03', 'Gorilla 04', 'Gorilla 05'])
         self.assertTrue(second['has_next'])
-        self.assertEqual(self._names(third), ['Gorilla 06'])
+        self.assertEqual(self._names(glue_object, third), ['Gorilla 06'])
         self.assertFalse(third['has_next'])
         self.assertIsNone(third['seek_key'])
 
@@ -192,11 +206,11 @@ class QuerySetPaginationTestCase(TestCase):
         self._all_names_via_cursor(glue_object)  # loaded_row_count now covers all 7 rows
 
         first = glue_object.query_with_params(slice={'start': 0, 'stop': 4})
-        self.assertEqual(self._names(first), ['Gorilla 00', 'Gorilla 01'])
+        self.assertEqual(self._names(glue_object, first), ['Gorilla 00', 'Gorilla 01'])
         self.assertTrue(first['has_next'])
 
         second = glue_object.query_with_params(slice={'start': 0, 'stop': 4}, seek_key=first['seek_key'])
-        self.assertEqual(self._names(second), ['Gorilla 02', 'Gorilla 03'])
+        self.assertEqual(self._names(glue_object, second), ['Gorilla 02', 'Gorilla 03'])
 
     def test_unordered_queryset_is_ordered_by_pk_and_seeks_without_offset(self):
         glue_object = build_glue(Gorilla.objects.all(), batch_size=3)
@@ -214,7 +228,7 @@ class QuerySetPaginationTestCase(TestCase):
 
         result = glue_object.query_with_params(order_by='-name')
 
-        self.assertEqual(self._names(result), ['Gorilla 06', 'Gorilla 05', 'Gorilla 04'])
+        self.assertEqual(self._names(glue_object, result), ['Gorilla 06', 'Gorilla 05', 'Gorilla 04'])
 
     def test_non_unique_ordering_field_still_produces_stable_pages(self):
         # Every gorilla shares the same weight, so pk is the only thing that
@@ -251,13 +265,13 @@ class QuerySetPaginationTestCase(TestCase):
         with self.assertNumQueries(1):
             glue_object.query_with_params()
 
-    def test_eager_state_is_the_first_page(self):
-        glue_object = build_glue(batch_size=3, loading_strategy=LoadingStrategy.EAGER)
+    def test_introduction_carries_no_rows(self):
+        glue_object = build_glue(batch_size=3)
 
-        state = glue_object.state
+        entry = glue_object.entry
 
-        self.assertEqual(self._names(state), ['Gorilla 00', 'Gorilla 01', 'Gorilla 02'])
-        self.assertTrue(state['has_next'])
+        self.assertNotIn('items', entry.computed_data)
+        self.assertEqual(glue_object._serialized_child_entries(), [])
 
     def test_batch_size_is_signed_into_the_policy_and_restored(self):
         glue_object = build_glue(batch_size=2)
@@ -367,15 +381,15 @@ class QuerySetNullOrderingTestCase(TestCase):
                 name=f'Fight {index}', red_corner=gorilla, blue_corner=rival, status=status,
             )
 
-    def _names(self, result):
-        return [row['computed_data']['name'] for row in result['items']]
+    def _names(self, glue_object, result):
+        return [row['computed_data']['name'] for row in addressed_row_entries(glue_object, result)]
 
     def _all_names_via_cursor(self, glue_object, **params):
         names = []
         seek_key = None
         for _ in range(20):
             result = glue_object.query_with_params(seek_key=seek_key, **params)
-            names.extend(self._names(result))
+            names.extend(self._names(glue_object, result))
             if not result['has_next']:
                 return names
             seek_key = result['seek_key']
@@ -413,11 +427,11 @@ class QuerySetNullOrderingTestCase(TestCase):
 
         # Whichever direction, the three NULL-status fights land at the end.
         self.assertEqual(
-            [row['computed_data']['status'] for row in ascending['items']][-3:],
+            [row['computed_data']['status'] for row in addressed_row_entries(glue_object, ascending)][-3:],
             [None, None, None],
         )
         self.assertEqual(
-            [row['computed_data']['status'] for row in descending['items']][-3:],
+            [row['computed_data']['status'] for row in addressed_row_entries(glue_object, descending)][-3:],
             [None, None, None],
         )
 

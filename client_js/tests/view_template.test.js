@@ -2,33 +2,62 @@ import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
 import GlueView from "../src/view"
 import {htmlResultFromResponse} from "../src/htmlRenderer"
-import {attributeResponse, createEntry, createManifest} from "./testUtils"
+import {attributeResponse, createEntry} from "./testUtils"
 
 describe('view and template facades', () => {
-    test('view requests merge payloads, preserve the inner method, and load manifests', async () => {
+    test('a GET view requests the real same-origin URL with the payload as query parameters', async () => {
         happyDOM.setURL('http://localhost/')
-        let request
+        const requests = []
         const loaded = []
         const previousGlue = globalThis.Glue
-        globalThis.Glue = {loadManifests: manifests => loaded.push(...manifests)}
-        const child = createManifest({policy: {name: 'child', address: 'child#test'}})
+        globalThis.Glue = {loadObjects: objects => loaded.push(...objects)}
+        const child = createEntry({policy: {name: 'child', address: 'child#test'}})
         const view = new GlueView({
-            _config: {glueViewUrlPath: '/view/'},
-            sendRequest: async (_url, options) => {
-                request = JSON.parse(options.body)
-                return {data: {html: '<p>Loaded</p>', manifest_list: [child]}}
+            _config: {glueViewMediaType: 'application/vnd.django-glue.view+json'},
+            sendRequest: async (url, options) => {
+                requests.push({url, options})
+                return {data: {is_glue_template_response: true, html: '<p>Loaded</p>', objects: [child]}}
             },
-        }, 'http://example.com/detail/', {shared: true})
+        }, 'http://example.com/detail/?tab=1', {shared: true})
 
         try {
             expect(await view.get({local: 1})).toBe('<p>Loaded</p>')
         } finally {
             globalThis.Glue = previousGlue
         }
-        expect(request).toEqual({
-            url_path: '/detail/', method: 'GET', view_payload: {shared: true, local: 1},
-        })
+        expect(requests[0].url).toBe('/detail/?tab=1&shared=true&local=1')
+        expect(requests[0].options.method).toBe('GET')
+        expect(requests[0].options.headers.Accept).toBe('application/vnd.django-glue.view+json')
         expect(loaded).toEqual([child])
+    })
+
+    test('a POST view sends the merged payload as CSRF-protected JSON to the real URL', async () => {
+        happyDOM.setURL('http://localhost/')
+        let request
+        const view = new GlueView({
+            _config: {glueViewMediaType: 'application/vnd.django-glue.view+json'},
+            sendRequest: async (url, options) => {
+                request = {url, options}
+                return {data: {is_glue_template_response: true, html: '<p>Posted</p>', objects: []}}
+            },
+        }, '/detail/', {shared: true})
+
+        expect(await view.post({local: 1})).toBe('<p>Posted</p>')
+        expect(request.url).toBe('/detail/')
+        expect(request.options.csrfProtected).toBeTrue()
+        expect(JSON.parse(request.options.body)).toEqual({shared: true, local: 1})
+    })
+
+    test('a response without the envelope marker is a non-fragment outcome', async () => {
+        happyDOM.setURL('http://localhost/')
+        const view = new GlueView({
+            _config: {glueViewMediaType: 'application/vnd.django-glue.view+json'},
+            sendRequest: async () => ({data: null}),
+        }, '/download/')
+        document.body.innerHTML = '<div id="target"><b>Kept</b></div>'
+
+        expect(await view.renderInnerHtml('#target')).toBeNull()
+        expect(document.querySelector('#target').innerHTML).toBe('<b>Kept</b>')
     })
 
     test('inserts returned HTML at each adjacent position', async () => {
@@ -58,41 +87,20 @@ describe('view and template facades', () => {
         )
     })
 
-    test('template proxies render through the shared HTML interface', async () => {
-        const manifest = createEntry({
-            policy: {
-                name: 'card', namespace: 'template', address: 'card#test',
-                attributes: ['render_html'], state_snapshot: {},
-            },
-            staticData: {fields: {}, callables: {render_html: {allowed_arguments: ['title']}}},
-        })
-        const client = new GlueClient({objects: [manifest]})
-        client.http.sendAttributeRequest = async request => {
-            expect(request.kwargs).toEqual({title: 'Profile'})
-            return attributeResponse('card#test', {result: {html: '<p>Rendered</p>'}})
-        }
-        document.body.innerHTML = '<div id="target"></div>'
-
-        await client.template.card.renderInnerHtml('#target', {title: 'Profile'})
-
-        expect(document.querySelector('#target').innerHTML).toBe('<p>Rendered</p>')
-    })
-
-    test('callable template responses load their public manifests', async () => {
+    test('callable template responses load their public objects', async () => {
         const source = createEntry({
             policy: {attributes: ['save'], state_snapshot: {}},
             staticData: {callables: {save: {allowed_arguments: []}}},
         })
-        const child = createManifest({policy: {
+        const child = createEntry({policy: {
             name: 'new_row', address: 'new-row#test', state_snapshot: {id: 7, name: 'New'},
         }})
         const client = new GlueClient({objects: [source]})
         globalThis.Glue = client
-        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: {
-            is_glue_template_response: true,
-            html: '<p>Row list</p>',
-            manifest_list: [child],
-        }})
+        client.http.sendAttributeRequest = async () => ({data: {objects: [
+            {address: 'gorilla#test', html: '<p>Row list</p>', result: null},
+            child,
+        ]}})
 
         const result = await client.model.gorilla.save()
 

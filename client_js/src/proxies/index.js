@@ -5,7 +5,7 @@ import GlueFormSetProxy from "./formset"
 import GlueFunctionProxy from "./function"
 import GlueModelProxy from "./model"
 import GlueQuerySetProxy from "./queryset"
-import GlueTemplateProxy from "./template"
+import GlueComponentProxy from "./component"
 import {getProxyClass, registerProxyClass} from "./registry"
 
 const NAMESPACE_TO_PROXY_CLASS = {
@@ -15,7 +15,7 @@ const NAMESPACE_TO_PROXY_CLASS = {
     function: GlueFunctionProxy,
     model: GlueModelProxy,
     querySet: GlueQuerySetProxy,
-    template: GlueTemplateProxy,
+    component: GlueComponentProxy,
 }
 
 Object.entries(NAMESPACE_TO_PROXY_CLASS).forEach(([namespace, proxyClass]) => {
@@ -31,7 +31,7 @@ export {
     GlueFunctionProxy,
     GlueModelProxy,
     GlueQuerySetProxy,
-    GlueTemplateProxy,
+    GlueComponentProxy,
     NAMESPACE_TO_PROXY_CLASS,
     registerProxyClass,
 }

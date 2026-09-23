@@ -88,17 +88,16 @@ server objects.
     `CustomEvent` from its root for ordinary Alpine and JavaScript handling.
     Observing a browser event grants no authority, and any resulting Glue call
     uses that target's own policy.
-16. **Parameter sources are visible.** Literal HTML attributes are strings,
-    complete `{{ ... }}` attributes resolve typed Django-context values, and
-    `:` / `x-bind:` attributes resolve untrusted Alpine values for an
-    authorized delayed mount. Glue never guesses between server and client
-    scopes, and an admitted mount value becomes an ordinary immutable signed
-    parameter.
-17. **Component markup is compiled, not interpreted at runtime.** A thin Glue
-    `DjangoTemplates` backend compiles registered `<glue:... />` elements once
-    into ordinary component nodes while preserving Django's loaders, caching,
-    escaping, inheritance, and diagnostics. Templates without Glue elements
-    take an unchanged fast path.
+16. **Parameter sources are explicit.** `{% glue_component 'tag' name=value %}`
+    resolves Django filter expressions to typed Python values at render time.
+    Those values become signed parameters at introduction, and the component
+    mounts during that render. Client-evaluated parameters and delayed
+    (`lazy`/`defer`) mounting are not part of the tag; each would need its own
+    future design.
+17. **Components use the Django template system directly.** The existing
+    `django_glue` library supplies `{% glue_component %}`. Django compiles the
+    tag with its ordinary loaders, caching, inheritance, and diagnostics; no
+    custom template backend or HTML element compiler is needed.
 18. **Component instances are addressable without global names.** Alpine's
     `$glue` resolves the component for its current scope; `Glue.from(element)`
     resolves the nearest addressed component root in plain JavaScript, and

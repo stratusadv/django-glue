@@ -1,182 +1,34 @@
-# Field Filtering
+# Field projection
 
-## Overview
-
-Field filtering controls which model fields are exposed to the frontend. You must specify either `fields` to whitelist specific fields or `exclude` to blacklist them.
-
-## Whitelist with `fields`
-
-The `fields` parameter restricts the glue object to only the specified fields:
+Use `fields` to expose an explicit set of model fields, or `exclude` to
+remove fields from the default selection. `editable` narrows the exposed
+fields that accept browser updates:
 
 ```python
-from django_glue import Glue, GlueAccess
-
 Glue.model(
     request=request,
+    target=task,
     unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'done'],
+    access=Glue.Access.CHANGE,
+    fields=['id', 'title', 'done', 'project', 'project__name'],
+    editable=['title', 'done', 'project'],
 )
 ```
 
-Only `id`, `title`, and `done` can be read or written from the frontend. All other fields are invisible.
+The same projection applies to rows returned by `Glue.queryset()`. Nested
+`__` paths explicitly traverse relations. A to-one traversal produces an
+addressed model child; a to-many or reverse traversal produces an addressed
+queryset child. `fields='__all__'` exposes ordinary fields but does not
+automatically traverse relations. ORM `select_related()` and
+`prefetch_related()` optimize fetching without changing exposure.
 
-## Blacklist with `exclude`
-
-The `exclude` parameter hides specific fields while exposing everything else:
+`Glue.fields()` is optional shorthand for a canonical path tuple:
 
 ```python
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    exclude=['password', 'internal_notes', 'api_key'],
-)
+selection = Glue.fields('id', 'title', project=['id', 'name'])
 ```
 
-## Using `ALL_FIELDS`
-
-Use the `ALL_FIELDS` constant to explicitly include or exclude all fields:
-
-```python
-from django_glue import Glue, GlueAccess, ALL_FIELDS
-
-# Include all fields
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=ALL_FIELDS,
-)
-
-# Exclude all model fields (useful when you only want form fields)
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    exclude=ALL_FIELDS,
-)
-```
-
-## Using Both `fields` and `exclude`
-
-When both are provided, `fields` restricts the candidate set, then `exclude` removes fields from it:
-
-```python
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'description', 'done', 'priority'],
-    exclude=['priority'],  # priority is removed from the allowed set
-)
-```
-
-!!! note
-
-    Either `fields` or `exclude` must be provided. If you provide neither, a `ValueError` is raised.
-
-## Field Filtering on QuerySet Glue
-
-Field filtering works the same way on queryset glue:
-
-```python
-Glue.queryset(
-    request=request,
-    unique_name='tasks',
-    target=Task.objects.all(),
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'done', 'created_at'],
-)
-```
-
-Only the specified fields will be returned when you call `all()`, `filter()`, `orderBy()`, or `slice()`.
-
-## Related Fields
-
-When you include a ForeignKey or ManyToMany field in `fields`, the glue object will serialize the related data:
-
-```python
-Glue.queryset(
-    request=request,
-    unique_name='tasks',
-    target=Task.objects.select_related('assigned_to').prefetch_related('tags'),
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'assigned_to', 'tags'],
-)
-```
-
-- **ForeignKey** fields return the nested object's exposed fields
-- **ManyToMany** fields return a list of related object PKs
-
-## Custom ModelForm with Field Filtering
-
-When you provide a `form` or `forms` parameter, the field filtering is derived from the form's fields combined with the glue `fields`/`exclude` settings:
-
-```python
-from myapp.forms import TaskSummaryForm
-
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title'],
-    form=TaskSummaryForm,
-)
-```
-
-The `fields` and `exclude` parameters further restrict the exposed fields.
-
-## Primary Key is Always Included
-
-The primary key (`id`) is always included in the field definitions, even if you don't explicitly list it. This is necessary for the glue object to identify the model instance.
-
-## Practical Use Cases
-
-### Read-Only Summary View
-
-Expose only display fields for a summary view:
-
-```python
-Glue.model(
-    request=request,
-    unique_name='task_summary',
-    target=task,
-    access=GlueAccess.VIEW,
-    fields=['id', 'title', 'done', 'created_at'],
-)
-```
-
-### Edit Form with Restricted Fields
-
-Allow editing only certain fields:
-
-```python
-Glue.model(
-    request=request,
-    unique_name='task',
-    target=task,
-    access=GlueAccess.CHANGE,
-    fields=['id', 'title', 'description', 'done'],
-)
-```
-
-### Hide Sensitive Data
-
-Exclude sensitive fields while allowing access to the rest:
-
-```python
-Glue.model(
-    request=request,
-    unique_name='user_profile',
-    target=user,
-    access=GlueAccess.CHANGE,
-    exclude=['password', 'last_login', 'user_permissions'],
-)
-```
+That selection has the same meaning as
+`['id', 'title', 'project__id', 'project__name']`.
+Use `choices={'project': Glue.choices(...)}` for a separate trusted relation
+choice source. A choice source does not widen the projected relation fields.

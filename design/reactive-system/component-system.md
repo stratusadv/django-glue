@@ -1,26 +1,23 @@
 # Component System
 
-Status: Accepted living design; implementation pending, with bundled Alpine,
-unified HTML rendering, and the component base already present on the branch
+Status: Accepted living design; implemented on the django-glue state-model
+branch. Portal consumer migration to that branch remains a separate gate.
 
 Date: 2026-09-10
 
 ## Context
 
-Django Glue already solves the backend/frontend contract: signed, stateless
-policies (`glue/policy.py`), declared attributes (`@Glue.attr`,
-`@Glue.property`), nested glue objects (`GlueObjectAttribute`), a namespace
-registry (`glue/registry.py`), and a round trip that can return a successor
-policy, computed data, new manifests, and HTML.
+Django Glue began with signed, stateless policies, declared attributes, a
+namespace registry, and server-authored HTML. The state-model refactor gives
+those pieces addressed children and the flat `objects` response envelope.
 
-The time entry dashboard in stratusadv-portal
-(`app/time_tracker/glue/dashboard/`) proves the ViewModel half of a component
-system works: one `Glue.object()` call in the view, one
-`Glue.timeEntryDashboard` binding in `x-data`, and commands such as
-`next_week()` that mutate `self` and return `{}` so refreshed state is the
-payload.
+The time-entry dashboard in stratusadv-portal first proved the ViewModel half
+of a component system with a registered Glue object and `next_week()` command.
+It now lives at `app/time_tracker/components/time_entry_dashboard.py` and is
+stamped by the portal dashboard page. Its browser E2Es cover keyed week
+navigation and the add-entry modal on the portal's component branch.
 
-What still hurts is composition:
+The original composition problems motivating this design were:
 
 - Child identity is a hand-written global string
   (`f'time_entry_day_{date:%Y_%m_%d}'`, `f'{self.name}.entries.new'`). The
@@ -290,9 +287,28 @@ class EntryEditor(Glue.Component):
 Glue does not call `mount()` when reconstructing an object from a verified
 token, advancing its token after an action, or rendering a parent that retains
 the already-mounted child. It runs again only when a component is genuinely
-introduced again after removal or on a new page load. Consequently it is
+introduced again: after removal, on a new page load, or when an expired child
+is reintroduced through its owner (`state-model.md` §10). Consequently it is
 suitable for producing initial retained state, but not for exactly-once durable
 side effects: browsers can reload and initial responses can be retried.
+
+Reintroduction reruns the factory and authorizes the result from scratch, so it
+also reruns `mount()`: retained state the client cannot edit restarts from
+`mount()`'s output, while the client's editable draft, Alpine scope, and
+request queue survive at the same address and the draft is resubmitted as
+ordinary `updates`. Recovering retained state from the expired token instead
+would honor a token past its fixed lifetime (ADR 013). Livewire makes the same
+trade at its equivalent boundary: its snapshot carries no expiry, its only
+time bound is the session, and a 419 "page expired" ends in a reload that
+remounts every component; reintroduction is the narrower form of that reload.
+
+Introduction is one framework step for every Glue family, not a component
+special case: `introduce(request)` authorizes the `introduce` operation and
+binds the object to the request, and `Component` extends it by calling
+`mount()`. Page roots, child slots, callable results, and reintroduced
+children all introduce through it. A denied page root is an error, a denied
+callable result fails its entry with `not_authorized`, and a denied child is
+omitted and stays unbound.
 
 The generated `__init__` remains framework-owned and may run during server
 reconstruction. Glue does not bypass normal Python construction with
@@ -358,21 +374,45 @@ their own signed parameters. Template partials or keyed Alpine regions may
 split presentation without inventing child authorities. The removed
 optional-parameter mechanism and request batching are not cross-object caches.
 
-### 5. Components are stamped with HTML-like Glue elements
+### 5. Components are stamped with a Django template tag
 
-The public composition syntax is a self-closing HTML-like element rather than
-a Django block tag:
+The public composition syntax is the `{% glue_component %}` tag established on
+the component workstream (commit `e6f204b`):
 
 ```django
+{% load django_glue %}
 {% for date in component.dates %}
-    <glue:time-entry-day
-        date="{{ date }}"
-        user-id="{{ component.user_id }}"
-        key="{{ date }}"
-        @saved="$glue.$refresh()"
-    />
+    {% glue_component 'time-entry-day' date=date user_id=component.user_id key=date %}
 {% endfor %}
 ```
+
+The first positional expression resolves the registered component tag name.
+Named expressions resolve through Django's `FilterExpression`, retaining Python
+types without an HTML attribute parser. `key` and `access` are reserved; all
+other named expressions must be declared parameters. The tag is self-closing in
+Django template syntax; slots remain deferred. The tag lives in the existing
+`django_glue` template library, so no custom `DjangoTemplates` backend, HTML
+element scanner, or `<glue:... />` grammar is part of the target design.
+
+The render context supplies the composing component. A stamp inside a Django
+loop requires a stable explicit key; `forloop.counter` and
+`forloop.counter0` are rejected. A key must be an immutable supported scalar
+or non-empty tuple of those values, canonicalized with type information.
+Duplicate target/key pairs under one parent fail. The key determines a stable
+child address under the composing parent on the addressed wire, while the
+component class's registered identifier determines reconstruction. Changing
+the public tag name does not replace that signed identifier.
+
+Server-resolved parameters are sampled at introduction and signed. There is no
+implicit subscription to the expression that supplied one. The tag has no
+Alpine-bound parameter spelling, no `lazy` or `defer` mount mode, and no
+stamp-level event handlers: every stamped component mounts during the server
+render that stamps it, and event handling belongs on ordinary markup or on the
+source proxy (see "Declared events communicate semantic outcomes"). Client-
+evaluated parameters and delayed mounting would each need their own design;
+neither is part of this one.
+
+#### Tag names
 
 `TimeEntryDay` derives the default tag name `time-entry-day`. A component may
 override it when a shorter, domain-qualified, or collision-free public name is
@@ -383,108 +423,20 @@ class TimeEntryDay(Glue.Component):
     tag_name = 'time-tracker.time-entry-day'
 ```
 
-```html
-<glue:time-tracker.time-entry-day ... />
+```django
+{% glue_component 'time-tracker.time-entry-day' date=date user_id=user.pk key=date %}
 ```
 
-Names are lowercase kebab-case segments. Component registration rejects two
-classes with the same effective tag name during Django's startup checks rather
-than choosing by import order. The override changes the public template name;
-it does not replace the component's signed reconstruction identifier.
+Names are lowercase kebab-case segments separated by dots. Component
+registration rejects two classes with the same effective tag name during
+Django's startup checks rather than choosing by import order. The override
+changes the public template name; it does not replace the component's signed
+reconstruction identifier. Components are discovered from each installed
+app's `components` module or package at startup.
 
-The initial grammar deliberately supports only registered, statically named,
-self-closing component elements. Slots, paired component elements, and dynamic
-component-class selection are separate extensions. The compiler can therefore
-resolve the class and reject unknown parameters, events, framework attributes,
-and duplicate attributes before rendering request data.
-
-#### The Glue template backend is a narrow compiler layer
-
-Plain HTML-like elements are text to Django's template lexer, so Glue supplies
-a `DjangoTemplates` subclass. It recognizes `<glue:... />` elements and
-compiles them to internal component nodes before ordinary Django compilation;
-it is not another template engine. Django context processors, escaping,
-inheritance, includes, loaders, and template caching remain authoritative.
-
-The compiler has a strict fast path: when a source contains no `<glue:` marker
-it returns the source unchanged. A template containing components is scanned
-once when Django compiles it, not on each render, and Django's cached-loader
-behavior must be preserved. Component rendering therefore has the same
-steady-state cost regardless of whether its source spelling was HTML-like or
-an internal node.
-
-Robustness is part of the backend contract:
-
-- recognize only complete, self-closing Glue elements in HTML data context;
-- ignore examples inside HTML/Django comments, `script`, `style`, and Django
-  `verbatim` regions;
-- parse quoted multiline attributes without regular-expression shortcuts;
-- preserve original template origins and line locations in compile errors;
-- cover filesystem, app-directory, custom and cached loaders, template
-  inheritance/includes, and `from_string()`;
-- fail on malformed Glue elements rather than emitting them to the browser;
-  and
-- leave all non-Glue source unchanged.
-
-#### Parameter sources are explicit
-
-An attribute has exactly one source, visible in its spelling:
-
-```html
-<glue:report-preview
-    account-id="{{ account.pk }}"
-    :date-range="selectedRange"
-    theme="compact"
-    lazy
-/>
-```
-
-- A complete `{{ account.pk }}` value is a normal Django filter expression
-  resolved against the render context. The compiler passes its Python value to
-  the component without rendering it to text, so serializer-supported types
-  remain typed.
-- Text containing one or more interpolations, such as
-  `label="Report for {{ account.name }}"`, produces a string under Django's
-  ordinary escaping rules.
-- `:date-range="selectedRange"` and the long
-  `x-bind:date-range="selectedRange"` spelling both mean an Alpine expression
-  evaluated in the enclosing Alpine scope. The `:` shorthand has the same
-  meaning on a Glue element as it has on ordinary HTML.
-- `theme="compact"` is a literal string.
-
-Glue never guesses a source by looking for the same name in Django and Alpine
-contexts. That would make typos change trust domains and make a template's
-meaning depend on incidental context values. HTML kebab-case attribute names
-map mechanically to declared Python snake_case names.
-
-An Alpine-bound parameter requires `lazy` or `defer`; using one on an eager
-component is a compile error. `lazy` mounts when the placeholder enters the
-viewport, while `defer` mounts after initial Alpine initialization. They are
-mutually exclusive. A server-resolved component may also use either mode to
-delay expensive mounting without changing the source or trust of its
-parameters.
-
-The initial server render resolves and signs fixed Django parameters into a
-mount-only policy. That policy also names the exact Alpine-bound parameters the
-stamp site permits but does not sign their values. At the load trigger, Glue
-evaluates those expressions through the enclosing Alpine scope and submits the
-results as untrusted construction input. The server rejects additional names,
-validates the declared parameter types, applies current authorization, calls
-`mount()`, and returns the normal policy, static data, computed data, and HTML.
-
-An accepted Alpine value is then signed into the normal policy's
-`target.parameters`. It is sampled once and does not remain bound to Alpine;
-later propagation is the separate reactive-parameter feature. A server-issued
-stamp may be cloned by an authorized Alpine `x-for`, but the mount-only policy
-still fixes the component target and permitted parameter names. Glue does not
-initially expose a global client factory that can mount arbitrary registered
-components without such a server-authored stamp.
-
-The compiled stamp establishes parentage from the render context—reading the
-enclosing component that `get_context_data()` placed there—so stamped
-components join the address tree rather than a flat namespace. Removing the
-owner or placeholder cancels an outstanding lazy mount and disposes any child
-that it introduced.
+The tag supports only registered components with a single root element.
+Slots, paired tags, and dynamic component-class selection are separate
+extensions.
 
 #### Keys
 
@@ -495,32 +447,27 @@ rendered**, not declared by the component, as with Blazor's `@key` and React's
 `(user_id, date)` under a team grid.
 
 ```django
-{% for user in component.users %}{% for date in component.dates %}
-    <glue:time-entry-day
-        date="{{ date }}"
-        user-id="{{ user.id }}"
-        key="({{ user.id }}, {{ date }})"
-    />
-{% endfor %}{% endfor %}
+{% for cell in component.cells %}
+    {% glue_component 'time-entry-day' date=cell.date user_id=cell.user_id key=cell.key %}
+{% endfor %}
 ```
 
-A complete `key="{{ expression }}"` preserves the resolved scalar type. The
-parenthesized form is a composite key whose comma-separated members must each
-be one complete Django interpolation; it preserves member types and tuple
-boundaries rather than concatenating display strings. Literal keys remain
-available for fixed variants. The component compiler owns this small key
-grouping grammar, but each member remains a normal Django filter expression.
+`key=` is an ordinary Django filter expression, and its resolved Python value
+is the key: the scalar type survives, and a composite key is a tuple the
+render context supplies (here `cell.key` is `(user_id, date)`). Django's
+template language has no tuple literal, so composite keys come from the
+context rather than from a key grammar; literal scalar keys remain available
+for fixed variants.
 
 - In Python, an addressed collection adapter declares the key for its items,
-  so it is still the collection choosing, not the item. A normal
-  `Glue.attr(...)` may hold serializable collection data but never a direct or
-  nested `BaseGlue` item. Querysets and formsets provide their own keyed
-  addressed collections; any future general collection shortcut must use the
-  same child contract rather than restoring `glue_factory` inference on
-  ordinary state.
-- A server-authored stamp inside a Django loop uses `key="{{ ... }}"`.
-  Client-side cloning inside Alpine `x-for` uses Alpine's ordinary `:key` and a
-  mount-only capability emitted for that stamp site.
+  so it is still the collection choosing, not the item. Querysets and formsets
+  provide their own keyed addressed collections. A `Glue.attr(...)` list holds
+  ordinary serializable data unless its items are meant to be proxies: a list
+  holding Glue objects, or a declaration naming a `glue_factory` that turns
+  raw items such as model instances into Glue objects, becomes an addressed
+  `SequenceGlue`. A list mixing Glue objects with raw items and no factory is
+  an error, never plain data.
+- A server-authored stamp inside a Django loop supplies `key=`.
 - The registered component target and canonical key are baked into the child's
   address at stamp time, and the address is signed as the policy name. The same
   key may be used by different child targets under one parent; two instances
@@ -537,25 +484,6 @@ the typed value rather than calling `str()`, so integer `1`, string `"1"`, and
 composite `(1, "2")` cannot collide. Mutable containers, Glue objects, Django
 models, forms, and querysets are not keys.
 
-The composite grammar's edges are closed rather than left to fall through to the
-literal rule:
-
-- A parenthesized `key` attribute is **always** a composite. Every
-  comma-separated member must be one complete `{{ ... }}` interpolation; a member
-  that is not is a compile error naming the member, not a literal string. So
-  `key="(draft)"` fails rather than silently becoming the four-character string
-  `(draft)`. A literal key that genuinely needs surrounding parentheses is not
-  expressible, which is an acceptable loss.
-- Member splitting is quote- and brace-aware, exactly as the element scanner is.
-  `key="({{ a|default:&quot;x,y&quot; }}, {{ b }})"` is two members, not three. A
-  naive split on commas would produce a key that silently differs from the one
-  the author wrote, which is the worst available failure for an identity
-  mechanism.
-- A single-member composite `key="({{ pk }})"` is a one-tuple and is a distinct
-  key from the bare scalar `key="{{ pk }}"`. Canonicalization preserves tuple
-  boundaries, so the two cannot collide; the compiler warns on the one-tuple
-  form because it is almost always a typo.
-
 An address is a path whose segments are unique only among siblings. Its debug
 form may look like `dashboard.TimeEntryDay[(184,2026-09-09)].entries[471]`;
 the wire representation is opaque and never reparses that display spelling. A
@@ -565,7 +493,6 @@ of the same target under one parent require distinct keys even outside a loop.
 Missing and bad keys fail loudly rather than degrading to positional matching:
 
 - A server stamp rendered under a Django `forloop` without `key=` is an error.
-- An Alpine-cloned stamp without `:key` is an error before mounting.
 - Duplicate target/key pairs under one parent are an error.
 - A direct `forloop.counter` or `forloop.counter0` key is rejected.
 
@@ -596,10 +523,6 @@ Three shapes are kept, for different jobs:
   than a positional manifest array (`SequenceGlue` currently names items
   `f'{name}.{index}'`). The canonical transport and admission rules are defined
   in `state-model.md` §8.
-
-With Alpine as a dependency, a server-authored mount stamp can also be cloned
-inside `x-for :key`, which is the path for client-owned reorderable collections
-(see §6). The clone does not widen the signed mount capability.
 
 ### 6. Replaced HTML is morphed with Alpine.morph
 
@@ -759,33 +682,18 @@ events, event names are constrained in two ways:
   the failure is a registration error rather than a runtime surprise.
 - **Every bridged event carries its source address.** The `CustomEvent`'s
   `detail` includes a reserved `$address` alongside the declared detail, and the
-  event also exposes the source proxy directly. A stamp-level `@saved` handler
+  event also exposes the source proxy directly. An ancestor `@saved` listener
   filters on that address rather than on node identity, because a component's
   root element can be replaced by a morph while its address is stable — filtering
   on `event.target` would break exactly when the design's morph-preservation
   guarantees are doing their job. The reserved key is documented and rejected as a
   declared detail name.
 
-The HTML-like composition spelling follows Alpine and Livewire while remaining
-scoped to the exact stamped child:
-
-```html
-<glue:entry-editor
-    entry-id="{{ entry.pk }}"
-    key="{{ entry.pk }}"
-    @saved="open = false; $glue.$refresh()"
-/>
-```
-
-The compiler validates `saved` against the registered child declaration, then
-installs it as an ordinary Alpine event expression evaluated in the composing
-parent's scope. `$glue` resolves to the nearest component proxy in that scope,
-so this example refreshes the parent rather than looking up a global proxy
-name. `$event.detail` exposes the event detail, and ordinary Alpine event
-modifiers remain available. Because the source `<glue:... />` element is
-compiled away, an `@event` on a component stamp must name one of that
-component's declared events; DOM listeners unrelated to the child's public
-events belong on ordinary markup.
+The `{% glue_component %}` tag accepts typed parameters, `key`, and `access`.
+It does not parse Alpine event handlers. A composing template may listen for a
+child's bubbling DOM event on ordinary markup, or application code may subscribe
+to the exact child proxy with `$on()`. The event detail carries the source
+address so a DOM listener can filter multiple children under one ancestor.
 
 The event source is the response entry's canonical address and active client
 generation. Every Glue proxy provides a source-scoped listener independent of
@@ -806,11 +714,10 @@ Alpine-facing delivery path: `@saved`, `x-on:saved`, `$event.detail`, `.once`,
 browser meanings. Glue does not maintain a second global event bus or dispatch
 directly to a named component.
 
-A stamp-level handler is bound to the exact stamped child's source even when a
-descendant emits an event with the same name. The compiled handler compares the
-event's source address against the stamped child's, which is why the address
-travels with the event; general ancestor DOM listeners receive normal bubbling
-semantics. A model, form, queryset, or other
+A source-scoped `$on()` handler is bound to the exact child's source even when a
+descendant emits an event with the same name. General ancestor DOM listeners
+receive normal bubbling semantics and may inspect the address in event detail.
+A model, form, queryset, or other
 non-rendered Glue object has no canonical DOM root and therefore exposes the
 same event only through `$on()`. The source-scoped proxy event is the universal
 contract; the component DOM event is its browser integration.
@@ -1047,7 +954,7 @@ Findings:
   rejected rather than merely ranked lower.
 - **Alpine.morph passes everything except full reorder**, where its keyed
   lookahead relocated two cards and rebuilt two. That case belongs to keyed
-  `x-for` (§5, §6).
+  `x-for` (§6).
 - **Stable ids drive exact relocation.** idiomorph's perfect reorder came from
   `id` matching, which canonical addresses provide.
 
@@ -1070,17 +977,11 @@ Findings:
   object proxying system."* That remains true of the Python side; the client
   is now Alpine-specific. The roadmap should say so.
 - **The HTML envelopes are unified.** `GlueTemplateResponse` and negotiated
-  `Glue.view` responses use `render_html_payload()` to produce
-  `{is_glue_template_response: true, html, manifest_list}`.
-  Attribute transports carry that envelope in `result`; view transports
-  return it directly. `htmlResultFromResponse()` registers manifests and
-  creates the small internal renderable result; all public render methods
-  share `client_js/src/htmlRenderer.js`.
-  This names the already-implemented transition shape. State-model phase 6
-  normalizes `manifest_list` to the shared flat `objects` collection without
-  reintroducing a separate HTML registration path.
-  `TemplateGlue` and its template proxy are removed rather than retained as a
-  separate client-driven rendering API.
+  `Glue.view` responses use `render_html_payload()` to produce HTML and the
+  shared flat `objects` collection. Attribute transports carry the HTML result
+  in their addressed response entry; view transports return the HTML envelope
+  directly. `client_js/src/htmlRenderer.js` handles the public render methods.
+  `TemplateGlue` and its template proxy are removed.
 - **`Glue.view` uses the target URL's middleware chain.** It requests the actual
   same-origin target with a Glue-specific `Accept` media type. A response
   middleware packages the rendered HTML and introduced objects, but never changes
@@ -1116,22 +1017,10 @@ Findings:
   values state already carries.
 - **Parent-held children only.** Keeping every child as a parent attribute
   prevents stamping components from templates.
-- **A public `{% glue_component ... %}` tag.** Django does not recognize block
-  tags across lines, so realistic stamps become long single-line expressions.
-  The narrow Glue template backend preserves Django semantics while giving
-  component composition an HTML-shaped multiline form.
-- **Post-render or browser-only interpretation of `<glue:...>`.** Resolving
-  components after Django renders would erase typed context values, delay all
-  introduction until another browser request, and weaken parent/address
-  ownership. Glue compiles the element before Django rendering instead.
 - **Implicit parameter-source detection.** Looking for the same expression in
   Django and Alpine scopes makes typos change trust domains and makes meaning
-  depend on incidental context. Complete `{{ ... }}` values are server
-  expressions, `:` / `x-bind:` values are Alpine expressions, and unmarked
-  values are literals.
-- **Using `:` for Django-context parameters on Glue elements.** That conflicts
-  with Alpine's established binding shorthand. Glue preserves ordinary Alpine
-  meaning and uses Django's existing `{{ ... }}` spelling for server values.
+  depend on incidental context. The template-tag arguments are Django filter
+  expressions; Alpine-bound construction remains a separate future design.
 - **A component-only private event bus.** It duplicates Alpine's expression,
   modifier, bubbling, and listener-lifecycle machinery and makes ordinary
   `addEventListener()` unable to observe component outcomes. Proxy `$on()`

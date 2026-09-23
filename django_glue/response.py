@@ -22,10 +22,13 @@ class GlueResponse:
     status: int = 200
     redirect: dict[str, Any] | None = None
     dispose: Iterable[str] | None = None
+    html: str | None = None
+    objects: list[dict[str, Any]] | None = None
 
     def __post_init__(self) -> None:
         self.messages = list(self.messages or [])
         self.dispose = list(self.dispose or [])
+        self.objects = list(self.objects or [])
 
     @classmethod
     def from_result(cls, result: Any, *, render_as_html: bool = False) -> Self:
@@ -81,47 +84,18 @@ class GlueResponse:
             status=error.status,
         )
 
-    def to_payload(self, **extra: Any) -> dict[str, Any]:
-        return {
-            **extra,
-            'result': self.result,
-            'messages': [
-                message.to_dict() for message in self.messages
-            ],
-        }
-
-    def to_json_response(self, *, glue_object: Any = None, **extra: Any) -> JsonResponse:
+    def to_json_response(self) -> JsonResponse:
         return JsonResponse(
-            self._serialize_glue_values(self.to_payload(**extra), glue_object),
+            {
+                'result': self.result,
+                'messages': [
+                    message.to_dict() for message in self.messages
+                ],
+            },
             status=self.status,
             safe=True,
             encoder=GlueResponseJSONEncoder,
         )
-
-    @classmethod
-    def _serialize_glue_values(
-        cls, payload: dict[str, Any], glue_object: Any = None
-    ) -> dict[str, Any]:
-        serialized: dict[str, Any] = {}
-        for key, item in payload.items():
-            if key == 'result':
-                serialized[key] = cls._serialize_result(item, glue_object)
-            else:
-                cls._reject_glue_objects(item)
-                serialized[key] = item
-        return serialized
-
-    @classmethod
-    def _serialize_result(cls, result: Any, glue_object: Any = None) -> Any:
-        from django_glue.glue.base import BaseGlue
-
-        if isinstance(result, BaseGlue):
-            if glue_object is not None:
-                result.request = glue_object.request
-            return result.manifest.model_dump()
-
-        cls._reject_glue_objects(result)
-        return result
 
     @classmethod
     def _reject_glue_objects(cls, value: Any, *, path: str = 'result') -> None:
@@ -163,15 +137,14 @@ def render_html_payload(
         response.render()
 
     resolved_request = request if request is not None else getattr(response, '_request', None)
-    manifest_list = (
-        GlueContextManager(resolved_request).serialized_manifests
+    objects = (
+        GlueContextManager(resolved_request).serialized_objects
         if resolved_request is not None
         else []
     )
     return {
-        'is_glue_template_response': True,
         'html': response.content.decode(response.charset or 'utf-8'),
-        'manifest_list': manifest_list,
+        'objects': objects,
     }
 
 
@@ -190,7 +163,7 @@ class GlueTemplateResponse:
     tags (`{% csrf_token %}`, `{{ perms.* }}`, `{% render_static_modals %}`)
     work, and any `Glue.queryset()`/`Glue.model()`/etc. calls made earlier
     in the same request -- including by the rendered template itself --
-    ride along as `manifest_list`, same as `Glue.view` does, so the client
+    ride along as addressed `objects`, same as `Glue.view` does, so the client
     gets live proxies for anything new the render touched.
     """
 
@@ -204,4 +177,5 @@ class GlueTemplateResponse:
 
     @classmethod
     def from_template_response(cls, response: TemplateResponse) -> GlueResponse:
-        return GlueResponse(result=render_html_payload(response))
+        payload = render_html_payload(response)
+        return GlueResponse(html=payload['html'], objects=payload['objects'])

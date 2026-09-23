@@ -11,17 +11,17 @@ import {
 } from "./state"
 
 class GlueAddressRecord {
-    constructor({address, policyToken, staticData = {}, computedData = {}, loadingStrategy = 'lazy'}) {
+    constructor({address, policyToken, staticData = {}, computedData = {}}) {
         this.address = address
         this.policyToken = policyToken
         this.policy = GluePolicy.fromSignedPolicyToken(policyToken)
         this.staticData = cloneValue(staticData)
         this.computedData = cloneValue(computedData)
+        this.receivedComputedData = computedData
         this.canonical = assembleAuthoritative(this.policy, this.computedData)
         this.editablePaths = new Set()
         this.revisions = new Map()
         this.generation = 0
-        this.loadingStrategy = loadingStrategy
         this.owner = null
         this.stale = false
         this.disposed = false
@@ -29,6 +29,7 @@ class GlueAddressRecord {
         this.displacedChildren = null
         this.proxy = null
         this._queue = Promise.resolve()
+        this.inFlightController = null
         this._suppressMutations = false
         this.reactiveValues = reactive({})
         this._replaceReactive(this.canonical)
@@ -38,6 +39,8 @@ class GlueAddressRecord {
         this.disposed = true
         this.generation += 1
         this._queue = Promise.resolve()
+        this.inFlightController?.abort()
+        this.inFlightController = null
     }
 
     attachProxy(proxy) {
@@ -85,17 +88,11 @@ class GlueAddressRecord {
     }
 
     introduce(entry) {
-        if (this.disposed) {
-            this.disposed = false
-            this.stale = false
-            this.generation += 1
-            this._queue = Promise.resolve()
-        }
         const wasStale = this.stale
         this._applyPolicyToken(entry.policy_token)
         this.staticData = cloneValue(entry.static_data || {})
         this.computedData = cloneValue(entry.computed_data || {})
-        this.loadingStrategy = entry.loading_strategy || this.loadingStrategy
+        this.receivedComputedData = entry.computed_data ?? null
         const authoritative = assembleAuthoritative(this.policy, this.computedData)
         const previousCanonical = this.canonical
         this.canonical = authoritative
@@ -111,6 +108,7 @@ class GlueAddressRecord {
         ) return
         if (entry.policy_token !== undefined) this._applyPolicyToken(entry.policy_token)
         if (entry.static_data !== undefined) this.staticData = cloneValue(entry.static_data || {})
+        this.receivedComputedData = entry.computed_data ?? null
         if (entry.computed_data !== undefined) {
             this.computedData = mergeComputedData(
                 this.computedData,
