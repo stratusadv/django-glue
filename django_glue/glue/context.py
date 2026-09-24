@@ -17,8 +17,10 @@ TGlue = TypeVar('TGlue', bound='BaseGlue')
 
 
 class GlueObjectEntry(BaseModel):
-    """Addressed wire entry (state-model.md §10): the page-load and
-    attribute-call entry shape, without a result tag."""
+    """
+    Addressed wire entry (state-model.md §10): the page-load and
+    attribute-call entry shape, without a result tag.
+    """
 
     address: str = ''
     policy_token: str
@@ -36,21 +38,27 @@ class GlueContextManager:
 
     @property
     def serialized_objects(self) -> list[dict[str, Any]]:
-        """The page's object graph as flat addressed entries (state-model.md
+        """
+        The page's object graph as flat addressed entries (state-model.md
         §10 "Page load"): roots first, children as flat siblings, deduped by
-        address."""
+        address.
+        """
         serialized: list[dict[str, Any]] = []
         seen: set[str] = set()
         for glue in self.glue_objects:
             if glue.address in seen:
                 continue
+
             seen.add(glue.address)
             serialized.append(glue.entry.model_dump())
+
             for child_entry in glue._serialized_child_entries():
                 if child_entry['address'] in seen:
                     continue
+
                 seen.add(child_entry['address'])
                 serialized.append(child_entry)
+
         return serialized
 
     def add_glue(self, glue: TGlue) -> TGlue:

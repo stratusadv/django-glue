@@ -1440,6 +1440,39 @@ class DjangoModelGlueObjectTestCase(TestCase):
         })
         self.assertEqual(children[0].glue_object.form['name'].value(), 'Koko')
 
+    def test_model_form_class_initial_comes_from_instance_not_model_defaults(self):
+        """A form class passed to Glue.model must not seed the rebuilt form's
+        initial from the empty instance's model defaults. A form that seeds
+        initial from its instance must surface the real instance's value, not
+        the model default (regression: date field defaulted to date.today).
+        """
+        from django import forms
+
+        class InitialFromInstanceForm(forms.ModelForm):
+            class Meta:
+                model = Gorilla
+                fields = ['name', 'age']
+
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                if not self.is_bound and self.instance is not None:
+                    for field_name in self.fields:
+                        value = getattr(self.instance, field_name, None)
+                        if value is not None:
+                            self.initial.setdefault(field_name, value)
+
+        gorilla = Gorilla.objects.create(name='Moses', age=30)
+        glue_object = with_request(ModelGlue(
+            gorilla,
+            **glue_context(),
+            fields=['id', 'name', 'age'],
+            form=InitialFromInstanceForm,
+        ))
+
+        form_glue = glue_object._bound_children[0].glue_object
+        self.assertEqual(form_glue.form.initial['age'], 30)
+        self.assertEqual(form_glue.form['age'].value(), 30)
+
     def test_model_forms_dict_can_contain_classes_instead_of_instances(self):
         """Verify that form classes can be passed in the forms dict."""
         glue_object = with_request(ModelGlue(
@@ -1504,6 +1537,140 @@ class DjangoModelGlueObjectTestCase(TestCase):
 
 
 class DjangoFormGlueObjectTestCase(TestCase):
+    def test_django_form_provider_emits_declared_event_from_its_glue_address(self):
+        from django import forms
+
+        class SavedForm(forms.Form):
+            title = forms.CharField()
+            saved = Glue.event()
+
+            @Glue.attr
+            def submit_entry(self) -> dict:
+                self.saved(pk=7)
+                return {'success': True}
+
+        glue_object = with_request(FormGlue(SavedForm(), **glue_context(name='saved-form')))
+        context = AttributeCallRequestContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=glue_object.policy,
+            target_glue_updates={'title': 'Done'},
+            target_attribute_name='submit_entry',
+            target_attribute_call_kwargs={},
+        )
+
+        payload, _introduced = glue_object.process_attribute_call(context)
+
+        self.assertEqual(glue_object.get_static_data()['events'], ['saved'])
+        self.assertEqual(payload['effects']['events'], [
+            {'name': 'saved', 'detail': {'pk': 7}},
+        ])
+
+    def test_provider_callable_that_validates_keeps_field_errors_in_response(self):
+        """A provider save-style callable that validates itself (is_valid())
+        must not leave the response's field errors empty: the server
+        re-derives the form's field output on the call, and after a failed
+        validation the current state HAS errors. Empty errors would let the
+        client merge away the errors a prior validate() just displayed."""
+        from test_project.test_forms import SaveValidatingForm
+
+        glue_object = with_request(
+            FormGlue(SaveValidatingForm(), **glue_context(name='entry-form'))
+        )
+        validation_payload, _introduced = glue_object.process_attribute_call(
+            AttributeCallRequestContext.model_construct(
+                request=glue_object.request,
+                target_glue_policy=glue_object.policy,
+                target_glue_updates={},
+                target_attribute_name='validate',
+                target_attribute_call_kwargs={},
+            )
+        )
+        self.assertEqual(
+            validation_payload['computed_data']['fields']['title'],
+            {'errors': ['This field is required.']},
+        )
+
+        token = validation_payload.get('policy_token', glue_object.policy.token)
+        restored = with_request(
+            FormGlue._reconstruct_from_policy(GluePolicy.from_token(token))
+        )
+        save_payload, _introduced = restored.process_attribute_call(
+            AttributeCallRequestContext.model_construct(
+                request=restored.request,
+                target_glue_policy=GluePolicy.from_token(token),
+                target_glue_updates={},
+                target_attribute_name='save_entry',
+                target_attribute_call_kwargs={},
+            )
+        )
+
+        self.assertFalse(save_payload['result']['success'])
+        self.assertEqual(
+            save_payload['computed_data']['fields']['title'],
+            {'errors': ['This field is required.']},
+        )
+
+    def test_provider_callable_that_validates_clears_errors_when_fixed(self):
+        from test_project.test_forms import SaveValidatingForm
+
+        glue_object = with_request(
+            FormGlue(SaveValidatingForm(), **glue_context(name='entry-form'))
+        )
+        glue_object.process_attribute_call(
+            AttributeCallRequestContext.model_construct(
+                request=glue_object.request,
+                target_glue_policy=glue_object.policy,
+                target_glue_updates={},
+                target_attribute_name='validate',
+                target_attribute_call_kwargs={},
+            )
+        )
+
+        restored = with_request(
+            FormGlue._reconstruct_from_policy(glue_object.policy)
+        )
+        save_payload, _introduced = restored.process_attribute_call(
+            AttributeCallRequestContext.model_construct(
+                request=restored.request,
+                target_glue_policy=restored.policy,
+                target_glue_updates={'title': 'Weekly report', 'hours': 4.0},
+                target_attribute_name='save_entry',
+                target_attribute_call_kwargs={},
+            )
+        )
+
+        self.assertTrue(save_payload['result']['success'])
+        self.assertEqual(
+            save_payload['computed_data']['fields']['title'],
+            {'errors': []},
+        )
+
+    def test_non_validating_call_on_fresh_form_does_not_surface_required_errors(self):
+        """The moment a modal opens, the first attribute call (e.g. loading
+        choices) hydrates the form, binding it with an empty draft. Deriving
+        the response's field output must not run a fresh full_clean(), which
+        would surface "required" errors the user never triggered."""
+        from django import forms
+
+        class SkillForm(forms.Form):
+            name = forms.CharField()
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        Skill.objects.create(name='Grappling')
+        glue_object = with_request(FormGlue(SkillForm(), **glue_context(name='skill-form')))
+        context = AttributeCallRequestContext.model_construct(
+            request=glue_object.request,
+            target_glue_policy=glue_object.policy,
+            target_glue_updates={'name': '', 'skill': None},
+            target_attribute_name='foreign_key_choices',
+            target_attribute_call_kwargs={'field_name': 'skill'},
+        )
+
+        payload, _introduced = glue_object.process_attribute_call(context)
+
+        self.assertEqual(payload['computed_data']['fields']['name'], {'errors': []})
+        self.assertEqual(payload['computed_data']['fields']['skill'], {'errors': []})
+
     def test_form_foreign_key_choices_returns_configured_choices(self):
         from django import forms
 

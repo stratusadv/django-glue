@@ -1,7 +1,13 @@
-# Internal Design Work
+# Internal Design
 
-These documents are working architecture material and are not part of the
+These documents govern Django Glue's design and are separate from the
 published documentation site.
 
-- [`reactive-system/`](reactive-system/) — reactive components, shared state
-  management, HTML rendering, and their implementation roadmap.
+- [`specs/`](specs/) — governing contracts and proposals, with a reading order.
+- [`roadmap.md`](roadmap.md) — implementation gates and deferred work.
+- [`decisions/`](decisions/) — durable architectural decisions and their rationale.
+- [`research/`](research/) — audits and framework comparisons behind the specs.
+- [`concerns.md`](concerns.md) — concerns considered without changing the design.
+
+Start with the [spec index](specs/README.md). For authority and implementation
+rules, read [`AGENTS.md`](AGENTS.md).

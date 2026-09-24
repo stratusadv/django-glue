@@ -1,4 +1,5 @@
-from typing import Callable, Literal, Mapping, Sequence, TypeVar, Union
+from functools import update_wrapper
+from typing import Any, Callable, Literal, Mapping, Sequence, TypeVar, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, ModelForm
@@ -59,6 +60,18 @@ class _GluePropertyDescriptor:
             return self
         return self._property.__get__(instance, owner)
 
+def _attr(*args: Any, **kwargs: Any) -> Any:
+    return DeclaredAttribute(*args, **kwargs)
+
+
+_attr = update_wrapper(
+    _attr,
+    DeclaredAttribute,
+    assigned=('__module__', '__name__', '__qualname__', '__doc__'),
+    updated=(),
+)
+
+
 def _html_attr(*args, **kwargs) -> DeclaredAttribute:
     """
     Shortcut for @Glue.attr(render_as_html=True).
@@ -90,8 +103,8 @@ class Glue:
     Access = GlueAccess
     Component = Component
     FormSet = FormSetGlue
-    attribute = DeclaredAttribute
-    attr = DeclaredAttribute
+    attribute = _attr
+    attr = _attr
     event = GlueEvent
     html_attr = _html_attr
     namespace = GlueNamespace
@@ -163,11 +176,11 @@ class Glue:
 
     @staticmethod
     def model(
-        target: Model,
-        *,
         request: HttpRequest | None = None,
         unique_name: str | None = None,
+        target: Model | None = None,
         access: GlueAccess = GlueAccess.VIEW,
+        *,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
         editable: Sequence[str] | None = None,
@@ -197,11 +210,11 @@ class Glue:
 
     @staticmethod
     def queryset(
-        target: QuerySet,
-        *,
         request: HttpRequest | None = None,
         unique_name: str | None = None,
+        target: QuerySet | None = None,
         access: GlueAccess = GlueAccess.VIEW,
+        *,
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
         editable: Sequence[str] | None = None,
@@ -231,11 +244,11 @@ class Glue:
 
     @staticmethod
     def form(
-        target: BaseForm,
-        *,
         request: HttpRequest | None = None,
         unique_name: str | None = None,
+        target: BaseForm | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
+        *,
         editable: Sequence[str] | None = None,
     ) -> FormGlue:
         glue_object = FormGlue(
@@ -251,11 +264,11 @@ class Glue:
 
     @staticmethod
     def formset(
-        target: type[FormSetGlue] | type[BaseForm],
-        *,
         request: HttpRequest | None = None,
         unique_name: str | None = None,
+        target: type[FormSetGlue] | type[BaseForm] | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
+        *,
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
@@ -269,6 +282,15 @@ class Glue:
                 can_delete=can_delete,
             )
         else:
+            if not (isinstance(target, type) and issubclass(target, BaseForm)):
+                msg = (
+                    f'Glue.formset() takes a form class or a Glue.FormSet subclass, not '
+                    f'{target!r}. The formset is rebuilt from importable classes on every '
+                    'request, so a Django formset or formset_factory() class cannot be glued: '
+                    'declare a Glue.FormSet subclass with form_class, min_num, max_num and '
+                    'can_delete instead.'
+                )
+                raise TypeError(msg)
             glue_object = FormSetGlue(
                 target,
                 name=unique_name,

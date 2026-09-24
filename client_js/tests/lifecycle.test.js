@@ -9,6 +9,84 @@ function modelClient() {
 }
 
 describe('proxy lifecycle', () => {
+    test('modal exposes its owned form saved event and cleans up on disposal', async () => {
+        const form = createEntry({
+            policy: {
+                name: 'entry_form', namespace: 'form', address: 'modal#test.entry.form',
+                attributes: ['save'], state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {save: {allowed_arguments: []}}, events: ['saved']},
+        })
+        const entry = createEntry({
+            policy: {
+                name: 'entry', namespace: 'model', address: 'modal#test.entry',
+                attributes: ['form'], state_snapshot: {}, children: {form: form.address},
+            },
+            staticData: {
+                fields: {}, callables: {}, children: {form: {kind: 'form', nullable: false}},
+            },
+        })
+        const modalEntry = createEntry({
+            policy: {
+                name: 'entry_modal', namespace: 'component', address: 'modal#test',
+                attributes: ['entry'], state_snapshot: {}, children: {entry: entry.address},
+            },
+            staticData: {
+                fields: {}, callables: {}, events: ['saved'],
+                children: {entry: {kind: 'model', nullable: false}},
+            },
+        })
+        modalEntry.static_data.forwarded_events = {saved: 'entry.form.saved'}
+        const client = new GlueClient({objects: [modalEntry, entry, form]})
+        const modal = client._registry.getProxy(modalEntry.address)
+        const seen = []
+        modal.$on('saved', event => seen.push([event.source, event.currentTarget, event.detail.pk]))
+        client.http.sendAttributeRequest = async () => attributeResponse(form.address, {
+            result: {success: true},
+            effects: {events: [{name: 'saved', detail: {pk: 7}}]},
+        })
+
+        await modal.entry.form.save()
+
+        expect(seen).toEqual([[modal.entry.form, modal, 7]])
+        modal.$dispose()
+        expect(client._registry.getProxy(form.address)).toBeNull()
+    })
+
+    test('exposing a mounted child event does not duplicate its bubbling DOM event', async () => {
+        const child = createEntry({
+            policy: {
+                name: 'editor', namespace: 'component', address: 'modal#test.editor',
+                attributes: ['save'], state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {save: {allowed_arguments: []}}, events: ['saved']},
+        })
+        const modalEntry = createEntry({
+            policy: {
+                name: 'entry_modal', namespace: 'component', address: 'modal#test',
+                attributes: ['editor'], state_snapshot: {}, children: {editor: child.address},
+            },
+            staticData: {
+                fields: {}, callables: {}, events: ['saved'],
+                children: {editor: {kind: 'component', nullable: false}},
+            },
+        })
+        modalEntry.static_data.forwarded_events = {saved: 'editor.saved'}
+        const client = new GlueClient({objects: [modalEntry, child]})
+        document.body.innerHTML = '<div data-glue-address="modal#test"><div data-glue-address="modal#test.editor"></div></div>'
+        const modal = client._registry.getProxy(modalEntry.address)
+        const events = []
+        modal.$el.addEventListener('saved', event => events.push(event.detail.pk))
+        client.http.sendAttributeRequest = async () => attributeResponse(child.address, {
+            result: {success: true},
+            effects: {events: [{name: 'saved', detail: {pk: 7}}]},
+        })
+
+        await modal.editor.save()
+
+        expect(events).toEqual([7])
+    })
+
     test('delivers declared events after the addressed response applies', async () => {
         const client = modelClient()
         const proxy = client.model.gorilla
@@ -40,6 +118,24 @@ describe('proxy lifecycle', () => {
         await proxy.save()
 
         expect(calls).toBe(0)
+    })
+
+    test('a rejected event listener reports its error without changing the save result', async () => {
+        const client = modelClient()
+        const proxy = client.model.gorilla
+        const errors = []
+        client.onError(({error}) => errors.push(error.message))
+        proxy.$on('saved', async () => {
+            throw new Error('refresh failed')
+        })
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
+            result: {success: true},
+            effects: {events: [{name: 'saved', detail: {}}]},
+        })
+
+        expect(await proxy.save()).toEqual({success: true})
+        await Promise.resolve()
+        expect(errors).toEqual(['refresh failed'])
     })
 
     test('routes messages through a proxy handler before the global handler', async () => {

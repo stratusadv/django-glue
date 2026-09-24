@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import enum
 import importlib
 import io
 import pickle
@@ -8,7 +9,7 @@ from functools import lru_cache
 from typing import Any, ClassVar
 
 from django.apps import apps
-from django.db.models import QuerySet
+from django.db.models import Model, QuerySet
 
 from django_glue.conf import settings as glue_settings
 
@@ -45,6 +46,20 @@ class QuerySetUnpickler(pickle.Unpickler):
     _glue_continuation_classes: ClassVar[frozenset[str]] = frozenset({
         'django_glue.glue.options.django.choices.QuerySetChoiceOptions',
     })
+    # Ordinary scalar values in ORM filters, including the constructors
+    # QueryPickler uses to reduce str/int enum members and related model
+    # filter instances to their primary keys.
+    _plain_value_constructors: ClassVar[frozenset[str]] = frozenset({
+        'builtins.int',
+        'builtins.str',
+        'datetime.date',
+        'datetime.datetime',
+        'datetime.time',
+        'datetime.timedelta',
+        'datetime.timezone',
+        'decimal.Decimal',
+        'uuid.UUID',
+    })
     _registered_qualified_names: ClassVar[set[str]] = set()
 
     @classmethod
@@ -71,6 +86,8 @@ class QuerySetUnpickler(pickle.Unpickler):
             return True
         if qualified_name in type(self)._glue_continuation_classes:
             return True
+        if qualified_name in type(self)._plain_value_constructors:
+            return True
         module, _separator, _name = qualified_name.rpartition('.')
         if module == self._django_orm_module or module.startswith(
             f'{self._django_orm_module}.'
@@ -91,16 +108,60 @@ def model_class_path(model: type[Any]) -> str:
     return f'{model.__module__}.{model.__name__}'
 
 
+class QueryPickler(pickle.Pickler):
+    """Reduces filter values that would drag application state into the
+    continuation:
+
+    - a str/int enum member (e.g. ``status=MyChoices.ACTIVE``) to its plain
+      value, which queries identically and needs no application class admitted
+      to the unpickler's allowlist;
+    - a model instance used as a related filter value to its primary key. The
+      lookup normalizes ``rhs`` to the pk at construction; the raw instance
+      survives only in ``deconstructible``'s ``_constructor_args``, and
+      serializing it would carry the instance's field values -- tz-aware
+      datetimes, loaded relations -- into the signed query, where a ``ZoneInfo``
+      tzinfo pickles through ``builtins.getattr``. The pk form compiles to
+      identical SQL. An instance whose pk type the unpickler does not admit is
+      left to default pickling, so the closed allowlist still refuses it at
+      issuance.
+    """
+
+    def reducer_override(self, obj: Any) -> Any:
+        if isinstance(obj, enum.Enum) and isinstance(obj, (str, int)):
+            return type(obj.value), (obj.value,)
+        if isinstance(obj, Model):
+            pk_type = type(obj.pk)
+            if (
+                f'{pk_type.__module__}.{pk_type.__qualname__}'
+                in QuerySetUnpickler._plain_value_constructors
+            ):
+                return pk_type, (obj.pk,)
+        return NotImplemented
+
+
 def pickle_query(queryset: QuerySet) -> str:
     """Encode a queryset's ``Query`` as a signed continuation, refusing one
-    larger than the continuation bound it would later be rejected by."""
-    encoded = base64.b64encode(pickle.dumps(queryset.query)).decode('ascii')
+    that would later be rejected when decoded: over the continuation bound, or
+    carrying a type outside the unpickler's allowlist. Refusing here fails the
+    render that issues the queryset, not the first call that decodes it."""
+    buffer = io.BytesIO()
+    QueryPickler(buffer).dump(queryset.query)
+    pickled = buffer.getvalue()
+    encoded = base64.b64encode(pickled).decode('ascii')
     if len(encoded) > glue_settings.DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES:
         msg = (
             f'The {model_class_path(queryset.model)} queryset encodes to {len(encoded)} bytes, '
             'over DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES.'
         )
         raise ValueError(msg)
+    try:
+        QuerySetUnpickler(io.BytesIO(pickled)).load()
+    except pickle.UnpicklingError as error:
+        msg = (
+            f'The {model_class_path(queryset.model)} queryset cannot be issued: {error} '
+            'Filter on a plain value, or admit the type with QuerySetUnpickler.register().'
+        )
+        raise ValueError(msg) from error
     return encoded
 
 

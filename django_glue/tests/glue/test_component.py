@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from functools import cached_property
 from html import unescape
 from typing import Any
 
@@ -157,6 +158,12 @@ class ResolvedChildOwnerComponent(ChildOwnerComponent):
     namespace = 'resolvedChildOwnerComponent'
 
 
+class ChildOwnerProducerComponent(GreetingComponent):
+    @Glue.attr
+    def spawn(self) -> ChildOwnerComponent:
+        return ChildOwnerComponent()
+
+
 class MountedResultComponent(Component):
     template = 'glue_template_test.html'
     label: str = Glue.attr('initial')
@@ -215,6 +222,86 @@ def test_component_returned_from_a_callable_is_mounted_at_introduction(mock_requ
     )
 
     assert GluePolicy.from_token(result_entry['policy_token']).state_snapshot['label'] == 'mounted'
+
+
+def test_returned_component_introduces_its_owned_children(mock_request) -> None:
+    producer = Glue.object(mock_request, ChildOwnerProducerComponent())
+
+    context = call_context(producer, 'spawn')
+    reconstructed = ChildOwnerProducerComponent.from_attribute_call_resolver_context(context)
+    entry, introduced = reconstructed.process_attribute_call(context)
+
+    owner_entry = next(item for item in introduced if item['address'] == entry['result'])
+    child_address = GluePolicy.from_token(owner_entry['policy_token']).children['child']
+    assert child_address in {item['address'] for item in introduced}
+
+
+class WeekComponent(Component):
+    tag_name = 'week-component'
+    template = 'glue_template_test.html'
+
+    week: int = Glue.attr(parameter=True)
+    note: str = Glue.attr('', editable=True)
+
+    @cached_property
+    def _label(self) -> str:
+        return f'week {self.week}'
+
+    def get_context_data(self) -> dict[str, str]:
+        return {'greeting': self._label}
+
+    @Glue.property
+    def label(self) -> str:
+        return self._label
+
+    @Glue.attr
+    def advance(self) -> int:
+        # Reads the cache before moving the parameter, as a navigation action
+        # computing its target from the current week does.
+        assert self._label == f'week {self.week}'
+        self.week += 1
+        return self.week
+
+    @Glue.attr
+    def annotate(self) -> None:
+        self.note = 'noted'
+
+
+def test_parameter_change_rerenders_from_a_fresh_instance(mock_request) -> None:
+    component = Glue.object(mock_request, WeekComponent(week=1))
+
+    context = call_context(component, 'advance')
+    reconstructed = WeekComponent.from_attribute_call_resolver_context(context)
+    entry, _introduced = reconstructed.process_attribute_call(context)
+
+    assert entry['result'] == 2
+    assert '>week 2</span>' in entry['html']
+    assert f'data-glue-address="{component.address}"' in entry['html']
+    assert entry['computed_data']['label'] == 'week 2'
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters'] == {'week': 2}
+
+
+def test_refresh_returns_current_component_markup(mock_request) -> None:
+    component = Glue.object(mock_request, WeekComponent(week=1))
+
+    context = call_context(component, None)
+    reconstructed = WeekComponent.from_attribute_call_resolver_context(context)
+    entry, _introduced = reconstructed.process_attribute_call(context)
+
+    assert '>week 1</span>' in entry['html']
+    assert f'data-glue-address="{component.address}"' in entry['html']
+    assert entry['computed_data']['label'] == 'week 1'
+
+
+def test_state_only_change_does_not_rerender(mock_request) -> None:
+    component = Glue.object(mock_request, WeekComponent(week=1))
+
+    context = call_context(component, 'annotate')
+    reconstructed = WeekComponent.from_attribute_call_resolver_context(context)
+    entry, _introduced = reconstructed.process_attribute_call(context)
+
+    assert 'html' not in entry
+    assert GluePolicy.from_token(entry['policy_token']).state_snapshot['note'] == 'noted'
 
 
 def test_component_rejects_undeclared_or_missing_parameters() -> None:
@@ -294,6 +381,21 @@ def test_declared_event_enters_effects_channel(mock_request) -> None:
     assert component._effects_payload(GlueResponse(), [])['events'] == [
         {'name': 'saved', 'detail': {'pk': 7}},
     ]
+
+
+def test_forwarded_event_declares_owned_source_without_server_emission(mock_request) -> None:
+    class EntryModal(Component):
+        template = 'glue_template_test.html'
+        saved = Glue.event(from_child='entry.form.saved')
+
+    modal = Glue.object(mock_request, EntryModal())
+
+    assert modal.get_static_data()['events'] == ['saved']
+    assert modal.get_static_data()['forwarded_events'] == {
+        'saved': 'entry.form.saved',
+    }
+    with pytest.raises(TypeError, match='forwarded event'):
+        modal.saved(pk=7)
 
 
 def test_event_detail_rejects_a_glue_object(mock_request) -> None:
@@ -542,8 +644,10 @@ def test_callless_reintroduce_entry_resigns_live_child_at_existing_address(
     assert entry['result'] is None
     assert entry['effects'] == {'messages': []}
     assert 'policy_token' not in entry
-    assert len(introduced) == 1
-    reintroduction = introduced[0]
+    assert 'html' in entry
+    reintroductions = [item for item in introduced if item['address'] == child_address]
+    assert reintroductions
+    reintroduction = reintroductions[0]
     assert reintroduction['address'] == child_address
     child_policy = GluePolicy.from_token(reintroduction['policy_token'])
     assert child_policy.address == child_address

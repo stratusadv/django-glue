@@ -83,7 +83,15 @@ class GlueViewMiddlewareCheckTestCase(SimpleTestCase):
         with override_settings(MIDDLEWARE=['a.Middleware', GLUE_VIEW_MIDDLEWARE_PATH]):
             self.assertEqual(check_glue_view_middleware(), [])
 
-    def test_missing_or_misplaced_middleware_fails_startup(self):
-        for middleware in (['a.Middleware'], [GLUE_VIEW_MIDDLEWARE_PATH, 'a.Middleware']):
-            with self.subTest(middleware=middleware), override_settings(MIDDLEWARE=middleware):
-                self.assertEqual([error.id for error in check_glue_view_middleware()], ['django_glue.E002'])
+    def test_missing_middleware_fails_startup(self):
+        with override_settings(MIDDLEWARE=['a.Middleware']):
+            errors = check_glue_view_middleware()
+            self.assertEqual([error.id for error in errors], ['django_glue.E003'])
+            self.assertIn('missing from MIDDLEWARE', errors[0].msg)
+
+    def test_misplaced_middleware_fails_startup(self):
+        with override_settings(MIDDLEWARE=[GLUE_VIEW_MIDDLEWARE_PATH, 'a.Middleware']):
+            self.assertEqual(
+                [error.id for error in check_glue_view_middleware()],
+                ['django_glue.E002'],
+            )

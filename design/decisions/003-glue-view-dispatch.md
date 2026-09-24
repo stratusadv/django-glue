@@ -52,4 +52,4 @@ endpoint, synthetic request wrapper, and manual redirect loop are removed.
   restoring normal request semantics.
 
 The complete transport contract remains in
-[`../state-model.md`](../state-model.md#6-effects-and-fragments-are-separate-channels).
+[`../specs/core/state-model.md`](../specs/core/state-model.md#6-effects-and-fragments-are-separate-channels).

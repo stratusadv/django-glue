@@ -306,6 +306,10 @@ class ModelFieldResolutionMixin:
             return False
         if self._is_reverse_relation(relation_name):
             return True
+        # An unsaved owner has no related object for any to-one FK yet, so its
+        # child slot must be nullable even when the field is not null-constrained.
+        if getattr(self.instance, 'pk', None) is None:
+            return True
         return bool(getattr(field, 'null', False))
 
     def _relation_is_to_many(self, relation_name: str) -> bool:

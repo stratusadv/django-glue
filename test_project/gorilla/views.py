@@ -9,10 +9,16 @@ from django_glue import Glue
 from test_project.gorilla.forms import GorillaGlueModelForm
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.gorilla.forms import GorillaForm
+from test_project.test_forms import ContactFormSet
 
 
 def component_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'gorilla/page/component_page.html')
+
+
+def contact_formset_view(request: HttpRequest) -> HttpResponse:
+    Glue.formset(request, 'contacts', ContactFormSet, Glue.Access.CHANGE)
+    return render(request, 'gorilla/page/contact_formset_page.html')
 
 
 def list_view(request: HttpRequest) -> HttpResponse:

@@ -211,7 +211,7 @@ domain validity, or authorization by itself.
 | Proxy reconciliation and authoritative snapshots | `state-model.md` |
 | Components, stamping, parentage, keys, lifecycle | `component-system.md` |
 | Alpine startup, morphing, DOM preservation | `component-system.md` |
-| Phases, gates, deferred polling and hardening | `roadmap.md` |
+| Phases, gates, deferred polling and hardening | `design/roadmap.md` |
 | Historical rationale | `decisions/` |
 
 ## Production escape-hatch validation

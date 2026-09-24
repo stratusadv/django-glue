@@ -221,7 +221,7 @@ security-hardening items above remain separate follow-up work.
   ordering, annotations, and counts in the same response. Reject an unsaved
   owner and require an explicit callable for through models needing extra data.
 - Measure whether a production-shaped queryset continuation justifies
-  `scoped-policy.md` Rule 1. Rows keep self-contained policies until it does, and
+  `specs/proposals/scoped-policy.md` Rule 1. Rows keep self-contained policies until it does, and
   must reconstruct through the introducing queryset rather than the default
   manager either way.
 - Preserve arbitrary server-authored queryset ergonomics.

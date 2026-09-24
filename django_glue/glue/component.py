@@ -2,18 +2,27 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
+
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse
+from django.shortcuts import render as render_template
+from django.utils.safestring import mark_safe
+from django.views.decorators.http import require_safe
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.exceptions import GlueComponentParameterError
+from django_glue.exceptions import GlueAuthorizationError, GlueComponentParameterError
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.attributes.declared import _MISSING
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_registry
+from django_glue.glue.component_naming import component_name
 from django_glue.glue.component_root import inject_component_root
+from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
+from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.response import GlueResponse, GlueTemplateResponse
 from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
@@ -167,6 +176,90 @@ class Component(BaseGlue):
 
     def get_context_data(self) -> dict[str, Any]:
         return {'component': self}
+
+    @classmethod
+    def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: Any) -> dict[str, Any]:
+        _ = request
+        return url_kwargs
+
+    @classmethod
+    def as_view(
+        cls,
+        *,
+        template: str | None = None,
+        access: GlueAccess = GlueAccess.VIEW,
+        **parameters: Any,
+    ) -> Callable[..., HttpResponse]:
+        @require_safe
+        def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
+            if cls.tag_name is None:
+                raise ValueError('Component URL views need a registered tag name.')
+            view_kwargs = cls.get_view_kwargs(
+                request,
+                **{**parameters, **url_parameters},
+            )
+            component = cls(
+                name=component_name('', cls.tag_name, None),
+                access=view_kwargs.pop('access', access),
+                **view_kwargs,
+            )
+            try:
+                GlueContextManager(request).add_glue(component)
+                html = component.render().html
+                if template is not None:
+                    return render_template(
+                        request,
+                        template,
+                        {
+                            **component.get_context_data(),
+                            'component_html': mark_safe(html),  # noqa: S308 - Django template
+                        },
+                    )
+                return HttpResponse(html)
+            except GlueAuthorizationError as error:
+                raise PermissionDenied from error
+
+        return view
+
+    def process_attribute_call(
+        self,
+        call_context: AttributeCallRequestContext,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Run the call, re-rendering when it moved a parameter.
+
+        Parameters are what reconstruct a component, so changing one is a
+        structural change: the rendered markup (e.g. which children are
+        stamped) no longer matches. The render runs on a fresh instance built
+        from the successor token rather than on ``self``, whose derived values
+        (cached properties and the like) were computed from the old
+        parameters. That render's output is the authoritative HTML and
+        computed data; the call's own result and effects stand.
+        """
+        entry, introduced = super().process_attribute_call(call_context)
+        incoming_parameters = call_context.target_glue_policy.identity['parameters']
+        if (
+            'html' in entry
+            or (
+                call_context.target_attribute_name is not None
+                and self.identity['parameters'] == incoming_parameters
+            )
+        ):
+            return entry, introduced
+
+        render_context = AttributeCallRequestContext(
+            request=call_context.request,
+            target_glue_policy=self.policy,
+            target_attribute_name='render',
+        )
+        fresh = type(self).from_attribute_call_resolver_context(render_context)
+        render_entry, render_introduced = fresh.process_attribute_call(render_context)
+
+        entry['html'] = render_entry['html']
+        entry.pop('computed_data', None)
+        for key in ('policy_token', 'static_data', 'computed_data'):
+            if key in render_entry:
+                entry[key] = render_entry[key]
+        return entry, [*introduced, *render_introduced]
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def render(self) -> GlueResponse:

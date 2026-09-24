@@ -1,4 +1,6 @@
-from django_glue import Glue
+from django.http import HttpRequest
+
+from django_glue import Glue, GlueOperation
 
 
 class CounterCard(Glue.Component):
@@ -16,6 +18,22 @@ class CounterCard(Glue.Component):
         self.count += 1
         self.counted(value=self.count)
         return self.count
+
+
+class ProtectedCounterCard(CounterCard):
+    def authorize(self, request: HttpRequest, operation: GlueOperation) -> bool:
+        _ = operation
+        return request.user.is_authenticated
+
+
+class RequestConfiguredCounterCard(CounterCard):
+    @classmethod
+    def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: object) -> dict[str, object]:
+        return {
+            **url_kwargs,
+            'start': int(request.GET['start']),
+            'access': Glue.Access.CHANGE,
+        }
 
 
 class CounterDashboard(Glue.Component):

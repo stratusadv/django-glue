@@ -10,10 +10,10 @@ The current branch is intentionally making a clean break from the legacy runtime
 
 Treat the design documents as the specification. Read them in this order before making further architectural decisions:
 
-1. `design/reactive-system/design.md`
-2. `design/reactive-system/state-model.md`
-3. `design/reactive-system/component-system.md`
-4. `design/reactive-system/roadmap.md`
+1. `design/specs/core/overview.md`
+2. `design/specs/core/state-model.md`
+3. `design/specs/core/component-system.md`
+4. `design/roadmap.md`
 
 For the current work, `state-model.md` is primary and roadmap phase 6 defines the release gate. Particularly relevant parts of `state-model.md` are:
 
@@ -23,7 +23,7 @@ For the current work, `state-model.md` is primary and roadmap phase 6 defines th
 - Family pipeline and `$fields` semantics.
 - §10: the new wire format.
 
-`design/reactive-system/decisions/012-formset-is-a-keyed-collection.md` records the completed FormSet design.
+`design/decisions/012-formset-is-a-keyed-collection.md` records the completed FormSet design.
 
 ## Working rules
 
@@ -348,7 +348,7 @@ Implementation notes:
 
 ### A3 prerequisite: policy-token lifetime — DECIDED (2026-09-22, ADR 013)
 
-**24 hours from issuance** (`DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400`), fixed, successor-issued only when retained values change. Recorded in `design/reactive-system/decisions/013-policy-token-lifetime.md`; roadmap checklist item closed; `settings.py` and `AGENTS.md` now state the semantics (the old "rolling" wording is corrected). Rationale in one line: the token is session-bound and re-authorized per request, so the lifetime bounds only the accepted replay/staleness residual — and roots have no reintroduction path, so a shorter default would make long-open pages reload and discard in-progress root-level edits. User may veto; changing the number is a one-line edit.
+**24 hours from issuance** (`DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 86400`), fixed, successor-issued only when retained values change. Recorded in `design/decisions/013-policy-token-lifetime.md`; roadmap checklist item closed; `settings.py` and `AGENTS.md` now state the semantics (the old "rolling" wording is corrected). Rationale in one line: the token is session-bound and re-authorized per request, so the lifetime bounds only the accepted replay/staleness residual — and roots have no reintroduction path, so a shorter default would make long-open pages reload and discard in-progress root-level edits. User may veto; changing the number is a one-line edit.
 
 ### A3 conformance record (pre-edit, per design/AGENTS.md)
 
@@ -1370,6 +1370,35 @@ the latter is a seeded diagnostic for an unresolvable target. The prototype's
 reintegration and agent-rule documents were removed during the merge into
 `v1.1/base` because they describe the state model as shelved and the old wire as
 active.
+
+*Gorilla list deletion conformance record (pre-edit, 2026-09-23).*
+1. **Phase and gate.** Phase 6 E2E consumer behavior on the completed library:
+   deleting a model shown by a queryset must remove its card from the visible
+   list without a page reload.
+2. **Governing contract.** `state-model.md` §10 says queryset rows are answers to
+   query callables, and a queryset refresh reruns its signed last query. Disposal
+   removes an addressed row proxy; the list page must request a new query answer
+   to update its own displayed array.
+3. **Legacy mechanism.** The list page holds a snapshot of `queryset.items` in
+   Alpine state. It has a `gorillas-changed` reload event for creation but no
+   corresponding trigger after either delete action. Its loader calls `all()`,
+   which returns a cached answer for a loaded query, so the event alone does not
+   fetch changed membership. No implicit registry-to-UI collection mutation or
+   compatibility behavior will be added.
+4. **Mapping.** A focused browser test checks that deletion persists and the
+   visible card count falls for both delete controls. The existing list-page
+   reload event will be used by both delete actions, and the loader will call
+   `refresh()` for a fresh query answer; no new runtime class, field, or public
+   method is required.
+
+*Done:* The browser test reproduced both delete paths with a persisted
+deletion and three stale cards. Dispatching `gorillas-changed` alone still left
+three cards because `all()` returned the loaded query's cached result; an
+explicit queryset `refresh()` returned the correct two-row list. The list-page
+loader now calls `refresh()`, and both delete actions dispatch
+`gorillas-changed` after success. The focused browser test passes for both
+controls (2 passed). The full E2E gate passes: 37 passed, 10 xfailed, 2
+existing pytest collection warnings.
 
 `client_js/dbg_tmp.mjs` is an existing untracked user debug script: leave it
 alone. All file edits must use the editor/patch tool, not shell scripts or

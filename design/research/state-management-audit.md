@@ -224,7 +224,7 @@ After the cull, the concepts that genuinely earn their place:
 > independently expose a declared value to construction with `parameter=True`.
 > Glue derives direction, protection and timing from the role. Naming these
 > questions in the public interface was drafted and rejected. See
-> [`../state-model.md`](../state-model.md) §1–§3.
+> [`../specs/core/state-model.md`](../specs/core/state-model.md) §1–§3.
 
 A **question** here means something asked of every single value, where the answers
 are a short fixed list. Pick the right questions and a handful of them describe the

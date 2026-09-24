@@ -3,7 +3,7 @@
 The state-model redesign is implemented on `v1.1/base`; consumer migration and
 release review remain.
 Its implementation phases are internal checkpoints, not separate releases.
-The repository's `design/reactive-system/roadmap.md` owns the detailed gates.
+The repository's `design/roadmap.md` owns the detailed gates.
 
 The release gate includes the addressed server and client protocol, built-in
 Glue families, component stamping and lifecycle, consumer migration, and

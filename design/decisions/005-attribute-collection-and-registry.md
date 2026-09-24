@@ -56,4 +56,4 @@ is deleted with the old attribute hierarchy.
 - Retaining the legacy runtime collector as the public collector contract.
 
 The attribute and composition contracts remain in
-[`../state-model.md`](../state-model.md#4-addressed-objects-and-attributes-use-one-pipeline-not-one-class).
+[`../specs/core/state-model.md`](../specs/core/state-model.md#4-addressed-objects-and-attributes-use-one-pipeline-not-one-class).

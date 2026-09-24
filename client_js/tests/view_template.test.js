@@ -107,4 +107,41 @@ describe('view and template facades', () => {
         expect(String(result)).toBe('<p>Row list</p>')
         expect(client.model.new_row).toBe(client._registry.getProxy(child.address))
     })
+
+    function component(html) {
+        const entry = createEntry({
+            policy: {
+                name: 'card', namespace: 'component', address: 'card#test',
+                attributes: ['render', 'edit_modal'], state_snapshot: {},
+            },
+            staticData: {fields: {}, callables: {
+                render: {allowed_arguments: []},
+                edit_modal: {allowed_arguments: []},
+            }},
+        })
+        const client = new GlueClient({objects: [entry]})
+        globalThis.Glue = client
+        document.body.innerHTML = '<div data-glue-address="card#test"><span>Card</span></div>'
+        client.http.sendAttributeRequest = async () => ({data: {objects: [
+            {address: 'card#test', html, result: null},
+        ]}})
+        return client._registry.getProxy(entry.address)
+    }
+
+    test('a component html attribute returns its fragment without re-rendering the component', async () => {
+        const proxy = component('<h5>Edit</h5><form></form>')
+
+        const result = await proxy.edit_modal()
+
+        expect(String(result)).toBe('<h5>Edit</h5><form></form>')
+        expect(document.body.innerHTML).toBe('<div data-glue-address="card#test"><span>Card</span></div>')
+    })
+
+    test('a component action returning its own render re-renders the component root', async () => {
+        const proxy = component('<div data-glue-address="card#test"><span>Rerendered</span></div>')
+
+        await proxy.edit_modal()
+
+        expect(document.body.textContent).toBe('Rerendered')
+    })
 })

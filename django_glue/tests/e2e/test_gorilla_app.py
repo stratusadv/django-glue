@@ -78,6 +78,32 @@ def test_combatants_page_initializes_glue_demo(
     assert glue_state['models'] == ['new_gorilla_model']
 
 
+def test_contact_formset_keeps_surviving_draft_across_requests(
+    page: Page,
+    application: Application,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-contact-formset')
+    demo.goto('gorilla:contact_formset')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    page.get_by_role('button', name='Add contact').click()
+    page.get_by_role('button', name='Add contact').click()
+    rows = page.locator('.contact-row')
+    expect(rows).to_have_count(2)
+
+    rows.nth(0).get_by_label('Contact name').fill('Discarded')
+    rows.nth(1).get_by_label('Contact name').fill('Bee')
+    rows.nth(1).get_by_label('Contact email').fill('bee@example.com')
+    rows.nth(1).get_by_label('Contact message').fill('Surviving row')
+    rows.nth(1).get_by_label('Contact priority').select_option('low')
+    rows.nth(0).get_by_role('button', name='Remove contact').click()
+    expect(rows).to_have_count(1)
+
+    page.get_by_role('button', name='Submit contacts').click()
+
+    expect(page.locator('#contact-result')).to_have_text('{"valid":true,"names":["Bee"]}')
+
+
 def test_queryset_filter_order_slice_demo(
     page: Page,
     application: Application,
@@ -371,6 +397,35 @@ def test_model_edit_save_demo(
     expect(page.get_by_role('alert')).to_contain_text('Fighter saved successfully!')
     assert Gorilla.objects.get(name='Alpha Atlas').description == 'Updated by Playwright e2e.'
     assert Gorilla.objects.get(name='Alpha Atlas').age == 13
+
+
+@pytest.mark.parametrize('via_dropdown', [False, True], ids=['card', 'dropdown'])
+def test_list_model_delete_updates_roster(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+    via_dropdown: bool,
+) -> None:
+    alpha_pk = seeded_gorillas['alpha'].pk
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-list-delete')
+    demo.goto('gorilla:list')
+    fighter_names = page.get_by_placeholder('Fighter Name')
+    expect(fighter_names).to_have_count(3)
+
+    page.once('dialog', lambda dialog: dialog.accept())
+    card = gorilla_card(page, ALPHA_INDEX)
+    if via_dropdown:
+        card.get_by_role('button', name='More Actions').click()
+        dropdown_delete = card.locator('.dropdown-menu').get_by_role('button', name='Delete')
+        expect(dropdown_delete).to_be_visible()
+        dropdown_delete.click()
+    else:
+        card.get_by_role('button', name='Delete', exact=True).first.click()
+
+    expected_alert = 'Deleted via dropdown.' if via_dropdown else 'Fighter deleted.'
+    expect(page.get_by_role('alert')).to_contain_text(expected_alert)
+    assert not Gorilla.objects.filter(pk=alpha_pk).exists()
+    expect(fighter_names).to_have_count(2)
 
 
 def test_global_message_handler_demo(

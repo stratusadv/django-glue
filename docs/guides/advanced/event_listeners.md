@@ -36,6 +36,13 @@ stop()
 function. Disposal removes its listeners. Each event is delivered after the
 response has reconciled the source state and introduced objects.
 
+An owner can expose a specific signed child event. For example, a component
+with a child model named `entry` whose form declares `saved = Glue.event()`
+can declare `saved = Glue.event(from_child='entry.form.saved')`. Consumers then
+subscribe with `modal.$on('saved', handler)`. The event keeps the child form as
+`event.source` and the owner's proxy as `event.currentTarget`. Other child
+events remain private; disposing the owner removes the subscription.
+
 When the source is a rendered component, Glue also dispatches a bubbling DOM
 `CustomEvent` from its current root. Its `detail` contains the declared values
 and `$address`; `event.source` is the source proxy. Ordinary Alpine or DOM

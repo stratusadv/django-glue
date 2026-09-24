@@ -58,4 +58,4 @@ querysets, formsets, sequences, and functions.
   output and schema are not consumed upward by Glue.
 - A second state engine specifically for components.
 
-The complete contract remains in [`../state-model.md`](../state-model.md).
+The complete contract remains in [`../specs/core/state-model.md`](../specs/core/state-model.md).

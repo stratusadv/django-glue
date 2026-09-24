@@ -1,7 +1,7 @@
 # Architecture
 
-The repository's `design/reactive-system/state-model.md` and
-`design/reactive-system/component-system.md` are the authoritative contracts.
+The repository's `design/specs/core/state-model.md` and
+`design/specs/core/component-system.md` are the authoritative contracts.
 This page maps those contracts to the implementation.
 
 ## Registration and page load

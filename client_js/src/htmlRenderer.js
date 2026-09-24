@@ -121,5 +121,5 @@ function htmlResultFromResponse(data, client) {
     return new HtmlResult(data?.html || '', client)
 }
 
-export {htmlResultFromResponse}
+export {htmlResultFromResponse, htmlToFragment}
 export default HtmlRenderer

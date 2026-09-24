@@ -5,7 +5,7 @@ from django import forms
 from django.test import TestCase
 
 from django_glue import Glue
-from django_glue.exceptions import GlueFormSetMaxNumExceededError
+from django_glue.exceptions import GlueFormSetMaxNumExceededError, GlueRequestError
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
@@ -28,6 +28,21 @@ class SampleContactFormSet(Glue.FormSet):
 
     def clean(self, form_list):
         return ['Test cross-form error.']
+
+
+class SubmittingContactFormSet(Glue.FormSet):
+    form_class = ContactForm
+    min_num = 1
+    can_delete = True
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def submit(self):
+        validation = self.validate()
+        return {
+            'valid': validation['valid'],
+            'names': [form.bound_form.cleaned_data['name'] for form in validation['form_list']]
+            if validation['valid'] else [],
+        }
 
 
 class FormSetGlueTestCase(TestCase):
@@ -59,6 +74,26 @@ class FormSetGlueTestCase(TestCase):
     def test_requires_a_form_class(self):
         with self.assertRaises(ValueError):
             FormSetGlue(**glue_context(name='contacts'))
+
+    def test_shortcut_rejects_a_django_formset_instance_naming_the_fix(self):
+        formset = forms.formset_factory(ContactForm)()
+
+        with self.assertRaisesRegex(TypeError, 'Glue.FormSet subclass'):
+            Glue.formset(None, 'contacts', formset)
+
+    def test_validated_forms_expose_their_bound_django_form(self):
+        glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
+        glue_object.append(key='1', initial={})
+        glue_object._load_client_state({'forms': {'1': {
+            'name': 'Ada', 'email': 'ada@example.com', 'message': 'Hello', 'priority': 'low',
+        }}})
+
+        result = glue_object.validate()
+
+        bound_form = result['form_list'][0].bound_form
+        self.assertIsInstance(bound_form, ContactForm)
+        self.assertTrue(bound_form.is_bound)
+        self.assertEqual(bound_form.cleaned_data['name'], 'Ada')
 
     def test_append_returns_a_bound_form_glue_with_initial_values(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
@@ -114,6 +149,118 @@ class FormSetGlueTestCase(TestCase):
         self.assertEqual(introduction['address'], entry['result'])
         successor = GluePolicy.from_token(entry['policy_token'])
         self.assertEqual(successor.children, {'1': introduction['address']})
+
+    def test_rows_survive_separate_append_requests(self):
+        original = with_request(FormSetGlue(
+            ContactForm, **glue_context(name='contacts'), max_num=2,
+        ))
+        policy = original.policy
+
+        for key in ('first', 'second'):
+            reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+            reconstructed.request = request_with_session()
+            context = AttributeCallRequestContext.model_construct(
+                request=reconstructed.request,
+                target_glue_policy=policy,
+                target_glue_updates={},
+                target_attribute_name='append',
+                target_attribute_call_kwargs={'key': key, 'initial': {}},
+                reintroduce=[],
+            )
+            entry, introduced = reconstructed.process_attribute_call(context)
+            self.assertEqual(len(introduced), 1)
+            policy = GluePolicy.from_token(entry['policy_token'])
+
+        self.assertEqual(list(policy.children), ['first', 'second'])
+
+    def test_remove_and_submit_uses_surviving_row_values_across_requests(self):
+        original = with_request(SubmittingContactFormSet(name='contacts'))
+        policy = original.policy
+        child_policies = {}
+
+        for attribute, kwargs in (
+            ('append', {'key': 'first', 'initial': {}}),
+            ('append', {'key': 'second', 'initial': {}}),
+            ('pop', {'key': 'first'}),
+        ):
+            reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+            reconstructed.request = request_with_session()
+            context = AttributeCallRequestContext.model_construct(
+                request=reconstructed.request,
+                target_glue_policy=policy,
+                target_glue_updates={},
+                target_attribute_name=attribute,
+                target_attribute_call_kwargs=kwargs,
+                reintroduce=[],
+            )
+            entry, introduced = reconstructed.process_attribute_call(context)
+            self.assertNotIn('error', entry)
+            for child in introduced:
+                child_policy = GluePolicy.from_token(child['policy_token'])
+                child_policies[child_policy.name.rsplit('.', 1)[-1]] = child_policy
+            policy = GluePolicy.from_token(entry['policy_token'])
+
+        self.assertEqual(list(policy.children), ['second'])
+
+        reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+        context = AttributeCallRequestContext.model_construct(
+            request=reconstructed.request,
+            target_glue_policy=policy,
+            target_glue_updates={},
+            target_attribute_name='submit',
+            target_attribute_call_kwargs={'__forms': {
+                'second': {
+                    'policy_token': child_policies['second'].token,
+                    'updates': {
+                        'name': 'Bee',
+                        'email': 'bee@example.com',
+                        'message': 'Surviving row',
+                        'priority': 'low',
+                    },
+                },
+            }},
+            reintroduce=[],
+        )
+
+        entry, _ = reconstructed.process_attribute_call(context)
+
+        self.assertEqual(entry['result'], {'valid': True, 'names': ['Bee']})
+
+    def test_submit_rejects_a_form_token_outside_signed_membership(self):
+        original = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))
+        original.append(key='first', initial={})
+        policy = original.policy
+        foreign = with_request(FormSetGlue(ContactForm, **glue_context(name='other')))
+        foreign_policy = foreign.policy
+        foreign_reconstructed = FormSetGlue._reconstruct_from_policy(foreign_policy)
+        foreign_reconstructed.request = request_with_session()
+        foreign_context = AttributeCallRequestContext.model_construct(
+            request=foreign_reconstructed.request,
+            target_glue_policy=foreign_policy,
+            target_glue_updates={},
+            target_attribute_name='append',
+            target_attribute_call_kwargs={'key': 'first', 'initial': {}},
+            reintroduce=[],
+        )
+        _, foreign_children = foreign_reconstructed.process_attribute_call(foreign_context)
+        foreign_token = foreign_children[0]['policy_token']
+
+        reconstructed = FormSetGlue._reconstruct_from_policy(policy)
+        reconstructed.request = request_with_session()
+        context = AttributeCallRequestContext.model_construct(
+            request=reconstructed.request,
+            target_glue_policy=policy,
+            target_glue_updates={},
+            target_attribute_name='validate',
+            target_attribute_call_kwargs={'__forms': {
+                'first': {'policy_token': foreign_token, 'updates': {}},
+            }},
+            reintroduce=[],
+        )
+
+        with self.assertRaisesRegex(GlueRequestError, 'does not belong'):
+            reconstructed.process_attribute_call(context)
 
     def test_attribute_call_without_child_changes_omits_introductions(self):
         glue_object = with_request(FormSetGlue(ContactForm, **glue_context(name='contacts')))

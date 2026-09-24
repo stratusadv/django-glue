@@ -51,7 +51,14 @@ class FormGlue(BaseGlue):
         self._editable_draft: dict[str, Any] = {}
         self._bound_form: forms.BaseForm | None = None
 
+    @property
+    def bound_form(self) -> forms.BaseForm | None:
+        """The Django form bound and validated by the last ``validate()``, or
+        ``None`` before one ran -- e.g. for ``save(commit=False)``."""
+        return self._bound_form
+
     def get_attribute_providers(self) -> tuple[Any, ...]:
+        self.form._glue_event_owner = self
         return (self.form,)
 
     def get_identity(self) -> dict[str, Any]:
@@ -174,8 +181,27 @@ class FormGlue(BaseGlue):
         return super().get_state()
 
     def _populate_field_errors(self) -> None:
-        """Populate _field_errors from form errors."""
-        self._field_errors = dict(self.form.errors)
+        """Sync _field_errors from the form's validation result, if any.
+
+        Reads ``form._errors`` directly rather than the ``form.errors``
+        property: that property calls ``is_valid()`` and would run a fresh
+        ``full_clean()``, surfacing "required" errors on a bound-but-unsubmitted
+        form (the moment a modal opens). Validation is triggered only by an
+        explicit validate/save call or a provider callable that validates the
+        form itself; this only reflects a result that already exists.
+        """
+        form_errors = self.form._errors
+        if form_errors is not None:
+            self._field_errors = {name: list(errors) for name, errors in form_errors.items()}
+
+    def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
+        # Field adapters read _field_errors. A provider callable (a
+        # save_model_obj-style method) validates the form itself and never
+        # touches _field_errors, so re-sync from the form before deriving
+        # downward output. The sync reflects only a validation that already
+        # ran (see _populate_field_errors); it never triggers one.
+        self._populate_field_errors()
+        return super().get_computed_data(include_all=include_all)
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> FormGlue:

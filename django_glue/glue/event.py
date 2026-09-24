@@ -34,8 +34,15 @@ DOM_EVENT_NAMES = frozenset({
 
 
 class GlueEvent:
-    def __init__(self) -> None:
+    def __init__(self, *, from_child: str | None = None) -> None:
+        if from_child is not None and (
+            not isinstance(from_child, str)
+            or len(from_child.split('.')) < 2
+            or any(not segment for segment in from_child.split('.'))
+        ):
+            raise ValueError('from_child must name a child path and event.')
         self.name: str | None = None
+        self.from_child = from_child
 
     def __set_name__(self, owner: type, name: str) -> None:
         if name in DOM_EVENT_NAMES or name.startswith('$'):
@@ -50,10 +57,13 @@ class GlueEvent:
         return partial(self.emit, instance)
 
     def emit(self, instance: Any, **detail: Any) -> None:
+        if self.from_child is not None:
+            raise TypeError('A forwarded event cannot be emitted by its owner.')
         if '$address' in detail:
             raise ValueError('Event detail cannot define the reserved $address key.')
         GlueResponseJSONEncoder().encode(detail)
-        instance.__dict__.setdefault('_pending_events', []).append({
+        owner = getattr(instance, '_glue_event_owner', instance)
+        owner.__dict__.setdefault('_pending_events', []).append({
             'name': self.name,
             'detail': detail,
         })

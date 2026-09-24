@@ -16,6 +16,7 @@ from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
     GlueCalledNonCallableAttributeError,
+    GlueComponentRegistrationError,
     GlueMissingAttributeError,
     GlueRequestError,
     GlueRequestErrorCode,
@@ -121,6 +122,7 @@ class BaseGlue(ABC):
             for child in owner._bound_children:
                 if child.glue_object is None or child.address in seen:
                     continue
+
                 seen.add(child.address)
                 child.glue_object._address = child.address
                 serialized.append(child.glue_object.entry.model_dump())
@@ -332,12 +334,25 @@ class BaseGlue(ABC):
             static_data['children'] = children
         if callables:
             static_data['callables'] = callables
-        events = [
-            name for name, declaration in inspect.getmembers_static(type(self))
+        declarations = [
+            (name, declaration)
+            for provider in (self, *self.get_attribute_providers())
+            for name, declaration in inspect.getmembers_static(type(provider))
             if isinstance(declaration, GlueEvent)
         ]
+        names = [name for name, _declaration in declarations]
+        if len(names) != len(set(names)):
+            raise GlueComponentRegistrationError('Glue event names must be unique on an address.')
+        events = names
         if events:
             static_data['events'] = events
+        forwarded_events = {
+            name: declaration.from_child
+            for name, declaration in declarations
+            if declaration.from_child is not None
+        }
+        if forwarded_events:
+            static_data['forwarded_events'] = forwarded_events
         return static_data
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
@@ -752,6 +767,7 @@ class BaseGlue(ABC):
                 result.cap_access(self.access)
                 result.introduce(self.request)
                 introduced.append(result.entry.model_dump())
+                introduced.extend(result._serialized_child_entries())
             result = result.address
         else:
             GlueResponse._reject_glue_objects(result)

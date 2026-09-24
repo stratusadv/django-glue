@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+The full migration guide for these changes is at [Migration Guide](../migration.md).
+
 ### Breaking
 
 - The state-model release removes the `metadata`/`state`/`manifest_list`
@@ -20,6 +22,13 @@
 
 - Components mount through `{% glue_component %}` with typed Django
   parameters, stable keys, server HTML, Alpine morphing, and declared events.
+- `Component.as_view()` serves a component directly from a Django URL as an
+  HTML fragment, or inside a full page with a `template=` wrapper.
+- Mounted component `$refresh()` renders and morphs its root. An owner can
+  expose a signed child's event with `Glue.event(from_child=...)`.
+- Formsets retain signed row membership across requests and submit child form
+  values together for validation and saving; `pop()` removes a row on the
+  server.
 - One live proxy exists per address. Disposed references become tombstones;
   reintroduction creates a new proxy generation.
 - Model and form state is split into signed retained state, stable interface

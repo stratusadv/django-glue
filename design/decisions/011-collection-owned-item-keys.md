@@ -69,4 +69,4 @@ family special-casing and no base-class field.
   the key is read from the signed token instead.
 
 The complete contract remains in
-[`../state-model.md`](../state-model.md#8-collections-get-identity-and-keys).
+[`../specs/core/state-model.md`](../specs/core/state-model.md#8-collections-get-identity-and-keys).

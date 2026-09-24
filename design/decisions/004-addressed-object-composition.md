@@ -75,6 +75,6 @@ composition without weakening either rule.
   application-specific and explicit.
 
 The complete contracts remain in
-[`../state-model.md`](../state-model.md#4-addressed-objects-and-attributes-use-one-pipeline-not-one-class)
+[`../specs/core/state-model.md`](../specs/core/state-model.md#4-addressed-objects-and-attributes-use-one-pipeline-not-one-class)
 and
-[`../component-system.md`](../component-system.md#composition-mechanisms).
+[`../specs/core/component-system.md`](../specs/core/component-system.md#composition-mechanisms).

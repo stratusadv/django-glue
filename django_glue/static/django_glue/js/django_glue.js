@@ -4350,7 +4350,7 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
-      if (target.html !== undefined && this._policy.namespace === "component" && this.$el) {
+      if (target.html !== undefined && this._policy.namespace === "component" && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
         await result.renderOuterHtml(this.$el);
       }
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
@@ -4440,16 +4440,49 @@ ${expression ? 'Expression: "' + expression + `"
       effects.events?.forEach(({ name, detail }) => {
         const event = {
           type: name,
+          sourceType: name,
           detail: { ...detail, $address: this._record.address },
           source: this
         };
-        this._eventListeners.get(name)?.forEach((listener) => listener(event));
-        if (this.$el && typeof CustomEvent !== "undefined") {
-          const domEvent = new CustomEvent(name, { detail: event.detail, bubbles: true });
-          domEvent.source = this;
-          this.$el.dispatchEvent(domEvent);
+        this._deliverEvent(event);
+        let sourcePath = "";
+        let descendant = this;
+        while (descendant._record.owner?.path && descendant._owner) {
+          sourcePath = sourcePath ? `${descendant._record.owner.path}.${sourcePath}` : descendant._record.owner.path;
+          const owner = descendant._owner;
+          if (owner._record.disposed)
+            break;
+          Object.entries(owner._record.staticData?.forwarded_events || {}).forEach(([exposedName, fromChild]) => {
+            if (fromChild === `${sourcePath}.${name}`) {
+              owner._deliverEvent({ ...event, type: exposedName });
+            }
+          });
+          descendant = owner;
         }
       });
+    }
+    _deliverEvent(event) {
+      const delivered = { ...event, currentTarget: this };
+      const reportError = (error2) => {
+        const handler = this._onError || this._client?._onError;
+        if (handler)
+          handler({ error: error2, event: delivered, proxy: this });
+        else
+          console.error(error2);
+      };
+      this._eventListeners.get(event.type)?.forEach((listener) => {
+        try {
+          Promise.resolve(listener(delivered)).catch(reportError);
+        } catch (error2) {
+          reportError(error2);
+        }
+      });
+      const sourceElement = event.source.$el;
+      if (this.$el && typeof CustomEvent !== "undefined" && !(this !== event.source && event.type === event.sourceType && sourceElement && this.$el.contains(sourceElement))) {
+        const domEvent = new CustomEvent(event.type, { detail: event.detail, bubbles: true });
+        domEvent.source = event.source;
+        this.$el.dispatchEvent(domEvent);
+      }
     }
     _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
@@ -4526,31 +4559,44 @@ ${expression ? 'Expression: "' + expression + `"
     constructor(options) {
       super(options);
       this.nonFormErrors = [];
-      this._removedKeys = new Set;
-      this._nextKey = Object.keys(this._policy.children || {}).length;
+      this._nextKey = Math.max(-1, ...Object.keys(this._policy.children || {}).map(Number).filter(Number.isSafeInteger)) + 1;
     }
     get forms() {
-      return Object.entries(this._policy.children || {}).filter(([key]) => !this._removedKeys.has(key)).map(([, address]) => this._registry.getProxy(address)).filter(Boolean);
+      return Object.entries(this._policy.children || {}).map(([, address]) => this._registry.getProxy(address)).filter(Boolean);
     }
     get length() {
       return this.forms.length;
     }
     async append(initial = {}) {
       const key = String(this._nextKey++);
-      const form = await this._callAttribute("append", { key, initial });
-      this._removedKeys.delete(key);
-      return form;
+      return await this._callAttribute("append", { key, initial });
     }
-    pop(key) {
+    async pop(key) {
       const entry = Object.entries(this._policy.children || {}).find(([, address]) => this._registry.getProxy(address)?.$key === key);
       if (!entry)
         return;
-      this._removedKeys.add(entry[0]);
-      return this._registry.getProxy(entry[1]);
+      const form = this._registry.getProxy(entry[1]);
+      await this._callAttribute("pop", { key: entry[0] });
+      return form;
+    }
+    _singleCall(attribute, kwargs, options = {}) {
+      if (attribute !== null && attribute !== "append" && attribute !== "pop") {
+        const forms = Object.fromEntries(Object.entries(this._policy.children || {}).map(([key, address]) => {
+          const record = this._registry.getRecord(address);
+          if (!record || record.disposed) {
+            throw new Error(`Formset row "${key}" is unavailable.`);
+          }
+          return [key, {
+            policy_token: record.policyToken,
+            updates: record.captureRequest().updates
+          }];
+        }));
+        return super._singleCall(attribute, { ...kwargs, __forms: forms }, options);
+      }
+      return super._singleCall(attribute, kwargs, options);
     }
     async validate() {
       const result = await this._callAttribute("validate");
-      this._removedKeys.clear();
       this.nonFormErrors = result?.non_form_errors || [];
       return result;
     }

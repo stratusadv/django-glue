@@ -10,10 +10,10 @@ Refines the state-related portions of [`component-system.md`](component-system.m
 `docs/future/attribute-glue-unification.md`, whose stated precondition —
 *"the current attribute confusion causes real bugs"* — is now met.
 
-Evidence: [`research/state-management-audit.md`](research/state-management-audit.md)
+Evidence: [`research/state-management-audit.md`](../../research/state-management-audit.md)
 (catalogue, usage census across django-glue, stratusadv-portal and django-spire,
 seven rulings) and
-[`research/comparative-analysis.md`](research/comparative-analysis.md)
+[`research/comparative-analysis.md`](../../research/comparative-analysis.md)
 (Livewire/Unicorn comparison and security findings).
 
 ---
@@ -1033,12 +1033,15 @@ Declared semantic events are effects as well. `effects.events` contains the
 event name and ordinary serialized detail; its source is the address of the
 response entry, so the wire format does not repeat or accept a target address.
 After the complete originating response has been applied, the client delivers
-each event to listeners scoped to that source proxy generation. If the source
-is a mounted component, it also dispatches a real bubbling `CustomEvent` with
-the same name and detail from the component root. Alpine and plain JavaScript
-therefore consume component events through normal DOM event semantics;
-non-rendered Glue families use the universal proxy `$on()` API because they
-have no canonical element.
+each event to listeners scoped to that source proxy generation. An owner may
+explicitly expose a declared event from one signed descendant path; delivery
+to that owner retains the original source address and does not expose other
+descendant events. If the source is a mounted component, it also dispatches a
+real bubbling `CustomEvent` with the same name and detail from the component
+root. A mounted owner similarly bridges an explicitly exposed descendant event
+from its own root. Alpine and plain JavaScript therefore consume component
+events through normal DOM event semantics; non-rendered Glue families use the
+universal proxy `$on()` API because they have no canonical element.
 
 An event is down-only output: it is not signed into the successor token, is
 never hydrated, and grants no authority to a listener. JavaScript may dispatch
@@ -1055,10 +1058,12 @@ where their address ownership is explicit, rather than smuggled through event
 detail.
 
 `$refresh()` itself remains an ordinary addressed request rather than an
-effect. Refresh does not imply reset and does not bypass reconciliation. In
-particular, a form keeps its admitted invalid draft, a model keeps its editable
-overlay while refetching persisted data, a queryset reruns its authenticated
-query, and a component recomputes downward output.
+effect. Refresh does not imply reset and does not bypass reconciliation. A
+component refresh includes its rendered HTML; a mounted component reconciles
+that HTML with its current root. In particular, a form keeps its admitted
+invalid draft, a model keeps its editable overlay while refetching persisted
+data, a queryset reruns its authenticated query, and a component recomputes
+downward output.
 
 **Refresh does not submit editable updates by default.** `$refresh()` sends the
 address and its current policy token and no `updates`; the server hydrates the
@@ -2505,7 +2510,7 @@ compression is introduced.
   are not deferred.
 
 Implementation order, gates, and deferred work are maintained in
-[`roadmap.md`](roadmap.md).
+[`roadmap.md`](../../roadmap.md).
 
 ---
 

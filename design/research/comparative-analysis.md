@@ -81,7 +81,7 @@ ORM-native model that makes it different.
 
 Unicorn and Livewire are **render-first**: an interaction produces HTML. Glue is
 **state-first**: an interaction produces values, and the DOM follows from Alpine
-bindings. [`../component-system.md`](../component-system.md) explicitly rejects regressing to
+bindings. [`../specs/core/component-system.md`](../specs/core/component-system.md) explicitly rejects regressing to
 render-first, and that is the right call — it is Glue's clearest technical
 differentiator.
 
@@ -226,7 +226,7 @@ data integrity, and Livewire has a good one.
 The most significant finding, because it undermines the trust anchor the component
 system is being built on.
 
-[`../component-system.md`](../component-system.md) §4 specifies that identity attributes are
+[`../specs/core/component-system.md`](../specs/core/component-system.md) §4 specifies that identity attributes are
 "required parameters: everything needed to rebuild the component," signed into the
 policy. In practice a value declared `Glue.attr(identity=True)` is *also* collected as
 a `StateAttribute`, and `BaseGlue._load_client_state()` applies any `StateAttribute`

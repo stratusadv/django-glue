@@ -6,10 +6,10 @@ retained for Rule 1's contract and for the reasoning behind all three.
 
 Date: 2026-09-16 (revised; supersedes the scoped-policy draft of 2026-09-14)
 
-Relates to: [`state-model.md`](state-model.md) §4, §8, §10 ·
-[`decisions/004-addressed-object-composition.md`](decisions/004-addressed-object-composition.md) ·
-[`decisions/009-add-access.md`](decisions/009-add-access.md) ·
-[`concerns.md`](concerns.md)
+Relates to: [`state-model.md`](../core/state-model.md) §4, §8, §10 ·
+[`decisions/004-addressed-object-composition.md`](../../decisions/004-addressed-object-composition.md) ·
+[`decisions/009-add-access.md`](../../decisions/009-add-access.md) ·
+[`concerns.md`](../../concerns.md)
 
 ---
 
@@ -178,7 +178,7 @@ keeps its self-contained token.
 ## Rule 2 — a projected to-one relation is an addressed child with no continuation
 
 > **Accepted.** This rule now lives in
-> [`state-model.md`](state-model.md#a-projected-relation-is-an-addressed-child),
+> [`state-model.md`](../core/state-model.md#a-projected-relation-is-an-addressed-child),
 > which is authoritative. The text below is the original argument for it.
 
 `fields=Glue.fields('id', 'description', project=('id', 'name'))` introduces the
@@ -231,7 +231,7 @@ children, not fifty.
 ## Rule 3 — a projected to-many relation is an addressed queryset
 
 > **Accepted.** This rule now lives in
-> [`state-model.md`](state-model.md#a-projected-relation-is-an-addressed-child),
+> [`state-model.md`](../core/state-model.md#a-projected-relation-is-an-addressed-child),
 > which is authoritative, and is refined by ADR 009.
 
 A projected to-many or reverse relation is a `QuerySetGlue` child rather than a

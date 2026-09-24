@@ -1,5 +1,5 @@
 import {GlueAddressError, GlueProxyError} from "../errors"
-import {htmlResultFromResponse} from "../htmlRenderer"
+import {htmlResultFromResponse, htmlToFragment} from "../htmlRenderer"
 
 class BaseGlueProxy {
     constructor({http, record, registry, client = null, owner = null}) {
@@ -183,7 +183,17 @@ class BaseGlueProxy {
         const result = target.html === undefined
             ? this._convertResult(rawResult, attribute)
             : htmlResultFromResponse(target, this._client)
-        if (target.html !== undefined && this._policy.namespace === 'component' && this.$el) {
+        // Only HTML rooted at this component's own address (its render(),
+        // whether called directly or returned by an action) replaces it. Any
+        // other HTML attribute on a component (a modal body, a row) is a
+        // fragment for its caller to place.
+        if (
+            target.html !== undefined
+            && this._policy.namespace === 'component'
+            && this.$el
+            && htmlToFragment(target.html).firstElementChild
+                ?.getAttribute('data-glue-address') === this._record.address
+        ) {
             await result.renderOuterHtml(this.$el)
         }
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
@@ -280,16 +290,59 @@ class BaseGlueProxy {
         effects.events?.forEach(({name, detail}) => {
             const event = {
                 type: name,
+                sourceType: name,
                 detail: {...detail, $address: this._record.address},
                 source: this,
             }
-            this._eventListeners.get(name)?.forEach(listener => listener(event))
-            if (this.$el && typeof CustomEvent !== 'undefined') {
-                const domEvent = new CustomEvent(name, {detail: event.detail, bubbles: true})
-                domEvent.source = this
-                this.$el.dispatchEvent(domEvent)
+            this._deliverEvent(event)
+            let sourcePath = ''
+            let descendant = this
+            while (descendant._record.owner?.path && descendant._owner) {
+                sourcePath = sourcePath
+                    ? `${descendant._record.owner.path}.${sourcePath}`
+                    : descendant._record.owner.path
+                const owner = descendant._owner
+                if (owner._record.disposed) break
+                Object.entries(owner._record.staticData?.forwarded_events || {})
+                    .forEach(([exposedName, fromChild]) => {
+                        if (fromChild === `${sourcePath}.${name}`) {
+                            owner._deliverEvent({...event, type: exposedName})
+                        }
+                    })
+                descendant = owner
             }
         })
+    }
+
+    _deliverEvent(event) {
+        const delivered = {...event, currentTarget: this}
+        const reportError = error => {
+            const handler = this._onError || this._client?._onError
+            if (handler) handler({error, event: delivered, proxy: this})
+            else console.error(error)
+        }
+        this._eventListeners.get(event.type)?.forEach(listener => {
+            try {
+                Promise.resolve(listener(delivered)).catch(reportError)
+            } catch (error) {
+                reportError(error)
+            }
+        })
+        const sourceElement = event.source.$el
+        if (
+            this.$el
+            && typeof CustomEvent !== 'undefined'
+            && !(
+                this !== event.source
+                && event.type === event.sourceType
+                && sourceElement
+                && this.$el.contains(sourceElement)
+            )
+        ) {
+            const domEvent = new CustomEvent(event.type, {detail: event.detail, bubbles: true})
+            domEvent.source = event.source
+            this.$el.dispatchEvent(domEvent)
+        }
     }
 
     _convertResult(result, attribute = null) {

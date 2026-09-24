@@ -26,7 +26,7 @@ class TypeCheckingReturnGlue(BaseGlue):
     def new_entry(self, request: HttpRequest) -> ModelGlue:
         from test_project.gorilla.models import Gorilla  # noqa: PLC0415
 
-        return Glue.model(Gorilla(name='New'), fields=['name'], access=GlueAccess.CHANGE)
+        return Glue.model(target=Gorilla(name='New'), fields=['name'], access=GlueAccess.CHANGE)
 
     @Glue.attr
     def maybe_entry(self) -> ModelGlue | None:

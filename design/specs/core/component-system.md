@@ -438,6 +438,44 @@ The tag supports only registered components with a single root element.
 Slots, paired tags, and dynamic component-class selection are separate
 extensions.
 
+#### Components as URL views
+
+A component class may be the target of a Django URL pattern:
+
+```python
+path('cards/<int:start>/', CounterCard.as_view(), name='card-fragment')
+path('cards/<int:start>/page/', CounterCard.as_view(
+    template='gorilla/page/card.html',
+), name='card-page')
+```
+
+`as_view()` serves safe HTTP requests through Django's ordinary URL and
+middleware path. Named URL captures supply declared component parameters;
+constructor defaults passed to `as_view()` supply parameters not captured by
+the route. A component may override `get_view_kwargs(request, **url_kwargs)`
+to return constructor kwargs derived from the current request, including a
+request-specific `access` ceiling. The default returns the supplied kwargs.
+The component is introduced and mounted once before rendering, with
+the same signed root address and child entries as a template-tag stamp. Unknown
+or missing parameters retain the component's normal constructor errors.
+
+Without `template=`, the response is the component's declared template as an
+HTML fragment, including its addressed root. With `template=`, the component
+still renders its declared template first; the override is a page template
+that receives `component_html` as safe rendered markup alongside the
+component's normal context. A page template includes `{% django_glue_init %}`
+to boot the client. Keeping the component template unchanged ensures later
+`render()` calls return the same component fragment rather than a whole page.
+Either route remains compatible with `Glue.view` content negotiation and its
+ordinary middleware checks.
+
+Django view decorators may guard the URL, as with any other view. That guard
+applies to page retrieval; later addressed component calls use their own
+endpoint. The component's `access=` value caps the signed operations, while
+`authorize(request, operation)` enforces current application permission at
+introduction and on later calls. An `authorize()` denial during direct URL
+rendering becomes Django's HTTP 403 response.
+
 #### Keys
 
 A key identifies a child among its siblings and **is chosen where the child is
@@ -626,9 +664,12 @@ and have each response acknowledge it as canonical. The full contract is in
 The adapter determines what returning to its authoritative source means. A
 model refetches and reauthorizes its row before reapplying its retained draft
 overlay; a form reconstructs its bound form without discarding admitted raw
-values; a queryset reruns its query; and a component recomputes its properties
-and any requested rendering. The reconciliation rules in `state-model.md` §5
-preserve edits made while the refresh is in flight. Refresh never means reset.
+values; and a queryset reruns its query. A mounted component recomputes its
+properties, renders its template, and morphs its root as part of `$refresh()`;
+an unmounted component still returns the rendered HTML for a host to mount.
+Application code does not invoke `render()` to reconcile a component after a
+mutation. The reconciliation rules in `state-model.md` §5 preserve edits made
+while the refresh is in flight. Refresh never means reset.
 
 Glue does not attempt to infer a dependency graph from a model save. Arbitrary
 query predicates and computed properties make that both incomplete and
@@ -715,8 +756,16 @@ browser meanings. Glue does not maintain a second global event bus or dispatch
 directly to a named component.
 
 A source-scoped `$on()` handler is bound to the exact child's source even when a
-descendant emits an event with the same name. General ancestor DOM listeners
-receive normal bubbling semantics and may inspect the address in event detail.
+descendant emits an event with the same name. An owner may explicitly expose one
+owned child's declared event under its own public event name, for example
+`saved = Glue.event(from_child='entry.form.saved')`. This declaration adds a
+subscription on the owner for that exact descendant path and event; other child
+events remain private. Delivery retains the form as `event.source` and the
+original `$address`, while `event.currentTarget` is the exposing owner. A
+mounted owner bridges this exposed event from its root as one bubbling DOM
+event. The owner cannot emit a forwarded event directly from server code.
+General ancestor DOM listeners receive normal bubbling semantics and may
+inspect the address in event detail.
 A model, form, queryset, or other
 non-rendered Glue object has no canonical DOM root and therefore exposes the
 same event only through `$on()`. The source-scoped proxy event is the universal

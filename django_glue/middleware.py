@@ -52,13 +52,22 @@ class GlueViewMiddleware:
 def check_glue_view_middleware(app_configs: Any = None, **kwargs: Any) -> list[Error]:
     _ = app_configs, kwargs
     middleware = list(getattr(settings, 'MIDDLEWARE', None) or ())
-    if middleware and middleware[-1] == GLUE_VIEW_MIDDLEWARE_PATH:
-        return []
-    return [Error(
-        f'{GLUE_VIEW_MIDDLEWARE_PATH} must be the last entry in MIDDLEWARE.',
-        hint=(
-            'Glue.view negotiates the final response; every other middleware must '
-            'run before it so none is bypassed.'
-        ),
-        id='django_glue.E002',
-    )]
+    if GLUE_VIEW_MIDDLEWARE_PATH not in middleware:
+        return [Error(
+            f'{GLUE_VIEW_MIDDLEWARE_PATH} is missing from MIDDLEWARE.',
+            hint=(
+                'Add it as the last entry in MIDDLEWARE. Glue.view negotiates the '
+                'final response, so it must run after every other middleware.'
+            ),
+            id='django_glue.E003',
+        )]
+    if middleware[-1] != GLUE_VIEW_MIDDLEWARE_PATH:
+        return [Error(
+            f'{GLUE_VIEW_MIDDLEWARE_PATH} must be the last entry in MIDDLEWARE.',
+            hint=(
+                'Glue.view negotiates the final response; every other middleware must '
+                'run before it so none is bypassed.'
+            ),
+            id='django_glue.E002',
+        )]
+    return []

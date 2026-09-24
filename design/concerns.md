@@ -67,7 +67,7 @@ which mode deserves the short name would then have changed.
 `design.md` requires a queryset row to retain the authenticated scope that
 introduced it. Read literally that puts a copy of the pickled continuation in
 every row's policy, which extrapolates to roughly 130 KiB of signed tokens for a
-fifty-row table. [`scoped-policy.md`](scoped-policy.md) Rule 1 would fix it by
+fifty-row table. [`scoped-policy.md`](specs/proposals/scoped-policy.md) Rule 1 would fix it by
 having a collection child reference its owner's policy instead of copying it —
 one `owner` field, and the owner riding along as a passive entry in the existing
 `objects` collection.

@@ -28,18 +28,18 @@ Do not do either of these:
 
 When documents disagree about intended behavior:
 
-- `design/reactive-system/state-model.md` governs state and transport.
-- `design/reactive-system/component-system.md` governs composition and
+- `design/specs/core/state-model.md` governs state and transport.
+- `design/specs/core/component-system.md` governs composition and
   rendering.
-- `design/reactive-system/design.md` summarizes those two but does not
+- `design/specs/core/overview.md` summarizes those two but does not
   override them.
-- `design/reactive-system/roadmap.md` owns sequencing, gates, and deferred
-  work — never protocol semantics. No runtime work is authorized merely
+- `design/roadmap.md` owns sequencing, gates, and deferred work — never
+  protocol semantics. No runtime work is authorized merely
   because a design section exists; the roadmap gates determine readiness.
-- `design/reactive-system/decisions/` records durable choices. A settled ADR
+- `design/decisions/` records durable choices. A settled ADR
   is superseded by a later one, never silently rewritten.
 
-`design/reactive-system/README.md` is the entry point and reading order.
+`design/specs/README.md` is the entry point and reading order.
 
 ## What this means in practice
 

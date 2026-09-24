@@ -12,7 +12,7 @@ stable id/key (the address analogue), local Alpine state, a focusable input, and
 a subtree owned by imperative third-party JS.
 
 Cases that fail by design are strict xfails with the reason recorded; they are
-the evidence behind design/reactive-system/component-system.md. An XPASS means a
+the evidence behind design/specs/core/component-system.md. An XPASS means a
 library's behaviour changed and that evidence table is out of date.
 """
 from __future__ import annotations

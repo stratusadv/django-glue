@@ -40,7 +40,7 @@
                     .orderBy(this.orderBy)
                     .slice(this.sliceStart, this.sliceStop)
 
-                await this.gorillaQuerySet.all()
+                await this.gorillaQuerySet.refresh()
                 this.gorillaArray = this.gorillaQuerySet.items
             },
             init() {
@@ -229,6 +229,7 @@
                             return;
                         }
                         $store.notifications.success('Fighter deleted.');
+                        $dispatch('gorillas-changed');
                     },
                     errorSummary(proxy) {
                         const errors = Object.fromEntries(
@@ -377,6 +378,7 @@
                                             if (confirm('Delete this fighter?')) {
                                                 await gorilla.delete();
                                                 $store.notifications.success('Deleted via dropdown.');
+                                                $dispatch('gorillas-changed');
                                             }
                                             dropdownOpen = false;
                                         ">

@@ -16,9 +16,18 @@ class ModelGlueFormConfigMixin:
     def _ensure_form_instance(
         form_or_class: forms.ModelForm | type[forms.ModelForm],
     ) -> forms.ModelForm:
-        """Convert a form class to an instance if needed."""
+        """Convert a form class to an instance if needed.
+
+        A class carries no user-provided initial, so the ``.initial`` the
+        form's ``__init__`` derives from the empty instance's model defaults
+        is discarded; left in place it would shadow the real instance's
+        values when the form is rebuilt with an instance in
+        ``ModelGlue._build_form_child``.
+        """
         if inspect.isclass(form_or_class):
-            return form_or_class()
+            instance = form_or_class()
+            instance.initial = {}
+            return instance
         return form_or_class
 
     @staticmethod

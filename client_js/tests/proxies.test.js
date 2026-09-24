@@ -236,4 +236,62 @@ describe('formset proxy facade', () => {
         expect(result.valid).toBeFalse()
         expect(client.formSet.contacts.nonFormErrors).toEqual(['Need another contact'])
     })
+
+    test('submits live child drafts with their tokens to a formset action', async () => {
+        const form = createEntry({
+            policy: {
+                name: 'contacts.first', namespace: 'form', address: 'contacts#test[first]',
+                state_snapshot: {name: 'Ada'}, attributes: ['name'],
+            },
+            staticData: {fields: {name: {value_path: 'name', editable: true}}},
+        })
+        const formset = createEntry({
+            policy: {
+                name: 'contacts', namespace: 'formSet', address: 'contacts#test',
+                attributes: ['submit'], state_snapshot: {}, children: {first: form.address},
+            },
+            staticData: {callables: {submit: {allowed_arguments: []}}},
+        })
+        const client = new GlueClient({objects: [formset, form]})
+        const child = client.formSet.contacts.forms[0]
+        child.name = 'Bee'
+        let sent
+        client.http.sendAttributeRequest = async request => {
+            sent = request
+            return attributeResponse(formset.address, {result: {valid: true}})
+        }
+
+        await client.formSet.contacts.submit()
+
+        expect(sent.kwargs.__forms.first).toEqual({
+            policy_token: form.policy_token,
+            updates: {name: 'Bee'},
+        })
+    })
+
+    test('pop waits for the server before removing a child', async () => {
+        const form = createEntry({policy: {
+            name: 'contacts.first', namespace: 'form', address: 'contacts#test[first]',
+        }})
+        const formset = createEntry({policy: {
+            name: 'contacts', namespace: 'formSet', address: 'contacts#test',
+            attributes: ['pop'], state_snapshot: {}, children: {first: form.address},
+        }, staticData: {callables: {pop: {allowed_arguments: ['key']}}}})
+        const client = new GlueClient({objects: [formset, form]})
+        let finish
+        client.http.sendAttributeRequest = async () => new Promise(resolve => { finish = resolve })
+
+        const removed = client.formSet.contacts.pop(client.formSet.contacts.forms[0].$key)
+        expect(client.formSet.contacts.length).toBe(1)
+        await new Promise(resolve => setTimeout(resolve, 0))
+        finish(attributeResponse(formset.address, {
+            policy_token: createPolicyToken({
+                name: 'contacts', namespace: 'formSet', address: formset.address,
+                attributes: ['pop'], state_snapshot: {}, children: {},
+            }),
+            result: null,
+        }))
+        await removed
+        expect(client.formSet.contacts.length).toBe(0)
+    })
 })

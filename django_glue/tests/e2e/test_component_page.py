@@ -13,6 +13,21 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.e2e]
 
 
+def test_component_as_view_full_page_is_interactive(
+    page: Page,
+    application: Application,
+) -> None:
+    page.goto(application.url('gorilla:component_card_page', {'start': 9}))
+
+    card = page.get_by_test_id('counter-card')
+    expect(card.get_by_test_id('counter-value')).to_have_text('9')
+    card.get_by_role('button', name='Increment').click()
+    expect(card.get_by_test_id('counter-value')).to_have_text('10')
+    page.evaluate("Glue.from(document.querySelector('[data-testid=counter-card]')).$refresh()")
+    expect(card.get_by_test_id('counter-value')).to_have_text('10')
+    expect(page.locator('html')).to_have_count(1)
+
+
 def test_keyed_component_stamps_use_addressed_state_and_events(
     page: Page,
     application: Application,
