@@ -612,7 +612,7 @@ class QuerySetGlue(
                     name=f'{self.name}.{relation_name}.{related_key}',
                     subfields=subfields,
                 )
-                if not child.authorize(
+                if not child.is_authorized(
                     self.request,
                     GlueOperation(
                         kind=GlueOperationKind.INTRODUCE,

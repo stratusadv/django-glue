@@ -80,19 +80,19 @@ class ModelRefreshTestCase(TestCase):
 
     def test_refresh_and_submitted_refresh_authorize_their_operation_kind(self):
         seen: list[GlueOperationKind] = []
-        original = ModelGlue.authorize
+        original = ModelGlue.is_authorized
 
-        def recording_authorize(glue_object, request, operation):
+        def recording_is_authorized(glue_object, request, operation):
             if operation.attribute is None:
                 seen.append(operation.kind)
             return original(glue_object, request, operation)
 
-        ModelGlue.authorize = recording_authorize
+        ModelGlue.is_authorized = recording_is_authorized
         try:
             request_entry(ModelGlue, self.policy, self.request)
             request_entry(ModelGlue, self.policy, self.request, updates={'age': '21'})
         finally:
-            ModelGlue.authorize = original
+            ModelGlue.is_authorized = original
 
         self.assertEqual(seen, [GlueOperationKind.REFRESH, GlueOperationKind.UPDATE])
 

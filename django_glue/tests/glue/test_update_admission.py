@@ -58,7 +58,7 @@ class UpdateGuardedProbeGlue(AdmissionProbeGlue):
     namespace = 'updateGuardedProbe'
     operations: ClassVar[list[GlueOperation]] = []
 
-    def authorize(self, request, operation: GlueOperation) -> bool:
+    def is_authorized(self, request, operation: GlueOperation) -> bool:
         type(self).operations.append(operation)
         return not (operation.kind == GlueOperationKind.UPDATE and operation.attribute == 'other')
 

@@ -135,6 +135,6 @@ class SequenceMembershipTestCase(TestCase):
 
 
 class RefusedStateGlue(DeclaredStateGlue):
-    def authorize(self, request, operation):
+    def is_authorized(self, request, operation):
         _ = request, operation
         return False

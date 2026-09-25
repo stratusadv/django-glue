@@ -320,13 +320,13 @@ Database-derived values that need no retained continuity remain
 
 Components expose no public `hydrate()`, `dehydrate()`, or per-request `boot()`
 hook. On every interaction Glue verifies the token, reconstructs the target
-from signed parameters, consults `authorize()`, restores `state_snapshot`,
-admits editable updates, consults `authorize()` again for the attribute being
+from signed parameters, consults `is_authorized()`, restores `state_snapshot`,
+admits editable updates, consults `is_authorized()` again for the attribute being
 invoked, invokes the authorized callable, recomputes derived output, and issues
 the successor token in a fixed order. Application code cannot interpose on that
 security boundary.
 
-`authorize()` is the one application-supplied step in that sequence and is not
+`is_authorized()` is the one application-supplied step in that sequence and is not
 an exception to the rule. It is a pure predicate: it answers yes or no, cannot
 mutate the object, cannot observe or alter editable updates, and cannot change
 the order around it. The rejected hooks were rejected for letting application

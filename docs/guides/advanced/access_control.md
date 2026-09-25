@@ -28,7 +28,7 @@ must stay editable.
 
 Access is only one boundary. `fields` determines readable projection,
 `editable` narrows writable fields, callable declarations set their own
-required access, and `authorize()` can deny an object for the current request.
+required access, and `is_authorized()` can deny an object for the current request.
 The server intersects the current declaration, signed capability, and current
 authorization at introduction, reconstruction, and invocation. Denying one
 address in a batch leaves other addresses able to advance.

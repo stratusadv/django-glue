@@ -16,7 +16,7 @@ belong in the living design documents.
 | Re-check the concrete security findings | Complete at design level | identity locking, callable injection, query controls, TemplateGlue removal, and target-path middleware are settled |
 | Walk the thirteen production escape-hatch sites | Complete at design level | questionnaire workflow, chat and notification entity operations, persisted ordering, polling reads, Editor.js integration, and polymorphic notification rendering all fit the shared contracts without retaining a raw transport |
 | Resolve state-dependent component questions | Complete at design level | independent policies, transport-only batching, shared-derivation ownership, lifecycle, disposal, configured transient Glue-object results, DOM-bridged declared events, addressed refresh, Django template-tag stamping, typed parameter sources, and bounded per-address policy ownership are settled |
-| Name the application authorization contract | Complete at design level | `state-model.md` §3 defines `authorize()` as a pure predicate at three call points, its permissive default, and its per-address denial shape |
+| Name the application authorization contract | Complete at design level | `state-model.md` §3 defines `is_authorized()` as a pure predicate at three call points, its permissive default, and its per-address denial shape |
 | Separate write exposure from read exposure | Complete at design level | `state-model.md` §9 adds the `editable=` projection for model and form adapters, following the established `filters` / `ordering` default contract |
 | Separate creation from persisted mutation | Complete at design level | ADR 009 and `state-model.md` §§3–4 add `ADD`, define create-only queryset rows, and preserve secure creation through projected relation querysets without an `allow_create` flag |
 | Give batched responses a failure shape | Complete at design level | `state-model.md` §10 scopes faults per address and defines which faults fail the envelope instead |
@@ -48,7 +48,7 @@ Sequencing consequences:
 | # | Phase | Gate |
 | --- | --- | --- |
 | 1 | Lock identity in `_load_client_state` | The security probe returning `999` for a value signed as `5` returns `5` |
-| 2 | Add `parameter=` / `editable=` to `Glue.attr`, the `editable=` projection, and `authorize()`; move derived output to `@Glue.property` | Dashboard and every built-in family map to the three value roles and independent construction-parameter exposure; `editable=` narrows the derived model and form write sets; `authorize()` runs at introduction, reconstruction, and attribute invocation, and a denial blocks the operation without advancing a token |
+| 2 | Add `parameter=` / `editable=` to `Glue.attr`, the `editable=` projection, and `is_authorized()`; move derived output to `@Glue.property` | Dashboard and every built-in family map to the three value roles and independent construction-parameter exposure; `editable=` narrows the derived model and form write sets; `is_authorized()` runs at introduction, reconstruction, and attribute invocation, and a denial blocks the operation without advancing a token |
 | 3 | Replace the attribute hierarchy with attribute definitions, explicit namespaces, and addressed children | No attribute subclasses `BaseGlue`; every built-in uses one server pipeline; fluent dotted call paths and non-component children are covered; a projected to-one relation resolves to one shared addressed child across rows; a projected to-many relation preserves the `QuerySetGlue` surface; `ADD` permits creation without mutation of persisted rows; a non-nullable child factory does not run on an owner interaction that does not address it |
 | 4 | Introduce schema and split downward data by lifetime | Unchanged field/interface metadata is not resent |
 | 5 | Replace the client attribute/proxy caches with one address registry, attribute materializer, child binder, response dispatcher, and role-aware reconciliation | One proxy exists per live address; `ABC` survives when `A -> AB` was sent and `AB` returns; namespace and child paths route to the correct token |
@@ -161,7 +161,7 @@ security-hardening items above remain separate follow-up work.
   as well as object scale: a hundred-row queryset or formset introduces a hundred
   independently signed children, so the per-page-render bound needs real numbers
   from a production-shaped table, not only from a single object.
-- Implement `authorize()` as a pure predicate called at introduction,
+- Implement `is_authorized()` as a pure predicate called at introduction,
   reconstruction, and attribute invocation. Verify it cannot mutate the object, see
   editable updates, or alter the capability, and that a denial produces a
   per-address `not_authorized` entry leaving that address's client state

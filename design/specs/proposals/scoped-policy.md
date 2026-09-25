@@ -142,7 +142,7 @@ it forbids the mechanism.
    `base.get(pk=key)`, never the default manager. A key outside the collection is
    a 404, which is already `QuerySetGlue.get`'s behaviour and already right: a row
    can leave a bound filter between render and interaction.
-5. Run `authorize()` for the row (§3). A collection-level check may short-circuit,
+5. Run `is_authorized()` for the row (§3). A collection-level check may short-circuit,
    but never replaces the per-row check.
 6. Hydrate `state_snapshot`, admit `updates` against the owner's **editable**
    projection, invoke the callable.
@@ -200,14 +200,14 @@ The bound comes instead from two properties that already hold:
    fabricate a policy for an arbitrary project id, so it can only address
    projects the server actually projected from authorized rows. Enumeration is
    closed by issuance, not by a filter.
-2. **`authorize()` runs per instance on every request** (§3). Reconstruction is
+2. **`is_authorized()` runs per instance on every request** (§3). Reconstruction is
    `Project.objects.get(pk=key)`, and the application's rule — not the
    reconstruction path — decides whether this user may still read it.
 
 This is a deliberate, reviewable difference from rows. The residual exposure is
 the replay property the state model already accepts: a project policy issued
 while the user had access stays usable until expiry even if the row that
-introduced it leaves the collection. `authorize()` is the declared place to close
+introduced it leaves the collection. `is_authorized()` is the declared place to close
 that. A project needing a hard bound declares the relation as an explicit child
 property with its own configured queryset, which restores a real continuation.
 

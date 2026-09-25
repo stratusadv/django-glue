@@ -122,7 +122,7 @@ from django_glue import Glue
 class EntryPage(Glue.Component):
     template = 'entries/entry.html'
 
-    def authorize(self, request, operation):
+    def is_authorized(self, request, operation):
         if operation.required_access == Glue.Access.CHANGE:
             return request.user.has_perm('entries.change_entry')
         return request.user.has_perm('entries.view_entry')

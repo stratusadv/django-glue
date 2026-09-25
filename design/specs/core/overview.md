@@ -45,7 +45,7 @@ server objects.
 4. **Current authority wins.** Effective access is the intersection of the
    signed capability, the current declaration, and current application
    authorization. All three are mechanisms, not descriptions: the third is the
-   `authorize()` predicate every `BaseGlue` exposes, consulted at introduction,
+   `is_authorized()` predicate every `BaseGlue` exposes, consulted at introduction,
    reconstruction, and attribute invocation. Its default is permissive by design,
    because inventing an implicit permission convention would be the deny-list
    mistake in another form.

@@ -934,13 +934,13 @@ B. Spec contracts not implemented:
    Gates: 573 Python, 113 JS, 35 E2E / 10 xfailed. **Consumer migration:**
    every project must add `django_glue.middleware.GlueViewMiddleware` as the
    last `MIDDLEWARE` entry (startup fails otherwise).
-8. `authorize()` at all three points: reconstruction uses `refresh`/`update`/
+ 8. `is_authorized()` at all three points: reconstruction uses `refresh`/`update`/
    `call` as the interaction requires (today always `call`), and each admitted
    draft is authorized as `update` with its attribute path before applying.
    *B8 conformance record (pre-edit, 2026-09-23).* (1) Phase 6 gap closure.
    (2) state-model.md §3 authorization point 3 ("before each authorized callable
    runs and before each admitted draft is applied, with `attribute` naming the
-   exact path") and roadmap "Implement `authorize()` as a pure predicate called
+   exact path") and roadmap "Implement `is_authorized()` as a pure predicate called
    at introduction, reconstruction, and attribute invocation". Point 2
    (reconstruction kinds) was done in B7. (3) Nothing removed. (4) Mapping:
    `_hydrate` — shared by the call and refresh paths — authorizes each admitted

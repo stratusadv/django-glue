@@ -73,7 +73,7 @@ data do not expose generic `.new()` and require an explicitly declared callable.
   the relation's projected fields; `ADD` grants no additional query traversal.
 - An unsaved relation owner cannot create related objects because there is no
   stable owner identity to sign or attach.
-- Application `authorize()` checks remain mandatory at introduction,
+- Application `is_authorized()` checks remain mandatory at introduction,
   reconstruction, and invocation. Possessing `ADD` does not imply a Django
   `add` permission or bypass row/tenant policy.
 

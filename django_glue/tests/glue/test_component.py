@@ -140,7 +140,7 @@ class NullableChildOwnerComponent(GreetingComponent):
 class DeniedChildComponent(ChildComponent):
     namespace = 'deniedChildComponent'
 
-    def authorize(self, request: Any, operation: Any) -> bool:
+    def is_authorized(self, request: Any, operation: Any) -> bool:
         return False
 
 

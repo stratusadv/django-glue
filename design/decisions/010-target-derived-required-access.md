@@ -76,5 +76,5 @@ The built-in save targets illustrate the pattern:
 - A second, parallel "per-target access" declaration option — a second
   permission axis, exactly what ADR 009 refused with `allow_create`.
 - Widening the relevant `save` declarations to a broad static `CHANGE` and
-  relying on `authorize()` to narrow creation — loses the `ADD` signal on the
+   relying on `is_authorized()` to narrow creation — loses the `ADD` signal on the
   declaration surface and cannot be verified from the class alone.

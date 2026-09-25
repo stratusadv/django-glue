@@ -33,7 +33,7 @@ class AuthorizationProbeGlue(BaseGlue):
         )
         self.call_count = 0
 
-    def authorize(
+    def is_authorized(
         self,
         request: HttpRequest,
         operation: GlueOperation,
@@ -96,7 +96,7 @@ def test_default_authorization_is_permissive(
 ) -> None:
     glue = PermissiveGlue()
 
-    assert glue.authorize(
+    assert glue.is_authorized(
         mock_request,
         GlueOperation(
             kind=GlueOperationKind.INTRODUCE,

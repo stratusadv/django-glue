@@ -218,7 +218,7 @@ class BaseGlue(ABC):
     def get_attribute_providers(self) -> Iterable[Any]:
         return ()
 
-    def authorize(
+    def is_authorized(
         self,
         request: HttpRequest,
         operation: GlueOperation,
@@ -239,7 +239,7 @@ class BaseGlue(ABC):
             attribute=None,
             required_access=self.access,
         )
-        if not self.authorize(request, operation):
+        if not self.is_authorized(request, operation):
             raise GlueAuthorizationError(object_name=self.name, operation=operation)
         self.request = request
 
@@ -248,7 +248,7 @@ class BaseGlue(ABC):
             msg = f"Cannot authorize unbound Glue object '{self.name}'."
             raise RuntimeError(msg)
 
-        if not self.authorize(self.request, operation):
+        if not self.is_authorized(self.request, operation):
             raise GlueAuthorizationError(
                 object_name=self.name,
                 operation=operation,
