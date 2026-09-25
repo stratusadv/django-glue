@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
+{% load django_glue %}
 
 {% block content %}
-<main>{{ component_html }}</main>
+<main>{% glue_component %}</main>
 {% endblock %}

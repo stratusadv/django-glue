@@ -184,6 +184,21 @@ def test_component_is_exposed_on_glue_shortcut() -> None:
     assert Glue.Component is Component
 
 
+def test_component_suffix_is_omitted_from_derived_tag_name() -> None:
+    class ActivityFeedComponent(Component):
+        pass
+
+    class ActivityFeedWidget(Component):
+        pass
+
+    class CustomActivityFeedComponent(Component):
+        tag_name = 'custom-feed'
+
+    assert ActivityFeedComponent.tag_name == 'activity-feed'
+    assert ActivityFeedWidget.tag_name == 'activity-feed-widget'
+    assert CustomActivityFeedComponent.tag_name == 'custom-feed'
+
+
 def test_declared_parameters_are_signed_and_reconstructed_without_remount(mock_request) -> None:
     class ParameterComponent(Component):
         tag_name = 'signed-parameter-component'

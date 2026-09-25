@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.shortcuts import render as render_template
-from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_safe
 
 from django_glue.access import GlueAccess
@@ -33,6 +32,9 @@ if TYPE_CHECKING:
 class _DefaultFactory:
     def __repr__(self) -> str:
         return '<factory>'
+
+
+VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 
 
 class Component(BaseGlue):
@@ -72,7 +74,8 @@ class Component(BaseGlue):
                 ),
             ])
         if 'tag_name' not in cls.__dict__:
-            cls.tag_name = CAMEL_BOUNDARY.sub('-', cls.__name__).lower()
+            stem = cls.__name__.removesuffix('Component')
+            cls.tag_name = CAMEL_BOUNDARY.sub('-', stem or cls.__name__).lower()
         if cls.template is not None:
             component_registry.register(cls)
 
@@ -205,17 +208,16 @@ class Component(BaseGlue):
             )
             try:
                 GlueContextManager(request).add_glue(component)
-                html = component.render().html
                 if template is not None:
                     return render_template(
                         request,
                         template,
                         {
                             **component.get_context_data(),
-                            'component_html': mark_safe(html),  # noqa: S308 - Django template
+                            VIEW_COMPONENT_CONTEXT_KEY: component,
                         },
                     )
-                return HttpResponse(html)
+                return HttpResponse(component.render().html)
             except GlueAuthorizationError as error:
                 raise PermissionDenied from error
 

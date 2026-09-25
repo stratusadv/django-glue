@@ -2,29 +2,29 @@ from django.urls import path
 
 from test_project.gorilla import views
 from test_project.gorilla.components import (
-    CounterCard,
-    ProtectedCounterCard,
-    RequestConfiguredCounterCard,
+    CounterCardComponent,
+    ProtectedCounterCardComponent,
+    RequestConfiguredCounterCardComponent,
 )
 
 app_name = 'gorilla'
 
 urlpatterns = [
     path('components/', views.component_view, name='components'),
-    path('components/card/<int:start>/', CounterCard.as_view(), name='component_card_fragment'),
+    path('components/card/<int:start>/', CounterCardComponent.as_view(), name='component_card_fragment'),
     path(
         'components/protected-card/<int:start>/',
-        ProtectedCounterCard.as_view(),
+        ProtectedCounterCardComponent.as_view(),
         name='component_protected_card',
     ),
     path(
         'components/request-card/',
-        RequestConfiguredCounterCard.as_view(),
+        RequestConfiguredCounterCardComponent.as_view(),
         name='component_request_card',
     ),
     path(
         'components/card/<int:start>/page/',
-        CounterCard.as_view(template='gorilla/page/component_card_page.html'),
+        CounterCardComponent.as_view(template='gorilla/page/component_card_page.html'),
         name='component_card_page',
     ),
     path('contact_formset/', views.contact_formset_view, name='contact_formset'),

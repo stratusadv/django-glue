@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.template import Context, Template
 from django.urls import reverse
 
+from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.policy import GluePolicy
 
 if TYPE_CHECKING:
@@ -40,9 +42,16 @@ def test_template_override_wraps_the_component_in_a_full_page(client: Client) ->
     assert response.status_code == 200
     html = response.content.decode()
     assert '<html' in html
-    assert 'data-testid="counter-card"' in html
+    assert html.count('data-testid="counter-card"') == 1
     assert 'data-glue-address=' in html
     assert 'id="django-glue-context"' in html
+
+
+def test_bare_component_tag_requires_a_component_view() -> None:
+    template = Template('{% load django_glue %}{% glue_component %}')
+
+    with pytest.raises(GlueComponentKeyError, match='component view'):
+        template.render(Context({'component': object()}))
 
 
 def test_component_url_rejects_post(client: Client) -> None:

@@ -3,7 +3,7 @@ from django.http import HttpRequest
 from django_glue import Glue, GlueOperation
 
 
-class CounterCard(Glue.Component):
+class CounterCardComponent(Glue.Component):
     template = 'gorilla/component/counter_card.html'
 
     start: int = Glue.attr(parameter=True)
@@ -20,13 +20,13 @@ class CounterCard(Glue.Component):
         return self.count
 
 
-class ProtectedCounterCard(CounterCard):
-    def authorize(self, request: HttpRequest, operation: GlueOperation) -> bool:
+class ProtectedCounterCardComponent(CounterCardComponent):
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
         _ = operation
         return request.user.is_authenticated
 
 
-class RequestConfiguredCounterCard(CounterCard):
+class RequestConfiguredCounterCardComponent(CounterCardComponent):
     @classmethod
     def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: object) -> dict[str, object]:
         return {
@@ -36,7 +36,7 @@ class RequestConfiguredCounterCard(CounterCard):
         }
 
 
-class CounterDashboard(Glue.Component):
+class CounterDashboardComponent(Glue.Component):
     template = 'gorilla/component/counter_dashboard.html'
 
     starts: list[int] = Glue.attr(default_factory=lambda: [2, 5])

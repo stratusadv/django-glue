@@ -8,10 +8,10 @@ modules at startup.
 from django_glue import Glue
 
 
-class CounterCard(Glue.Component):
+class CounterCardComponent(Glue.Component):
     template = 'counter/card.html'
 
-    start: int = Glue.attr(parameter=True)
+    start: int = Glue.ComponentParameter()
     count: int = Glue.attr(0, editable=True)
     counted = Glue.event()
 
@@ -37,13 +37,15 @@ Stamp it with the ordinary Django template tag:
 {% endfor %}
 ```
 
-The first argument is the registered tag name. It defaults to the class name in
-kebab case and can be set with `tag_name`. Named arguments resolve as Django
-filter expressions, so `start=start` passes the Python value. Only declared
-parameters are accepted. `key` is required inside a loop, must remain stable
-for the same logical child, and cannot be a loop index. `access` may override
-the component's default `VIEW` access. A component template must render exactly
-one HTML root element; Glue adds its address marker to that root.
+The first argument is the registered tag name. Glue removes a trailing
+`Component` from the class name, then converts it to kebab case. Classes without
+that suffix use their full name. Set `tag_name` to override the default. Named
+arguments resolve as Django filter expressions, so `start=start` passes the
+Python value. Only declared parameters are accepted. `key` is required inside
+a loop, must remain stable for the same logical child, and cannot be a loop
+index. `access` may override the component's default `VIEW` access. A component
+template must render exactly one HTML root element; Glue adds its address
+marker to that root.
 
 ```django
 <section>
@@ -72,13 +74,13 @@ Register a component directly in Django's URL patterns with `as_view()`:
 
 ```python
 from django.urls import path
-from .components import CounterCard
+from .components import CounterCardComponent
 
 urlpatterns = [
-    path('cards/<int:start>/', CounterCard.as_view(), name='card-fragment'),
+    path('cards/<int:start>/', CounterCardComponent.as_view(), name='card-fragment'),
     path(
         'cards/<int:start>/page/',
-        CounterCard.as_view(template='cards/page.html'),
+        CounterCardComponent.as_view(template='cards/page.html'),
         name='card-page',
     ),
 ]
@@ -104,15 +106,19 @@ The page template places the rendered component in its layout:
 
 ```django
 {% extends 'base.html' %}
-{% block content %}{{ component_html }}{% endblock %}
+{% load django_glue %}
+{% block content %}{% glue_component %}{% endblock %}
 ```
 
-The page layout must load Glue with `{% django_glue_init %}`. The component
-still uses its declared template for later reactive rerenders. These URLs serve
-GET and HEAD; component actions use Glue's normal addressed endpoint.
+The no-argument tag renders the component supplied by `as_view()`. Outside a
+component view, it raises an error. The page layout must load Glue with
+`{% django_glue_init %}`. The component still uses its declared template for
+later reactive rerenders. These URLs serve GET and HEAD; component actions use
+Glue's normal addressed endpoint.
 
-Use Django's view decorators to guard the initial URL. Override `authorize()`
-on the component to check permission again for later Glue calls:
+Use Django's view decorators to guard the initial URL. Override
+`is_authorized()` on the component to check permission again for later Glue
+calls:
 
 ```python
 from django.contrib.auth.decorators import permission_required

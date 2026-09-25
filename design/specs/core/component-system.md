@@ -414,12 +414,14 @@ neither is part of this one.
 
 #### Tag names
 
-`TimeEntryDay` derives the default tag name `time-entry-day`. A component may
+`TimeEntryDayComponent` derives the default tag name `time-entry-day`: Glue
+removes a trailing `Component` suffix before converting the name to kebab case.
+Classes without that suffix use their full name. A component may
 override it when a shorter, domain-qualified, or collision-free public name is
 needed:
 
 ```python
-class TimeEntryDay(Glue.Component):
+class TimeEntryDayComponent(Glue.Component):
     tag_name = 'time-tracker.time-entry-day'
 ```
 
@@ -461,19 +463,20 @@ or missing parameters retain the component's normal constructor errors.
 
 Without `template=`, the response is the component's declared template as an
 HTML fragment, including its addressed root. With `template=`, the component
-still renders its declared template first; the override is a page template
-that receives `component_html` as safe rendered markup alongside the
-component's normal context. A page template includes `{% django_glue_init %}`
-to boot the client. Keeping the component template unchanged ensures later
-`render()` calls return the same component fragment rather than a whole page.
+is injected into the page template's context. The no-argument
+`{% glue_component %}` tag renders it in place, using its declared template.
+Outside a component view, that tag form raises an error. A page template
+includes `{% django_glue_init %}` to boot the client. Keeping the component
+template unchanged ensures later `render()` calls return the same component
+fragment rather than a whole page.
 Either route remains compatible with `Glue.view` content negotiation and its
 ordinary middleware checks.
 
 Django view decorators may guard the URL, as with any other view. That guard
 applies to page retrieval; later addressed component calls use their own
 endpoint. The component's `access=` value caps the signed operations, while
-`authorize(request, operation)` enforces current application permission at
-introduction and on later calls. An `authorize()` denial during direct URL
+`is_authorized(request, operation)` enforces current application permission at
+introduction and on later calls. An `is_authorized()` denial during direct URL
 rendering becomes Django's HTTP 403 response.
 
 #### Keys

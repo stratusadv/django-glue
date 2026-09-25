@@ -9,6 +9,7 @@ from django.utils.safestring import mark_safe
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue import address
+from django_glue.glue.component import VIEW_COMPONENT_CONTEXT_KEY
 from django_glue.glue.component_naming import canonical_key, component_name
 from django_glue.glue.component_registry import component_registry
 from django_glue.glue.context import GlueContextManager
@@ -24,7 +25,7 @@ STAMPED_KEYS_ATTR = '_django_glue_stamped_component_keys'
 class GlueComponentNode(Node):
     def __init__(
         self,
-        tag_expression: FilterExpression,
+        tag_expression: FilterExpression | None,
         parameters: dict[str, FilterExpression],
         key_expression: FilterExpression | None,
         access_expression: FilterExpression | None,
@@ -35,6 +36,14 @@ class GlueComponentNode(Node):
         self.access_expression = access_expression
 
     def render(self, context: Context) -> str:
+        if self.tag_expression is None:
+            component = context.get(VIEW_COMPONENT_CONTEXT_KEY)
+            if component is None:
+                raise GlueComponentKeyError(
+                    '{% glue_component %} without a tag name needs a component view.'
+                )
+            return mark_safe(component.render().html)
+
         request = getattr(context, 'request', None) or context.get('request')
         if request is None:
             raise GlueComponentKeyError(
@@ -86,8 +95,8 @@ class GlueComponentNode(Node):
 def register_component_tags(register: Any) -> None:
     def parse_component_token(parser: Parser, token: Token) -> GlueComponentNode:
         bits = token.split_contents()
-        if len(bits) < 2:
-            raise TemplateSyntaxError('{% glue_component %} needs a registered tag name.')
+        if len(bits) == 1:
+            return GlueComponentNode(None, {}, None, None)
         tag_expression = parser.compile_filter(bits[1])
         parameters: dict[str, FilterExpression] = {}
         key_expression = None
