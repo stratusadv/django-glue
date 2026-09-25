@@ -238,7 +238,7 @@ VIEW < ADD < CHANGE < DELETE
 persisted target. `CHANGE` includes creation and persisted mutation. `DELETE`
 includes all four capabilities. This ordering is Glue's least-authority model,
 not a claim that Django's `add`, `change`, and `delete` permissions imply one
-another; `authorize()` below remains the application-owned check for those
+another; `is_authorized()` below remains the application-owned check for those
 orthogonal rules. Creation is part of the access cascade rather than a separate
 `allow_create` flag (ADR 009).
 
@@ -286,11 +286,11 @@ class GlueOperation:
 
 
 class BaseGlue:
-    def authorize(self, request: HttpRequest, operation: GlueOperation) -> bool:
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
         return True
 ```
 
-`authorize()` is a **pure predicate**. It receives the reconstructed object, the
+`is_authorized()` is a **pure predicate**. It receives the reconstructed object, the
 current request, and what is being attempted; it returns a boolean. It may not
 mutate the object, may not see or alter editable updates, may not widen or
 narrow the capability, and may not change reconstruction order. That is what
@@ -313,7 +313,7 @@ It is consulted at exactly three points, in this order:
    a per-field or per-method rule lives; the object-level check cannot express
    "may read the row but may not call `set_deleted`".
 
-`authorize()` never substitutes for the other two terms, and the other two never
+`is_authorized()` never substitutes for the other two terms, and the other two never
 substitute for it. A denial at any point is reported through the per-address
 `error` channel in §10 with code `not_authorized`, leaving the client's canonical
 data, token, static data and drafts for that address untouched.
@@ -327,7 +327,7 @@ always called, and is called at points where a denial is still cheap.
 
 The built-in families narrow it where the adapter genuinely knows better:
 
-| Family                             | Default`authorize()`                                                                                                                |
+| Family                             | Default`is_authorized()`                                                                                                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Custom objects and components      | permissive; the application overrides                                                                                                 |
 | `ModelGlue`                      | permissive, but reconstruction refetches through the scope that introduced the row rather than the unrestricted default manager (§4) |
@@ -337,7 +337,7 @@ The built-in families narrow it where the adapter genuinely knows better:
 | `FunctionGlue`                   | permissive; the signed target is the entire capability                                                                                |
 
 A family whose default is permissive is not thereby unguarded — it is guarded by
-capability and declaration, and `authorize()` is the seam for the rule only the
+capability and declaration, and `is_authorized()` is the seam for the rule only the
 application can state. Documentation must say this plainly rather than implying
 that signing confers permission.
 
@@ -413,7 +413,7 @@ developer authored the queryset and it *is* the permission statement. A relation
 has no authored queryset, and synthesizing one means Glue inventing a reverse
 subquery nobody wrote. The bound comes instead from two properties that already
 hold: only the server issues policies, so a client can address only the related
-objects actually projected from authorized rows; and `authorize()` runs per
+objects actually projected from authorized rows; and `is_authorized()` runs per
 instance on every request, so the application decides whether this user may still
 read it.
 
@@ -1161,7 +1161,7 @@ differs, and stating it prevents a project from building on an internal seam:
 | ----------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
 | Serializer registry                                                     | **public**            | registering a handler for a project value type                                  |
 | Glue class registry                                                     | **public**            | registering a custom`BaseGlue` family so its objects reconstruct from a token |
-| `authorize()` (§3)                                                   | **public**            | overriding on any`BaseGlue` subclass                                          |
+| `is_authorized()` (§3)                                                   | **public**            | overriding on any`BaseGlue` subclass                                          |
 | Queryset unpickler allowlist                                            | **public**, versioned | registering custom lookups or expressions                                       |
 | Injection registry                                                      | **closed**            | Glue only; its entries are security-relevant                                    |
 | Attribute registry, address registry, child binder, response dispatcher | **internal**          | not extension points; shapes may change without notice                          |
@@ -2480,7 +2480,7 @@ compression is introduced.
   to `VIEW < ADD < CHANGE < DELETE`, enabling create-only querysets and relation
   collections without an `allow_create` flag. Persisted rows from an ADD-only
   collection remain `VIEW`; ADR 009 and §4 define the draft transition.
-- **`authorize()` is new public API on every `BaseGlue`.** Its default is
+- **`is_authorized()` is new public API on every `BaseGlue`.** Its default is
   permissive, so nothing breaks on adoption; it is the named seam for the
   object-level permission rule that invariant 4 requires and that no amount of
   signing can supply (§3).
