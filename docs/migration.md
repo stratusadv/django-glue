@@ -252,9 +252,9 @@ of the release.
 class TimeEntryDay(Glue.Component):
     template = 'time_tracker/component/day.html'
 
-    date: datetime.date = Glue.attr(parameter=True)
-    user_id: int = Glue.attr(parameter=True)
-    note: str = Glue.attr('', parameter=True, editable=True)
+    date: datetime.date = Glue.ComponentParameter()
+    user_id: int = Glue.ComponentParameter()
+    note: str = Glue.ComponentParameter('', editable=True)
 
     @cached_property
     def _entries(self):
@@ -266,10 +266,12 @@ class TimeEntryDay(Glue.Component):
 ```
 
 - `template` is the component's template path; `tag_name` (optional) overrides
-  the default kebab-case name derived from the class.
-- `Glue.attr(parameter=True)` declares a **reconstructor** supplied at
-  construction (from the template tag or Python).
-- `Glue.attr(x, parameter=True, editable=True)` is editable state: supplied at
+  the default kebab-case name derived from the class after removing a trailing
+  `Component` suffix.
+- `Glue.ComponentParameter()` declares a **reconstructor** supplied at
+  construction (from the template tag or Python). It is a shorthand for
+  `Glue.attr(parameter=True)`.
+- `Glue.ComponentParameter(x, editable=True)` is editable state: supplied at
   construction and updatable by the client through its admitted channel.
 - `Glue.attr(x, editable=True)` is internal draft state, not a parent input.
 - `@Glue.property` is derived output, recomputed server-side.

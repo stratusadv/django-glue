@@ -94,6 +94,23 @@ def _html_attr(*args, **kwargs) -> DeclaredAttribute:
     return DeclaredAttribute(*args, **kwargs)
 
 
+def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
+    """
+    Shortcut for @Glue.attr(parameter=True).
+
+    Marks a declared value as a component construction parameter so it is
+    collected by ``Component._declared_parameters`` and supplied at component
+    construction time. The value role is set independently, as with
+    ``Glue.attr``:
+
+        class MyComponent(Glue.Component):
+            date = Glue.ComponentParameter()                      # reconstructor
+            note = Glue.ComponentParameter('', editable=True)     # editable state
+    """
+    kwargs.setdefault('parameter', True)
+    return DeclaredAttribute(*args, **kwargs)
+
+
 def _event(obj: Any | None = None, name: str | None = None, payload: dict[str, Any] | None = None) -> GlueEvent | None:
     """
     ``Glue.event()`` with no arguments returns a ``GlueEvent`` descriptor for
@@ -124,6 +141,7 @@ class Glue:
     FormSet = FormSetGlue
     attribute = _attr
     attr = _attr
+    ComponentParameter = _component_parameter
     event = _event
     html_attr = _html_attr
     namespace = GlueNamespace

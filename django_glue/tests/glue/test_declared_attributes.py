@@ -16,6 +16,7 @@ from django_glue.glue.attributes.definition import (
     GlueValueRole,
 )
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
+from django_glue.glue.base import BaseGlue
 from django_glue.glue.component import Component
 
 if TYPE_CHECKING:
@@ -64,6 +65,40 @@ def test_parameter_is_independent_from_editable_state_role() -> None:
     assert parameterized.is_parameter
     assert internal.value_role == GlueValueRole.EDITABLE_STATE
     assert not internal.is_parameter
+
+
+def test_component_parameter_is_a_shortcut_for_attr_parameter() -> None:
+    assert (
+        Glue.ComponentParameter().__glue_options__
+        == Glue.attr(parameter=True).__glue_options__
+    )
+    assert (
+        Glue.ComponentParameter('', editable=True).__glue_options__
+        == Glue.attr('', parameter=True, editable=True).__glue_options__
+    )
+
+
+def test_parameter_on_non_component_glue_object_raises() -> None:
+    with pytest.raises(RuntimeError) as exc_info:
+
+        class NonComponentParameterGlue(BaseGlue):
+            namespace = 'nonComponentParameter'
+            param = Glue.ComponentParameter(0)
+
+    underlying = exc_info.value.__cause__ or exc_info.value.__context__
+    assert isinstance(underlying, TypeError)
+    assert 'only valid on Glue.Component' in str(underlying)
+
+
+def test_parameter_on_component_glue_object_is_allowed() -> None:
+    class ParameterAllowedComponent(Component):
+        tag_name = 'parameter-allowed-component'
+        template = 'glue_template_test.html'
+
+        week: int = Glue.ComponentParameter(0)
+
+    assert issubclass(ParameterAllowedComponent, Component)
+    assert 'week' in ParameterAllowedComponent._declared_parameters()
 
 
 def test_property_is_derived_output() -> None:

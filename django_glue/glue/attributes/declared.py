@@ -127,6 +127,23 @@ class DeclaredAttribute:
         self.storage_name = f'__glue_attribute_{name}'
         if hasattr(self.target, '__set_name__'):
             self.target.__set_name__(owner, name)
+        if not self._parameter:
+            return
+        from django_glue.glue.base import BaseGlue
+        from django_glue.glue.component import Component
+
+        if (
+            isinstance(owner, type)
+            and issubclass(owner, BaseGlue)
+            and not issubclass(owner, Component)
+        ):
+            msg = (
+                'Glue.ComponentParameter (Glue.attr(parameter=True)) marks a value as a '
+                'component construction parameter and is only valid on Glue.Component '
+                f'subclasses. {owner.__name__!r} is not a Component; declare the value '
+                'as an ordinary Glue.attr().'
+            )
+            raise TypeError(msg)
 
     def __get__(self, instance: Any, owner: type | None = None) -> Any:
         if hasattr(self.target, '__get__'):
