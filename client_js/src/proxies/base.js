@@ -295,22 +295,6 @@ class BaseGlueProxy {
                 source: this,
             }
             this._deliverEvent(event)
-            let sourcePath = ''
-            let descendant = this
-            while (descendant._record.owner?.path && descendant._owner) {
-                sourcePath = sourcePath
-                    ? `${descendant._record.owner.path}.${sourcePath}`
-                    : descendant._record.owner.path
-                const owner = descendant._owner
-                if (owner._record.disposed) break
-                Object.entries(owner._record.staticData?.forwarded_events || {})
-                    .forEach(([exposedName, fromChild]) => {
-                        if (fromChild === `${sourcePath}.${name}`) {
-                            owner._deliverEvent({...event, type: exposedName})
-                        }
-                    })
-                descendant = owner
-            }
         })
     }
 

@@ -139,27 +139,25 @@ urlpatterns = [
 ```
 
 `access=` sets the component's maximum Glue capability; it is not a Django
-permission check. The URL decorator controls page access, and `authorize()`
-uses the current request for both the first render and subsequent operations.
-For an object-specific rule, check the component's signed identity and the
-current database scope inside `authorize()`.
+permission check. The URL decorator controls page access, and
+`is_authorized()` uses the current request for both the first render and
+subsequent operations. For an object-specific rule, check the component's
+signed identity and the current database scope inside `is_authorized()`.
 
 An action may return another component for a host to mount. The returned
-component owns its declared child form or formset and may expose one of that
-child's events:
+component owns its declared child form or formset:
 
 ```python
 class EntryModal(Glue.Component):
     template = 'entry/modal.html'
-    saved = Glue.event(from_child='entry.form.saved')
 
     @Glue.property
     def entry(self):
         return Glue.model(target=..., form=EntryForm)
 ```
 
-The host can subscribe with `modal.$on('saved', handler)` and dispose the modal
-when it closes. Disposal also removes its owned children and listeners.
+The host disposes the modal when it closes. Disposal also removes its owned
+children and listeners.
 
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound

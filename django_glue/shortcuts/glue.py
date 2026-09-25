@@ -14,7 +14,7 @@ from django_glue.glue.attributes.definition import (
 )
 from django_glue.glue.attributes.namespace import GlueNamespace
 from django_glue.glue.component import Component
-from django_glue.glue.event import GlueEvent
+from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
@@ -94,6 +94,25 @@ def _html_attr(*args, **kwargs) -> DeclaredAttribute:
     return DeclaredAttribute(*args, **kwargs)
 
 
+def _event(obj: Any | None = None, name: str | None = None, payload: dict[str, Any] | None = None) -> GlueEvent | None:
+    """
+    ``Glue.event()`` with no arguments returns a ``GlueEvent`` descriptor for
+    class-body use (``saved = Glue.event()``). Called with a Glue object it
+    fires a named event on that object inline — ``Glue.event(self, 'saved',
+    {'pk': 1})`` — the counterpart to the declared-event callable, landing in
+    the same ``effects.events`` channel as ``self.saved(pk=1)``.
+    """
+    if obj is None:
+        return GlueEvent()
+    if not isinstance(name, str) or not name or is_reserved_event_name(name):
+        msg = (
+            f'Glue event {name!r} must be a non-empty name that does not '
+            'conflict with a browser event or reserved name.'
+        )
+        raise ValueError(msg)
+    emit_event(obj, name, payload if payload is not None else {})
+
+
 # Type alias for form parameter: can be either an instance or a class
 FormOrClass = Union[ModelForm, type[ModelForm]]
 ChoiceSource = TypeVar('ChoiceSource')
@@ -105,7 +124,7 @@ class Glue:
     FormSet = FormSetGlue
     attribute = _attr
     attr = _attr
-    event = GlueEvent
+    event = _event
     html_attr = _html_attr
     namespace = GlueNamespace
     property = _GluePropertyDescriptor

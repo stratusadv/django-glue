@@ -346,13 +346,6 @@ class BaseGlue(ABC):
         events = names
         if events:
             static_data['events'] = events
-        forwarded_events = {
-            name: declaration.from_child
-            for name, declaration in declarations
-            if declaration.from_child is not None
-        }
-        if forwarded_events:
-            static_data['forwarded_events'] = forwarded_events
         return static_data
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:

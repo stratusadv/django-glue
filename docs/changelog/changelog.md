@@ -24,8 +24,11 @@ The full migration guide for these changes is at [Migration Guide](../migration.
   parameters, stable keys, server HTML, Alpine morphing, and declared events.
 - `Component.as_view()` serves a component directly from a Django URL as an
   HTML fragment, or inside a full page with a `template=` wrapper.
-- Mounted component `$refresh()` renders and morphs its root. An owner can
-  expose a signed child's event with `Glue.event(from_child=...)`.
+- Mounted component `$refresh()` renders and morphs its root.
+- `Glue.event(obj, name, payload)` fires a named event on a Glue object from an
+  action without declaring it as a class attribute; `Glue.event()` with no
+  arguments still returns the descriptor. It shares the declared-event
+  validation and `effects.events` channel.
 - Formsets retain signed row membership across requests and submit child form
   values together for validation and saving; `pop()` removes a row on the
   server.

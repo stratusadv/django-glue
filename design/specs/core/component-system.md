@@ -756,20 +756,12 @@ browser meanings. Glue does not maintain a second global event bus or dispatch
 directly to a named component.
 
 A source-scoped `$on()` handler is bound to the exact child's source even when a
-descendant emits an event with the same name. An owner may explicitly expose one
-owned child's declared event under its own public event name, for example
-`saved = Glue.event(from_child='entry.form.saved')`. This declaration adds a
-subscription on the owner for that exact descendant path and event; other child
-events remain private. Delivery retains the form as `event.source` and the
-original `$address`, while `event.currentTarget` is the exposing owner. A
-mounted owner bridges this exposed event from its root as one bubbling DOM
-event. The owner cannot emit a forwarded event directly from server code.
-General ancestor DOM listeners receive normal bubbling semantics and may
-inspect the address in event detail.
-A model, form, queryset, or other
-non-rendered Glue object has no canonical DOM root and therefore exposes the
-same event only through `$on()`. The source-scoped proxy event is the universal
-contract; the component DOM event is its browser integration.
+descendant emits an event with the same name. General ancestor DOM listeners
+receive normal bubbling semantics and may inspect the address in event detail.
+A model, form, queryset, or other non-rendered Glue object has no canonical DOM
+root and therefore exposes the same event only through `$on()`. The
+source-scoped proxy event is the universal contract; the component DOM event is
+its browser integration.
 
 Components expose their DOM relationship without requiring a global string
 name. Within a component template Alpine's `$glue` magic resolves the current

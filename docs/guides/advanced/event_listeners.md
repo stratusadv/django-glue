@@ -22,6 +22,10 @@ The event appears in that address's `effects.events` only when the action
 succeeds. Its detail must be serializable. `$address` is reserved for the source
 address and cannot be supplied by the action.
 
+When no client needs a stable name, fire the event by name instead of declaring
+one: `Glue.event(self, 'saved', {'pk': entry.pk})`. It validates the name the
+same way a declaration does and lands in the same `effects.events` channel.
+
 Subscribe to the source proxy with `$on(name, callback)`:
 
 ```javascript
@@ -35,13 +39,6 @@ stop()
 `$on()` rejects names the object did not declare and returns an unsubscribe
 function. Disposal removes its listeners. Each event is delivered after the
 response has reconciled the source state and introduced objects.
-
-An owner can expose a specific signed child event. For example, a component
-with a child model named `entry` whose form declares `saved = Glue.event()`
-can declare `saved = Glue.event(from_child='entry.form.saved')`. Consumers then
-subscribe with `modal.$on('saved', handler)`. The event keeps the child form as
-`event.source` and the owner's proxy as `event.currentTarget`. Other child
-events remain private; disposing the owner removes the subscription.
 
 When the source is a rendered component, Glue also dispatches a bubbling DOM
 `CustomEvent` from its current root. Its `detail` contains the declared values

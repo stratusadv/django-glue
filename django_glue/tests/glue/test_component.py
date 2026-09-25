@@ -383,19 +383,30 @@ def test_declared_event_enters_effects_channel(mock_request) -> None:
     ]
 
 
-def test_forwarded_event_declares_owned_source_without_server_emission(mock_request) -> None:
-    class EntryModal(Component):
+def test_inline_event_enters_effects_channel(mock_request) -> None:
+    class InlineEventComponent(Component):
         template = 'glue_template_test.html'
-        saved = Glue.event(from_child='entry.form.saved')
 
-    modal = Glue.object(mock_request, EntryModal())
+    component = Glue.object(mock_request, InlineEventComponent())
+    Glue.event(component, 'saved', {'pk': 7})
 
-    assert modal.get_static_data()['events'] == ['saved']
-    assert modal.get_static_data()['forwarded_events'] == {
-        'saved': 'entry.form.saved',
-    }
-    with pytest.raises(TypeError, match='forwarded event'):
-        modal.saved(pk=7)
+    assert component._effects_payload(GlueResponse(), [])['events'] == [
+        {'name': 'saved', 'detail': {'pk': 7}},
+    ]
+
+
+def test_inline_event_validates_name_and_detail(mock_request) -> None:
+    class InlineEventComponent(Component):
+        template = 'glue_template_test.html'
+
+    component = Glue.object(mock_request, InlineEventComponent())
+
+    with pytest.raises(ValueError, match='conflict'):
+        Glue.event(component, 'submit')
+    with pytest.raises(ValueError, match=r'\$address'):
+        Glue.event(component, 'saved', {'$address': 'forged'})
+    with pytest.raises(TypeError):
+        Glue.event(component, 'saved', {'child': ChildComponent()})
 
 
 def test_event_detail_rejects_a_glue_object(mock_request) -> None:
