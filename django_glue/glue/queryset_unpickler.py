@@ -28,6 +28,8 @@ class QuerySetUnpickler(pickle.Unpickler):
     - Django's own ORM namespace (``django.db.models`` and its submodules):
       fields, lookups, expressions, aggregates, functions, ``query_utils``,
       ``sql.query``/``sql.where``/``sql.datastructures``, and so on.
+    - the relation descriptor a join through a ``GenericRelation`` carries
+      (``django.contrib.contenttypes.fields.GenericRel``).
     - model classes in the Django app registry -- the only models the server
       can issue querysets over.
 
@@ -39,6 +41,9 @@ class QuerySetUnpickler(pickle.Unpickler):
     VERSION = 1
 
     _django_orm_module = 'django.db.models'
+    _django_contrib_orm_classes: ClassVar[frozenset[str]] = frozenset({
+        'django.contrib.contenttypes.fields.GenericRel',
+    })
     # Glue's own continuation-carrier classes. The signed continuation stores
     # choice-source configuration as an attribute on the serialized Query
     # (state-model.md: "The same path carries choice-source continuations"), so
@@ -85,6 +90,8 @@ class QuerySetUnpickler(pickle.Unpickler):
         if qualified_name in type(self)._registered_qualified_names:
             return True
         if qualified_name in type(self)._glue_continuation_classes:
+            return True
+        if qualified_name in type(self)._django_contrib_orm_classes:
             return True
         if qualified_name in type(self)._plain_value_constructors:
             return True

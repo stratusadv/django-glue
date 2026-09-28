@@ -91,6 +91,17 @@ class QuerySetUnpicklerTestCase(TestCase):
         options = getattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE)
         assert options.fields == ('name',)
 
+    def test_allows_the_generic_relation_join_descriptor(self):
+        from django.contrib.contenttypes.fields import GenericRel
+
+        payload = _global_payload('django.contrib.contenttypes.fields', 'GenericRel')
+
+        assert _load(payload) is GenericRel
+
+    def test_rejects_other_contenttypes_classes(self):
+        with pytest.raises(pickle.UnpicklingError, match='outside the queryset allowlist'):
+            _load(_global_payload('django.contrib.contenttypes.fields', 'GenericForeignKey'))
+
     def test_rejects_a_standard_library_class(self):
         with pytest.raises(pickle.UnpicklingError, match='outside the queryset allowlist'):
             _load(_global_payload('os', 'system'))
