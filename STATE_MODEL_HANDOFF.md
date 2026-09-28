@@ -1193,7 +1193,8 @@ The tag already enforces the Keys rules:
 - duplicate target/key pairs under one parent fail, including outside a loop;
 - keys are canonicalized with their types.
 
-The registry enforces tag-name collisions (`E001`) and discovery.
+The registry is a lazy cache: a tag resolves to a `components` module under the
+components root on first use, and reconstruction resolves by `module.qualname`.
 
 *Root scanner finding.* The scanner had no tests. The probe found three
 defects:

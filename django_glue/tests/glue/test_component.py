@@ -19,6 +19,7 @@ from django_glue.exceptions import (
 )
 from django_glue.glue.attributes import BoundGlueAttribute, GlueAttributeCollector
 from django_glue.glue.component import Component
+from django_glue.glue.component_registry import component_registry
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
@@ -184,24 +185,19 @@ def test_component_is_exposed_on_glue_shortcut() -> None:
     assert Glue.Component is Component
 
 
-def test_component_suffix_is_omitted_from_derived_tag_name() -> None:
-    class ActivityFeedComponent(Component):
-        pass
+def test_component_is_reconstructable_by_its_identifier() -> None:
+    class ReconstructedModalComponent(Component):
+        template = 'glue_template_test.html'
 
-    class ActivityFeedWidget(Component):
-        pass
+    identifier = f'{ReconstructedModalComponent.__module__}.{ReconstructedModalComponent.__qualname__}'
 
-    class CustomActivityFeedComponent(Component):
-        tag_name = 'custom-feed'
-
-    assert ActivityFeedComponent.tag_name == 'activity-feed'
-    assert ActivityFeedWidget.tag_name == 'activity-feed-widget'
-    assert CustomActivityFeedComponent.tag_name == 'custom-feed'
+    assert component_registry.from_identifier(identifier) is ReconstructedModalComponent
+    with pytest.raises(GlueComponentRegistrationError):
+        component_registry.from_tag_name('no/such/component')
 
 
 def test_declared_parameters_are_signed_and_reconstructed_without_remount(mock_request) -> None:
     class ParameterComponent(Component):
-        tag_name = 'signed-parameter-component'
         template = 'glue_template_test.html'
         count: int = Glue.attr(parameter=True)
         draft: str = Glue.attr('', parameter=True, editable=True)
@@ -252,7 +248,6 @@ def test_returned_component_introduces_its_owned_children(mock_request) -> None:
 
 
 class WeekComponent(Component):
-    tag_name = 'week-component'
     template = 'glue_template_test.html'
 
     week: int = Glue.attr(parameter=True)
@@ -321,7 +316,6 @@ def test_state_only_change_does_not_rerender(mock_request) -> None:
 
 def test_component_rejects_undeclared_or_missing_parameters() -> None:
     class ParameterComponent(Component):
-        tag_name = 'validation-parameter-component'
         template = 'glue_template_test.html'
         count: int = Glue.attr(parameter=True)
 
@@ -333,7 +327,6 @@ def test_component_rejects_undeclared_or_missing_parameters() -> None:
 
 def test_component_constructor_signature_is_generated_from_declarations() -> None:
     class SignatureComponent(Component):
-        tag_name = 'signature-component'
         template = 'glue_template_test.html'
         count: int = Glue.attr(parameter=True)
         note: str = Glue.attr('', parameter=True, editable=True)
@@ -351,37 +344,29 @@ def test_component_constructor_signature_is_generated_from_declarations() -> Non
 
 
 def test_component_template_tag_stamps_typed_keyed_components(mock_request) -> None:
-    class StampedNumber(Component):
-        tag_name = 'stamped-number'
-        template = 'glue_template_test.html'
-        number: int = Glue.attr(parameter=True)
-
     html = Template(
-        '{% load django_glue %}{% for number in numbers %}'
-        "{% glue_component 'stamped-number' number=number key=number %}"
+        '{% load django_glue %}{% for start in starts %}'
+        "{% glue_component 'gorilla/counter_card' start=start key=start %}"
         '{% endfor %}'
-    ).render(Context({'request': mock_request, 'numbers': [1, 2]}))
+    ).render(Context({'request': mock_request, 'starts': [1, 2]}))
     entries = GlueContextManager(mock_request).serialized_objects
 
     assert html.count('data-glue-address=') == 2
     assert len(entries) == 2
-    assert all(GluePolicy.from_token(entry['policy_token']).identity['parameters']['number'] in {1, 2} for entry in entries)
+    assert all(GluePolicy.from_token(entry['policy_token']).identity['parameters']['start'] in {1, 2} for entry in entries)
     assert entries[0]['address'] != entries[1]['address']
 
 
 def test_stamped_component_root_carries_its_children_entries(mock_request) -> None:
-    class StampedChildOwner(ChildOwnerComponent):
-        tag_name = 'stamped-child-owner'
-
     html = Template(
-        "{% load django_glue %}{% glue_component 'stamped-child-owner' %}"
+        "{% load django_glue %}{% glue_component 'gorilla/counter_badge_owner' %}"
     ).render(Context({'request': mock_request}))
     encoded = html.split('data-glue-objects="', 1)[1].split('"', 1)[0]
     entries = json.loads(unescape(encoded))
 
     owner_policy = GluePolicy.from_token(entries[0]['policy_token'])
     assert entries[0]['address'] in html
-    assert [entry['address'] for entry in entries[1:]] == [owner_policy.children['child']]
+    assert [entry['address'] for entry in entries[1:]] == [owner_policy.children['badge']]
 
 
 def test_declared_event_enters_effects_channel(mock_request) -> None:

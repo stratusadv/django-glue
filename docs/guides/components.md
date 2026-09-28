@@ -1,8 +1,9 @@
 # Components
 
-A component is a Glue object with a Django template. Put its class in an
-installed app's `components.py` or `components/` package; Glue discovers those
-modules at startup.
+A component is a Glue object with a Django template. Put its class in a
+`components.py` module or `components/` package under the components root
+(default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`);
+Glue resolves it lazily when its tag is used.
 
 ```python
 from django_glue import Glue
@@ -33,13 +34,16 @@ Stamp it with the ordinary Django template tag:
 ```django
 {% load django_glue %}
 {% for start in starts %}
-    {% glue_component 'counter-card' start=start key=start %}
+    {% glue_component 'gorilla/counter_card' start=start key=start %}
 {% endfor %}
 ```
 
-The first argument is the registered tag name. Glue removes a trailing
-`Component` from the class name, then converts it to kebab case. Classes without
-that suffix use their full name. Set `tag_name` to override the default. Named
+The first argument names the component as a snake_case path: an optional
+directory, then the component name. The last segment names the class —
+`counter_card` resolves to `CounterCardComponent` (else `CounterCard`) — and the
+segments before it are a directory, so the component must live in the
+`components` module or package that is a child of that directory. Glue imports
+and scans it lazily on first use; the file it lives in does not matter. Named
 arguments resolve as Django filter expressions, so `start=start` passes the
 Python value. Only declared parameters are accepted. `key` is required inside
 a loop, must remain stable for the same logical child, and cannot be a loop

@@ -265,9 +265,9 @@ class TimeEntryDay(Glue.Component):
         return sum(e.allocated_hours for e in self._entries)
 ```
 
-- `template` is the component's template path; `tag_name` (optional) overrides
-  the default kebab-case name derived from the class after removing a trailing
-  `Component` suffix.
+- `template` is the component's template path. The component is addressed in
+  templates by a snake_case path (see "Stamp a component"), not by a name the
+  class declares.
 - `Glue.ComponentParameter()` declares a **reconstructor** supplied at
   construction (from the template tag or Python). It is a shorthand for
   `Glue.attr(parameter=True)`.
@@ -285,24 +285,28 @@ is generated from the declarations, so a hand-written `__init__` is not needed.
 ### Stamp a component
 
 Components are mounted with the `{% glue_component %}` template tag. The first
-positional expression names the registered component; named expressions resolve
-through Django's `FilterExpression` (Python types preserved). `key` and `access`
-are reserved; every other named expression must be a declared parameter. A
-component inside a loop needs a stable explicit `key` (`forloop.counter` is
-rejected).
+positional expression names the component as a snake_case path — an optional
+directory, then the component name; the last segment maps to the class
+(`time_entry_day` → `TimeEntryDay(Component)`) and the component must live in
+the `components` module or package under that directory. Named expressions
+resolve through Django's `FilterExpression` (Python types preserved). `key` and
+`access` are reserved; every other named expression must be a declared
+parameter. A component inside a loop needs a stable explicit `key`
+(`forloop.counter` is rejected).
 
 ```django
 {% load django_glue %}
 {% for date in component.dates %}
-    {% glue_component 'time-entry-day' date=date user_id=component.user_id key=date %}
+    {% glue_component 'time_tracker/time_entry_day' date=date user_id=component.user_id key=date %}
 {% endfor %}
 ```
 
 The `key` fixes a stable child address under the composing parent; the class's
-registered tag name drives reconstruction. A component mounts during the render
+`module.qualname` drives reconstruction. A component mounts during the render
 that stamps it. Parameter changes and `$refresh()` render and morph mounted
-HTML with `Alpine.morph`. Components are discovered from each installed app's
-`components` module or package at startup.
+HTML with `Alpine.morph`. Components are resolved lazily from the components
+root (default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`)
+when their tag is used.
 
 Components reuse the established `BaseGlue` entry points — the same signed
 parameters, state snapshots, editable-update admission, unsigned response data,

@@ -33,4 +33,4 @@ def canonical_key(value: Any) -> str:
 def component_name(parent_address: str, tag_name: str, key: Any) -> str:
     source = f'{parent_address}|{tag_name}|{canonical_key(key)}'
     digest = hashlib.blake2s(source.encode(), digest_size=8).hexdigest()
-    return f'{tag_name.replace("-", "_").replace(".", "_")}_{digest}'
+    return f'{tag_name.replace("/", "_").replace(".", "_").replace("-", "_")}_{digest}'

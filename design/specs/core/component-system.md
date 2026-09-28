@@ -382,11 +382,12 @@ the component workstream (commit `e6f204b`):
 ```django
 {% load django_glue %}
 {% for date in component.dates %}
-    {% glue_component 'time-entry-day' date=date user_id=component.user_id key=date %}
+    {% glue_component 'time_tracker/time_entry_day' date=date user_id=component.user_id key=date %}
 {% endfor %}
 ```
 
-The first positional expression resolves the registered component tag name.
+The first positional expression names the component to stamp, as a snake_case
+path (see "Tag names" below).
 Named expressions resolve through Django's `FilterExpression`, retaining Python
 types without an HTML attribute parser. `key` and `access` are reserved; all
 other named expressions must be declared parameters. The tag is self-closing in
@@ -414,31 +415,36 @@ neither is part of this one.
 
 #### Tag names
 
-`TimeEntryDayComponent` derives the default tag name `time-entry-day`: Glue
-removes a trailing `Component` suffix before converting the name to kebab case.
-Classes without that suffix use their full name. A component may
-override it when a shorter, domain-qualified, or collision-free public name is
-needed:
-
-```python
-class TimeEntryDayComponent(Glue.Component):
-    tag_name = 'time-tracker.time-entry-day'
-```
+The tag is a **snake_case path**: an optional directory prefix, then the
+component name, separated by slashes. The last segment names the class
+(`TimeEntryDayComponent`, else `TimeEntryDay`); the segments before it are a
+directory, and the component lives in the `components` package that is a child
+of that directory:
 
 ```django
-{% glue_component 'time-tracker.time-entry-day' date=date user_id=user.pk key=date %}
+{% glue_component 'time_entry_day' date=date user_id=user.pk key=date %}
+{% glue_component 'time_tracker/time_entry_day' date=date user_id=user.pk key=date %}
 ```
 
-Names are lowercase kebab-case segments separated by dots. Component
-registration rejects two classes with the same effective tag name during
-Django's startup checks rather than choosing by import order. The override
-changes the public template name; it does not replace the component's signed
-reconstruction identifier. Components are discovered from each installed
-app's `components` module or package at startup.
+The first addresses `TimeEntryDay(Component)` in `<root>/components`; the
+second addresses the same class in `<root>/time_tracker/components`. The class
+is matched by name while scanning that `components` package — **the file it
+lives in does not matter** — and is imported and resolved lazily on first use,
+never at startup. The components root defaults to the project's
+`settings.BASE_DIR` and is overridable via `DJANGO_GLUE_COMPONENTS_ROOT`.
 
-The tag supports only registered components with a single root element.
-Slots, paired tags, and dynamic component-class selection are separate
-extensions.
+Names are lowercase snake_case segments; the directory is a slash-separated
+import path of such segments. Because the tag *is* the address, the class name
+is fixed by it: `time_entry_day` can only be `TimeEntryDay(Component)`.
+Reconstruction is independent of the tag — it still resolves from the signed
+`component_id` (`module.qualname`) — so moving or renaming the tag does not
+change a component's signed identity, only where the next stamp finds the
+class. There is no startup discovery and no cross-class tag collision to check:
+two directories may both define `TimeEntryDayComponent`, addressed by their
+distinct paths.
+
+The tag supports only resolvable components with a single root element. Slots,
+paired tags, and dynamic component-class selection are separate extensions.
 
 #### Components as URL views
 
@@ -489,7 +495,7 @@ rendered**, not declared by the component, as with Blazor's `@key` and React's
 
 ```django
 {% for cell in component.cells %}
-    {% glue_component 'time-entry-day' date=cell.date user_id=cell.user_id key=cell.key %}
+    {% glue_component 'time_tracker/time_entry_day' date=cell.date user_id=cell.user_id key=cell.key %}
 {% endfor %}
 ```
 
@@ -509,7 +515,7 @@ for fixed variants.
   `SequenceGlue`. A list mixing Glue objects with raw items and no factory is
   an error, never plain data.
 - A server-authored stamp inside a Django loop supplies `key=`.
-- The registered component target and canonical key are baked into the child's
+- The component target and canonical key are baked into the child's
   address at stamp time, and the address is signed as the policy name. The same
   key may be used by different child targets under one parent; two instances
   of the same target and key are the same logical child.
@@ -722,8 +728,8 @@ events, event names are constrained in two ways:
   `click`, `load` or any other event in the standard set would dispatch something
   indistinguishable from the native event to every ancestor listener on the page,
   including third-party widget code and spire's own form handling. The check runs
-  against a published list at startup, alongside the duplicate-tag-name check, so
-  the failure is a registration error rather than a runtime surprise.
+  against a published list when the class is defined, so the failure is a
+  definition error rather than a runtime surprise.
 - **Every bridged event carries its source address.** The `CustomEvent`'s
   `detail` includes a reserved `$address` alongside the declared detail, and the
   event also exposes the source proxy directly. An ancestor `@saved` listener

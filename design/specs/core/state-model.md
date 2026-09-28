@@ -1126,8 +1126,7 @@ Three obligations follow from making one URL serve two representations:
 - **Ordering is enforced by a system check.** "Final entry in `MIDDLEWARE`" is
   a security-relevant constraint and documentation cannot enforce it. Glue ships
   a Django system check that fails startup when its response middleware is
-  absent or not last, in the same way the component registry check rejects
-  duplicate tag names.
+  absent or not last.
 
 The central `/__dg__/glue_view/` redispatch endpoint,
 `ViewFragmentHttpRequest`, and its manual redirect loop are removed. Redirects
@@ -1193,7 +1192,7 @@ a key"*:
 - `FormSetGlue` names nested forms `form_list.{index}` — a wire-format name
   chosen, per its own comment, to dodge a JavaScript property collision
 
-For a stamped component, an address segment combines the registered component
+For a stamped component, an address segment combines the component target
 target with its render-site key. A key is either one immutable, key-safe scalar
 supported by the serializer registry or a non-empty tuple of those scalars.
 Canonicalization preserves type and tuple boundaries rather than coercing to a
@@ -1695,7 +1694,7 @@ future composition features, not hidden behavior of `parameter=True`.
 
 There is no delayed introduction. An object is introduced complete, during the
 server render or response that constructs it, and no global client API may
-construct an arbitrary registered component. Client-evaluated construction
+construct an arbitrary component. Client-evaluated construction
 inputs and `lazy`/`defer` mounting would each need a server-authored capability
 naming what the client may supply; neither is designed (`roadmap.md`, deferred
 component-model extensions).

@@ -17,6 +17,11 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Components are looked up relative to the test project; the import identity
+# of a component is its own (e.g. test_project.gorilla.components), not this
+# path.
+DJANGO_GLUE_COMPONENTS_ROOT = str(BASE_DIR / 'test_project')
+
 env_file = Path(__file__).parent.parent / 'development.env'
 load_dotenv(env_file)
 

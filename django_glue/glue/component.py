@@ -40,7 +40,6 @@ VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
-    tag_name: ClassVar[str | None] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -51,6 +50,7 @@ class Component(BaseGlue):
                 raise GlueComponentParameterError(
                     f'Parameter {key!r} on {cls.__name__} needs a type annotation.'
                 )
+
         if cls.__init__ is Component.__init__:
             keyword = inspect.Parameter.KEYWORD_ONLY
             cls.__signature__ = inspect.Signature([
@@ -73,9 +73,6 @@ class Component(BaseGlue):
                     for key, declaration in declared.items()
                 ),
             ])
-        if 'tag_name' not in cls.__dict__:
-            stem = cls.__name__.removesuffix('Component')
-            cls.tag_name = CAMEL_BOUNDARY.sub('-', stem or cls.__name__).lower()
         if cls.template is not None:
             component_registry.register(cls)
 
@@ -195,14 +192,14 @@ class Component(BaseGlue):
     ) -> Callable[..., HttpResponse]:
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
-            if cls.tag_name is None:
-                raise ValueError('Component URL views need a registered tag name.')
             view_kwargs = cls.get_view_kwargs(
                 request,
                 **{**parameters, **url_parameters},
             )
+            stem = cls.__name__.removesuffix('Component')
+            base_name = CAMEL_BOUNDARY.sub('_', stem or cls.__name__).lower()
             component = cls(
-                name=component_name('', cls.tag_name, None),
+                name=component_name('', base_name, None),
                 access=view_kwargs.pop('access', access),
                 **view_kwargs,
             )

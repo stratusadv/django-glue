@@ -12,8 +12,8 @@ request and creates an addressed root for that page.
 | `Glue.function()` | An authorized Python function |
 | `Glue.object()` | A configured custom `BaseGlue` instance |
 
-`Glue.Component` classes are discovered at startup and mounted with
-`{% glue_component %}` in a Django template.
+`Glue.Component` classes are resolved lazily from the components root and
+mounted with `{% glue_component %}` in a Django template.
 
 ## Model projections and choices
 

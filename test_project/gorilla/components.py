@@ -1,3 +1,5 @@
+from typing import Any
+
 from django.http import HttpRequest
 
 from django_glue import Glue, GlueOperation
@@ -48,3 +50,19 @@ class CounterDashboardComponent(Glue.Component):
     def drop_first(self) -> Glue.Response:
         self.starts = [5]
         return self.render()
+
+
+class CounterBadgeComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+
+class CounterBadgeOwnerComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.badge_value = CounterBadgeComponent()
+
+    @Glue.property
+    def badge(self) -> CounterBadgeComponent:
+        return self.badge_value

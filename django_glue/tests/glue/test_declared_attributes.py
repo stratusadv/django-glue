@@ -92,7 +92,6 @@ def test_parameter_on_non_component_glue_object_raises() -> None:
 
 def test_parameter_on_component_glue_object_is_allowed() -> None:
     class ParameterAllowedComponent(Component):
-        tag_name = 'parameter-allowed-component'
         template = 'glue_template_test.html'
 
         week: int = Glue.ComponentParameter(0)
