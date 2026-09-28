@@ -376,8 +376,7 @@ optional-parameter mechanism and request batching are not cross-object caches.
 
 ### 5. Components are stamped with a Django template tag
 
-The public composition syntax is the `{% glue_component %}` tag established on
-the component workstream (commit `e6f204b`):
+The public composition syntax is the `{% glue_component %}` tag:
 
 ```django
 {% load django_glue %}
