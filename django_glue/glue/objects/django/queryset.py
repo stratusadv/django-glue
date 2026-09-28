@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import builtins
+import json
 from enum import StrEnum
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
+from django.core import signing
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
@@ -12,6 +14,7 @@ from django_glue.access import GlueAccess
 from django_glue.conf import settings
 from django_glue.exceptions import (
     GlueModelInstanceNotFoundError,
+    GlueQuerySetCursorValidationError,
     GlueQuerySetFilterValidationError,
     GlueQuerySetOrderValidationError,
     GlueQuerySetSliceValidationError,
@@ -346,7 +349,7 @@ class QuerySetGlue(
         self._current_batch = list(window.items)
         return {
             'items': [self._row_address(instance) for instance in self._current_batch],
-            'seek_key': window.next_seek_key,
+            'seek_key': self._sign_seek_key(window.next_seek_key),
             'has_next': window.has_next,
             'batch_size': self.batch_size,
         }
@@ -536,17 +539,37 @@ class QuerySetGlue(
 
             return {'items': items, 'seek_key': None, 'has_next': False, 'batch_size': None}
 
+        position_key = None
+        if seek_key is not None:
+            try:
+                position_key = self._seek_key_signer.unsign(seek_key)
+            except signing.BadSignature:
+                raise GlueQuerySetCursorValidationError(seek_key) from None
+
         cursor = GlueCollectionCursor(objects, self.batch_size)
-        batch = cursor.seek(seek_key)
+        batch = cursor.seek(position_key)
         self._current_batch = list(batch.items)
         self._loaded_row_count += len(batch.items)
 
         return {
             'items': [self._row_address(instance) for instance in batch.items],
-            'seek_key': batch.next_seek_key,
+            'seek_key': self._sign_seek_key(batch.next_seek_key),
             'has_next': batch.has_next,
             'batch_size': self.batch_size,
         }
+
+    @property
+    def _seek_key_signer(self) -> signing.Signer:
+        """Signs continuation positions for this queryset's address and current
+        query, so a seek key is authenticated continuation data (state-model.md
+        "Authenticated queryset continuation"): it cannot be forged into a
+        comparison over an ordering-only field, nor replayed against another
+        queryset or another filter and ordering."""
+        query = json.dumps(self._last_query_params or {}, sort_keys=True, default=str)
+        return signing.Signer(salt=f'django_glue.queryset.seek_key:{self.address}:{query}')
+
+    def _sign_seek_key(self, position_key: str | None) -> str | None:
+        return None if position_key is None else self._seek_key_signer.sign(position_key)
 
     @DeclaredAttribute(required_access=GlueAccess.VIEW)
     def get(self, pk: Any) -> ModelGlue:
@@ -579,11 +602,7 @@ class QuerySetGlue(
                     ),
                     details={'keys': disallowed},
                 )
-        draft = self._row_glue(self.queryset.model(), bind=False)
-        if initial:
-            draft._load_client_state(initial)
-            draft._invalidate_attributes()
-        return draft
+        return self._row_glue(self.queryset.model(), bind=False, initial=initial)
 
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return [
@@ -628,20 +647,56 @@ class QuerySetGlue(
         live_children: Mapping[str, str] | None = None,
         reintroduce: Iterable[str] = (),
     ) -> tuple[BoundGlueChild, ...]:
+        """Rows and projected relation children share the collection's slot
+        rules (state-model.md §10). A live relation child carries forward by
+        address; one named in ``reintroduce`` is rebuilt through a row of the
+        base queryset that still references it, or dropped when none does."""
+        relation_names = {name for name, _subfields in self._projected_relations}
+        reintroduced_relations = {
+            path for path in reintroduce if path.split('.', 1)[0] in relation_names
+        }
         row_children = super()._bind_children(
             live_children=live_children,
-            reintroduce=reintroduce,
+            reintroduce=set(reintroduce) - reintroduced_relations,
         )
         relation_children = self._bind_relation_children(
             self._current_batch,
             owner_address=self.address,
         )
-        relation_paths = {child.path for child in relation_children}
+        produced_paths = {child.path for child in relation_children}
+        rebuilt_children = self._rebuild_relation_children(
+            reintroduced_relations - produced_paths,
+        )
+        replaced_paths = produced_paths | reintroduced_relations
         return tuple(
-            child for child in row_children if child.path not in relation_paths
-        ) + relation_children
+            child for child in row_children if child.path not in replaced_paths
+        ) + relation_children + rebuilt_children
 
-    def _row_glue(self, instance: models.Model, *, bind: bool = True) -> ModelGlue:
+    def _rebuild_relation_children(self, paths: Iterable[str]) -> tuple[BoundGlueChild, ...]:
+        rebuilt = []
+        for path in paths:
+            relation_name, related_key = path.split('.', 1)
+            if self._relation_is_to_many(relation_name):
+                referencing = self.queryset.filter(pk=related_key)
+            else:
+                referencing = self.queryset.filter(**{f'{relation_name}__pk': related_key})
+            instance = referencing.first()
+            if instance is None:
+                continue
+            rebuilt.extend(
+                child
+                for child in self._bind_relation_children([instance], owner_address=self.address)
+                if child.path == path
+            )
+        return tuple(rebuilt)
+
+    def _row_glue(
+        self,
+        instance: models.Model,
+        *,
+        bind: bool = True,
+        initial: dict | None = None,
+    ) -> ModelGlue:
         child_name = f'{self.name}.{instance.pk}'
         child_forms = {
             # Need to rebuild the form here in order to properly bind instance data!
@@ -673,6 +728,23 @@ class QuerySetGlue(
         )
         child_object._row_access = row_access
         child_object.request = self.request
+        if initial:
+            child_object._load_client_state(initial)
+            child_object.forms = {
+                name: form.__class__(instance=child_object.instance)
+                for name, form in child_object.forms.items()
+            }
+            for form in child_object.forms.values():
+                for name in form.fields:
+                    path = name
+                    if path not in initial:
+                        try:
+                            path = child_object._relation_identity_name(name)
+                        except FieldDoesNotExist:
+                            continue
+                    if path in initial:
+                        form.initial[name] = initial[path]
+            child_object._invalidate_attributes()
         if instance.pk is None:
             child_object._relation = self._relation
         else:

@@ -41,14 +41,6 @@ if TYPE_CHECKING:
 ALL_FIELDS: Literal['__all__'] = '__all__'
 DRAFTED_PATHS_KEY = '$draft'
 
-
-def _required_save_access(glue: ModelGlue) -> GlueAccess:
-    """Saving an unsaved row requires ADD; saving a persisted row requires
-    CHANGE (state-model.md §3, ADR 010).
-    """
-    return GlueAccess.ADD if glue.instance.pk is None else GlueAccess.CHANGE
-
-
 class ModelGlue(
     GlueComputedAttributesMixin,
     ModelGlueFormConfigMixin,
@@ -538,7 +530,7 @@ class ModelGlue(
 
         return self.request.FILES.get(field_name)
 
-    @DeclaredAttribute(required_access=_required_save_access)
+    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
     def save(self) -> dict[str, Any]:
         """Persist the draft. A draft created through a relation attaches to
         that exact relation in the same transaction (state-model.md §4)."""

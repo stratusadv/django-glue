@@ -18,15 +18,35 @@ from django.test import RequestFactory, TestCase
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
 django.setup()
 
+from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.glue import FormGlue, ModelGlue, QuerySetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 from django_glue.tests.conftest import MockSession
 from test_project.gorilla.forms import GorillaForm
-from test_project.gorilla.models import Gorilla
+from test_project.gorilla.models import Gorilla, Skill
 
 glue_attribute_call_view = GlueAttributeCallResolver.as_view()
+
+GORILLA_VALUES = {
+    'name': 'Filo',
+    'age': 5,
+    'weight': 200.0,
+    'height': 1.8,
+    'rank_points': 0,
+}
+
+
+class GorillaSaveForm(GorillaForm):
+    """A form whose one application save method both creates and updates, the
+    shape consuming projects use; its access follows the target (ADR 018)."""
+
+    @Glue.attr(required_access=Glue.Access.required_save_access)
+    def save_model_obj(self) -> dict:
+        if not self.is_valid():
+            return {'valid': False}
+        return {'valid': True, 'pk': self.save().pk}
 
 
 class _AttributeRequestMixin:
@@ -134,6 +154,59 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         self.assertEqual(draft.access, GlueAccess.ADD)
         self.assertIsNone(draft.identity['target_pk'])
         self.assertFalse(Gorilla.objects.filter(name='New').exists())
+
+    def test_new_initial_is_present_in_the_draft_form(self):
+        queryset = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.ADD,
+            fields=('name', 'age', 'weight', 'height', 'rank_points'),
+            form=GorillaSaveForm(),
+        )
+        queryset.request = self.request_context()
+        local_draft = queryset.new(initial={'name': 'Filo', 'age': 5})
+        self.assertEqual(local_draft.instance.name, 'Filo')
+        self.assertEqual(local_draft.forms['default'].initial['name'], 'Filo')
+
+        response = self.call(
+            'gorillas',
+            queryset.policy,
+            'new',
+            kwargs={'initial': {'name': 'Filo', 'age': 5}},
+        )
+        form_entry = next(
+            entry for entry in json.loads(response.content)['objects']
+            if entry['address'].endswith('.form')
+        )
+        draft_form = self.decode(form_entry['policy_token'])
+
+        self.assertEqual(draft_form.identity['initial']['name'], 'Filo')
+        self.assertEqual(draft_form.identity['initial']['age'], 5)
+
+    def test_new_many_to_many_initial_is_present_in_the_draft_form(self):
+        skill = Skill.objects.create(name='Climbing')
+        queryset = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.ADD,
+            fields=('name', 'skills'),
+            form=GorillaSaveForm(),
+        )
+        queryset.request = self.request_context()
+
+        response = self.call(
+            'gorillas',
+            queryset.policy,
+            'new',
+            kwargs={'initial': {'skills': [skill.pk]}},
+        )
+        form_entry = next(
+            entry for entry in json.loads(response.content)['objects']
+            if entry['address'].endswith('.form')
+        )
+        draft_form = self.decode(form_entry['policy_token'])
+
+        self.assertEqual(draft_form.identity['initial']['skills'], [skill.pk])
 
     def test_new_initial_admitted_only_against_signed_editable(self):
         """new(initial) rejects keys outside the signed editable projection —
@@ -431,3 +504,124 @@ class GlueFormSaveAdmissionTestCase(_AttributeRequestMixin, TestCase):
         self.assertEqual(entry['error']['code'], 'not_authorized')
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Koko')
+
+
+class GlueSaveRequiredAccessTestCase(_AttributeRequestMixin, TestCase):
+    """validate() and application save methods declared with
+    Glue.Access.required_save_access follow the target like save() (ADR 009, ADR
+    018): an unsaved target needs ADD, a persisted target needs CHANGE."""
+
+    def setUp(self):
+        super().setUp()
+        self.gorilla = Gorilla.objects.create(
+            name='Koko',
+            description='Leader',
+            age=18,
+            weight=200.0,
+            height=1.8,
+        )
+
+    def bound_form(self, form, access, name='gorilla_form'):
+        glue_object = FormGlue(form, name=name, access=access)
+        glue_object.request = self.request_context()
+        return glue_object
+
+    def test_unsaved_model_form_at_add_validates(self):
+        glue_object = self.bound_form(GorillaForm(instance=Gorilla()), GlueAccess.ADD)
+
+        response = self.call(
+            'gorilla_form',
+            glue_object.policy,
+            'validate',
+            updates={**GORILLA_VALUES, 'rank_points': 5},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        result = self.entry(response)['result']
+        self.assertFalse(result['valid'])
+        self.assertIn('rank_points', result['errors'])
+
+    def test_persisted_model_form_at_add_validate_is_denied(self):
+        glue_object = self.bound_form(GorillaForm(instance=self.gorilla), GlueAccess.ADD)
+
+        response = self.call('gorilla_form', glue_object.policy, 'validate')
+
+        self.assertEqual(self.entry(response)['error']['code'], 'not_authorized')
+
+    def test_required_save_access_method_creates_an_unsaved_target_at_add(self):
+        glue_object = self.bound_form(GorillaSaveForm(instance=Gorilla()), GlueAccess.ADD)
+
+        response = self.call(
+            'gorilla_form',
+            glue_object.policy,
+            'save_model_obj',
+            updates=GORILLA_VALUES,
+        )
+
+        self.assertTrue(self.entry(response)['result']['valid'])
+        self.assertTrue(Gorilla.objects.filter(name='Filo').exists())
+
+    def test_required_save_access_method_denies_a_persisted_target_at_add(self):
+        glue_object = self.bound_form(GorillaSaveForm(instance=self.gorilla), GlueAccess.ADD)
+
+        response = self.call(
+            'gorilla_form',
+            glue_object.policy,
+            'save_model_obj',
+            updates={**GORILLA_VALUES, 'name': 'Mutated'},
+        )
+
+        self.assertEqual(self.entry(response)['error']['code'], 'not_authorized')
+        self.gorilla.refresh_from_db()
+        self.assertEqual(self.gorilla.name, 'Koko')
+
+    def test_required_save_access_method_updates_a_persisted_target_at_change(self):
+        glue_object = self.bound_form(
+            GorillaSaveForm(instance=self.gorilla),
+            GlueAccess.CHANGE,
+        )
+
+        response = self.call(
+            'gorilla_form',
+            glue_object.policy,
+            'save_model_obj',
+            updates={**GORILLA_VALUES, 'name': 'Renamed'},
+        )
+
+        self.assertTrue(self.entry(response)['result']['valid'])
+        self.gorilla.refresh_from_db()
+        self.assertEqual(self.gorilla.name, 'Renamed')
+
+    def test_draft_row_form_of_a_change_queryset_validates_and_saves(self):
+        queryset = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            access=GlueAccess.CHANGE,
+            fields=('name', 'age', 'weight', 'height', 'rank_points'),
+            form=GorillaSaveForm(),
+        )
+        queryset.request = self.request_context()
+        new_response = self.call('gorillas', queryset.policy, 'new')
+        draft_form = self.decode(next(
+            entry['policy_token']
+            for entry in json.loads(new_response.content)['objects']
+            if entry['address'].endswith('.form')
+        ))
+        self.assertEqual(draft_form.access, GlueAccess.ADD)
+
+        validate_response = self.call(
+            draft_form.name,
+            draft_form,
+            'validate',
+            updates=GORILLA_VALUES,
+        )
+        save_response = self.call(
+            draft_form.name,
+            draft_form,
+            'save_model_obj',
+            updates=GORILLA_VALUES,
+        )
+
+        self.assertTrue(self.entry(validate_response)['result']['valid'])
+        self.assertTrue(self.entry(save_response)['result']['valid'])
+        self.assertTrue(Gorilla.objects.filter(name='Filo').exists())

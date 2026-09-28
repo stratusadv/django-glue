@@ -22,17 +22,6 @@ if TYPE_CHECKING:
     from django_glue.glue.policy import GluePolicy
 
 
-def _required_save_access(glue: FormGlue) -> GlueAccess:
-    """Saving an unsaved instance requires ADD; a persisted target requires
-    CHANGE (state-model.md §3, ADR 010). A plain form has no instance, so it
-    is always create-only.
-    """
-    instance = getattr(glue.form, 'instance', None)
-    if instance is None or instance.pk is None:
-        return GlueAccess.ADD
-    return GlueAccess.CHANGE
-
-
 class FormGlue(BaseGlue):
     namespace = 'form'
 
@@ -285,7 +274,7 @@ class FormGlue(BaseGlue):
         })
         return retained
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         self._bound_form = bound_form
@@ -294,7 +283,7 @@ class FormGlue(BaseGlue):
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
-    @DeclaredAttribute(required_access=_required_save_access)
+    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
     def save(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         valid = bound_form.is_valid()

@@ -97,6 +97,86 @@ class QuerySetMembershipTestCase(TestCase):
         self.assertEqual(len(successor.children), 2)
 
 
+class QuerySetRelationChildMembershipTestCase(TestCase):
+    """The collection owns its projected relation children (state-model.md §4),
+    so they follow the collection's slot rules (§10): live ones carry forward,
+    and an expired one is reintroduced through the collection at its existing
+    address."""
+
+    def setUp(self):
+        from django_glue import Glue
+        from test_project.fight.models import Fight
+
+        self.koko = Gorilla.objects.create(name='Koko', age=18)
+        self.rival = Gorilla.objects.create(name='Rival', age=19)
+        self.fights = [
+            Fight.objects.create(name=f'Fight {index}', red_corner=self.koko, blue_corner=self.rival)
+            for index in range(2)
+        ]
+        self.request = request_with_session()
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=Glue.fields('id', 'name', red_corner=('name',)),
+        )
+        glue_object.request = self.request
+        _entry, _introduced, self.policy = request_entry(
+            QuerySetGlue, glue_object.policy, self.request, attribute='query_with_params',
+        )
+        self.path = f'red_corner.{self.koko.pk}'
+
+    def test_a_non_query_call_carries_the_relation_child_forward(self):
+        _entry, introduced, successor = request_entry(
+            QuerySetGlue, self.policy, self.request, attribute='count',
+        )
+
+        self.assertEqual(successor.children[self.path], self.policy.children[self.path])
+        self.assertEqual(introduced, [])
+
+    def test_reintroducing_a_live_relation_child_rebuilds_it_at_its_address(self):
+        Gorilla.objects.filter(pk=self.koko.pk).update(name='Koko Renamed')
+
+        _entry, introduced, successor = request_entry(
+            QuerySetGlue,
+            self.policy,
+            self.request,
+            attribute='count',
+            reintroduce=[self.path],
+        )
+
+        address = self.policy.children[self.path]
+        self.assertEqual(successor.children[self.path], address)
+        self.assertEqual([entry['address'] for entry in introduced], [address])
+        self.assertEqual(introduced[0]['computed_data']['name'], 'Koko Renamed')
+
+    def test_reintroducing_a_relation_child_no_row_references_drops_it(self):
+        from test_project.fight.models import Fight
+
+        Fight.objects.update(red_corner=self.rival)
+
+        _entry, introduced, successor = request_entry(
+            QuerySetGlue,
+            self.policy,
+            self.request,
+            attribute='count',
+            reintroduce=[self.path],
+        )
+
+        self.assertNotIn(self.path, successor.children)
+        self.assertEqual(introduced, [])
+
+    def test_reintroducing_a_relation_path_the_collection_never_issued_fails_admission(self):
+        with self.assertRaises(GlueRequestError):
+            request_entry(
+                QuerySetGlue,
+                self.policy,
+                self.request,
+                attribute='count',
+                reintroduce=[f'red_corner.{self.rival.pk}'],
+            )
+
+
 class SequenceMembershipTestCase(TestCase):
     def setUp(self):
         self.request = request_with_session()

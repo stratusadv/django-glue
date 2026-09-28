@@ -188,12 +188,24 @@ class GlueCollectionCursor:
         return queryset.filter(clauses)
 
     def _position_of(self, instance: models.Model) -> list[Any]:
-        return [self._cursor_safe_value(getattr(instance, field)) for field in self._ordering]
+        return [self._cursor_safe_value(self._ordering_value(instance, field)) for field in self._ordering]
 
     def _encode(self, instance: models.Model, ordering: tuple[str, ...]) -> str:
-        position = [self._cursor_safe_value(getattr(instance, field)) for field in ordering]
+        position = [self._cursor_safe_value(self._ordering_value(instance, field)) for field in ordering]
         payload = json.dumps(position).encode('utf-8')
         return base64.urlsafe_b64encode(payload).decode('ascii')
+
+    @staticmethod
+    def _ordering_value(instance: models.Model, field: str) -> Any:
+        """The value an ordering path reads on ``instance``, following a
+        ``relation__field`` path through to-one relations; a missing related
+        object reads as None, which the seek filter treats as the NULL bucket."""
+        value: Any = instance
+        for part in field.split('__'):
+            if value is None:
+                return None
+            value = getattr(value, part)
+        return value
 
     def _decode(self, seek_key: str | None, ordering: tuple[str, ...]) -> list[Any] | None:
         if seek_key is None:

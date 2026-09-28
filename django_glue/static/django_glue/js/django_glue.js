@@ -5638,6 +5638,10 @@ ${expression ? 'Expression: "' + expression + `"
   var attributeMaterializer_default = GlueAttributeMaterializer;
 
   // client_js/src/runtime/childBinder.js
+  function isOwnedBy(address, ownerAddress) {
+    return address.startsWith(`${ownerAddress}.`) || address.startsWith(`${ownerAddress}[`);
+  }
+
   class GlueChildBinder {
     constructor(registry) {
       this.registry = registry;
@@ -5676,12 +5680,15 @@ ${expression ? 'Expression: "' + expression + `"
       const current = record.policy.children || {};
       const displaced = [];
       Object.entries(record.boundChildren || {}).forEach(([path, oldAddress]) => {
-        if (current[path] !== oldAddress)
+        if (current[path] !== oldAddress && isOwnedBy(oldAddress, record.address)) {
           displaced.push(oldAddress);
+        }
       });
       return displaced;
     }
     _link(child, record, path) {
+      if (!isOwnedBy(child._record.address, record.address))
+        return;
       if (child._owner !== record.proxy)
         child._owner = record.proxy;
       child._record.owner = { address: record.address, path };

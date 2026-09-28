@@ -56,6 +56,32 @@ def statistic_choices(self) -> list[dict]:
 The same applies to `@Glue.html_attr`. A read-only attribute simply omits them
 rather than passing `updates_client_state=False`.
 
+### Save methods that both create and update: `Glue.Access.required_save_access`
+
+A draft from `queryset.new()` now has exactly `ADD` access, whatever the
+queryset's access. In v1.0 it inherited the queryset's access, usually `CHANGE`.
+A form method that saves both new and existing instances therefore cannot
+require a fixed `CHANGE`: a draft opened from an "Add" button would be rejected.
+Declaring a fixed `ADD` instead would let a create-only object modify persisted
+rows. Pass `Glue.Access.required_save_access`, which requires `ADD` while the
+instance is unsaved and `CHANGE` once it is persisted:
+
+```python
+# v1.0
+@Glue.attr(required_access=Glue.Access.CHANGE)
+def save_model_obj(self, request: HttpRequest) -> GlueResponse:
+    ...
+
+# v1.1
+@Glue.attr(required_access=Glue.Access.required_save_access)
+def save_model_obj(self, request: HttpRequest) -> GlueResponse:
+    ...
+```
+
+Glue's own `save()` and `validate()` on forms, and `save()` on models, use the
+same rule. A method that only ever edits persisted instances can keep
+`Glue.Access.CHANGE`.
+
 ### Relation projection: `related_field_config` → `Glue.fields`
 
 `related_field_config` is gone. Project related scalar fields with `fields=`

@@ -4,18 +4,18 @@ import {createEntry, createPolicyToken, createStaticData} from "./testUtils"
 
 const rootPolicy = {
     name: 'root', namespace: 'root', address: 'root#test',
-    attributes: ['save'], children: {form: 'form#test'}, state_snapshot: {},
+    attributes: ['save'], children: {form: 'root#test.form'}, state_snapshot: {},
 }
 const formPolicy = {
-    name: 'form', namespace: 'form', address: 'form#test',
-    attributes: ['validate'], children: {nested: 'nested#test'}, state_snapshot: {name: 'Ada'},
+    name: 'form', namespace: 'form', address: 'root#test.form',
+    attributes: ['validate'], children: {nested: 'root#test.form.nested'}, state_snapshot: {name: 'Ada'},
 }
 const nestedPolicy = {
-    name: 'nested', namespace: 'model', address: 'nested#test',
+    name: 'nested', namespace: 'model', address: 'root#test.form.nested',
     state_snapshot: {note: 'hi'},
 }
 
-function formEntry(address = 'form#test') {
+function formEntry(address = 'root#test.form') {
     return createEntry({
         policy: {...formPolicy, address},
         staticData: {
@@ -56,7 +56,7 @@ describe('replacement and removal disposal', () => {
     test('the same path with the same address preserves proxy, draft, and queue', async () => {
         const {client, root, form, nested} = tree()
         const {release} = gatedHttp(client, {
-            onValidate: () => ({data: {objects: [{address: 'form#test', result: {valid: true}}]}}),
+            onValidate: () => ({data: {objects: [{address: 'root#test.form', result: {valid: true}}]}}),
             onRoot: () => ({data: {objects: [{address: 'root#test', result: {saved: true}}]}}),
         })
 
@@ -72,16 +72,27 @@ describe('replacement and removal disposal', () => {
         expect(await validatePromise).toEqual({valid: true})
     })
 
-    test('a different address at a path is a replacement that disposes the old child', async () => {
+    test('a different address at a path is a replacement that disposes the old child and its tree', async () => {
         const {client, root, form} = tree()
         const replacementPolicy = createPolicyToken({
             ...rootPolicy,
-            children: {form: 'form#other'},
+            children: {form: 'root#test.form:other'},
             created_at: 2,
         })
         client.http.sendAttributeRequest = async (params) => ({data: {objects: [
             {address: 'root#test', policy_token: replacementPolicy, result: {}},
-            formEntry('form#other'),
+            createEntry({
+                policy: {
+                    ...formPolicy,
+                    address: 'root#test.form:other',
+                    children: {nested: 'root#test.form:other.nested'},
+                },
+                staticData: {
+                    children: {nested: {kind: 'model', nullable: true}},
+                    callables: {validate: {allowed_arguments: []}},
+                },
+            }),
+            createEntry({policy: {...nestedPolicy, address: 'root#test.form:other.nested'}}),
         ]}})
 
         const oldForm = form
@@ -89,12 +100,12 @@ describe('replacement and removal disposal', () => {
         await root.save()
 
         expect(root.form).not.toBe(oldForm)
-        expect(root.form._record.address).toBe('form#other')
-        expect(client._registry.getRecord('form#test')).toBeUndefined()
+        expect(root.form._record.address).toBe('root#test.form:other')
+        expect(client._registry.getRecord('root#test.form')).toBeUndefined()
         expect(oldForm._record.disposed).toBe(true)
-        expect(root.form.nested).toBe(nested)
-        expect(nested._record.owner).toEqual({address: 'form#other', path: 'nested'})
-        expect(nested._record.disposed).toBe(false)
+        expect(nested._record.disposed).toBe(true)
+        expect(root.form.nested).not.toBe(nested)
+        expect(root.form.nested._record.owner).toEqual({address: 'root#test.form:other', path: 'nested'})
 
         let error
         try {
@@ -115,7 +126,7 @@ describe('replacement and removal disposal', () => {
         client.http.sendAttributeRequest = async (params) => {
             if (params.attribute === 'validate') {
                 return {data: {objects: [
-                    {address: 'form#test', policy_token: emptyChildrenToken, result: {valid: true}},
+                    {address: 'root#test.form', policy_token: emptyChildrenToken, result: {valid: true}},
                 ]}}
             }
             return {data: {objects: [{address: 'root#test', result: {}}]}}
@@ -124,9 +135,9 @@ describe('replacement and removal disposal', () => {
         await form.validate()
 
         expect(form.nested).toBeNull()
-        expect(client._registry.getRecord('nested#test')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form.nested')).toBeUndefined()
         expect(nested._record.disposed).toBe(true)
-        expect(client._registry.getRecord('form#test')).toBeDefined()
+        expect(client._registry.getRecord('root#test.form')).toBeDefined()
         expect(root.form).toBe(form)
     })
 
@@ -136,8 +147,8 @@ describe('replacement and removal disposal', () => {
         root.$dispose()
 
         expect(client._registry.getRecord('root#test')).toBeUndefined()
-        expect(client._registry.getRecord('form#test')).toBeUndefined()
-        expect(client._registry.getRecord('nested#test')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form.nested')).toBeUndefined()
         expect(root._record.disposed).toBe(true)
         expect(form._record.disposed).toBe(true)
         expect(nested._record.disposed).toBe(true)
@@ -148,7 +159,7 @@ describe('replacement and removal disposal', () => {
         const {client, form} = tree()
 
         expect(() => form.$dispose()).toThrow('bound to its owner at path "form"')
-        expect(client._registry.getRecord('form#test')).toBeDefined()
+        expect(client._registry.getRecord('root#test.form')).toBeDefined()
     })
 
     test('effects.dispose disposes an owned address without a children map change', async () => {
@@ -157,14 +168,14 @@ describe('replacement and removal disposal', () => {
             {
                 address: 'root#test',
                 result: {},
-                effects: {messages: [], dispose: ['form#test']},
+                effects: {messages: [], dispose: ['root#test.form']},
             },
         ]}})
 
         await root.save()
 
-        expect(client._registry.getRecord('form#test')).toBeUndefined()
-        expect(client._registry.getRecord('nested#test')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form.nested')).toBeUndefined()
         expect(form._record.disposed).toBe(true)
         expect(nested._record.disposed).toBe(true)
         expect(client._registry.getRecord('root#test')).toBeDefined()
@@ -315,18 +326,18 @@ describe('late responses for disposed generations', () => {
         const gate = new Promise(resolve => {gateResolve = resolve})
         const changedMapToken = createPolicyToken({
             ...rootPolicy,
-            children: {form: 'form#test', extra: 'extra#test'},
+            children: {form: 'root#test.form', extra: 'root#test.extra'},
             created_at: 2,
         })
         client.http.sendAttributeRequest = async (params) => {
             if (params.attribute === 'validate') {
                 await gate
-                return {data: {objects: [{address: 'form#test', result: {valid: true}}]}}
+                return {data: {objects: [{address: 'root#test.form', result: {valid: true}}]}}
             }
             return {data: {objects: [
                 {address: 'root#test', policy_token: changedMapToken, result: {}},
                 formEntry(),
-                createEntry({policy: {name: 'extra', namespace: 'model', address: 'extra#test'}}),
+                createEntry({policy: {name: 'extra', namespace: 'model', address: 'root#test.extra'}}),
             ]}}
         }
 
@@ -345,7 +356,7 @@ describe('late responses for disposed generations', () => {
         client.http.sendAttributeRequest = async (params) => {
             if (params.attribute === 'validate') {
                 await gate
-                return {data: {objects: [{address: 'form#test', result: {valid: true}}]}}
+                return {data: {objects: [{address: 'root#test.form', result: {valid: true}}]}}
             }
             step += 1
             if (step === 1) {
@@ -354,7 +365,7 @@ describe('late responses for disposed generations', () => {
                 ]}}
             }
             return {data: {objects: [
-                {address: 'root#test', policy_token: createPolicyToken({...rootPolicy, children: {form: 'form#test'}, created_at: 3}), result: {}},
+                {address: 'root#test', policy_token: createPolicyToken({...rootPolicy, children: {form: 'root#test.form'}, created_at: 3}), result: {}},
                 formEntry(),
             ]}}
         }
@@ -386,7 +397,7 @@ describe('late responses for disposed generations', () => {
         client.http.sendAttributeRequest = async (params) => {
             if (params.attribute === 'validate') {
                 await gate
-                return {data: {objects: [{address: 'form#test', result: {valid: true}}]}}
+                return {data: {objects: [{address: 'root#test.form', result: {valid: true}}]}}
             }
             return {data: {objects: [{address: 'root#test', result: {}}]}}
         }
@@ -404,7 +415,7 @@ describe('late responses for disposed generations', () => {
 
         gateResolve()
         expect(await validatePromise).toBeUndefined()
-        expect(client._registry.getRecord('form#test')).toBeUndefined()
+        expect(client._registry.getRecord('root#test.form')).toBeUndefined()
     })
 })
 
@@ -424,5 +435,78 @@ describe('effects channel', () => {
         await root.save()
 
         expect(navigations).toEqual(['/next'])
+    })
+})
+
+describe('address references do not create owners', () => {
+    const collectionAddress = 'deals#test'
+    const partnerAddress = 'deals#test.partner:5'
+    const rowAddress = key => `deals#test[${key}]`
+
+    const collectionPolicy = (children) => ({
+        name: 'deals', namespace: 'root', address: collectionAddress,
+        attributes: [], children, state_snapshot: {},
+    })
+    const rowPolicy = (key, children = {partner: partnerAddress}) => ({
+        name: `deals.${key}`, namespace: 'model', address: rowAddress(key),
+        attributes: [], children, state_snapshot: {id: key},
+    })
+    const rowStaticData = {children: {partner: {kind: 'model', nullable: true}}}
+
+    function collection() {
+        const client = new GlueClient({objects: [
+            createEntry({policy: collectionPolicy({
+                1: rowAddress(1), 2: rowAddress(2), 'partner.5': partnerAddress,
+            })}),
+            createEntry({policy: rowPolicy(1), staticData: rowStaticData}),
+            createEntry({policy: rowPolicy(2), staticData: rowStaticData}),
+            createEntry({policy: {
+                name: 'deals.partner.5', namespace: 'model', address: partnerAddress,
+                attributes: [], state_snapshot: {id: 5, name: 'Acme'},
+            }}),
+        ]})
+        globalThis.Glue = client
+        const proxy = address => client._registry.getProxy(address)
+        return {client, proxy, first: proxy(rowAddress(1)), second: proxy(rowAddress(2))}
+    }
+
+    function reconcile(client, address, policy) {
+        const record = client._registry.getRecord(address)
+        client._dispatcher.reconcile(
+            address,
+            {policy_token: createPolicyToken({...policy, created_at: 2})},
+            record.captureRequest(),
+        )
+    }
+
+    test('a row reading a collection-owned child does not take ownership of it', () => {
+        const {client, first, second} = collection()
+
+        expect(first.partner).toBe(second.partner)
+
+        expect(client._registry.getRecord(partnerAddress).owner)
+            .toEqual({address: collectionAddress, path: 'partner.5'})
+    })
+
+    test('a row dropping its reference leaves the child to its owner and the other rows', () => {
+        const {client, first, second} = collection()
+        const partner = second.partner
+
+        reconcile(client, rowAddress(1), rowPolicy(1, {}))
+
+        expect(first.partner).toBeNull()
+        expect(partner._record.disposed).toBe(false)
+        expect(second.partner).toBe(partner)
+        expect(client._registry.getRecord(partnerAddress)).toBeDefined()
+    })
+
+    test('the owning collection dropping the child disposes it', () => {
+        const {client, second} = collection()
+        const partner = second.partner
+
+        reconcile(client, collectionAddress, collectionPolicy({1: rowAddress(1), 2: rowAddress(2)}))
+
+        expect(partner._record.disposed).toBe(true)
+        expect(client._registry.getRecord(partnerAddress)).toBeUndefined()
     })
 })

@@ -51,8 +51,31 @@ The full migration guide for these changes is at [Migration Guide](../migration.
   Defaults follow exposed scalar and projected relation fields; explicit
   declarations can grant exact hidden paths, annotations, transforms, or reverse
   traversal. Full paths and lookups are validated on each request.
+- Queryset seek keys are signed and bound to the queryset and the exact filter
+  and ordering they continue. A forged, tampered, or replayed key is rejected,
+  so an ordering-only permission cannot be used to filter.
 - HTML responses register introduced objects before morphing. Matching keyed
   nodes preserve Alpine state, focus, and caret position.
+
+- `Glue.Access.required_save_access` gives methods that both create and update
+  the same target-derived access as `save()`: `ADD` for an unsaved instance,
+  `CHANGE` for a persisted one. See the migration guide.
+
+### Fixes
+
+- A form on a `QuerySetGlue.new(initial)` draft now receives the admitted
+  initial values before it is introduced, including raw foreign-key identities
+  and many-to-many selections.
+- A form on a `new()` draft can `validate()` at `ADD`; it previously required
+  `CHANGE`, which a draft never has.
+- Deleting or re-pointing a queryset row no longer disposes a projected
+  relation object that other rows share. Only the object's owner disposes it.
+- An expired projected relation object is reintroduced through its queryset.
+  It previously failed with a server error.
+- `loadMore()` continues querysets ordered by a related field path, such as
+  `order_by=['-notification__sent_datetime']`.
+- A form refresh no longer overwrites client-owned field members with server
+  metadata, so choices narrowed with `overrideChoices()` survive it.
 
 ## v1.0.1
 

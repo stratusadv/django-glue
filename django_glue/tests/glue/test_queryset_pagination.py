@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import json
+
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -164,6 +167,59 @@ class QuerySetPaginationTestCase(TestCase):
 
             self.assertEqual(context.exception.status, 422)
             self.assertEqual(context.exception.details(), {'seek_key': seek_key})
+
+    def test_unsigned_or_forged_seek_position_is_rejected(self):
+        glue_object = build_glue(batch_size=3)
+        issued = glue_object.query_with_params()['seek_key']
+        position, signature = issued.rsplit(':', 1)
+        forged_position = base64.urlsafe_b64encode(
+            json.dumps(['Gorilla 05', Gorilla.objects.get(name='Gorilla 05').pk]).encode(),
+        ).decode()
+
+        for seek_key in (position, forged_position, f'{forged_position}:{signature}'):
+            with self.assertRaises(GlueQuerySetCursorValidationError):
+                glue_object.query_with_params(seek_key=seek_key)
+
+    def test_seek_key_is_rejected_under_a_different_query(self):
+        glue_object = build_glue(batch_size=3)
+        issued = glue_object.query_with_params(order_by=['name'])['seek_key']
+
+        with self.assertRaises(GlueQuerySetCursorValidationError):
+            glue_object.query_with_params(order_by=['-name'], seek_key=issued)
+
+        with self.assertRaises(GlueQuerySetCursorValidationError):
+            glue_object.query_with_params(
+                filter={'name__icontains': 'Gorilla'},
+                order_by=['name'],
+                seek_key=issued,
+            )
+
+    def test_seek_key_is_rejected_by_another_queryset(self):
+        issued = build_glue(batch_size=3).query_with_params()['seek_key']
+        other = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='other_gorillas',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+            batch_size=3,
+        )
+        other.request = request_with_session()
+        other.policy
+
+        with self.assertRaises(GlueQuerySetCursorValidationError):
+            other.query_with_params(seek_key=issued)
+
+    def test_refreshed_window_issues_a_seek_key_the_next_batch_accepts(self):
+        glue_object = build_glue(batch_size=3)
+        glue_object.query_with_params(order_by=['name'])
+
+        refreshed = glue_object._loaded_window()
+        following = glue_object.query_with_params(order_by=['name'], seek_key=refreshed['seek_key'])
+
+        self.assertEqual(
+            self._names(glue_object, following),
+            ['Gorilla 03', 'Gorilla 04', 'Gorilla 05'],
+        )
 
     def test_empty_queryset_has_no_next(self):
         glue_object = build_glue(Gorilla.objects.none(), batch_size=3)
@@ -431,6 +487,33 @@ class QuerySetNullOrderingTestCase(TestCase):
 
         self.assertEqual(sorted(names), sorted(f'Fight {index}' for index in range(6)))
         self.assertEqual(len(names), 6)  # every row exactly once -- no skip, no duplicate
+
+    def test_continuation_follows_a_related_ordering_path(self):
+        for index, name in enumerate(['Delta', 'Alpha', 'Echo', 'Charlie', 'Bravo']):
+            Fight.objects.create(
+                name=f'Ranked {index}',
+                red_corner=Gorilla.objects.create(name=name, age=index),
+                blue_corner=Gorilla.objects.get(name='Rival'),
+            )
+        glue_object = QuerySetGlue(
+            Fight.objects.filter(name__startswith='Ranked'),
+            name='fights',
+            access=GlueAccess.VIEW,
+            fields=['id', 'name'],
+            ordering=['red_corner__name', 'winner__name'],
+            batch_size=2,
+        )
+        glue_object.request = request_with_session()
+        glue_object.policy
+
+        by_red_corner = self._all_names_via_cursor(glue_object, order_by='-red_corner__name')
+        by_nullable_winner = self._all_names_via_cursor(glue_object, order_by='winner__name')
+
+        self.assertEqual(
+            by_red_corner,
+            ['Ranked 2', 'Ranked 0', 'Ranked 3', 'Ranked 4', 'Ranked 1'],
+        )
+        self.assertEqual(sorted(by_nullable_winner), [f'Ranked {index}' for index in range(5)])
 
     def test_null_ordering_values_sort_last_regardless_of_direction(self):
         glue_object = QuerySetGlue(

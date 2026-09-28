@@ -3,13 +3,13 @@ import GlueClient from "../src/client"
 import {createEntry, createPolicyToken, createStaticData} from "./testUtils"
 
 const formPolicy = {
-    name: 'entry_form', namespace: 'form', address: 'form#test',
+    name: 'entry_form', namespace: 'form', address: 'dashboard#test.entry_form',
     attributes: ['validate'], state_snapshot: {name: 'Ada'},
     identity: {target_pk: null},
 }
 const ownerPolicy = {
     name: 'dashboard', namespace: 'dashboard', address: 'dashboard#test',
-    attributes: ['save'], children: {entry_form: 'form#test'}, state_snapshot: {},
+    attributes: ['save'], children: {entry_form: 'dashboard#test.entry_form'}, state_snapshot: {},
 }
 const formStaticData = createStaticData({callables: {validate: {allowed_arguments: []}}})
 
@@ -23,7 +23,7 @@ function formEntry(overrides = {}) {
 
 function reintroducedFormEntry(policyToken) {
     return {
-        address: 'form#test',
+        address: 'dashboard#test.entry_form',
         policy_token: policyToken,
         static_data: formStaticData,
         computed_data: {},
@@ -64,11 +64,11 @@ describe('child reintroduction after policy expiry', () => {
             if (params.attribute === 'validate') {
                 if (params.policyToken === originalToken) {
                     return {data: {objects: [{
-                        address: 'form#test',
+                        address: 'dashboard#test.entry_form',
                         error: {code: 'policy_expired', message: 'policy expired'},
                     }]}}
                 }
-                return {data: {objects: [{address: 'form#test', result: {valid: true}}]}}
+                return {data: {objects: [{address: 'dashboard#test.entry_form', result: {valid: true}}]}}
             }
             return {data: {objects: [
                 {address: 'dashboard#test'},
@@ -80,12 +80,12 @@ describe('child reintroduction after policy expiry', () => {
 
         expect(result).toEqual({valid: true})
         expect(requests).toHaveLength(3)
-        expect(requests[0].address).toBe('form#test')
+        expect(requests[0].address).toBe('dashboard#test.entry_form')
         expect(requests[0].attribute).toBe('validate')
         expect(requests[1].address).toBe('dashboard#test')
         expect(requests[1].attribute).toBeUndefined()
         expect(requests[1].reintroduce).toEqual(['entry_form'])
-        expect(requests[2].address).toBe('form#test')
+        expect(requests[2].address).toBe('dashboard#test.entry_form')
         expect(requests[2].attribute).toBe('validate')
         expect(requests[2].policyToken).toBe(freshToken)
         expect(form._record.stale).toBe(false)
@@ -96,7 +96,7 @@ describe('child reintroduction after policy expiry', () => {
         client.http.sendAttributeRequest = async (params) => {
             if (params.attribute === 'validate') {
                 return {data: {objects: [{
-                    address: 'form#test',
+                    address: 'dashboard#test.entry_form',
                     error: {code: 'policy_expired', message: 'policy expired'},
                 }]}}
             }
@@ -125,7 +125,7 @@ describe('child reintroduction after policy expiry', () => {
         let calls = 0
         client.http.sendAttributeRequest = async () => {
             calls++
-            return {data: {objects: [{address: 'form#test', result: {valid: true}}]}}
+            return {data: {objects: [{address: 'dashboard#test.entry_form', result: {valid: true}}]}}
         }
 
         let error
@@ -155,12 +155,12 @@ describe('child reintroduction after policy expiry', () => {
                 validateRequests.push(params)
                 if (params.policyToken === originalToken) {
                     return {data: {objects: [{
-                        address: 'form#test',
+                        address: 'dashboard#test.entry_form',
                         error: {code: 'policy_expired', message: 'policy expired'},
                     }]}}
                 }
                 return {data: {objects: [{
-                    address: 'form#test',
+                    address: 'dashboard#test.entry_form',
                     policy_token: acknowledgedToken,
                     result: {valid: true},
                 }]}}
