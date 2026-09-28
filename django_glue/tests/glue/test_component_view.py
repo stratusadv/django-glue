@@ -36,7 +36,7 @@ def test_component_url_renders_an_addressed_fragment_from_url_parameters(client:
     assert '<html' not in html
 
 
-def test_template_override_wraps_the_component_in_a_full_page(client: Client) -> None:
+def test_layout_template_renders_the_component_inside_a_full_page(client: Client) -> None:
     response = client.get(reverse('gorilla:component_card_page', kwargs={'start': 9}))
 
     assert response.status_code == 200
@@ -45,6 +45,25 @@ def test_template_override_wraps_the_component_in_a_full_page(client: Client) ->
     assert html.count('data-testid="counter-card"') == 1
     assert 'data-glue-address=' in html
     assert 'id="django-glue-context"' in html
+
+
+def test_layout_template_class_attribute_is_the_default_layout(client: Client) -> None:
+    response = client.get(reverse('gorilla:component_laid_out_card', kwargs={'start': 9}))
+
+    assert response.status_code == 200
+    template_names = [template.name for template in response.templates]
+    assert 'gorilla/page/component_card_page.html' in template_names
+    assert response.content.decode().count('data-testid="counter-card"') == 1
+
+
+def test_as_view_layout_template_overrides_the_class_attribute(client: Client) -> None:
+    response = client.get(reverse('gorilla:component_laid_out_card_alt', kwargs={'start': 9}))
+
+    assert response.status_code == 200
+    template_names = [template.name for template in response.templates]
+    assert 'gorilla/page/component_card_alt_page.html' in template_names
+    assert 'gorilla/page/component_card_page.html' not in template_names
+    assert 'data-testid="alt-layout"' in response.content.decode()
 
 
 def test_bare_component_tag_requires_a_component_view() -> None:

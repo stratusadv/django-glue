@@ -3,6 +3,7 @@ from django.urls import path
 from test_project.gorilla import views
 from test_project.gorilla.components import (
     CounterCardComponent,
+    LaidOutCounterCardComponent,
     ProtectedCounterCardComponent,
     RequestConfiguredCounterCardComponent,
 )
@@ -24,8 +25,20 @@ urlpatterns = [
     ),
     path(
         'components/card/<int:start>/page/',
-        CounterCardComponent.as_view(template='gorilla/page/component_card_page.html'),
+        CounterCardComponent.as_view(layout_template='gorilla/page/component_card_page.html'),
         name='component_card_page',
+    ),
+    path(
+        'components/laid-out-card/<int:start>/',
+        LaidOutCounterCardComponent.as_view(),
+        name='component_laid_out_card',
+    ),
+    path(
+        'components/laid-out-card/<int:start>/alt/',
+        LaidOutCounterCardComponent.as_view(
+            layout_template='gorilla/page/component_card_alt_page.html'
+        ),
+        name='component_laid_out_card_alt',
     ),
     path('contact_formset/', views.contact_formset_view, name='contact_formset'),
     path('', views.list_view, name='list'),

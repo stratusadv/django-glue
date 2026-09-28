@@ -40,6 +40,7 @@ VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
+    layout_template: str | None = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -55,7 +56,6 @@ class Component(BaseGlue):
             keyword = inspect.Parameter.KEYWORD_ONLY
             cls.__signature__ = inspect.Signature([
                 inspect.Parameter('name', keyword, default=None, annotation=str | None),
-                inspect.Parameter('template', keyword, default=None, annotation=str | None),
                 inspect.Parameter('access', keyword, default=GlueAccess.VIEW, annotation=GlueAccess),
                 *(
                     inspect.Parameter(
@@ -89,7 +89,6 @@ class Component(BaseGlue):
         self,
         *,
         name: str | None = None,
-        template: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         **parameters: Any,
     ) -> None:
@@ -111,12 +110,10 @@ class Component(BaseGlue):
             )
         super().__init__(name=name, access=access)
 
-        resolved_template = template if template is not None else self.template
-        if not resolved_template:
+        if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
             raise ValueError(msg)
 
-        self.template = resolved_template
         annotations = get_type_hints(type(self))
         for key in declared:
             value = parameters[key] if key in parameters else getattr(self, key)
@@ -186,10 +183,12 @@ class Component(BaseGlue):
     def as_view(
         cls,
         *,
-        template: str | None = None,
+        layout_template: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         **parameters: Any,
     ) -> Callable[..., HttpResponse]:
+        layout = layout_template if layout_template is not None else cls.layout_template
+
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
             view_kwargs = cls.get_view_kwargs(
@@ -205,10 +204,10 @@ class Component(BaseGlue):
             )
             try:
                 GlueContextManager(request).add_glue(component)
-                if template is not None:
+                if layout is not None:
                     return render_template(
                         request,
-                        template,
+                        layout,
                         {
                             **component.get_context_data(),
                             VIEW_COMPONENT_CONTEXT_KEY: component,

@@ -84,15 +84,27 @@ urlpatterns = [
     path('cards/<int:start>/', CounterCardComponent.as_view(), name='card-fragment'),
     path(
         'cards/<int:start>/page/',
-        CounterCardComponent.as_view(template='cards/page.html'),
+        CounterCardComponent.as_view(layout_template='cards/page.html'),
         name='card-page',
     ),
 ]
 ```
 
 Named URL captures supply declared component parameters. The default response
-is the component's own template as an HTML fragment. A `template=` override
-wraps that fragment in a page template.
+is the component's own template as an HTML fragment, for fetching with
+`Glue.view(url)`. Set a layout template to respond with a full page instead:
+the layout template contains the component and marks where it renders. Declare
+it on the class with `layout_template`, or pass `layout_template=` to
+`as_view()` to override the class attribute for one URL:
+
+```python
+class CounterCardComponent(Glue.Component):
+    template = 'cards/counter_card.html'
+    layout_template = 'cards/page.html'
+```
+
+A layout template does not change the component's own `template`, which it
+keeps for every later re-render.
 
 For parameters or access derived from the request, override the class hook:
 
@@ -106,7 +118,7 @@ The returned kwargs go to the component constructor; `access` may be included
 to set the request's capability ceiling. The default hook returns the URL and
 `as_view()` kwargs unchanged.
 
-The page template places the rendered component in its layout:
+The layout template places the rendered component with the no-argument tag:
 
 ```django
 {% extends 'base.html' %}
@@ -115,9 +127,8 @@ The page template places the rendered component in its layout:
 ```
 
 The no-argument tag renders the component supplied by `as_view()`. Outside a
-component view, it raises an error. The page layout must load Glue with
-`{% django_glue_init %}`. The component still uses its declared template for
-later reactive rerenders. These URLs serve GET and HEAD; component actions use
+component view, it raises an error. The layout template must load Glue with
+`{% django_glue_init %}`, directly or through the template it extends. These URLs serve GET and HEAD; component actions use
 Glue's normal addressed endpoint.
 
 Use Django's view decorators to guard the initial URL. Override
@@ -142,7 +153,7 @@ urlpatterns = [
     path(
         'entries/',
         permission_required('entries.view_entry', raise_exception=True)(
-            EntryPage.as_view(template='entries/page.html', access=Glue.Access.CHANGE)
+            EntryPage.as_view(layout_template='entries/page.html', access=Glue.Access.CHANGE)
         ),
     ),
 ]

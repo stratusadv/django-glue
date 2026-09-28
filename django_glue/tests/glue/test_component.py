@@ -335,7 +335,7 @@ def test_component_constructor_signature_is_generated_from_declarations() -> Non
 
     parameters = inspect.signature(SignatureComponent).parameters
 
-    assert list(parameters) == ['name', 'template', 'access', 'count', 'note', 'tags']
+    assert list(parameters) == ['name', 'access', 'count', 'note', 'tags']
     assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
     assert parameters['count'].default is inspect.Parameter.empty
     assert parameters['count'].annotation is int
@@ -428,12 +428,6 @@ def test_event_named_like_a_dom_event_is_rejected_at_declaration(event_name: str
         type('CollidingEventComponent', (Component,), {event_name: Glue.event()})
 
     assert 'conflicts with a browser event' in str(raised.value.__cause__ or raised.value)
-
-
-def test_component_accepts_template_override() -> None:
-    component = GreetingComponent(template='gorilla/component/fighter_rank_card.html')
-
-    assert component.template == 'gorilla/component/fighter_rank_card.html'
 
 
 def test_component_requires_template_path() -> None:

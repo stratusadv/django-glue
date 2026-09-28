@@ -371,7 +371,7 @@ def test_typed_property_compiles_child_slot() -> None:
     class PanelOwner:
         @Glue.property
         def panel(self) -> Component:
-            return Component(template='panel.html')
+            ...
 
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(PanelOwner)
@@ -405,7 +405,7 @@ def test_callable_compiles_glue_result_contract() -> None:
     class PanelOwner:
         @Glue.attr
         def panel(self) -> Component:
-            return Component(template='panel.html')
+            ...
 
         @Glue.attr
         def optional_panel(self) -> Component | None:

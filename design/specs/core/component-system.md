@@ -452,7 +452,7 @@ A component class may be the target of a Django URL pattern:
 ```python
 path('cards/<int:start>/', CounterCard.as_view(), name='card-fragment')
 path('cards/<int:start>/page/', CounterCard.as_view(
-    template='gorilla/page/card.html',
+    layout_template='gorilla/page/card.html',
 ), name='card-page')
 ```
 
@@ -466,14 +466,23 @@ The component is introduced and mounted once before rendering, with
 the same signed root address and child entries as a template-tag stamp. Unknown
 or missing parameters retain the component's normal constructor errors.
 
-Without `template=`, the response is the component's declared template as an
-HTML fragment, including its addressed root. With `template=`, the component
-is injected into the page template's context. The no-argument
-`{% glue_component %}` tag renders it in place, using its declared template.
-Outside a component view, that tag form raises an error. A page template
-includes `{% django_glue_init %}` to boot the client. Keeping the component
-template unchanged ensures later `render()` calls return the same component
-fragment rather than a whole page.
+A component's layout template comes from its `layout_template` class attribute,
+and `as_view(layout_template=...)` overrides it for one URL, in the way Django's
+`as_view()` keyword arguments override class attributes. Without a layout
+template, the response is the component's declared template as an HTML
+fragment, including its addressed root. With one, the response is the layout
+template, rendered with the component in its context:
+the layout contains the component, and the no-argument `{% glue_component %}`
+tag marks where it renders, using its declared template. Outside a component
+view, that tag form raises an error. A layout template includes
+`{% django_glue_init %}` to boot the client.
+
+A layout template does not replace the component's `template`. The component
+always renders with its declared template, so later `render()` calls return
+the same component fragment rather than a whole page. `template=` is
+deliberately not an `as_view()` argument: a per-view override of the
+component's own template would have to survive reconstruction from the signed
+identity, which is not designed.
 Either route remains compatible with `Glue.view` content negotiation and its
 ordinary middleware checks.
 

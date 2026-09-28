@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## Unreleased
+## v1.1.0
 
 The full migration guide for these changes is at [Migration Guide](../migration.md).
 
@@ -25,8 +25,12 @@ The full migration guide for these changes is at [Migration Guide](../migration.
 - `Glue.ComponentParameter` declares a component construction parameter, a
   shorthand for `Glue.attr(parameter=True)`. Declaring one on a non-Component
   glue object is an error at class definition.
-- `Component.as_view()` serves a component directly from a Django URL as an
-  HTML fragment, or inside a full page with a `template=` wrapper.
+- `Component.as_view()` serves a component from a Django URL. By default the
+  response is the component's HTML alone, for fetching with `Glue.view(url)`.
+  With a layout template (the `layout_template` class attribute, or
+  `as_view(layout_template=...)` to override it) the response is a full page,
+  where a no-argument `{% glue_component %}` tag marks where the component
+  renders.
 - Mounted component `$refresh()` renders and morphs its root.
 - `Glue.event(obj, name, payload)` fires a named event on a Glue object from an
   action without declaring it as a class attribute; `Glue.event()` with no

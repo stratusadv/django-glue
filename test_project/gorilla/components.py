@@ -22,6 +22,10 @@ class CounterCardComponent(Glue.Component):
         return self.count
 
 
+class LaidOutCounterCardComponent(CounterCardComponent):
+    layout_template = 'gorilla/page/component_card_page.html'
+
+
 class ProtectedCounterCardComponent(CounterCardComponent):
     def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
         _ = operation
