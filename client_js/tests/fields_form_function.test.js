@@ -129,6 +129,34 @@ describe('field-backed proxy facades', () => {
         expect(field.selectedChoice).toEqual({value: 2, label: 'Drumming'})
     })
 
+    test('overridden relation choices survive a response that refreshes the field', async () => {
+        RelationFieldGlue.loadingCache.clear()
+        const manifest = createEntry({
+            policy: {
+                state_snapshot: {project: 93},
+                attributes: ['project', 'project_is_billable'],
+            },
+            staticData: {
+                fields: {project: {
+                    value_path: 'project', type: 'ModelChoiceField', editable: true,
+                    choices: [], choice_model_path: 'app.Project',
+                }},
+                callables: {project_is_billable: {allowed_arguments: ['project_id']}},
+            },
+        })
+        const client = new GlueClient({objects: [manifest]})
+        client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {result: false})
+        const proxy = client.model.gorilla
+        const field = proxy.$fields.project
+
+        field.overrideChoices([{value: 93, label: 'Enterprise CRM'}])
+        await proxy.project_is_billable({project_id: 93})
+
+        expect(proxy.$fields.project).toBe(field)
+        expect(field.choices).toEqual([{value: 93, label: 'Enterprise CRM'}])
+        expect(field.selectedChoice.label).toBe('Enterprise CRM')
+    })
+
     test('static replacement removes obsolete fields and callables', () => {
         const client = new GlueClient({objects: [createEntry()]})
         const proxy = client.model.gorilla

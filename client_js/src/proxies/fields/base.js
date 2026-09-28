@@ -39,10 +39,14 @@ class FieldGlue {
         return this.errors.join(', ')
     }
 
+    // Server metadata lands as plain data properties and never writes through
+    // or shadows a member the field class defines (errors, choices, value...):
+    // those own client-side state that a refresh must not reset.
     updateMetadata(metadata = {}) {
         for (const key of this._metadataKeys || []) delete this[key]
+        const prototype = Object.getPrototypeOf(this)
         const assignable = Object.fromEntries(
-            Object.entries(metadata).filter(([key]) => key !== 'errors')
+            Object.entries(metadata).filter(([key]) => !(key in prototype))
         )
         Object.assign(this, assignable)
         this._metadataKeys = Object.keys(assignable)

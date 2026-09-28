@@ -5217,7 +5217,8 @@ ${expression ? 'Expression: "' + expression + `"
     updateMetadata(metadata = {}) {
       for (const key of this._metadataKeys || [])
         delete this[key];
-      const assignable = Object.fromEntries(Object.entries(metadata).filter(([key]) => key !== "errors"));
+      const prototype = Object.getPrototypeOf(this);
+      const assignable = Object.fromEntries(Object.entries(metadata).filter(([key]) => !(key in prototype)));
       Object.assign(this, assignable);
       this._metadataKeys = Object.keys(assignable);
     }
