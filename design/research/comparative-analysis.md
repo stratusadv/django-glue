@@ -295,6 +295,10 @@ rejected. There is no use case for letting the client supply `request`.
 
 ### 4.4 Verified: queryset filter allowlist is shallow, order_by is unchecked
 
+Historical finding from the pre-1.1 query implementation. The current
+`QuerySetGlue` signs complete filter and ordering paths and validates them on
+requests; the examples below document the issue that prompted the change.
+
 `QuerySetGlue._filtered_and_ordered()` validates only the first segment of each
 filter key:
 

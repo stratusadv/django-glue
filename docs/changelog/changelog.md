@@ -47,6 +47,10 @@ The full migration guide for these changes is at [Migration Guide](../migration.
   permits creation without granting edits to persisted rows.
 - `Glue.fields()` and nested `fields` paths configure relation projection;
   `choices=` supplies trusted relation choice sources.
+- Queryset `filters=` and `ordering=` define signed client query permissions.
+  Defaults follow exposed scalar and projected relation fields; explicit
+  declarations can grant exact hidden paths, annotations, transforms, or reverse
+  traversal. Full paths and lookups are validated on each request.
 - HTML responses register introduced objects before morphing. Matching keyed
   nodes preserve Alpine state, focus, and caret position.
 

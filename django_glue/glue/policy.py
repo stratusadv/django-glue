@@ -38,8 +38,14 @@ class GlueCallableCapability(BaseModel):
     allowed_arguments: tuple[str, ...] = ()
 
 
+class GlueQueryCapability(BaseModel):
+    filters: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    ordering: tuple[str, ...] = ()
+
+
 class GlueCapability(BaseModel):
     callables: dict[str, GlueCallableCapability] = Field(default_factory=dict)
+    query: GlueQueryCapability | None = None
 
 
 class GluePolicy(BaseModel):
@@ -76,14 +82,6 @@ class GluePolicy(BaseModel):
             }
         ]
 
-        callables = {
-            definition.path: {
-                'allowed_arguments': definition.allowed_arguments,
-            }
-            for definition in glue_object._attribute_registry
-            if definition.kind == GlueAttributeKind.CALLABLE
-        }
-
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
             'request_user_id': getattr(getattr(glue_object.request, 'user', None), 'id', None),
@@ -95,9 +93,7 @@ class GluePolicy(BaseModel):
             'address': glue_object.address,
             'children': glue_object.children,
             'state_snapshot': glue_object._retained_state(),
-            'capability': {
-                'callables': callables,
-            },
+            'capability': glue_object.get_capability(),
         })
 
     @classmethod

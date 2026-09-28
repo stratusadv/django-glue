@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
+from django.db.models.functions import Length
 from django.test import TestCase, override_settings
 
-from django_glue import ALL_FIELDS, Glue
+from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
     GlueQuerySetCursorValidationError,
     GlueQuerySetFilterValidationError,
+    GlueQuerySetOrderValidationError,
     GlueQuerySetSliceValidationError,
 )
 from django_glue.glue.objects.django.queryset import QuerySetGlue
@@ -317,6 +320,24 @@ class QuerySetCountTestCase(TestCase):
         with self.assertRaises(GlueQuerySetFilterValidationError):
             glue_object.count(filter={'age__gt': 1})
 
+    def test_filter_rejects_unapproved_lookup_on_exposed_field(self):
+        glue_object = build_glue()
+
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            glue_object.query_with_params(filter={'name__regex': 'Gorilla'})
+
+    def test_order_rejects_hidden_field(self):
+        glue_object = build_glue()
+
+        with self.assertRaises(GlueQuerySetOrderValidationError):
+            glue_object.query_with_params(order_by='age')
+
+    def test_order_rejects_expression(self):
+        glue_object = build_glue()
+
+        with self.assertRaises(GlueQuerySetOrderValidationError):
+            glue_object.query_with_params(order_by='?')
+
     def test_count_is_independent_of_seek_batch(self):
         glue_object = build_glue(batch_size=3)
 
@@ -465,3 +486,201 @@ class RelatedSetPaginationTestCase(TestCase):
         self.assertEqual(len(state['items']), 2)
         self.assertTrue(state['has_next'])
         self.assertEqual(state['batch_size'], 2)
+
+
+class ProjectedQueryCapabilityTestCase(TestCase):
+    def setUp(self):
+        self.alpha = Gorilla.objects.create(name='Alpha', age=12)
+        self.beta = Gorilla.objects.create(name='Beta', age=24)
+        Fight.objects.create(name='First Bout', red_corner=self.alpha, blue_corner=self.beta)
+        Fight.objects.create(name='Second Bout', red_corner=self.beta, blue_corner=self.alpha)
+
+    def test_projected_relation_filter_and_order_survive_signed_reconstruction(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            fields=Glue.fields('id', 'name', red_corner=('name',)),
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+        policy = GluePolicy.from_token(glue_object.policy.token)
+        restored = QuerySetGlue._reconstruct_from_policy(policy)
+        restored.request = request_with_session()
+
+        self.assertIn('icontains', policy.capability.query.filters['red_corner__name'])
+        self.assertIn('red_corner__name', policy.capability.query.ordering)
+        result = restored.query_with_params(
+            filter={'red_corner__name__icontains': 'alp'},
+            order_by='red_corner__name',
+        )
+
+        self.assertEqual(
+            [row['computed_data']['name'] for row in addressed_row_entries(restored, result)],
+            ['First Bout'],
+        )
+
+    def test_projected_relation_does_not_expose_other_related_fields(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            fields=Glue.fields('id', 'name', red_corner=('name',)),
+        )
+        glue_object.request = request_with_session()
+
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            glue_object.query_with_params(filter={'red_corner__age__gte': 18})
+        with self.assertRaises(GlueQuerySetOrderValidationError):
+            glue_object.query_with_params(order_by='red_corner__age')
+
+    def test_projected_relation_keeps_raw_identity_queries(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            fields=Glue.fields('id', 'name', red_corner=('name',)),
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+
+        result = glue_object.query_with_params(
+            filter={'red_corner': self.alpha.pk},
+            order_by='red_corner',
+        )
+        self.assertEqual(len(result['items']), 1)
+
+    def test_invalid_explicit_query_paths_are_rejected_at_introduction(self):
+        with self.assertRaises(ValueError):
+            QuerySetGlue(
+                Fight.objects.all(),
+                fields=['id'],
+                filters={'red_corner__password': ['exact']},
+            )
+        with self.assertRaises(ValueError):
+            QuerySetGlue(
+                Fight.objects.all(),
+                fields=['id'],
+                ordering=['red_corner__password'],
+            )
+
+    def test_explicit_hidden_path_is_limited_to_declared_lookup_and_order(self):
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            fields=['id', 'name'],
+            filters={'red_corner__age': ['gte']},
+            ordering=['name'],
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+
+        result = glue_object.query_with_params(filter={'red_corner__age__gte': 18})
+        self.assertEqual(len(result['items']), 1)
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            glue_object.query_with_params(filter={'red_corner__age__lte': 18})
+        with self.assertRaises(GlueQuerySetOrderValidationError):
+            glue_object.query_with_params(order_by='red_corner__age')
+
+    def test_explicit_reverse_traversal_is_signed_and_limited(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            fields=['id', 'name'],
+            filters={'fights_as_red_corner__name': ['icontains']},
+            ordering=['fights_as_red_corner__name'],
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+        restored = QuerySetGlue._reconstruct_from_policy(
+            GluePolicy.from_token(glue_object.policy.token)
+        )
+        restored.request = request_with_session()
+
+        result = restored.query_with_params(
+            filter={'fights_as_red_corner__name__icontains': 'First'},
+            order_by='fights_as_red_corner__name',
+        )
+        self.assertEqual(len(result['items']), 1)
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            restored.query_with_params(filter={'fights_as_red_corner__name__regex': 'First'})
+
+    def test_explicit_annotation_is_signed_and_limited(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.annotate(name_length=Length('name')),
+            name='gorillas',
+            fields=['id', 'name'],
+            filters={'name_length': ['gte']},
+            ordering=['name_length'],
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+        restored = QuerySetGlue._reconstruct_from_policy(
+            GluePolicy.from_token(glue_object.policy.token)
+        )
+        restored.request = request_with_session()
+
+        result = restored.query_with_params(
+            filter={'name_length__gte': 5}, order_by='name_length'
+        )
+        self.assertEqual(len(result['items']), 1)
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            restored.query_with_params(filter={'name_length__lt': 5})
+
+    def test_explicit_transform_is_signed_and_limited(self):
+        Fight.objects.filter(name='First Bout').update(
+            date_time=datetime(2024, 2, 3, tzinfo=UTC)
+        )
+        Fight.objects.filter(name='Second Bout').update(
+            date_time=datetime(2026, 2, 3, tzinfo=UTC)
+        )
+        glue_object = QuerySetGlue(
+            Fight.objects.all(),
+            name='fights',
+            fields=['id', 'name', 'date_time'],
+            filters={'date_time__year': ['gte']},
+            ordering=['date_time__year'],
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+        restored = QuerySetGlue._reconstruct_from_policy(
+            GluePolicy.from_token(glue_object.policy.token)
+        )
+        restored.request = request_with_session()
+
+        result = restored.query_with_params(
+            filter={'date_time__year__gte': 2025}, order_by='date_time__year'
+        )
+        self.assertEqual(len(result['items']), 1)
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            restored.query_with_params(filter={'date_time__year__lt': 2025})
+
+    def test_advanced_paths_are_not_derived_by_default(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.annotate(name_length=Length('name')),
+            name='gorillas',
+            fields=['id', 'name'],
+        )
+        glue_object.request = request_with_session()
+
+        for key in (
+            'name_length__gte',
+            'name__lower__exact',
+            'fights_as_red_corner__name__icontains',
+        ):
+            with self.assertRaises(GlueQuerySetFilterValidationError):
+                glue_object.query_with_params(filter={key: 'Alpha'})
+        with self.assertRaises(GlueQuerySetOrderValidationError):
+            glue_object.query_with_params(order_by='name_length')
+
+    def test_registered_unusual_lookup_requires_explicit_declaration(self):
+        glue_object = QuerySetGlue(
+            Gorilla.objects.all(),
+            name='gorillas',
+            fields=['id', 'name'],
+            filters={'name': ['regex']},
+            batch_size=None,
+        )
+        glue_object.request = request_with_session()
+
+        result = glue_object.query_with_params(filter={'name__regex': '^Al'})
+        self.assertEqual(len(result['items']), 1)
+        with self.assertRaises(GlueQuerySetFilterValidationError):
+            glue_object.query_with_params(filter={'name__icontains': 'Al'})

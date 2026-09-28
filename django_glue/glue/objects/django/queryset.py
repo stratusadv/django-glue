@@ -5,11 +5,15 @@ from enum import StrEnum
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal, Mapping, Sequence
 
+from django.core.exceptions import FieldDoesNotExist
+from django.db import models
+
 from django_glue.access import GlueAccess
 from django_glue.conf import settings
 from django_glue.exceptions import (
     GlueModelInstanceNotFoundError,
     GlueQuerySetFilterValidationError,
+    GlueQuerySetOrderValidationError,
     GlueQuerySetSliceValidationError,
     GlueRequestError,
     GlueRequestErrorCode,
@@ -46,7 +50,6 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from django import forms
-    from django.db import models
 
     from django_glue.glue.base import BaseGlue
     from django_glue.glue.policy import GluePolicy
@@ -79,6 +82,8 @@ class QuerySetGlue(
         fields: Sequence[str] | Literal['__all__'] = (),
         exclude: Sequence[str] | Literal['__all__'] = (),
         editable: Sequence[str] | None = None,
+        filters: Mapping[str, Sequence[str]] | None = None,
+        ordering: Sequence[str] | None = None,
         form: forms.ModelForm | None = None,
         forms: Mapping[str, forms.ModelForm] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
@@ -112,6 +117,8 @@ class QuerySetGlue(
             editable,
             self.access,
         )
+        self.query_filters = self._normalize_query_filters(filters)
+        self.query_ordering = self._normalize_query_ordering(ordering)
         self.initialize_computed_attributes(computed_attributes)
         self._last_query_params = last_query_params
         self._loaded_row_count = loaded_row_count
@@ -157,6 +164,129 @@ class QuerySetGlue(
         identity |= self.computed_attributes_identity()
 
         return identity
+
+    def get_capability(self) -> dict[str, Any]:
+        capability = super().get_capability()
+        capability['query'] = {
+            'filters': self.query_filters,
+            'ordering': self.query_ordering,
+        }
+        return capability
+
+    def _query_field(self, path: str, *, allow_advanced: bool = False) -> models.Field:
+        if not isinstance(path, str) or not path or path.startswith('-'):
+            raise ValueError(f'Invalid query field path: {path!r}.')
+        model = self.queryset.model
+        parts = path.split('__')
+        field = None
+        derived_leaf = False
+        for index, part in enumerate(parts):
+            if not part or part == '?':
+                raise ValueError(f'Invalid query field path: {path!r}.')
+            if model is None:
+                transform_class = field.get_transform(part) if allow_advanced else None
+                if transform_class is None:
+                    raise ValueError(f'Unknown query transform in {path!r}.')
+                try:
+                    field = transform_class(models.Value(None, output_field=field)).output_field
+                except (AttributeError, TypeError, ValueError) as exc:
+                    raise ValueError(f'Invalid query transform in {path!r}.') from exc
+                derived_leaf = True
+                continue
+            if allow_advanced and index == 0 and part in self.queryset.query.annotations:
+                try:
+                    field = self.queryset.query.annotations[part].output_field
+                except (AttributeError, TypeError, ValueError) as exc:
+                    raise ValueError(f'Annotation {part!r} has no queryable field.') from exc
+                model = None
+                derived_leaf = True
+                continue
+            try:
+                field = model._meta.pk if part == 'pk' else model._meta.get_field(part)
+            except FieldDoesNotExist as exc:
+                raise ValueError(f'Unknown query field path: {path!r}.') from exc
+            if index < len(parts) - 1:
+                if field.is_relation and field.related_model is not None:
+                    if (
+                        (field.one_to_many or field.many_to_many) and not allow_advanced
+                    ) or (part == getattr(field, 'attname', field.name) and part != field.name):
+                        raise ValueError(f'Query path cannot traverse {part!r}: {path!r}.')
+                    model = field.related_model
+                elif allow_advanced and field.concrete:
+                    model = None
+                else:
+                    raise ValueError(f'Query path cannot traverse {part!r}: {path!r}.')
+        if not isinstance(field, models.Field) or (
+            not derived_leaf and (not field.concrete or field.one_to_many or field.many_to_many)
+        ):
+            raise ValueError(f'Query path must end at a scalar field: {path!r}.')
+        return field
+
+    @cached_property
+    def _default_query_paths(self) -> dict[str, models.Field]:
+        paths = {}
+        for path in (*self._included_fields, *self._projected_field_paths):
+            try:
+                field = self._query_field(path)
+            except ValueError:
+                continue
+            paths[path] = field
+            if field.is_relation and path == field.attname:
+                paths[field.name] = field
+        return paths
+
+    @staticmethod
+    def _default_query_lookups(field: models.Field) -> tuple[str, ...]:
+        lookups = ('exact', 'in', 'isnull')
+        if isinstance(field, (models.CharField, models.TextField)):
+            return (
+                *lookups, 'contains', 'icontains', 'startswith', 'istartswith',
+                'endswith', 'iendswith',
+            )
+        if isinstance(field, (
+            models.IntegerField, models.FloatField, models.DecimalField,
+            models.DateField, models.TimeField, models.DurationField,
+        )):
+            return (*lookups, 'gt', 'gte', 'lt', 'lte')
+        return lookups
+
+    def _normalize_query_filters(
+        self, filters: Mapping[str, Sequence[str]] | None,
+    ) -> dict[str, tuple[str, ...]]:
+        if filters is None:
+            return {
+                path: self._default_query_lookups(field)
+                for path, field in self._default_query_paths.items()
+            }
+        normalized = {}
+        for path, lookups in filters.items():
+            field = self._query_field(path, allow_advanced=True)
+            if isinstance(lookups, str) or not lookups:
+                raise ValueError(f'filters[{path!r}] must list registered lookups.')
+            names = tuple(lookups)
+            if any(
+                not isinstance(name, str)
+                or not name
+                or '__' in name
+                or field.get_lookup(name) is None
+                for name in names
+            ):
+                raise ValueError(f'filters[{path!r}] contains an unregistered lookup.')
+            normalized[path] = names
+        return normalized
+
+    def _normalize_query_ordering(self, ordering: Sequence[str] | None) -> tuple[str, ...]:
+        if ordering is None:
+            return tuple(
+                path for path, field in self._default_query_paths.items()
+                if not isinstance(field, (models.BinaryField, models.JSONField))
+            )
+        if isinstance(ordering, str):
+            raise ValueError('ordering must be a sequence of field paths.')
+        normalized = tuple(ordering)
+        for path in normalized:
+            self._query_field(path, allow_advanced=True)
+        return normalized
 
     def get_attribute_providers(self) -> tuple[Any, ...]:
         # Mirrors ModelGlue's {'instance': self.instance} -- a `@Glue.attr`
@@ -235,6 +365,7 @@ class QuerySetGlue(
         forms = cls.deserialize_form_classes(
             policy.identity.get('form_identities', {})
         )
+        query_capability = policy.capability.query
         glue_object = cls(
             queryset,
             name=policy.name,
@@ -242,6 +373,8 @@ class QuerySetGlue(
             fields=policy.identity['fields'],
             exclude=policy.identity['exclude'],
             editable=policy.identity['editable'],
+            filters=query_capability.filters if query_capability is not None else {},
+            ordering=query_capability.ordering if query_capability is not None else (),
             forms=forms,
             computed_attributes=policy.identity.get('computed_attributes', {}),
             batch_size=policy.identity.get('batch_size'),
@@ -283,12 +416,14 @@ class QuerySetGlue(
         order_by: str | list[str] | None = None,
     ) -> models.QuerySet:
         queryset = self.queryset
-        allowed_fields = set(self._included_fields)
 
         for key in (filter or {}):
-            base_field = key.split('__')[0]
-            if base_field not in allowed_fields:
-                raise GlueQuerySetFilterValidationError(base_field, list(allowed_fields))
+            if not isinstance(key, str) or not any(
+                (key == path and 'exact' in lookups)
+                or (key.startswith(f'{path}__') and key[len(path) + 2:] in lookups)
+                for path, lookups in self.query_filters.items()
+            ):
+                raise GlueQuerySetFilterValidationError(str(key), list(self.query_filters))
 
         if filter:
             queryset = queryset.filter(**filter)
@@ -296,6 +431,14 @@ class QuerySetGlue(
         if order_by:
             if isinstance(order_by, str):
                 order_by = [order_by]
+
+            for entry in order_by:
+                if (
+                    not isinstance(entry, str)
+                    or entry.lstrip('-') not in self.query_ordering
+                    or entry.startswith('--')
+                ):
+                    raise GlueQuerySetOrderValidationError(str(entry), list(self.query_ordering))
 
             queryset = queryset.order_by(*self._nulls_last_order_by(order_by))
 

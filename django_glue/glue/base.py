@@ -279,6 +279,15 @@ class BaseGlue(ABC):
     def get_identity(self) -> dict[str, Any]:
         return {}
 
+    def get_capability(self) -> dict[str, Any]:
+        return {
+            'callables': {
+                definition.path: {'allowed_arguments': definition.allowed_arguments}
+                for definition in self._attribute_registry
+                if definition.kind == GlueAttributeKind.CALLABLE
+            },
+        }
+
     @cached_property
     def state(self) -> dict[str, Any]:
         """Build mutable state from attributes."""

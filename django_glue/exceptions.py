@@ -234,6 +234,19 @@ class GlueQuerySetFilterValidationError(GlueError):
         }
 
 
+class GlueQuerySetOrderValidationError(GlueError):
+    code = 'queryset_order_validation_error'
+    status = 422
+
+    def __init__(self, field: str, allowed_fields: list[str]) -> None:
+        self.field = field
+        self.allowed_fields = allowed_fields
+        super().__init__(f"Cannot order by field '{field}'. Allowed fields: {allowed_fields}")
+
+    def details(self) -> dict:
+        return {'field': self.field, 'allowed_fields': self.allowed_fields}
+
+
 class GlueQuerySetCursorValidationError(GlueError):
     """Raised when a seek_key is malformed or does not match the current query."""
 

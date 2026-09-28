@@ -32,3 +32,7 @@ That selection has the same meaning as
 `['id', 'title', 'project__id', 'project__name']`.
 Use `choices={'project': Glue.choices(...)}` for a separate trusted relation
 choice source. A choice source does not widen the projected relation fields.
+
+For queryset filtering and ordering, the field projection also supplies the
+default query permissions. See [Query permissions](../query_set_glue.md#query-permissions)
+for the signed allowlist and explicit `filters=` / `ordering=` controls.
