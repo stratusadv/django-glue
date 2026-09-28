@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Contact formset{% endblock %}
+{% block content %}
+    <div x-data="{
+        formset: Glue.formSet.contacts,
+        result: null,
+        async submit() {
+            this.result = await this.formset.submit()
+        }
+    }">
+        <button type="button" @click="await formset.append()">Add contact</button>
+        <template x-for="(form, index) in formset.forms" :key="form.$key">
+            <div class="contact-row">
+                <span x-text="`Contact ${index + 1}`"></span>
+                <input aria-label="Contact name" x-model="form.name">
+                <input aria-label="Contact email" x-model="form.email">
+                <input aria-label="Contact message" x-model="form.message">
+                <select aria-label="Contact priority" x-model="form.priority">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+                <button type="button" @click="await formset.pop(form.$key)">Remove contact</button>
+            </div>
+        </template>
+        <button type="button" @click="await submit()">Submit contacts</button>
+        <div id="contact-result" x-text="result ? JSON.stringify(result) : ''"></div>
+    </div>
+{% endblock %}

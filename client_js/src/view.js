@@ -1,9 +1,23 @@
-import {resolveElement, htmlToFragment} from "./utils"
+import HtmlRenderer, {htmlResultFromResponse} from "./htmlRenderer"
 
-class GlueView {
+function toQueryString(data) {
+    const params = new URLSearchParams()
+    Object.entries(data).forEach(([key, value]) => {
+        const values = Array.isArray(value) ? value : [value]
+        values.forEach(item => params.append(
+            key,
+            item !== null && typeof item === 'object' ? JSON.stringify(item) : String(item),
+        ))
+    })
+    return params
+}
+
+class GlueView extends HtmlRenderer() {
     constructor(http, url, sharedPayload = {}) {
+        super()
         this.http = http
-        this.url = new URL(url, window.location.origin).pathname
+        const resolved = new URL(url, window.location.origin)
+        this.url = `${resolved.pathname}${resolved.search}`
         this.sharedPayload = sharedPayload
     }
 
@@ -15,74 +29,30 @@ class GlueView {
         return await this._fetchView(payload, 'POST')
     }
 
-    async renderInnerHtml(target, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        element.replaceChildren(htmlToFragment(html))
-        return html
-    }
-
-    async renderOuterHtml(target, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        element.replaceWith(htmlToFragment(html))
-        return html
-    }
-
-    async _renderInsertAdjacentHtml(target, position, payload = {}) {
-        const element = resolveElement(target)
-        const html = await this.post(payload)
-        const fragment = htmlToFragment(html)
-
-        if (position === 'beforebegin') {
-            element.before(fragment)
-        } else if (position === 'afterbegin') {
-            element.prepend(fragment)
-        } else if (position === 'beforeend') {
-            element.append(fragment)
-        } else if (position === 'afterend') {
-            element.after(fragment)
-        } else {
-            throw new Error(`Invalid insert position: ${position}`)
-        }
-
-        return html
-    }
-
-    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'beforebegin', payload)
-    }
-
-    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'afterbegin', payload)
-    }
-
-    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'beforeend', payload)
-    }
-
-    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
-        return await this._renderInsertAdjacentHtml(target, 'afterend', payload)
+    async _getHtml(payload = {}) {
+        return this.post(payload)
     }
 
     async _fetchView(payload = {}, method = 'POST') {
-        const response = await this.http.sendRequest(this.http._config.glueViewUrlPath, {
-            method: 'POST',
-            contentType: 'application/json',
-            csrfProtected: true,
-            body: JSON.stringify({
-                url_path: this.url,
-                method,
-                view_payload: {
-                    ...this.sharedPayload,
-                    ...payload,
-                },
-            }),
-        })
+        const data = {...this.sharedPayload, ...payload}
+        const headers = {Accept: this.http._config.glueViewMediaType}
+        let response
+        if (method === 'GET') {
+            const target = new URL(this.url, window.location.origin)
+            toQueryString(data).forEach((value, key) => target.searchParams.append(key, value))
+            response = await this.http.sendRequest(`${target.pathname}${target.search}`, {method: 'GET', headers})
+        } else {
+            response = await this.http.sendRequest(this.url, {
+                method: 'POST',
+                headers,
+                contentType: 'application/json',
+                csrfProtected: true,
+                body: JSON.stringify(data),
+            })
+        }
 
-        globalThis.Glue.loadManifests(response.data?.manifest_list || [])
-
-        return response.data?.html || ''
+        if (response.data?.is_glue_template_response !== true) return null
+        return htmlResultFromResponse(response.data, globalThis.Glue).html
     }
 }
 

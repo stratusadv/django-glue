@@ -4,7 +4,7 @@
 
 {% block page_title %}Gorilla Fight Simulator{% endblock %}
 {% block page_heading %}<h2 class="text-gorilla-gold">Fighter Arena</h2>{% endblock %}
-{% block page_subtitle %}Demonstrates Glue.template for dynamic rendering and Glue.function for server-side computation.{% endblock %}
+{% block page_subtitle %}Demonstrates Glue.html_attr for dynamic rendering and Glue.function for server-side computation.{% endblock %}
 {% block page_nav %}
     <div class="mt-2">
         <a href="/" class="btn btn-outline-secondary btn-sm">Combatants</a>
@@ -80,7 +80,6 @@
 {% block content %}
     <div x-data="{
         gorilla: Glue.model.gorilla,
-        rankCardTemplate: Glue.template.rank_card,
         calcRankFn: Glue.function.calculate_fighter_rank,
         genIntroFn: Glue.function.generate_introduction,
         predictFn: Glue.function.predict_fight_outcome,
@@ -129,54 +128,18 @@
         },
 
         async renderRankCard() {
-            if (!this.rankResult) {
-                await this.loadRank();
-            }
-            const targetEl = document.getElementById('rankCardAssessment');
-            await this.rankCardTemplate.renderInnerHtml(targetEl, {
-                name: this.gorilla.name,
-                rank: this.rankResult.rank,
-                tier: this.rankResult.tier,
-                color: this.rankResult.color,
-                description: this.rankResult.description,
-                rank_points: this.gorilla.rank_points,
-                age: this.gorilla.age,
-                score_pct: Math.min((this.rankResult.score / 15000) * 100, 100).toFixed(1),
-            });
+            const card = await this.gorilla.rank_card();
+            await card.renderInnerHtml(document.getElementById('rankCardAssessment'));
         },
 
         async renderRankCardOuter() {
-            if (!this.rankResult) {
-                await this.loadRank();
-            }
-            const targetEl = document.getElementById('rankCardModes');
-            await this.rankCardTemplate.renderOuterHtml(targetEl, {
-                name: this.gorilla.name,
-                rank: this.rankResult.rank,
-                tier: this.rankResult.tier,
-                color: this.rankResult.color,
-                description: this.rankResult.description,
-                rank_points: this.gorilla.rank_points,
-                age: this.gorilla.age,
-                score_pct: Math.min((this.rankResult.score / 15000) * 100, 100).toFixed(1),
-            });
+            const card = await this.gorilla.rank_card();
+            await card.renderOuterHtml(document.getElementById('rankCardModes'));
         },
 
         async renderRankCardInnerModes() {
-            if (!this.rankResult) {
-                await this.loadRank();
-            }
-            const targetEl = document.getElementById('rankCardModes');
-            await this.rankCardTemplate.renderInnerHtml(targetEl, {
-                name: this.gorilla.name,
-                rank: this.rankResult.rank,
-                tier: this.rankResult.tier,
-                color: this.rankResult.color,
-                description: this.rankResult.description,
-                rank_points: this.gorilla.rank_points,
-                age: this.gorilla.age,
-                score_pct: Math.min((this.rankResult.score / 15000) * 100, 100).toFixed(1),
-            });
+            const card = await this.gorilla.rank_card();
+            await card.renderInnerHtml(document.getElementById('rankCardModes'));
         },
 
         async loadIntroduction() {
@@ -207,13 +170,6 @@
             }
         },
 
-        async init() {
-            try {
-                await this.gorilla.get();
-            } catch (error) {
-                console.error('Failed to initialize arena:', error);
-            }
-        },
     }">
         <!-- Fighter Info Header -->
         <div class="arena-section">
@@ -269,7 +225,7 @@
                         <h5 class="mb-0">
                             <i class="bi bi-trophy me-2"></i>
                             Rank Assessment
-                            <span class="badge bg-light text-dark ms-2">Glue.template + Glue.function</span>
+                            <span class="badge bg-light text-dark ms-2">Glue.html_attr + Glue.function</span>
                         </h5>
                         <small class="opacity-75">Calculates rank via Python, renders via Django template</small>
                     </div>
@@ -302,7 +258,7 @@
                         <div id="rankCardAssessment" class="mt-3">
                             <div class="text-center text-muted py-4">
                                 <i class="bi bi-arrow-up-circle fs-1"></i>
-                                <p class="mt-2 mb-0">Rank card will render here via Glue.template</p>
+                                <p class="mt-2 mb-0">Rank card will render here via Glue.html_attr</p>
                             </div>
                         </div>
                     </div>
@@ -418,7 +374,7 @@
                         <h5 class="mb-0">
                             <i class="bi bi-puzzle me-2"></i>
                             Template Render Modes
-                            <span class="badge bg-light text-dark ms-2">Glue.template</span>
+                            <span class="badge bg-light text-dark ms-2">Glue.html_attr</span>
                         </h5>
                         <small class="opacity-75">Demonstrates renderInnerHtml vs renderOuterHtml</small>
                     </div>
@@ -437,7 +393,7 @@
                             <div id="rankCardModes" class="p-2" style="background: #f8f9fa; border-radius: 4px;">
                                 <div class="text-center text-muted py-4">
                                     <i class="bi bi-arrow-up-circle fs-1"></i>
-                                    <p class="mt-2 mb-0">Rank card will render here via Glue.template</p>
+                                    <p class="mt-2 mb-0">Rank card will render here via Glue.html_attr</p>
                                 </div>
                             </div>
                         </div>
@@ -570,11 +526,11 @@
             <div class="arena-section-body">
                 <div class="row g-4">
                     <div class="col-lg-4 col-md-12">
-                        <h6 class="fw-bold" style="color: var(--gorilla-green);">Glue.template</h6>
+                        <h6 class="fw-bold" style="color: var(--gorilla-green);">Glue.html_attr</h6>
                         <div class="function-result">
-<span x-text="`Glue.template.rank_card\n  .renderInnerHtml(\n    element,\n    { name, rank, tier, ... }\n  )`"></span>
+<span x-text="`(await gorilla.rank_card())\n  .renderInnerHtml(element)`"></span>
                         </div>
-                        <small class="text-muted">Renders a Django template server-side and injects HTML into the DOM.</small>
+                        <small class="text-muted">Calls a model attribute that renders a Django template server-side and injects the HTML into the DOM.</small>
                     </div>
                     <div class="col-lg-4 col-md-12">
                         <h6 class="fw-bold" style="color: var(--gorilla-gold);">Glue.function (Rank)</h6>

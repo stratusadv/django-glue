@@ -32,30 +32,33 @@
 {% block content %}
     <div x-data="{
         gorilla: Glue.model.gorilla,
-        init() {
-            this.gorilla.addListener('save', event => {
-                if (event.proxy.hasErrors()) {
-                    $store.notifications.error(`Failed to save fighter. ${this.errorSummary(event.proxy)}`, 6000);
-                }
-                else {
-                    $store.notifications.success('Fighter saved successfully!');
-                }
-            });
-            this.gorilla.addListener('save', () => {
+        async saveGorilla() {
+            try {
+                await this.gorilla.save();
+            } catch {
                 $store.notifications.error('Failed to save fighter.');
-            }, 'error');
-            this.gorilla.addListener('delete', () => {
-                window.location.href = '{% url "gorilla:list" %}';
-            });
-            this.gorilla.addListener('delete', () => {
+                return;
+            }
+            if (this.gorilla.hasErrors()) {
+                $store.notifications.error(`Failed to save fighter. ${this.errorSummary(this.gorilla)}`, 6000);
+            } else {
+                $store.notifications.success('Fighter saved successfully!');
+            }
+        },
+        async deleteGorilla() {
+            try {
+                await this.gorilla.delete();
+            } catch {
                 $store.notifications.error('Failed to delete fighter.');
-            }, 'error');
+                return;
+            }
+            window.location.href = '{% url "gorilla:list" %}';
         },
         errorSummary(proxy) {
             const errors = Object.fromEntries(
-                Object.entries(proxy._state || {})
-                    .filter(([, fieldState]) => fieldState?.errors?.length)
-                    .map(([field, fieldState]) => [field, fieldState.errors])
+                Object.entries(proxy.$fields || {})
+                    .filter(([, field]) => field.hasErrors)
+                    .map(([name, field]) => [name, field.errors])
             );
             const messages = Object.entries(errors)
                 .map(([field, fieldErrors]) => {
@@ -284,10 +287,10 @@
 
                     <div class="card-footer bg-gorilla-cream">
                         <div class="d-flex gap-2 justify-content-end">
-                            <button class="btn btn-gorilla px-4" @click="gorilla.save()">
+                            <button class="btn btn-gorilla px-4" @click="saveGorilla()">
                                 Save Changes
                             </button>
-                            <button class="btn btn-gorilla-danger" @click="if(confirm('Delete this fighter?')) gorilla.delete()">
+                            <button class="btn btn-gorilla-danger" @click="if(confirm('Delete this fighter?')) deleteGorilla()">
                                 Delete Fighter
                             </button>
                         </div>

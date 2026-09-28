@@ -1,10 +1,12 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.http import HttpRequest
+from django.template.response import TemplateResponse
 
 from django_glue import Glue
 from django_glue.response import GlueResponse
-from test_project.gorilla.services import GorillaServiceDescriptor
+from test_project.gorilla.services import GorillaService
+from test_project.gorilla.utils import calculate_fighter_rank
 
 
 class Skill(models.Model):
@@ -67,7 +69,7 @@ class Gorilla(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    services = Glue.attribute(GorillaServiceDescriptor(), required_access=Glue.Access.CHANGE)
+    services = Glue.namespace(GorillaService)
 
     class Meta:
         db_table = 'gorilla'
@@ -112,6 +114,17 @@ class Gorilla(models.Model):
             ],
         )
 
+    @Glue.html_attr(required_access=Glue.Access.VIEW)
+    def rank_card(self, request: HttpRequest) -> TemplateResponse:
+        rank = calculate_fighter_rank(self.rank_points, self.age, self.weight, self.height)
+        return TemplateResponse(request, 'gorilla/component/fighter_rank_card.html', {
+            **rank,
+            'name': self.name,
+            'rank_points': self.rank_points,
+            'age': self.age,
+            'score_pct': f'{min(rank["score"] / 15000 * 100, 100):.1f}',
+        })
+
     @Glue.attribute(required_access=Glue.Access.VIEW)
     def shout(self, volume: int) -> str:
         return 'A' * volume
@@ -120,4 +133,3 @@ class Gorilla(models.Model):
     def something(self) -> None:
         self.age = self.age + 1
         self.save()
-

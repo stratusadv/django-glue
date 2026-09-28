@@ -17,7 +17,10 @@ describe('GlueHttp edge cases', () => {
         let request
         global.fetch = async (_url, options) => {
             request = options
-            return new Response(JSON.stringify({ok: true}), {status: 200})
+            return new Response(JSON.stringify({ok: true}), {
+                status: 200,
+                headers: {'Content-Type': 'application/json'},
+            })
         }
 
         const result = await http().sendRequest('/endpoint', {
@@ -113,25 +116,24 @@ describe('GlueHttp edge cases', () => {
         global.fetch = async () => new Response(JSON.stringify({
             result: {
                 error: {
-                    message: 'Policy denied',
-                    code: 'proxy_access_denied',
-                    status: 403,
-                    details: {attribute: 'save'},
+                    message: 'Entry address does not match its signed policy.',
+                    code: 'address_mismatch',
+                    status: 400,
+                    details: {address: 'gorillas#abc', policy_address: 'gorillas#def'},
                 },
             },
-            messages: [],
-        }), {status: 403})
+        }), {status: 400})
 
         await expect(http().sendRequest('/denied')).rejects.toMatchObject({
             name: 'GlueHttpError',
-            status: 403,
-            message: 'Policy denied',
-            code: 'proxy_access_denied',
+            status: 400,
+            message: 'Entry address does not match its signed policy.',
+            code: 'address_mismatch',
             payload: {
-                message: 'Policy denied',
-                code: 'proxy_access_denied',
-                status: 403,
-                details: {attribute: 'save'},
+                message: 'Entry address does not match its signed policy.',
+                code: 'address_mismatch',
+                status: 400,
+                details: {address: 'gorillas#abc', policy_address: 'gorillas#def'},
             },
         })
     })
@@ -149,6 +151,34 @@ describe('GlueHttp edge cases', () => {
         expect(result.files['nested.upload']).toBe(file)
         expect(result.files.attachments).toEqual([file])
         expect(result.data).toEqual({nested: {name: 'nested'}, attachments: ['existing'], name: 'Koko'})
+    })
+
+    test('expands FileList values into one form entry per file', async () => {
+        class TestFileList extends Array {}
+        const previousFileList = global.FileList
+        global.FileList = TestFileList
+        let body
+        global.fetch = async (_url, options) => {
+            body = options.body
+            return new Response('{}', {status: 200})
+        }
+
+        try {
+            const files = new TestFileList(
+                new File(['a'], 'a.txt'),
+                new File(['b'], 'b.txt'),
+            )
+            const glueHttp = http()
+            glueHttp._extractFiles = () => ({files: {uploads: files}, data: {}})
+
+            await glueHttp.sendAttributeRequest({
+                name: 'gorilla', policyToken: 'token', attribute: 'save', kwargs: {},
+            })
+
+            expect(body.getAll('uploads')).toHaveLength(2)
+        } finally {
+            global.FileList = previousFileList
+        }
     })
 
 })

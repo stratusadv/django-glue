@@ -1,6 +1,86 @@
 # Changelog for Django Glue
 
+## v1.1.0
+
+The full migration guide for these changes is at [Migration Guide](../migration.md).
+
+### Breaking
+
+- The state-model release removes the `metadata`/`state`/`manifest_list`
+  envelopes, `TemplateGlue`, `Glue.template()`, `Glue.sequence()`, loading
+  strategies, `load_state()`, and `related_field_config`.
+- Attribute requests use a flat addressed `objects` envelope with editable
+  `updates`; responses return authoritative addressed entries and independent
+  per-address failures.
+- Alpine.js and its morph plugin are bundled. Applications remove separate
+  Alpine core and morph scripts and application calls to `Alpine.start()`.
+- `Glue.view(url)` requests the real Django route. Install
+  `GlueViewMiddleware` last in `MIDDLEWARE`; the redispatch endpoint is gone.
+- `renderOuterHtml()` requires exactly one root element.
+
+### Features
+
+- Components mount through `{% glue_component %}` with typed Django
+  parameters, stable keys, server HTML, Alpine morphing, and declared events.
+- `Glue.ComponentParameter` declares a component construction parameter, a
+  shorthand for `Glue.attr(parameter=True)`. Declaring one on a non-Component
+  glue object is an error at class definition.
+- `Component.as_view()` serves a component from a Django URL. By default the
+  response is the component's HTML alone, for fetching with `Glue.view(url)`.
+  With a layout template (the `layout_template` class attribute, or
+  `as_view(layout_template=...)` to override it) the response is a full page,
+  where a no-argument `{% glue_component %}` tag marks where the component
+  renders.
+- Mounted component `$refresh()` renders and morphs its root.
+- `Glue.event(obj, name, payload)` fires a named event on a Glue object from an
+  action without declaring it as a class attribute; `Glue.event()` with no
+  arguments still returns the descriptor. It shares the declared-event
+  validation and `effects.events` channel.
+- Formsets retain signed row membership across requests and submit child form
+  values together for validation and saving; `pop()` removes a row on the
+  server.
+- One live proxy exists per address. Disposed references become tombstones;
+  reintroduction creates a new proxy generation.
+- Model and form state is split into signed retained state, stable interface
+  data, and derived output. `$refresh()` re-derives an object's output.
+- Queryset rows and relation children have independent addresses. `ADD`
+  permits creation without granting edits to persisted rows.
+- `Glue.fields()` and nested `fields` paths configure relation projection;
+  `choices=` supplies trusted relation choice sources.
+- Queryset `filters=` and `ordering=` define signed client query permissions.
+  Defaults follow exposed scalar and projected relation fields; explicit
+  declarations can grant exact hidden paths, annotations, transforms, or reverse
+  traversal. Full paths and lookups are validated on each request.
+- Queryset seek keys are signed and bound to the queryset and the exact filter
+  and ordering they continue. A forged, tampered, or replayed key is rejected,
+  so an ordering-only permission cannot be used to filter.
+- HTML responses register introduced objects before morphing. Matching keyed
+  nodes preserve Alpine state, focus, and caret position.
+
+- `Glue.Access.required_save_access` gives methods that both create and update
+  the same target-derived access as `save()`: `ADD` for an unsaved instance,
+  `CHANGE` for a persisted one. See the migration guide.
+
+### Fixes
+
+- A form on a `QuerySetGlue.new(initial)` draft now receives the admitted
+  initial values before it is introduced, including raw foreign-key identities
+  and many-to-many selections.
+- A form on a `new()` draft can `validate()` at `ADD`; it previously required
+  `CHANGE`, which a draft never has.
+- Deleting or re-pointing a queryset row no longer disposes a projected
+  relation object that other rows share. Only the object's owner disposes it.
+- An expired projected relation object is reintroduced through its queryset.
+  It previously failed with a server error.
+- `loadMore()` continues querysets ordered by a related field path, such as
+  `order_by=['-notification__sent_datetime']`.
+- A form refresh no longer overwrites client-owned field members with server
+  metadata, so choices narrowed with `overrideChoices()` survive it.
+
 ## v1.0.1
+
+The entries below describe historical releases. Use the guides above for the
+current API.
 
 ### Fixes
 

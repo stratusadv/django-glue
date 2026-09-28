@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.loading import LoadingStrategy
 from django_glue.utils import get_attr_from_path_string
 
 if TYPE_CHECKING:
@@ -24,9 +23,8 @@ class FunctionGlue(BaseGlue):
         *,
         name: str,
         access: GlueAccess = GlueAccess.VIEW,
-        loading_strategy: LoadingStrategy = LoadingStrategy.LAZY,
     ) -> None:
-        super().__init__(name=name, access=access, loading_strategy=loading_strategy)
+        super().__init__(name=name, access=access)
         self.target = target
 
     def get_identity(self) -> dict[str, Any]:
@@ -39,14 +37,10 @@ class FunctionGlue(BaseGlue):
     def get_state(self) -> dict[str, Any]:
         return {'function_path': self.target}
 
-    def get_metadata(self) -> dict[str, Any]:
-        return {
-            'params': self.identity.get('params', []),
-            'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
-            },
-        }
+    def get_static_data(self) -> dict[str, Any]:
+        static_data = super().get_static_data()
+        static_data['params'] = self.identity.get('params', [])
+        return static_data
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> FunctionGlue:

@@ -101,7 +101,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         }
 
         cache.promise = this.owner.foreign_key_choices({
-            field_name: this.name,
+            field_name: this.choice_field || this.name,
         }).then(result => {
             const {results = []} = result || {}
             this._mergeChoices(results)
@@ -132,7 +132,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         this._searchQuery = query
 
         const searchPromise = this.owner.foreign_key_choices({
-            field_name: this.name,
+            field_name: this.choice_field || this.name,
             search: query,
         }).then(result => {
             if (

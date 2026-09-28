@@ -1,0 +1,72 @@
+from typing import Any
+
+from django.http import HttpRequest
+
+from django_glue import Glue, GlueOperation
+
+
+class CounterCardComponent(Glue.Component):
+    template = 'gorilla/component/counter_card.html'
+
+    start: int = Glue.attr(parameter=True)
+    count: int = Glue.attr(0, editable=True)
+    counted = Glue.event()
+
+    def mount(self) -> None:
+        self.count = self.start
+
+    @Glue.attr
+    def increment(self) -> int:
+        self.count += 1
+        self.counted(value=self.count)
+        return self.count
+
+
+class LaidOutCounterCardComponent(CounterCardComponent):
+    layout_template = 'gorilla/page/component_card_page.html'
+
+
+class ProtectedCounterCardComponent(CounterCardComponent):
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
+        _ = operation
+        return request.user.is_authenticated
+
+
+class RequestConfiguredCounterCardComponent(CounterCardComponent):
+    @classmethod
+    def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: object) -> dict[str, object]:
+        return {
+            **url_kwargs,
+            'start': int(request.GET['start']),
+            'access': Glue.Access.CHANGE,
+        }
+
+
+class CounterDashboardComponent(Glue.Component):
+    template = 'gorilla/component/counter_dashboard.html'
+
+    starts: list[int] = Glue.attr(default_factory=lambda: [2, 5])
+
+    def get_context_data(self) -> dict:
+        return {'component': self, 'starts': self.starts}
+
+    @Glue.attr
+    def drop_first(self) -> Glue.Response:
+        self.starts = [5]
+        return self.render()
+
+
+class CounterBadgeComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+
+class CounterBadgeOwnerComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.badge_value = CounterBadgeComponent()
+
+    @Glue.property
+    def badge(self) -> CounterBadgeComponent:
+        return self.badge_value

@@ -24,23 +24,6 @@ function cloneValue(value) {
     return value
 }
 
-function parseFieldValue(field, value) {
-    if (value === null || value === undefined || value === '' || value instanceof Date) {
-        return value
-    }
-
-    const type = field?.type
-    if (type === 'DateField') {
-        return new Date(`${value}T00:00:00`)
-    }
-
-    if (['DateTimeField', 'SplitDateTimeField'].includes(type)) {
-        return new Date(value)
-    }
-
-    return value
-}
-
 function serializeValue(value) {
     if (value === null || value === undefined) {
         return value
@@ -73,16 +56,6 @@ function parseJsonScriptById(scriptId) {
     return JSON.parse(document.getElementById(scriptId).textContent)
 }
 
-function resolveElement(target) {
-    return typeof target === 'string' ? document.querySelector(target) : target
-}
-
-function htmlToFragment(html) {
-    const template = document.createElement('template')
-    template.innerHTML = html
-    return template.content
-}
-
 function resolveUrl(urlPathTemplate, kwargs = {}) {
     let url = urlPathTemplate
     for (const [key, value] of Object.entries(kwargs)) {
@@ -108,11 +81,8 @@ function shouldJsonSerializePostData(value) {
 export {
     cloneValue,
     isPlainObject,
-    parseFieldValue,
     serializeValue,
     shouldJsonSerializePostData,
     parseJsonScriptById,
     resolveUrl,
-    resolveElement,
-    htmlToFragment,
 }

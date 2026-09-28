@@ -4,15 +4,16 @@ import ManyChoiceFieldGlue from "./manyChoice"
 import RelationFieldGlue from "./relation"
 import ManyRelationFieldGlue from "./manyRelation"
 
-function createFieldGlue({owner, name, stateKey, metadata = {}, existingField = null}) {
+function createFieldGlue({owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null}) {
     if (existingField?.__glue__isFieldProxy) {
         existingField.updateMetadata(metadata)
         existingField.name = name
+        existingField.fieldPath = fieldPath
         existingField.stateKey = stateKey
         return existingField
     }
 
-    const options = {owner, name, stateKey, metadata}
+    const options = {owner, name, fieldPath, stateKey, metadata}
     if (metadata.choice_model_path && ['ManyToManyField', 'ModelMultipleChoiceField'].includes(metadata.type)) {
         return new ManyRelationFieldGlue(options)
     }
@@ -20,7 +21,7 @@ function createFieldGlue({owner, name, stateKey, metadata = {}, existingField = 
         return new RelationFieldGlue(options)
     }
     if (Array.isArray(metadata.choices)) {
-        const stateValue = owner._state?.[stateKey]?.value
+        const stateValue = owner._record.getValue(stateKey)
         const multipleChoiceTypes = ['MultipleChoiceField', 'TypedMultipleChoiceField']
         const multipleChoiceWidgets = ['CheckboxSelectMultiple', 'SelectMultiple']
         if (

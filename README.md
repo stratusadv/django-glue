@@ -21,9 +21,9 @@
 - **Unintrusive Integration** 
   - Stays out of your way and works with your existing application with no need to rewrite
     your Django views or frontend code.
-- **Frontend Framework Agnostic** 
-  - Designed to work with any style of frontend development with no additional JavaScript
-    dependencies or bloat.
+- **Reactive Alpine Frontend**
+  - Bundles a pinned Alpine runtime and morph plugin so server-rendered updates preserve
+    local UI state, focus, and keyed DOM nodes.
 - **Granular Access Control** 
   - Designed with security at top of mind, with the ability to precisely control backend data
     access on a per-object basis.
@@ -35,4 +35,3 @@
 ## Documentation
 
 Check out the [Django Glue Website](https://django-glue.stratusadv.com) for documentation including tutorials and more.
-

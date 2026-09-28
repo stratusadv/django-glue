@@ -45,7 +45,6 @@ def test_combatants_page_initializes_glue_demo(
     seeded_gorillas: dict,
 ) -> None:
     del seeded_gorillas
-
     demo = DemoSession.start(page, application, shot_directory_name='gorilla-queryset-bootstrap')
 
     demo.title_card(
@@ -77,6 +76,32 @@ def test_combatants_page_initializes_glue_demo(
     assert glue_state['querySets'] == ['gorillas']
     assert glue_state['hasGlobalMessageHandler'] is True
     assert glue_state['models'] == ['new_gorilla_model']
+
+
+def test_contact_formset_keeps_surviving_draft_across_requests(
+    page: Page,
+    application: Application,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-contact-formset')
+    demo.goto('gorilla:contact_formset')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    page.get_by_role('button', name='Add contact').click()
+    page.get_by_role('button', name='Add contact').click()
+    rows = page.locator('.contact-row')
+    expect(rows).to_have_count(2)
+
+    rows.nth(0).get_by_label('Contact name').fill('Discarded')
+    rows.nth(1).get_by_label('Contact name').fill('Bee')
+    rows.nth(1).get_by_label('Contact email').fill('bee@example.com')
+    rows.nth(1).get_by_label('Contact message').fill('Surviving row')
+    rows.nth(1).get_by_label('Contact priority').select_option('low')
+    rows.nth(0).get_by_role('button', name='Remove contact').click()
+    expect(rows).to_have_count(1)
+
+    page.get_by_role('button', name='Submit contacts').click()
+
+    expect(page.locator('#contact-result')).to_have_text('{"valid":true,"names":["Bee"]}')
 
 
 def test_queryset_filter_order_slice_demo(
@@ -190,18 +215,18 @@ def test_fight_page_hydrates_fields_demo(
                 .all();
             const fight = fights.items[0];
             const fields = fight.$fields;
-            await Promise.all([fields.red_corner_id.ensureChoices(), fields.blue_corner_id.ensureChoices()]);
+            await Promise.all([fields.red_corner.ensureChoices(), fields.blue_corner.ensureChoices()]);
             return {
                 name: String(fight.name),
-                cornerChoices: [fields.red_corner_id.choices.length, fields.blue_corner_id.choices.length],
+                cornerChoices: [fields.red_corner.choices.length, fields.blue_corner.choices.length],
                 choiceCounts: [
                     fields.location.choices.length > 0,
                     fields.weather_conditions.choices.length > 0,
                     fields.terrain_type.choices.length > 0,
                     fields.status.choices.length > 0,
                 ],
-                redCorner: fields.red_corner_id.selectedChoice?.label,
-                blueCorner: fields.blue_corner_id.selectedChoice?.label,
+                redCorner: fields.red_corner.selectedChoice?.label,
+                blueCorner: fields.blue_corner.selectedChoice?.label,
                 location: fields.location.selectedChoice?.label,
                 weather: fields.weather_conditions.selectedChoice?.label,
                 terrain: fields.terrain_type.selectedChoice?.label,
@@ -258,7 +283,7 @@ def test_searchable_choice_retains_selection_after_search_clears_demo(
 
     expect(search).to_have_value('')
     expect(selected).to_have_text('Gamma Grove')
-    expect(page.get_by_test_id('fighter-choice-results').get_by_role('button')).to_have_count(0)
+    expect(page.get_by_test_id('fighter-choice-results').get_by_role('button')).to_have_count(2)
 
 
 def test_searchable_multiple_choices_hydrate_and_retain_selections_demo(
@@ -297,26 +322,14 @@ def test_searchable_multiple_choices_hydrate_and_retain_selections_demo(
     expect(selected).to_contain_text('Gamma Grove')
     expect(
         page.get_by_test_id('multiple-fighter-choice-results').get_by_role('button')
-    ).to_have_count(0)
+    ).to_have_count(2)
 
 
-def test_saving_a_foreign_key_through_the_nested_shape_persists_it_demo(
+def test_saving_a_foreign_key_through_the_field_facade_persists_it_demo(
     page: Page,
     application: Application,
     seeded_gorillas: dict,
 ) -> None:
-    """
-    Regression coverage for ModelGlue._load_client_state()'s FK round trip
-    (_related_pk_from_state()): a forward FK arrives in client state in two
-    shapes at once -- the flat `red_corner_id` and the full nested Gorilla
-    manifest under `red_corner` (no top-level 'value' key). The old code only
-    ever read the nested shape and blindly did `.get('value')` on it, which
-    silently produced None -- nulling the FK on save with no error. This
-    reassigns red_corner purely through the nested shape (leaving the flat
-    red_corner_id stale, exactly the "attname missing/stale" case) and calls
-    fight.save() directly, the same trigger `test_model_edit_save_demo` uses
-    below, just on a model that actually has a forward FK.
-    """
     demo = DemoSession.start(page, application, shot_directory_name='fight-fk-round-trip-save')
     demo.goto('fight:list')
     page.wait_for_function('window.Glue && window.Alpine')
@@ -324,43 +337,25 @@ def test_saving_a_foreign_key_through_the_nested_shape_persists_it_demo(
     demo.title_card(
         'Saving A Foreign Key',
         kicker='django-glue',
-        subtitle='fight.save() must persist a reassigned FK from its nested shape, not null it.',
+        subtitle='fight.save() persists a foreign key reassigned through its field facade.',
     )
 
-    demo.narrate('Reassigning red_corner through its nested manifest, then calling save()', step='1')
+    demo.narrate('Reassigning red_corner through its field facade, then calling save()', step='1')
     result = page.evaluate(
         """async () => {
-            // Only 'fights' is registered on this page -- pull Gamma Grove's
-            // id off the other seeded fight's red_corner rather than a
-            // separate gorillas queryset.
             const allFights = await window.Glue.querySet.fights.all();
             const fight = allFights.items.find(item => item.name === 'Alpha vs Beta');
-            const gammaId = allFights.items.find(item => item.name === 'Gamma Exhibition').red_corner.id;
-
-            // Sanity check: the nested proxy is really the full-object
-            // shape this fix is about, not a flat value.
+            const gammaId = allFights.items.find(item => item.name === 'Gamma Exhibition').red_corner;
             const beforeShape = {
-                hasNestedValue: 'value' in (fight._state.red_corner || {}),
-                nestedName: fight.red_corner?.name,
+                fieldValue: fight.$fields.red_corner.value,
             };
-
-            // Point the nested manifest's own pk at Gamma Grove, and drop
-            // the flat red_corner_id state entirely -- attname-with-value
-            // wins by design when both shapes are present (that's a
-            // different, already-passing case), so isolating the nested-
-            // only shape is what actually exercises the fallback the old
-            // code got wrong.
-            delete fight._state.red_corner_id;
-            fight._state.red_corner.id.value = gammaId;
-
+            fight.$fields.red_corner.value = gammaId;
             await fight.save();
-
             return {beforeShape, gammaId};
         }"""
     )
 
-    assert result['beforeShape']['hasNestedValue'] is False
-    assert result['beforeShape']['nestedName'] == 'Alpha Atlas'
+    assert result['beforeShape']['fieldValue'] == seeded_gorillas['alpha'].pk
 
     demo.narrate('The reassignment persisted -- not silently nulled', step='2')
     from test_project.fight.models import Fight
@@ -402,6 +397,35 @@ def test_model_edit_save_demo(
     expect(page.get_by_role('alert')).to_contain_text('Fighter saved successfully!')
     assert Gorilla.objects.get(name='Alpha Atlas').description == 'Updated by Playwright e2e.'
     assert Gorilla.objects.get(name='Alpha Atlas').age == 13
+
+
+@pytest.mark.parametrize('via_dropdown', [False, True], ids=['card', 'dropdown'])
+def test_list_model_delete_updates_roster(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+    via_dropdown: bool,
+) -> None:
+    alpha_pk = seeded_gorillas['alpha'].pk
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-list-delete')
+    demo.goto('gorilla:list')
+    fighter_names = page.get_by_placeholder('Fighter Name')
+    expect(fighter_names).to_have_count(3)
+
+    page.once('dialog', lambda dialog: dialog.accept())
+    card = gorilla_card(page, ALPHA_INDEX)
+    if via_dropdown:
+        card.get_by_role('button', name='More Actions').click()
+        dropdown_delete = card.locator('.dropdown-menu').get_by_role('button', name='Delete')
+        expect(dropdown_delete).to_be_visible()
+        dropdown_delete.click()
+    else:
+        card.get_by_role('button', name='Delete', exact=True).first.click()
+
+    expected_alert = 'Deleted via dropdown.' if via_dropdown else 'Fighter deleted.'
+    expect(page.get_by_role('alert')).to_contain_text(expected_alert)
+    assert not Gorilla.objects.filter(pk=alpha_pk).exists()
+    expect(fighter_names).to_have_count(2)
 
 
 def test_global_message_handler_demo(
@@ -608,3 +632,96 @@ def test_progressive_form_demo(
     expect(page.get_by_text('Fighter Created!')).to_be_visible()
     expect(page.get_by_text('Fighter "Echo Ember" created!')).to_be_visible()
     assert Gorilla.objects.filter(name='Echo Ember').exists()
+
+
+def test_detail_model_delete_disposes_proxy(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-delete-disposal')
+    demo.title_card(
+        'Glue Model Delete + Address Disposal',
+        kicker='django-glue',
+        subtitle='delete() removes the row, and the response tears the proxy down at the same address.',
+    )
+
+    gamma = seeded_gorillas['gamma']
+    demo.goto('gorilla:detail', pk=gamma.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.narrate('The profile page binds one model proxy', step='1')
+    expect(page.get_by_placeholder('Fighter Name')).to_have_value('Gamma Grove')
+
+    demo.narrate('delete() removes the row and disposes the address', step='2')
+    disposal_state = page.evaluate(
+        """async () => {
+            const proxy = window.Glue.model.gorilla
+            const address = proxy._record.address
+            await proxy.delete()
+            return {
+                address,
+                disposed: proxy._record.disposed,
+                registryForgot: window.Glue._registry.getRecord(address) === undefined,
+                publicLookup: window.Glue.model.gorilla ?? null,
+            }
+        }"""
+    )
+
+    assert disposal_state['disposed'] is True
+    assert disposal_state['registryForgot'] is True
+    assert disposal_state['publicLookup'] is None
+    assert Gorilla.objects.filter(pk=gamma.pk).count() == 0
+
+
+def test_model_refresh_re_reads_a_row_changed_out_of_band(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-model-refresh')
+    demo.title_card(
+        'Glue $refresh()',
+        kicker='django-glue',
+        subtitle='A refresh re-reads persisted data without submitting pending edits.',
+    )
+
+    beta = seeded_gorillas['beta']
+    demo.goto('gorilla:detail', pk=beta.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+    name_input = page.get_by_placeholder('Fighter Name')
+    expect(name_input).to_have_value(beta.name)
+
+    demo.narrate('Another writer renames the fighter; the page refreshes', step='1')
+    Gorilla.objects.filter(pk=beta.pk).update(name='Renamed Elsewhere')
+    page.evaluate('() => window.Glue.model.gorilla.$refresh()')
+
+    expect(name_input).to_have_value('Renamed Elsewhere')
+
+
+def test_arena_rank_card_renders_through_model_html_attribute(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-arena-rank-card')
+    demo.title_card(
+        'Glue HTML Attribute',
+        kicker='django-glue',
+        subtitle='A model attribute renders the rank card server-side; the client morphs it in.',
+    )
+
+    alpha = seeded_gorillas['alpha']
+    demo.goto('gorilla:arena', pk=alpha.pk)
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    demo.narrate('rank_card() renders the card into the assessment panel', step='1')
+    page.get_by_role('button', name='Render Card').click()
+    assessment = page.locator('#rankCardAssessment .rank-card')
+    expect(assessment).to_be_visible()
+    expect(assessment).to_contain_text(alpha.name)
+
+    demo.narrate('renderOuterHtml replaces the target element itself', step='2')
+    page.get_by_role('button', name='Outer HTML').click()
+    expect(page.locator('.rank-card')).to_have_count(2)
+    expect(page.locator('#rankCardModes')).to_have_count(0)

@@ -1,62 +1,30 @@
 # Configuration
 
-## Overview
+Set `DJANGO_GLUE_*` values in Django settings. The defaults live in
+`django_glue/settings.py`.
 
-Django Glue provides configuration options through Django settings. The server publishes client configuration in the Glue manifest rendered by `{% django_glue_init %}`.
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| `DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS` | `86400` | Fixed lifetime from token issuance |
+| `DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS` | `30` | Browser request timeout |
+| `DJANGO_GLUE_QUERYSET_BATCH_SIZE` | `100` | Default rows returned per queryset query |
+| `DJANGO_GLUE_MAX_UPDATES` | `200` | Editable paths in one addressed request |
+| `DJANGO_GLUE_MAX_UPDATES_ENCODED_BYTES` | `65536` | Encoded update payload size |
+| `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` | `131072` | Token size before signature verification |
+| `DJANGO_GLUE_MAX_POLICY_DECODED_BYTES` | `131072` | Decoded token size before parsing |
+| `DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES` | `65536` | Encoded queryset continuation size |
 
-## Backend Configuration
+A successor policy token gets a new issuance time only when retained values
+change. An expired child may be reintroduced through its owner; an expired
+page root requires a reload.
 
-All settings are defined in your Django `settings.py`. Any constant from `django_glue.settings` can be overridden by defining the same name in your project's settings.
+`DJANGO_GLUE_QUERYSET_BATCH_SIZE` controls query results, not introduction:
+querysets introduce no rows until queried. A `Glue.choices()` queryset with
+`search_fields` returns bounded matches for a query. Implicit relation choices
+are capped and require an explicit choice source when the related table is
+larger than the default search limit.
 
-### Proxy Policy Max Age
-
-```python
-# Signed proxy policy max age in seconds (default: 600)
-DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS = 600
-```
-
-Each registered proxy policy is signed with a creation timestamp. On every subsequent proxy request, Django Glue verifies the policy signature and rejects policies older than this max age.
-
-### Request Timeout
-
-```python
-DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS = 30
-```
-
-### QuerySet Batch Size
-
-```python
-# Default number of QuerySetGlue rows per batch (default: 100)
-DJANGO_GLUE_QUERYSET_BATCH_SIZE = 100
-```
-
-Applies only to `Glue.queryset()` collection loading. Relation choices are not
-batched: searchable `Glue.choices()` sources use their trusted `search_limit`,
-while non-searchable sources load as complete enumerations.
-
-## Request Timeout
-
-All HTTP requests from the JS client respect the configured timeout. If a request exceeds the timeout, it is aborted and an error is thrown:
-
-```javascript
-try {
-    await Glue.model.task.save()
-} catch (error) {
-    console.error('Request failed:', error)
-}
-```
-
-## CSRF Protection
-
-All POST requests from the JavaScript client include the CSRF token via the `X-CSRFToken` header. The client reads the token from `document.cookie` automatically. No additional configuration is needed.
-
-## URL Configuration
-
-The `{% django_glue_init %}` template tag injects the correct URL paths for the internal endpoints. The URLs are:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `/__dg__/callable_attribute/<object_name>/` | Execute a Glue attribute request |
-| `/__dg__/glue_view/` | Execute a Django view for HTML rendering |
-
-These are sent to the client in the Glue manifest. You do not need to reference them manually.
+The JavaScript client sends CSRF tokens on POST requests. Include
+`django_glue_urls()` for `POST /__dg__/callable_attribute/` and put
+`django_glue.middleware.GlueViewMiddleware` last in `MIDDLEWARE` for
+`Glue.view(url)`. That view API requests the actual Django URL.

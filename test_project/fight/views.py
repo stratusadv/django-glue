@@ -60,7 +60,7 @@ def schedule_view(request: HttpRequest) -> HttpResponse:
         request=request,
         unique_name='fight_form',
         target=FightForm(),
-        access=Glue.Access.CHANGE
+        access=Glue.Access.CHANGE,
     )
 
     Glue.form(

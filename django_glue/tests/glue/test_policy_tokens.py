@@ -23,7 +23,7 @@ class GluePolicyTokenTestCase(TestCase):
                 'initial': {'estimated_hours': 0.0},
             },
             'access': GlueAccess.CHANGE,
-            'attributes': ['load_state', 'save'],
+            'attributes': ['validate', 'save'],
             **overrides,
         })
 
@@ -42,6 +42,28 @@ class GluePolicyTokenTestCase(TestCase):
 
         with self.assertRaises(GlueInvalidPolicyError):
             GluePolicy.from_token(f'{policy.token}x')
+
+    def test_oversized_token_is_refused_before_signature_verification(self):
+        token = self.policy().token
+
+        with (
+            override_settings(DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES=len(token) - 1),
+            patch('django_glue.glue.policy.signing.loads') as verify,
+            self.assertRaises(GlueInvalidPolicyError),
+        ):
+            GluePolicy.from_token(token)
+        verify.assert_not_called()
+
+    def test_oversized_decoded_envelope_is_refused_before_parsing(self):
+        token = self.policy().token
+
+        with (
+            override_settings(DJANGO_GLUE_MAX_POLICY_DECODED_BYTES=16),
+            patch('django_glue.glue.policy.json.loads') as parse,
+            self.assertRaises(GlueInvalidPolicyError),
+        ):
+            GluePolicy.from_token(token)
+        parse.assert_not_called()
 
     @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=60)
     def test_expired_token_is_rejected(self):
@@ -79,7 +101,7 @@ class GluePolicyTokenTestCase(TestCase):
 
     def test_nested_policy_has_its_own_token(self):
         child = self.policy(name='project_form.child')
-        parent = self.policy(attributes=['load_state', child])
+        parent = self.policy(attributes=['validate', child])
 
         restored_parent = GluePolicy.from_token(parent.token)
         restored_child = restored_parent.attributes[1]

@@ -5,12 +5,14 @@ from django import template
 from django.urls import get_resolver
 from django.utils.safestring import mark_safe
 
+from django_glue.glue.component_tag import register_component_tags
 from django_glue.glue.context import GlueContextManager
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
 register = template.Library()
+register_component_tags(register)
 
 
 def _get_url_pattern_template(name: str) -> str:

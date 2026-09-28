@@ -51,7 +51,7 @@ jobs:
           --with 'django==${{ matrix.django-version }}'
           --group dev
           pytest
-          django_glue/tests/glue/test_adapters.py
+          django_glue/tests/glue/test_objects.py
           django_glue/tests/glue/test_queryset_pagination.py
           -q
 

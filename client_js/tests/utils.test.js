@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test"
-import {cloneValue, isPlainObject, parseFieldValue, parseJsonScriptById, serializeValue} from "../src/utils"
+import {cloneValue, isPlainObject, parseJsonScriptById, serializeValue} from "../src/utils"
 
 describe('frontend value utilities', () => {
     test('clones nested values without sharing mutable objects', () => {
@@ -14,14 +14,9 @@ describe('frontend value utilities', () => {
         expect(isPlainObject(clone.date)).toBe(false)
     })
 
-    test('parses and serializes date and regular field values', () => {
-        const date = parseFieldValue({type: 'DateField'}, '2026-01-01')
-        const datetime = parseFieldValue({type: 'DateTimeField'}, '2026-01-01T12:00:00Z')
-
-        expect(date).toBeInstanceOf(Date)
-        expect(datetime).toBeInstanceOf(Date)
+    test('serializes dates without coercing wire values on read', () => {
+        const date = new Date('2026-01-01T00:00:00Z')
         expect(serializeValue({date, ignored: () => {}, _private: true})).toEqual({date: date.toISOString()})
-        expect(parseFieldValue({type: 'CharField'}, 'value')).toBe('value')
     })
 
     test('reads JSON embedded in a script element', () => {

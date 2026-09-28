@@ -1,4 +1,4 @@
-__VERSION__ = '1.0.1'
+__VERSION__ = '1.1.0'
 
 # Context
 DJANGO_GLUE_CONTEXT_KEY = 'DJANGO_GLUE_CONTEXT'
@@ -11,4 +11,6 @@ DJANGO_GLUE_CONTEXT_SCRIPT_NAME = 'django-glue-context'
 # Url
 BASE_URL_NAME = '__dg__'
 CALLABLE_ATTRIBUTE_URL_NAME = 'callable_attribute'
-GLUE_VIEW_URL_NAME = 'glue_view'
+
+# Glue.view negotiation
+GLUE_VIEW_MEDIA_TYPE = 'application/vnd.django-glue.view+json'

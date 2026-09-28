@@ -6,6 +6,8 @@ from django.test import TestCase
 
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueModelInstanceNotFoundError
+from django_glue.glue import address
+from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import QuerySetGlue
 from test_project.gorilla.models import Gorilla
 
@@ -38,10 +40,17 @@ class QuerySetGetTestCase(TestCase):
         )
         self.glue_object = build_glue(Gorilla.objects.filter(name='Inside'))
 
-    def test_get_returns_payload_for_a_row_inside_the_queryset(self):
+    def test_get_returns_the_row_glue_for_a_row_inside_the_queryset(self):
         result = self.glue_object.get(pk=self.inside.pk)
 
-        assert result['state']['name']['value'] == 'Inside'
+        assert isinstance(result, ModelGlue)
+        assert result.name == f'gorillas.{self.inside.pk}'
+        assert result.address == address.item(
+            self.glue_object.address,
+            str(self.inside.pk),
+        )
+        assert result.is_bound is False
+        assert result.state['name']['value'] == 'Inside'
 
     def test_get_reports_not_found_for_a_row_outside_the_queryset(self):
         with self.assertRaises(GlueModelInstanceNotFoundError) as context:

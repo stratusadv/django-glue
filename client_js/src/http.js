@@ -22,6 +22,7 @@ class GlueHttp {
         const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000)
+        requestOptions.signal?.addEventListener('abort', () => controller.abort(), {once: true})
         const headers = {...(requestOptions.headers || {})}
         const method = requestOptions.method || 'GET'
         let contentType = requestOptions.contentType
@@ -60,11 +61,12 @@ class GlueHttp {
                 throw await this._buildRequestError(response)
             }
 
+            const isJson = (response.headers.get('Content-Type') || '').includes('json')
             return {
                 ok: response.ok,
                 payload: await response.clone().text(),
                 httpResponse: response,
-                data: await response.json(),
+                data: isJson ? await response.json() : null,
             }
         } finally {
             clearTimeout(timeoutId)
@@ -88,24 +90,43 @@ class GlueHttp {
         })
     }
 
-    async postForm(url, data, headers = {}, csrfProtected = true) {
+    async postForm(url, data, headers = {}, csrfProtected = true, signal = null) {
         return await this.sendRequest(url, {
             payload: data,
             method: 'POST',
             contentType: 'multipart/form-data',
             headers: headers,
             csrfProtected,
+            signal,
         })
     }
 
-    async sendAttributeRequest({name, policyToken, state = null, attribute, kwargs = {}}) {
+    async sendAttributeRequest({
+        address,
+        policyToken,
+        updates = {},
+        attribute = null,
+        kwargs = {},
+        reintroduce = null,
+        companions = [],
+        signal = null,
+    }) {
         const formData = new FormData()
-        const {files, data} = this._extractFiles(serializeValue(state || {}))
+        const {files, data} = this._extractFiles(serializeValue(updates))
 
-        formData.append('policy_token', policyToken)
-        formData.append('state', JSON.stringify(data))
-        formData.append('attribute', attribute)
-        formData.append('kwargs', JSON.stringify(kwargs))
+        const entry = {
+            address,
+            policy_token: policyToken,
+            updates: data,
+        }
+        if (attribute !== null) entry.call = {attribute, kwargs}
+        if (reintroduce) entry.reintroduce = reintroduce
+        const companionEntries = companions.map(companion => ({
+            address: companion.address,
+            policy_token: companion.policyToken,
+            updates: {},
+        }))
+        formData.append('objects', JSON.stringify([entry, ...companionEntries]))
 
         Object.entries(files).forEach(([key, value]) => {
             if (value instanceof FileList) {
@@ -117,7 +138,7 @@ class GlueHttp {
             }
         })
 
-        return await this.postForm(`${this._config.attributeUrlPath}${name}/${attribute}/`, formData)
+        return await this.postForm(this._config.attributeUrlPath, formData, {}, true, signal)
     }
 
     _extractFiles(obj) {
