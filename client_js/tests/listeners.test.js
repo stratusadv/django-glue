@@ -129,6 +129,46 @@ describe('component listeners', () => {
         expect(requests[0].mounted).toEqual([CARD])
     })
 
+    test("a listener's own event travels on to its ancestor", async () => {
+        const TALLIED = 'gorilla.components.CounterTallyComponent.tallied'
+        const page = componentEntry({address: 'page#test', staticData: {listeners: [TALLIED]}})
+        const tally = componentEntry({
+            address: TALLY,
+            ancestors: ['page#test'],
+            staticData: {listeners: [COUNTED], events: ['tallied'], event_ids: {tallied: TALLIED}},
+        })
+        const card = componentEntry({
+            address: CARD,
+            ancestors: [TALLY, 'page#test'],
+            attributes: ['increment'],
+            staticData: {
+                callables: {increment: {allowed_arguments: []}},
+                events: ['counted'],
+                event_ids: {counted: COUNTED},
+            },
+        })
+        const client = new GlueClient({objects: [page, tally, card]})
+        globalThis.Glue = client
+        document.body.innerHTML = `<div data-glue-address="page#test"><div data-glue-address="${TALLY}"><div data-glue-address="${CARD}"></div></div></div>`
+        const requests = []
+        client.http.sendAttributeRequest = async request => {
+            requests.push([request.address, request.attribute, request.kwargs?.events?.map(({event}) => event)])
+            const events = {
+                [CARD]: [{name: 'counted', detail: {}}],
+                [TALLY]: [{name: 'tallied', detail: {}}],
+            }[request.address] || []
+            return attributeResponse(request.address, {result: null, effects: {messages: [], events}})
+        }
+
+        await client._registry.getProxy(CARD).increment()
+
+        expect(requests).toEqual([
+            [CARD, 'increment', undefined],
+            [TALLY, '$receive', [COUNTED]],
+            ['page#test', '$receive', [TALLIED]],
+        ])
+    })
+
     test('a failed delivery still applies the source morph and resolves the source call', async () => {
         const {client, card} = tallyClient()
         const errors = []

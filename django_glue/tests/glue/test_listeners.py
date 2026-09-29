@@ -6,12 +6,15 @@ from typing import Any
 import pytest
 from django.http import HttpRequest
 from django.test import RequestFactory
+from django.test.signals import template_rendered
 
-from django_glue import Glue
+from django_glue import Glue, GlueOperation, GlueOperationKind
 from django_glue.exceptions import (
     GlueAccessError,
+    GlueAuthorizationError,
     GlueComponentRegistrationError,
     GlueInvalidPolicyError,
+    GlueInvalidSessionError,
     GlueRequestError,
 )
 from django_glue.glue.context import GlueContextManager
@@ -22,6 +25,7 @@ from django_glue.resolver.attribute_call.context import (
     AttributeCallBatchContext,
 )
 from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
+from django_glue.tests.conftest import MockSession
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.gorilla.components import (
     CounterCardComponent,
@@ -98,11 +102,58 @@ def test_receive_runs_every_matching_listener_and_rerenders(mock_request) -> Non
 
 def test_receive_delivers_several_events_and_renders_once(mock_request) -> None:
     tally, cards = _stamped(mock_request)
+    rendered: list[str] = []
 
-    entry = _receive(tally, [_counted_from(cards[0]), _counted_from(cards[1])])
+    def record(sender: Any, template: Any, **kwargs: Any) -> None:
+        rendered.append(template.name)
+
+    template_rendered.connect(record)
+    try:
+        entry = _receive(tally, [_counted_from(cards[0]), _counted_from(cards[1])])
+    finally:
+        template_rendered.disconnect(record)
 
     assert GluePolicy.from_token(entry['policy_token']).state_snapshot['counted_since_mount'] == 2
-    assert entry['html'].count('data-testid="tally-summary"') == 1
+    assert rendered.count(CounterTallyComponent.template) == 1
+
+
+def test_receive_rejects_a_source_issued_to_another_session(mock_request) -> None:
+    tally, _cards = _stamped(mock_request)
+    elsewhere = RequestFactory().get('/')
+    elsewhere.session = MockSession(session_key='another-session')
+    card = CounterCardComponent(start=1)
+    card._ancestors = (tally.address,)
+    foreign = Glue.object(elsewhere, card)
+
+    with pytest.raises(GlueInvalidSessionError):
+        _receive(tally, [{'event': COUNTED, 'source_token': foreign.policy.token, 'detail': {}}])
+
+
+class ListenerDeniedTallyComponent(CounterTallyComponent):
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
+        return operation.attribute != 'tally'
+
+
+class UnreadableCardComponent(CounterCardComponent):
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
+        return operation.kind is not GlueOperationKind.REFRESH
+
+
+def test_a_listener_denied_by_is_authorized_fails_the_delivery(mock_request) -> None:
+    tally, cards = _stamped(mock_request, ListenerDeniedTallyComponent)
+
+    with pytest.raises(GlueAuthorizationError, match="attribute 'tally'"):
+        _receive(tally, [_counted_from(cards[0])])
+
+
+def test_reading_a_source_its_is_authorized_denies_fails_the_delivery(mock_request) -> None:
+    tally, _cards = _stamped(mock_request)
+    card = UnreadableCardComponent(start=1)
+    card._ancestors = (tally.address,)
+    source = Glue.object(mock_request, card)
+
+    with pytest.raises(GlueAuthorizationError):
+        _receive(tally, [{'event': COUNTED, 'source_token': source.policy.token, 'detail': {}}])
 
 
 def test_skip_rerender_listeners_that_change_nothing_do_not_render(mock_request) -> None:

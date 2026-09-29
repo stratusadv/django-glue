@@ -72,6 +72,27 @@ describe('GlueHttp', () => {
         expect(response.data.objects).toEqual([{address: 'a#1', result: 1}])
     })
 
+    test('a request carrying a file travels alone, outside its batch', async () => {
+        const calls = mockOperationFetch({objects: [{address: 'a#1', result: 1}]})
+        const http = new GlueHttp(new GlueConfig())
+        const batch = new GlueRequestBatch(http, 2)
+        const photo = new File(['receipt'], 'receipt.png', {type: 'image/png'})
+        // Browsers tag a File as [object File]; happy-dom's lacks the tag, so
+        // serializeValue would read it as a plain object.
+        Object.defineProperty(photo, Symbol.toStringTag, {value: 'File'})
+
+        await Promise.all([
+            http.sendAttributeRequest({address: 'a#1', policyToken: 't1', updates: {photo}, attribute: 'save', batch}),
+            http.sendAttributeRequest({address: 'b#2', policyToken: 't2', attribute: '$receive', batch}),
+        ])
+
+        expect(calls).toHaveLength(2)
+        const [withFile, batched] = calls.map(call => call.options.body)
+        expect(JSON.parse(withFile.get('objects')).map(entry => entry.address)).toEqual(['a#1'])
+        expect(withFile.get('photo')).toBeInstanceOf(File)
+        expect(JSON.parse(batched.get('objects')).map(entry => entry.address)).toEqual(['b#2'])
+    })
+
     test('a second request for an address already in a batch travels alone', async () => {
         const calls = mockOperationFetch({objects: [{address: 'a#1', result: 1}]})
         const http = new GlueHttp(new GlueConfig())

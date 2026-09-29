@@ -10,6 +10,7 @@ from django.template import Context, Template, TemplateSyntaxError
 from django.test import RequestFactory
 
 from django_glue import Glue
+from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.component import MOUNTED_CHILDREN_CONTEXT_KEY
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
@@ -113,6 +114,15 @@ def test_rerender_with_parent_renders_a_mounted_child(mock_request) -> None:
 
     assert 'data-testid="counter-card"' in html
     assert _card_addresses(later) == [address]
+
+
+def test_two_kept_children_with_one_key_are_still_rejected(mock_request) -> None:
+    _stamp(mock_request, CARD, start=1)
+    [address] = _card_addresses(mock_request)
+    later = _later_request(mock_request)
+
+    with pytest.raises(GlueComponentKeyError, match='share key'):
+        _stamp(later, CARD + CARD, mounted=frozenset([address]), start=1)
 
 
 def test_an_unknown_bare_word_is_a_template_syntax_error() -> None:
