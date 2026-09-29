@@ -25,7 +25,7 @@
 | [`021`](021-component-parameter-initializers.md) | Accepted; implemented on branch | A component parameter may be a model, initialized from its signed key by a decorated method, or a dataclass encoded through the serializer registry |
 | [`022`](022-component-callables-re-render-by-default.md) | Accepted; implemented on branch | A successful component callable re-renders its component in the same response, unless it returns a Glue object or declares `skip_rerender=True` |
 | [`023`](023-component-as-page.md) | Accepted; implemented on branch | A view serves a component it constructed with `component.as_page(request)`; `get_view_kwargs` is deprecated |
-| [`024`](024-component-listeners.md) | Proposed | A component declares the descendant events it reacts to with `Glue.listener`; the client delivers them in a follow-up `$receive` call, and the listener re-renders the component |
+| [`024`](024-component-listeners.md) | Accepted; implemented on branch | A component declares the descendant events it reacts to with `Glue.listener`; the client delivers them in a follow-up `$receive` call, and the listener re-renders the component |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

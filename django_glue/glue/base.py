@@ -725,15 +725,29 @@ class BaseGlue(ABC):
             required_access=required_access,
         ))
 
+        def invoke() -> Any:
+            hydrated_attribute = self._bound_attributes[call_context.target_attribute_name]
+            return hydrated_attribute.call(
+                **self._resolve_callable_arguments(hydrated_attribute, call_context)
+            )
+
+        return self._run_call(call_context, invoke, render_as_html=definition.render_as_html)
+
+    def _run_call(
+        self,
+        call_context: AttributeCallRequestContext,
+        invoke: Callable[[], Any],
+        *,
+        render_as_html: bool = False,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Hydrate, run an admitted and authorized call, and build its entry.
+
+        ``invoke`` runs after hydration, against the hydrated object.
+        """
+        policy = call_context.target_glue_policy
         incoming_static_data = self.get_static_data()
         self._hydrate(policy, call_context.target_glue_updates)
-        bound_attribute = self._bound_attributes[call_context.target_attribute_name]
-        call_result = bound_attribute.call(
-            **self._resolve_callable_arguments(
-                bound_attribute,
-                call_context,
-            )
-        )
+        call_result = invoke()
 
         self.__dict__['_bound_children'] = self._bind_children(
             live_children=policy.children,
@@ -754,7 +768,7 @@ class BaseGlue(ABC):
 
         response = GlueResponse.from_result(
             call_result,
-            render_as_html=definition.render_as_html,
+            render_as_html=render_as_html,
         )
         introduced.extend(response.objects)
         result = response.result
@@ -765,9 +779,7 @@ class BaseGlue(ABC):
                     introduced_entry['address'] for introduced_entry in introduced
                 }
             ):
-                result._address = address.transient(self.address)
-                result.cap_access(self.access)
-                result.introduce(self.request)
+                self._introduce_result(result)
                 introduced.append(result.entry.model_dump())
                 introduced.extend(result._serialized_child_entries())
             result = result.address
@@ -778,6 +790,12 @@ class BaseGlue(ABC):
             entry['html'] = response.html
         entry['effects'] = self._effects_payload(response, introduced)
         return entry, introduced
+
+    def _introduce_result(self, result: BaseGlue) -> None:
+        """Introduce a Glue object this object's callable returned, as its owner."""
+        result._address = address.transient(self.address)
+        result.cap_access(self.access)
+        result.introduce(self.request)
 
     def _effects_payload(
         self,

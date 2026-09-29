@@ -28,6 +28,25 @@ def test_component_as_view_full_page_is_interactive(
     expect(page.locator('html')).to_have_count(1)
 
 
+def test_parent_listener_rerenders_when_a_stamped_child_emits(
+    page: Page,
+    application: Application,
+) -> None:
+    page.goto(application.url('gorilla:component_tally', {}))
+    summary = page.get_by_test_id('tally-summary')
+    expect(summary).to_have_text('Last counted 0, 0 counts')
+
+    receives = []
+    page.on(
+        'request',
+        lambda request: receives.append(request) if '$receive' in (request.post_data or '') else None,
+    )
+    page.get_by_test_id('counter-card').nth(1).get_by_role('button', name='Increment').click()
+
+    expect(summary).to_have_text('Last counted 5, 1 counts')
+    assert len(receives) == 1
+
+
 def test_keyed_component_stamps_use_addressed_state_and_events(
     page: Page,
     application: Application,

@@ -819,6 +819,21 @@ root and therefore exposes the same event only through `$on()`. The
 source-scoped proxy event is the universal contract; the component DOM event is
 its browser integration.
 
+A component that depends on its descendants declares it on its class with
+`@Glue.listener(ChildComponent.event)` (ADR 024). A component's signed identity
+records its ancestor chain: the component whose template stamped it or whose
+callable returned it, then that component's chain. When a component's response
+carries an event, the client calls the built-in `$receive` callable on each
+mounted ancestor in that chain whose `static_data.listeners` names the event's
+identity, passing the event, its detail, and the source's current token. The
+server verifies that the source is a genuine descendant emitting a declared
+event, runs the matching listeners, and re-renders the listening component under
+the callable re-render rule above. The source's own morph waits for those calls and is skipped when a
+listener's render already contains it. Routing follows the signed ancestry, not
+the DOM, so it does not depend on bubbling or on where a host mounts a returned
+component. This is not a global bus: an event reaches only its source's
+declared, listening ancestors.
+
 Components expose their DOM relationship without requiring a global string
 name. Within a component template Alpine's `$glue` magic resolves the current
 component proxy. Plain JavaScript can resolve the nearest component from an

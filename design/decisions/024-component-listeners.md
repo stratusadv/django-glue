@@ -1,6 +1,6 @@
 # ADR 024: A Component Declares the Descendant Events It Reacts To with `Glue.listener`
 
-Status: Proposed
+Status: Accepted; implemented on branch
 
 Date: 2026-09-29
 
@@ -108,22 +108,26 @@ listening components and calls them in a second request.
    `as_page()` has none. Addresses are derived from the parent's address, key
    and tag, not from parameters, so the chain stays valid across re-renders
    and model parameter retargeting.
-2. **Listeners and ancestry are published.** A component's `static_data` lists
-   its listeners by event identity, and repeats its ancestor chain for routing.
-   A component's schema lists the identity of each event it can emit.
+2. **Listeners are published.** A component's `static_data` lists its listeners
+   by event identity under `listeners`, and maps each event it can emit to its
+   identity under `event_ids`. The client reads the ancestor chain from the
+   policy payload it already decodes.
 3. **The client routes by ancestry.** When a response carries an event from a
    component, the client selects each component in the source's ancestor chain
    that is mounted and has a listener for that event. Routing does not follow
    the DOM, so an Alpine `.stop` on an intermediate element does not block it,
    and a modal returned by a row's callable reaches the row's listeners even
    when its host mounts it at the end of `<body>`.
-4. **One request delivers every event.** The client sends one request with an
-   entry per listening ancestor. Each entry calls the built-in `$receive`
-   callable with that ancestor's events from the originating response, in
-   order, each with its source's address and current policy token. The wire
+4. **One call per listening ancestor delivers its events.** The client calls
+   the built-in `$receive` callable on each listening ancestor, concurrently,
+   with that ancestor's events from the originating response in order, each
+   with its identity, detail, and the source's current policy token. The wire
    format is unchanged: `$receive` is an ordinary call on the ancestor's own
-   address and policy token. A parent and a grandparent listening to the same
-   event are two entries in the same request.
+   address and policy token, and goes through the ancestor's own call queue, so
+   it is ordered after the ancestor's in-flight calls and is reintroduced
+   through its owner when its token has expired, like any other call.
+   Application attribute paths cannot begin with `$`, so `$receive` cannot
+   collide with one.
 5. **The server checks each source, runs every matching listener, then renders
    once.** For each event, `$receive` verifies the source token and rejects it
    unless the listening component's address is in the source's signed
@@ -145,12 +149,13 @@ templates that refresh by hand keep working.
 ### One frame on screen
 
 When an originating response carries an event that a mounted ancestor listens
-for, the client applies that response's state and other effects immediately but
-defers its HTML morph. When the `$receive` response settles, the client morphs
-the source and then its ancestors in the same frame, outermost last. If the
-`$receive` request fails, the source's morph is applied at that point and the
-failure is reported on the ancestor's address like any other per-address
-failure.
+for, the client applies that response's state immediately but holds its HTML
+morph until every `$receive` call settles. A listening ancestor that
+re-rendered already contains the source's new markup, so the source's own morph
+is skipped. When no listener re-rendered, or a `$receive` call failed, the
+source morphs itself at that point, and a failure is reported on the
+ancestor's address like any other per-address failure. The source's call
+resolves after its listeners have been applied.
 
 ### Trust
 
@@ -175,6 +180,16 @@ Listeners that only re-render never read either.
   parent never re-scopes a client-supplied key to find it.
 - Every component's signed identity grows by its ancestor chain, typically one
   or two addresses.
+- A listener's re-render re-stamps the children in its template, and a
+  re-stamped child is introduced and mounted again. A child keeps only what its
+  parameters and the database give it, so a counter holding a click count in
+  retained state resets to its mounted value. This is how `$refresh()` on a
+  parent already behaves; listeners make it happen after a child's own action.
+  Children whose state lives in the database, such as transaction rows, are
+  unaffected.
+- A child component produced by a `@Glue.property` does not carry ancestry, so
+  its events are not delivered to listeners. Stamped and returned components
+  cover the cases this ADR was written for.
 - Rows and other children can be components with signed identities and their own
   access, while the list that summarizes them stays consistent. The Profitly
   transaction review can move `confirm`, `always_categorize_merchant` and

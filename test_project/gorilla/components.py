@@ -45,6 +45,45 @@ class CounterDashboardComponent(Glue.Component):
         self.starts = [5]
 
 
+class CounterTallyComponent(Glue.Component):
+    template = 'gorilla/component/counter_tally.html'
+
+    starts: list[int] = Glue.attr(default_factory=lambda: [2, 5])
+    last_counted_start: int = Glue.attr(0)
+    counted_since_mount: int = Glue.attr(0)
+
+    def get_context_data(self) -> dict:
+        return {'component': self, 'starts': self.starts}
+
+    @Glue.listener(CounterCardComponent.counted)
+    def card_counted(self, event: Glue.ReceivedEvent[CounterCardComponent]) -> None:
+        self.last_counted_start = event.source.start
+
+    @Glue.listener(CounterCardComponent.counted)
+    def tally(self) -> None:
+        self.counted_since_mount += 1
+
+    @Glue.attr
+    def open_card(self) -> CounterCardComponent:
+        return CounterCardComponent(start=9)
+
+
+class QuietCounterTallyComponent(CounterTallyComponent):
+    @Glue.listener(CounterCardComponent.counted, skip_rerender=True)
+    def card_counted(self, event: Glue.ReceivedEvent[CounterCardComponent]) -> None:
+        pass
+
+    @Glue.listener(CounterCardComponent.counted, skip_rerender=True)
+    def tally(self) -> None:
+        pass
+
+
+class GuardedCounterTallyComponent(CounterTallyComponent):
+    @Glue.listener(CounterCardComponent.counted, required_access=Glue.Access.CHANGE)
+    def tally(self) -> None:
+        self.counted_since_mount += 1
+
+
 class CounterBadgeComponent(Glue.Component):
     template = 'glue_template_test.html'
 

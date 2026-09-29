@@ -13,7 +13,13 @@ from django.views.decorators.http import require_safe
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.exceptions import GlueAuthorizationError, GlueComponentParameterError
+from django_glue.exceptions import (
+    GlueAccessError,
+    GlueAuthorizationError,
+    GlueComponentParameterError,
+    GlueRequestError,
+    GlueRequestErrorCode,
+)
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.attributes.declared import _MISSING
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
@@ -22,7 +28,10 @@ from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_regist
 from django_glue.glue.component_naming import component_name
 from django_glue.glue.component_root import inject_component_root
 from django_glue.glue.context import GlueContextManager
+from django_glue.glue.event import GlueEvent
+from django_glue.glue.listener import GlueListener, ReceivedEvent
 from django_glue.glue.model_parameter import ModelParameter
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.response import GlueResponse, GlueTemplateResponse
@@ -38,6 +47,7 @@ class _DefaultFactory:
 
 
 VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
+RECEIVE_ATTRIBUTE = '$receive'
 
 
 @cache
@@ -49,10 +59,21 @@ def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
     }
 
 
+@cache
+def _event_identities(component_class: type[Component]) -> dict[str, str]:
+    """Each event the class declares or inherits, by name, mapped to its identity (ADR 024)."""
+    return {
+        name: declaration.identity
+        for name, declaration in inspect.getmembers_static(component_class)
+        if isinstance(declaration, GlueEvent)
+    }
+
+
 class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
     layout_template: str | None = None
+    _glue_listeners: ClassVar[dict[str, GlueListener]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -88,6 +109,12 @@ class Component(BaseGlue):
                     for key, declaration in declared.items()
                 ),
             ])
+        cls._glue_listeners = {
+            name: value
+            for base in reversed(cls.__mro__)
+            for name, value in base.__dict__.items()
+            if isinstance(value, GlueListener)
+        }
         if cls.template is not None:
             component_registry.register(cls)
         if 'get_view_kwargs' in cls.__dict__:
@@ -135,6 +162,7 @@ class Component(BaseGlue):
             stem = type(self).__name__.removesuffix('Component') or type(self).__name__
             name = component_name('', CAMEL_BOUNDARY.sub('_', stem).lower(), None)
         super().__init__(name=name, access=access)
+        self._ancestors: tuple[str, ...] = ()
 
         if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
@@ -183,6 +211,7 @@ class Component(BaseGlue):
         return {
             'component_id': f'{type(self).__module__}.{type(self).__qualname__}',
             'parameters': json.loads(json.dumps(parameters, cls=GlueResponseJSONEncoder)),
+            'ancestors': list(self._ancestors),
         }
 
     @classmethod
@@ -193,12 +222,29 @@ class Component(BaseGlue):
             access=policy.access,
             **policy.identity['parameters'],
         )
+        component._ancestors = tuple(policy.identity.get('ancestors', ()))
         for key, value in policy.state_snapshot.items():
             attribute = component._bound_attributes.get(key)
             if attribute is not None and attribute.definition.value_role is GlueValueRole.RECONSTRUCTOR:
                 annotation = get_type_hints(component_class).get(key)
                 setattr(component, key, glue_serializer_registry.decode(value, annotation))
         return component
+
+    def get_static_data(self) -> dict[str, Any]:
+        """Adds the identities of the events this component emits and listens
+        for, which the client uses to route events to listeners (ADR 024)."""
+        static_data = super().get_static_data()
+        event_identities = _event_identities(type(self))
+        if event_identities:
+            static_data['event_ids'] = event_identities
+        listened = sorted({
+            identity
+            for listener in self._glue_listeners.values()
+            for identity in listener.event_identities
+        })
+        if listened:
+            static_data['listeners'] = listened
+        return static_data
 
     def introduce(self, request: HttpRequest) -> None:
         super().introduce(request)
@@ -274,6 +320,9 @@ class Component(BaseGlue):
         the call. That render's output is the authoritative HTML and computed
         data; the call's own result and effects stand.
         """
+        if call_context.target_attribute_name == RECEIVE_ATTRIBUTE:
+            return self._receive(call_context)
+
         entry, introduced = super().process_attribute_call(call_context)
         if 'html' in entry:
             return entry, introduced
@@ -284,6 +333,131 @@ class Component(BaseGlue):
             if definition.skip_rerender or definition.expected_type is not None:
                 return entry, introduced
 
+        return self._rerendered(entry, introduced, call_context)
+
+    def _receive(
+        self,
+        call_context: AttributeCallRequestContext,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Run the listeners for descendant events the client delivered (ADR 024).
+
+        Every listener is authorized before any runs. The component re-renders
+        once for the whole delivery unless every listener that ran skips it and
+        no retained value changed.
+        """
+        deliveries: list[tuple[GlueListener, ReceivedEvent[Any]]] = []
+        for identity, event in self._admit_received_events(call_context):
+            listeners = [
+                listener
+                for listener in self._glue_listeners.values()
+                if identity in listener.event_identities
+            ]
+            if not listeners:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_KWARGS,
+                    message=f'{type(self).__name__} has no listener for the delivered event.',
+                    details={'event': identity},
+                )
+            deliveries.extend((listener, event) for listener in listeners)
+
+        policy = call_context.target_glue_policy
+        for listener, _event in deliveries:
+            if not policy.access.has_access(listener.required_access):
+                raise GlueAccessError(
+                    attribute=listener.name,
+                    required_access=listener.required_access.value,
+                    current_access=policy.access.value,
+                )
+            self._require_authorization(GlueOperation(
+                kind=GlueOperationKind.CALL,
+                attribute=listener.name,
+                required_access=listener.required_access,
+            ))
+
+        def invoke() -> None:
+            for listener, event in deliveries:
+                listener.run(self, event)
+
+        entry, introduced = self._run_call(call_context, invoke)
+        if 'policy_token' not in entry and all(listener.skip_rerender for listener, _event in deliveries):
+            return entry, introduced
+        return self._rerendered(entry, introduced, call_context)
+
+    def _admit_received_events(
+        self,
+        call_context: AttributeCallRequestContext,
+    ) -> list[tuple[str, ReceivedEvent[Any]]]:
+        """Verify each delivered event's source before any listener runs.
+
+        The source token must be genuine, issued to this session and user, name
+        this component among its signed ancestors, and belong to a class that
+        declares or inherits the event. The detail stays untrusted.
+        """
+        kwargs = call_context.target_attribute_call_kwargs
+        deliveries = kwargs.get('events')
+        if set(kwargs) != {'events'} or not isinstance(deliveries, list) or not deliveries:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_KWARGS,
+                message=f'{RECEIVE_ATTRIBUTE} takes a non-empty "events" list.',
+            )
+
+        received: list[tuple[str, ReceivedEvent[Any]]] = []
+        for delivery in deliveries:
+            if (
+                not isinstance(delivery, dict)
+                or not isinstance(delivery.get('event'), str)
+                or not isinstance(delivery.get('source_token'), str)
+                or not isinstance(delivery.get('detail', {}), dict)
+            ):
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_KWARGS,
+                    message='Each delivered event needs "event", "source_token", and an object "detail".',
+                )
+            source_policy = GluePolicy.from_token(delivery['source_token'])
+            source_policy.verify_request(call_context.request)
+            if (
+                source_policy.namespace != self.namespace
+                or self.address not in source_policy.identity.get('ancestors', ())
+            ):
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_KWARGS,
+                    message='The event source is not a descendant of this component.',
+                    details={'source': source_policy.address},
+                )
+            source_class = component_registry.from_identifier(source_policy.identity['component_id'])
+            names_by_identity = {
+                identity: name for name, identity in _event_identities(source_class).items()
+            }
+            if delivery['event'] not in names_by_identity:
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_KWARGS,
+                    message='The event source does not declare the delivered event.',
+                    details={'source': source_policy.address, 'event': delivery['event']},
+                )
+            received.append((
+                delivery['event'],
+                ReceivedEvent(
+                    name=names_by_identity[delivery['event']],
+                    detail=delivery.get('detail', {}),
+                    source_policy=source_policy,
+                    source_class=source_class,
+                    request=call_context.request,
+                ),
+            ))
+        return received
+
+    def _introduce_result(self, result: BaseGlue) -> None:
+        if isinstance(result, Component):
+            result._ancestors = (self.address, *self._ancestors)
+        super()._introduce_result(result)
+
+    def _rerendered(
+        self,
+        entry: dict[str, Any],
+        introduced: list[dict[str, Any]],
+        call_context: AttributeCallRequestContext,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Replace ``entry``'s output with a render of the successor state (ADR 022)."""
         render_context = AttributeCallRequestContext(
             request=call_context.request,
             target_glue_policy=self.policy,

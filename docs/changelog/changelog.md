@@ -15,6 +15,14 @@
 - `component.as_page(request)` responds with a component the application
   constructed, so a page whose parameters depend on the request is an ordinary
   view. `as_view()` now builds on it (ADR 023).
+- `@Glue.listener(ChildComponent.event)` declares that a component reacts to a
+  descendant's event. The client delivers the event through the component's
+  built-in `$receive` call, which runs the listener and re-renders the
+  component, and the child's own markup waits for that render so the page
+  changes once. `event.source` is the emitting component, rebuilt from its signed
+  token (ADR 024).
+- A component's signed identity records its ancestors: the component whose
+  template stamped it, or whose callable returned it, and theirs.
 
 ### Deprecated
 

@@ -1063,7 +1063,11 @@ never hydrated, and grants no authority to a listener. JavaScript may dispatch
 a browser event with the same name, so no DOM event is evidence of a successful
 server operation. A handler that calls or refreshes another object uses that
 target's own policy and passes through its normal admission, validation, and
-authorization.
+authorization. This holds for a component's declared `Glue.listener` too
+(ADR 024): the client delivers the event as a `$receive` call on the listening
+component's own policy, the relayed detail is untrusted input, and only the
+source token that accompanies it is verified, as a descendant of the listener
+emitting an event its class declares.
 
 An event is a best-effort notification about one successfully produced
 response, not durable messaging or an exactly-once domain guarantee. Events

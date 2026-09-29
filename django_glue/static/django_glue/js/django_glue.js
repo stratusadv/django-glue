@@ -4201,6 +4201,27 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var policy_default = GluePolicy;
 
+  // client_js/src/runtime/listenerRouter.js
+  function deliverToListeners(proxy, entry) {
+    const events = entry.effects?.events;
+    const ancestors = proxy._record.policy.identity?.ancestors;
+    if (!events?.length || !ancestors?.length)
+      return [];
+    const eventIds = proxy._record.staticData?.event_ids || {};
+    return ancestors.flatMap((address) => {
+      const ancestor = proxy._registry.getProxy(address);
+      if (!ancestor || ancestor._record.disposed || !ancestor.$el)
+        return [];
+      const listened = new Set(ancestor._record.staticData?.listeners || []);
+      const delivered = events.filter(({ name }) => listened.has(eventIds[name])).map(({ name, detail }) => ({
+        event: eventIds[name],
+        source_token: proxy._record.policyToken,
+        detail
+      }));
+      return delivered.length ? [ancestor._callAttribute("$receive", { events: delivered })] : [];
+    });
+  }
+
   // client_js/src/proxies/base.js
   class BaseGlueProxy {
     constructor({ http, record, registry, client = null, owner = null }) {
@@ -4350,8 +4371,12 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
+      const listenersRendered = Promise.allSettled(deliverToListeners(this, target)).then((outcomes) => outcomes.some((outcome) => outcome.status === "fulfilled" && outcome.value?.html !== undefined));
       if (target.html !== undefined && this._policy.namespace === "component" && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
-        await result.renderOuterHtml(this.$el);
+        if (!await listenersRendered && this.$el)
+          await result.renderOuterHtml(this.$el);
+      } else {
+        await listenersRendered;
       }
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);

@@ -18,6 +18,7 @@ from django_glue.glue.component import Component
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
+from django_glue.glue.listener import ReceivedEvent, listener
 from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
@@ -154,6 +155,8 @@ class Glue:
     attr = _attr
     ComponentParameter = _component_parameter
     event = _event
+    listener = staticmethod(listener)
+    ReceivedEvent = ReceivedEvent
     html_attr = _html_attr
     namespace = GlueNamespace
     property = _GluePropertyDescriptor

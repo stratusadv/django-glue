@@ -1,5 +1,6 @@
 import {GlueAddressError, GlueProxyError} from "../errors"
 import {htmlResultFromResponse, htmlToFragment} from "../htmlRenderer"
+import {deliverToListeners} from "../runtime/listenerRouter"
 
 class BaseGlueProxy {
     constructor({http, record, registry, client = null, owner = null}) {
@@ -183,6 +184,13 @@ class BaseGlueProxy {
         const result = target.html === undefined
             ? this._convertResult(rawResult, attribute)
             : htmlResultFromResponse(target, this._client)
+        // Listening ancestors re-render around this object, so its own morph
+        // waits for them and is skipped when one of them rendered it (ADR 024).
+        const listenersRendered = Promise.allSettled(deliverToListeners(this, target)).then(
+            outcomes => outcomes.some(
+                outcome => outcome.status === 'fulfilled' && outcome.value?.html !== undefined,
+            ),
+        )
         // Only HTML rooted at this component's own address (its render(),
         // whether called directly or returned by an action) replaces it. Any
         // other HTML attribute on a component (a modal body, a row) is a
@@ -194,7 +202,9 @@ class BaseGlueProxy {
             && htmlToFragment(target.html).firstElementChild
                 ?.getAttribute('data-glue-address') === this._record.address
         ) {
-            await result.renderOuterHtml(this.$el)
+            if (!await listenersRendered && this.$el) await result.renderOuterHtml(this.$el)
+        } else {
+            await listenersRendered
         }
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
             const childRecord = this._registry.getRecord(rawResult)

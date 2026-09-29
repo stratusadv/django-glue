@@ -57,5 +57,51 @@ An ancestor DOM listener sees bubbling events from every descendant, so inspect
 `$event.detail.$address` when it needs a specific child. `$on()` is always
 source-scoped, including for non-rendered models, forms, and querysets.
 
+## Reacting to a child's event on the server
+
+A component that depends on its children declares what it reacts to with
+`Glue.listener`, instead of wiring `$refresh()` into its template:
+
+```python
+class TransactionReviewComponent(Glue.Component):
+    template = 'banking/component/transaction_review.html'
+
+    @Glue.listener(TransactionRowComponent.confirmed, TransactionRowComponent.merchant_rule_created)
+    def row_changed(self) -> None:
+        """The month summary and other rows from the merchant depend on the row."""
+```
+
+When a row stamped in this component's template emits `confirmed`, the client
+calls the listening component with the event, runs `row_changed`, and
+re-renders the component. The row's own markup is updated by that render, so the
+page changes once.
+
+- **Pass the declared event, not its name.** `TransactionRowComponent.confirmed`
+  fails at import if the row does not declare it, and a subclass of the row
+  still matches.
+- **A listener reaches descendants.** A component stamped in the listener's
+  template, stamped inside one of those, or returned by one of their callables
+  is a descendant, wherever its host mounts it on the page.
+- **Handling an event re-renders the component,** like any component callable.
+  Pass `skip_rerender=True` to opt out; a listener that changes a retained value
+  re-renders anyway. `required_access=` works as it does on `Glue.attr`.
+- **Take the event to learn which child changed.** `event.source` is the
+  emitting component, rebuilt from its signed token, with its parameters and
+  scope. Type it with `Glue.ReceivedEvent[...]`:
+
+```python
+@Glue.listener(TransactionRowComponent.confirmed)
+def row_confirmed(self, event: Glue.ReceivedEvent[TransactionRowComponent]) -> None:
+    self.last_confirmed_merchant = event.source.transaction.merchant
+```
+
+`event.detail` is the payload the client relayed and is untrusted, like callable
+arguments. Read what you need from `event.source` or the database.
+
+A listener re-renders its whole template, including the children it stamps.
+Each re-stamped child is mounted again from its parameters, so state a child
+keeps only in memory, such as a click count, returns to its mounted value.
+Keep that state in the database or in the parent.
+
 Loading and transport errors remain normal promise behavior: set local loading
 state before `await`, catch errors, and clear loading state in `finally`.
