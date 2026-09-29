@@ -4099,15 +4099,16 @@ ${expression ? 'Expression: "' + expression + `"
       next.querySelectorAll("template[data-glue-keep]").forEach((placeholder) => {
         const address = placeholder.getAttribute("data-glue-keep");
         const live = previousNodes.find((node) => node.getAttribute("data-glue-address") === address);
-        if (live)
-          placeholder.replaceWith(live.cloneNode(true));
-        else
-          placeholder.remove();
+        if (!live)
+          return placeholder.remove();
+        const shell = live.cloneNode(false);
+        shell._glueKeep = true;
+        placeholder.replaceWith(shell);
       });
       morph2(element, next, {
         key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
         updating(node, to, childrenOnly, skip) {
-          if (node.hasAttribute?.("data-morph-ignore"))
+          if (to?._glueKeep || node.hasAttribute?.("data-morph-ignore"))
             return skip();
           if (inner && node === element)
             childrenOnly();

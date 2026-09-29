@@ -63,6 +63,18 @@ for (const [name, createRenderer] of Object.entries(renderers)) {
             expect(target.querySelector('template')).toBeNull()
         })
 
+        test('a kept child keeps the nodes Alpine generated inside it', async () => {
+            document.body.innerHTML = '<div id="target"><div data-glue-address="p[row]" x-data="{items: [1, 2]}"><template x-for="item in items"><b x-text="item"></b></template></div></div>'
+            const target = document.querySelector('#target')
+            Alpine.initTree(target)
+            await Alpine.nextTick()
+
+            await createRenderer('<div id="target"><template data-glue-keep="p[row]"></template></div>').renderOuterHtml(target)
+            await Alpine.nextTick()
+
+            expect([...target.querySelectorAll('b')].map(node => node.textContent)).toEqual(['1', '2'])
+        })
+
         test('a placeholder for a child that is gone is dropped', async () => {
             document.body.innerHTML = '<div id="target"><p>Old</p></div>'
 
