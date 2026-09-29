@@ -45,6 +45,10 @@ class CounterDashboardComponent(Glue.Component):
         self.starts = [5]
 
 
+class RerenderingCounterDashboardComponent(CounterDashboardComponent):
+    rerender_on = (CounterCardComponent.counted,)
+
+
 class CounterTallyComponent(Glue.Component):
     template = 'gorilla/component/counter_tally.html'
 

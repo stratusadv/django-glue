@@ -29,7 +29,7 @@ from django_glue.glue.component_naming import component_name
 from django_glue.glue.component_root import inject_component_root
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.event import GlueEvent
-from django_glue.glue.listener import GlueListener, ReceivedEvent
+from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
 from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
@@ -73,6 +73,7 @@ class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
     layout_template: str | None = None
+    rerender_on: ClassVar[tuple[GlueEvent, ...]] = ()
     _glue_listeners: ClassVar[dict[str, GlueListener]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -109,6 +110,8 @@ class Component(BaseGlue):
                     for key, declaration in declared.items()
                 ),
             ])
+        if 'rerender_on' in cls.__dict__ and cls.rerender_on:
+            require_declared_events(cls.rerender_on, f'{cls.__name__}.rerender_on')
         cls._glue_listeners = {
             name: value
             for base in reversed(cls.__mro__)
@@ -239,9 +242,12 @@ class Component(BaseGlue):
         if event_identities:
             static_data['event_ids'] = event_identities
         listened = sorted({
-            identity
-            for listener in self._glue_listeners.values()
-            for identity in listener.event_identities
+            *(event.identity for event in self.rerender_on),
+            *(
+                identity
+                for listener in self._glue_listeners.values()
+                for identity in listener.event_identities
+            ),
         })
         if listened:
             static_data['listeners'] = listened
@@ -340,25 +346,29 @@ class Component(BaseGlue):
         self,
         call_context: AttributeCallRequestContext,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Run the listeners for descendant events the client delivered (ADR 024).
+        """Handle descendant events the client delivered (ADR 024).
 
         Every listener is authorized before any runs. The component re-renders
-        once for the whole delivery unless every listener that ran skips it and
-        no retained value changed.
+        once for the whole delivery when an event is in ``rerender_on``, or
+        when a listener ran that does not skip it, or when a retained value
+        changed.
         """
+        rerender_identities = {event.identity for event in self.rerender_on}
         deliveries: list[tuple[GlueListener, ReceivedEvent[Any]]] = []
+        rerender = False
         for identity, event in self._admit_received_events(call_context):
             listeners = [
                 listener
                 for listener in self._glue_listeners.values()
                 if identity in listener.event_identities
             ]
-            if not listeners:
+            if not listeners and identity not in rerender_identities:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_KWARGS,
-                    message=f'{type(self).__name__} has no listener for the delivered event.',
+                    message=f'{type(self).__name__} neither re-renders on nor listens for the delivered event.',
                     details={'event': identity},
                 )
+            rerender = rerender or identity in rerender_identities
             deliveries.extend((listener, event) for listener in listeners)
 
         policy = call_context.target_glue_policy
@@ -380,7 +390,8 @@ class Component(BaseGlue):
                 listener.run(self, event)
 
         entry, introduced = self._run_call(call_context, invoke)
-        if 'policy_token' not in entry and all(listener.skip_rerender for listener, _event in deliveries):
+        rerender = rerender or any(not listener.skip_rerender for listener, _event in deliveries)
+        if 'policy_token' not in entry and not rerender:
             return entry, introduced
         return self._rerendered(entry, introduced, call_context)
 

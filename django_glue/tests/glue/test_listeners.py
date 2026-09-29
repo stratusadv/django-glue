@@ -25,16 +25,19 @@ from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolv
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.gorilla.components import (
     CounterCardComponent,
+    CounterDashboardComponent,
     CounterTallyComponent,
     GuardedCounterTallyComponent,
     QuietCounterTallyComponent,
+    RerenderingCounterDashboardComponent,
 )
 
 COUNTED = CounterCardComponent.counted.identity
 
 
-def _stamped(mock_request, tally_class=CounterTallyComponent) -> tuple[CounterTallyComponent, list[dict[str, Any]]]:
-    tally = Glue.object(mock_request, tally_class())
+def _stamped(mock_request, component_class=CounterTallyComponent) -> tuple[Any, list[dict[str, Any]]]:
+    """Render a component that stamps counter cards; return it and the cards' entries."""
+    tally = Glue.object(mock_request, component_class())
     tally.render()
     cards = [
         entry
@@ -109,6 +112,35 @@ def test_skip_rerender_listeners_that_change_nothing_do_not_render(mock_request)
 
     assert 'html' not in entry
     assert 'policy_token' not in entry
+
+
+def test_rerender_on_rerenders_without_a_listener(mock_request) -> None:
+    dashboard, cards = _stamped(mock_request, RerenderingCounterDashboardComponent)
+
+    entry = _receive(dashboard, [_counted_from(cards[0])])
+
+    assert dashboard.get_static_data()['listeners'] == [COUNTED]
+    assert 'data-testid="counter-dashboard"' in entry['html']
+    assert 'policy_token' not in entry
+
+
+def test_rerender_on_takes_a_tuple_of_declared_events() -> None:
+    with pytest.raises(TypeError, match='rerender_on takes one or more events'):
+        class NameListedComponent(Glue.Component):
+            template = 'glue_template_test.html'
+            rerender_on = ('counted',)
+
+    with pytest.raises(TypeError, match='rerender_on takes one or more events'):
+        class UnwrappedComponent(Glue.Component):
+            template = 'glue_template_test.html'
+            rerender_on = CounterCardComponent.counted
+
+
+def test_receive_rejects_an_event_the_component_does_not_handle(mock_request) -> None:
+    dashboard, cards = _stamped(mock_request, CounterDashboardComponent)
+
+    with pytest.raises(GlueRequestError, match='neither re-renders on nor listens for'):
+        _receive(dashboard, [_counted_from(cards[0])])
 
 
 def test_receive_rejects_a_source_that_is_not_a_descendant(mock_request) -> None:

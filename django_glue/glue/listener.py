@@ -105,15 +105,23 @@ class GlueListener:
             self.function(component)
 
 
+def require_declared_events(events: Any, where: str) -> None:
+    """Reject anything but a non-empty sequence of events declared on a class."""
+    if (
+        not isinstance(events, (tuple, list))
+        or not events
+        or any(not isinstance(event, GlueEvent) or event.identity is None for event in events)
+    ):
+        msg = f'{where} takes one or more events declared on a class, such as RowComponent.saved.'
+        raise TypeError(msg)
+
+
 def listener(
     *events: GlueEvent,
     required_access: GlueAccess = GlueAccess.VIEW,
     skip_rerender: bool = False,
 ) -> Callable[[Callable[..., None]], GlueListener]:
-    undeclared = [event for event in events if not isinstance(event, GlueEvent) or event.identity is None]
-    if not events or undeclared:
-        msg = 'Glue.listener takes one or more events declared on a class, such as RowComponent.saved.'
-        raise TypeError(msg)
+    require_declared_events(events, 'Glue.listener')
 
     def decorate(function: Callable[..., None]) -> GlueListener:
         return GlueListener(

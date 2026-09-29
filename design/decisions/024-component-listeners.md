@@ -1,8 +1,12 @@
-# ADR 024: A Component Declares the Descendant Events It Reacts To with `Glue.listener`
+# ADR 024: A Component Declares the Descendant Events It Reacts To with `rerender_on` and `Glue.listener`
 
 Status: Accepted; implemented on branch
 
 Date: 2026-09-29
+
+Amended 2026-09-29, before release: a re-render with no code to run is declared
+with the `rerender_on` class attribute instead of an empty `Glue.listener`
+method. See "Declaring a re-render".
 
 ## Context
 
@@ -52,25 +56,44 @@ on the server, which Glue deliberately does not.
 
 ## Decision
 
-### Declaring a listener
+### Declaring a re-render
 
-`Glue.listener(*events)` decorates a component method. Each argument is a
-declared event, referenced through the class that declares it:
+The common case has no code to run: the component shows something its children
+change, and must re-render when they announce it. It declares that as class
+configuration, beside `template` and `layout_template`:
 
 ```python
 class TransactionReviewComponent(SignedInComponent):
     template = 'banking/component/transaction_review.html'
-
-    month_start: datetime.date = Glue.ComponentParameter()
-
-    @Glue.listener(TransactionRowComponent.confirmed, TransactionRowComponent.merchant_rule_created)
-    def row_changed(self) -> None:
-        """The month summary and other rows from the merchant depend on the row."""
+    rerender_on = (
+        TransactionRowComponent.confirmed,
+        TransactionRowComponent.merchant_rule_created,
+    )
 ```
 
-- **Only a component may declare a listener.** Re-rendering on an event is what
-  the listener is for, and only components render. Declaring one on another
-  Glue object is an error at class definition, as `Glue.ComponentParameter` is.
+`rerender_on` is a tuple of declared events, checked when the class is defined.
+The name states the effect and the trigger, so a reader does not need to know
+how delivery works to see why the component renders again. A subclass replaces
+or extends the tuple.
+
+The first version of this ADR expressed the same thing as a `Glue.listener`
+method with an empty body. That is a declaration dressed as a method: the
+decorator needed something to attach to, and nothing in the snippet said that a
+re-render follows. A bodiless `Glue.listener(...)` class attribute and a
+`Glue.depends_on(...)` were also considered and rejected for the same reason,
+and `depends_on` suggests a data dependency such as a model more than an event.
+
+### Declaring a listener
+
+`Glue.listener(*events)` decorates a component method that runs when one of the
+events arrives. Each argument is a declared event, referenced through the class
+that declares it. The component then re-renders under the same rule as any
+component callable.
+
+- **Only a component may declare a listener or `rerender_on`.** Re-rendering is
+  what they are for, and only components render. Declaring a listener on
+  another Glue object is an error at class definition, as
+  `Glue.ComponentParameter` is.
 - **Events are referenced as objects, not names.** `GlueEvent` records the class
   that declares it, so a misspelled event fails at import. An event fired by
   name with `Glue.event(obj, 'saved', {...})` has no declaration and cannot be
@@ -108,8 +131,9 @@ listening components and calls them in a second request.
    `as_page()` has none. Addresses are derived from the parent's address, key
    and tag, not from parameters, so the chain stays valid across re-renders
    and model parameter retargeting.
-2. **Listeners are published.** A component's `static_data` lists its listeners
-   by event identity under `listeners`, and maps each event it can emit to its
+2. **Listeners are published.** A component's `static_data` lists the identities
+   of the events in its `rerender_on` and its listeners under `listeners`, and
+   maps each event it can emit to its
    identity under `event_ids`. The client reads the ancestor chain from the
    policy payload it already decodes.
 3. **The client routes by ancestry.** When a response carries an event from a
@@ -136,8 +160,10 @@ listening components and calls them in a second request.
    checking each one's `required_access` and `is_authorized()` as a call to that
    listener. The first access to `event.source` rebuilds the source and checks
    its own `is_authorized()` for a read. The listening component then re-renders
-   under the ADR 022 rule, once for the whole batch, unless every listener that
-   ran declares `skip_rerender=True`.
+   once for the whole batch when a delivered event is in its `rerender_on`, a
+   listener that ran does not declare `skip_rerender=True`, or a retained value
+   changed. An event the component neither re-renders on nor listens for is
+   rejected.
 6. **Events from listeners keep going up.** A listener may emit the listening
    component's own events. They arrive in the `$receive` response and are
    delivered to that component's ancestors in turn.

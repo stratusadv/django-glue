@@ -819,17 +819,20 @@ root and therefore exposes the same event only through `$on()`. The
 source-scoped proxy event is the universal contract; the component DOM event is
 its browser integration.
 
-A component that depends on its descendants declares it on its class with
-`@Glue.listener(ChildComponent.event)` (ADR 024). A component's signed identity
+A component that depends on its descendants declares it on its class (ADR 024):
+`rerender_on = (ChildComponent.event, ...)` re-renders it when a descendant
+emits one of those events, and `@Glue.listener(ChildComponent.event)` runs a
+method first. A component's signed identity
 records its ancestor chain: the component whose template stamped it or whose
 callable returned it, then that component's chain. When a component's response
 carries an event, the client calls the built-in `$receive` callable on each
 mounted ancestor in that chain whose `static_data.listeners` names the event's
 identity, passing the event, its detail, and the source's current token. The
 server verifies that the source is a genuine descendant emitting a declared
-event, runs the matching listeners, and re-renders the listening component under
-the callable re-render rule above. The source's own morph waits for those calls and is skipped when a
-listener's render already contains it. Routing follows the signed ancestry, not
+event, runs the matching listeners, and re-renders the component when an event
+is in its `rerender_on` or a listener that ran does not skip rendering. The
+source's own morph waits for those calls and is skipped when the component's
+render already contains it. Routing follows the signed ancestry, not
 the DOM, so it does not depend on bubbling or on where a host mounts a returned
 component. This is not a global bus: an event reaches only its source's
 declared, listening ancestors.
