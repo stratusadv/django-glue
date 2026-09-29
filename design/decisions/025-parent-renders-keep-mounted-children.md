@@ -67,10 +67,13 @@ every child.
    including inside a table, so the placeholder is not moved by the parser
    whatever element the child's root is. Duplicate-key checking still runs.
 4. **The client restores the child before morphing.** Before morphing a
-   response's HTML, the client replaces each placeholder with a copy of the
-   live element at that address. The morph then finds that subtree unchanged
-   and leaves the child's DOM, Alpine state, and proxy alone. A placeholder
-   whose element is gone is dropped.
+   response's HTML, the client replaces each placeholder with an empty copy of
+   the live child's element: the same tag and attributes, so the morph pairs it
+   with the live child, marked so the morph skips it. The live child's DOM,
+   Alpine state, and proxy are left alone. A full copy would carry nodes Alpine
+   generated inside the child, such as `x-for` items, whose bindings fail when
+   Alpine evaluates them outside their loop. A placeholder whose element is gone
+   is dropped.
 5. **Page loads are unchanged.** A page, a fragment served by `as_view()` or
    `as_page()`, and an HTML result that is not a component's own render carry
    no `mounted` list, so every child renders.

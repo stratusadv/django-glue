@@ -31,8 +31,8 @@
 - A component's `rerender_on = (ChildComponent.event, ...)` re-renders it when
   a descendant emits one of those events, and `@Glue.listener(ChildComponent.event)`
   runs a method first. The client delivers the event through the component's
-  built-in `$receive` call, and the child's own markup waits for the component's
-  render so the page changes once. A listener's `event.source` is the emitting
+  built-in `$receive` call, and the child applies its own markup once the
+  component's render has arrived, so the page changes once. A listener's `event.source` is the emitting
   component, rebuilt from its signed token (ADR 024).
 - A component's signed identity records its ancestors: the component whose
   template stamped it, or whose callable returned it, and theirs.

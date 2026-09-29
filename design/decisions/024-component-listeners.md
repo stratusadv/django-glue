@@ -11,7 +11,13 @@ method. See "Declaring a re-render".
 Partly superseded by [ADR 025](025-parent-renders-keep-mounted-children.md): a
 component's re-render keeps its mounted children instead of re-stamping them,
 `rerender_on` is delivered page-wide rather than to ancestors only, deliveries
-are batched, and the source always applies its own morph.
+are batched, and the source always applies its own morph. A stamped child's
+address now also carries a hash of the parameters and access its stamp passes,
+so the statement below that addresses are "not from parameters" no longer holds
+for stamped children. The ancestor chain is unaffected: it holds the parent's
+address, a child the parent stamps with new parameters is a new child with the
+same parent, and a child that retargets its own model parameter keeps its
+address, because only a stamp computes the hash.
 
 ## Context
 

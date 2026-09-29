@@ -72,8 +72,9 @@ class TransactionReviewComponent(Glue.Component):
 ```
 
 When a row stamped in this component's template emits `confirmed`, the client
-delivers the event to this component, which re-renders. The row's own markup is
-updated by that render, so the page changes once.
+delivers the event to this component, which re-renders. The row keeps its place
+in that render and updates itself from its own response, which waits until this
+component's render has arrived, so the page changes once.
 
 - **List the declared events, not their names.**
   `TransactionRowComponent.confirmed` fails at import if the row does not declare
