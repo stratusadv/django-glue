@@ -22,6 +22,28 @@ if TYPE_CHECKING:
 RESOLVING_PARAMETERS_ATTRIBUTE = '_glue_resolving_model_parameters'
 
 
+def _missing_loads(resolved: Model, supplied: Model, prefix: str = '') -> set[str]:
+    """What ``resolved`` has loaded and ``supplied`` lacks, named as the queryset
+    arguments that load it: annotations and fields, prefetched relations, and
+    ``select_related`` relations, followed into each relation both have loaded
+    so a nested load is named by its path (``project__client``)."""
+    internal = {'_state', '_prefetched_objects_cache'}
+    names = set(resolved.__dict__) - set(supplied.__dict__) - internal
+    names |= (
+        set(getattr(resolved, '_prefetched_objects_cache', {}))
+        - set(getattr(supplied, '_prefetched_objects_cache', {}))
+    )
+    missing = {f'{prefix}{name}' for name in names}
+    for name, related in resolved._state.fields_cache.items():
+        if name not in supplied._state.fields_cache:
+            missing.add(f'{prefix}{name}')
+            continue
+        supplied_related = supplied._state.fields_cache[name]
+        if related is not None and supplied_related is not None:
+            missing |= _missing_loads(related, supplied_related, f'{prefix}{name}__')
+    return missing
+
+
 class ModelParameter(DeclaredAttribute):
     """A component parameter whose value is a model row, declared by decorating
     its initializer with ``Glue.ComponentParameter`` (ADR 021).
@@ -145,10 +167,7 @@ class ModelParameter(DeclaredAttribute):
             )
             raise GlueComponentParameterError(msg) from error
 
-        missing = sorted(
-            (set(resolved.__dict__) - set(supplied.__dict__) - {'_state'})
-            | (set(resolved._state.fields_cache) - set(supplied._state.fields_cache))
-        )
+        missing = sorted(_missing_loads(resolved, supplied))
         if not missing:
             return supplied
 

@@ -20,6 +20,7 @@ from django_glue.exceptions import (
 from django_glue.glue.component import Component
 from django_glue.glue.policy import GluePolicy
 from django_glue.tests.glue.test_callable_parameters import call_context
+from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla
 
 
@@ -141,6 +142,47 @@ def test_verification_accepts_an_instance_loaded_like_the_initializer(
     with warnings.catch_warnings():
         warnings.simplefilter('error', GlueModelParameterMismatchWarning)
         assert component.gorilla is loaded_gorilla
+
+
+class GorillaRecordComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def gorilla(self, pk: int) -> Gorilla:
+        return Gorilla.objects.prefetch_related('skills', 'fights_as_red_corner').get(pk=pk)
+
+
+class FightCardComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def fight(self, pk: int) -> Fight:
+        return Fight.objects.select_related('red_corner').prefetch_related('red_corner__skills').get(pk=pk)
+
+
+def test_verification_names_a_missing_prefetch_although_another_is_loaded(
+    mock_request, gorilla, settings,
+) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True
+    partly_loaded = Gorilla.objects.prefetch_related('skills').get(pk=gorilla.pk)
+    component = Glue.object(mock_request, GorillaRecordComponent(gorilla=partly_loaded))
+
+    with pytest.warns(GlueModelParameterMismatchWarning) as caught:
+        _ = component.gorilla
+
+    [warning] = caught
+    assert 'without fights_as_red_corner,' in str(warning.message)
+    assert '_prefetched_objects_cache' not in str(warning.message)
+
+
+def test_verification_names_a_missing_nested_load_by_its_path(mock_request, gorilla, settings) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True
+    fight = Fight.objects.create(name='Bout', red_corner=gorilla, blue_corner=gorilla)
+    shallow = Fight.objects.select_related('red_corner').get(pk=fight.pk)
+    component = Glue.object(mock_request, FightCardComponent(fight=shallow))
+
+    with pytest.warns(GlueModelParameterMismatchWarning, match='without red_corner__skills,'):
+        _ = component.fight
 
 
 def test_model_parameter_is_not_client_callable(mock_request, loaded_gorilla) -> None:
