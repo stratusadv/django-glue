@@ -1,6 +1,6 @@
 import {describe, expect, test} from "bun:test"
 import GlueConfig from "../src/config"
-import GlueHttp from "../src/http"
+import GlueHttp, {GlueRequestBatch} from "../src/http"
 import {createPolicy, createState, mockOperationFetch} from "./testUtils"
 
 describe('GlueHttp', () => {
@@ -47,7 +47,7 @@ describe('GlueHttp', () => {
             {address: 'b#2', result: 2},
         ]})
         const http = new GlueHttp(new GlueConfig())
-        const batch = http.batch(2)
+        const batch = new GlueRequestBatch(http, 2)
 
         const [first, second] = await Promise.all([
             http.sendAttributeRequest({address: 'a#1', policyToken: 't1', attribute: '$receive', batch}),
@@ -65,10 +65,24 @@ describe('GlueHttp', () => {
         const http = new GlueHttp(new GlueConfig())
 
         const response = await http.sendAttributeRequest({
-            address: 'a#1', policyToken: 't1', attribute: '$receive', batch: http.batch(3),
+            address: 'a#1', policyToken: 't1', attribute: '$receive', batch: new GlueRequestBatch(http, 3),
         })
 
         expect(calls).toHaveLength(1)
         expect(response.data.objects).toEqual([{address: 'a#1', result: 1}])
+    })
+
+    test('a second request for an address already in a batch travels alone', async () => {
+        const calls = mockOperationFetch({objects: [{address: 'a#1', result: 1}]})
+        const http = new GlueHttp(new GlueConfig())
+        const batch = new GlueRequestBatch(http, 2)
+
+        await Promise.all([
+            http.sendAttributeRequest({address: 'a#1', policyToken: 't1', attribute: '$receive', batch}),
+            http.sendAttributeRequest({address: 'a#1', policyToken: 't1', attribute: 'save', batch}),
+        ])
+
+        expect(calls).toHaveLength(2)
+        expect(calls.map(call => JSON.parse(call.options.body.get('objects')).length)).toEqual([1, 1])
     })
 })

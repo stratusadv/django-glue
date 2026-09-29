@@ -1,3 +1,5 @@
+import {GlueRequestBatch} from "../http"
+
 // Routes a response's events to the components that react to them (ADR 024,
 // ADR 025): a mounted component that lists the event in `rerender_on`,
 // anywhere on the page, and a mounted ancestor with a `Glue.listener` for it.
@@ -28,7 +30,7 @@ function deliverToListeners(proxy, entry) {
     })
     if (!deliveries.length) return []
 
-    const batch = proxy._http.batch(deliveries.length)
+    const batch = new GlueRequestBatch(proxy._http, deliveries.length)
     return deliveries.map(([recipient, delivered]) => (
         recipient._callAttribute('$receive', {events: delivered}, {batch})
     ))

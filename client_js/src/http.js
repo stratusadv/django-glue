@@ -101,12 +101,6 @@ class GlueHttp {
         })
     }
 
-    // Collects up to `size` attribute requests into one POST (ADR 025). It
-    // sends when the last one arrives, or on the next task if some never do.
-    batch(size) {
-        return {size, pending: [], timer: null, sent: false}
-    }
-
     async sendAttributeRequest({
         address,
         policyToken,
@@ -135,43 +129,11 @@ class GlueHttp {
             updates: {},
         }))]
 
-        // A request with files, or one arriving after its batch was sent,
-        // travels alone. Batched entries always carry distinct addresses:
-        // each comes from a different component's queue.
-        if (!batch || batch.sent || Object.keys(files).length) {
+        // A request with files travels alone, as does one its batch refuses.
+        if (!batch?.accepts(entries) || Object.keys(files).length) {
             return await this._postEntries(entries, files, signal)
         }
-        return await new Promise((resolve, reject) => {
-            batch.pending.push({entries, resolve, reject})
-            if (batch.pending.length >= batch.size) this._sendBatch(batch)
-            else batch.timer ??= setTimeout(() => this._sendBatch(batch), 0)
-        })
-    }
-
-    async _sendBatch(batch) {
-        clearTimeout(batch.timer)
-        batch.sent = true
-        const {pending} = batch
-        try {
-            const response = await this._postEntries(pending.flatMap(item => item.entries), {}, null)
-            // The response lists each requested entry followed by the
-            // children it introduced; hand each caller its own run.
-            const owners = new Map(pending.flatMap((item, index) => (
-                item.entries.map(entry => [entry.address, index])
-            )))
-            const shares = pending.map(() => [])
-            let owner = 0
-            ;(response.data?.objects || []).forEach(object => {
-                owner = owners.get(object?.address) ?? owner
-                shares[owner].push(object)
-            })
-            pending.forEach((item, index) => item.resolve({
-                ...response,
-                data: {...response.data, objects: shares[index]},
-            }))
-        } catch (error) {
-            pending.forEach(item => item.reject(error))
-        }
+        return await batch.add(entries)
     }
 
     async _postEntries(entries, files, signal) {
@@ -263,4 +225,60 @@ class GlueHttp {
     }
 }
 
+// Collects up to `size` attribute requests into one POST and hands each
+// caller its own share of the response (ADR 025). It sends when the last
+// request arrives, or on the next task if some never do.
+class GlueRequestBatch {
+    constructor(http, size) {
+        this._http = http
+        this._size = size
+        this._pending = []
+        this._timer = null
+        this._sent = false
+    }
+
+    // A batch takes no request after it is sent, and never two entries for
+    // one address, which the endpoint rejects as a whole.
+    accepts(entries) {
+        if (this._sent) return false
+        const addresses = new Set(this._pending.flatMap(item => item.entries.map(entry => entry.address)))
+        return entries.every(entry => !addresses.has(entry.address))
+    }
+
+    add(entries) {
+        return new Promise((resolve, reject) => {
+            this._pending.push({entries, resolve, reject})
+            if (this._pending.length >= this._size) this._send()
+            else this._timer ??= setTimeout(() => this._send(), 0)
+        })
+    }
+
+    async _send() {
+        clearTimeout(this._timer)
+        this._sent = true
+        const pending = this._pending
+        try {
+            const response = await this._http._postEntries(pending.flatMap(item => item.entries), {}, null)
+            // The response lists each requested entry followed by the
+            // children it introduced; hand each caller its own run.
+            const owners = new Map(pending.flatMap((item, index) => (
+                item.entries.map(entry => [entry.address, index])
+            )))
+            const shares = pending.map(() => [])
+            let owner = 0
+            ;(response.data?.objects || []).forEach(object => {
+                owner = owners.get(object?.address) ?? owner
+                shares[owner].push(object)
+            })
+            pending.forEach((item, index) => item.resolve({
+                ...response,
+                data: {...response.data, objects: shares[index]},
+            }))
+        } catch (error) {
+            pending.forEach(item => item.reject(error))
+        }
+    }
+}
+
+export {GlueRequestBatch}
 export default GlueHttp

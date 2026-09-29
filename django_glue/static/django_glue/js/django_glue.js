@@ -222,9 +222,6 @@
         signal
       });
     }
-    batch(size) {
-      return { size, pending: [], timer: null, sent: false };
-    }
     async sendAttributeRequest({
       address,
       policyToken,
@@ -254,37 +251,10 @@
         policy_token: companion.policyToken,
         updates: {}
       }))];
-      if (!batch || batch.sent || Object.keys(files).length) {
+      if (!batch?.accepts(entries) || Object.keys(files).length) {
         return await this._postEntries(entries, files, signal);
       }
-      return await new Promise((resolve, reject) => {
-        batch.pending.push({ entries, resolve, reject });
-        if (batch.pending.length >= batch.size)
-          this._sendBatch(batch);
-        else
-          batch.timer ??= setTimeout(() => this._sendBatch(batch), 0);
-      });
-    }
-    async _sendBatch(batch) {
-      clearTimeout(batch.timer);
-      batch.sent = true;
-      const { pending } = batch;
-      try {
-        const response = await this._postEntries(pending.flatMap((item) => item.entries), {}, null);
-        const owners = new Map(pending.flatMap((item, index) => item.entries.map((entry) => [entry.address, index])));
-        const shares = pending.map(() => []);
-        let owner = 0;
-        (response.data?.objects || []).forEach((object) => {
-          owner = owners.get(object?.address) ?? owner;
-          shares[owner].push(object);
-        });
-        pending.forEach((item, index) => item.resolve({
-          ...response,
-          data: { ...response.data, objects: shares[index] }
-        }));
-      } catch (error2) {
-        pending.forEach((item) => item.reject(error2));
-      }
+      return await batch.add(entries);
     }
     async _postEntries(entries, files, signal) {
       const formData = new FormData;
@@ -353,6 +323,52 @@
         payload: errorData || null,
         responseBody: body
       });
+    }
+  }
+
+  class GlueRequestBatch {
+    constructor(http, size) {
+      this._http = http;
+      this._size = size;
+      this._pending = [];
+      this._timer = null;
+      this._sent = false;
+    }
+    accepts(entries) {
+      if (this._sent)
+        return false;
+      const addresses = new Set(this._pending.flatMap((item) => item.entries.map((entry) => entry.address)));
+      return entries.every((entry) => !addresses.has(entry.address));
+    }
+    add(entries) {
+      return new Promise((resolve, reject) => {
+        this._pending.push({ entries, resolve, reject });
+        if (this._pending.length >= this._size)
+          this._send();
+        else
+          this._timer ??= setTimeout(() => this._send(), 0);
+      });
+    }
+    async _send() {
+      clearTimeout(this._timer);
+      this._sent = true;
+      const pending = this._pending;
+      try {
+        const response = await this._http._postEntries(pending.flatMap((item) => item.entries), {}, null);
+        const owners = new Map(pending.flatMap((item, index) => item.entries.map((entry) => [entry.address, index])));
+        const shares = pending.map(() => []);
+        let owner = 0;
+        (response.data?.objects || []).forEach((object) => {
+          owner = owners.get(object?.address) ?? owner;
+          shares[owner].push(object);
+        });
+        pending.forEach((item, index) => item.resolve({
+          ...response,
+          data: { ...response.data, objects: shares[index] }
+        }));
+      } catch (error2) {
+        pending.forEach((item) => item.reject(error2));
+      }
     }
   }
   var http_default = GlueHttp;
@@ -4886,7 +4902,7 @@ ${expression ? 'Expression: "' + expression + `"
     });
     if (!deliveries.length)
       return [];
-    const batch = proxy._http.batch(deliveries.length);
+    const batch = new GlueRequestBatch(proxy._http, deliveries.length);
     return deliveries.map(([recipient, delivered]) => recipient._callAttribute("$receive", { events: delivered }, { batch }));
   }
 

@@ -129,7 +129,8 @@ class ModelParameter(DeclaredAttribute):
         return value
 
     def _verified(self, instance: Any, supplied: Model) -> Model:
-        if not self._verification_enabled():
+        configured = settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS
+        if not (settings.DEBUG if configured is None else configured):
             return supplied
 
         try:
@@ -157,8 +158,3 @@ class ModelParameter(DeclaredAttribute):
             stacklevel=2,
         )
         return resolved
-
-    @staticmethod
-    def _verification_enabled() -> bool:
-        configured = settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS
-        return settings.DEBUG if configured is None else bool(configured)
