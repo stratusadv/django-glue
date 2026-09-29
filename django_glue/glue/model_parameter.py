@@ -111,9 +111,12 @@ class ModelParameter(DeclaredAttribute):
         instance.__dict__[self.storage_name] = supplied
         instance.__dict__.pop(self.resolved_name, None)
 
-    def signed_value(self, instance: Any) -> Any:
+    def signed_value(self, instance: Any) -> int | str:
+        """The key as it is signed: an int, or a string for any other key type,
+        such as a UUID, which the key field's ``to_python`` reads back."""
         supplied = instance.__dict__[self.storage_name]
-        return supplied.pk if isinstance(supplied, Model) else supplied
+        key = supplied.pk if isinstance(supplied, Model) else supplied
+        return key if isinstance(key, int) else str(key)
 
     def _resolved(self, instance: Any, pk: Any) -> Model:
         try:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-import json
 import warnings
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
@@ -12,7 +11,6 @@ from django.shortcuts import render as render_template
 from django.views.decorators.http import require_safe
 
 from django_glue.access import GlueAccess
-from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
@@ -237,7 +235,7 @@ class Component(BaseGlue):
         }
         return {
             'component_id': f'{type(self).__module__}.{type(self).__qualname__}',
-            'parameters': json.loads(json.dumps(parameters, cls=GlueResponseJSONEncoder)),
+            'parameters': parameters,
             'ancestors': list(self._ancestors),
         }
 

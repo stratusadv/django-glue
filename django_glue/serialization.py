@@ -7,6 +7,7 @@ from django import forms
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from pydantic import PydanticUserError, TypeAdapter
+from pydantic_core import PydanticSerializationError
 from pydantic import ValidationError as PydanticValidationError
 
 if TYPE_CHECKING:
@@ -31,6 +32,8 @@ class GlueSerializerHandler(ABC):
         raise NotImplementedError
 
     def encode(self, value: Any, target: Any) -> Any:
+        """The value in its wire form. A handler whose values already are
+        keeps this default."""
         _ = target
         return value
 
@@ -183,8 +186,8 @@ class AnnotationSerializer(GlueSerializerHandler):
     def encode(self, value: Any, target: Any) -> Any:
         try:
             return _adapter(target).dump_python(value, mode='json')
-        except PydanticUserError:
-            return value
+        except (PydanticUserError, PydanticSerializationError) as error:
+            raise GlueSerializerError(str(error)) from error
 
 
 glue_serializer_registry = GlueSerializerRegistry(

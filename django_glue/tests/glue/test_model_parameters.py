@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import datetime
 import enum
+import uuid
 import warnings
 from dataclasses import dataclass
 from decimal import Decimal
 
 import pytest
+from django.db import models
 from django.db.models.functions import Upper
 
 from django_glue import Glue
@@ -235,6 +237,31 @@ def test_dataclass_parameter_round_trips_through_the_token(mock_request) -> None
     }
     assert reconstructed.window == window
     assert 'html' in entry
+
+
+class Receipt(models.Model):
+    id = models.UUIDField(primary_key=True)
+
+    class Meta:
+        app_label = 'gorilla'
+        managed = False
+
+
+class ReceiptCardComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def receipt(self, pk: uuid.UUID) -> Receipt:
+        return Receipt.objects.get(pk=pk)
+
+
+def test_a_uuid_key_is_signed_as_a_string_and_read_back() -> None:
+    key = uuid.uuid4()
+
+    signed = ReceiptCardComponent(receipt=Receipt(pk=key)).identity['parameters']
+    rebuilt = ReceiptCardComponent(**signed).identity['parameters']
+
+    assert signed == rebuilt == {'receipt': str(key)}
 
 
 @dataclass(frozen=True)
