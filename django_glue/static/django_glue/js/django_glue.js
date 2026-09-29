@@ -3966,6 +3966,11 @@ ${expression ? 'Expression: "' + expression + `"
   // client_js/src/alpine.js
   module_default.plugin(module_default2);
   module_default.magic("glue", (element) => globalThis.Glue?.from(element) || null);
+  module_default.directive("glue-component", (element) => {
+    const proxy = globalThis.Glue?.from(element);
+    if (proxy)
+      module_default.addScopeToNode(element, { component: proxy });
+  }).before("data");
   var installed = false;
   var started2 = false;
   function installAlpine() {
@@ -4000,8 +4005,14 @@ ${expression ? 'Expression: "' + expression + `"
   function morph2(element, html, options = {}) {
     return module_default.morph(element, html, options);
   }
-  function addScopeToNode2(element, scope) {
-    module_default.addScopeToNode(element, scope);
+  function addComponentScope(element, proxy) {
+    if (!element._x_marker) {
+      element.setAttribute("x-glue-component", "");
+      return;
+    }
+    if (element._x_dataStack?.some((scope) => scope.component === proxy))
+      return;
+    module_default.addScopeToNode(element, { component: proxy });
   }
 
   // client_js/src/htmlRenderer.js
@@ -5812,7 +5823,7 @@ ${expression ? 'Expression: "' + expression + `"
         }
         if (!node.hasAttribute("x-data"))
           node.setAttribute("x-data", "{}");
-        addScopeToNode2(node, { component: proxy });
+        addComponentScope(node, proxy);
       });
       return nodes;
     }

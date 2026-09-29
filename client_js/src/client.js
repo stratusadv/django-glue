@@ -7,7 +7,7 @@ import GlueAddressRegistry from "./runtime/addressRegistry"
 import GlueAttributeMaterializer from "./runtime/attributeMaterializer"
 import GlueChildBinder from "./runtime/childBinder"
 import GlueResponseDispatcher from "./runtime/responseDispatcher"
-import {addScopeToNode} from "./alpine"
+import {addComponentScope} from "./alpine"
 
 class GlueClient {
     constructor(context) {
@@ -93,7 +93,7 @@ class GlueClient {
                 record.owner ||= {address: parent.getAttribute('data-glue-address'), path: null}
             }
             if (!node.hasAttribute('x-data')) node.setAttribute('x-data', '{}')
-            addScopeToNode(node, {component: proxy})
+            addComponentScope(node, proxy)
         })
         return nodes
     }

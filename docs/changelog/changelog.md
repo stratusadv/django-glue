@@ -34,7 +34,6 @@
 
 - A component constructed without a `name` is named after its class, as
   `as_view()` already named it, instead of the shared name `component`.
-
 - A successful component callable re-renders its component in the same
   response. A callable returning a Glue object skips the render, and
   `@Glue.attr(skip_rerender=True)` opts any other callable out unless it changed
@@ -45,6 +44,16 @@
 - A component stamped by `{% glue_component %}` whose `is_authorized()` denies it
   renders nothing instead of failing the page. `as_view()` still responds 403.
 - `GlueAuthorizationError` messages name the denied operation and attribute.
+
+### Fixes
+
+- A component nested inside another component, or inside any element with
+  `x-data`, now sees its ancestors' Alpine data, as ordinary nested `x-data`
+  does. Glue previously attached the `component` scope before Alpine had
+  initialized the ancestors, so their `x-data` was missing from the nested
+  component's scope.
+- Re-rendering no longer stacks another `component` scope on a component root
+  that Alpine had already initialized.
 
 ## v1.1.0
 
