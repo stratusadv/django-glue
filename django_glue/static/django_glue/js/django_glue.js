@@ -4262,35 +4262,6 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var policy_default = GluePolicy;
 
-  // client_js/src/runtime/listenerRouter.js
-  function deliverToListeners(proxy, entry) {
-    const events = entry.effects?.events;
-    if (!events?.length)
-      return [];
-    const eventIds = proxy._record.staticData?.event_ids || {};
-    const ancestors = new Set(proxy._record.policy.identity?.ancestors || []);
-    const deliveries = [];
-    proxy._registry.records.forEach((record) => {
-      if (record === proxy._record || record.disposed || !record.proxy?.$el)
-        return;
-      const reacting = new Set([
-        ...record.staticData?.rerender_on || [],
-        ...ancestors.has(record.address) ? record.staticData?.listeners || [] : []
-      ]);
-      const delivered = events.filter(({ name }) => reacting.has(eventIds[name])).map(({ name, detail }) => ({
-        event: eventIds[name],
-        source_token: proxy._record.policyToken,
-        detail
-      }));
-      if (delivered.length)
-        deliveries.push([record.proxy, delivered]);
-    });
-    if (!deliveries.length)
-      return [];
-    const batch = proxy._http.batch(deliveries.length);
-    return deliveries.map(([recipient, delivered]) => recipient._callAttribute("$receive", { events: delivered }, { batch }));
-  }
-
   // client_js/src/proxies/base.js
   class BaseGlueProxy {
     constructor({ http, record, registry, client = null, owner = null }) {
@@ -4399,9 +4370,9 @@ ${expression ? 'Expression: "' + expression + `"
           attribute,
           kwargs,
           companions,
-          mounted: this.$el ? [...this.$el.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address")) : [],
           signal: controller?.signal ?? null,
-          batch
+          batch,
+          ...this._requestFields()
         });
       } catch (error2) {
         if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -4442,10 +4413,7 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
-      await Promise.allSettled(deliverToListeners(this, target));
-      if (target.html !== undefined && this._policy.namespace === "component" && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
-        await result.renderOuterHtml(this.$el);
-      }
+      await this._applyResponse(target, result);
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);
         if (childRecord && !childRecord.owner) {
@@ -4456,6 +4424,10 @@ ${expression ? 'Expression: "' + expression + `"
       this._processEffects(target);
       return { result, response: response.data };
     }
+    _requestFields() {
+      return {};
+    }
+    async _applyResponse(target, result) {}
     async _reintroduceWithOwner() {
       const owner = this._record.owner;
       if (!owner?.path)
@@ -4556,12 +4528,6 @@ ${expression ? 'Expression: "' + expression + `"
           reportError(error2);
         }
       });
-      const sourceElement = event.source.$el;
-      if (this.$el && typeof CustomEvent !== "undefined" && !(this !== event.source && event.type === event.sourceType && sourceElement && this.$el.contains(sourceElement))) {
-        const domEvent = new CustomEvent(event.type, { detail: event.detail, bubbles: true });
-        domEvent.source = event.source;
-        this.$el.dispatchEvent(domEvent);
-      }
     }
     _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
@@ -4895,6 +4861,35 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var queryset_default = GlueQuerySetProxy;
 
+  // client_js/src/runtime/listenerRouter.js
+  function deliverToListeners(proxy, entry) {
+    const events = entry.effects?.events;
+    if (!events?.length)
+      return [];
+    const eventIds = proxy._record.staticData?.event_ids || {};
+    const ancestors = new Set(proxy._record.policy.identity?.ancestors || []);
+    const deliveries = [];
+    proxy._registry.records.forEach((record) => {
+      if (record === proxy._record || record.disposed || !record.proxy?.$el)
+        return;
+      const reacting = new Set([
+        ...record.staticData?.rerender_on || [],
+        ...ancestors.has(record.address) ? record.staticData?.listeners || [] : []
+      ]);
+      const delivered = events.filter(({ name }) => reacting.has(eventIds[name])).map(({ name, detail }) => ({
+        event: eventIds[name],
+        source_token: proxy._record.policyToken,
+        detail
+      }));
+      if (delivered.length)
+        deliveries.push([record.proxy, delivered]);
+    });
+    if (!deliveries.length)
+      return [];
+    const batch = proxy._http.batch(deliveries.length);
+    return deliveries.map(([recipient, delivered]) => recipient._callAttribute("$receive", { events: delivered }, { batch }));
+  }
+
   // client_js/src/proxies/component.js
   class GlueComponentProxy extends htmlRenderer_default(base_default) {
     get $el() {
@@ -4905,6 +4900,30 @@ ${expression ? 'Expression: "' + expression + `"
     async _getHtml(payload = {}) {
       const result = await this._callAttribute("render", payload);
       return result?.html ?? result;
+    }
+    _requestFields() {
+      const root = this.$el;
+      if (!root)
+        return {};
+      return {
+        mounted: [...root.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address"))
+      };
+    }
+    _deliverEvent(event) {
+      super._deliverEvent(event);
+      const root = this.$el;
+      const sourceElement = event.source.$el;
+      if (root && typeof CustomEvent !== "undefined" && !(this !== event.source && event.type === event.sourceType && sourceElement && root.contains(sourceElement))) {
+        const domEvent = new CustomEvent(event.type, { detail: event.detail, bubbles: true });
+        domEvent.source = event.source;
+        root.dispatchEvent(domEvent);
+      }
+    }
+    async _applyResponse(target, result) {
+      await Promise.allSettled(deliverToListeners(this, target));
+      if (target.html !== undefined && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
+        await result.renderOuterHtml(this.$el);
+      }
     }
   }
   var component_default = GlueComponentProxy;
