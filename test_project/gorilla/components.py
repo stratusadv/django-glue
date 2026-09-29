@@ -32,16 +32,6 @@ class ProtectedCounterCardComponent(CounterCardComponent):
         return request.user.is_authenticated
 
 
-class RequestConfiguredCounterCardComponent(CounterCardComponent):
-    @classmethod
-    def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: object) -> dict[str, object]:
-        return {
-            **url_kwargs,
-            'start': int(request.GET['start']),
-            'access': Glue.Access.CHANGE,
-        }
-
-
 class CounterDashboardComponent(Glue.Component):
     template = 'gorilla/component/counter_dashboard.html'
 

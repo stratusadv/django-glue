@@ -479,10 +479,20 @@ path('cards/<int:start>/page/', CounterCard.as_view(
 `as_view()` serves safe HTTP requests through Django's ordinary URL and
 middleware path. Named URL captures supply declared component parameters;
 constructor defaults passed to `as_view()` supply parameters not captured by
-the route. A component may override `get_view_kwargs(request, **url_kwargs)`
-to return constructor kwargs derived from the current request, including a
-request-specific `access` ceiling. The default returns the supplied kwargs.
-The component is introduced and mounted once before rendering, with
+the route.
+
+A page whose parameters or access depend on the request is an ordinary Django
+view that constructs the component and returns `component.as_page(request)`
+(ADR 023). `as_page()` is the response `as_view()` produces, for a component the
+application built: the view's decorators, query parsing, and permission checks
+stay in Django's view layer, and the constructor call is the only construction
+contract. `as_page(layout_template=...)` overrides the class's layout template
+as `as_view()` does. A component constructed without a `name` is named from its
+class, so both paths produce the same root address. `get_view_kwargs()`, which
+returned constructor kwargs as a dict, is deprecated in 1.1.1 and removed in
+1.2.0.
+
+Either way, the component is introduced and mounted once before rendering, with
 the same signed root address and child entries as a template-tag stamp. Unknown
 or missing parameters retain the component's normal constructor errors.
 

@@ -202,17 +202,29 @@ class CounterCardComponent(Glue.Component):
 A layout template does not change the component's own `template`, which it
 keeps for every later re-render.
 
-For parameters or access derived from the request, override the class hook:
+When parameters or access depend on the request, write an ordinary view that
+constructs the component and responds with `as_page()`:
 
 ```python
-@classmethod
-def get_view_kwargs(cls, request, **url_kwargs):
-    return {**url_kwargs, 'user_id': request.user.pk}
+@permission_required('entries.view_entry', raise_exception=True)
+def week_view(request):
+    requested = request.GET.get('date')
+    week_of = datetime.date.fromisoformat(requested) if requested else timezone.localdate()
+    access = Glue.Access.CHANGE if request.user.has_perm('entries.change_entry') else Glue.Access.VIEW
+
+    component = WeekComponent(week_of=week_of, access=access)
+    return component.as_page(request)
 ```
 
-The returned kwargs go to the component constructor; `access` may be included
-to set the request's capability ceiling. The default hook returns the URL and
-`as_view()` kwargs unchanged.
+`as_page(request, layout_template=None)` introduces and mounts the component,
+then renders its layout template, or the component alone when there is none. A
+denial by `is_authorized()` responds 403. The constructor call is the whole
+contract: an unknown or missing parameter raises the component's normal error.
+`as_view()` is the same response for a component built from URL captures and
+fixed keyword arguments.
+
+`get_view_kwargs()` is deprecated and will be removed in 1.2.0. A component that
+overrides it emits a `DeprecationWarning`; move its body into a view as above.
 
 The layout template places the rendered component with the no-argument tag:
 

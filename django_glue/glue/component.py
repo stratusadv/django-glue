@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import warnings
 from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
 
@@ -89,6 +90,14 @@ class Component(BaseGlue):
             ])
         if cls.template is not None:
             component_registry.register(cls)
+        if 'get_view_kwargs' in cls.__dict__:
+            warnings.warn(
+                f'{cls.__name__}.get_view_kwargs() is deprecated and will be removed in '
+                'django-glue 1.2.0. Construct the component in a view function and return '
+                'component.as_page(request) instead.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     @classmethod
     def _declared_parameters(cls) -> dict[str, DeclaredAttribute]:
@@ -122,6 +131,9 @@ class Component(BaseGlue):
             raise GlueComponentParameterError(
                 f'Missing parameters for {type(self).__name__}: {missing}'
             )
+        if name is None:
+            stem = type(self).__name__.removesuffix('Component') or type(self).__name__
+            name = component_name('', CAMEL_BOUNDARY.sub('_', stem).lower(), None)
         super().__init__(name=name, access=access)
 
         if not self.template:
@@ -200,8 +212,32 @@ class Component(BaseGlue):
 
     @classmethod
     def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: Any) -> dict[str, Any]:
+        """Deprecated (ADR 023): construct the component in a view and call `as_page()`."""
         _ = request
         return url_kwargs
+
+    def as_page(self, request: HttpRequest, *, layout_template: str | None = None) -> HttpResponse:
+        """Respond to ``request`` with this component (ADR 023).
+
+        The component is introduced and mounted, then rendered inside the layout
+        template (the argument, else the class's ``layout_template``), or alone as
+        a fragment when there is none. A denial at introduction responds 403.
+        """
+        layout = layout_template if layout_template is not None else self.layout_template
+        try:
+            GlueContextManager(request).add_glue(self)
+            if layout is not None:
+                return render_template(
+                    request,
+                    layout,
+                    {
+                        **self.get_context_data(),
+                        VIEW_COMPONENT_CONTEXT_KEY: self,
+                    },
+                )
+            return HttpResponse(self.render().html)
+        except GlueAuthorizationError as error:
+            raise PermissionDenied from error
 
     @classmethod
     def as_view(
@@ -211,35 +247,14 @@ class Component(BaseGlue):
         access: GlueAccess = GlueAccess.VIEW,
         **parameters: Any,
     ) -> Callable[..., HttpResponse]:
-        layout = layout_template if layout_template is not None else cls.layout_template
-
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
             view_kwargs = cls.get_view_kwargs(
                 request,
                 **{**parameters, **url_parameters},
             )
-            stem = cls.__name__.removesuffix('Component')
-            base_name = CAMEL_BOUNDARY.sub('_', stem or cls.__name__).lower()
-            component = cls(
-                name=component_name('', base_name, None),
-                access=view_kwargs.pop('access', access),
-                **view_kwargs,
-            )
-            try:
-                GlueContextManager(request).add_glue(component)
-                if layout is not None:
-                    return render_template(
-                        request,
-                        layout,
-                        {
-                            **component.get_context_data(),
-                            VIEW_COMPONENT_CONTEXT_KEY: component,
-                        },
-                    )
-                return HttpResponse(component.render().html)
-            except GlueAuthorizationError as error:
-                raise PermissionDenied from error
+            component = cls(access=view_kwargs.pop('access', access), **view_kwargs)
+            return component.as_page(request, layout_template=layout_template)
 
         return view
 

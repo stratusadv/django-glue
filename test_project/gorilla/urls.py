@@ -5,7 +5,6 @@ from test_project.gorilla.components import (
     CounterCardComponent,
     LaidOutCounterCardComponent,
     ProtectedCounterCardComponent,
-    RequestConfiguredCounterCardComponent,
 )
 
 app_name = 'gorilla'
@@ -18,11 +17,7 @@ urlpatterns = [
         ProtectedCounterCardComponent.as_view(),
         name='component_protected_card',
     ),
-    path(
-        'components/request-card/',
-        RequestConfiguredCounterCardComponent.as_view(),
-        name='component_request_card',
-    ),
+    path('components/request-card/', views.request_card_view, name='component_request_card'),
     path(
         'components/card/<int:start>/page/',
         CounterCardComponent.as_view(layout_template='gorilla/page/component_card_page.html'),

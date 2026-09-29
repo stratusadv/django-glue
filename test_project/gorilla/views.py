@@ -6,6 +6,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 
 from django_glue import Glue
+from test_project.gorilla.components import CounterCardComponent
 from test_project.gorilla.forms import GorillaGlueModelForm
 from test_project.gorilla.models import Gorilla, Skill
 from test_project.gorilla.forms import GorillaForm
@@ -14,6 +15,11 @@ from test_project.test_forms import ContactFormSet
 
 def component_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'gorilla/page/component_page.html')
+
+
+def request_card_view(request: HttpRequest) -> HttpResponse:
+    component = CounterCardComponent(start=int(request.GET['start']), access=Glue.Access.CHANGE)
+    return component.as_page(request)
 
 
 def contact_formset_view(request: HttpRequest) -> HttpResponse:

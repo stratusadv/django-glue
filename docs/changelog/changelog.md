@@ -12,8 +12,20 @@
   `GlueModelParameterMismatchWarning` (ADR 021).
 - Component parameters are encoded through their annotation's adapter, so
   dataclass parameters are signed and restored (ADR 021).
+- `component.as_page(request)` responds with a component the application
+  constructed, so a page whose parameters depend on the request is an ordinary
+  view. `as_view()` now builds on it (ADR 023).
+
+### Deprecated
+
+- `Component.get_view_kwargs()` is deprecated and will be removed in 1.2.0. A
+  component that overrides it emits a `DeprecationWarning`. Construct the
+  component in a view and return `component.as_page(request)` instead (ADR 023).
 
 ### Changes
+
+- A component constructed without a `name` is named after its class, as
+  `as_view()` already named it, instead of the shared name `component`.
 
 - A successful component callable re-renders its component in the same
   response. A callable returning a Glue object skips the render, and
