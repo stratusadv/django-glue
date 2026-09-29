@@ -4877,35 +4877,6 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var queryset_default = GlueQuerySetProxy;
 
-  // client_js/src/runtime/listenerRouter.js
-  function deliverToListeners(proxy, entry) {
-    const events = entry.effects?.events;
-    if (!events?.length)
-      return [];
-    const eventIds = proxy._record.staticData?.event_ids || {};
-    const ancestors = new Set(proxy._record.policy.identity?.ancestors || []);
-    const deliveries = [];
-    proxy._registry.records.forEach((record) => {
-      if (record === proxy._record || record.disposed || !record.proxy?.$el)
-        return;
-      const reacting = new Set([
-        ...record.staticData?.rerender_on || [],
-        ...ancestors.has(record.address) ? record.staticData?.listeners || [] : []
-      ]);
-      const delivered = events.filter(({ name }) => reacting.has(eventIds[name])).map(({ name, detail }) => ({
-        event: eventIds[name],
-        source_token: proxy._record.policyToken,
-        detail
-      }));
-      if (delivered.length)
-        deliveries.push([record.proxy, delivered]);
-    });
-    if (!deliveries.length)
-      return [];
-    const batch = new GlueRequestBatch(proxy._http, deliveries.length);
-    return deliveries.map(([recipient, delivered]) => recipient._callAttribute("$receive", { events: delivered }, { batch }));
-  }
-
   // client_js/src/proxies/component.js
   class GlueComponentProxy extends htmlRenderer_default(base_default) {
     get $el() {
@@ -4935,8 +4906,32 @@ ${expression ? 'Expression: "' + expression + `"
         root.dispatchEvent(domEvent);
       }
     }
+    _deliverEvents(target) {
+      const eventIds = this._record.staticData?.event_ids || {};
+      const events = (target.effects?.events || []).filter(({ name }) => eventIds[name]).map(({ name, detail }) => ({
+        event: eventIds[name],
+        source_token: this._record.policyToken,
+        detail
+      }));
+      if (!events.length)
+        return [];
+      const ancestors = new Set(this._record.policy.identity?.ancestors || []);
+      const deliveries = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el).map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
+      if (!deliveries.length)
+        return [];
+      const batch = new GlueRequestBatch(this._http, deliveries.length);
+      return deliveries.map(([proxy, reactions]) => proxy._callAttribute("$receive", { events: reactions }, { batch }));
+    }
+    _reactionsTo(events, fromDescendant) {
+      const staticData = this._record.staticData || {};
+      const reacting = new Set([
+        ...staticData.rerender_on || [],
+        ...fromDescendant ? staticData.listeners || [] : []
+      ]);
+      return events.filter(({ event }) => reacting.has(event));
+    }
     async _applyResponse(target, result) {
-      await Promise.allSettled(deliverToListeners(this, target));
+      await Promise.allSettled(this._deliverEvents(target));
       if (target.html !== undefined && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
         await result.renderOuterHtml(this.$el);
       }
