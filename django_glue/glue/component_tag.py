@@ -108,7 +108,7 @@ class GlueComponentNode(Node):
                 f'{tag_name}:{canonical}:{_stamp_fingerprint(component)}',
             )
         if isinstance(parent, Component):
-            component._ancestors = (parent.address, *parent._ancestors)
+            component._ancestors = parent.lineage
         if (
             not self.rerender_with_parent
             and component.address in context.get(MOUNTED_CHILDREN_CONTEXT_KEY, ())

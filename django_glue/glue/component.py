@@ -205,6 +205,11 @@ class Component(BaseGlue):
         }
 
     @property
+    def lineage(self) -> tuple[str, ...]:
+        """This component's address and its ancestors': the ancestry of a child it stamps or returns."""
+        return (self.address, *self._ancestors)
+
+    @property
     def identity(self) -> dict[str, Any]:
         parameter_types = _parameter_types(type(self))
         parameters = {
@@ -472,7 +477,7 @@ class Component(BaseGlue):
 
     def _introduce_result(self, result: BaseGlue) -> None:
         if isinstance(result, Component):
-            result._ancestors = (self.address, *self._ancestors)
+            result._ancestors = self.lineage
         super()._introduce_result(result)
 
     def _rerendered(
