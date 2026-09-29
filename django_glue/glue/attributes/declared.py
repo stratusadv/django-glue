@@ -131,11 +131,20 @@ class DeclaredAttribute:
         self.storage_name = f'__glue_attribute_{name}'
         if hasattr(self.target, '__set_name__'):
             self.target.__set_name__(owner, name)
-        if not self._parameter:
+        if not self._parameter and not self._skip_rerender:
             return
         from django_glue.glue.base import BaseGlue
         from django_glue.glue.component import Component
 
+        if self._skip_rerender and not (isinstance(owner, type) and issubclass(owner, Component)):
+            msg = (
+                f'skip_rerender=True on {owner.__name__}.{name} only means something on a '
+                "Glue.Component's callable, which re-renders the component; "
+                f'{owner.__name__!r} is not a Component.'
+            )
+            raise TypeError(msg)
+        if not self._parameter:
+            return
         if (
             isinstance(owner, type)
             and issubclass(owner, BaseGlue)

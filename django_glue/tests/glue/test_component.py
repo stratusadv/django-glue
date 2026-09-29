@@ -19,6 +19,7 @@ from django_glue.exceptions import (
     GlueRequestErrorCode,
 )
 from django_glue.glue.attributes import BoundGlueAttribute, GlueAttributeCollector
+from django_glue.glue.base import BaseGlue
 from django_glue.glue.component import Component
 from django_glue.glue.component_registry import component_registry
 from django_glue.glue.context import GlueContextManager
@@ -371,6 +372,31 @@ def test_skip_rerender_is_rejected_on_a_value_attribute() -> None:
             note: str = Glue.attr('', skip_rerender=True)
 
         GlueAttributeCollector.collect(InvalidComponent)
+
+
+def test_skip_rerender_is_rejected_off_a_component() -> None:
+    from django.db import models
+
+    with pytest.raises(RuntimeError) as glue_object:
+        class NotAComponentGlue(BaseGlue):
+            namespace = 'notAComponent'
+
+            @Glue.attr(skip_rerender=True)
+            def save(self) -> None:
+                pass
+
+    with pytest.raises(RuntimeError) as model_method:
+        class Report(models.Model):
+            class Meta:
+                app_label = 'gorilla'
+
+            @Glue.attr(skip_rerender=True)
+            def archive(self) -> None:
+                pass
+
+    for raised in (glue_object, model_method):
+        assert isinstance(raised.value.__cause__, TypeError)
+        assert 'only means something on a Glue.Component' in str(raised.value.__cause__)
 
 
 def test_component_rejects_undeclared_or_missing_parameters() -> None:

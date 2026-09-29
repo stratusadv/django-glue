@@ -158,6 +158,10 @@ def delete_entry(self) -> None:
     Glue.event(self, 'deleted', {'pk': self.entry_id})
 ```
 
+`skip_rerender` only applies to a component's own callables. Declaring it on a
+model, queryset, form, service, or other Glue object raises a `TypeError` when
+the class is defined, because nothing there re-renders.
+
 A callable that changes one of the component's parameters or other retained
 values re-renders regardless, so the markup always matches the component's
 state. Only the component whose callable ran re-renders.

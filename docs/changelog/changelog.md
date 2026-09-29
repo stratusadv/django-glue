@@ -53,7 +53,8 @@
   one of the component's retained values (ADR 022). Callables that returned
   `self.render()` can return `None`, and a client `$refresh()` after the
   component's own action is no longer needed. Mark a callable that deletes the
-  row its component shows with `skip_rerender=True`.
+  row its component shows with `skip_rerender=True`. The option is a
+  `TypeError` at class definition anywhere but on a component.
 - A component stamped by `{% glue_component %}` whose `is_authorized()` denies it
   renders nothing instead of failing the page. `as_view()` still responds 403.
 - `GlueAuthorizationError` messages name the denied operation and attribute.
