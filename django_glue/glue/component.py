@@ -123,7 +123,8 @@ class Component(BaseGlue):
                 'django-glue 1.2.0. Construct the component in a view function and return '
                 'component.as_page(request) instead.',
                 DeprecationWarning,
-                stacklevel=2,
+                # Past __init_subclass__ and ABCMeta.__new__ to the class statement.
+                stacklevel=3,
             )
 
     @classmethod
