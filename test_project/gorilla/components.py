@@ -51,9 +51,8 @@ class CounterDashboardComponent(Glue.Component):
         return {'component': self, 'starts': self.starts}
 
     @Glue.attr
-    def drop_first(self) -> Glue.Response:
+    def drop_first(self) -> None:
         self.starts = [5]
-        return self.render()
 
 
 class CounterBadgeComponent(Glue.Component):

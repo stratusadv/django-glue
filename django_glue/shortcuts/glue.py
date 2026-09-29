@@ -1,3 +1,4 @@
+import inspect
 from functools import update_wrapper
 from typing import Any, Callable, Literal, Mapping, Sequence, TypeVar, Union
 
@@ -17,6 +18,7 @@ from django_glue.glue.component import Component
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
+from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
@@ -106,7 +108,16 @@ def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
         class MyComponent(Glue.Component):
             date = Glue.ComponentParameter()                      # reconstructor
             note = Glue.ComponentParameter('', editable=True)     # editable state
+
+    Decorating a method declares a model parameter whose method initializes the
+    row from its primary key (ADR 021):
+
+        @Glue.ComponentParameter
+        def entry(self, pk: int) -> TimeEntry:
+            return TimeEntry.objects.get(pk=pk, user=self.request.user)
     """
+    if len(args) == 1 and not kwargs and inspect.isfunction(args[0]):
+        return ModelParameter(args[0])
     kwargs.setdefault('parameter', True)
     return DeclaredAttribute(*args, **kwargs)
 

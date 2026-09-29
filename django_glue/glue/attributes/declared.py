@@ -23,6 +23,7 @@ class DeclaredAttributeOptions:
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
     is_callable: bool = True
     render_as_html: bool = False
+    skip_rerender: bool = False
     is_parameter: bool = False
     value_role: GlueValueRole | None = None
     is_namespace: bool = False
@@ -64,6 +65,7 @@ class DeclaredAttribute:
         parameter: bool = False,
         editable: bool = False,
         render_as_html: bool = False,
+        skip_rerender: bool = False,
         default: Any = _MISSING,
         default_factory: Callable[[], Any] | object = _MISSING,
         glue_factory: Callable[..., Any] | None = None,
@@ -78,6 +80,7 @@ class DeclaredAttribute:
         self._parameter = parameter
         self._editable = editable
         self._render_as_html = render_as_html
+        self._skip_rerender = skip_rerender
         self.default = default
         self.default_factory = default_factory
         self.glue_factory = glue_factory
@@ -103,6 +106,7 @@ class DeclaredAttribute:
             required_access=self.required_access,
             is_callable=self._is_callable,
             render_as_html=self._render_as_html,
+            skip_rerender=self._skip_rerender,
             is_parameter=self._parameter,
             value_role=self._resolve_value_role(),
         )
@@ -206,7 +210,11 @@ class DeclaredAttribute:
         if not self._is_callable:
             return
         if self._parameter:
-            msg = 'Glue.attr parameter=True is only valid for value declarations.'
+            msg = (
+                'Glue.attr parameter=True is only valid for value declarations. '
+                'A model parameter is declared with a bare @Glue.ComponentParameter '
+                'on its initializer and takes no options, such as editable=True.'
+            )
             raise TypeError(msg)
         if self._editable:
             msg = 'Glue.attr editable=True is only valid for value declarations.'

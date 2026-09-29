@@ -94,6 +94,22 @@ site or `{% glue_component %}` resolves every parameter before the object is
 introduced, and the client never supplies one. Whether later client updates are
 allowed is determined by the value's independent editable role.
 
+A method decorated with `Glue.ComponentParameter` declares a model parameter; its
+name is the parameter name, it takes a primary key, and it returns an instance of
+its annotated model class. `target.parameters` holds only the key. Construction,
+and assignment by server code, use a supplied instance as is and pass a supplied
+key to the initializer; every later request passes the signed key to it, failing
+the address with `model_instance_not_found` on `DoesNotExist`. The initializer
+runs lazily, on the first read of the parameter with the request bound, and at
+most once per object. A supplied instance must have the shape the initializer
+returns. When `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` is on (it defaults to
+`DEBUG`), the first read of a supplied instance also calls the initializer: a `DoesNotExist`
+raises `invalid_component_parameter`, and a missing annotation or loaded relation
+emits `GlueModelParameterMismatchWarning` and uses the resolved instance. Model
+parameters are reconstructors; they cannot be editable, and an initializer is
+never client-callable
+([ADR 021](../../decisions/021-component-parameter-initializers.md)).
+
 **The reconstructor role is the default.** A bare `Glue.attr(x)` survives in the
 signed policy token's `state_snapshot` and cannot be changed by the client.
 `Glue.attr(parameter=True)` has the same role but is supplied through the
@@ -302,8 +318,10 @@ It is consulted at exactly three points, in this order:
 
 1. **Introduction** — before an address is assigned and its first token issued,
    with `kind='introduce'`. A denial means the object is never introduced and no
-   token exists for it. A page-root denial is a server-side error in the view; a
-   child denial means the owner's declared slot resolves to absent.
+   token exists for it. A page-root denial is a server-side error in the view: a
+   component served by `as_view()` responds 403. A child denial means the owner's
+   declared slot resolves to absent, and a component stamped by
+   `{% glue_component %}` renders nothing, whether or not it has an owner.
 2. **Reconstruction** — after the token is verified and the target is
    reconstructed, before protocol admission, with `kind='refresh'`, `'update'`
    or `'call'` as the interaction requires. A denial fails that address's entry
@@ -1144,6 +1162,19 @@ This is narrower than annotation-driven *declaration*, which is rejected (§
 Rejected Alternatives). `Glue.attr` still declares state explicitly; the
 annotation is consulted only to answer "coerce back to what?" A missing
 annotation falls back to the registry or leaves the value untouched.
+
+The built-in set includes a model-key handler for model parameters
+(§1, [ADR 021](../../decisions/021-component-parameter-initializers.md)).
+It encodes a model instance to its primary key for `target.parameters` and
+decodes the signed key to the primary key's Python type. It never loads a row:
+turning a key into a row is the parameter's initializer, which is application
+code the handler does not replace.
+
+Every other parameter is encoded through its annotation's adapter in JSON mode,
+the same adapter that decodes it, so both directions accept the same types. A
+dataclass parameter is therefore signed as its JSON form and restored as an
+instance of the dataclass, with nested dates, decimals, and enums restored to
+their Python types.
 
 Replaces `GlueResponseJSONEncoder`, the seven attribute `state` implementations,
 the client's `parseFieldValue` type special-casing, and hand-written coercion of

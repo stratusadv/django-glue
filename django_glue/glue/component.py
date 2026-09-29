@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from functools import cache
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
 
 from django.core.exceptions import PermissionDenied
@@ -20,6 +21,7 @@ from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_regist
 from django_glue.glue.component_naming import component_name
 from django_glue.glue.component_root import inject_component_root
 from django_glue.glue.context import GlueContextManager
+from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.response import GlueResponse, GlueTemplateResponse
@@ -37,6 +39,15 @@ class _DefaultFactory:
 VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 
 
+@cache
+def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
+    annotations = get_type_hints(component_class)
+    return {
+        key: declaration.model_class if isinstance(declaration, ModelParameter) else annotations[key]
+        for key, declaration in component_class._declared_parameters().items()
+    }
+
+
 class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
@@ -46,11 +57,14 @@ class Component(BaseGlue):
         super().__init_subclass__(**kwargs)
         annotations = get_type_hints(cls)
         declared = cls._declared_parameters()
-        for key in declared:
-            if key not in annotations:
+        for key, declaration in declared.items():
+            if isinstance(declaration, ModelParameter):
+                declaration.validate_declaration()
+            elif key not in annotations:
                 raise GlueComponentParameterError(
                     f'Parameter {key!r} on {cls.__name__} needs a type annotation.'
                 )
+        parameter_types = _parameter_types(cls)
 
         if cls.__init__ is Component.__init__:
             keyword = inspect.Parameter.KEYWORD_ONLY
@@ -68,7 +82,7 @@ class Component(BaseGlue):
                             if declaration.default_factory is not _MISSING
                             else inspect.Parameter.empty
                         ),
-                        annotation=annotations[key],
+                        annotation=parameter_types[key],
                     )
                     for key, declaration in declared.items()
                 ),
@@ -114,14 +128,16 @@ class Component(BaseGlue):
             msg = f'{type(self).__name__} must declare a template path.'
             raise ValueError(msg)
 
-        annotations = get_type_hints(type(self))
-        for key in declared:
+        parameter_types = _parameter_types(type(self))
+        for key, declaration in declared.items():
             value = parameters[key] if key in parameters else getattr(self, key)
-            annotation = annotations[key]
             if isinstance(value, BaseGlue):
                 raise GlueComponentParameterError(f'Parameter {key!r} cannot be a Glue object.')
+            if isinstance(declaration, ModelParameter):
+                setattr(self, key, value)
+                continue
             try:
-                setattr(self, key, glue_serializer_registry.coerce(value, annotation))
+                setattr(self, key, glue_serializer_registry.coerce(value, parameter_types[key]))
             except GlueSerializerError as error:
                 raise GlueComponentParameterError(
                     f'Invalid parameter {key!r} on {type(self).__name__}.'
@@ -143,7 +159,15 @@ class Component(BaseGlue):
 
     @property
     def identity(self) -> dict[str, Any]:
-        parameters = {key: getattr(self, key) for key in self._declared_parameters()}
+        parameter_types = _parameter_types(type(self))
+        parameters = {
+            key: (
+                declaration.signed_value(self)
+                if isinstance(declaration, ModelParameter)
+                else glue_serializer_registry.encode(getattr(self, key), parameter_types[key])
+            )
+            for key, declaration in self._declared_parameters().items()
+        }
         return {
             'component_id': f'{type(self).__module__}.{type(self).__qualname__}',
             'parameters': json.loads(json.dumps(parameters, cls=GlueResponseJSONEncoder)),
@@ -223,26 +247,27 @@ class Component(BaseGlue):
         self,
         call_context: AttributeCallRequestContext,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Run the call, re-rendering when it moved a parameter.
+        """Run the call and re-render the component in the same response (ADR 022).
 
-        Parameters are what reconstruct a component, so changing one is a
-        structural change: the rendered markup (e.g. which children are
-        stamped) no longer matches. The render runs on a fresh instance built
-        from the successor token rather than on ``self``, whose derived values
-        (cached properties and the like) were computed from the old
-        parameters. That render's output is the authoritative HTML and
-        computed data; the call's own result and effects stand.
+        A refresh always re-renders. A callable re-renders unless its declared
+        result is a Glue object, which hands the interaction to that object, or
+        it declares ``skip_rerender=True``; either exception is overridden when
+        the callable changed a retained value, because the markup would no
+        longer match the component's state. The render runs on a fresh
+        instance built from the successor token rather than on ``self``, whose
+        derived values (cached properties and the like) were computed before
+        the call. That render's output is the authoritative HTML and computed
+        data; the call's own result and effects stand.
         """
         entry, introduced = super().process_attribute_call(call_context)
-        incoming_parameters = call_context.target_glue_policy.identity['parameters']
-        if (
-            'html' in entry
-            or (
-                call_context.target_attribute_name is not None
-                and self.identity['parameters'] == incoming_parameters
-            )
-        ):
+        if 'html' in entry:
             return entry, introduced
+
+        attribute_name = call_context.target_attribute_name
+        if attribute_name is not None and 'policy_token' not in entry:
+            definition = self._bound_attributes[attribute_name].definition
+            if definition.skip_rerender or definition.expected_type is not None:
+                return entry, introduced
 
         render_context = AttributeCallRequestContext(
             request=call_context.request,

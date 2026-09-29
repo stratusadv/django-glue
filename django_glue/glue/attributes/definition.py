@@ -135,6 +135,7 @@ class GlueAttributeDefinition:
     allowed_arguments: tuple[str, ...] = ()
     injected_arguments: tuple[str, ...] = ()
     render_as_html: bool = False
+    skip_rerender: bool = False
     getter: Callable[[Any], Any] | None = None
     setter: Callable[[Any, Any], None] | None = None
     callable_target: Callable[[Any], Callable[..., Any]] | None = None
@@ -207,6 +208,7 @@ class GlueAttributeDefinition:
             self.allowed_arguments
             or self.injected_arguments
             or self.render_as_html
+            or self.skip_rerender
         ):
             msg = f'Non-callable attribute {self.path!r} cannot declare callable options.'
             raise ValueError(msg)

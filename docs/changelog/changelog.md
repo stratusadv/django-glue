@@ -1,5 +1,31 @@
 # Changelog for Django Glue
 
+## v1.1.1
+
+### Features
+
+- `@Glue.ComponentParameter` on a method declares a model parameter whose
+  initializer turns the signed primary key into the row. A construction site may
+  pass the loaded instance, which is used without a query; later requests resolve
+  the key through the initializer. `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` (default
+  `DEBUG`) checks supplied instances and emits
+  `GlueModelParameterMismatchWarning` (ADR 021).
+- Component parameters are encoded through their annotation's adapter, so
+  dataclass parameters are signed and restored (ADR 021).
+
+### Changes
+
+- A successful component callable re-renders its component in the same
+  response. A callable returning a Glue object skips the render, and
+  `@Glue.attr(skip_rerender=True)` opts any other callable out unless it changed
+  one of the component's retained values (ADR 022). Callables that returned
+  `self.render()` can return `None`, and a client `$refresh()` after the
+  component's own action is no longer needed. Mark a callable that deletes the
+  row its component shows with `skip_rerender=True`.
+- A component stamped by `{% glue_component %}` whose `is_authorized()` denies it
+  renders nothing instead of failing the page. `as_view()` still responds 403.
+- `GlueAuthorizationError` messages name the denied operation and attribute.
+
 ## v1.1.0
 
 The full migration guide for these changes is at [Migration Guide](../migration.md).

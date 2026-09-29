@@ -130,7 +130,7 @@ class GlueAuthorizationError(GlueError):
             else ''
         )
         super().__init__(
-            f"Authorization denied for{attribute} on Glue object '{object_name}'."
+            f"Authorization denied for {operation.kind}{attribute} on Glue object '{object_name}'."
         )
 
     def details(self) -> dict:
@@ -196,6 +196,10 @@ class GlueInvalidAttributeError(GlueError):
             'owner': self.owner,
             'value_type': self.value_type,
         }
+
+
+class GlueModelParameterMismatchWarning(UserWarning):
+    """A model instance supplied to a model parameter lacks what its initializer loads (ADR 021)."""
 
 
 class GlueModelInstanceNotFoundError(GlueError):

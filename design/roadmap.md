@@ -82,6 +82,43 @@ starts only with explicit implementation authorization.
   rendering may be added later as performance strategies, but must preserve
   address ownership, introduced-object registration, response ordering, and keyed DOM
   reconciliation.
+- [x] **Model and dataclass component parameters.** Accepted and implemented in
+  [ADR 021](decisions/021-component-parameter-initializers.md): a method decorated
+  with `Glue.ComponentParameter` declares a model parameter that signs only its
+  key and resolves it through the method, and every value parameter is encoded
+  through its annotation's adapter, so dataclass parameters work. Its gate, with
+  verification off unless stated:
+  - a modal or row component constructed from an instance its parent already
+    loaded issues no query for that row, including the portal's
+    `edit_entry_modal`;
+  - an initializer scoped by `self.request` stops resolving another user's row on
+    the next interaction, and a `DoesNotExist` on reconstruction fails the address
+    with `model_instance_not_found`;
+  - assigning an instance or a key to a model parameter in an action re-renders the
+    component with the new row;
+  - with verification on, a supplied instance the initializer cannot resolve raises
+    `invalid_component_parameter`, and one lacking an annotation or loaded
+    relation of the resolved instance emits `GlueModelParameterMismatchWarning`;
+  - an initializer never appears among the client-callable attributes, and a cycle
+    between initializers raises `invalid_component_parameter`;
+  - the decorator rejects `editable=True`, a return annotation that is not a model
+    class, and a signature other than `(self, pk)`;
+  - a dataclass parameter with nested `date`, `Decimal`, and enum fields renders,
+    and reconstruction restores it as an equal dataclass instance; a dataclass
+    field holding a model instance is rejected at construction.
+- [x] **Component callables re-render by default.** Accepted and implemented in
+  [ADR 022](decisions/022-component-callables-re-render-by-default.md). Its gate:
+  - a component callable that writes data without moving a retained value returns
+    the component's re-rendered HTML in its own response, with no `render()` call
+    and no follow-up `$refresh()`;
+  - a callable returning a component (the portal's modal factories) does not
+    re-render its component;
+  - `skip_rerender=True` suppresses the render (the portal's `delete_entry`),
+    except when the callable changed a retained value;
+  - the owner of the re-rendered component is not re-rendered;
+  - a render failure after a successful callable fails that address like any other
+    error, advancing nothing;
+  - `test_project/gorilla/components.py` no longer returns `self.render()`.
 - **Client-evaluated parameters and delayed mounting.** `{% glue_component %}`
   resolves parameters on the server and mounts during the stamping render. An
   Alpine-evaluated parameter source, or `lazy`/`defer` mounting, would each need

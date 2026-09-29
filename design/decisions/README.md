@@ -22,6 +22,9 @@
 | [`018`](018-required-save-access.md) | Accepted; implemented on branch | `Glue.Access.required_save_access` is the one target-derived rule for the access a save or validation requires |
 | [`019`](019-address-references-do-not-own.md) | Accepted; implemented on branch | Ownership follows address derivation; a reference never owns or disposes, and relation children reintroduce through their collection |
 | [`020`](020-new-draft-forms-use-admitted-initial.md) | Accepted; implemented on branch | Build new draft forms from admitted initial state before binding children |
+| [`021`](021-component-parameter-initializers.md) | Accepted; implemented on branch | A component parameter may be a model, initialized from its signed key by a decorated method, or a dataclass encoded through the serializer registry |
+| [`022`](022-component-callables-re-render-by-default.md) | Accepted; implemented on branch | A successful component callable re-renders its component in the same response, unless it returns a Glue object or declares `skip_rerender=True` |
+| [`023`](023-component-as-page.md) | Proposed | A view serves a component it constructed with `component.as_page(request)`; `get_view_kwargs` is deprecated |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

@@ -7,7 +7,7 @@ from django.template.loader import get_template
 from django.utils.safestring import mark_safe
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueComponentKeyError
+from django_glue.exceptions import GlueAuthorizationError, GlueComponentKeyError
 from django_glue.glue import address
 from django_glue.glue.component import VIEW_COMPONENT_CONTEXT_KEY
 from django_glue.glue.component_naming import canonical_key, component_name
@@ -80,7 +80,10 @@ class GlueComponentNode(Node):
         )
         if parent is not None:
             component._address = address.item(parent_address, f'{tag_name}:{canonical}')
-        GlueContextManager(request).add_glue(component)
+        try:
+            GlueContextManager(request).add_glue(component)
+        except GlueAuthorizationError:
+            return ''
         template = get_template(component.template)
         with context.push(**component.get_context_data()):
             html = template.template.render(context)

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from django import forms
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
-from pydantic import TypeAdapter
+from pydantic import PydanticUserError, TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 if TYPE_CHECKING:
@@ -29,6 +29,10 @@ class GlueSerializerHandler(ABC):
     @abstractmethod
     def decode(self, value: Any, target: Any) -> Any:
         raise NotImplementedError
+
+    def encode(self, value: Any, target: Any) -> Any:
+        _ = target
+        return value
 
 
 class GlueSerializerRegistry:
@@ -68,6 +72,16 @@ class GlueSerializerRegistry:
         for handler in self._handlers:
             if handler.supports(target):
                 return handler.decode(value, target)
+        return value
+
+    def encode(
+        self,
+        value: Any,
+        target: Any,
+    ) -> Any:
+        for handler in self._handlers:
+            if handler.supports(target):
+                return handler.encode(value, target)
         return value
 
 
@@ -143,11 +157,17 @@ class AnnotationSerializer(GlueSerializerHandler):
     def coerce(self, value: Any, target: Any) -> Any:
         try:
             return TypeAdapter(target).validate_python(value)
-        except (PydanticValidationError, TypeError, ValueError) as error:
+        except (PydanticValidationError, PydanticUserError, TypeError, ValueError) as error:
             raise GlueSerializerError(str(error)) from error
 
     def decode(self, value: Any, target: Any) -> Any:
         return self.coerce(value, target)
+
+    def encode(self, value: Any, target: Any) -> Any:
+        try:
+            return TypeAdapter(target).dump_python(value, mode='json')
+        except PydanticUserError:
+            return value
 
 
 glue_serializer_registry = GlueSerializerRegistry(

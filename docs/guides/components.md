@@ -58,6 +58,77 @@ marker to that root.
 </section>
 ```
 
+## Model and dataclass parameters
+
+A component that represents a database row declares it by decorating a method
+with `Glue.ComponentParameter`. The method is the parameter's initializer: it
+turns the row's primary key into the instance the component works with, and it
+applies whatever scope the component needs.
+
+```python
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int) -> TimeEntry:
+        return TimeEntry.objects.active().select_related('project').get(pk=pk, user=self.request.user)
+```
+
+The method name is the parameter name, its return annotation must be a model
+class, and it takes only the key. Pass the instance when you already have it, or
+its key when you do not:
+
+```python
+entry = TimeEntry.objects.active().select_related('project').get(pk=entry_id, user=request.user)
+return EntryModalComponent(entry=entry)
+```
+
+```django
+{% glue_component 'entries/entry_modal' entry=entry.pk %}
+```
+
+- A supplied instance is used as is, with no query. A supplied key is resolved
+  through the initializer on the first read of `self.entry`.
+- Only the key is signed. Every later request passes it to the initializer with
+  the current request, so scope is re-applied on every interaction. A row the
+  initializer no longer returns fails that component with
+  `model_instance_not_found`.
+- A supplied instance must be loaded the way the initializer loads it, with the
+  same `select_related()` and annotations. With
+  `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` on (it defaults to `DEBUG`), Glue checks:
+  an instance the initializer does not return raises
+  `GlueComponentParameterError`, and one missing an annotation or loaded relation
+  emits `GlueModelParameterMismatchWarning` and is replaced by the initializer's
+  instance. Escalate the warning to an error in your test settings to catch it in
+  CI.
+- A callable may assign an instance or a key to retarget the component, which
+  re-renders it. The initializer is never callable from the client, and a model
+  parameter cannot be editable.
+
+A value parameter annotated with a dataclass is signed as its JSON form and
+restored as the dataclass, including nested dates, decimals, and enums:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportWindow:
+    start: datetime.date
+    end: datetime.date
+
+
+class BudgetPanelComponent(Glue.Component):
+    template = 'reports/budget_panel.html'
+
+    window: ReportWindow = Glue.ComponentParameter()
+```
+
+A form is not a parameter. Build it as a child from the model parameter:
+
+```python
+@Glue.property
+def entry_form(self) -> FormGlue:
+    return Glue.form(target=TimeEntryForm(instance=self.entry))
+```
+
 The server template context exposes the Python component as `component`; the
 mounted Alpine scope exposes its client proxy under the same name. `$glue`
 resolves that proxy from an element inside the component. Outside Alpine,
@@ -65,8 +136,33 @@ resolves that proxy from an element inside the component. Outside Alpine,
 its current root. Components are addressed objects and do not receive global
 names under `Glue.component`.
 
-Changing a component parameter rerenders and morphs its mounted root. Call
-`component.$refresh()` when data outside that component changes, such as a
+A successful callable re-renders its component in the same response and morphs
+its mounted root, so an action that saves data needs no follow-up refresh and
+no `render()` call:
+
+```python
+@Glue.attr(required_access=Glue.Access.CHANGE)
+def confirm(self, transaction_id: int) -> None:
+    Transaction.objects.get(pk=transaction_id).confirm()
+```
+
+Two kinds of callable skip the render. A callable whose declared result is a Glue
+object, such as one that returns a modal component, hands the interaction to that
+object. A callable declared with `skip_rerender=True` opts out, for example one
+that deletes the row its component shows:
+
+```python
+@Glue.attr(required_access=Glue.Access.DELETE, skip_rerender=True)
+def delete_entry(self) -> None:
+    self.entry.delete()
+    Glue.event(self, 'deleted', {'pk': self.entry_id})
+```
+
+A callable that changes one of the component's parameters or other retained
+values re-renders regardless, so the markup always matches the component's
+state. Only the component whose callable ran re-renders.
+
+Call `component.$refresh()` when data outside that component changes, such as a
 record saved by a modal. The refresh recomputes its properties and markup,
 reconciles addressed children, and morphs the root. Stable child keys preserve
 their proxies and Alpine state; removed roots dispose their addresses.
@@ -164,6 +260,14 @@ permission check. The URL decorator controls page access, and
 `is_authorized()` uses the current request for both the first render and
 subsequent operations. For an object-specific rule, check the component's
 signed identity and the current database scope inside `is_authorized()`.
+
+A denial at the first render depends on how the component was created. A
+component served by `as_view()` responds 403. A component stamped with
+`{% glue_component %}` renders nothing and introduces no address, so the rest of
+the page renders normally; the template does not need its own permission check
+around the tag. A denied `@Glue.property` child resolves to absent. After the first
+render, a denied action or refresh fails only that component's entry with
+`not_authorized`.
 
 An action may return another component for a host to mount. The returned
 component owns its declared child form or formset:

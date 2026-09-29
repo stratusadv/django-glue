@@ -214,7 +214,11 @@ parameters create no subscription or implicit whole-subtree invalidation.
 Request-scoped dependencies such as the current request, authenticated user,
 and server services use Glue's server-injection path rather than masquerading
 as component parameters. An identifier such as `employee_id` remains a
-parameter when it genuinely selects what object the child represents.
+parameter when it genuinely selects what object the child represents. Declared
+as a model parameter with an initializer method, that parameter accepts the loaded instance at
+construction, signs only its key, and resolves the key through the method on
+later requests
+([ADR 021](../../decisions/021-component-parameter-initializers.md)).
 
 #### Properties may declare configured Glue-object children
 
@@ -333,6 +337,13 @@ the order around it. The rejected hooks were rejected for letting application
 code *act* inside signed reconstruction; a predicate that can only decline is a
 different thing.
 
+A parameter initializer is the other permitted step
+([ADR 021](../../decisions/021-component-parameter-initializers.md)). It is a
+value provider: Glue calls it at a fixed point with the signed key, and it returns
+the model instance for that key without assigning to `self`, writing to the
+database, or changing the order around it. It supplies one parameter's value; it
+does not act on the component.
+
 Custom value representation belongs in the shared serializer registry rather
 than lifecycle methods. Work needed for a specific interaction belongs in its
 callable, while repeatable output remains a `@Glue.property`. These paths apply
@@ -371,8 +382,17 @@ Shared derivation follows ownership rather than transport. Work that must be
 coherent or memoized together stays on one addressed object and uses ordinary
 private Python memoization there; independently addressed children derive from
 their own signed parameters. Template partials or keyed Alpine regions may
-split presentation without inventing child authorities. The removed
-optional-parameter mechanism and request batching are not cross-object caches.
+split presentation without inventing child authorities. A construction site that
+already holds the row a child represents may hand it over through a model
+parameter ([ADR 021](../../decisions/021-component-parameter-initializers.md)):
+the child's signed parameter is still the row's key, and every later request
+resolves it through the child's initializer. That handoff is construction input,
+not a cache; nothing outlives the render, and no child reads another object's
+state. A form is not handed over this way; it is a child built from the
+component's parameters. A row that only displays data, or whose actions the owning
+component can perform by key, stays a partial of the owner; a per-row component is
+for a row that needs its own actions, isolated re-rendering, or its own
+authorization.
 
 ### 5. Components are stamped with a Django template tag
 
@@ -687,6 +707,15 @@ an unmounted component still returns the rendered HTML for a host to mount.
 Application code does not invoke `render()` to reconcile a component after a
 mutation. The reconciliation rules in `state-model.md` §5 preserve edits made
 while the refresh is in flight. Refresh never means reset.
+
+A successful callable on a component re-renders that component in its own
+response, from a fresh instance reconstructed from the successor token, so an
+action needs no follow-up `$refresh()`
+([ADR 022](../../decisions/022-component-callables-re-render-by-default.md)). A
+callable whose declared result is a Glue object does not re-render its component,
+and `skip_rerender=True` opts any other callable out, unless the callable changed
+one of the component's retained values. Only the component whose callable ran
+re-renders; its owner and other components refresh as described below.
 
 Glue does not attempt to infer a dependency graph from a model save. Arbitrary
 query predicates and computed properties make that both incomplete and
