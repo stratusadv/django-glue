@@ -2037,8 +2037,9 @@ outcome for a page whose session-scoped capability has run out.
 
 A request entry for a component also carries an optional `mounted` list: the
 addresses of the component roots the client has inside that component's root
-(ADR 025). When the component renders, a stamped child whose address is listed
-is not re-stamped; the tag emits `<template data-glue-keep="ADDRESS">` and the
+(ADR 025). When that component re-renders itself for this entry, a stamped child
+whose address is listed is not re-stamped; the list affects no other entry and
+no other render, such as a direct `render` call; the tag emits `<template data-glue-keep="ADDRESS">` and the
 client keeps the live child. A stamped child's address includes a hash of its
 signed parameters and access, so a child the parent now stamps differently is
 not in the list and renders fresh. Like `reintroduce`, the list is untrusted and

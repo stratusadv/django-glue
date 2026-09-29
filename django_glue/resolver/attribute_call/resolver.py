@@ -12,7 +12,6 @@ from django_glue.exceptions import (
     GlueRequestErrorCode,
 )
 from django_glue.glue import policy
-from django_glue.glue.component_tag import MOUNTED_ADDRESSES_ATTR
 from django_glue.glue.registry import glue_class_registry
 from django_glue.resolver.attribute_call.context import (
     AddressedObjectEntry,
@@ -61,9 +60,6 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
         objects: list[dict[str, Any]] = []
         seen: set[str] = set()
         requested_addresses = {entry.address for entry in context.entries}
-        context.request.__dict__[MOUNTED_ADDRESSES_ATTR] = frozenset(
-            address for entry in context.entries for address in entry.mounted
-        )
         for entry in context.entries:
             for wire_entry in self._resolve_entry(context, entry):
                 address = wire_entry.get('address')
@@ -100,6 +96,7 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             target_attribute_name=entry.call.attribute if entry.call else None,
             target_attribute_call_kwargs=entry.call.kwargs if entry.call else {},
             reintroduce=entry.reintroduce,
+            mounted=entry.mounted,
         )
         try:
             decoded.verify_request(context.request)

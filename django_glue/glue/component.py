@@ -47,6 +47,8 @@ class _DefaultFactory:
 
 
 VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
+# The addresses of the children a re-render keeps rather than re-stamps (ADR 025).
+MOUNTED_CHILDREN_CONTEXT_KEY = '_django_glue_mounted_children'
 RECEIVE_ATTRIBUTE = '$receive'
 
 
@@ -167,6 +169,7 @@ class Component(BaseGlue):
             name = component_name('', CAMEL_BOUNDARY.sub('_', stem).lower(), None)
         super().__init__(name=name, access=access)
         self._ancestors: tuple[str, ...] = ()
+        self._mounted_children: frozenset[str] = frozenset()
 
         if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
@@ -478,13 +481,18 @@ class Component(BaseGlue):
         introduced: list[dict[str, Any]],
         call_context: AttributeCallRequestContext,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Replace ``entry``'s output with a render of the successor state (ADR 022)."""
+        """Replace ``entry``'s output with a render of the successor state (ADR 022).
+
+        The render keeps the children the requesting entry reports mounted
+        (ADR 025): this is the component re-rendering itself in place.
+        """
         render_context = AttributeCallRequestContext(
             request=call_context.request,
             target_glue_policy=self.policy,
             target_attribute_name='render',
         )
         fresh = type(self).from_attribute_call_resolver_context(render_context)
+        fresh._mounted_children = frozenset(call_context.mounted)
         render_entry, render_introduced = fresh.process_attribute_call(render_context)
 
         entry['html'] = render_entry['html']
@@ -504,7 +512,10 @@ class Component(BaseGlue):
         response = GlueTemplateResponse(
             request=request,
             template=self.template,
-            context=self.get_context_data(),
+            context={
+                **self.get_context_data(),
+                MOUNTED_CHILDREN_CONTEXT_KEY: self._mounted_children,
+            },
         )
         response.html = inject_component_root(
             response.html,

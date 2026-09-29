@@ -40,9 +40,14 @@ existing markup. A prop changes a skipped child only when the prop is marked
 
 ### A mounted child is skipped
 
-When a component renders in response to a Glue request, a stamped child that the
-client reports as still mounted is not rendered. The tag emits a placeholder,
-and the client keeps the child's live element.
+When a component re-renders itself in response to its own callable, refresh, or
+`$receive`, a stamped child that the client reports as still mounted in it is not
+rendered. The tag emits a placeholder, and the client keeps the child's live
+element. The list applies only to the entry that sent it and only to that
+component's re-render of itself: it reaches the render through the template
+context, not the request, so another entry in the same request, a direct
+`render` call whose HTML may be placed elsewhere, and an HTML result all render
+every child.
 
 1. **The client reports mounted children.** Every request entry for a
    component lists, under `mounted`, the addresses of the component roots

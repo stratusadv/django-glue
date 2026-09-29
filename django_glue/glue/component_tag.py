@@ -12,7 +12,11 @@ from django.utils.safestring import mark_safe
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueAuthorizationError, GlueComponentKeyError
 from django_glue.glue import address
-from django_glue.glue.component import VIEW_COMPONENT_CONTEXT_KEY, Component
+from django_glue.glue.component import (
+    MOUNTED_CHILDREN_CONTEXT_KEY,
+    VIEW_COMPONENT_CONTEXT_KEY,
+    Component,
+)
 from django_glue.glue.component_naming import canonical_key, component_name
 from django_glue.glue.component_registry import component_registry
 from django_glue.glue.context import GlueContextManager
@@ -23,7 +27,6 @@ if TYPE_CHECKING:
 
 
 STAMPED_KEYS_ATTR = '_django_glue_stamped_component_keys'
-MOUNTED_ADDRESSES_ATTR = '_django_glue_mounted_addresses'
 RERENDER_WITH_PARENT_FLAG = 'rerender_with_parent'
 
 
@@ -108,7 +111,7 @@ class GlueComponentNode(Node):
             component._ancestors = (parent.address, *parent._ancestors)
         if (
             not self.rerender_with_parent
-            and component.address in request.__dict__.get(MOUNTED_ADDRESSES_ATTR, ())
+            and component.address in context.get(MOUNTED_CHILDREN_CONTEXT_KEY, ())
         ):
             # The client still has this child, and its parameters are unchanged
             # (they are in its address): keep it rather than re-stamp it (ADR 025).

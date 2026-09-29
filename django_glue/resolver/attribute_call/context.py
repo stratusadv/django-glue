@@ -45,6 +45,7 @@ class AttributeCallRequestContext(BaseModel):
     target_attribute_name: str | None = None
     target_attribute_call_kwargs: dict[str, Any] = Field(default_factory=dict)
     reintroduce: list[str] = Field(default_factory=list)
+    mounted: list[str] = Field(default_factory=list)
 
 
 class AttributeCallBatchContext(BaseModel):
