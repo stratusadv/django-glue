@@ -30,19 +30,6 @@ STAMPED_KEYS_ATTR = '_django_glue_stamped_component_keys'
 RERENDER_WITH_PARENT_FLAG = 'rerender_with_parent'
 
 
-def _stamp_fingerprint(component: Component) -> str:
-    """A short hash of what a stamp passes a child: its signed parameters and access.
-
-    It is part of a stamped child's address, so a child the parent now stamps
-    differently gets a new address and is not kept (ADR 025).
-    """
-    stamped = json.dumps(
-        {'parameters': component.identity['parameters'], 'access': component.access},
-        sort_keys=True,
-    )
-    return hashlib.blake2s(stamped.encode(), digest_size=4).hexdigest()
-
-
 class GlueComponentNode(Node):
     def __init__(
         self,
@@ -103,10 +90,15 @@ class GlueComponentNode(Node):
             **{key: expression.resolve(context) for key, expression in self.parameters.items()},
         )
         if parent is not None:
-            component._address = address.item(
-                parent_address,
-                f'{tag_name}:{canonical}:{_stamp_fingerprint(component)}',
+            # The address carries a hash of what this stamp passes the child, so
+            # a child stamped with new parameters or access is a new child and is
+            # not kept (ADR 025).
+            stamped = json.dumps(
+                {'parameters': component.identity['parameters'], 'access': component.access},
+                sort_keys=True,
             )
+            fingerprint = hashlib.blake2s(stamped.encode(), digest_size=4).hexdigest()
+            component._address = address.item(parent_address, f'{tag_name}:{canonical}:{fingerprint}')
         if isinstance(parent, Component):
             component._ancestors = parent.lineage
         if (
