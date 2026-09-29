@@ -222,6 +222,9 @@
         signal
       });
     }
+    batch(size) {
+      return { size, pending: [], timer: null, sent: false };
+    }
     async sendAttributeRequest({
       address,
       policyToken,
@@ -230,9 +233,10 @@
       kwargs = {},
       reintroduce = null,
       companions = [],
-      signal = null
+      mounted = [],
+      signal = null,
+      batch = null
     }) {
-      const formData = new FormData;
       const { files, data } = this._extractFiles(serializeValue(updates));
       const entry = {
         address,
@@ -243,12 +247,48 @@
         entry.call = { attribute, kwargs };
       if (reintroduce)
         entry.reintroduce = reintroduce;
-      const companionEntries = companions.map((companion) => ({
+      if (mounted.length)
+        entry.mounted = mounted;
+      const entries = [entry, ...companions.map((companion) => ({
         address: companion.address,
         policy_token: companion.policyToken,
         updates: {}
-      }));
-      formData.append("objects", JSON.stringify([entry, ...companionEntries]));
+      }))];
+      if (!batch || batch.sent || Object.keys(files).length) {
+        return await this._postEntries(entries, files, signal);
+      }
+      return await new Promise((resolve, reject) => {
+        batch.pending.push({ entries, resolve, reject });
+        if (batch.pending.length >= batch.size)
+          this._sendBatch(batch);
+        else
+          batch.timer ??= setTimeout(() => this._sendBatch(batch), 0);
+      });
+    }
+    async _sendBatch(batch) {
+      clearTimeout(batch.timer);
+      batch.sent = true;
+      const { pending } = batch;
+      try {
+        const response = await this._postEntries(pending.flatMap((item) => item.entries), {}, null);
+        const owners = new Map(pending.flatMap((item, index) => item.entries.map((entry) => [entry.address, index])));
+        const shares = pending.map(() => []);
+        let owner = 0;
+        (response.data?.objects || []).forEach((object) => {
+          owner = owners.get(object?.address) ?? owner;
+          shares[owner].push(object);
+        });
+        pending.forEach((item, index) => item.resolve({
+          ...response,
+          data: { ...response.data, objects: shares[index] }
+        }));
+      } catch (error2) {
+        pending.forEach((item) => item.reject(error2));
+      }
+    }
+    async _postEntries(entries, files, signal) {
+      const formData = new FormData;
+      formData.append("objects", JSON.stringify(entries));
       Object.entries(files).forEach(([key, value]) => {
         if (value instanceof FileList) {
           Array.from(value).forEach((file) => formData.append(key, file));
@@ -4051,10 +4091,19 @@ ${expression ? 'Expression: "' + expression + `"
     }
     _morphHtml(element, next, inner = false) {
       const client = this._client;
-      const previousAddresses = client ? [
+      const previousNodes = [
         ...element.matches?.("[data-glue-address]") ? [element] : [],
         ...element.querySelectorAll("[data-glue-address]")
-      ].map((node) => node.getAttribute("data-glue-address")) : [];
+      ];
+      const previousAddresses = client ? previousNodes.map((node) => node.getAttribute("data-glue-address")) : [];
+      next.querySelectorAll("template[data-glue-keep]").forEach((placeholder) => {
+        const address = placeholder.getAttribute("data-glue-keep");
+        const live = previousNodes.find((node) => node.getAttribute("data-glue-address") === address);
+        if (live)
+          placeholder.replaceWith(live.cloneNode(true));
+        else
+          placeholder.remove();
+      });
       morph2(element, next, {
         key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
         updating(node, to, childrenOnly, skip) {
@@ -4215,22 +4264,30 @@ ${expression ? 'Expression: "' + expression + `"
   // client_js/src/runtime/listenerRouter.js
   function deliverToListeners(proxy, entry) {
     const events = entry.effects?.events;
-    const ancestors = proxy._record.policy.identity?.ancestors;
-    if (!events?.length || !ancestors?.length)
+    if (!events?.length)
       return [];
     const eventIds = proxy._record.staticData?.event_ids || {};
-    return ancestors.flatMap((address) => {
-      const ancestor = proxy._registry.getProxy(address);
-      if (!ancestor || ancestor._record.disposed || !ancestor.$el)
-        return [];
-      const listened = new Set(ancestor._record.staticData?.listeners || []);
-      const delivered = events.filter(({ name }) => listened.has(eventIds[name])).map(({ name, detail }) => ({
+    const ancestors = new Set(proxy._record.policy.identity?.ancestors || []);
+    const deliveries = [];
+    proxy._registry.records.forEach((record) => {
+      if (record === proxy._record || record.disposed || !record.proxy?.$el)
+        return;
+      const reacting = new Set([
+        ...record.staticData?.rerender_on || [],
+        ...ancestors.has(record.address) ? record.staticData?.listeners || [] : []
+      ]);
+      const delivered = events.filter(({ name }) => reacting.has(eventIds[name])).map(({ name, detail }) => ({
         event: eventIds[name],
         source_token: proxy._record.policyToken,
         detail
       }));
-      return delivered.length ? [ancestor._callAttribute("$receive", { events: delivered })] : [];
+      if (delivered.length)
+        deliveries.push([record.proxy, delivered]);
     });
+    if (!deliveries.length)
+      return [];
+    const batch = proxy._http.batch(deliveries.length);
+    return deliveries.map(([recipient, delivered]) => recipient._callAttribute("$receive", { events: delivered }, { batch }));
   }
 
   // client_js/src/proxies/base.js
@@ -4321,7 +4378,7 @@ ${expression ? 'Expression: "' + expression + `"
         return await this._singleCall(attribute, kwargs, options);
       }
     }
-    async _singleCall(attribute, kwargs, { submit = true, companions = [] } = {}) {
+    async _singleCall(attribute, kwargs, { submit = true, companions = [], batch = null } = {}) {
       const requestCapture = this._record.captureRequest();
       if (!submit)
         requestCapture.updates = {};
@@ -4341,7 +4398,9 @@ ${expression ? 'Expression: "' + expression + `"
           attribute,
           kwargs,
           companions,
-          signal: controller?.signal ?? null
+          mounted: this.$el ? [...this.$el.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address")) : [],
+          signal: controller?.signal ?? null,
+          batch
         });
       } catch (error2) {
         if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -4382,12 +4441,9 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
-      const listenersRendered = Promise.allSettled(deliverToListeners(this, target)).then((outcomes) => outcomes.some((outcome) => outcome.status === "fulfilled" && outcome.value?.html !== undefined));
+      await Promise.allSettled(deliverToListeners(this, target));
       if (target.html !== undefined && this._policy.namespace === "component" && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
-        if (!await listenersRendered && this.$el)
-          await result.renderOuterHtml(this.$el);
-      } else {
-        await listenersRendered;
+        await result.renderOuterHtml(this.$el);
       }
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);

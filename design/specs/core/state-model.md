@@ -2035,6 +2035,29 @@ issue the owner request that repairs it. A page root has no owner and therefore
 no reintroduction path; an expired root is a reload, which is the correct
 outcome for a page whose session-scoped capability has run out.
 
+A request entry for a component also carries an optional `mounted` list: the
+addresses of the component roots the client has inside that component's root
+(ADR 025). When the component renders, a stamped child whose address is listed
+is not re-stamped; the tag emits `<template data-glue-keep="ADDRESS">` and the
+client keeps the live child. A stamped child's address includes a hash of its
+signed parameters and access, so a child the parent now stamps differently is
+not in the list and renders fresh. Like `reintroduce`, the list is untrusted and
+needs no signing: listing a child the client does not have only denies that
+client the child's markup.
+
+```json
+{
+  "objects": [
+    {
+      "address": "review#7f3a9c21",
+      "policy_token": "...",
+      "call": {"attribute": "$receive", "kwargs": {"events": []}},
+      "mounted": ["review#7f3a9c21[banking/transaction_row:int:412:9c1e04ab]"]
+    }
+  ]
+}
+```
+
 A fixed named child may omit a key, in which case the property path itself is
 its stable identity. If reevaluation may intentionally select a different
 child for the same public path, the construction must supply a key derived from

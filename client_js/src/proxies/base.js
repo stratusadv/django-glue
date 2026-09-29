@@ -108,7 +108,7 @@ class BaseGlueProxy {
         }
     }
 
-    async _singleCall(attribute, kwargs, {submit = true, companions = []} = {}) {
+    async _singleCall(attribute, kwargs, {submit = true, companions = [], batch = null} = {}) {
         const requestCapture = this._record.captureRequest()
         if (!submit) requestCapture.updates = {}
         const companionCaptures = companions.map(record => {
@@ -127,7 +127,14 @@ class BaseGlueProxy {
                 attribute,
                 kwargs,
                 companions,
+                // A component's render keeps the children still mounted in it (ADR 025).
+                mounted: this.$el
+                    ? [...this.$el.querySelectorAll('[data-glue-address]')].map(
+                        element => element.getAttribute('data-glue-address'),
+                    )
+                    : [],
                 signal: controller?.signal ?? null,
+                batch,
             })
         } catch (error) {
             if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -184,13 +191,9 @@ class BaseGlueProxy {
         const result = target.html === undefined
             ? this._convertResult(rawResult, attribute)
             : htmlResultFromResponse(target, this._client)
-        // Listening ancestors re-render around this object, so its own morph
-        // waits for them and is skipped when one of them rendered it (ADR 024).
-        const listenersRendered = Promise.allSettled(deliverToListeners(this, target)).then(
-            outcomes => outcomes.some(
-                outcome => outcome.status === 'fulfilled' && outcome.value?.html !== undefined,
-            ),
-        )
+        // Components reacting to this response's events re-render too, so this
+        // object's own morph waits for them and the page changes once (ADR 025).
+        await Promise.allSettled(deliverToListeners(this, target))
         // Only HTML rooted at this component's own address (its render(),
         // whether called directly or returned by an action) replaces it. Any
         // other HTML attribute on a component (a modal body, a row) is a
@@ -202,9 +205,7 @@ class BaseGlueProxy {
             && htmlToFragment(target.html).firstElementChild
                 ?.getAttribute('data-glue-address') === this._record.address
         ) {
-            if (!await listenersRendered && this.$el) await result.renderOuterHtml(this.$el)
-        } else {
-            await listenersRendered
+            await result.renderOuterHtml(this.$el)
         }
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
             const childRecord = this._registry.getRecord(rawResult)

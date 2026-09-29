@@ -819,23 +819,32 @@ root and therefore exposes the same event only through `$on()`. The
 source-scoped proxy event is the universal contract; the component DOM event is
 its browser integration.
 
-A component that depends on its descendants declares it on its class (ADR 024):
-`rerender_on = (ChildComponent.event, ...)` re-renders it when a descendant
-emits one of those events, and `@Glue.listener(ChildComponent.event)` runs a
-method first. A component's signed identity
-records its ancestor chain: the component whose template stamped it or whose
-callable returned it, then that component's chain. When a component's response
-carries an event, the client calls the built-in `$receive` callable on each
-mounted ancestor in that chain whose `static_data.listeners` names the event's
-identity, passing the event, its detail, and the source's current token. The
-server verifies that the source is a genuine descendant emitting a declared
-event, runs the matching listeners, and re-renders the component when an event
-is in its `rerender_on` or a listener that ran does not skip rendering. The
-source's own morph waits for those calls and is skipped when the component's
-render already contains it. Routing follows the signed ancestry, not
-the DOM, so it does not depend on bubbling or on where a host mounts a returned
-component. This is not a global bus: an event reaches only its source's
-declared, listening ancestors.
+A component that depends on another component's changes declares it on its
+class (ADR 024, ADR 025): `rerender_on = (OtherComponent.event, ...)` re-renders
+it when any mounted component emits one of those events, and
+`@Glue.listener(ChildComponent.event)` runs a method first, for events from its
+descendants only. A component's signed identity records its ancestor chain: the
+component whose template stamped it or whose callable returned it, then that
+component's chain. When a component's response carries an event, the client
+calls the built-in `$receive` callable on each mounted component whose
+`static_data.rerender_on` names the event's identity, and on each mounted
+ancestor whose `static_data.listeners` does, passing the event, its detail, and
+the source's current token. All of one response's deliveries travel in one
+request. The server verifies that the source token is genuine and that its
+class declares the event, runs the matching listeners only when the source
+names the receiving component among its ancestors, and re-renders the
+component when an event is in its `rerender_on` or a listener that ran does not
+skip rendering. The source's own morph waits for those calls, so the source and
+the components reacting to it change together. Listener routing follows the
+signed ancestry, not the DOM, so it does not depend on bubbling or on where a
+host mounts a returned component.
+
+A component's re-render after page load keeps the stamped children the client
+reports mounted (ADR 025): the tag emits a `<template data-glue-keep>`
+placeholder, and the client keeps the live child, with its state. A child's
+address includes a hash of the parameters and access its stamp passes, so a
+child stamped differently renders fresh. A stamp marked `rerender_with_parent`
+always renders, for a child that is a plain view of its parent's data.
 
 Components expose their DOM relationship without requiring a global string
 name. Within a component template Alpine's `$glue` magic resolves the current

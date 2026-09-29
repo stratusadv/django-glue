@@ -19,13 +19,19 @@ class AddressedObjectEntry(BaseModel):
 
     ``call`` is optional: a reintroduction request names the owner and the
     canonical child paths to re-sign and carries no call (state-model.md
-    §10 "Reintroducing an expired child")."""
+    §10 "Reintroducing an expired child").
+
+    ``mounted`` lists the component roots the client has inside a
+    component's root. A render keeps them instead of re-stamping them
+    (ADR 025). It is untrusted: a client that lists a child it does not have
+    only denies itself that child's markup."""
 
     address: str
     policy_token: str
     updates: dict[str, Any] = Field(default_factory=dict)
     call: AttributeCall | None = None
     reintroduce: list[str] = Field(default_factory=list)
+    mounted: list[str] = Field(default_factory=list)
 
 
 class AttributeCallRequestContext(BaseModel):

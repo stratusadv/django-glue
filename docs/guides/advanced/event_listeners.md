@@ -78,12 +78,15 @@ updated by that render, so the page changes once.
 - **List the declared events, not their names.**
   `TransactionRowComponent.confirmed` fails at import if the row does not declare
   it, and a subclass of the row still matches.
-- **Events reach ancestors.** A component stamped in this component's template,
-  stamped inside one of those, or returned by one of their callables is a
-  descendant, wherever its host mounts it on the page.
+- **`rerender_on` hears the event from anywhere on the page.** Any mounted
+  component that lists the event re-renders, whether it is the source's parent,
+  an ancestor further up, or a sibling such as a summary panel next to the
+  rows. All the components one response wakes re-render in a single request.
 
 To run code when a descendant's event arrives, decorate a method with
-`Glue.listener`. The component re-renders after it, like after any component
+`Glue.listener`. A listener only hears its descendants: a component stamped in
+its template, stamped inside one of those, or returned by one of their
+callables, wherever its host mounts it on the page. The component re-renders after it, like after any component
 callable; pass `skip_rerender=True` to opt out, though a listener that changes a
 retained value re-renders anyway. `required_access=` works as it does on
 `Glue.attr`. Take the event to learn which child changed: `event.source` is the
@@ -99,10 +102,11 @@ def row_confirmed(self, event: Glue.ReceivedEvent[TransactionRowComponent]) -> N
 `event.detail` is the payload the client relayed and is untrusted, like callable
 arguments. Read what you need from `event.source` or the database.
 
-A re-render covers the component's whole template, including the children it stamps.
-Each re-stamped child is mounted again from its parameters, so state a child
-keeps only in memory, such as a click count, returns to its mounted value.
-Keep that state in the database or in the parent.
+A re-render redraws the component's own markup, not the children it stamps: a
+child still mounted on the page is kept as it is, with its state. So a child
+that shows data another component changes must declare `rerender_on` for the
+events that change it, or it shows what it last rendered. See
+[keeping children](../components.md#a-parents-re-render-keeps-its-children).
 
 Loading and transport errors remain normal promise behavior: set local loading
 state before `await`, catch errors, and clear loading state in `finally`.

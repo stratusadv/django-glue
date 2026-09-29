@@ -101,6 +101,34 @@ describe('component listeners', () => {
         expect(requests.map(request => request.attribute)).toEqual(['increment'])
     })
 
+    test('a component that re-renders on the event hears it from a sibling, a listener does not', async () => {
+        const {client, card} = tallyClient({listeners: []})
+        const panel = componentEntry({address: 'panel#test', staticData: {rerender_on: [COUNTED]}})
+        const bystander = componentEntry({address: 'other#test', staticData: {listeners: [COUNTED]}})
+        client.loadObjects([panel, bystander])
+        document.body.insertAdjacentHTML(
+            'beforeend',
+            '<div data-glue-address="panel#test"></div><div data-glue-address="other#test"></div>',
+        )
+        const requests = respond(client, {tally: {}})
+
+        await card.increment()
+
+        expect(requests.map(request => [request.address, request.attribute])).toEqual([
+            [CARD, 'increment'],
+            ['panel#test', '$receive'],
+        ])
+    })
+
+    test('a component call reports the component roots mounted inside it', async () => {
+        const {client} = tallyClient()
+        const requests = respond(client, {tally: {}})
+
+        await client._registry.getProxy(TALLY).$refresh()
+
+        expect(requests[0].mounted).toEqual([CARD])
+    })
+
     test('a failed delivery still applies the source morph and resolves the source call', async () => {
         const {client, card} = tallyClient()
         const errors = []

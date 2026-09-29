@@ -119,9 +119,19 @@ def test_rerender_on_rerenders_without_a_listener(mock_request) -> None:
 
     entry = _receive(dashboard, [_counted_from(cards[0])])
 
-    assert dashboard.get_static_data()['listeners'] == [COUNTED]
+    assert dashboard.get_static_data()['rerender_on'] == [COUNTED]
+    assert 'listeners' not in dashboard.get_static_data()
     assert 'data-testid="counter-dashboard"' in entry['html']
     assert 'policy_token' not in entry
+
+
+def test_rerender_on_takes_an_event_from_a_component_that_is_not_a_descendant(mock_request) -> None:
+    dashboard, _cards = _stamped(mock_request, RerenderingCounterDashboardComponent)
+    sibling = Glue.object(mock_request, CounterCardComponent(start=1))
+
+    entry = _receive(dashboard, [{'event': COUNTED, 'source_token': sibling.policy.token, 'detail': {}}])
+
+    assert 'data-testid="counter-dashboard"' in entry['html']
 
 
 def test_rerender_on_takes_a_tuple_of_declared_events() -> None:

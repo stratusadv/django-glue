@@ -26,6 +26,7 @@
 | [`022`](022-component-callables-re-render-by-default.md) | Accepted; implemented on branch | A successful component callable re-renders its component in the same response, unless it returns a Glue object or declares `skip_rerender=True` |
 | [`023`](023-component-as-page.md) | Accepted; implemented on branch | A view serves a component it constructed with `component.as_page(request)`; `get_view_kwargs` is deprecated |
 | [`024`](024-component-listeners.md) | Accepted; implemented on branch | A component declares the descendant events it reacts to with `Glue.listener`; the client delivers them in a follow-up `$receive` call, and the listener re-renders the component |
+| [`025`](025-parent-renders-keep-mounted-children.md) | Accepted; implemented on branch | A parent's re-render keeps the children the client reports mounted; a child declares its own freshness with `rerender_on`, delivered page-wide and batched |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

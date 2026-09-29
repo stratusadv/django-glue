@@ -41,10 +41,28 @@ def test_parent_listener_rerenders_when_a_stamped_child_emits(
         'request',
         lambda request: receives.append(request) if '$receive' in (request.post_data or '') else None,
     )
-    page.get_by_test_id('counter-card').nth(1).get_by_role('button', name='Increment').click()
+    card = page.get_by_test_id('counter-card').nth(1)
+    card.get_by_role('button', name='Increment').click()
 
     expect(summary).to_have_text('Last counted 5, 1 counts')
     assert len(receives) == 1
+    # The tally's re-render keeps the mounted card, so its count survives (ADR 025).
+    expect(card.get_by_test_id('counter-value')).to_have_text('6')
+
+
+def test_a_kept_child_placeholder_parses_in_place_inside_a_table(
+    page: Page,
+    application: Application,
+) -> None:
+    page.goto(application.url('gorilla:components', {}))
+
+    parent = page.evaluate('''() => {
+        const template = document.createElement('template')
+        template.innerHTML = '<table><tbody><template data-glue-keep="p[row]"></template></tbody></table>'
+        return template.content.querySelector('[data-glue-keep]').parentElement.tagName
+    }''')
+
+    assert parent == 'TBODY'
 
 
 def test_keyed_component_stamps_use_addressed_state_and_events(

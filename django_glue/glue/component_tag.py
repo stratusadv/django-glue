@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import TYPE_CHECKING, Any
 
 from django.template import Context, Node, TemplateSyntaxError
 from django.template.loader import get_template
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from django_glue.access import GlueAccess
@@ -20,6 +23,21 @@ if TYPE_CHECKING:
 
 
 STAMPED_KEYS_ATTR = '_django_glue_stamped_component_keys'
+MOUNTED_ADDRESSES_ATTR = '_django_glue_mounted_addresses'
+RERENDER_WITH_PARENT_FLAG = 'rerender_with_parent'
+
+
+def _stamp_fingerprint(component: Component) -> str:
+    """A short hash of what a stamp passes a child: its signed parameters and access.
+
+    It is part of a stamped child's address, so a child the parent now stamps
+    differently gets a new address and is not kept (ADR 025).
+    """
+    stamped = json.dumps(
+        {'parameters': component.identity['parameters'], 'access': component.access},
+        sort_keys=True,
+    )
+    return hashlib.blake2s(stamped.encode(), digest_size=4).hexdigest()
 
 
 class GlueComponentNode(Node):
@@ -29,11 +47,14 @@ class GlueComponentNode(Node):
         parameters: dict[str, FilterExpression],
         key_expression: FilterExpression | None,
         access_expression: FilterExpression | None,
+        *,
+        rerender_with_parent: bool = False,
     ) -> None:
         self.tag_expression = tag_expression
         self.parameters = parameters
         self.key_expression = key_expression
         self.access_expression = access_expression
+        self.rerender_with_parent = rerender_with_parent
 
     def render(self, context: Context) -> str:
         if self.tag_expression is None:
@@ -79,9 +100,19 @@ class GlueComponentNode(Node):
             **{key: expression.resolve(context) for key, expression in self.parameters.items()},
         )
         if parent is not None:
-            component._address = address.item(parent_address, f'{tag_name}:{canonical}')
+            component._address = address.item(
+                parent_address,
+                f'{tag_name}:{canonical}:{_stamp_fingerprint(component)}',
+            )
         if isinstance(parent, Component):
             component._ancestors = (parent.address, *parent._ancestors)
+        if (
+            not self.rerender_with_parent
+            and component.address in request.__dict__.get(MOUNTED_ADDRESSES_ATTR, ())
+        ):
+            # The client still has this child, and its parameters are unchanged
+            # (they are in its address): keep it rather than re-stamp it (ADR 025).
+            return format_html('<template data-glue-keep="{}"></template>', component.address)
         try:
             GlueContextManager(request).add_glue(component)
         except GlueAuthorizationError:
@@ -107,11 +138,16 @@ def register_component_tags(register: Any) -> None:
         key_expression = None
         access_expression = None
         seen: set[str] = set()
+        rerender_with_parent = False
         for bit in bits[2:]:
+            if bit == RERENDER_WITH_PARENT_FLAG:
+                rerender_with_parent = True
+                continue
             key, separator, raw_value = bit.partition('=')
             if not separator or not raw_value:
                 raise TemplateSyntaxError(
-                    '{% glue_component %} accepts keyword arguments after the tag name.'
+                    '{% glue_component %} accepts keyword arguments and the '
+                    f'{RERENDER_WITH_PARENT_FLAG} flag after the tag name, not {bit!r}.'
                 )
             if key in seen:
                 raise TemplateSyntaxError(f'Duplicate component argument: {key!r}.')
@@ -125,7 +161,13 @@ def register_component_tags(register: Any) -> None:
                 access_expression = expression
             else:
                 parameters[key] = expression
-        return GlueComponentNode(tag_expression, parameters, key_expression, access_expression)
+        return GlueComponentNode(
+            tag_expression,
+            parameters,
+            key_expression,
+            access_expression,
+            rerender_with_parent=rerender_with_parent,
+        )
 
     def reject_end_tag(parser: Parser, token: Token) -> Node:
         _ = parser, token

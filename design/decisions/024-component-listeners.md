@@ -8,6 +8,11 @@ Amended 2026-09-29, before release: a re-render with no code to run is declared
 with the `rerender_on` class attribute instead of an empty `Glue.listener`
 method. See "Declaring a re-render".
 
+Partly superseded by [ADR 025](025-parent-renders-keep-mounted-children.md): a
+component's re-render keeps its mounted children instead of re-stamping them,
+`rerender_on` is delivered page-wide rather than to ancestors only, deliveries
+are batched, and the source always applies its own morph.
+
 ## Context
 
 A rendered component can already announce an outcome. It declares

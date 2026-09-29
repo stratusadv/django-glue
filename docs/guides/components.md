@@ -163,10 +163,40 @@ values re-renders regardless, so the markup always matches the component's
 state. Only the component whose callable ran re-renders.
 
 Call `component.$refresh()` when data outside that component changes, such as a
-record saved by a modal. The refresh recomputes its properties and markup,
-reconciles addressed children, and morphs the root. Stable child keys preserve
-their proxies and Alpine state; removed roots dispose their addresses.
-`render()` produces HTML for initial or host mounting.
+record saved by a modal. The refresh recomputes its properties and markup and
+morphs the root; removed child roots dispose their addresses. To re-render when
+another component announces a change, list its events in `rerender_on` (see
+[declared events](advanced/event_listeners.md)). `render()` produces HTML for
+initial or host mounting.
+
+### A parent's re-render keeps its children
+
+When a component re-renders after a page has loaded, the children it stamps
+with `{% glue_component %}` and that are still on the page are kept as they are:
+the server sends a placeholder for each, and the child keeps its markup, its
+state, and its Alpine data. Only children that are new, or that the parent now
+stamps with different parameters or access, are rendered. A child stamped with
+different parameters is a new child, mounted fresh.
+
+A kept child is only as current as its last render, so a child that shows data
+another component changes declares the events that change it:
+
+```python
+class CloseProgressComponent(Glue.Component):
+    template = 'close/component/close_progress.html'
+    rerender_on = (TransactionRowComponent.confirmed, TransactionRowComponent.receipt_attached)
+```
+
+A child that is simply a view of data its parent re-reads, with parameters that
+do not change when that data does, can instead be stamped with the
+`rerender_with_parent` flag. It then renders with every render of its parent,
+and is mounted fresh each time, so it keeps no state of its own between them:
+
+```django
+{% for date in dates %}
+    {% glue_component 'entries/day' date=date key=date rerender_with_parent %}
+{% endfor %}
+```
 
 ## Use a component as a URL view
 

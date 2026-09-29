@@ -2,6 +2,19 @@
 
 ## v1.1.1
 
+### Breaking
+
+- A component's re-render after page load keeps the stamped children still on
+  the page instead of re-stamping them, so they keep their state and the
+  response carries only the parent's markup (ADR 025). A page that re-renders or
+  `$refresh()`es a parent so that its children redraw must now have each child
+  declare `rerender_on` for the events that change it, or stamp it with the new
+  `rerender_with_parent` flag. Otherwise those children show what they last
+  rendered.
+- `rerender_on` reaches every mounted component that lists the event, not only
+  the source's ancestors, and one response's deliveries travel in one request.
+  `Glue.listener` still hears only descendants.
+
 ### Features
 
 - `@Glue.ComponentParameter` on a method declares a model parameter whose

@@ -1,26 +1,37 @@
-// Routes a response's events to the mounted ancestors that declared a
-// Glue.listener for them (ADR 024). The ancestor chain comes from the source's
-// signed identity; each listening ancestor gets one `$receive` call carrying
-// its events and the source's current token. Returns the calls' promises.
+// Routes a response's events to the components that react to them (ADR 024,
+// ADR 025): a mounted component that lists the event in `rerender_on`,
+// anywhere on the page, and a mounted ancestor with a `Glue.listener` for it.
+// The ancestor chain comes from the source's signed identity. Every reacting
+// component gets one `$receive` call with its events and the source's current
+// token, and all of them travel in one request. Returns the calls' promises.
 function deliverToListeners(proxy, entry) {
     const events = entry.effects?.events
-    const ancestors = proxy._record.policy.identity?.ancestors
-    if (!events?.length || !ancestors?.length) return []
+    if (!events?.length) return []
 
     const eventIds = proxy._record.staticData?.event_ids || {}
-    return ancestors.flatMap(address => {
-        const ancestor = proxy._registry.getProxy(address)
-        if (!ancestor || ancestor._record.disposed || !ancestor.$el) return []
-        const listened = new Set(ancestor._record.staticData?.listeners || [])
+    const ancestors = new Set(proxy._record.policy.identity?.ancestors || [])
+    const deliveries = []
+    proxy._registry.records.forEach(record => {
+        if (record === proxy._record || record.disposed || !record.proxy?.$el) return
+        const reacting = new Set([
+            ...(record.staticData?.rerender_on || []),
+            ...(ancestors.has(record.address) ? record.staticData?.listeners || [] : []),
+        ])
         const delivered = events
-            .filter(({name}) => listened.has(eventIds[name]))
+            .filter(({name}) => reacting.has(eventIds[name]))
             .map(({name, detail}) => ({
                 event: eventIds[name],
                 source_token: proxy._record.policyToken,
                 detail,
             }))
-        return delivered.length ? [ancestor._callAttribute('$receive', {events: delivered})] : []
+        if (delivered.length) deliveries.push([record.proxy, delivered])
     })
+    if (!deliveries.length) return []
+
+    const batch = proxy._http.batch(deliveries.length)
+    return deliveries.map(([recipient, delivered]) => (
+        recipient._callAttribute('$receive', {events: delivered}, {batch})
+    ))
 }
 
 export {deliverToListeners}

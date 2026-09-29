@@ -235,19 +235,19 @@ class Component(BaseGlue):
         return component
 
     def get_static_data(self) -> dict[str, Any]:
-        """Adds the identities of the events this component emits and listens
-        for, which the client uses to route events to listeners (ADR 024)."""
+        """Adds the identities of the events this component emits, re-renders
+        on, and listens for, which the client uses to route events (ADR 024,
+        ADR 025): ``rerender_on`` page-wide, ``listeners`` to ancestors only."""
         static_data = super().get_static_data()
         event_identities = _event_identities(type(self))
         if event_identities:
             static_data['event_ids'] = event_identities
+        if self.rerender_on:
+            static_data['rerender_on'] = sorted({event.identity for event in self.rerender_on})
         listened = sorted({
-            *(event.identity for event in self.rerender_on),
-            *(
-                identity
-                for listener in self._glue_listeners.values()
-                for identity in listener.event_identities
-            ),
+            identity
+            for listener in self._glue_listeners.values()
+            for identity in listener.event_identities
         })
         if listened:
             static_data['listeners'] = listened
@@ -346,30 +346,40 @@ class Component(BaseGlue):
         self,
         call_context: AttributeCallRequestContext,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Handle descendant events the client delivered (ADR 024).
+        """Handle events the client delivered (ADR 024, ADR 025).
 
-        Every listener is authorized before any runs. The component re-renders
-        once for the whole delivery when an event is in ``rerender_on``, or
-        when a listener ran that does not skip it, or when a retained value
-        changed.
+        ``rerender_on`` takes an event from any component on the page;
+        listeners run only for an event from a descendant, because they can
+        read ``event.source``. Every listener is authorized before any runs.
+        The component re-renders once for the whole delivery when an event is
+        in ``rerender_on``, or when a listener ran that does not skip it, or
+        when a retained value changed.
         """
         rerender_identities = {event.identity for event in self.rerender_on}
         deliveries: list[tuple[GlueListener, ReceivedEvent[Any]]] = []
         rerender = False
-        for identity, event in self._admit_received_events(call_context):
+        for identity, event, from_descendant in self._admit_received_events(call_context):
             listeners = [
                 listener
                 for listener in self._glue_listeners.values()
                 if identity in listener.event_identities
             ]
-            if not listeners and identity not in rerender_identities:
-                raise GlueRequestError(
-                    code=GlueRequestErrorCode.INVALID_KWARGS,
-                    message=f'{type(self).__name__} neither re-renders on nor listens for the delivered event.',
-                    details={'event': identity},
-                )
+            if identity not in rerender_identities:
+                if not listeners:
+                    raise GlueRequestError(
+                        code=GlueRequestErrorCode.INVALID_KWARGS,
+                        message=f'{type(self).__name__} neither re-renders on nor listens for the delivered event.',
+                        details={'event': identity},
+                    )
+                if not from_descendant:
+                    raise GlueRequestError(
+                        code=GlueRequestErrorCode.INVALID_KWARGS,
+                        message='The event source is not a descendant of this component.',
+                        details={'source': event.source_address},
+                    )
             rerender = rerender or identity in rerender_identities
-            deliveries.extend((listener, event) for listener in listeners)
+            if from_descendant:
+                deliveries.extend((listener, event) for listener in listeners)
 
         policy = call_context.target_glue_policy
         for listener, _event in deliveries:
@@ -398,12 +408,13 @@ class Component(BaseGlue):
     def _admit_received_events(
         self,
         call_context: AttributeCallRequestContext,
-    ) -> list[tuple[str, ReceivedEvent[Any]]]:
+    ) -> list[tuple[str, ReceivedEvent[Any], bool]]:
         """Verify each delivered event's source before any listener runs.
 
-        The source token must be genuine, issued to this session and user, name
-        this component among its signed ancestors, and belong to a class that
-        declares or inherits the event. The detail stays untrusted.
+        The source token must be genuine, issued to this session and user to a
+        component, and belong to a class that declares or inherits the event.
+        Each event comes back with whether its source names this component
+        among its signed ancestors. The detail stays untrusted.
         """
         kwargs = call_context.target_attribute_call_kwargs
         deliveries = kwargs.get('events')
@@ -413,7 +424,7 @@ class Component(BaseGlue):
                 message=f'{RECEIVE_ATTRIBUTE} takes a non-empty "events" list.',
             )
 
-        received: list[tuple[str, ReceivedEvent[Any]]] = []
+        received: list[tuple[str, ReceivedEvent[Any], bool]] = []
         for delivery in deliveries:
             if (
                 not isinstance(delivery, dict)
@@ -427,13 +438,10 @@ class Component(BaseGlue):
                 )
             source_policy = GluePolicy.from_token(delivery['source_token'])
             source_policy.verify_request(call_context.request)
-            if (
-                source_policy.namespace != self.namespace
-                or self.address not in source_policy.identity.get('ancestors', ())
-            ):
+            if source_policy.namespace != self.namespace:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_KWARGS,
-                    message='The event source is not a descendant of this component.',
+                    message='The event source is not a component.',
                     details={'source': source_policy.address},
                 )
             source_class = component_registry.from_identifier(source_policy.identity['component_id'])
@@ -455,6 +463,7 @@ class Component(BaseGlue):
                     source_class=source_class,
                     request=call_context.request,
                 ),
+                self.address in source_policy.identity.get('ancestors', ()),
             ))
         return received
 

@@ -46,6 +46,31 @@ for (const [name, createRenderer] of Object.entries(renderers)) {
             expect(target.querySelector('b').textContent).toBe('New')
         })
 
+        test('a kept child placeholder leaves the live child in place', async () => {
+            // happy-dom mis-parses table markup inside <template>; the browser
+            // suite checks that a placeholder stays in place inside a table.
+            document.body.innerHTML = '<ul id="target"><li>Old</li><li data-glue-address="p[row]">Live</li></ul>'
+            const target = document.querySelector('#target')
+            const row = target.querySelector('[data-glue-address]')
+
+            await createRenderer(
+                '<ul id="target"><li>New</li><template data-glue-keep="p[row]"></template></ul>'
+            ).renderOuterHtml(target)
+
+            expect(target.querySelector('[data-glue-address]')).toBe(row)
+            expect(row.textContent).toBe('Live')
+            expect(target.firstElementChild.textContent).toBe('New')
+            expect(target.querySelector('template')).toBeNull()
+        })
+
+        test('a placeholder for a child that is gone is dropped', async () => {
+            document.body.innerHTML = '<div id="target"><p>Old</p></div>'
+
+            await createRenderer('<div id="target"><template data-glue-keep="p[gone]"></template><p>New</p></div>').renderOuterHtml('#target')
+
+            expect(document.querySelector('#target').innerHTML).toBe('<p>New</p>')
+        })
+
         test('empty inner HTML clears children without removing the target', async () => {
             document.body.innerHTML = '<div id="target"><p>Old</p></div>'
             await createRenderer('').renderInnerHtml('#target')
