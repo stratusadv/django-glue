@@ -19,13 +19,12 @@ and reconciles each response as authoritative.
 
 ## Design authority
 
-`design/AGENTS.md` governs work on the reactive system (the state-model
-refactor). Before editing `django_glue/` or `client_js/` for that work: read
-the active phase and its gate in `design/roadmap.md`, then the
-governing sections of `design/specs/core/state-model.md` (and
+`design/AGENTS.md` describes the design documents for the reactive system (the
+state-model refactor). Before editing `django_glue/` or `client_js/` for that
+work: read the active phase and its gate in `design/roadmap.md`, then the
+relevant sections of `design/specs/core/state-model.md` (and
 `design/specs/core/component-system.md` for components). This file describes
-the tree as it is; where it and the design docs disagree about the target
-architecture, the design docs win.
+the tree as it is.
 
 ## Project structure
 
