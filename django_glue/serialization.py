@@ -150,13 +150,30 @@ class DjangoFormFieldSerializer(GlueSerializerHandler):
         return value
 
 
+_ADAPTERS: dict[Any, TypeAdapter[Any]] = {}
+
+
+def _adapter(target: Any) -> TypeAdapter[Any]:
+    """The adapter for an annotation, built once: building one compiles a
+    schema, which costs 30-200x as much as using it, and a component's
+    parameters are coerced and encoded on every construction."""
+    try:
+        return _ADAPTERS[target]
+    except KeyError:
+        adapter = _ADAPTERS[target] = TypeAdapter(target)
+        return adapter
+    except TypeError:
+        # An unhashable annotation cannot be a cache key.
+        return TypeAdapter(target)
+
+
 class AnnotationSerializer(GlueSerializerHandler):
     def supports(self, target: Any) -> bool:
         return target is not None
 
     def coerce(self, value: Any, target: Any) -> Any:
         try:
-            return TypeAdapter(target).validate_python(value)
+            return _adapter(target).validate_python(value)
         except (PydanticValidationError, PydanticUserError, TypeError, ValueError) as error:
             raise GlueSerializerError(str(error)) from error
 
@@ -165,7 +182,7 @@ class AnnotationSerializer(GlueSerializerHandler):
 
     def encode(self, value: Any, target: Any) -> Any:
         try:
-            return TypeAdapter(target).dump_python(value, mode='json')
+            return _adapter(target).dump_python(value, mode='json')
         except PydanticUserError:
             return value
 

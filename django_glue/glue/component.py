@@ -62,6 +62,21 @@ def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
 
 
 @cache
+def _reactions(component_class: type[Component]) -> dict[str, list[str]]:
+    """The identities of the events a class re-renders on and listens for, as
+    its static data publishes them (ADR 024, ADR 025); empty lists omitted."""
+    reactions = {
+        'rerender_on': sorted({event.identity for event in component_class.rerender_on}),
+        'listeners': sorted({
+            identity
+            for listener in component_class._glue_listeners.values()
+            for identity in listener.event_identities
+        }),
+    }
+    return {key: identities for key, identities in reactions.items() if identities}
+
+
+@cache
 def _event_identities(component_class: type[Component]) -> dict[str, str]:
     """Each event the class declares or inherits, by name, mapped to its identity (ADR 024)."""
     return {
@@ -250,15 +265,7 @@ class Component(BaseGlue):
         event_identities = _event_identities(type(self))
         if event_identities:
             static_data['event_ids'] = event_identities
-        if self.rerender_on:
-            static_data['rerender_on'] = sorted({event.identity for event in self.rerender_on})
-        listened = sorted({
-            identity
-            for listener in self._glue_listeners.values()
-            for identity in listener.event_identities
-        })
-        if listened:
-            static_data['listeners'] = listened
+        static_data.update(_reactions(type(self)))
         return static_data
 
     def introduce(self, request: HttpRequest) -> None:
@@ -363,7 +370,7 @@ class Component(BaseGlue):
         in ``rerender_on``, or when a listener ran that does not skip it, or
         when a retained value changed.
         """
-        rerender_identities = {event.identity for event in self.rerender_on}
+        rerender_identities = set(_reactions(type(self)).get('rerender_on', ()))
         deliveries: list[tuple[GlueListener, ReceivedEvent[Any]]] = []
         rerender = False
         for identity, event, from_descendant in self._admit_received_events(call_context):
