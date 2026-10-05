@@ -27,6 +27,7 @@
 | [`023`](023-component-as-page.md) | Accepted; implemented on branch | A view serves a component it constructed with `component.as_page(request)`; `get_view_kwargs` is deprecated |
 | [`024`](024-component-listeners.md) | Accepted; implemented on branch; partly superseded by 025 | A component declares the events it re-renders on with `rerender_on` and runs code for a descendant's events with `Glue.listener`; the client delivers them in a follow-up `$receive` call |
 | [`025`](025-parent-renders-keep-mounted-children.md) | Accepted; implemented on branch | A parent's re-render keeps the children the client reports mounted; a child declares its own freshness with `rerender_on`, delivered page-wide and batched |
+| [`026`](026-component-session.md) | Accepted; implemented on branch | `Component.session` is a cache-backed mutable mapping scoped by the component class's qualified name, auto-flushed when the component's interaction completes and written only when changed, never crossing the wire |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

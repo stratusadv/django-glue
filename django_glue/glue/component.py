@@ -25,6 +25,7 @@ from django_glue.glue.base import BaseGlue
 from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_registry
 from django_glue.glue.component_naming import component_name
 from django_glue.glue.component_root import inject_component_root
+from django_glue.glue.component_session import ComponentSession
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.event import GlueEvent
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
@@ -183,6 +184,7 @@ class Component(BaseGlue):
         super().__init__(name=name, access=access)
         self._ancestors: tuple[str, ...] = ()
         self._mounted_children: frozenset[str] = frozenset()
+        self._session: ComponentSession | None = None
 
         if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
@@ -239,6 +241,28 @@ class Component(BaseGlue):
             'ancestors': list(self._ancestors),
         }
 
+    @property
+    def session(self) -> ComponentSession:
+        """The server-side session for this component class (ADR 026).
+
+        A mutable mapping over one cache entry, scoped by the class's
+        qualified name. Mutations mark the namespace dirty, and the
+        component flushes the session when its interaction completes,
+        writing the entry only when dirty. The session is server-side
+        only and never crosses the wire.
+        """
+        if self.request is None:
+            msg = f"Cannot access the session of unbound component '{self.name}'."
+            raise RuntimeError(msg)
+        if self._session is None:
+            self._session = ComponentSession(self.request, type(self).__qualname__)
+        return self._session
+
+    def _flush_session(self) -> None:
+        """Persist the session if this interaction changed it (ADR 026)."""
+        if self._session is not None and self._session.is_dirty:
+            self._session.save()
+
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> Component:
         component_class = component_registry.from_identifier(policy.identity['component_id'])
@@ -269,6 +293,7 @@ class Component(BaseGlue):
     def introduce(self, request: HttpRequest) -> None:
         super().introduce(request)
         self.mount()
+        self._flush_session()
 
     def mount(self) -> None:
         pass
@@ -344,6 +369,7 @@ class Component(BaseGlue):
             return self._receive(call_context)
 
         entry, introduced = super().process_attribute_call(call_context)
+        self._flush_session()
         if 'html' in entry:
             return entry, introduced
 
@@ -413,6 +439,7 @@ class Component(BaseGlue):
                 listener.run(self, event)
 
         entry, introduced = self._run_call(call_context, invoke)
+        self._flush_session()
         rerender = rerender or any(not listener.skip_rerender for listener, _event in deliveries)
         if 'policy_token' not in entry and not rerender:
             return entry, introduced

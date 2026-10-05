@@ -333,3 +333,36 @@ children and listeners.
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound
 parameter syntax.
+
+## Server-side state (ComponentSession)
+
+Some state a component needs is invisible to the client: a rate-limit counter,
+a multi-step flow's position, a scratch value shared by the component's
+instances. Signed parameters and state snapshots exist for state the client
+sees, and a private field dies on every request, so Glue provides
+`self.session`: a mutable mapping over one entry in your project's default
+Django cache, scoped by the component class's qualified name (ADR 026).
+
+```python
+class OnboardingComponent(Glue.Component):
+    template = 'onboarding/panel.html'
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def skip(self):
+        self.session['skipped'] = True
+```
+
+- The session flushes itself. A change — setting a key to a value it does not
+  already hold — marks the namespace dirty, and the component writes the cache
+  entry when the interaction — its `mount()`, a
+  callable, `$receive()`, or `$refresh()` — completes, only when dirty, so a
+  request that changes nothing writes nothing. A change made by a call that
+  raises is lost. `save()` persists immediately for code outside the
+  interaction.
+- Every instance of the class shares the entry, and so do all users. It is for
+  component-level scratch, not per-user data and not data that must survive a
+  cache flush. Per-user or durable state belongs in the database.
+- The session never crosses the wire: it is not part of the policy token or
+  the computed data, and the client cannot read or write it.
+- `self.session.discard()` deletes the entry. Keys must be strings, and values
+  must be picklable.

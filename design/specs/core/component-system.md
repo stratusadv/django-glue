@@ -121,12 +121,15 @@ class TimeEntryDay(Glue.Component):
   and §10. The client assembles and reconciles their values into the existing
   reactive object; it does not replace the object or infer data from rendered
   HTML.
-- **Components do not introduce a state engine.** They use the same signed
-  parameters and state snapshots, editable-update admission and domain
-  validation, unsigned response data, effects, and client reconciliation as
-  `ModelGlue`, `FormGlue`, `QuerySetGlue`, and the other existing families.
-  Component behavior is a composition layer over `BaseGlue`, not a replacement
-  for its established entrypoints.
+- **Components do not introduce a state engine for client-facing state.**
+  Retained, editable, and derived state uses the same signed parameters and
+  state snapshots, editable-update admission and domain validation, unsigned
+  response data, effects, and client reconciliation as `ModelGlue`,
+  `FormGlue`, `QuerySetGlue`, and the other existing families. Component
+  behavior is a composition layer over `BaseGlue`, not a replacement for its
+  established entrypoints. Server-side scratch state that never crosses the
+  wire is a separate opt-in store (see "Server-side component state" below and
+  [ADR 026](../../decisions/026-component-session.md)).
 - **Calls are ordered per address.** The client advances one component's token
   and canonical data before sending its next call, while unrelated component
   addresses may proceed concurrently. Cross-tab freshness is supplied by the
@@ -393,6 +396,36 @@ component's parameters. A row that only displays data, or whose actions the owni
 component can perform by key, stays a partial of the owner; a per-row component is
 for a row that needs its own actions, isolated re-rendering, or its own
 authorization.
+
+#### Server-side component state (ComponentSession)
+
+The token is the only store for state the client sees. Some component state
+sees no client at all: a rate-limit counter, a multi-step flow's position, a
+per-class scratch value. Holding it in a private field loses it on the first
+reconstruction (§2), and signing it into the token makes it client-visible,
+grows every response, and re-signs the token on every change
+([ADR 013](../../decisions/013-policy-token-lifetime.md),
+[ADR 025](../../decisions/025-parent-renders-keep-mounted-children.md)).
+
+`Component.session` is the one store for that state, and it is opt-in
+([ADR 026](../../decisions/026-component-session.md)):
+
+- **One cache entry per component class.** The session is a mutable mapping
+  over one entry in the host application's default cache, scoped by the
+  component class's qualified name. All instances of the class share the
+  entry, and so do all users; state that must be per-user, or must survive a
+  cache flush, belongs in the database.
+- **Saving is automatic and change-only.** Setting a key to a value it does
+  not already hold marks the namespace dirty; the component flushes the
+  session when `mount()` completes at introduction
+  and when every attribute call completes, and the entry is written only when
+  dirty, so a request that changes nothing writes nothing. A call that raises
+  never flushes. `session.save()` persists immediately for code outside those
+  points, and `session.discard()` deletes the entry.
+- **It never crosses the wire.** The session is not part of the policy token,
+  `static_data`, or `computed_data`, and it is not an admitted update. The
+  client cannot read or write it, and the reconstruction pipeline above is
+  unchanged: the token remains the only authority for client-facing state.
 
 ### 5. Components are stamped with a Django template tag
 
