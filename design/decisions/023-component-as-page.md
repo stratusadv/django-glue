@@ -95,11 +95,11 @@ arguments map straight onto parameters. It is reimplemented as
 `cls(**parameters).as_page(request, layout_template=...)` under `require_safe`,
 so the two paths share one introduction and rendering path.
 
-`get_view_kwargs` shipped in v1.1.0, so v1.1.1 deprecates it rather than
+`get_view_kwargs` shipped in v1.1.0, so v1.2.0 deprecates it rather than
 removing it. `as_view()` still calls it, and a subclass that overrides it emits
 a `DeprecationWarning` at class creation, which names `as_page()` as the
-replacement. It is removed in v1.2.0. The five known overrides migrate to view
-functions.
+replacement. It will be removed in a future version. The five known overrides
+migrate to view functions.
 
 ## Consequences
 

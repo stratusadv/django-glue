@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## v1.1.1
+## v1.2.0
 
 ### Breaking
 
@@ -39,9 +39,10 @@
 
 ### Deprecated
 
-- `Component.get_view_kwargs()` is deprecated and will be removed in 1.2.0. A
-  component that overrides it emits a `DeprecationWarning`. Construct the
-  component in a view and return `component.as_page(request)` instead (ADR 023).
+- `Component.get_view_kwargs()` is deprecated and will be removed in a future
+  version. A component that overrides it emits a `DeprecationWarning`. Construct
+  the component in a view and return `component.as_page(request)` instead
+  (ADR 023).
 
 ### Changes
 

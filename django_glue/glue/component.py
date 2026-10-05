@@ -138,8 +138,8 @@ class Component(BaseGlue):
         if 'get_view_kwargs' in cls.__dict__:
             warnings.warn(
                 f'{cls.__name__}.get_view_kwargs() is deprecated and will be removed in '
-                'django-glue 1.2.0. Construct the component in a view function and return '
-                'component.as_page(request) instead.',
+                'a future version of django-glue. Construct the component in a view function '
+                'and return component.as_page(request) instead.',
                 DeprecationWarning,
                 # Past __init_subclass__ and ABCMeta.__new__ to the class statement.
                 stacklevel=3,

@@ -257,8 +257,9 @@ contract: an unknown or missing parameter raises the component's normal error.
 `as_view()` is the same response for a component built from URL captures and
 fixed keyword arguments.
 
-`get_view_kwargs()` is deprecated and will be removed in 1.2.0. A component that
-overrides it emits a `DeprecationWarning`; move its body into a view as above.
+`get_view_kwargs()` is deprecated and will be removed in a future version. A
+component that overrides it emits a `DeprecationWarning`; move its body into a
+view as above.
 
 The layout template places the rendered component with the no-argument tag:
 

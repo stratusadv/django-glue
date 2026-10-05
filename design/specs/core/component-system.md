@@ -489,8 +489,8 @@ stay in Django's view layer, and the constructor call is the only construction
 contract. `as_page(layout_template=...)` overrides the class's layout template
 as `as_view()` does. A component constructed without a `name` is named from its
 class, so both paths produce the same root address. `get_view_kwargs()`, which
-returned constructor kwargs as a dict, is deprecated in 1.1.1 and removed in
-1.2.0.
+returned constructor kwargs as a dict, is deprecated in 1.2.0 and will be
+removed in a future version.
 
 Either way, the component is introduced and mounted once before rendering, with
 the same signed root address and child entries as a template-tag stamp. Unknown
