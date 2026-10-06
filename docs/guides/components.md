@@ -94,6 +94,66 @@ every module searched. A `DIRS` directory must be importable: one that holds a
 `components` module outside every `sys.path` entry raises the same error, naming
 the entry, instead of being skipped.
 
+## Lists: render rows as partials unless a row is live
+
+**Render each row of a list as a template partial of the component that owns the
+list. Make a row its own component only when the row is live: it holds state of
+its own between requests, such as an inline edit mode and its draft text.**
+
+Ask of each row: *does it need to remember anything between requests?* A row
+that only shows data, or whose buttons can be handled by the list, is not live.
+Its buttons call the list's callables with the row's key:
+
+```python
+class CommentsComponent(Glue.Component):
+    template = 'comments/comments.html'
+
+    @Glue.attr(required_access=Glue.Access.DELETE)
+    def delete(self, request: HttpRequest, pk: int) -> None:
+        Comment.objects.get(pk=pk, user=request.user).delete()
+```
+
+```django
+<ul>
+    {% for comment in comments %}
+        <li>
+            {{ comment.text }}
+            <button @click="component.delete({{ comment.pk }})">Delete</button>
+        </li>
+    {% endfor %}
+</ul>
+```
+
+The row markup can live in its own template and be included in the loop; it is
+still part of the list component.
+
+The key comes from the client, so the callable checks it: the lookup above only
+finds the user's own comments.
+
+**Why.** Every component on a page carries its own signed token and its own
+address, and the browser tracks each one. A row component adds roughly 1.5 KB to
+the page, most of it a token that does not compress, so 20 row components add
+about 30 KB and 200 add about 300 KB, where the same rows as partials add almost
+nothing. A partial costs only its HTML. Queries are not the difference: a list that
+passes each row its loaded instance renders row components in one query (see
+[model parameters](#model-and-dataclass-parameters)).
+
+**When a row component is right.** A row that is live pays for itself:
+
+- It keeps its own state, such as an edit mode and a draft, without the list
+  tracking which row is being edited.
+- An action re-renders only that row, so the response stays the same size however
+  long the list is, where a list callable re-renders the whole list.
+- Its authorization lives in one place, its initializer, instead of in every list
+  callable.
+
+Keep such lists short, tens of rows rather than hundreds, and have the list pass
+each row the instance it already loaded.
+
+Livewire and Phoenix LiveView give the same advice: Livewire asks whether a nested
+piece "need[s] to be 'live'" before making it a component, and LiveView says to
+avoid live components "merely for code organization purposes".
+
 ## Model and dataclass parameters
 
 A component that represents a database row declares it by decorating a method

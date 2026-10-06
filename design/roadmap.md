@@ -106,6 +106,77 @@ starts only with explicit implementation authorization.
   - a dataclass parameter with nested `date`, `Decimal`, and enum fields renders,
     and reconstruction restores it as an equal dataclass instance; a dataclass
     field holding a model instance is rejected at construction.
+- [x] **Bounded model parameters.** Accepted and implemented in
+  [ADR 026](decisions/026-bounded-model-parameters.md): an initializer taking
+  `(self, model, pk)` accepts a row of any concrete subclass of its return
+  annotation. Its gate:
+  - one component class renders and reconstructs rows of two different models,
+    and a supplied instance issues no query;
+  - the token signs `{'model': <label>, 'pk': <key>}`, and assigning a signed
+    value in an action retargets the parameter to another model and re-renders;
+  - a label outside the bound, an unknown label, and a bare key are rejected with
+    `invalid_component_parameter`;
+  - a row that leaves the initializer's scope fails with
+    `model_instance_not_found`, and verification resolves a supplied instance
+    through its own model;
+  - the concrete form rejects an abstract model or `Model` itself at class
+    definition, naming the bounded form;
+  - a signed mapping with a null key or a label that is not a string is rejected
+    with `invalid_component_parameter`.
+- [x] **Draft model parameters.** Accepted and implemented in
+  [ADR 029](decisions/029-draft-model-parameters.md): a model parameter whose
+  initializer's key annotation admits `None` may be left out for a row that does
+  not exist yet. Its gate:
+  - leaving the parameter out, or passing `None`, builds the draft through the
+    initializer, seeded from the component's other parameters, signs a null key,
+    and is rebuilt on a later request; a stamp that leaves it out does the same;
+  - a draft seeded from an optional dataclass parameter and a dict parameter is
+    rebuilt with the same values on a later request, and the edit case leaves
+    both out;
+  - a callable that saves the draft signs its new key and re-renders, even with
+    `skip_rerender=True`, and the next request edits that record instead of
+    creating another;
+  - the parameter still takes a saved row or its key, and rejects an unsaved
+    instance, naming the fix; a parameter that does not opt in stays required;
+  - `Optional[...]` is accepted as the annotation, a key annotation without
+    `None` rejects `None`, and a bounded parameter that declares a draft is
+    rejected at class definition.
+- [x] **Formsets edit saved records.** Accepted and implemented in
+  [ADR 028](decisions/028-formsets-edit-saved-records.md): a formset is seeded
+  with `instances` and `initial`, and removing a saved row signs a pending
+  deletion that `save` applies. Its gate:
+  - seeding `instances` binds each row to its record in one query, orders them
+    before `initial` rows, and rejects an unsaved instance, another model, a form
+    of another class, a bound form, and a seed beyond `max_num`;
+  - `pop` of a saved row signs its key into `state_snapshot.removed_pks` without
+    deleting it, and `pop` of an unsaved row signs nothing;
+  - `pop` of a saved row is rejected without `DELETE`, a live row's `pop` is
+    rejected without that row's token, and another row's token is rejected;
+  - `save` deletes the removed records and clears the list, in a query count
+    that does not grow with the number removed, and an invalid row leaves every
+    record untouched;
+  - `save_forms` and `delete_removed` overrides replace the default writes and
+    survive reconstruction;
+  - `validate` and `save` load their submitted rows in a query count that does
+    not grow with the rows, `save` writes only the saved rows that changed, and
+    an unedited new row is still created;
+  - a form with foreign-key fields loads its rows in one query and runs
+    Django's two validation queries per foreign-key field per row, no more;
+  - `validate` called over the wire on a formset with rows returns each row's
+    address;
+  - in the browser, removing seeded rows and saving leaves only the remaining
+    records in the database;
+  - in the browser, a `CHANGE` component with a `DELETE` formset child edits and
+    deletes its owner's records and leaves another owner's untouched;
+  - `append` rejects an `initial` key the form does not let a user edit, and
+    `new_row_defaults` set unexposed fields on appended and seeded new rows,
+    win over the client's `initial`, and survive reconstruction;
+  - a default on an editable field can be changed by the user, and a default on
+    a disabled field cannot;
+  - an unsaved form passed through `instances` gets the defaults, and a form for
+    a saved record does not;
+  - in the browser, a row added in a component's formset is saved under that
+    component's owner, and an `append` naming another owner is refused.
 - [x] **Component callables re-render by default.** Accepted and implemented in
   [ADR 022](decisions/022-component-callables-re-render-by-default.md). Its gate:
   - a component callable that writes data without moving a retained value returns
