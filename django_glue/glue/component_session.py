@@ -3,8 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterator, MutableMapping
 from typing import TYPE_CHECKING, Any
 
-from django.core.cache import cache
-
 from django_glue.conf import settings
 
 if TYPE_CHECKING:
@@ -25,57 +23,41 @@ class ComponentSession(MutableMapping[str, Any]):
     """
 
     def __init__(self, request: HttpRequest, namespace: str) -> None:
-        self.request = request
+        self.session = request.session
         self.namespace = namespace
         self._key = f'{settings.DJANGO_GLUE_COMPONENT_SESSION_CACHE_PREFIX}{namespace}'
-        self._data: dict[str, Any] | None = None
-        self._dirty = False
 
     @property
-    def is_dirty(self) -> bool:
-        return self._dirty
+    def data(self) -> dict[str, Any]:
+        return self.session.get(self._key, {})
 
-    def _load(self) -> dict[str, Any]:
-        if self._data is None:
-            loaded = cache.get(self._key)
-            self._data = loaded if isinstance(loaded, dict) else {}
-        return self._data
-
-    def _require_string_key(self, key: Any) -> str:
+    @staticmethod
+    def _require_string_key(key: Any) -> str:
         if not isinstance(key, str):
             msg = f'ComponentSession keys must be strings, got {type(key).__name__}.'
             raise TypeError(msg)
         return key
 
     def __getitem__(self, key: str) -> Any:
-        return self._load()[key]
+        return self.data[key]
 
     def __setitem__(self, key: str, value: Any) -> None:
         key = self._require_string_key(key)
-        data = self._load()
-        if key not in data or data[key] != value:
-            self._dirty = True
-        data[key] = value
+
+        if key not in self.data or self.data[key] != value:
+            self.set_modified()
+
+        self.data[key] = value
 
     def __delitem__(self, key: str) -> None:
-        del self._load()[self._require_string_key(key)]
-        self._dirty = True
+        del self.data[self._require_string_key(key)]
+        self.set_modified()
 
     def __iter__(self) -> Iterator[str]:
-        return iter(self._load())
+        return iter(self.data)
 
     def __len__(self) -> int:
-        return len(self._load())
+        return len(self.data)
 
-    def save(self) -> None:
-        """Write the namespace to the cache; a no-op unless it changed."""
-        if not self._dirty:
-            return
-        cache.set(self._key, self._load())
-        self._dirty = False
-
-    def discard(self) -> None:
-        """Delete the namespace's cache entry and forget the local view."""
-        cache.delete(self._key)
-        self._data = {}
-        self._dirty = False
+    def set_modified(self) -> None:
+        self.session.modified = True

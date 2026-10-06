@@ -243,25 +243,11 @@ class Component(BaseGlue):
 
     @property
     def session(self) -> ComponentSession:
-        """The server-side session for this component class (ADR 026).
-
-        A mutable mapping over one cache entry, scoped by the class's
-        qualified name. Mutations mark the namespace dirty, and the
-        component flushes the session when its interaction completes,
-        writing the entry only when dirty. The session is server-side
-        only and never crosses the wire.
-        """
         if self.request is None:
-            msg = f"Cannot access the session of unbound component '{self.name}'."
-            raise RuntimeError(msg)
-        if self._session is None:
-            self._session = ComponentSession(self.request, type(self).__qualname__)
-        return self._session
+            message = f"Cannot access the session of unbound component '{self.name}'."
+            raise RuntimeError(message)
 
-    def _flush_session(self) -> None:
-        """Persist the session if this interaction changed it (ADR 026)."""
-        if self._session is not None and self._session.is_dirty:
-            self._session.save()
+        return ComponentSession(self.request, type(self).__qualname__)
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> Component:
@@ -293,7 +279,6 @@ class Component(BaseGlue):
     def introduce(self, request: HttpRequest) -> None:
         super().introduce(request)
         self.mount()
-        self._flush_session()
 
     def mount(self) -> None:
         pass
@@ -369,7 +354,7 @@ class Component(BaseGlue):
             return self._receive(call_context)
 
         entry, introduced = super().process_attribute_call(call_context)
-        self._flush_session()
+
         if 'html' in entry:
             return entry, introduced
 
@@ -439,7 +424,7 @@ class Component(BaseGlue):
                 listener.run(self, event)
 
         entry, introduced = self._run_call(call_context, invoke)
-        self._flush_session()
+
         rerender = rerender or any(not listener.skip_rerender for listener, _event in deliveries)
         if 'policy_token' not in entry and not rerender:
             return entry, introduced
