@@ -1,6 +1,9 @@
 # ADR 021: Model and Dataclass Component Parameters
 
-Status: Accepted; implemented on branch
+Status: Accepted; implemented on branch; extended by
+[ADR 026](026-bounded-model-parameters.md) (bounded parameters) and
+[ADR 029](029-draft-model-parameters.md) (a parameter may accept `None` for a row
+that does not exist yet)
 
 Date: 2026-09-28
 

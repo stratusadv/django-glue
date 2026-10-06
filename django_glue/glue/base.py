@@ -307,12 +307,14 @@ class BaseGlue(ABC):
         }
 
     def get_static_data(self) -> dict[str, Any]:
-        """Client-visible static data (state-model.md §10 "Responses omit what
+        """
+        Client-visible static data (state-model.md §10 "Responses omit what
         did not change"): field descriptors with ``value_path`` state-path
         mappings, addressed-child kind/nullable slots, and callable argument
         shapes. Down-only and client-forgets: stable across calls for an
         unchanged object, omitted from the response when it did not change,
-        and never sent back to the server."""
+        and never sent back to the server.
+        """
         fields: dict[str, Any] = {}
         children: dict[str, Any] = {}
         callables: dict[str, Any] = {}
@@ -415,12 +417,21 @@ class BaseGlue(ABC):
         context: AttributeCallRequestContext
     ) -> Self:
         glue_object = cls._reconstruct_from_policy(context.target_glue_policy)
-        glue_object.request = context.request
-        glue_object._address = context.target_glue_policy.address
+        glue_object._authorize_reconstruction(context)
 
-        attribute = glue_object._bound_attributes.get(context.target_attribute_name)
+        return glue_object
+
+    def _authorize_reconstruction(self, context: AttributeCallRequestContext) -> None:
+        """
+        Bind a reconstructed object to its request and address, then authorize
+        the interaction as a whole (state-model.md §3, "Reconstruction").
+        """
+        self.request = context.request
+        self._address = context.target_glue_policy.address
+
+        attribute = self._bound_attributes.get(context.target_attribute_name)
         required_access = (
-            glue_object._resolve_required_access(attribute.definition.required_access)
+            self._resolve_required_access(attribute.definition.required_access)
             if attribute is not None
             else GlueAccess.VIEW
         )
@@ -430,13 +441,11 @@ class BaseGlue(ABC):
             kind = GlueOperationKind.UPDATE
         else:
             kind = GlueOperationKind.REFRESH
-        glue_object._require_authorization(GlueOperation(
+        self._require_authorization(GlueOperation(
             kind=kind,
             attribute=None,
             required_access=required_access,
         ))
-
-        return glue_object
 
     @classmethod
     @abstractmethod
@@ -444,11 +453,14 @@ class BaseGlue(ABC):
         """Reconstruct a GlueObject from a signed policy."""
         raise NotImplementedError
 
-    def _retained_state(self) -> dict[str, Any]:
-        """Non-parameterized retained state signed into the successor policy
+    def _get_retained_state(self) -> dict[str, Any]:
+        """
+        Non-parameterized retained state signed into the successor policy
         token's ``state_snapshot``: internal reconstructors plus the family's
-        acknowledged editable state (state-model.md §5, §10)."""
+        acknowledged editable state (state-model.md §5, §10).
+        """
         retained: dict[str, Any] = {}
+
         for path, attribute in self._bound_attributes.items():
             definition = attribute.definition
             if (
@@ -456,6 +468,7 @@ class BaseGlue(ABC):
                 and definition.value_role is GlueValueRole.RECONSTRUCTOR
             ):
                 retained[path] = attribute.get()
+
         return retained
 
     def _admit_updates(

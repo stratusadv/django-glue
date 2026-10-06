@@ -389,7 +389,11 @@ split presentation without inventing child authorities. A construction site that
 already holds the row a child represents may hand it over through a model
 parameter ([ADR 021](../../decisions/021-component-parameter-initializers.md)):
 the child's signed parameter is still the row's key, and every later request
-resolves it through the child's initializer. That handoff is construction input,
+resolves it through the child's initializer. A model parameter whose
+initializer's key annotation admits `None` may instead be left out for a row
+that does not exist yet: the signed key is null, the initializer builds the row
+on every request, and once the component saves it the new key is signed
+([ADR 029](../../decisions/029-draft-model-parameters.md)). That handoff is construction input,
 not a cache; nothing outlives the render, and no child reads another object's
 state. A form is not handed over this way; it is a child built from the
 component's parameters. A row that only displays data, or whose actions the owning
@@ -476,12 +480,37 @@ of that directory:
 {% glue_component 'time_tracker/time_entry_day' date=date user_id=user.pk key=date %}
 ```
 
-The first addresses `TimeEntryDay(Component)` in `<root>/components`; the
-second addresses the same class in `<root>/time_tracker/components`. The class
-is matched by name while scanning that `components` package — **the file it
-lives in does not matter** — and is imported and resolved lazily on first use,
-never at startup. The components root defaults to the project's
-`settings.BASE_DIR` and is overridable via `DJANGO_GLUE_COMPONENTS_ROOT`.
+The first addresses `TimeEntryDay(Component)` in `<location>/components`; the
+second addresses the same class in `<location>/time_tracker/components`. The
+class is matched by name while scanning that `components` package — **the file
+it lives in does not matter** — and is imported and resolved lazily on first
+use, never at startup.
+
+The locations are configured the way Django configures template lookup
+(ADR 027):
+
+```python
+DJANGO_GLUE_COMPONENTS = {
+    'DIRS': [BASE_DIR / 'app'],
+    'APP_DIRS': True,
+}
+```
+
+- `DIRS` is a list of directories, searched in order. It defaults to
+  `[settings.BASE_DIR]`.
+- `APP_DIRS` defaults to `True`. When on, the tag's directory is also read as a
+  dotted package path (`django_spire/comment` is `django_spire.comment`), and
+  that package is searched when it is an installed app or lies inside one.
+- Every `DIRS` entry is searched before any installed app. A location with no
+  `components` module is skipped. The first location whose `components` module
+  defines the class wins, so a project overrides a library's component by
+  defining the same class at the same tag path under one of its `DIRS`.
+- When no location defines the class, resolution fails with
+  `GlueComponentRegistrationError`, naming every module searched.
+
+The system check `django_glue.E004` rejects the removed
+`DJANGO_GLUE_COMPONENTS_ROOT` setting, and `django_glue.E005` rejects a
+malformed `DJANGO_GLUE_COMPONENTS`.
 
 Names are lowercase snake_case segments; the directory is a slash-separated
 import path of such segments. Because the tag *is* the address, the class name
@@ -520,8 +549,8 @@ stay in Django's view layer, and the constructor call is the only construction
 contract. `as_page(layout_template=...)` overrides the class's layout template
 as `as_view()` does. A component constructed without a `name` is named from its
 class, so both paths produce the same root address. `get_view_kwargs()`, which
-returned constructor kwargs as a dict, is deprecated in 1.1.1 and removed in
-1.2.0.
+returned constructor kwargs as a dict, is deprecated in 1.2.0 and will be
+removed in a future version.
 
 Either way, the component is introduced and mounted once before rendering, with
 the same signed root address and child entries as a template-tag stamp. Unknown

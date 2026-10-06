@@ -22,10 +22,10 @@ from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.attributes.declared import _MISSING
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_registry
-from django_glue.glue.component_naming import component_name
-from django_glue.glue.component_root import inject_component_root
-from django_glue.glue.component_session import ComponentSession
+from django_glue.glue.components.naming import component_name
+from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_registry
+from django_glue.glue.components.root import inject_component_root
+from django_glue.glue.components.session import ComponentSession
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.event import GlueEvent
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
@@ -139,8 +139,8 @@ class Component(BaseGlue):
         if 'get_view_kwargs' in cls.__dict__:
             warnings.warn(
                 f'{cls.__name__}.get_view_kwargs() is deprecated and will be removed in '
-                'django-glue 1.2.0. Construct the component in a view function and return '
-                'component.as_page(request) instead.',
+                'a future version of django-glue. Construct the component in a view function '
+                'and return component.as_page(request) instead.',
                 DeprecationWarning,
                 # Past __init_subclass__ and ABCMeta.__new__ to the class statement.
                 stacklevel=3,
@@ -192,7 +192,13 @@ class Component(BaseGlue):
 
         parameter_types = _parameter_types(type(self))
         for key, declaration in declared.items():
-            value = parameters[key] if key in parameters else getattr(self, key)
+            if key in parameters:
+                value = parameters[key]
+            elif isinstance(declaration, ModelParameter):
+                # Reading it would run the initializer before the other parameters are assigned.
+                value = declaration.default
+            else:
+                value = getattr(self, key)
             if isinstance(value, BaseGlue):
                 raise GlueComponentParameterError(f'Parameter {key!r} cannot be a Glue object.')
             if isinstance(declaration, ModelParameter):
@@ -205,7 +211,7 @@ class Component(BaseGlue):
                     f'Invalid parameter {key!r} on {type(self).__name__}.'
                 ) from error
 
-    def _retained_state(self) -> dict[str, Any]:
+    def _get_retained_state(self) -> dict[str, Any]:
         return {
             path: attribute.get()
             for path, attribute in self._bound_attributes.items()

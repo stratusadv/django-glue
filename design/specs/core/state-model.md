@@ -110,6 +110,16 @@ parameters are reconstructors; they cannot be editable, and an initializer is
 never client-callable
 ([ADR 021](../../decisions/021-component-parameter-initializers.md)).
 
+An initializer that takes `(self, model, pk)` declares a bounded model parameter.
+Its return annotation is an upper bound, which may be abstract or `Model` itself:
+it accepts a row of any concrete subclass. `target.parameters` holds
+`{'model': <label>, 'pk': <key>}`, and decoding rejects a label that names no
+installed model or a model outside the bound with `invalid_component_parameter`
+before the initializer runs. Construction takes an instance or that signed
+mapping, never a bare key. Every later request calls the initializer with the
+labelled model and the key; all other rules above apply unchanged
+([ADR 026](../../decisions/026-bounded-model-parameters.md)).
+
 **The reconstructor role is the default.** A bare `Glue.attr(x)` survives in the
 signed policy token's `state_snapshot` and cannot be changed by the client.
 `Glue.attr(parameter=True)` has the same role but is supplied through the
@@ -704,7 +714,7 @@ map. Child policies and state remain independent.
 | `ModelGlue`                  | model class, target PK, exposure/configuration, exposed editable values (row baseline plus acknowledged draft overlay) | the`editable=` projection (§9), derived from field metadata when omitted | current persisted read-only fields, annotations, relation children, errors | re-fetch and authorize the model; validate the draft before persistence; define stale-row conflict behaviour                                                                      |
 | `FormGlue` / `ModelForm`   | form class, target PK, initial/server state, acknowledged bound-data draft          | enabled exposed fields                                                      | errors, labels, widgets, choices                                           | preserve complete raw bound data for cross-field validation; files need a handler                                                                                                 |
 | `QuerySetGlue`               | authenticated query continuation, configuration, cursor and pagination bookkeeping  | declared query controls only                                                | rows, annotations, counts, and keyed child references                      | verify before unpickling through an allowlisting unpickler; bound payload size; close filter/order allowlists; key row construction by the editable projection; preserve batching |
-| `FormSetGlue`                | construction rules, stable membership/order, acknowledged form drafts               | keyed form fields and declared collection operations                        | form/non-form errors and keyed child references                            | replace positional identity with keys; preserve management-form invariants                                                                                                        |
+| `FormSetGlue`                | construction rules, stable membership/order, acknowledged form drafts, pending deletions of removed saved rows (ADR 028) | keyed form fields and declared collection operations                        | form/non-form errors and keyed child references                            | replace positional identity with keys; preserve management-form invariants                                                                                                        |
 | `SequenceGlue`               | reconstructable provider identity and server-owned order when applicable            | declared collection operations                                              | keyed child references                                                     | define reconstruction, membership, and ordering; an empty identity is invalid                                                                                                     |
 | `FunctionGlue`               | callable capability and target                                                      | none; call arguments are untrusted inputs                                   | result/effects and parameter metadata                                      | validate arguments and prevent request/context injection                                                                                                                          |
 | `Glue.view` and HTML results | none for the fragment transport; introduced objects carry their own signed policies | none unless represented by an addressed object                              | negotiated HTML envelope, introduced object entries, and effects           | request the actual target URL through normal Django middleware; content negotiation grants no authority                                                                           |
@@ -1170,7 +1180,10 @@ annotation falls back to the registry or leaves the value untouched.
 The built-in set includes a model-key handler for model parameters
 (§1, [ADR 021](../../decisions/021-component-parameter-initializers.md)).
 It encodes a model instance to its primary key for `target.parameters` and
-decodes the signed key to the primary key's Python type. It never loads a row:
+decodes the signed key to the primary key's Python type. For a bounded model
+parameter it encodes the model's label with the key and decodes the label to the
+model class, checked against the bound
+([ADR 026](../../decisions/026-bounded-model-parameters.md)). It never loads a row:
 turning a key into a row is the parameter's initializer, which is application
 code the handler does not replace.
 

@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from django_glue import Glue
-from django_glue.glue.component import Component
-from django_glue.glue.component_session import ComponentSession
-
+from django_glue.glue.components import Component
+from django_glue.glue.components.session import ComponentSession
 from django_glue.tests.glue.test_callable_parameters import call_context
 
 if TYPE_CHECKING:

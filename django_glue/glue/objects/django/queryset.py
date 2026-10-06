@@ -311,10 +311,10 @@ class QuerySetGlue(
             return set(select_related.keys())
         return set()
 
-    def _retained_state(self) -> dict[str, Any]:
+    def _get_retained_state(self) -> dict[str, Any]:
         """Query cursor memory is a non-parameterized reconstructor: the next
         batch needs it, and only the server advances it (state-model.md §2)."""
-        retained = super()._retained_state()
+        retained = super()._get_retained_state()
         retained.update({
             'last_query_params': self._last_query_params,
             'loaded_row_count': self._loaded_row_count,

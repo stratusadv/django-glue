@@ -1,0 +1,13 @@
+<section class="fights-editor" data-testid="fights-editor" x-data="{result: null}">
+    <template x-for="form in component.fights.forms" :key="form.$key">
+        <div class="fight-row">
+            <input aria-label="Fight name" x-model="form.name">
+            <button type="button" @click="await component.fights.pop(form.$key)">Remove fight</button>
+        </div>
+    </template>
+    <button type="button" @click="await component.fights.append()">Add fight</button>
+    <button type="button" @click="result = await component.fights.save()">Save fights</button>
+    <button type="button" @click="await component.check()">Check fights</button>
+    <div data-testid="fights-result" x-text="result ? JSON.stringify(result) : ''"></div>
+    <div data-testid="fights-checks" x-text="component.checks"></div>
+</section>

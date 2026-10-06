@@ -324,12 +324,12 @@ class ModelGlue(
             return
         self._editable_draft[field_name] = value
 
-    def _retained_state(self) -> dict[str, Any]:
+    def _get_retained_state(self) -> dict[str, Any]:
         """The snapshot carries a complete baseline: the overlay resolves to
         the row's current value on every exposed editable path, so the
         client's canonical view is complete from the token alone
         (state-model.md §4)."""
-        retained = super()._retained_state()
+        retained = super()._get_retained_state()
         retained.update({
             field_name: self._get_model_attribute_value(field_name)
             for field_name in self.editable

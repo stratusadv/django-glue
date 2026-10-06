@@ -12,15 +12,15 @@ from django.utils.safestring import mark_safe
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueAuthorizationError, GlueComponentKeyError
 from django_glue.glue import address
-from django_glue.glue.component import (
+from django_glue.glue.components.component import (
     MOUNTED_CHILDREN_CONTEXT_KEY,
     VIEW_COMPONENT_CONTEXT_KEY,
     Component,
 )
-from django_glue.glue.component_naming import canonical_key, component_name
-from django_glue.glue.component_registry import component_registry
+from django_glue.glue.components.naming import canonical_key, component_name
+from django_glue.glue.components.registry import component_registry
+from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.context import GlueContextManager
-from django_glue.glue.component_root import inject_component_root
 
 if TYPE_CHECKING:
     from django.template.base import FilterExpression, Parser, Token

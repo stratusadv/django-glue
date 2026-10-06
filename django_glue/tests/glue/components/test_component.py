@@ -20,8 +20,7 @@ from django_glue.exceptions import (
 )
 from django_glue.glue.attributes import BoundGlueAttribute, GlueAttributeCollector
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component import Component
-from django_glue.glue.component_registry import component_registry
+from django_glue.glue.components import Component, component_registry
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry

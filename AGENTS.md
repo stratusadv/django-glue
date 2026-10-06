@@ -39,7 +39,7 @@ django-glue/
 │   │   ├── attributes/             # DeclaredAttribute, definitions, collector, adapters
 │   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue
 │   │   ├── function.py             # FunctionGlue
-│   │   ├── component.py            # Component rendering and lifecycle
+│   │   ├── components/             # Component, tag, lookup (discovery), registry, naming, root, session
 │   │   └── operation.py            # GlueOperation authorization records
 │   ├── resolver/
 │   │   ├── attribute_call/         # /__dg__/callable_attribute/ endpoint (batch entries)
@@ -74,8 +74,7 @@ django-glue/
 │                                   # comments, lab, core)
 ├── design/                         # Reactive-system design docs (authority)
 ├── docs/                           # MkDocs site
-├── justfile                        # All dev commands
-└── STATE_MODEL_HANDOFF.md          # State-model implementation and release handoff
+└── justfile                        # All dev commands
 ```
 
 ## Server: Glue objects
@@ -117,7 +116,7 @@ BaseGlue (django_glue/glue/base.py)
 ├── FormGlue        (glue/objects/django/form/object.py)
 ├── FormSetGlue     (glue/objects/django/formset.py, via BaseCollectionGlue)
 ├── FunctionGlue    (glue/function.py)
-└── Component       (glue/component.py)
+└── Component       (glue/components/component.py)
 ```
 
 ### Declared attributes

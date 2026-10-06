@@ -193,7 +193,16 @@ class FormGlue(BaseGlue):
         return super().get_computed_data(include_all=include_all)
 
     @classmethod
-    def _reconstruct_from_policy(cls, policy: GluePolicy) -> FormGlue:
+    def _reconstruct_from_policy(
+        cls,
+        policy: GluePolicy,
+        *,
+        instance: Model | None = None,
+    ) -> FormGlue:
+        """
+        ``instance`` is the signed ``target_pk``'s record when the caller has
+        already loaded it, as a formset does for all its rows in one query.
+        """
         form_class = get_attr_from_path_string(policy.identity['form_class_path'])
         initial = policy.identity.get('initial', {})
         target_pk = policy.identity.get('target_pk')
@@ -203,7 +212,8 @@ class FormGlue(BaseGlue):
 
             if target_pk is not None:
                 try:
-                    instance = model_class.objects.get(pk=target_pk)
+                    if instance is None:
+                        instance = model_class.objects.get(pk=target_pk)
                     model_initial = model_to_dict(
                         instance,
                         form_class._meta.fields,
@@ -266,12 +276,14 @@ class FormGlue(BaseGlue):
         super()._load_client_state(state)
         self.form = self._bind_form()
 
-    def _retained_state(self) -> dict[str, Any]:
-        retained = super()._retained_state()
+    def _get_retained_state(self) -> dict[str, Any]:
+        retained = super()._get_retained_state()
+
         retained.update({
             name: self._get_form_attribute_value(name)
             for name in self.editable
         })
+
         return retained
 
     @DeclaredAttribute(required_access=GlueAccess.required_save_access)

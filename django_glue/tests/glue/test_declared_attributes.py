@@ -17,7 +17,7 @@ from django_glue.glue.attributes.definition import (
 )
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 
 if TYPE_CHECKING:
     from django_glue.glue.attributes.declared import DeclaredAttributeOptions

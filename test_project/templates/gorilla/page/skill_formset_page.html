@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Skill formset{% endblock %}
+{% block page_title %}Skill Formset{% endblock %}
+{% block page_subtitle %}A model formset seeded with saved skills plus one prefilled blank row{% endblock %}
+{% block content %}
+    <div x-data="{
+        formset: Glue.formSet.skills,
+        result: null,
+        async validate() {
+            this.result = await this.formset.validate()
+        },
+        async save() {
+            this.result = await this.formset.save()
+        }
+    }">
+        <template x-for="form in formset.forms" :key="form.$key">
+            <div class="skill-row row g-2 align-items-start mb-2">
+                <div class="col-1 pt-2">
+                    <span class="badge" :class="form.$pk ? 'bg-gorilla-green' : 'bg-secondary'"
+                          x-text="form.$pk ? `#${form.$pk}` : 'new'"></span>
+                </div>
+                <div class="col-3">
+                    <input class="form-control form-control-gorilla" aria-label="Skill name" placeholder="Name"
+                           :class="{'is-invalid': form.$fields.name.hasErrors}" x-model="form.name">
+                    <div class="invalid-feedback" x-text="form.$fields.name.errorText"></div>
+                </div>
+                <div class="col-3">
+                    <input class="form-control form-control-gorilla" aria-label="Skill description"
+                           placeholder="Description"
+                           :class="{'is-invalid': form.$fields.description.hasErrors}" x-model="form.description">
+                    <div class="invalid-feedback" x-text="form.$fields.description.errorText"></div>
+                </div>
+                <div class="col-2">
+                    <input type="number" class="form-control form-control-gorilla" aria-label="Skill difficulty"
+                           placeholder="Difficulty (1-10)"
+                           :class="{'is-invalid': form.$fields.difficulty.hasErrors}"
+                           x-model.number="form.difficulty">
+                    <div class="invalid-feedback" x-text="form.$fields.difficulty.errorText"></div>
+                </div>
+                <div class="col-2">
+                    <input type="number" class="form-control form-control-gorilla" aria-label="Skill level"
+                           placeholder="Level (1-100)"
+                           :class="{'is-invalid': form.$fields.level.hasErrors}" x-model.number="form.level">
+                    <div class="invalid-feedback" x-text="form.$fields.level.errorText"></div>
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-gorilla-danger" aria-label="Remove row"
+                            @click="await formset.pop(form.$key)">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-gorilla-secondary" @click="await formset.append()">Add skill</button>
+            <button type="button" class="btn btn-gorilla" @click="await validate()">Validate skills</button>
+            <button type="button" class="btn btn-gorilla" @click="await save()">Save skills</button>
+            <a class="btn btn-outline-secondary" href="{% url 'gorilla:skill_formset' %}">Reload from database</a>
+        </div>
+
+        <ul class="text-danger mt-3" x-show="formset.nonFormErrors.length">
+            <template x-for="error in formset.nonFormErrors" :key="error">
+                <li x-text="error"></li>
+            </template>
+        </ul>
+        <pre id="skill-result" class="mt-3" x-text="result ? JSON.stringify(result) : ''"></pre>
+    </div>
+{% endblock %}

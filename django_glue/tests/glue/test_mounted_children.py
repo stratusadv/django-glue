@@ -11,7 +11,7 @@ from django.test import RequestFactory
 
 from django_glue import Glue
 from django_glue.exceptions import GlueComponentKeyError
-from django_glue.glue.component import MOUNTED_CHILDREN_CONTEXT_KEY
+from django_glue.glue.components.component import MOUNTED_CHILDREN_CONTEXT_KEY
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import (

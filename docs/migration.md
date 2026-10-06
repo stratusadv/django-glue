@@ -330,9 +330,9 @@ parameter. A component inside a loop needs a stable explicit `key`
 The `key` fixes a stable child address under the composing parent; the class's
 `module.qualname` drives reconstruction. A component mounts during the render
 that stamps it. Parameter changes and `$refresh()` render and morph mounted
-HTML with `Alpine.morph`. Components are resolved lazily from the components
-root (default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`)
-when their tag is used.
+HTML with `Alpine.morph`. Components are resolved lazily when their tag is used,
+from the `DIRS` of `DJANGO_GLUE_COMPONENTS` (default `[settings.BASE_DIR]`) and
+then from the installed apps.
 
 Components reuse the established `BaseGlue` entry points — the same signed
 parameters, state snapshots, editable-update admission, unsigned response data,

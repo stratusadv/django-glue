@@ -42,7 +42,9 @@ def _field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
         schema['max_length'] = field.max_length
     if getattr(field, 'min_length', None):
         schema['min_length'] = field.min_length
-    if getattr(field, 'choices', None):
+    # A queryset-backed form field's choices are its whole related table; its
+    # adapter serves them on demand, so they are never enumerated here.
+    if not hasattr(field, 'queryset') and getattr(field, 'choices', None):
         schema['choices'] = [
             {'value': str(value), 'label': str(choice_label)}
             for value, choice_label in field.choices

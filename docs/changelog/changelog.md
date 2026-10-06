@@ -2,17 +2,6 @@
 
 ## v1.2.0
 
-### Features
-
-- `Component.session` is a mutable mapping of server-side scratch state,
-  scoped by the component class's qualified name and backed by the request's
-  Django session. A change marks the session modified, and Django saves it
-  when the request completes, so a request that changes nothing saves
-  nothing. The state is per-user, never signed, and never sent to the client
-  (ADR 026).
-
-## v1.1.1
-
 ### Breaking
 
 - A component's re-render after page load keeps the stamped children still on
@@ -25,6 +14,20 @@
 - `rerender_on` reaches every mounted component that lists the event, not only
   the source's ancestors, and one response's deliveries travel in one request.
   `Glue.listener` still hears only descendants.
+- `DJANGO_GLUE_COMPONENTS_ROOT` is removed. Replace it with
+  `DJANGO_GLUE_COMPONENTS = {'DIRS': [<root>]}`. A project that still sets it
+  fails the system check `django_glue.E004`, whose hint gives the replacement
+  (ADR 027).
+- The component modules moved into the `django_glue.glue.components` package:
+  `django_glue.glue.component` is now `django_glue.glue.components.component`,
+  and `component_registry`, `component_discovery`, `component_naming`,
+  `component_root` and `component_tag` are its `registry`, `discovery`,
+  `naming`, `root` and `tag` modules. `Glue.Component` is unchanged, and
+  `Component` and `component_registry` import from
+  `django_glue.glue.components`.
+- A formset's `save()` saves nothing when any row is invalid. It previously
+  saved the valid rows. It also no longer calls each row's own `save`; it
+  validates the rows and passes their Django forms to `save_forms` (ADR 028).
 
 ### Features
 
@@ -34,6 +37,15 @@
   the key through the initializer. `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` (default
   `DEBUG`) checks supplied instances and emits
   `GlueModelParameterMismatchWarning` (ADR 021).
+- A model parameter whose initializer takes the model as well as the key,
+  `def host(self, model, pk)`, accepts a row of any concrete subclass of its
+  return annotation, so one component can serve rows of several models. The
+  token signs the model's label with the key (ADR 026).
+- A model parameter whose initializer annotates its key as `| None`, such as
+  `def entry(self, pk: int | None) -> TimeEntry`, may be left out for a record
+  that does not exist yet. The initializer builds it on every request, and once
+  a callable saves it the component is signed with the new key and edits that
+  record. One component can therefore create a record or edit one (ADR 029).
 - Component parameters are encoded through their annotation's adapter, so
   dataclass parameters are signed and restored (ADR 021).
 - `component.as_page(request)` responds with a component the application
@@ -47,12 +59,39 @@
   component, rebuilt from its signed token (ADR 024).
 - A component's signed identity records its ancestors: the component whose
   template stamped it, or whose callable returned it, and theirs.
+- `DJANGO_GLUE_COMPONENTS` configures where component tags are looked up, shaped
+  like Django's `TEMPLATES`: `DIRS` lists directories searched in order, and
+  `APP_DIRS` (default `True`) also searches the installed apps by package path.
+  A library's components resolve in any project that installs its apps, and a
+  project overrides one by defining the same class at the same tag path under
+  one of its `DIRS` (ADR 027).
+- `Glue.formset()` and `Glue.FormSet` take `instances` (saved records to edit)
+  and `initial` (prefilled blank rows), so a formset can load existing records.
+  Removing a saved row with `pop` deletes its record on the next `save()`, and
+  needs `Glue.Access.DELETE`. `save_forms` and `delete_removed` on a
+  `Glue.FormSet` subclass replace how rows are saved and deleted (ADR 028).
+- `new_row_defaults` on `Glue.formset()` and `Glue.FormSet` sets starting values
+  on every new row, such as the key of the record the rows belong to. The values
+  are signed and may name fields the form does not expose. The browser cannot
+  change a default on a field the form does not expose or disables; a default on
+  an editable field prefills it (ADR 028).
+- A formset's `validate()` and `save()` load all submitted rows in one query,
+  and `save()` writes only the saved rows that changed. Django's own validation
+  queries for a form's foreign-key and unique fields still run per row
+  (ADR 028).
+- `Component.session` is a mutable mapping of server-side scratch state,
+  scoped by the component class's qualified name and backed by the request's
+  Django session. A change marks the session modified, and Django saves it
+  when the request completes, so a request that changes nothing saves
+  nothing. The state is per-user, never signed, and never sent to the client
+  (ADR 026).
 
 ### Deprecated
 
-- `Component.get_view_kwargs()` is deprecated and will be removed in 1.2.0. A
-  component that overrides it emits a `DeprecationWarning`. Construct the
-  component in a view and return `component.as_page(request)` instead (ADR 023).
+- `Component.get_view_kwargs()` is deprecated and will be removed in a future
+  version. A component that overrides it emits a `DeprecationWarning`. Construct
+  the component in a view and return `component.as_page(request)` instead
+  (ADR 023).
 
 ### Changes
 
@@ -72,6 +111,14 @@
 
 ### Fixes
 
+- A formset's `append(initial)` rejects any `initial` key that is not a field
+  the form lets a user edit. It previously accepted every key, so a browser
+  could set model fields the form did not expose on a new row, including the
+  key of the record the row belongs to. A page that passed such a key declares
+  `new_row_defaults` instead (ADR 028).
+- Describing a form's foreign-key or many-to-many field no longer loads the whole
+  related table. The rows were read and then discarded, once per relation field
+  for every form and every formset row. What the client receives is unchanged.
 - A component nested inside another component, or inside any element with
   `x-data`, now sees its ancestors' Alpine data, as ordinary nested `x-data`
   does. Glue previously attached the `component` scope before Alpine had

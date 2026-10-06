@@ -263,9 +263,39 @@ describe('formset proxy facade', () => {
 
         await client.formSet.contacts.submit()
 
-        expect(sent.kwargs.__forms.first).toEqual({
+        expect(sent.kwargs.__submitted_forms.first).toEqual({
             policy_token: form.policy_token,
             updates: {name: 'Bee'},
+        })
+    })
+
+    test('pop submits only the removed row, with its token and no edits', async () => {
+        const rows = ['first', 'second'].map(key => createEntry({
+            policy: {
+                name: `contacts.${key}`, namespace: 'form', address: `contacts#test[${key}]`,
+                state_snapshot: {name: 'Ada'}, attributes: ['name'],
+            },
+            staticData: {fields: {name: {value_path: 'name', editable: true}}},
+        }))
+        const formset = createEntry({policy: {
+            name: 'contacts', namespace: 'formSet', address: 'contacts#test',
+            attributes: ['pop'], state_snapshot: {},
+            children: {first: rows[0].address, second: rows[1].address},
+        }, staticData: {callables: {pop: {allowed_arguments: ['key']}}}})
+        const client = new GlueClient({objects: [formset, ...rows]})
+        const removedRow = client.formSet.contacts.forms[0]
+        removedRow.name = 'Bee'
+        let sent
+        client.http.sendAttributeRequest = async request => {
+            sent = request
+            return attributeResponse(formset.address, {result: null})
+        }
+
+        await client.formSet.contacts.pop(removedRow.$key)
+
+        expect(sent.kwargs).toEqual({
+            key: 'first',
+            __submitted_forms: {first: {policy_token: rows[0].policy_token, updates: {}}},
         })
     })
 

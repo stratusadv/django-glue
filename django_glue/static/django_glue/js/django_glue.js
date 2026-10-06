@@ -4641,20 +4641,22 @@ ${expression ? 'Expression: "' + expression + `"
       return form;
     }
     _singleCall(attribute, kwargs, options = {}) {
-      if (attribute !== null && attribute !== "append" && attribute !== "pop") {
-        const forms = Object.fromEntries(Object.entries(this._policy.children || {}).map(([key, address]) => {
-          const record = this._registry.getRecord(address);
-          if (!record || record.disposed) {
-            throw new Error(`Formset row "${key}" is unavailable.`);
-          }
-          return [key, {
-            policy_token: record.policyToken,
-            updates: record.captureRequest().updates
-          }];
-        }));
-        return super._singleCall(attribute, { ...kwargs, __forms: forms }, options);
+      if (attribute === null || attribute === "append") {
+        return super._singleCall(attribute, kwargs, options);
       }
-      return super._singleCall(attribute, kwargs, options);
+      const children = this._policy.children || {};
+      const keys = attribute === "pop" ? [kwargs.key] : Object.keys(children);
+      const forms = Object.fromEntries(keys.map((key) => {
+        const record = this._registry.getRecord(children[key]);
+        if (!record || record.disposed) {
+          throw new Error(`Formset row "${key}" is unavailable.`);
+        }
+        return [key, {
+          policy_token: record.policyToken,
+          updates: attribute === "pop" ? {} : record.captureRequest().updates
+        }];
+      }));
+      return super._singleCall(attribute, { ...kwargs, __submitted_forms: forms }, options);
     }
     async validate() {
       const result = await this._callAttribute("validate");

@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import datetime
 import enum
+import inspect
 import uuid
 import warnings
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import Any, Optional
 
 import pytest
 from django.db import models
 from django.db.models.functions import Upper
+from django.template import Context, Template
 
 from django_glue import Glue
 from django_glue.exceptions import (
@@ -17,11 +20,12 @@ from django_glue.exceptions import (
     GlueModelInstanceNotFoundError,
     GlueModelParameterMismatchWarning,
 )
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component, component_registry
+from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.fight.models import Fight
-from test_project.gorilla.models import Gorilla
+from test_project.gorilla.models import Gorilla, Skill
 
 
 class GorillaCardComponent(Component):
@@ -230,13 +234,14 @@ def test_initializer_must_return_a_model() -> None:
                 return str(pk)
 
 
-def test_initializer_must_take_only_a_key() -> None:
-    with pytest.raises(GlueComponentParameterError, match=r'def gorilla\(self, pk\)'):
+def test_initializer_must_take_a_key_or_a_model_and_a_key() -> None:
+    signatures = r'def gorilla\(self, pk\) or def gorilla\(self, model, pk\)'
+    with pytest.raises(GlueComponentParameterError, match=signatures):
         class WrongSignatureComponent(Component):
             template = 'glue_template_test.html'
 
             @Glue.ComponentParameter
-            def gorilla(self, pk: int, extra: int) -> Gorilla:
+            def gorilla(self, model: type[Gorilla], pk: int, extra: int) -> Gorilla:
                 return Gorilla.objects.get(pk=pk)
 
 
@@ -247,6 +252,133 @@ def test_decorator_form_takes_no_options() -> None:
 
             @Glue.ComponentParameter(editable=True)
             def gorilla(self, pk: int) -> Gorilla:
+                return Gorilla.objects.get(pk=pk)
+
+
+class Primate(models.Model):
+    class Meta:
+        abstract = True
+        app_label = 'gorilla'
+
+
+class NamedRowComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def row(self, model: type[models.Model], pk: int) -> models.Model:
+        return model._default_manager.get(pk=pk)
+
+    def get_context_data(self) -> dict[str, str]:
+        return {'greeting': self.row.name}
+
+    @Glue.attr
+    def show(self, model: str, pk: int) -> None:
+        self.row = {'model': model, 'pk': pk}
+
+
+class YoungGorillaCardComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def gorilla(self, model: type[Gorilla], pk: int) -> Gorilla:
+        return model._default_manager.filter(age__lt=60).get(pk=pk)
+
+    def get_context_data(self) -> dict[str, str]:
+        return {'greeting': self.gorilla.name}
+
+
+@pytest.fixture
+def skill(db) -> Skill:
+    return Skill.objects.create(name='Grapple')
+
+
+def test_bounded_parameter_signs_the_model_label_with_the_key(
+    mock_request, gorilla, django_assert_num_queries, settings,
+) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = False
+    component = Glue.object(mock_request, NamedRowComponent(row=gorilla))
+
+    with django_assert_num_queries(0):
+        assert component.row is gorilla
+        html = component.render().html
+
+    assert '>Koko</span>' in html
+    assert component.identity['parameters'] == {
+        'row': {'model': 'gorilla.gorilla', 'pk': gorilla.pk},
+    }
+
+
+def test_bounded_parameter_reconstructs_each_model_through_the_initializer(
+    mock_request, gorilla, skill,
+) -> None:
+    for row, name in ((gorilla, 'Koko'), (skill, 'Grapple')):
+        component = Glue.object(mock_request, NamedRowComponent(row=row))
+
+        reconstructed, entry = reconstruct(component, None)
+
+        assert type(reconstructed.row) is type(row)
+        assert f'>{name}</span>' in entry['html']
+
+
+def test_assigning_a_signed_value_retargets_a_bounded_parameter_to_another_model(
+    mock_request, gorilla, skill,
+) -> None:
+    component = Glue.object(mock_request, NamedRowComponent(row=gorilla))
+
+    _reconstructed, entry = reconstruct(component, 'show', model='gorilla.skill', pk=skill.pk)
+
+    assert '>Grapple</span>' in entry['html']
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters'] == {
+        'row': {'model': 'gorilla.skill', 'pk': skill.pk},
+    }
+
+
+def test_bounded_parameter_rejects_a_model_outside_its_bound(skill) -> None:
+    with pytest.raises(GlueComponentParameterError, match='not a Gorilla'):
+        YoungGorillaCardComponent(gorilla={'model': 'gorilla.skill', 'pk': skill.pk})
+
+    with pytest.raises(GlueComponentParameterError, match='takes a Gorilla'):
+        YoungGorillaCardComponent(gorilla=skill)
+
+
+def test_bounded_parameter_rejects_an_unknown_model_label(db) -> None:
+    with pytest.raises(GlueComponentParameterError, match='no installed model'):
+        NamedRowComponent(row={'model': 'gorilla.okapi', 'pk': 1})
+
+
+def test_bounded_parameter_rejects_a_bare_key(gorilla) -> None:
+    with pytest.raises(GlueComponentParameterError, match='signed model and key'):
+        NamedRowComponent(row=gorilla.pk)
+
+
+def test_bounded_row_that_left_the_initializer_scope_is_not_found(mock_request, gorilla) -> None:
+    component = Glue.object(mock_request, YoungGorillaCardComponent(gorilla=gorilla))
+    Gorilla.objects.filter(pk=gorilla.pk).update(age=60)
+
+    with pytest.raises(GlueModelInstanceNotFoundError) as caught:
+        reconstruct(component, None)
+
+    assert caught.value.code == 'model_instance_not_found'
+
+
+def test_bounded_verification_resolves_a_supplied_instance_through_its_own_model(
+    mock_request, db, settings,
+) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True
+    elder = Gorilla.objects.create(name='Elder', age=60)
+    component = Glue.object(mock_request, YoungGorillaCardComponent(gorilla=elder))
+
+    with pytest.raises(GlueComponentParameterError, match='does not return'):
+        _ = component.gorilla
+
+
+def test_concrete_parameter_rejects_an_abstract_model() -> None:
+    with pytest.raises(GlueComponentParameterError, match=r'def primate\(self, model, pk\)'):
+        class AbstractComponent(Component):
+            template = 'glue_template_test.html'
+
+            @Glue.ComponentParameter
+            def primate(self, pk: int) -> Primate:
                 return Gorilla.objects.get(pk=pk)
 
 
@@ -320,3 +452,215 @@ class HolderComponent(Component):
 def test_dataclass_parameter_holding_a_model_is_rejected(db) -> None:
     with pytest.raises(GlueComponentParameterError):
         HolderComponent(holder=Holder(gorilla=Gorilla(name='x')))
+
+
+class GorillaEditorComponent(Component):
+    template = 'glue_template_test.html'
+
+    starting_age: int = Glue.ComponentParameter()
+
+    @Glue.ComponentParameter
+    def gorilla(self, pk: int | None) -> Gorilla:
+        if pk is None:
+            return Gorilla(name='New gorilla', age=self.starting_age)
+        return Gorilla.objects.get(pk=pk)
+
+    def get_context_data(self) -> dict[str, str]:
+        return {'greeting': f'{self.gorilla.name}, {self.gorilla.age}'}
+
+    @Glue.attr
+    def save(self) -> None:
+        self.gorilla.save()
+
+    @Glue.attr
+    def rename(self, name: str) -> None:
+        self.gorilla.name = name
+        self.gorilla.save()
+
+    @Glue.attr
+    def look(self) -> None:
+        return None
+
+    @Glue.attr(skip_rerender=True)
+    def save_quietly(self) -> None:
+        self.gorilla.save()
+
+
+def test_leaving_the_parameter_out_builds_a_draft_through_the_initializer(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(starting_age=7))
+
+    assert component.gorilla.pk is None
+    assert (component.gorilla.name, component.gorilla.age) == ('New gorilla', 7)
+    assert component.identity['parameters'] == {'starting_age': 7, 'gorilla': None}
+
+
+def test_passing_none_builds_the_same_draft_as_leaving_the_parameter_out(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(gorilla=None, starting_age=7))
+
+    assert component.gorilla.pk is None
+    assert component.identity['parameters'] == {'starting_age': 7, 'gorilla': None}
+
+
+def test_a_draft_parameter_is_optional_in_the_component_signature() -> None:
+    parameters = inspect.signature(GorillaEditorComponent).parameters
+
+    assert parameters['gorilla'].default is None
+    assert parameters['starting_age'].default is inspect.Parameter.empty
+
+
+def test_a_draft_is_rebuilt_from_its_null_key_and_its_seed_on_a_later_request(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(starting_age=7))
+
+    reconstructed, entry = reconstruct(component, 'look')
+
+    assert reconstructed.gorilla.pk is None
+    assert '>New gorilla, 7</span>' in entry['html']
+    assert not Gorilla.objects.exists()
+
+
+def test_saving_a_draft_signs_its_new_key_and_rerenders(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(gorilla=None, starting_age=7))
+
+    _reconstructed, entry = reconstruct(component, 'save')
+
+    saved = Gorilla.objects.get()
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters']['gorilla'] == saved.pk
+    assert '>New gorilla, 7</span>' in entry['html']
+
+
+def test_a_saved_draft_is_edited_not_created_again_on_the_next_request(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(gorilla=None, starting_age=7))
+    _reconstructed, entry = reconstruct(component, 'save')
+    signed = GluePolicy.from_token(entry['policy_token']).identity['parameters']
+
+    saved_component = Glue.object(mock_request, GorillaEditorComponent(**signed))
+    _reconstructed, entry = reconstruct(saved_component, 'rename', name='Koko')
+
+    assert list(Gorilla.objects.values_list('name', flat=True)) == ['Koko']
+    assert '>Koko, 7</span>' in entry['html']
+
+
+def test_saving_a_draft_rerenders_although_the_callable_skips_rerender(mock_request, db) -> None:
+    component = Glue.object(mock_request, GorillaEditorComponent(gorilla=None, starting_age=7))
+
+    _reconstructed, entry = reconstruct(component, 'save_quietly')
+
+    saved = Gorilla.objects.get()
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters']['gorilla'] == saved.pk
+    assert 'html' in entry
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GorillaSeed:
+    name: str
+    born: datetime.date
+
+
+class SeededGorillaEditorComponent(Component):
+    template = 'glue_template_test.html'
+
+    seed: GorillaSeed | None = Glue.ComponentParameter(None)
+    extras: dict[str, Any] = Glue.ComponentParameter(default_factory=dict)
+
+    @Glue.ComponentParameter
+    def gorilla(self, pk: int | None) -> Gorilla:
+        if pk is None:
+            return Gorilla(name=self.seed.name, description=f'Born {self.seed.born:%Y}', **self.extras)
+        return Gorilla.objects.get(pk=pk)
+
+    def get_context_data(self) -> dict[str, str]:
+        return {'greeting': f'{self.gorilla.name}, {self.gorilla.description}, {self.gorilla.age}'}
+
+    @Glue.attr
+    def look(self) -> None:
+        return None
+
+
+def test_a_draft_is_seeded_from_a_dataclass_and_a_dict_parameter_on_every_request(mock_request, db) -> None:
+    component = Glue.object(mock_request, SeededGorillaEditorComponent(
+        seed=GorillaSeed(name='Koko', born=datetime.date(2019, 7, 4)),
+        extras={'age': 7},
+    ))
+
+    reconstructed, entry = reconstruct(component, 'look')
+
+    assert reconstructed.seed == GorillaSeed(name='Koko', born=datetime.date(2019, 7, 4))
+    assert '>Koko, Born 2019, 7</span>' in entry['html']
+
+
+def test_the_seed_parameters_are_left_out_when_editing_a_saved_row(mock_request, gorilla) -> None:
+    component = Glue.object(mock_request, SeededGorillaEditorComponent(gorilla=gorilla))
+
+    assert component.gorilla == gorilla
+    assert component.identity['parameters'] == {'seed': None, 'extras': {}, 'gorilla': gorilla.pk}
+
+
+def test_a_draft_parameter_still_takes_a_saved_row_or_its_key(mock_request, gorilla) -> None:
+    by_instance = Glue.object(mock_request, GorillaEditorComponent(gorilla=gorilla, starting_age=7))
+    by_key = Glue.object(mock_request, GorillaEditorComponent(gorilla=gorilla.pk, starting_age=7))
+
+    assert by_instance.identity['parameters']['gorilla'] == gorilla.pk
+    assert by_key.gorilla == gorilla
+
+
+def test_a_draft_parameter_rejects_an_unsaved_instance_naming_the_fix(db) -> None:
+    with pytest.raises(GlueComponentParameterError, match='leave the parameter out'):
+        GorillaEditorComponent(gorilla=Gorilla(name='Prepared'), starting_age=7)
+
+
+def test_a_parameter_that_does_not_accept_a_draft_is_still_required(db) -> None:
+    with pytest.raises(GlueComponentParameterError, match='Missing parameters'):
+        GorillaCardComponent()
+
+
+def test_a_stamp_that_leaves_the_parameter_out_renders_the_draft(mock_request, db) -> None:
+    component_registry.by_tag_name['gorilla_editor'] = GorillaEditorComponent
+    try:
+        html = Template(
+            "{% load django_glue %}{% glue_component 'gorilla_editor' starting_age=7 %}"
+        ).render(Context({'request': mock_request}))
+    finally:
+        del component_registry.by_tag_name['gorilla_editor']
+    entry = GlueContextManager(mock_request).serialized_objects[0]
+
+    assert '>New gorilla, 7</span>' in html
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters'] == {
+        'starting_age': 7,
+        'gorilla': None,
+    }
+
+
+def test_optional_spelling_of_the_key_annotation_accepts_a_draft(db) -> None:
+    class OptionalKeyComponent(Component):
+        template = 'glue_template_test.html'
+
+        @Glue.ComponentParameter
+        def gorilla(self, pk: Optional[int]) -> Gorilla:  # noqa: UP045
+            return Gorilla() if pk is None else Gorilla.objects.get(pk=pk)
+
+    assert OptionalKeyComponent(gorilla=None).gorilla.pk is None
+
+
+def test_a_key_annotation_without_none_does_not_accept_a_draft(db) -> None:
+    with pytest.raises(GlueComponentParameterError, match=r'annotate its key as int \| None'):
+        GorillaCardComponent(gorilla=None)
+
+
+def test_a_bounded_parameter_cannot_declare_a_draft() -> None:
+    with pytest.raises(GlueComponentParameterError, match='does not accept a draft'):
+        class BoundedDraftComponent(Component):
+            template = 'glue_template_test.html'
+
+            @Glue.ComponentParameter
+            def row(self, model: type[models.Model], pk: int | None) -> models.Model:
+                return model() if pk is None else model._default_manager.get(pk=pk)
+
+
+@pytest.mark.parametrize('value', [
+    {'model': 'gorilla.gorilla', 'pk': None},
+    {'model': 5, 'pk': 1},
+    {'model': None, 'pk': 1},
+])
+def test_bounded_parameter_rejects_a_malformed_signed_value(db, value) -> None:
+    with pytest.raises(GlueComponentParameterError):
+        NamedRowComponent(row=value)

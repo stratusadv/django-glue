@@ -1,6 +1,6 @@
 import inspect
 from functools import update_wrapper
-from typing import Any, Callable, Literal, Mapping, Sequence, TypeVar, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, ModelForm
@@ -14,12 +14,12 @@ from django_glue.glue.attributes.definition import (
     _resolve_glue_result_annotation,
 )
 from django_glue.glue.attributes.namespace import GlueNamespace
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.listener import ReceivedEvent, listener
-from django_glue.glue.model_parameter import ModelParameter
+from django_glue.glue.model_parameter import BoundedModelParameter, ConcreteModelParameter
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
@@ -116,9 +116,18 @@ def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
         @Glue.ComponentParameter
         def entry(self, pk: int) -> TimeEntry:
             return TimeEntry.objects.get(pk=pk, user=self.request.user)
+
+    An initializer that also takes the model accepts a row of any concrete
+    subclass of its return annotation (ADR 026):
+
+        @Glue.ComponentParameter
+        def host(self, model: type[CommentHost], pk: int) -> CommentHost:
+            return model._default_manager.get(pk=pk)
     """
     if len(args) == 1 and not kwargs and inspect.isfunction(args[0]):
-        return ModelParameter(args[0])
+        if len(inspect.signature(args[0]).parameters) == BoundedModelParameter.initializer_arity:
+            return BoundedModelParameter(args[0])
+        return ConcreteModelParameter(args[0])
     kwargs.setdefault('parameter', True)
     return DeclaredAttribute(*args, **kwargs)
 
@@ -324,12 +333,18 @@ class Glue:
         target: type[FormSetGlue] | type[BaseForm] | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         *,
+        initial: Iterable[Mapping[str, Any]] = (),
+        instances: Iterable[Model | BaseForm] = (),
+        new_row_defaults: Mapping[str, Any] | None = None,
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
     ) -> FormSetGlue:
         if isinstance(target, type) and issubclass(target, FormSetGlue):
             glue_object = target(
+                initial=initial,
+                instances=instances,
+                new_row_defaults=new_row_defaults,
                 name=unique_name,
                 access=access,
                 min_num=min_num,
@@ -348,6 +363,9 @@ class Glue:
                 raise TypeError(msg)
             glue_object = FormSetGlue(
                 target,
+                initial=initial,
+                instances=instances,
+                new_row_defaults=new_row_defaults,
                 name=unique_name,
                 access=access,
                 min_num=min_num,

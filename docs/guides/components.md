@@ -1,9 +1,9 @@
 # Components
 
 A component is a Glue object with a Django template. Put its class in a
-`components.py` module or `components/` package under the components root
-(default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`);
-Glue resolves it lazily when its tag is used.
+`components.py` module or `components/` package; Glue resolves it lazily when
+its tag is used. [Where components are found](#where-components-are-found)
+covers the lookup.
 
 ```python
 from django_glue import Glue
@@ -58,6 +58,102 @@ marker to that root.
 </section>
 ```
 
+## Where components are found
+
+Glue looks up a tag's directory the way Django looks up a template, configured
+by one setting shaped like `TEMPLATES`:
+
+```python
+DJANGO_GLUE_COMPONENTS = {
+    'DIRS': [BASE_DIR / 'app'],
+    'APP_DIRS': True,
+}
+```
+
+- `DIRS` lists directories, searched in order. It defaults to `[BASE_DIR]`.
+  With the setting above, `time_tracker/time_entry_day` is looked up in
+  `BASE_DIR/app/time_tracker/components`.
+- `APP_DIRS` defaults to `True`. The tag's directory is then also read as a
+  package path, and that package is searched when it is an installed app or
+  lies inside one. `django_spire/comment/comments` finds `CommentsComponent` in
+  `django_spire.comment.components`, in any project that installs that app.
+
+Both keys are optional, and so is the setting.
+
+Every `DIRS` entry is searched before the installed apps, and the first
+location whose `components` module defines the class wins. To override a
+library's component, define a class with the same name at the same tag path
+under one of your `DIRS`:
+
+```
+app/django_spire/comment/components.py    # your CommentsComponent wins
+```
+
+A tag that no location defines raises `GlueComponentRegistrationError`, naming
+every module searched. A `DIRS` directory must be importable: one that holds a
+`components` module outside every `sys.path` entry raises the same error, naming
+the entry, instead of being skipped.
+
+## Lists: render rows as partials unless a row is live
+
+**Render each row of a list as a template partial of the component that owns the
+list. Make a row its own component only when the row is live: it holds state of
+its own between requests, such as an inline edit mode and its draft text.**
+
+Ask of each row: *does it need to remember anything between requests?* A row
+that only shows data, or whose buttons can be handled by the list, is not live.
+Its buttons call the list's callables with the row's key:
+
+```python
+class CommentsComponent(Glue.Component):
+    template = 'comments/comments.html'
+
+    @Glue.attr(required_access=Glue.Access.DELETE)
+    def delete(self, request: HttpRequest, pk: int) -> None:
+        Comment.objects.get(pk=pk, user=request.user).delete()
+```
+
+```django
+<ul>
+    {% for comment in comments %}
+        <li>
+            {{ comment.text }}
+            <button @click="component.delete({{ comment.pk }})">Delete</button>
+        </li>
+    {% endfor %}
+</ul>
+```
+
+The row markup can live in its own template and be included in the loop; it is
+still part of the list component.
+
+The key comes from the client, so the callable checks it: the lookup above only
+finds the user's own comments.
+
+**Why.** Every component on a page carries its own signed token and its own
+address, and the browser tracks each one. A row component adds roughly 1.5 KB to
+the page, most of it a token that does not compress, so 20 row components add
+about 30 KB and 200 add about 300 KB, where the same rows as partials add almost
+nothing. A partial costs only its HTML. Queries are not the difference: a list that
+passes each row its loaded instance renders row components in one query (see
+[model parameters](#model-and-dataclass-parameters)).
+
+**When a row component is right.** A row that is live pays for itself:
+
+- It keeps its own state, such as an edit mode and a draft, without the list
+  tracking which row is being edited.
+- An action re-renders only that row, so the response stays the same size however
+  long the list is, where a list callable re-renders the whole list.
+- Its authorization lives in one place, its initializer, instead of in every list
+  callable.
+
+Keep such lists short, tens of rows rather than hundreds, and have the list pass
+each row the instance it already loaded.
+
+Livewire and Phoenix LiveView give the same advice: Livewire asks whether a nested
+piece "need[s] to be 'live'" before making it a component, and LiveView says to
+avoid live components "merely for code organization purposes".
+
 ## Model and dataclass parameters
 
 A component that represents a database row declares it by decorating a method
@@ -104,6 +200,123 @@ return EntryModalComponent(entry=entry)
 - A callable may assign an instance or a key to retarget the component, which
   re-renders it. The initializer is never callable from the client, and a model
   parameter cannot be editable.
+
+### A record that may not exist yet
+
+A component that creates a record or edits one uses the same model parameter for
+both. Annotate the initializer's key as `| None`, and build the new record when
+the key is `None`:
+
+```python
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    day: datetime.date = Glue.ComponentParameter()
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int | None) -> TimeEntry:
+        if pk is None:
+            return TimeEntry(date=self.day, user=self.request.user)
+        return TimeEntry.objects.active().get(pk=pk, user=self.request.user)
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def save(self, hours: Decimal) -> None:
+        self.entry.hours = hours
+        self.entry.save()
+```
+
+```django
+{% glue_component 'entries/entry_modal' day=day %}                {# a new entry #}
+{% glue_component 'entries/entry_modal' entry=entry day=day %}    {# an existing one #}
+```
+
+```python
+EntryModalComponent(day=day)
+EntryModalComponent(entry=entry, day=day)
+```
+
+- Leave the parameter out for a new record. Passing `None` means the same, so a
+  stamp whose `entry` is a row or `None` serves both cases.
+- The token signs a null key, and every later request calls the initializer
+  with `None`. The new record is rebuilt each time, so give it its starting
+  values in the initializer.
+- Starting values that come from the page, such as `day` above, are passed as
+  their own parameters and read from `self`. An unsaved instance is rejected,
+  because only the key is signed and anything set on it would be lost on the
+  next request.
+- Once a callable saves `self.entry`, Glue signs the new key and re-renders the
+  component, which now edits that record. Saving it again updates it. A callable
+  that creates and saves a different object assigns it: `self.entry = entry`.
+- A parameter whose key annotation does not include `None` stays required and
+  rejects `None`, as before.
+
+When a new record needs several starting values that the edit case does not,
+pass them as one optional parameter instead of one parameter each:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EntrySeed:
+    day: datetime.date
+    project_id: int
+
+
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    seed: EntrySeed | None = Glue.ComponentParameter(None)
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int | None) -> TimeEntry:
+        if pk is None:
+            return TimeEntry(date=self.seed.day, project_id=self.seed.project_id, user=self.request.user)
+        return TimeEntry.objects.active().get(pk=pk, user=self.request.user)
+```
+
+```python
+EntryModalComponent(seed=EntrySeed(day=day, project_id=project.pk))    # a new entry
+EntryModalComponent(entry=entry)                                        # an existing one
+```
+
+- A dataclass keeps its types: a date is a date again on the next request.
+- A `dict[str, Any]` parameter works too, and is handy for a few strings or
+  integers. It is signed as JSON, so a date or decimal in it comes back as a
+  string on later requests. Use a dataclass, or a `TypedDict` from
+  `typing_extensions`, when the types matter.
+- Neither can hold a model instance. Pass its key, as `project_id` above.
+
+### A row from any of several models
+
+A component that serves rows of more than one model, such as a comment list that
+any commentable model can host, declares its initializer with the model as well as
+the key. The return annotation is then an upper bound: an abstract base, a concrete
+parent, or `Model` itself.
+
+```python
+class CommentsComponent(Glue.Component):
+    template = 'comments/comments.html'
+
+    @Glue.ComponentParameter
+    def host(self, model: type[Commentable], pk: int) -> Commentable:
+        return model._default_manager.get(pk=pk)
+```
+
+```django
+{% glue_component 'comments/comments' host=task %}
+```
+
+- Pass a saved instance of any concrete subclass of the bound. The token signs
+  its model label with the key, as `{'model': 'tasks.task', 'pk': 42}`.
+- Later requests call the initializer with the model that label names and the
+  key. A label that names no installed model, or a model outside the bound, fails
+  the component with `invalid_component_parameter` before the initializer runs.
+- A bare key is rejected, because it does not say which model it belongs to. Server
+  code that has no instance assigns the signed form,
+  `{'model': 'tasks.task', 'pk': 42}`.
+- This form does not accept `None` for a record that does not exist yet.
+- Every other model-parameter rule above applies unchanged.
+
+A concrete initializer, `(self, pk)`, must return a concrete model. An abstract
+model or `Model` itself has no rows of its own, so Glue asks for the bounded form.
 
 A value parameter annotated with a dataclass is signed as its JSON form and
 restored as the dataclass, including nested dates, decimals, and enums:
@@ -257,8 +470,9 @@ contract: an unknown or missing parameter raises the component's normal error.
 `as_view()` is the same response for a component built from URL captures and
 fixed keyword arguments.
 
-`get_view_kwargs()` is deprecated and will be removed in 1.2.0. A component that
-overrides it emits a `DeprecationWarning`; move its body into a view as above.
+`get_view_kwargs()` is deprecated and will be removed in a future version. A
+component that overrides it emits a `DeprecationWarning`; move its body into a
+view as above.
 
 The layout template places the rendered component with the no-argument tag:
 
