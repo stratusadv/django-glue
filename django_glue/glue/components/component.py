@@ -190,7 +190,13 @@ class Component(BaseGlue):
 
         parameter_types = _parameter_types(type(self))
         for key, declaration in declared.items():
-            value = parameters[key] if key in parameters else getattr(self, key)
+            if key in parameters:
+                value = parameters[key]
+            elif isinstance(declaration, ModelParameter):
+                # Reading it would run the initializer before the other parameters are assigned.
+                value = declaration.default
+            else:
+                value = getattr(self, key)
             if isinstance(value, BaseGlue):
                 raise GlueComponentParameterError(f'Parameter {key!r} cannot be a Glue object.')
             if isinstance(declaration, ModelParameter):

@@ -386,7 +386,11 @@ split presentation without inventing child authorities. A construction site that
 already holds the row a child represents may hand it over through a model
 parameter ([ADR 021](../../decisions/021-component-parameter-initializers.md)):
 the child's signed parameter is still the row's key, and every later request
-resolves it through the child's initializer. That handoff is construction input,
+resolves it through the child's initializer. A model parameter whose
+initializer's key annotation admits `None` may instead be left out for a row
+that does not exist yet: the signed key is null, the initializer builds the row
+on every request, and once the component saves it the new key is signed
+([ADR 029](../../decisions/029-draft-model-parameters.md)). That handoff is construction input,
 not a cache; nothing outlives the render, and no child reads another object's
 state. A form is not handed over this way; it is a child built from the
 component's parameters. A row that only displays data, or whose actions the owning

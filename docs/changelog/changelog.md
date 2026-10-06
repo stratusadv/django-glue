@@ -37,6 +37,15 @@
   the key through the initializer. `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` (default
   `DEBUG`) checks supplied instances and emits
   `GlueModelParameterMismatchWarning` (ADR 021).
+- A model parameter whose initializer takes the model as well as the key,
+  `def host(self, model, pk)`, accepts a row of any concrete subclass of its
+  return annotation, so one component can serve rows of several models. The
+  token signs the model's label with the key (ADR 026).
+- A model parameter whose initializer annotates its key as `| None`, such as
+  `def entry(self, pk: int | None) -> TimeEntry`, may be left out for a record
+  that does not exist yet. The initializer builds it on every request, and once
+  a callable saves it the component is signed with the new key and edits that
+  record. One component can therefore create a record or edit one (ADR 029).
 - Component parameters are encoded through their annotation's adapter, so
   dataclass parameters are signed and restored (ADR 021).
 - `component.as_page(request)` responds with a component the application

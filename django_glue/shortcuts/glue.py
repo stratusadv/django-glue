@@ -19,7 +19,7 @@ from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
 from django_glue.glue.listener import ReceivedEvent, listener
-from django_glue.glue.model_parameter import ModelParameter
+from django_glue.glue.model_parameter import BoundedModelParameter, ConcreteModelParameter
 from django_glue.glue.objects.django.computed_attributes import ComputedAttribute
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
@@ -116,9 +116,18 @@ def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
         @Glue.ComponentParameter
         def entry(self, pk: int) -> TimeEntry:
             return TimeEntry.objects.get(pk=pk, user=self.request.user)
+
+    An initializer that also takes the model accepts a row of any concrete
+    subclass of its return annotation (ADR 026):
+
+        @Glue.ComponentParameter
+        def host(self, model: type[CommentHost], pk: int) -> CommentHost:
+            return model._default_manager.get(pk=pk)
     """
     if len(args) == 1 and not kwargs and inspect.isfunction(args[0]):
-        return ModelParameter(args[0])
+        if len(inspect.signature(args[0]).parameters) == BoundedModelParameter.initializer_arity:
+            return BoundedModelParameter(args[0])
+        return ConcreteModelParameter(args[0])
     kwargs.setdefault('parameter', True)
     return DeclaredAttribute(*args, **kwargs)
 
