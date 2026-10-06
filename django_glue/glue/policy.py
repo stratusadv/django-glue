@@ -94,7 +94,7 @@ class GluePolicy(BaseModel):
             'attributes': attributes,
             'address': glue_object.address,
             'children': glue_object.children,
-            'state_snapshot': glue_object._retained_state(),
+            'state_snapshot': glue_object._get_retained_state(),
             'capability': glue_object.get_capability(),
         })
 

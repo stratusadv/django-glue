@@ -25,6 +25,9 @@
   `naming`, `root` and `tag` modules. `Glue.Component` is unchanged, and
   `Component` and `component_registry` import from
   `django_glue.glue.components`.
+- A formset's `save()` saves nothing when any row is invalid. It previously
+  saved the valid rows. It also no longer calls each row's own `save`; it
+  validates the rows and passes their Django forms to `save_forms` (ADR 028).
 
 ### Features
 
@@ -53,6 +56,20 @@
   A library's components resolve in any project that installs its apps, and a
   project overrides one by defining the same class at the same tag path under
   one of its `DIRS` (ADR 027).
+- `Glue.formset()` and `Glue.FormSet` take `instances` (saved records to edit)
+  and `initial` (prefilled blank rows), so a formset can load existing records.
+  Removing a saved row with `pop` deletes its record on the next `save()`, and
+  needs `Glue.Access.DELETE`. `save_forms` and `delete_removed` on a
+  `Glue.FormSet` subclass replace how rows are saved and deleted (ADR 028).
+- `new_row_defaults` on `Glue.formset()` and `Glue.FormSet` sets starting values
+  on every new row, such as the key of the record the rows belong to. The values
+  are signed and may name fields the form does not expose. The browser cannot
+  change a default on a field the form does not expose or disables; a default on
+  an editable field prefills it (ADR 028).
+- A formset's `validate()` and `save()` load all submitted rows in one query,
+  and `save()` writes only the saved rows that changed. Django's own validation
+  queries for a form's foreign-key and unique fields still run per row
+  (ADR 028).
 
 ### Deprecated
 
@@ -79,6 +96,14 @@
 
 ### Fixes
 
+- A formset's `append(initial)` rejects any `initial` key that is not a field
+  the form lets a user edit. It previously accepted every key, so a browser
+  could set model fields the form did not expose on a new row, including the
+  key of the record the row belongs to. A page that passed such a key declares
+  `new_row_defaults` instead (ADR 028).
+- Describing a form's foreign-key or many-to-many field no longer loads the whole
+  related table. The rows were read and then discarded, once per relation field
+  for every form and every formset row. What the client receives is unchanged.
 - A component nested inside another component, or inside any element with
   `x-data`, now sees its ancestors' Alpine data, as ordinary nested `x-data`
   does. Glue previously attached the `component` scope before Alpine had

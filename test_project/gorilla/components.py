@@ -3,6 +3,8 @@ from typing import Any
 from django.http import HttpRequest
 
 from django_glue import Glue, GlueOperation
+from test_project.gorilla.forms import FightNameForm
+from test_project.gorilla.models import Gorilla
 
 
 class CounterCardComponent(Glue.Component):
@@ -86,6 +88,36 @@ class GuardedCounterTallyComponent(CounterTallyComponent):
     @Glue.listener(CounterCardComponent.counted, required_access=Glue.Access.CHANGE)
     def tally(self) -> None:
         self.counted_since_mount += 1
+
+
+class GorillaFightsEditorComponent(Glue.Component):
+    template = 'gorilla/component/fights_editor.html'
+
+    @Glue.ComponentParameter
+    def gorilla(self, pk: int) -> Gorilla:
+        return Gorilla.objects.get(pk=pk)
+
+    @Glue.property
+    def fights(self) -> Glue.FormSet:
+        # Whoever may change the gorilla may edit and remove its fights.
+        can_change = self.access.has_access(Glue.Access.CHANGE)
+        return Glue.FormSet(
+            FightNameForm,
+            instances=self.gorilla.fights_as_red_corner.order_by('pk'),
+            # A new fight belongs to this gorilla and starts as a sparring
+            # match against itself; the form exposes neither corner.
+            new_row_defaults={'red_corner': self.gorilla.pk, 'blue_corner': self.gorilla.pk},
+            access=Glue.Access.DELETE if can_change else Glue.Access.VIEW,
+            can_delete=True,
+        )
+
+    checks: int = Glue.attr(0, editable=True)
+
+    @Glue.attr
+    def check(self) -> None:
+        # Changes a retained value, so the component re-renders around its
+        # formset child.
+        self.checks += 1
 
 
 class CounterBadgeComponent(Glue.Component):

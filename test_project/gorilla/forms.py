@@ -3,6 +3,7 @@ from django.core.handlers.wsgi import WSGIRequest
 
 from django_glue import Glue
 from django_glue.response import GlueResponse
+from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 
 
@@ -130,6 +131,12 @@ class GorillaGlueModelForm(forms.ModelForm):
             'weight',
             'height',
         ]
+
+
+class FightNameForm(forms.ModelForm):
+    class Meta:
+        model = Fight
+        fields = ['name']
 
 
 class SkillForm(forms.ModelForm):

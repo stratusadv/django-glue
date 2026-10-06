@@ -1,6 +1,8 @@
 # ADR 012: FormSetGlue is a keyed collection of FormGlue, not a BaseFormSet
 
-Status: Accepted; implemented on branch (consumer migration deferred to phase 6)
+Status: Accepted; implemented on branch (consumer migration deferred to phase 6);
+partly superseded by [ADR 028](028-formsets-edit-saved-records.md), which lets a
+formset be seeded and gives row removal its deletion behavior
 
 Date: 2026-09-17
 

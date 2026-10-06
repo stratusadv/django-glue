@@ -1,6 +1,6 @@
 import inspect
 from functools import update_wrapper
-from typing import Any, Callable, Literal, Mapping, Sequence, TypeVar, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
 
 from django.db.models import Model, QuerySet
 from django.forms import BaseForm, ModelForm
@@ -324,12 +324,18 @@ class Glue:
         target: type[FormSetGlue] | type[BaseForm] | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         *,
+        initial: Iterable[Mapping[str, Any]] = (),
+        instances: Iterable[Model | BaseForm] = (),
+        new_row_defaults: Mapping[str, Any] | None = None,
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
     ) -> FormSetGlue:
         if isinstance(target, type) and issubclass(target, FormSetGlue):
             glue_object = target(
+                initial=initial,
+                instances=instances,
+                new_row_defaults=new_row_defaults,
                 name=unique_name,
                 access=access,
                 min_num=min_num,
@@ -348,6 +354,9 @@ class Glue:
                 raise TypeError(msg)
             glue_object = FormSetGlue(
                 target,
+                initial=initial,
+                instances=instances,
+                new_row_defaults=new_row_defaults,
                 name=unique_name,
                 access=access,
                 min_num=min_num,

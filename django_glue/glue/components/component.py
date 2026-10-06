@@ -203,7 +203,7 @@ class Component(BaseGlue):
                     f'Invalid parameter {key!r} on {type(self).__name__}.'
                 ) from error
 
-    def _retained_state(self) -> dict[str, Any]:
+    def _get_retained_state(self) -> dict[str, Any]:
         return {
             path: attribute.get()
             for path, attribute in self._bound_attributes.items()

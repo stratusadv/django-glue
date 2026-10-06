@@ -6,10 +6,10 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 
 from django_glue import Glue
-from test_project.gorilla.components import CounterCardComponent
+from test_project.gorilla.components import CounterCardComponent, GorillaFightsEditorComponent
 from test_project.gorilla.forms import GorillaGlueModelForm
 from test_project.gorilla.models import Gorilla, Skill
-from test_project.gorilla.forms import GorillaForm
+from test_project.gorilla.forms import GorillaForm, SkillForm
 from test_project.test_forms import ContactFormSet
 
 
@@ -22,9 +22,30 @@ def request_card_view(request: HttpRequest) -> HttpResponse:
     return component.as_page(request)
 
 
+def fights_editor_view(request: HttpRequest, pk: int) -> HttpResponse:
+    component = GorillaFightsEditorComponent(
+        gorilla=get_object_or_404(Gorilla, pk=pk),
+        access=Glue.Access.CHANGE,
+    )
+    return component.as_page(request, layout_template='gorilla/page/component_card_page.html')
+
+
 def contact_formset_view(request: HttpRequest) -> HttpResponse:
     Glue.formset(request, 'contacts', ContactFormSet, Glue.Access.CHANGE)
     return render(request, 'gorilla/page/contact_formset_page.html')
+
+
+def skill_formset_view(request: HttpRequest) -> HttpResponse:
+    Glue.formset(
+        request,
+        'skills',
+        SkillForm,
+        Glue.Access.DELETE,
+        instances=Skill.objects.order_by('pk')[:10],
+        initial=[{'name': 'Prefilled new skill', 'difficulty': 3}],
+        can_delete=True,
+    )
+    return render(request, 'gorilla/page/skill_formset_page.html')
 
 
 def list_view(request: HttpRequest) -> HttpResponse:
