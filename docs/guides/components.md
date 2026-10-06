@@ -90,7 +90,9 @@ app/django_spire/comment/components.py    # your CommentsComponent wins
 ```
 
 A tag that no location defines raises `GlueComponentRegistrationError`, naming
-every module searched.
+every module searched. A `DIRS` directory must be importable: one that holds a
+`components` module outside every `sys.path` entry raises the same error, naming
+the entry, instead of being skipped.
 
 ## Model and dataclass parameters
 

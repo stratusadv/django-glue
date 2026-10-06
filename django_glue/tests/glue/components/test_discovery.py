@@ -103,6 +103,25 @@ def test_an_unresolved_tag_names_every_module_searched(settings, on_sys_path) ->
     assert "'test_project.gorilla.components'" in message
 
 
+def test_a_directory_whose_components_cannot_be_imported_fails_instead_of_being_skipped(
+    settings, tmp_path,
+) -> None:
+    write_package(
+        tmp_path,
+        'stray_overrides.test_project.gorilla',
+        COMPONENT_SOURCE.format(name='CounterCardComponent'),
+    )
+    settings.DJANGO_GLUE_COMPONENTS = {'DIRS': [tmp_path / 'stray_overrides']}
+
+    with pytest.raises(GlueComponentRegistrationError) as caught:
+        resolve_component('test_project/gorilla/counter_card')
+
+    message = str(caught.value)
+    assert 'cannot be imported' in message
+    assert str(tmp_path / 'stray_overrides') in message
+    assert 'sys.path' in message
+
+
 def test_check_rejects_the_removed_components_root_setting(settings) -> None:
     settings.DJANGO_GLUE_COMPONENTS_ROOT = 'app'
 

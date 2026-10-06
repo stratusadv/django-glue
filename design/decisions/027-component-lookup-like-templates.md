@@ -54,7 +54,11 @@ DJANGO_GLUE_COMPONENTS = {
 
 1. For each entry in `DIRS`, the tag's directory is a path under that entry, as ADR
    014 describes for its single root. A location with no `components` module or
-   package there is skipped.
+   package there is skipped. A location that has one Glue cannot import, because
+   no `sys.path` entry contains it, fails resolution at once with
+   `GlueComponentRegistrationError` naming the entry. That is a misconfigured
+   entry, not a missing component, and skipping it would let a later location
+   answer in its place without anyone noticing.
 2. If `APP_DIRS` is on, the tag's directory is read as a dotted package path:
    `django_spire/comment` is `django_spire.comment`. That package is searched only
    when it is an installed app or lies inside one. Its `components` module is

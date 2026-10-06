@@ -77,9 +77,13 @@ def _components_module_names(tag_name: str, directory: str) -> Iterator[str]:
             continue
         import_name = _import_name_for(location / 'components')
         if import_name is None:
+            # A misconfigured entry, not a missing component: skipping it would
+            # hide the mistake behind whichever location answered instead.
             raise GlueComponentRegistrationError(
-                f'Cannot resolve component {tag_name!r}: '
-                f'{location / "components"} is not under a sys.path entry.'
+                f'Cannot resolve component {tag_name!r}: the DJANGO_GLUE_COMPONENTS DIRS entry '
+                f'{str(entry)!r} has a components module at {location / "components"} that cannot '
+                'be imported, because no sys.path entry contains it. Put the directory on '
+                'sys.path or remove the entry.'
             )
         yield import_name
 
