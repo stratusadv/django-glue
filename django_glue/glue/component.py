@@ -247,7 +247,10 @@ class Component(BaseGlue):
             message = f"Cannot access the session of unbound component '{self.name}'."
             raise RuntimeError(message)
 
-        return ComponentSession(self.request, type(self).__qualname__)
+        if self._session is None:
+            self._session = ComponentSession(self.request, type(self).__qualname__)
+
+        return self._session
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> Component:

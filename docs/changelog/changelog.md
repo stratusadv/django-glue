@@ -5,11 +5,11 @@
 ### Features
 
 - `Component.session` is a mutable mapping of server-side scratch state,
-  scoped by the component class's qualified name and backed by the default
-  Django cache. It flushes itself when the component's interaction completes
-  and writes the entry only when something changed, so a request that changes
-  nothing writes nothing, and `session.discard()` deletes the entry. The
-  session is never signed and never sent to the client (ADR 026).
+  scoped by the component class's qualified name and backed by the request's
+  Django session. A change marks the session modified, and Django saves it
+  when the request completes, so a request that changes nothing saves
+  nothing. The state is per-user, never signed, and never sent to the client
+  (ADR 026).
 
 ## v1.1.1
 

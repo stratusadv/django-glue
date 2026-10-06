@@ -410,18 +410,16 @@ grows every response, and re-signs the token on every change
 `Component.session` is the one store for that state, and it is opt-in
 ([ADR 026](../../decisions/026-component-session.md)):
 
-- **One cache entry per component class.** The session is a mutable mapping
-  over one entry in the host application's default cache, scoped by the
+- **One session entry per user, per component class.** The session is a
+  mutable mapping over one entry in the request's session, scoped by the
   component class's qualified name. All instances of the class share the
-  entry, and so do all users; state that must be per-user, or must survive a
-  cache flush, belongs in the database.
-- **Saving is automatic and change-only.** Setting a key to a value it does
-  not already hold marks the namespace dirty; the component flushes the
-  session when `mount()` completes at introduction
-  and when every attribute call completes, and the entry is written only when
-  dirty, so a request that changes nothing writes nothing. A call that raises
-  never flushes. `session.save()` persists immediately for code outside those
-  points, and `session.discard()` deletes the entry.
+  entry within one user's session; state shared across users belongs in the
+  database or the cache.
+- **Persistence rides on Django.** A change — setting a key to a value it
+  does not already hold — marks the session modified, and Django saves a
+  modified session when the request completes, so a request that changes
+  nothing saves nothing. A call that raises does not roll back a session
+  write it made before failing.
 - **It never crosses the wire.** The session is not part of the policy token,
   `static_data`, or `computed_data`, and it is not an admitted update. The
   client cannot read or write it, and the reconstruction pipeline above is
