@@ -74,8 +74,7 @@ django-glue/
 │                                   # comments, lab, core)
 ├── design/                         # Reactive-system design docs (authority)
 ├── docs/                           # MkDocs site
-├── justfile                        # All dev commands
-└── STATE_MODEL_HANDOFF.md          # State-model implementation and release handoff
+└── justfile                        # All dev commands
 ```
 
 ## Server: Glue objects

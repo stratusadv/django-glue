@@ -187,9 +187,8 @@ directly and remain part of the state-model implementation.
 
 ## Implementation verification checklist
 
-The branch implementation and conformance records for these contracts are in
-`STATE_MODEL_HANDOFF.md`. The production-shaped payload measurement and the
-security-hardening items above remain separate follow-up work.
+The production-shaped payload measurement and the security-hardening items above
+remain separate follow-up work.
 
 - Measure production-shaped policy tokens with retained drafts, queryset
   continuations, and signed collection membership, plus aggregate request size
