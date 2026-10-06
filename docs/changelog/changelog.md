@@ -14,6 +14,17 @@
 - `rerender_on` reaches every mounted component that lists the event, not only
   the source's ancestors, and one response's deliveries travel in one request.
   `Glue.listener` still hears only descendants.
+- `DJANGO_GLUE_COMPONENTS_ROOT` is removed. Replace it with
+  `DJANGO_GLUE_COMPONENTS = {'DIRS': [<root>]}`. A project that still sets it
+  fails the system check `django_glue.E004`, whose hint gives the replacement
+  (ADR 027).
+- The component modules moved into the `django_glue.glue.components` package:
+  `django_glue.glue.component` is now `django_glue.glue.components.component`,
+  and `component_registry`, `component_discovery`, `component_naming`,
+  `component_root` and `component_tag` are its `registry`, `discovery`,
+  `naming`, `root` and `tag` modules. `Glue.Component` is unchanged, and
+  `Component` and `component_registry` import from
+  `django_glue.glue.components`.
 
 ### Features
 
@@ -36,6 +47,12 @@
   component, rebuilt from its signed token (ADR 024).
 - A component's signed identity records its ancestors: the component whose
   template stamped it, or whose callable returned it, and theirs.
+- `DJANGO_GLUE_COMPONENTS` configures where component tags are looked up, shaped
+  like Django's `TEMPLATES`: `DIRS` lists directories searched in order, and
+  `APP_DIRS` (default `True`) also searches the installed apps by package path.
+  A library's components resolve in any project that installs its apps, and a
+  project overrides one by defining the same class at the same tag path under
+  one of its `DIRS` (ADR 027).
 
 ### Deprecated
 

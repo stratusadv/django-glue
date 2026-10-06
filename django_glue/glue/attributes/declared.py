@@ -134,7 +134,7 @@ class DeclaredAttribute:
         if not self._parameter and not self._skip_rerender:
             return
         from django_glue.glue.base import BaseGlue
-        from django_glue.glue.component import Component
+        from django_glue.glue.components.component import Component
 
         if self._skip_rerender and not (isinstance(owner, type) and issubclass(owner, Component)):
             msg = (

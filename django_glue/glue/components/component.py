@@ -22,9 +22,9 @@ from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.attributes.declared import _MISSING
 from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component_registry import CAMEL_BOUNDARY, component_registry
-from django_glue.glue.component_naming import component_name
-from django_glue.glue.component_root import inject_component_root
+from django_glue.glue.components.naming import component_name
+from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_registry
+from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.event import GlueEvent
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events

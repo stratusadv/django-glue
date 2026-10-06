@@ -71,7 +71,7 @@ issuance by default.
 | Server object and declaration pipeline | `django_glue/glue/base.py`, `django_glue/glue/attributes/` |
 | Policies and addressed children | `django_glue/glue/policy.py`, `django_glue/glue/children.py` |
 | Django families | `django_glue/glue/objects/django/` |
-| Components and template tag | `django_glue/glue/component.py`, `django_glue/templatetags/django_glue.py` |
+| Components and template tag | `django_glue/glue/components/`, `django_glue/templatetags/django_glue.py` |
 | Client registry and reconciliation | `client_js/src/runtime/` |
 | Client family proxies | `client_js/src/proxies/` |
 | HTML rendering and view transport | `client_js/src/htmlRenderer.js`, `django_glue/middleware.py` |

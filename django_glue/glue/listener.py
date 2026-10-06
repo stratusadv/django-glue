@@ -12,7 +12,7 @@ from django_glue.glue.operation import GlueOperation, GlueOperationKind
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-    from django_glue.glue.component import Component
+    from django_glue.glue.components.component import Component
     from django_glue.glue.policy import GluePolicy
 
 
@@ -85,7 +85,7 @@ class GlueListener:
         self.name = function.__name__
 
     def __set_name__(self, owner: type, name: str) -> None:
-        from django_glue.glue.component import Component  # noqa: PLC0415
+        from django_glue.glue.components.component import Component  # noqa: PLC0415
 
         if not issubclass(owner, Component):
             raise GlueComponentRegistrationError(

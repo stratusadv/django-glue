@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from django_glue.exceptions import GlueComponentRootError
-from django_glue.glue.component_root import inject_component_root
+from django_glue.glue.components.root import inject_component_root
 
 ROOT_ATTRIBUTES = ' data-glue-address="a#1" data-glue-objects="[]"'
 

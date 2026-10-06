@@ -15,7 +15,7 @@
 | [`011`](011-collection-owned-item-keys.md) | Accepted; implemented on branch | Let each collection own its item-key derivation; no `BaseGlue.key` |
 | [`012`](012-formset-is-a-keyed-collection.md) | Accepted; implemented on branch | FormSetGlue is a keyed collection of FormGlue, not a BaseFormSet |
 | [`013`](013-policy-token-lifetime.md) | Accepted; implemented on branch | The policy-token lifetime is 24 hours from issuance |
-| [`014`](014-lazy-snake-case-component-discovery.md) | Accepted; implemented on branch | Lazy snake_case component discovery by name |
+| [`014`](014-lazy-snake-case-component-discovery.md) | Accepted; implemented on branch; partly superseded by 027 | Lazy snake_case component discovery by name |
 | [`015`](015-signed-queryset-query-permissions.md) | Accepted; implemented on branch | Queryset query permissions are signed full paths and lookups, derived from exposure by default |
 | [`016`](016-field-metadata-never-shadows-field-members.md) | Accepted; implemented on branch | Server field metadata never shadows a member the field class defines |
 | [`017`](017-signed-queryset-seek-keys.md) | Accepted; implemented on branch | Queryset seek keys are signed continuation data bound to their queryset and query |
@@ -27,6 +27,7 @@
 | [`023`](023-component-as-page.md) | Accepted; implemented on branch | A view serves a component it constructed with `component.as_page(request)`; `get_view_kwargs` is deprecated |
 | [`024`](024-component-listeners.md) | Accepted; implemented on branch; partly superseded by 025 | A component declares the events it re-renders on with `rerender_on` and runs code for a descendant's events with `Glue.listener`; the client delivers them in a follow-up `$receive` call |
 | [`025`](025-parent-renders-keep-mounted-children.md) | Accepted; implemented on branch | A parent's re-render keeps the children the client reports mounted; a child declares its own freshness with `rerender_on`, delivered page-wide and batched |
+| [`027`](027-component-lookup-like-templates.md) | Accepted; implemented on branch | Component lookup is configured by `DJANGO_GLUE_COMPONENTS`, shaped like `TEMPLATES`: `DIRS` searched in order, then installed apps, first location defining the class wins |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

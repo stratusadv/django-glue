@@ -14,7 +14,7 @@ from django_glue.glue.attributes.definition import (
     _resolve_glue_result_annotation,
 )
 from django_glue.glue.attributes.namespace import GlueNamespace
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue

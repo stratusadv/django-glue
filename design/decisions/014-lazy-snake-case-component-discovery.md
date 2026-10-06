@@ -1,6 +1,8 @@
 # ADR 014: Lazy snake_case component discovery by name
 
-Status: Accepted; implemented on branch
+Status: Accepted; implemented on branch; partly superseded by
+[ADR 027](027-component-lookup-like-templates.md), which replaces the single
+components root and `DJANGO_GLUE_COMPONENTS_ROOT` with `DJANGO_GLUE_COMPONENTS`
 
 Date: 2026-09-25
 

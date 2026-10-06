@@ -1,9 +1,9 @@
 # Components
 
 A component is a Glue object with a Django template. Put its class in a
-`components.py` module or `components/` package under the components root
-(default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`);
-Glue resolves it lazily when its tag is used.
+`components.py` module or `components/` package; Glue resolves it lazily when
+its tag is used. [Where components are found](#where-components-are-found)
+covers the lookup.
 
 ```python
 from django_glue import Glue
@@ -57,6 +57,40 @@ marker to that root.
     <span x-text="component.count"></span>
 </section>
 ```
+
+## Where components are found
+
+Glue looks up a tag's directory the way Django looks up a template, configured
+by one setting shaped like `TEMPLATES`:
+
+```python
+DJANGO_GLUE_COMPONENTS = {
+    'DIRS': [BASE_DIR / 'app'],
+    'APP_DIRS': True,
+}
+```
+
+- `DIRS` lists directories, searched in order. It defaults to `[BASE_DIR]`.
+  With the setting above, `time_tracker/time_entry_day` is looked up in
+  `BASE_DIR/app/time_tracker/components`.
+- `APP_DIRS` defaults to `True`. The tag's directory is then also read as a
+  package path, and that package is searched when it is an installed app or
+  lies inside one. `django_spire/comment/comments` finds `CommentsComponent` in
+  `django_spire.comment.components`, in any project that installs that app.
+
+Both keys are optional, and so is the setting.
+
+Every `DIRS` entry is searched before the installed apps, and the first
+location whose `components` module defines the class wins. To override a
+library's component, define a class with the same name at the same tag path
+under one of your `DIRS`:
+
+```
+app/django_spire/comment/components.py    # your CommentsComponent wins
+```
+
+A tag that no location defines raises `GlueComponentRegistrationError`, naming
+every module searched.
 
 ## Model and dataclass parameters
 

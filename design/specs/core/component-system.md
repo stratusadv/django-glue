@@ -445,12 +445,37 @@ of that directory:
 {% glue_component 'time_tracker/time_entry_day' date=date user_id=user.pk key=date %}
 ```
 
-The first addresses `TimeEntryDay(Component)` in `<root>/components`; the
-second addresses the same class in `<root>/time_tracker/components`. The class
-is matched by name while scanning that `components` package — **the file it
-lives in does not matter** — and is imported and resolved lazily on first use,
-never at startup. The components root defaults to the project's
-`settings.BASE_DIR` and is overridable via `DJANGO_GLUE_COMPONENTS_ROOT`.
+The first addresses `TimeEntryDay(Component)` in `<location>/components`; the
+second addresses the same class in `<location>/time_tracker/components`. The
+class is matched by name while scanning that `components` package — **the file
+it lives in does not matter** — and is imported and resolved lazily on first
+use, never at startup.
+
+The locations are configured the way Django configures template lookup
+(ADR 027):
+
+```python
+DJANGO_GLUE_COMPONENTS = {
+    'DIRS': [BASE_DIR / 'app'],
+    'APP_DIRS': True,
+}
+```
+
+- `DIRS` is a list of directories, searched in order. It defaults to
+  `[settings.BASE_DIR]`.
+- `APP_DIRS` defaults to `True`. When on, the tag's directory is also read as a
+  dotted package path (`django_spire/comment` is `django_spire.comment`), and
+  that package is searched when it is an installed app or lies inside one.
+- Every `DIRS` entry is searched before any installed app. A location with no
+  `components` module is skipped. The first location whose `components` module
+  defines the class wins, so a project overrides a library's component by
+  defining the same class at the same tag path under one of its `DIRS`.
+- When no location defines the class, resolution fails with
+  `GlueComponentRegistrationError`, naming every module searched.
+
+The system check `django_glue.E004` rejects the removed
+`DJANGO_GLUE_COMPONENTS_ROOT` setting, and `django_glue.E005` rejects a
+malformed `DJANGO_GLUE_COMPONENTS`.
 
 Names are lowercase snake_case segments; the directory is a slash-separated
 import path of such segments. Because the tag *is* the address, the class name

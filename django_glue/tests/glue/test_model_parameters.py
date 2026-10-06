@@ -17,7 +17,7 @@ from django_glue.exceptions import (
     GlueModelInstanceNotFoundError,
     GlueModelParameterMismatchWarning,
 )
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 from django_glue.glue.policy import GluePolicy
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.fight.models import Fight
