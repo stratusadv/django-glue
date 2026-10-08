@@ -3,6 +3,7 @@ import {GlueProxyError} from "../errors"
 import GluePolicy from "../policy"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "../proxies"
 import GlueAddressRecord from "./addressRecord"
+import {isOwnedBy} from "./childBinder"
 
 class GlueAddressRegistry {
     constructor({client, http, materializer, childBinder}) {
@@ -50,6 +51,10 @@ class GlueAddressRegistry {
         record.proxy?._afterRecordRefresh?.()
     }
 
+    // A record's children go with it. A child is linked to its owner only once
+    // both are registered and one of them is refreshed or read, so a child that
+    // arrived after its owner and was never read has no link. Its address is
+    // still derived from its owner's, which is what makes it a child.
     dispose(address) {
         const record = this.records.get(address)
         if (!record || record.disposed) return
@@ -58,7 +63,9 @@ class GlueAddressRegistry {
         while (index < doomed.length) {
             const current = doomed[index]
             this.records.forEach(candidate => {
-                if (candidate.owner?.address === current && !doomed.includes(candidate.address)) {
+                const isChild = candidate.owner?.address === current
+                    || isOwnedBy(candidate.address, current)
+                if (isChild && !doomed.includes(candidate.address)) {
                     doomed.push(candidate.address)
                 }
             })

@@ -510,3 +510,59 @@ describe('address references do not create owners', () => {
         expect(client._registry.getRecord(partnerAddress)).toBeUndefined()
     })
 })
+
+describe('disposal of a child introduced after its owner', () => {
+    const resultAddress = 'root#test["t1a2b"]'
+    const childAddress = `${resultAddress}.form`
+
+    function introducedByAResponse() {
+        const client = new GlueClient({objects: [
+            createEntry({policy: {...rootPolicy, children: {}}}),
+        ]})
+        const registry = client._registry
+
+        registry.introduce(createEntry({
+            policy: {
+                name: 'row', namespace: 'model', address: resultAddress,
+                children: {form: childAddress}, state_snapshot: {},
+            },
+            staticData: {children: {form: {kind: 'form', nullable: false}}},
+        }))
+        registry.introduce(createEntry({
+            policy: {
+                name: 'form', namespace: 'form', address: childAddress,
+                state_snapshot: {name: 'Ada'},
+            },
+        }))
+
+        return registry
+    }
+
+    test('a child that was never read is disposed with its owner', () => {
+        const registry = introducedByAResponse()
+
+        expect(registry.getRecord(childAddress).owner).toBeNull()
+
+        registry.dispose(resultAddress)
+
+        expect(registry.getRecord(resultAddress)).toBeUndefined()
+        expect(registry.getRecord(childAddress)).toBeUndefined()
+        expect(registry.getRecord('root#test')).toBeDefined()
+    })
+
+    test('a record whose address only begins the same way is kept', () => {
+        const registry = introducedByAResponse()
+        const lookalikeAddress = 'root#test["t1a2bc"]'
+
+        registry.introduce(createEntry({
+            policy: {
+                name: 'other', namespace: 'model', address: lookalikeAddress,
+                state_snapshot: {},
+            },
+        }))
+        registry.dispose(resultAddress)
+
+        expect(registry.getRecord(childAddress)).toBeUndefined()
+        expect(registry.getRecord(lookalikeAddress)).toBeDefined()
+    })
+})

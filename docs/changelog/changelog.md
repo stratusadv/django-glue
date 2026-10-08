@@ -1,5 +1,19 @@
 # Changelog for Django Glue
 
+## v1.3.0
+
+### Fixes
+
+- Disposing an object on the client also disposes every child whose address is
+  derived from it. A child that arrived in a callable's response after its owner
+  was only linked to that owner once it was read, so a child that was never read,
+  such as the form of a model that was never rendered, stayed in the client's
+  registry after its owner was disposed.
+
+  Code that disposed a returned collection and kept using its items must now keep
+  the collection for as long as it uses them: the items' addresses are derived
+  from the collection's, so they are disposed with it.
+
 ## v1.2.1
 
 ### Fixes
