@@ -35,6 +35,10 @@ class FormGlue(BaseGlue):
     ) -> None:
         super().__init__(name=name, access=access)
         self.form = form
+        # A call replaces self.form with a bound form, whose initial Django
+        # fills from its instance. The identity signs the initial this form
+        # was given, so a token renewed by a call names the same form.
+        self._initial = form.initial
         self.editable = self._normalize_editable(editable)
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
@@ -142,7 +146,7 @@ class FormGlue(BaseGlue):
     def _prepared_initial(self) -> dict[str, Any]:
         return {
             name: field.prepare_value(self._ordered(value)) if field else value
-            for name, value in self.form.initial.items()
+            for name, value in self._initial.items()
             for field in [self.form.fields.get(name)]
         }
 
@@ -236,6 +240,11 @@ class FormGlue(BaseGlue):
                 # self.instance stays consistent across every place a form
                 # for this same not-yet-saved row gets reconstructed.
                 form = form_class(instance=cls._unsaved_instance_from_initial(model_class, initial), initial=initial)
+                # A ModelForm adds every field of its instance to initial, and
+                # initial is part of the identity the next token signs. Keep
+                # the signed values, so a rebuilt form signs the identity it
+                # was rebuilt from and its formset still recognizes the row.
+                form.initial = dict(initial)
         else:
             form = form_class(initial=initial)
 
