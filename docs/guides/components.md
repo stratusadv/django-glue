@@ -555,7 +555,8 @@ a multi-step flow's position, a scratch value shared by the component's
 instances. Signed parameters and state snapshots exist for state the client
 sees, and a private field dies on every request, so Glue provides
 `self.session`: a mutable mapping over one entry in the request's Django
-session, scoped by the component class's qualified name (ADR 026).
+session, scoped by the component class's module-qualified name, so two
+classes that share a name in different modules do not share state (ADR 031).
 
 ```python
 class OnboardingComponent(Glue.Component):
@@ -566,10 +567,13 @@ class OnboardingComponent(Glue.Component):
         self.session['skipped'] = True
 ```
 
-- The session persists itself. A change — setting a key to a value it does
-  not already hold — marks the session modified, and Django saves a modified
-  session when the request completes, so a request that changes nothing
-  saves nothing. A write a call makes before it raises is kept.
+- The session persists itself. Setting or deleting a key marks the session
+  modified, and Django saves a modified session when the request completes,
+  so a request that writes nothing saves nothing. A write a call makes
+  before it raises is kept.
+- A list or dict changed in place is not saved until you assign it back:
+  after `items = self.session['items']` and `items.append(pk)`, write
+  `self.session['items'] = items`.
 - Every instance of the class shares the entry within one user's session;
   the state is per-user. State shared across users, or durable state,
   belongs in the database.
@@ -577,3 +581,47 @@ class OnboardingComponent(Glue.Component):
   the computed data, and the client cannot read or write it.
 - Keys must be strings, and values must be serializable by your session
   backend.
+
+### Showing a session value to the client
+
+Declare the value with `Glue.SessionAttr` when the browser should see it. The
+value is stored in the session under its own name, and the client reads it
+like any other component value:
+
+```python
+class OnboardingComponent(Glue.Component):
+    template = 'onboarding/panel.html'
+
+    step: int = Glue.SessionAttr(0)
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def advance(self):
+        self.step += 1
+```
+
+```html
+<span x-text="component.step"></span>
+<button @click="component.advance()">Next</button>
+```
+
+- A callable changes the value by assigning it. The client cannot write it,
+  and it is not signed into the token, so it survives a page load and a stale
+  page cannot put an old value back.
+- Reading a value that was never set returns the default and saves nothing.
+  Use `default_factory` for a list or dict: `seen: list[int] =
+  Glue.SessionAttr(default_factory=list)`. As with the mapping, assign a
+  changed list or dict back to save it.
+- Every instance of the class shares the value within one user's session. Do
+  not use it for per-row state on a component stamped once per row.
+- The new value reaches the browser with the callable's own re-render. A
+  callable declared with `skip_rerender=True` still sends it, whether you
+  assigned `self.step` or wrote `self.session['step']`, so `component.step`
+  updates. The template is not rendered again, so markup that printed the
+  value on the server keeps the old one.
+- Another mounted instance of the class keeps its old value until it renders
+  again; list an event the writer emits in its `rerender_on` to keep it
+  current.
+- `Glue.SessionAttr(...)` is `Glue.attr(..., session=True)`. It cannot be
+  combined with `parameter`, `editable`, `render_as_html`, `skip_rerender` or
+  `glue_factory`, cannot decorate a method or property, and is only valid on
+  a component.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import warnings
-from functools import cache
+from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
 
 from django.core.exceptions import PermissionDenied
@@ -184,7 +184,6 @@ class Component(BaseGlue):
         super().__init__(name=name, access=access)
         self._ancestors: tuple[str, ...] = ()
         self._mounted_children: frozenset[str] = frozenset()
-        self._session: ComponentSession | None = None
 
         if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
@@ -247,16 +246,24 @@ class Component(BaseGlue):
             'ancestors': list(self._ancestors),
         }
 
-    @property
+    @cached_property
     def session(self) -> ComponentSession:
         if self.request is None:
             message = f"Cannot access the session of unbound component '{self.name}'."
             raise RuntimeError(message)
 
-        if self._session is None:
-            self._session = ComponentSession(self.request, type(self).__qualname__)
+        def send_written_session_attribute(key: str) -> None:
+            # A session attribute's value was re-derived by the write, so this
+            # response carries it even when nothing re-renders the component.
+            declaration = inspect.getattr_static(type(self), key, None)
+            if isinstance(declaration, DeclaredAttribute) and declaration._session:
+                self._derived_paths.add(key)
 
-        return self._session
+        return ComponentSession(
+            self.request.session,
+            f'{type(self).__module__}.{type(self).__qualname__}',
+            on_write=send_written_session_attribute,
+        )
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> Component:
@@ -363,7 +370,6 @@ class Component(BaseGlue):
             return self._receive(call_context)
 
         entry, introduced = super().process_attribute_call(call_context)
-
         if 'html' in entry:
             return entry, introduced
 
@@ -433,7 +439,6 @@ class Component(BaseGlue):
                 listener.run(self, event)
 
         entry, introduced = self._run_call(call_context, invoke)
-
         rerender = rerender or any(not listener.skip_rerender for listener, _event in deliveries)
         if 'policy_token' not in entry and not rerender:
             return entry, introduced

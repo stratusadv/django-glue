@@ -31,7 +31,7 @@
 | [`027`](027-component-lookup-like-templates.md) | Accepted; implemented on branch | Component lookup is configured by `DJANGO_GLUE_COMPONENTS`, shaped like `TEMPLATES`: `DIRS` searched in order, then installed apps, first location defining the class wins |
 | [`028`](028-formsets-edit-saved-records.md) | Accepted; implemented on branch | A formset may be seeded with saved records; removing a saved row signs a pending deletion that `save` applies, with `save_forms` and `delete_removed` as hooks |
 | [`029`](029-draft-model-parameters.md) | Accepted; implemented on branch | A model parameter whose initializer's key annotation admits `None` may be left out for a row that does not exist yet; the initializer builds it, and a saved draft is signed by its new key |
-| [`026`](026-component-session.md) | Accepted; implemented on branch | `Component.session` is a per-user mutable mapping backed by the request's Django session, scoped by the component class's qualified name, saved with the session when the request changes it, never crossing the wire |
+| [`031`](031-component-session.md) | Accepted; implemented on branch | `Component.session` is a per-user mutable mapping backed by the request's Django session, scoped by the component class's module-qualified name, saved with the session when the request changes it, never crossing the wire except for a value declared with `Glue.SessionAttr`, which the client reads and cannot write |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

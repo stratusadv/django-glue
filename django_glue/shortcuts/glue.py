@@ -132,6 +132,26 @@ def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
     return DeclaredAttribute(*args, **kwargs)
 
 
+def _session_attr(*args: Any, **kwargs: Any) -> DeclaredAttribute:
+    """
+    Shortcut for Glue.attr(session=True).
+
+    Keeps a component's declared value in its session (ADR 031) instead of in
+    the signed token, so it survives a page load and is shared by every
+    instance of the class within one user's session. The client reads it and
+    cannot write it; a callable changes it by assignment:
+
+        class OnboardingComponent(Glue.Component):
+            step: int = Glue.SessionAttr(0)
+
+            @Glue.attr(required_access=Glue.Access.CHANGE)
+            def advance(self) -> None:
+                self.step += 1
+    """
+    kwargs.setdefault('session', True)
+    return DeclaredAttribute(*args, **kwargs)
+
+
 def _event(obj: Any | None = None, name: str | None = None, payload: dict[str, Any] | None = None) -> GlueEvent | None:
     """
     ``Glue.event()`` with no arguments returns a ``GlueEvent`` descriptor for
@@ -163,6 +183,7 @@ class Glue:
     attribute = _attr
     attr = _attr
     ComponentParameter = _component_parameter
+    SessionAttr = _session_attr
     event = _event
     listener = staticmethod(listener)
     ReceivedEvent = ReceivedEvent

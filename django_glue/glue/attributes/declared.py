@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
 
 _MISSING = object()
+_SESSION_VALUE_ONLY = (
+    'Glue.attr session=True is only valid for value declarations, such as '
+    'step: int = Glue.SessionAttr(0). It cannot decorate a method or property.'
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -64,6 +68,7 @@ class DeclaredAttribute:
         required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW,
         parameter: bool = False,
         editable: bool = False,
+        session: bool = False,
         render_as_html: bool = False,
         skip_rerender: bool = False,
         default: Any = _MISSING,
@@ -79,6 +84,7 @@ class DeclaredAttribute:
         self.required_access = required_access
         self._parameter = parameter
         self._editable = editable
+        self._session = session
         self._render_as_html = render_as_html
         self._skip_rerender = skip_rerender
         self.default = default
@@ -98,6 +104,9 @@ class DeclaredAttribute:
             else:
                 self.default = value
 
+        if session:
+            self._store_in_session()
+
         self._update_glue_options()
 
     def _update_glue_options(self) -> None:
@@ -111,16 +120,53 @@ class DeclaredAttribute:
             value_role=self._resolve_value_role(),
         )
 
+    def _store_in_session(self) -> None:
+        """
+        Keep this value in the owning component's session rather than on the
+        instance (ADR 031). The session is the only copy, so the value is sent
+        down as derived output and never signed into the token. Every option
+        that would give it a second home, or that only a callable has, is
+        rejected.
+        """
+        conflicts = [
+            option
+            for option, given in (
+                ('parameter', self._parameter),
+                ('editable', self._editable),
+                ('render_as_html', self._render_as_html),
+                ('skip_rerender', self._skip_rerender),
+                ('glue_factory', self.glue_factory is not None),
+            )
+            if given
+        ]
+        if conflicts:
+            msg = f'Glue.attr session=True cannot be combined with {", ".join(conflicts)}.'
+            raise TypeError(msg)
+        if self.target is not None:
+            raise TypeError(_SESSION_VALUE_ONLY)
+
+        from django_glue.glue.components.session import SessionValue
+
+        self.target = SessionValue(
+            default=None if self.default is _MISSING else self.default,
+            default_factory=None if self.default_factory is _MISSING else self.default_factory,
+        )
+
     def _resolve_value_role(self) -> GlueValueRole | None:
         if self._is_callable:
             return None
+        if self._session:
+            return GlueValueRole.DERIVED_OUTPUT
         if self._editable:
             return GlueValueRole.EDITABLE_STATE
         return GlueValueRole.RECONSTRUCTOR
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        if self.target is None and len(args) == 1 and not kwargs and self._is_decoratable(args[0]):
-            return self._bind_target(args[0])
+        if len(args) == 1 and not kwargs and self._is_decoratable(args[0]):
+            if self._session:
+                raise TypeError(_SESSION_VALUE_ONLY)
+            if self.target is None:
+                return self._bind_target(args[0])
         if callable(self.target):
             return self.target(*args, **kwargs)
         msg = f"'{self.__class__.__name__}' object is not callable"
@@ -131,10 +177,18 @@ class DeclaredAttribute:
         self.storage_name = f'__glue_attribute_{name}'
         if hasattr(self.target, '__set_name__'):
             self.target.__set_name__(owner, name)
-        if not self._parameter and not self._skip_rerender:
+        if not self._parameter and not self._skip_rerender and not self._session:
             return
         from django_glue.glue.base import BaseGlue
         from django_glue.glue.components.component import Component
+
+        if self._session and not (isinstance(owner, type) and issubclass(owner, Component)):
+            msg = (
+                f'Glue.SessionAttr (Glue.attr(session=True)) on {owner.__name__}.{name} keeps '
+                "the value in a Glue.Component's session; "
+                f'{owner.__name__!r} is not a Component.'
+            )
+            raise TypeError(msg)
 
         if self._skip_rerender and not (isinstance(owner, type) and issubclass(owner, Component)):
             msg = (

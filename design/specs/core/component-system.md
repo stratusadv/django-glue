@@ -129,7 +129,7 @@ class TimeEntryDay(Glue.Component):
   behavior is a composition layer over `BaseGlue`, not a replacement for its
   established entrypoints. Server-side scratch state that never crosses the
   wire is a separate opt-in store (see "Server-side component state" below and
-  [ADR 026](../../decisions/026-component-session.md)).
+  [ADR 031](../../decisions/031-component-session.md)).
 - **Calls are ordered per address.** The client advances one component's token
   and canonical data before sending its next call, while unrelated component
   addresses may proceed concurrently. Cross-tab freshness is supplied by the
@@ -405,28 +405,38 @@ authorization.
 
 The token is the only store for state the client sees. Some component state
 sees no client at all: a rate-limit counter, a multi-step flow's position, a
-per-class scratch value. Holding it in a private field loses it on the first
+per-user scratch value. Holding it in a private field loses it on the first
 reconstruction (§2), and signing it into the token makes it client-visible,
 grows every response, and re-signs the token on every change
 ([ADR 013](../../decisions/013-policy-token-lifetime.md),
 [ADR 025](../../decisions/025-parent-renders-keep-mounted-children.md)).
 
 `Component.session` is the one store for that state, and it is opt-in
-([ADR 026](../../decisions/026-component-session.md)):
+([ADR 031](../../decisions/031-component-session.md)):
 
 - **One session entry per user, per component class.** The session is a
   mutable mapping over one entry in the request's session, scoped by the
-  component class's qualified name. All instances of the class share the
+  component class's `module.qualname`. All instances of the class share the
   entry within one user's session; state shared across users belongs in the
   database or the cache.
-- **Persistence rides on Django.** A change — setting a key to a value it
-  does not already hold — marks the session modified, and Django saves a
-  modified session when the request completes, so a request that changes
-  nothing saves nothing. A call that raises does not roll back a session
-  write it made before failing.
-- **It never crosses the wire.** The session is not part of the policy token,
-  `static_data`, or `computed_data`, and it is not an admitted update. The
-  client cannot read or write it, and the reconstruction pipeline above is
+- **Persistence rides on Django.** Setting or deleting a key marks the
+  session modified, and Django saves a modified session when the request
+  completes, so a request that writes nothing saves nothing. A value mutated
+  in place is saved only once it is assigned back to its key. A call that
+  raises does not roll back a session write it made before failing.
+- **A declared value may live there.** `Glue.SessionAttr(default)`, a shortcut
+  for `Glue.attr(default, session=True)`, declares a value stored in the
+  session under its own name. It is sent down as `computed_data`, like a
+  `Glue.property`, and is never retained in the token, so the session is its
+  only copy and the client cannot write it. A callable changes it by
+  assignment. It is shared by every instance of the class. The value reaches
+  the client with the callable's own re-render; a callable that does not
+  re-render sends the session attributes whose keys it set or deleted, by
+  assignment or through `self.session`, without rendering the markup.
+- **Nothing else in it crosses the wire.** Apart from a declared session
+  attribute's value, the session is not part of the policy token,
+  `static_data`, or `computed_data`, and nothing in it is an admitted update.
+  The client cannot write it, and the reconstruction pipeline above is
   unchanged: the token remains the only authority for client-facing state.
 
 ### 5. Components are stamped with a Django template tag

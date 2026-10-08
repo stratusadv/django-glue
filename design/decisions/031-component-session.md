@@ -1,4 +1,4 @@
-# ADR 026: A Component Session Is A Django-Session-Backed Mapping
+# ADR 031: A Component Session Is A Django-Session-Backed Mapping
 
 Status: Accepted; implemented on branch
 
@@ -41,11 +41,13 @@ session use, and anonymous session churn is already an open hardening item in
 ## Decision
 
 `Component.session` is a `ComponentSession`: a mutable mapping over one entry
-in the request's session, scoped by the component class's qualified name and
-persisted with the session when the request completes.
+in the request's session, scoped by the component class's module-qualified
+name and persisted with the session when the request completes.
 
-1. **One session entry per user, per component class.** The namespace is
-   `type(component).__qualname__` and the session key is
+1. **One session entry per user, per component class.** The namespace is the
+   class's `module.qualname`, the same string its signed identity carries as
+   `component_id`, so two classes that share a name in different modules keep
+   separate entries. The session key is
    `DJANGO_GLUE_COMPONENT_SESSION_KEY_PREFIX` (default
    `django_glue:component_session:`) followed by the namespace. All instances
    of the class share the entry within one user's session. State shared
@@ -55,33 +57,71 @@ persisted with the session when the request completes.
    `update`, `clear`). Keys must be strings; values must be serializable by
    the host's session backend (JSON for cookie sessions, pickled for the
    database session).
-3. **Persistence rides on Django.** Setting a key to a value it does not
-   already hold marks the session modified, and Django saves a modified
-   session when the request completes, so a request that changes nothing
-   saves nothing. Writes go straight into the session when they happen, so a
-   call that raises does not roll back a write it made before failing.
+3. **Persistence rides on Django.** Setting or deleting a key marks the
+   session modified, as it does on Django's own session, and Django saves a
+   modified session when the request completes, so a request that writes
+   nothing saves nothing. Setting a key marks the session modified even when
+   the value is unchanged: comparing the old and new values cannot see a list
+   or dict that was mutated in place and assigned back, and would drop that
+   write. A value mutated in place without being assigned back is not saved.
+   Writes go straight into the session when they happen, so a call that
+   raises does not roll back a write it made before failing.
 4. **The session is not signed and never crosses the wire.** It is not part
    of the policy token, `static_data`, or `computed_data`, and it is not an
-   admitted update; the client cannot read or write it. It coexists with the
+   admitted update; the client cannot read or write it. Decision 5 is the
+   one exception, and it is read-only. It coexists with the
    signed state model without interposing on it: the reconstruction pipeline
    is unchanged (component-system.md §4, "Hydration is framework-owned"), and
    the token remains the only authority for client-facing state.
+5. **A declared value may live in the session.** `step: int =
+   Glue.SessionAttr(0)`, a shortcut for `Glue.attr(0, session=True)`, declares
+   a value stored in the session under its own name. Reading it returns the
+   stored value or the declared default, and a read writes nothing. Assigning
+   it in a callable writes the session. It is the one way a session value
+   reaches the client, and only downward: it is sent as `computed_data`, the
+   same role as a `Glue.property`, so it is never signed into the token and
+   the client cannot write it. The session stays the only copy, so a stale
+   page cannot restore an old value. `session=True` is rejected with
+   `parameter`, `editable`, `render_as_html`, `skip_rerender` and
+   `glue_factory`, on a method or property, and on a class that is not a
+   component.
 
 ## Consequences
 
 - State that never crosses the wire has a home, and "no state engine" stays
   true where it matters: the signed, client-reconciled state that is the
   reactive system (component-system.md §3, overview.md objective).
+- Glue's protocol stays stateless between requests, as state-model.md §2 and
+  [ADR 028](028-formsets-edit-saved-records.md) rely on: reconstruction,
+  admission and authorization still read only the verified token, and no
+  Glue object other than a component that opts in touches the session. What
+  changes is that a component can now ask the host application's session to
+  remember something for it.
 - The state is per-user. The class-shared counter the cache iteration
   described now belongs in the database or the cache; a component that needs
   it must say so.
 - Writing scratch state for an anonymous user creates a session row, and a
   large value grows the session cookie or row. Scratch that is large or must
   survive session expiry belongs in the database.
-- The namespace is the unqualified `__qualname__`: two classes with the same
-  qualified name in different modules share one entry within a session.
+- Moving or renaming a component class changes its namespace, so its session
+  state starts over, as its signed identity does.
 - A failed call keeps the session writes it made before raising; callers that
   need all-or-nothing scratch state must manage it explicitly.
+- A session write never decides whether a component re-renders, as a
+  database write does not. A callable re-renders its component by default
+  (ADR 022), and that render sends the session attributes' current values.
+- A callable that does not re-render still sends a session attribute it
+  wrote. The session reports each key it sets or deletes to its component,
+  and a key that names a session attribute is included in that response's
+  `computed_data`, whether the callable assigned the attribute or wrote its
+  key through `self.session`. The markup is not rendered again, so only
+  client-side bindings to the value update.
+- Other mounted instances of the class share the entry and show their old
+  value until they render again; one that must follow lists an event the
+  writer emits in `rerender_on`.
+- A session attribute is shared by every instance of its class, unlike every
+  other declared value. A component stamped once per row should not declare
+  one for per-row state.
 
 ## Alternatives considered
 

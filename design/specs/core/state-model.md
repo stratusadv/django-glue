@@ -167,6 +167,12 @@ can survive is the token the client holds. Parameterized values go in
 `target.parameters`; non-parameterized reconstructors and server-acknowledged
 editable draft state go in `state_snapshot`.
 
+A component may also keep per-user state in the host application's Django
+session ([ADR 031](../../decisions/031-component-session.md),
+component-system.md "Server-side component state"). That store is the host's,
+not part of this model: the browser never carries it back, so it is not signed,
+and reconstruction, admission and authorization read only the token.
+
 **No** → it is a **derived output** or construction metadata. The server
 recomputes it or ignores it, so authenticity of the browser's copy is
 irrelevant because that copy is never read.

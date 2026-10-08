@@ -80,11 +80,15 @@
   queries for a form's foreign-key and unique fields still run per row
   (ADR 028).
 - `Component.session` is a mutable mapping of server-side scratch state,
-  scoped by the component class's qualified name and backed by the request's
-  Django session. A change marks the session modified, and Django saves it
-  when the request completes, so a request that changes nothing saves
-  nothing. The state is per-user, never signed, and never sent to the client
-  (ADR 026).
+  scoped by the component class's module-qualified name and backed by the
+  request's Django session. Setting or deleting a key marks the session
+  modified, and Django saves it when the request completes, so a request that
+  writes nothing saves nothing. The state is per-user, never signed, and
+  never sent to the client (ADR 031).
+- `Glue.SessionAttr(default)`, a shortcut for `Glue.attr(default, session=True)`,
+  declares a component value stored in the component's session. The client
+  reads it and cannot write it, a callable changes it by assignment, and it
+  survives a page load because the session, not the token, holds it (ADR 031).
 
 ### Deprecated
 
