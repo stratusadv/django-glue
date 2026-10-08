@@ -105,11 +105,15 @@
   request's Django session. Setting or deleting a key marks the session
   modified, and Django saves it when the request completes, so a request that
   writes nothing saves nothing. The state is per-user, never signed, and
-  never sent to the client (ADR 031).
+  never sent to the client. `DJANGO_GLUE_COMPONENT_SESSION_KEY_PREFIX`
+  (default `django_glue:component_session:`) sets the prefix of the session
+  keys it uses (ADR 031).
 - `Glue.SessionAttr(default)`, a shortcut for `Glue.attr(default, session=True)`,
   declares a component value stored in the component's session. The client
   reads it and cannot write it, a callable changes it by assignment, and it
-  survives a page load because the session, not the token, holds it (ADR 031).
+  survives a page load because the session, not the token, holds it. A
+  callable that does not re-render its component, such as one declared with
+  `skip_rerender=True`, still sends the session values it changed (ADR 031).
 
 ### Deprecated
 
@@ -140,6 +144,12 @@
   could set model fields the form did not expose on a new row, including the
   key of the record the row belongs to. A page that passed such a key declares
   `new_row_defaults` instead (ADR 028).
+- A formset accepts a submitted row only if that formset issued it. It
+  previously accepted a row issued by another formset with the same name, so a
+  user could delete a record through a formset where they held
+  `Glue.Access.DELETE` using a row from one where they held only `CHANGE`. A
+  page loaded before the upgrade keeps working: its rows carry no issuer check
+  until the page is loaded again (ADR 028).
 - Describing a form's foreign-key or many-to-many field no longer loads the whole
   related table. The rows were read and then discarded, once per relation field
   for every form and every formset row. What the client receives is unchanged.
