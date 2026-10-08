@@ -1,3 +1,292 @@
+# Migration Guide — v1.1 to v1.2
+
+v1.2 changes how a component is set up, when it re-renders, and how a formset
+saves. Models, querysets and forms registered with `Glue.model(...)`,
+`Glue.queryset(...)` and `Glue.form(...)` need no changes.
+
+Most of the removed names raise an error that names their replacement, when the
+class is defined or when Django starts, so they are hard to miss. The two
+changes that fail silently are
+[a parent no longer redraws its children](#a-parents-re-render-keeps-its-children)
+and [a formset saves nothing when a row is invalid](#formsets-save-all-rows-or-none).
+Check those by hand.
+
+Coming from v1.0? Do [v1.0 to v1.1](#migration-guide-v10-to-v11) below first.
+
+## At a glance
+
+| v1.1 | v1.2 |
+|---|---|
+| `get_view_kwargs(cls, request, **url_kwargs)` | `__post_init__(self, request)`, assigning parameters and `self.access` |
+| `get_context_data(self)` | `{{ component.<name> }}` in the template; `self.context_data` for page context |
+| `mount(self)` | `__post_init__(self, request)` (`mount` still runs, and warns) |
+| `layout_template` | `view_template` |
+| `return self.render()` from a callable | return nothing; the component re-renders by itself |
+| `await component.save()` then `await component.$refresh()` | `await component.save()` |
+| a parent's re-render redraws its children | the child declares `rerender_on`, or is stamped with `rerender_with_parent` |
+| `DJANGO_GLUE_COMPONENTS_ROOT = <root>` | `DJANGO_GLUE_COMPONENTS = {'DIRS': [<root>]}` |
+| `from django_glue.glue.component import Component` | `from django_glue.glue.components import Component` |
+| `formset.save()` saves the valid rows | saves every row or none |
+| `formset.append({'owner': pk})` for a field the form does not expose | `new_row_defaults={'owner': pk}` |
+| — | **new:** `Component.session` and `Glue.SessionAttr` |
+| — | **new:** `Glue.listener`, model parameters, formsets that edit saved records |
+
+## Components
+
+### One setup hook: `__post_init__`
+
+`get_view_kwargs()`, `mount()` and `get_context_data()` are replaced by one
+method, `__post_init__(self, request)`. It runs once, when the component first
+appears on a page, after the user is authorized and before the first render.
+
+```python
+# v1.1
+class WeekComponent(Glue.Component):
+    template = 'entries/week.html'
+    layout_template = 'entries/page.html'
+
+    week_of: datetime.date = Glue.ComponentParameter()
+    entry_count: int = Glue.attr(0)
+
+    @classmethod
+    def get_view_kwargs(cls, request, **url_kwargs):
+        return {'week_of': datetime.date.fromisoformat(request.GET['date'])}
+
+    def mount(self):
+        self.entry_count = TimeEntry.objects.in_week(self.week_of).count()
+
+    def get_context_data(self):
+        return {
+            **super().get_context_data(),
+            'page_title': f'Week of {self.week_of:%B %-d}',
+            'entries': TimeEntry.objects.in_week(self.week_of),
+        }
+
+# v1.2
+class WeekComponent(Glue.Component):
+    template = 'entries/week.html'
+    view_template = 'entries/page.html'
+
+    week_of: datetime.date | None = Glue.ComponentParameter(None)
+    entry_count: int = Glue.attr(0)
+
+    def __post_init__(self, request):
+        if self.week_of is None:
+            self.week_of = datetime.date.fromisoformat(request.GET['date'])
+
+        self.entry_count = TimeEntry.objects.in_week(self.week_of).count()
+        self.context_data['page_title'] = f'Week of {self.week_of:%B %-d}'
+
+    @cached_property
+    def entries(self):
+        return list(TimeEntry.objects.in_week(self.week_of))
+```
+
+Move each hook's code as follows:
+
+- **`get_view_kwargs`.** The component is now constructed before the hook
+  runs, so a parameter the request supplies needs a default. Assign it in
+  `__post_init__` when it was not passed. Set the access level there too, with
+  `self.access = Glue.Access.CHANGE`. A URL capture or `as_view()` argument
+  that is not a declared parameter arrives as a keyword of the hook:
+  `def __post_init__(self, request, pk: int)`.
+- **`mount`.** Rename it to `__post_init__(self, request)`. An overridden
+  `mount()` still runs, before `__post_init__`, and emits a
+  `DeprecationWarning`.
+- **`get_context_data`.** A component's template context on a re-render is
+  `component` alone. Read what the component's own template shows from the
+  component, and put what the page around it needs in `self.context_data`:
+
+```django
+{# v1.1 #}
+{% for entry in entries %}...{% endfor %}
+
+{# v1.2 #}
+{% for entry in component.entries %}...{% endfor %}
+```
+
+`context_data` exists for the first render and the view template only. A
+callable that changes it raises an error.
+
+A class that still defines `get_view_kwargs`, `get_context_data` or
+`layout_template` raises `TypeError` when it is defined.
+
+### `layout_template` is `view_template`
+
+Rename the class attribute and the `as_view()` argument:
+
+```python
+# v1.1
+path('cards/', CounterCardComponent.as_view(layout_template='cards/page.html'))
+
+# v1.2
+path('cards/', CounterCardComponent.as_view(view_template='cards/page.html'))
+```
+
+### A callable re-renders its component
+
+A successful component callable now re-renders its component in the same
+response. Remove the code that did it by hand:
+
+```python
+# v1.1
+@Glue.attr(required_access=Glue.Access.CHANGE)
+def confirm(self, transaction_id: int):
+    Transaction.objects.get(pk=transaction_id).confirm()
+    return self.render()
+
+# v1.2
+@Glue.attr(required_access=Glue.Access.CHANGE)
+def confirm(self, transaction_id: int) -> None:
+    Transaction.objects.get(pk=transaction_id).confirm()
+```
+
+```js
+// v1.1
+await component.confirm(id)
+await component.$refresh()
+
+// v1.2
+await component.confirm(id)
+```
+
+A callable that deletes the row its component shows would now fail while
+re-rendering it. Declare it with `skip_rerender=True`:
+
+```python
+@Glue.attr(required_access=Glue.Access.DELETE, skip_rerender=True)
+def delete_entry(self) -> None:
+    self.entry.delete()
+    Glue.event(self, 'deleted', {'pk': self.entry_id})
+```
+
+A callable whose declared result is a Glue object, such as one that returns a
+modal component, does not re-render either. `$refresh()` is still the way to
+redraw a component when data outside it changes.
+
+### A parent's re-render keeps its children
+
+In v1.1 a component that re-rendered stamped its children again, so they
+redrew with it. In v1.2 the children still on the page are kept as they are,
+with their state and Alpine data. **A child that relied on its parent to
+refresh it now shows what it last rendered**, and nothing raises.
+
+For each child that shows data another component changes, choose one:
+
+```python
+# The child names the events that change it.
+class CloseProgressComponent(Glue.Component):
+    template = 'close/component/close_progress.html'
+    rerender_on = (TransactionRowComponent.confirmed,)
+```
+
+```django
+{# Or the child renders with every render of its parent, keeping no state. #}
+{% glue_component 'entries/day' date=date key=date rerender_with_parent %}
+```
+
+A child stamped with different parameters is a new child and is rendered
+fresh, as before.
+
+### `DJANGO_GLUE_COMPONENTS_ROOT` is `DJANGO_GLUE_COMPONENTS`
+
+```python
+# v1.1
+DJANGO_GLUE_COMPONENTS_ROOT = BASE_DIR / 'app'
+
+# v1.2
+DJANGO_GLUE_COMPONENTS = {'DIRS': [BASE_DIR / 'app']}
+```
+
+A project that still sets the old name fails the system check
+`django_glue.E004`. A project that never set it needs no change: `DIRS`
+defaults to `[BASE_DIR]`. Installed apps are now searched as well, so a
+library's components resolve without configuration.
+
+### The component modules moved
+
+`Glue.Component` is unchanged. Only direct imports need updating:
+
+| v1.1 | v1.2 |
+|---|---|
+| `django_glue.glue.component` | `django_glue.glue.components.component` |
+| `django_glue.glue.component_registry` | `django_glue.glue.components.registry` |
+| `django_glue.glue.component_discovery` | `django_glue.glue.components.discovery` |
+| `django_glue.glue.component_naming` | `django_glue.glue.components.naming` |
+| `django_glue.glue.component_root` | `django_glue.glue.components.root` |
+| `django_glue.glue.component_tag` | `django_glue.glue.components.tag` |
+
+`Component` and `component_registry` also import from
+`django_glue.glue.components`.
+
+## Formsets
+
+### Formsets save all rows or none
+
+`await formset.save()` now validates every row first. **If any row is invalid,
+nothing is saved**; v1.1 saved the valid rows. A page that relied on a partial
+save needs to show the row errors and let the user save again.
+
+`save()` also no longer calls each row form's own `save`. It passes the
+validated Django forms to `save_forms`, so a form class that overrode `save` to
+write through a service moves that code to a `Glue.FormSet` subclass:
+
+```python
+class SkillFormSet(Glue.FormSet):
+    form_class = SkillForm
+
+    def save_forms(self, form_list):
+        for form in form_list:
+            form.instance.services.save_model_obj(**form.cleaned_data)
+```
+
+### `append(initial)` only takes fields the user can edit
+
+`await formset.append(initial)` rejects any key that is not a field the form
+lets a user edit. v1.1 accepted every key, so a browser could set any model
+field on a new row. Values the user must not choose, such as the key of the
+record the rows belong to, move to the server:
+
+```python
+# v1.1, in JavaScript: await formset.append({red_corner: gorillaId})
+
+# v1.2
+Glue.formset(
+    request,
+    'fights',
+    FightNameForm,
+    Glue.Access.DELETE,
+    new_row_defaults={'red_corner': gorilla.pk},
+)
+```
+
+## New in v1.2
+
+Nothing here is required to upgrade.
+
+- **Component sessions.** `self.session` is a per-user mapping kept in the
+  Django session, for state the client should not hold.
+  `step: int = Glue.SessionAttr(0)` declares a value stored there that the
+  client can read. See the
+  [components guide](guides/components.md#server-side-state-componentsession).
+- **Events between components.** `rerender_on` re-renders a component when
+  another emits an event, and `@Glue.listener` runs a method first. See
+  [declared events](guides/advanced/event_listeners.md).
+- **Model parameters.** `@Glue.ComponentParameter` on a method turns a signed
+  primary key into the row, so a parent can hand a loaded record to a child.
+- **Formsets that edit saved records.** `instances=` loads saved records as
+  rows, and removing one deletes it on the next `save()`. See the
+  [form guide](guides/form_glue.md#editing-saved-records).
+
+## In tests
+
+- A component constructed without a `name` is named after its class, as
+  `as_view()` already named it. A test that looked a component up under the
+  shared name `component` uses the class-derived name.
+- A component stamped by `{% glue_component %}` that `is_authorized()` denies
+  renders nothing instead of failing the page. A test that expected the page to
+  fail checks that the component is absent.
+
 # Migration Guide — v1.0 to v1.1
 
 v1.1 made **significant changes to the underlying state model** and **introduced
