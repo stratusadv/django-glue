@@ -29,14 +29,15 @@ from test_project.gorilla.models import Gorilla, Skill
 
 
 class GorillaCardComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     @Glue.ComponentParameter
     def gorilla(self, pk: int) -> Gorilla:
         return Gorilla.objects.filter(age__lt=60).annotate(loud_name=Upper('name')).get(pk=pk)
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': self.gorilla.loud_name}
+    @property
+    def greeting(self) -> str:
+        return self.gorilla.loud_name
 
     @Glue.attr
     def rename(self) -> None:
@@ -262,14 +263,15 @@ class Primate(models.Model):
 
 
 class NamedRowComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     @Glue.ComponentParameter
     def row(self, model: type[models.Model], pk: int) -> models.Model:
         return model._default_manager.get(pk=pk)
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': self.row.name}
+    @property
+    def greeting(self) -> str:
+        return self.row.name
 
     @Glue.attr
     def show(self, model: str, pk: int) -> None:
@@ -277,14 +279,15 @@ class NamedRowComponent(Component):
 
 
 class YoungGorillaCardComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     @Glue.ComponentParameter
     def gorilla(self, model: type[Gorilla], pk: int) -> Gorilla:
         return model._default_manager.filter(age__lt=60).get(pk=pk)
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': self.gorilla.name}
+    @property
+    def greeting(self) -> str:
+        return self.gorilla.name
 
 
 @pytest.fixture
@@ -455,7 +458,7 @@ def test_dataclass_parameter_holding_a_model_is_rejected(db) -> None:
 
 
 class GorillaEditorComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     starting_age: int = Glue.ComponentParameter()
 
@@ -465,8 +468,9 @@ class GorillaEditorComponent(Component):
             return Gorilla(name='New gorilla', age=self.starting_age)
         return Gorilla.objects.get(pk=pk)
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': f'{self.gorilla.name}, {self.gorilla.age}'}
+    @property
+    def greeting(self) -> str:
+        return f'{self.gorilla.name}, {self.gorilla.age}'
 
     @Glue.attr
     def save(self) -> None:
@@ -557,7 +561,7 @@ class GorillaSeed:
 
 
 class SeededGorillaEditorComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     seed: GorillaSeed | None = Glue.ComponentParameter(None)
     extras: dict[str, Any] = Glue.ComponentParameter(default_factory=dict)
@@ -568,8 +572,9 @@ class SeededGorillaEditorComponent(Component):
             return Gorilla(name=self.seed.name, description=f'Born {self.seed.born:%Y}', **self.extras)
         return Gorilla.objects.get(pk=pk)
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': f'{self.gorilla.name}, {self.gorilla.description}, {self.gorilla.age}'}
+    @property
+    def greeting(self) -> str:
+        return f'{self.gorilla.name}, {self.gorilla.description}, {self.gorilla.age}'
 
     @Glue.attr
     def look(self) -> None:

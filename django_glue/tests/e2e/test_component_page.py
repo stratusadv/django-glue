@@ -38,7 +38,7 @@ def test_component_formset_child_edits_and_deletes_the_owners_records(
     alpha = seeded_gorillas['alpha']
     Fight.objects.create(name='Alpha vs Gamma', red_corner=alpha, blue_corner=seeded_gorillas['gamma'])
 
-    page.goto(application.url('gorilla:fights_editor', {'pk': alpha.pk}))
+    page.goto(application.url('gorilla:fights_editor', {'gorilla': alpha.pk}))
     page.wait_for_function('window.Glue && window.Alpine')
 
     editor = page.get_by_test_id('fights-editor')
@@ -68,7 +68,7 @@ def test_component_callable_keeps_the_formset_childs_unsaved_changes(
     alpha = seeded_gorillas['alpha']
     Fight.objects.create(name='Alpha vs Gamma', red_corner=alpha, blue_corner=seeded_gorillas['gamma'])
 
-    page.goto(application.url('gorilla:fights_editor', {'pk': alpha.pk}))
+    page.goto(application.url('gorilla:fights_editor', {'gorilla': alpha.pk}))
     page.wait_for_function('window.Glue && window.Alpine')
 
     editor = page.get_by_test_id('fights-editor')
@@ -106,7 +106,7 @@ def test_component_formset_child_creates_a_row_under_its_owner(
     seeded_gorillas: dict,
 ) -> None:
     alpha = seeded_gorillas['alpha']
-    page.goto(application.url('gorilla:fights_editor', {'pk': alpha.pk}))
+    page.goto(application.url('gorilla:fights_editor', {'gorilla': alpha.pk}))
     page.wait_for_function('window.Glue && window.Alpine')
 
     editor = page.get_by_test_id('fights-editor')

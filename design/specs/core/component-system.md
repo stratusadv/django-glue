@@ -110,8 +110,10 @@ class TimeEntryDay(Glue.Component):
 ```
 
 - The template path is declared on the class, with a constructor override.
-- The render context comes from `get_context_data()`, which by default
-  exposes the component instance.
+- The render context is the component instance, as `component`. The first
+  render also receives the page context the component added to
+  `self.context_data` in `__post_init__()`
+  ([ADR 030](../../decisions/030-component-post-init.md)).
 - **Rendering is state-first.** A component is server-rendered at mount.
   Steady-state updates flow through state and Alpine bindings, exactly as the
   dashboard works today. `render()` exists for mount and for dynamic insertion
@@ -273,35 +275,83 @@ component transition must be atomic, one component callable owns the complete
 operation. Glue never copies child draft state into the parent or automatically
 refreshes an owner on every child update.
 
-#### Mount
+#### Post-init
 
-`mount()` is the single initial-introduction hook for a component. Glue calls
+`__post_init__(request, **kwargs)` is the single initial-introduction hook for
+a component ([ADR 030](../../decisions/030-component-post-init.md)). Glue calls
 it after the generated constructor has assigned declared parameters and state
-defaults, and after the component has been bound to the current request, but
-before issuing its first policy token and rendering its initial HTML.
+defaults, and after the component has been authorized for the current request
+and bound to it, but before issuing its first policy token and rendering its
+initial HTML. It is where an application validates the component and sets it
+up.
 
 ```python
 class EntryEditor(Glue.Component):
     entry_id: int = Glue.attr(parameter=True)
     draft_title: str = Glue.attr('')
 
-    def mount(self):
+    def __post_init__(self, request):
         self.draft_title = Entry.objects.values_list('title', flat=True).get(
             pk=self.entry_id,
         )
 ```
 
-Glue does not call `mount()` when reconstructing an object from a verified
-token, advancing its token after an action, or rendering a parent that retains
-the already-mounted child. It runs again only when a component is genuinely
-introduced again: after removal, on a new page load, or when an expired child
-is reintroduced through its owner (`state-model.md` §10). Consequently it is
-suitable for producing initial retained state, but not for exactly-once durable
-side effects: browsers can reload and initial responses can be retried.
+The hook may do four things:
+
+- **Assign retained state.** A value a later action reads must be assigned to
+  a declared attribute, because a later action runs on an instance rebuilt
+  from the token, on which the hook did not run.
+- **Fill a defaulted parameter from the request.** The first token signs the
+  value the hook leaves, so a hook guards with the default to keep a value a
+  parent stamped.
+- **Set the access level.** The component is first authorized at the level it
+  was constructed with, `VIEW` when none was given. When the hook assigns a
+  different `self.access`, Glue caps it at the access of the component whose
+  callable returned this one, if any, and authorizes the `introduce` operation
+  again at the new level. A denial unbinds the component and is handled as an
+  initial denial is.
+- **Add page context.** Values added to `self.context_data` join the template
+  context of the first render: the component's own first render, the template
+  the tag renders into, and the view template around a URL view. They are not
+  signed and not kept. A component rebuilt for a later action starts with an
+  empty `context_data`, and a callable or listener that changes it fails, so
+  what the component's own template shows comes from the component: its
+  attributes, properties, and cached properties.
+
+**Init-only values.** A value passed to the constructor under a name that is
+not a declared parameter is an init-only value: Glue holds it until
+introduction and passes it to the keyword of `__post_init__` with that name.
+URL captures, `as_view()` arguments, template-tag arguments, and a constructor
+call all supply them the same way. An init-only value is not signed and does
+not exist after the hook returns. A name that is neither a declared parameter
+nor a keyword of the class's `__post_init__` fails construction as an unknown
+parameter; a hook that takes `**kwargs` accepts any name. A template tag hashes
+the init-only values it stamps into the child's address with the parameters and
+access (ADR 025), so they must be JSON-serializable there.
+
+```python
+class GorillaCard(Glue.Component):
+    name: str = Glue.attr('')
+
+    def __post_init__(self, request, pk: int):
+        self.name = Gorilla.objects.values_list('name', flat=True).get(pk=pk)
+```
+
+`mount()` is deprecated in 1.2.0 and will be removed in a future version. An
+overridden `mount()` still runs, before `__post_init__`, and warns.
+
+Glue does not call `__post_init__()` when reconstructing an object from a
+verified token, advancing its token after an action, or rendering a parent that
+retains the already-mounted child. It runs again only when a component is
+genuinely introduced again: after removal, on a new page load, or when an
+expired child is reintroduced through its owner (`state-model.md` §10).
+Consequently it is suitable for producing initial retained state, but not for
+exactly-once durable side effects: browsers can reload and initial responses
+can be retried.
 
 Reintroduction reruns the factory and authorizes the result from scratch, so it
-also reruns `mount()`: retained state the client cannot edit restarts from
-`mount()`'s output, while the client's editable draft, Alpine scope, and
+also reruns `__post_init__()`: retained state the client cannot edit restarts
+from the hook's output, while the client's editable draft, Alpine scope, and
 request queue survive at the same address and the draft is resubmitted as
 ordinary `updates`. Recovering retained state from the expired token instead
 would honor a token past its fixed lifetime (ADR 013). Livewire makes the same
@@ -312,16 +362,16 @@ remounts every component; reintroduction is the narrower form of that reload.
 Introduction is one framework step for every Glue family, not a component
 special case: `introduce(request)` authorizes the `introduce` operation and
 binds the object to the request, and `Component` extends it by calling
-`mount()`. Page roots, child slots, callable results, and reintroduced
+`__post_init__()`. Page roots, child slots, callable results, and reintroduced
 children all introduce through it. A denied page root is an error, a denied
 callable result fails its entry with `not_authorized`, and a denied child is
 omitted and stays unbound.
 
 The generated `__init__` remains framework-owned and may run during server
 reconstruction. Glue does not bypass normal Python construction with
-`__new__`, and developer code does not use `__init__` as a hidden mount hook.
+`__new__`, and developer code does not use `__init__` as a hidden setup hook.
 Database-derived values that need no retained continuity remain
-`@Glue.property` rather than being copied into state by `mount()`.
+`@Glue.property` rather than being copied into state by `__post_init__()`.
 
 #### Hydration is framework-owned
 
@@ -356,9 +406,8 @@ components a second reconstruction mechanism.
 Request access has two complementary contracts, not one:
 
 - **`self.request` is the bound-object contract.** Every `BaseGlue` is bound to
-  the current request before `mount()`, before any property is derived, and
-  before any callable runs. `@Glue.property`, `get_context_data()`, and adapter
-  configuration read `self.request` directly — a property has no parameters to
+  the current request before `__post_init__()`, before any property is derived,
+  and before any callable runs. `@Glue.property` and adapter configuration read `self.request` directly — a property has no parameters to
   inject into, so this is the only available path and it is public API.
 - **Server injection is the callable-argument contract.** A callable declares
   `request: HttpRequest` (or another registered injected type) and receives it as
@@ -542,42 +591,45 @@ A component class may be the target of a Django URL pattern:
 ```python
 path('cards/<int:start>/', CounterCard.as_view(), name='card-fragment')
 path('cards/<int:start>/page/', CounterCard.as_view(
-    layout_template='gorilla/page/card.html',
+    view_template='gorilla/page/card.html',
 ), name='card-page')
 ```
 
 `as_view()` serves safe HTTP requests through Django's ordinary URL and
 middleware path. Named URL captures supply declared component parameters;
 constructor defaults passed to `as_view()` supply parameters not captured by
-the route.
+the route. A capture or argument that is not a declared parameter is an
+init-only value for `__post_init__()`.
 
-A page whose parameters or access depend on the request is an ordinary Django
-view that constructs the component and returns `component.as_page(request)`
-(ADR 023). `as_page()` is the response `as_view()` produces, for a component the
-application built: the view's decorators, query parsing, and permission checks
-stay in Django's view layer, and the constructor call is the only construction
-contract. `as_page(layout_template=...)` overrides the class's layout template
-as `as_view()` does. A component constructed without a `name` is named from its
-class, so both paths produce the same root address. `get_view_kwargs()`, which
-returned constructor kwargs as a dict, is deprecated in 1.2.0 and will be
-removed in a future version.
+A page whose parameters, access, or page context depend on the request derives
+them in `__post_init__(request)`
+([ADR 030](../../decisions/030-component-post-init.md)): it fills defaulted
+parameters, assigns `self.access`, and adds to `self.context_data`. The
+constructor call `as_view()` makes is the only construction contract.
+`get_view_kwargs()`, which returned constructor kwargs as a dict, and
+`as_page()`, which responded with a component a view had constructed (ADR 023),
+are removed in 1.2.0. A class that still defines `get_view_kwargs()` fails when
+it is defined.
 
-Either way, the component is introduced and mounted once before rendering, with
-the same signed root address and child entries as a template-tag stamp. Unknown
-or missing parameters retain the component's normal constructor errors.
+The component is introduced once before rendering, with the same signed root
+address and child entries as a template-tag stamp. Unknown or missing
+parameters retain the component's normal constructor errors, and an
+authorization denial at introduction responds 403.
 
-A component's layout template comes from its `layout_template` class attribute,
-and `as_view(layout_template=...)` overrides it for one URL, in the way Django's
-`as_view()` keyword arguments override class attributes. Without a layout
+A component's view template comes from its `view_template` class attribute,
+and `as_view(view_template=...)` overrides it for one URL, in the way Django's
+`as_view()` keyword arguments override class attributes. Without a view
 template, the response is the component's declared template as an HTML
-fragment, including its addressed root. With one, the response is the layout
-template, rendered with the component in its context:
-the layout contains the component, and the no-argument `{% glue_component %}`
-tag marks where it renders, using its declared template. Outside a component
-view, that tag form raises an error. A layout template includes
-`{% django_glue_init %}` to boot the client.
+fragment, including its addressed root. With one, the response is the view
+template, rendered with the component and its `context_data` in its context:
+the view template contains the component, and the no-argument
+`{% glue_component %}` tag marks where it renders, using its declared template.
+Outside a component view, that tag form raises an error. A view template
+includes `{% django_glue_init %}` to boot the client. `view_template` was named
+`layout_template` in 1.1; a class that still defines `layout_template` fails
+when it is defined.
 
-A layout template does not replace the component's `template`. The component
+A view template does not replace the component's `template`. The component
 always renders with its declared template, so later `render()` calls return
 the same component fragment rather than a whole page. `template=` is
 deliberately not an `as_view()` argument: a per-view override of the
@@ -1020,7 +1072,8 @@ are discarded individually.
 
 Existing references to the disposed proxy become tombstones and reject later
 calls rather than silently targeting a future object. Reintroducing the same
-canonical address creates a new proxy generation and calls `mount()` again.
+canonical address creates a new proxy generation and calls `__post_init__()`
+again.
 This prevents an old response from patching a new client incarnation at the
 same address without weakening the one-live-proxy-per-address invariant.
 

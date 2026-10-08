@@ -62,10 +62,10 @@ class SessionAutoComponent(Component):
         pass
 
 
-class SessionMountComponent(Component):
+class SessionPostInitComponent(Component):
     template = 'glue_template_test.html'
 
-    def mount(self) -> None:
+    def __post_init__(self, request: HttpRequest) -> None:
         self.session['mounted'] = True
 
 
@@ -106,7 +106,7 @@ class SessionAttrComponent(Component):
 class SessionSecretComponent(Component):
     template = 'glue_template_test.html'
 
-    def mount(self) -> None:
+    def __post_init__(self, request: HttpRequest) -> None:
         self.session['session-secret-mounted'] = 'session-secret-value'
 
     @Glue.attr
@@ -298,10 +298,10 @@ def test_session_value_survives_to_a_second_request(
     assert fresh.session['last'] == 'recorded'
 
 
-def test_mount_write_is_visible_on_introduction(mock_request: HttpRequest) -> None:
-    Glue.object(mock_request, SessionMountComponent())
+def test_post_init_write_is_visible_on_introduction(mock_request: HttpRequest) -> None:
+    Glue.object(mock_request, SessionPostInitComponent())
 
-    assert stored(mock_request, SessionMountComponent)['mounted'] is True
+    assert stored(mock_request, SessionPostInitComponent)['mounted'] is True
 
 
 def test_callable_write_reaches_the_session(mock_request: HttpRequest) -> None:

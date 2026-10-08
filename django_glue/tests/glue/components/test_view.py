@@ -7,18 +7,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import PermissionDenied
 from django.template import Context, Template
 from django.urls import reverse
 
-from django_glue import Glue
 from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.policy import GluePolicy
 from test_project.gorilla.components import (
     CounterCardComponent,
     LaidOutCounterCardComponent,
-    ProtectedCounterCardComponent,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +40,7 @@ def test_component_url_renders_an_addressed_fragment_from_url_parameters(client:
     assert '<html' not in html
 
 
-def test_layout_template_renders_the_component_inside_a_full_page(client: Client) -> None:
+def test_view_template_renders_the_component_inside_a_full_page(client: Client) -> None:
     response = client.get(reverse('gorilla:component_card_page', kwargs={'start': 9}))
 
     assert response.status_code == 200
@@ -55,7 +51,7 @@ def test_layout_template_renders_the_component_inside_a_full_page(client: Client
     assert 'id="django-glue-context"' in html
 
 
-def test_layout_template_class_attribute_is_the_default_layout(client: Client) -> None:
+def test_view_template_class_attribute_is_the_default_view_template(client: Client) -> None:
     response = client.get(reverse('gorilla:component_laid_out_card', kwargs={'start': 9}))
 
     assert response.status_code == 200
@@ -64,7 +60,7 @@ def test_layout_template_class_attribute_is_the_default_layout(client: Client) -
     assert response.content.decode().count('data-testid="counter-card"') == 1
 
 
-def test_as_view_layout_template_overrides_the_class_attribute(client: Client) -> None:
+def test_as_view_view_template_overrides_the_class_attribute(client: Client) -> None:
     response = client.get(reverse('gorilla:component_laid_out_card_alt', kwargs={'start': 9}))
 
     assert response.status_code == 200
@@ -103,39 +99,6 @@ def test_component_authorization_allows_authenticated_page(client: Client) -> No
     assert 'data-testid="counter-card"' in response.content.decode()
 
 
-def test_as_page_renders_a_constructed_component_as_a_fragment(mock_request) -> None:
-    response = CounterCardComponent(start=4).as_page(mock_request)
-
-    html = response.content.decode()
-    assert response.status_code == 200
-    assert 'data-testid="counter-card"' in html
-    assert '<html' not in html
-
-
-def test_as_page_renders_the_class_layout_template(mock_request) -> None:
-    response = LaidOutCounterCardComponent(start=4).as_page(mock_request)
-
-    html = response.content.decode()
-    assert '<html' in html
-    assert html.count('data-testid="counter-card"') == 1
-
-
-def test_as_page_layout_template_argument_overrides_the_class_attribute(mock_request) -> None:
-    response = LaidOutCounterCardComponent(start=4).as_page(
-        mock_request,
-        layout_template='gorilla/page/component_card_alt_page.html',
-    )
-
-    assert 'data-testid="alt-layout"' in response.content.decode()
-
-
-def test_as_page_denial_raises_permission_denied(mock_request) -> None:
-    mock_request.user = AnonymousUser()
-
-    with pytest.raises(PermissionDenied):
-        ProtectedCounterCardComponent(start=4).as_page(mock_request)
-
-
 def test_unnamed_component_is_named_after_its_class() -> None:
     first = CounterCardComponent(start=1)
     second = CounterCardComponent(start=2)
@@ -145,18 +108,24 @@ def test_unnamed_component_is_named_after_its_class() -> None:
     assert LaidOutCounterCardComponent(start=1).name.startswith('laid_out_counter_card_')
 
 
-def test_overriding_get_view_kwargs_is_deprecated_but_still_used(mock_request) -> None:
-    with pytest.warns(DeprecationWarning, match='as_page'):
+def test_defining_the_renamed_layout_template_fails_at_class_definition() -> None:
+    with pytest.raises(TypeError, match='view_template'):
+        class LegacyLaidOutComponent(CounterCardComponent):
+            layout_template = 'gorilla/page/component_card_page.html'
+
+
+def test_defining_the_removed_get_view_kwargs_fails_at_class_definition() -> None:
+    with pytest.raises(TypeError, match='__post_init__'):
         class LegacyRequestCardComponent(CounterCardComponent):
             @classmethod
             def get_view_kwargs(cls, request, **url_kwargs):
-                return {**url_kwargs, 'start': 13, 'access': Glue.Access.CHANGE}
+                return url_kwargs
 
-    response = LegacyRequestCardComponent.as_view()(mock_request)
 
-    policy = _root_policy(response.content.decode())
-    assert policy.identity['parameters']['start'] == 13
-    assert policy.access == 'change'
+def test_a_url_capture_overrides_the_same_as_view_parameter(mock_request) -> None:
+    response = CounterCardComponent.as_view(start=1)(mock_request, start=13)
+
+    assert _root_policy(response.content.decode()).identity['parameters']['start'] == 13
 
 
 def _root_policy(html: str) -> GluePolicy:

@@ -1,6 +1,6 @@
 # ADR 023: Serve a Constructed Component with `as_page()`; Deprecate `get_view_kwargs`
 
-Status: Accepted; implemented on branch
+Status: Superseded by [ADR 030](030-component-post-init.md)
 
 Date: 2026-09-29
 

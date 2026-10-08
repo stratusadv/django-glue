@@ -10,7 +10,7 @@ from django.template import Context, Template, TemplateSyntaxError
 from django.test import RequestFactory
 
 from django_glue import Glue
-from django_glue.exceptions import GlueComponentKeyError
+from django_glue.exceptions import GlueComponentKeyError, GlueComponentParameterError
 from django_glue.glue.components.component import MOUNTED_CHILDREN_CONTEXT_KEY
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
@@ -80,6 +80,29 @@ def test_a_stamped_childs_address_changes_with_its_parameters(mock_request) -> N
     [second] = _card_addresses(later)
 
     assert first != second
+
+
+GREETING_CARD = (
+    "{% glue_component 'gorilla/greeting_counter_card' start=1 visitor=visitor key='card' %}"
+)
+
+
+def _root_address(html: str) -> str:
+    return html.split('data-glue-address="', 1)[1].split('"', 1)[0]
+
+
+def test_a_stamped_childs_address_changes_with_a_value_passed_to_post_init(mock_request) -> None:
+    first = _root_address(_stamp(mock_request, GREETING_CARD, visitor='Koko'))
+    same = _root_address(_stamp(_later_request(mock_request), GREETING_CARD, visitor='Koko'))
+    changed = _root_address(_stamp(_later_request(mock_request), GREETING_CARD, visitor='Harambe'))
+
+    assert first == same
+    assert first != changed
+
+
+def test_a_value_stamped_for_post_init_must_be_serializable(mock_request) -> None:
+    with pytest.raises(GlueComponentParameterError, match='JSON-serializable'):
+        _stamp(mock_request, GREETING_CARD, visitor=object())
 
 
 def test_a_mounted_child_renders_a_placeholder_and_is_not_introduced(mock_request) -> None:

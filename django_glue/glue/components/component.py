@@ -61,6 +61,24 @@ def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
 
 
 @cache
+def _post_init_keywords(component_class: type[Component]) -> tuple[frozenset[str], bool]:
+    """
+    The keyword names ``__post_init__`` takes beyond the request, and whether
+    it takes any keyword through ``**kwargs``.
+    """
+    signature = inspect.signature(component_class.__post_init__)
+    hook_parameters = list(signature.parameters.values())[2:]
+    return (
+        frozenset(
+            parameter.name
+            for parameter in hook_parameters
+            if parameter.kind in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY)
+        ),
+        any(parameter.kind is parameter.VAR_KEYWORD for parameter in hook_parameters),
+    )
+
+
+@cache
 def _reactions(component_class: type[Component]) -> dict[str, list[str]]:
     """The identities of the events a class re-renders on and listens for, as
     its static data publishes them (ADR 024, ADR 025); empty lists omitted."""
@@ -88,7 +106,7 @@ def _event_identities(component_class: type[Component]) -> dict[str, str]:
 class Component(BaseGlue):
     namespace: ClassVar[str] = 'component'
     template: str | None = None
-    layout_template: str | None = None
+    view_template: str | None = None
     rerender_on: ClassVar[tuple[GlueEvent, ...]] = ()
     _glue_listeners: ClassVar[dict[str, GlueListener]] = {}
 
@@ -137,10 +155,25 @@ class Component(BaseGlue):
         if cls.template is not None:
             component_registry.register(cls)
         if 'get_view_kwargs' in cls.__dict__:
+            message = (
+                f'{cls.__name__}.get_view_kwargs() was removed and is never called. Derive '
+                'request-dependent parameters and access in __post_init__() instead.'
+            )
+            raise TypeError(message)
+        if 'get_context_data' in cls.__dict__:
+            message = (
+                f'{cls.__name__}.get_context_data() was removed and is never called. Read what '
+                "the component's template shows from the component, and add page context to "
+                'self.context_data in __post_init__().'
+            )
+            raise TypeError(message)
+        if 'layout_template' in cls.__dict__:
+            message = f'{cls.__name__}.layout_template was renamed to view_template.'
+            raise TypeError(message)
+        if 'mount' in cls.__dict__:
             warnings.warn(
-                f'{cls.__name__}.get_view_kwargs() is deprecated and will be removed in '
-                'a future version of django-glue. Construct the component in a view function '
-                'and return component.as_page(request) instead.',
+                f'{cls.__name__}.mount() is deprecated and will be removed in a future '
+                'version of django-glue. Rename it to __post_init__().',
                 DeprecationWarning,
                 # Past __init_subclass__ and ABCMeta.__new__ to the class statement.
                 stacklevel=3,
@@ -163,7 +196,11 @@ class Component(BaseGlue):
         **parameters: Any,
     ) -> None:
         declared = self._declared_parameters()
-        unknown = parameters.keys() - declared.keys()
+        accepted, accepts_any = _post_init_keywords(type(self))
+        self._post_init_kwargs: dict[str, Any] = {
+            key: parameters.pop(key) for key in parameters.keys() - declared.keys()
+        }
+        unknown = set() if accepts_any else self._post_init_kwargs.keys() - accepted
         if unknown:
             raise GlueComponentParameterError(
                 f'Unknown parameters for {type(self).__name__}: {sorted(unknown)}'
@@ -184,6 +221,8 @@ class Component(BaseGlue):
         super().__init__(name=name, access=access)
         self._ancestors: tuple[str, ...] = ()
         self._mounted_children: frozenset[str] = frozenset()
+        self._access_ceiling: GlueAccess | None = None
+        self.context_data: dict[str, Any] = {}
 
         if not self.template:
             msg = f'{type(self).__name__} must declare a template path.'
@@ -292,61 +331,119 @@ class Component(BaseGlue):
         static_data.update(_reactions(type(self)))
         return static_data
 
+    def cap_access(self, ceiling: GlueAccess) -> None:
+        self._access_ceiling = ceiling
+        super().cap_access(ceiling)
+
     def introduce(self, request: HttpRequest) -> None:
         super().introduce(request)
+        introduced_access = self.access
         self.mount()
+        self.__post_init__(request, **self._post_init_kwargs)
+
+        if self.access == introduced_access:
+            return
+
+        if self._access_ceiling is not None:
+            super().cap_access(self._access_ceiling)
+        operation = GlueOperation(
+            kind=GlueOperationKind.INTRODUCE,
+            attribute=None,
+            required_access=self.access,
+        )
+        if not self.is_authorized(request, operation):
+            self.request = None
+            raise GlueAuthorizationError(object_name=self.name, operation=operation)
 
     def mount(self) -> None:
         pass
 
-    def get_context_data(self) -> dict[str, Any]:
-        return {'component': self}
-
-    @classmethod
-    def get_view_kwargs(cls, request: HttpRequest, **url_kwargs: Any) -> dict[str, Any]:
-        """Deprecated (ADR 023): construct the component in a view and call `as_page()`."""
-        _ = request
-        return url_kwargs
-
-    def as_page(self, request: HttpRequest, *, layout_template: str | None = None) -> HttpResponse:
-        """Respond to ``request`` with this component (ADR 023).
-
-        The component is introduced and mounted, then rendered inside the layout
-        template (the argument, else the class's ``layout_template``), or alone as
-        a fragment when there is none. A denial at introduction responds 403.
+    def __post_init__(self, request: HttpRequest) -> None:
         """
-        layout = layout_template if layout_template is not None else self.layout_template
-        try:
-            GlueContextManager(request).add_glue(self)
-            if layout is not None:
-                return render_template(
-                    request,
-                    layout,
-                    {
-                        **self.get_context_data(),
-                        VIEW_COMPONENT_CONTEXT_KEY: self,
-                    },
-                )
-            return HttpResponse(self.render().html)
-        except GlueAuthorizationError as error:
-            raise PermissionDenied from error
+        Validate and set up the component when it first appears on a page.
+
+        Runs once per introduction, after the parameters are assigned and the
+        component is authorized for ``request`` and bound to it, and before its
+        first policy token and HTML are produced. It does not run when a later
+        action rebuilds the component from its token, so a value a later
+        action reads must be assigned to a declared attribute.
+
+        A subclass may add keyword parameters after ``request``. A value a URL
+        capture, ``as_view()`` or the template tag passes under a name that is
+        not a declared parameter is given to the matching keyword, and is
+        neither signed nor kept after this call.
+
+        Assigning ``self.access`` here sets the level the component is signed
+        with. A changed level is capped at the level of the component whose
+        callable returned this one, then authorized again.
+
+        Values added to ``self.context_data`` here join the template context
+        of this first render and of the view template around it. They are
+        not kept for later renders, so what the component's own template
+        shows must come from the component.
+        """
+
+    def _template_context(self) -> dict[str, Any]:
+        return {**self.context_data, 'component': self}
+
+    def _run_call(
+        self,
+        call_context: AttributeCallRequestContext,
+        invoke: Callable[[], Any],
+        *,
+        render_as_html: bool = False,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """
+        Refuse a call that changed ``context_data``: the next render is built
+        from the token, which does not carry it.
+        """
+        context_data = dict(self.context_data)
+        result = super()._run_call(call_context, invoke, render_as_html=render_as_html)
+
+        if self.context_data != context_data:
+            message = (
+                f'{type(self).__name__}.{call_context.target_attribute_name}() changed '
+                'context_data, which only __post_init__() may do: it is not kept for later '
+                'renders. Read what the template shows from the component instead.'
+            )
+            raise RuntimeError(message)
+
+        return result
 
     @classmethod
     def as_view(
         cls,
         *,
-        layout_template: str | None = None,
+        view_template: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         **parameters: Any,
     ) -> Callable[..., HttpResponse]:
+        """
+        Build a view that responds to a safe request with this component.
+
+        URL captures and ``parameters`` construct the component. It is
+        introduced, then rendered inside the view template (the argument,
+        else the class's ``view_template``), or alone as a fragment when
+        there is none. A denial at introduction responds 403.
+        """
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
-            view_kwargs = cls.get_view_kwargs(
-                request,
-                **{**parameters, **url_parameters},
-            )
-            component = cls(access=view_kwargs.pop('access', access), **view_kwargs)
-            return component.as_page(request, layout_template=layout_template)
+            component = cls(access=access, **{**parameters, **url_parameters})
+            page_template = view_template if view_template is not None else component.view_template
+            try:
+                GlueContextManager(request).add_glue(component)
+                if page_template is not None:
+                    return render_template(
+                        request,
+                        page_template,
+                        {
+                            **component._template_context(),
+                            VIEW_COMPONENT_CONTEXT_KEY: component,
+                        },
+                    )
+                return HttpResponse(component.render().html)
+            except GlueAuthorizationError as error:
+                raise PermissionDenied from error
 
         return view
 
@@ -549,7 +646,7 @@ class Component(BaseGlue):
             request=request,
             template=self.template,
             context={
-                **self.get_context_data(),
+                **self._template_context(),
                 MOUNTED_CHILDREN_CONTEXT_KEY: self._mounted_children,
             },
         )

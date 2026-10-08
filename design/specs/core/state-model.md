@@ -2040,7 +2040,7 @@ existing proxy, editable draft, Alpine scope, and request queue* applies. The
 client keeps the user's work and receives a fresh token for it.
 
 The reintroduced object is a new introduction on the server: its retained
-state comes from the factory and, for a component, from `mount()`, never from
+state comes from the factory and, for a component, from `__post_init__()`, never from
 the expired token. Retained state the client cannot edit therefore restarts,
 and the client's editable draft reaches the fresh object as ordinary `updates`
 on its next call. Reading state out of the expired token would honor it past

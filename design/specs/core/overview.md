@@ -231,7 +231,7 @@ signed `questionnaire_id` parameter selects the workflow. Its
 `current_question_id` is bare server-owned state: after an answer is saved, the
 database-derived "next unanswered" question changes immediately, while the UI
 must continue showing the answered question and its percentages until the user
-explicitly advances. `mount()` chooses the initial question,
+explicitly advances. `__post_init__()` chooses the initial question,
 `submit_answer(choice)` records against the retained question, and
 `next_question()` advances it.
 

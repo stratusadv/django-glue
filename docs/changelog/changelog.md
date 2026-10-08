@@ -28,6 +28,18 @@
 - A formset's `save()` saves nothing when any row is invalid. It previously
   saved the valid rows. It also no longer calls each row's own `save`; it
   validates the rows and passes their Django forms to `save_forms` (ADR 028).
+- `Component.get_view_kwargs()` is removed. Give a request-derived parameter a
+  default and fill it in `__post_init__(request)`, and set `self.access` there.
+  A class that still defines it raises `TypeError` when it is defined
+  (ADR 030).
+- `Component.get_context_data()` is removed, and a component's template context
+  on a re-render is `component` alone. Read what the template shows from the
+  component, as `{{ component.entries }}`, and add page context such as
+  navigation to `self.context_data` in `__post_init__()`. A class that still
+  defines it raises `TypeError` when it is defined (ADR 030).
+- `layout_template` is renamed `view_template`, as a class attribute and as an
+  `as_view()` argument. A class that still defines `layout_template` raises
+  `TypeError` when it is defined (ADR 030).
 
 ### Features
 
@@ -48,9 +60,18 @@
   record. One component can therefore create a record or edit one (ADR 029).
 - Component parameters are encoded through their annotation's adapter, so
   dataclass parameters are signed and restored (ADR 021).
-- `component.as_page(request)` responds with a component the application
-  constructed, so a page whose parameters depend on the request is an ordinary
-  view. `as_view()` now builds on it (ADR 023).
+- `__post_init__(self, request, **kwargs)` is the one hook that validates and
+  sets up a component. It runs once when the component first appears on a
+  page, after the user is authorized and before the first render (ADR 030):
+    - Assigning `self.access` sets the level the component is signed with. A
+      changed level is authorized again, and a component returned from a
+      callable is capped at its caller's level.
+    - Values added to `self.context_data` join the template context of the
+      first render and of the view template. They are not kept, and a callable
+      that changes `context_data` raises an error.
+    - A URL capture, `as_view()` argument, or template-tag argument that is not
+      a declared parameter is passed to the keyword of `__post_init__` with
+      that name. It is not signed.
 - A component's `rerender_on = (ChildComponent.event, ...)` re-renders it when
   a descendant emits one of those events, and `@Glue.listener(ChildComponent.event)`
   runs a method first. The client delivers the event through the component's
@@ -92,10 +113,9 @@
 
 ### Deprecated
 
-- `Component.get_view_kwargs()` is deprecated and will be removed in a future
-  version. A component that overrides it emits a `DeprecationWarning`. Construct
-  the component in a view and return `component.as_page(request)` instead
-  (ADR 023).
+- `Component.mount()` is deprecated and will be removed in a future version.
+  Rename it to `__post_init__(self, request)`. An overridden `mount()` still
+  runs, before `__post_init__`, and emits a `DeprecationWarning` (ADR 030).
 
 ### Changes
 

@@ -16,7 +16,7 @@ class CounterCardComponent(Glue.Component):
     count: int = Glue.attr(0, editable=True)
     counted = Glue.event()
 
-    def mount(self):
+    def __post_init__(self, request):
         self.count = self.start
 
     @Glue.attr
@@ -25,9 +25,11 @@ class CounterCardComponent(Glue.Component):
         self.counted(value=self.count)
 ```
 
-`mount()` runs after parameters are assigned and the request is bound, before
-the component's first policy and HTML are produced. It does not run when a
-signed policy is reconstructed for a later action.
+`__post_init__()` is where a component is validated and set up. It runs once,
+when the component first appears on a page: after its parameters are assigned
+and it is authorized for the request, and before its first policy and HTML are
+produced. [Set a component up in `__post_init__`](#set-a-component-up-in-__post_init__)
+covers what it can do.
 
 Stamp it with the ordinary Django template tag:
 
@@ -415,6 +417,108 @@ and is mounted fresh each time, so it keeps no state of its own between them:
 {% endfor %}
 ```
 
+## Set a component up in `__post_init__`
+
+**Put the code that should run once, when the component first appears on a
+page, in `__post_init__(self, request)`.** It is the one place to validate the
+component, load its starting state, decide what the user may do, and give the
+page its context.
+
+```python
+class WeekComponent(Glue.Component):
+    template = 'entries/week.html'
+    view_template = 'entries/page.html'
+
+    week_of: datetime.date | None = Glue.ComponentParameter(None)
+    entry_count: int = Glue.attr(0)
+
+    def __post_init__(self, request):
+        if self.week_of is None:
+            requested = request.GET.get('date')
+            self.week_of = (
+                datetime.date.fromisoformat(requested) if requested else timezone.localdate()
+            )
+
+        self.entry_count = TimeEntry.objects.in_week(self.week_of).count()
+
+        if request.user.has_perm('entries.change_entry'):
+            self.access = Glue.Access.CHANGE
+
+        self.context_data['page_title'] = f'Week of {self.week_of:%B %-d}'
+```
+
+Glue calls it after the component's parameters are assigned and the user has
+passed `is_authorized()`, and before the first render. It can do four things:
+
+- **Set starting state.** Assign to the component's declared attributes.
+- **Fill a parameter from the request.** Give the parameter a default, and
+  assign it when it was not passed. The `if ... is None` check keeps a value a
+  parent or URL supplied.
+- **Set the access level.** Assign `self.access`. A component starts with the
+  level it was given, `VIEW` when none was, and Glue checks `is_authorized()`
+  again at the level the hook leaves. A component returned from another
+  component's callable never gets more access than that component has.
+- **Add page context.** Put values in `self.context_data`, and the view
+  template around the component can read them, as `{{ page_title }}` here.
+
+**It does not run again when the user acts.** Each later action rebuilds the
+component from its signed state, without calling `__post_init__`. Three rules
+follow:
+
+- A value a later action reads must be assigned to a declared attribute, as
+  `entry_count` is. A plain `self.something = ...` is gone on the next request.
+- What the component's own template shows comes from the component:
+  `{{ component.entry_count }}`, a `@Glue.property`, or a `cached_property`.
+  The template's only context variable on a re-render is `component`.
+- `context_data` is for the page around the component and exists for the first
+  render only. A callable that changes it raises an error.
+
+```python
+class WeekComponent(Glue.Component):
+    ...
+
+    @cached_property
+    def entries(self):
+        return list(TimeEntry.objects.in_week(self.week_of))
+```
+
+```django
+{% for entry in component.entries %}...{% endfor %}
+```
+
+### Values that are not parameters
+
+A value passed under a name that is not a declared parameter goes to the
+keyword of `__post_init__` with that name. It is not signed and is gone once
+the hook returns, so use it for something the hook only needs in order to set
+the component up:
+
+```python
+class GorillaCardComponent(Glue.Component):
+    template = 'gorilla/card.html'
+    name: str = Glue.attr('')
+
+    def __post_init__(self, request, pk: int):
+        self.name = Gorilla.objects.values_list('name', flat=True).get(pk=pk)
+```
+
+```python
+path('gorillas/<int:pk>/', GorillaCardComponent.as_view())
+```
+
+```django
+{% glue_component 'gorilla/gorilla_card' pk=gorilla.pk key=gorilla.pk %}
+```
+
+A name that is neither a parameter nor a keyword of the hook is still an
+"Unknown parameters" error; a hook written with `**kwargs` accepts any name. A
+value the tag passes this way must be JSON-serializable.
+
+`mount()`, the earlier name for this hook, is deprecated: it still runs, before
+`__post_init__`, and warns. `get_view_kwargs()`, `get_context_data()` and
+`as_page()` are removed; a class that still defines one of the first two raises
+an error naming its replacement.
+
 ## Use a component as a URL view
 
 Register a component directly in Django's URL patterns with `as_view()`:
@@ -427,7 +531,7 @@ urlpatterns = [
     path('cards/<int:start>/', CounterCardComponent.as_view(), name='card-fragment'),
     path(
         'cards/<int:start>/page/',
-        CounterCardComponent.as_view(layout_template='cards/page.html'),
+        CounterCardComponent.as_view(view_template='cards/page.html'),
         name='card-page',
     ),
 ]
@@ -435,46 +539,26 @@ urlpatterns = [
 
 Named URL captures supply declared component parameters. The default response
 is the component's own template as an HTML fragment, for fetching with
-`Glue.view(url)`. Set a layout template to respond with a full page instead:
-the layout template contains the component and marks where it renders. Declare
-it on the class with `layout_template`, or pass `layout_template=` to
+`Glue.view(url)`. Set a view template to respond with a full page instead:
+the view template contains the component and marks where it renders. Declare
+it on the class with `view_template`, or pass `view_template=` to
 `as_view()` to override the class attribute for one URL:
 
 ```python
 class CounterCardComponent(Glue.Component):
     template = 'cards/counter_card.html'
-    layout_template = 'cards/page.html'
+    view_template = 'cards/page.html'
 ```
 
-A layout template does not change the component's own `template`, which it
-keeps for every later re-render.
+A view template does not change the component's own `template`, which it
+keeps for every later re-render. A denial by `is_authorized()` responds 403,
+and an unknown or missing parameter raises the component's normal error.
 
-When parameters or access depend on the request, write an ordinary view that
-constructs the component and responds with `as_page()`:
+When parameters, access, or the page's own context depend on the request,
+derive them in [`__post_init__`](#set-a-component-up-in-__post_init__). There is
+no separate view to write.
 
-```python
-@permission_required('entries.view_entry', raise_exception=True)
-def week_view(request):
-    requested = request.GET.get('date')
-    week_of = datetime.date.fromisoformat(requested) if requested else timezone.localdate()
-    access = Glue.Access.CHANGE if request.user.has_perm('entries.change_entry') else Glue.Access.VIEW
-
-    component = WeekComponent(week_of=week_of, access=access)
-    return component.as_page(request)
-```
-
-`as_page(request, layout_template=None)` introduces and mounts the component,
-then renders its layout template, or the component alone when there is none. A
-denial by `is_authorized()` responds 403. The constructor call is the whole
-contract: an unknown or missing parameter raises the component's normal error.
-`as_view()` is the same response for a component built from URL captures and
-fixed keyword arguments.
-
-`get_view_kwargs()` is deprecated and will be removed in a future version. A
-component that overrides it emits a `DeprecationWarning`; move its body into a
-view as above.
-
-The layout template places the rendered component with the no-argument tag:
+The view template places the rendered component with the no-argument tag:
 
 ```django
 {% extends 'base.html' %}
@@ -483,7 +567,7 @@ The layout template places the rendered component with the no-argument tag:
 ```
 
 The no-argument tag renders the component supplied by `as_view()`. Outside a
-component view, it raises an error. The layout template must load Glue with
+component view, it raises an error. The view template must load Glue with
 `{% django_glue_init %}`, directly or through the template it extends. These URLs serve GET and HEAD; component actions use
 Glue's normal addressed endpoint.
 
@@ -509,7 +593,7 @@ urlpatterns = [
     path(
         'entries/',
         permission_required('entries.view_entry', raise_exception=True)(
-            EntryPage.as_view(layout_template='entries/page.html', access=Glue.Access.CHANGE)
+            EntryPage.as_view(view_template='entries/page.html', access=Glue.Access.CHANGE)
         ),
     ),
 ]

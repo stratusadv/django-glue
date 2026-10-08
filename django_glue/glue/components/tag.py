@@ -10,7 +10,11 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueAuthorizationError, GlueComponentKeyError
+from django_glue.exceptions import (
+    GlueAuthorizationError,
+    GlueComponentKeyError,
+    GlueComponentParameterError,
+)
 from django_glue.glue import address
 from django_glue.glue.components.component import (
     MOUNTED_CHILDREN_CONTEXT_KEY,
@@ -93,10 +97,16 @@ class GlueComponentNode(Node):
             # The address carries a hash of what this stamp passes the child, so
             # a child stamped with new parameters or access is a new child and is
             # not kept (ADR 025).
-            stamped = json.dumps(
-                {'parameters': component.identity['parameters'], 'access': component.access},
-                sort_keys=True,
-            )
+            stamp = {'parameters': component.identity['parameters'], 'access': component.access}
+            if component._post_init_kwargs:
+                stamp['post_init'] = component._post_init_kwargs
+            try:
+                stamped = json.dumps(stamp, sort_keys=True)
+            except TypeError as error:
+                raise GlueComponentParameterError(
+                    f"'{tag_name}' was stamped with a value for __post_init__() that is not "
+                    'JSON-serializable, so a later render cannot tell whether it changed.'
+                ) from error
             fingerprint = hashlib.blake2s(stamped.encode(), digest_size=4).hexdigest()
             component._address = address.item(parent_address, f'{tag_name}:{canonical}:{fingerprint}')
         if isinstance(parent, Component):
@@ -113,7 +123,7 @@ class GlueComponentNode(Node):
         except GlueAuthorizationError:
             return ''
         template = get_template(component.template)
-        with context.push(**component.get_context_data()):
+        with context.push(**component._template_context()):
             html = template.template.render(context)
         return mark_safe(inject_component_root(
             html,
