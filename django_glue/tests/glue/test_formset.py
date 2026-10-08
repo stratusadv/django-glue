@@ -13,6 +13,7 @@ from django_glue.exceptions import (
     GlueFormSetMaxNumExceededError,
     GlueRequestError,
 )
+from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
@@ -356,6 +357,38 @@ class FormSetGlueNewRowTestCase(TestCase):
         return call_across_requests(GluePolicy.from_token(entry['policy_token']), 'save', {
             '__submitted_forms': {'new': {'policy_token': introduced[0]['policy_token'], 'updates': {}}},
         })
+
+    def test_a_new_row_is_accepted_after_a_call_of_its_own(self):
+        formset = with_request(FormSetGlue(
+            TestModelForm,
+            can_delete=True,
+            **glue_context(name='gorillas', access=GlueAccess.DELETE),
+        ))
+        entry, introduced = call_across_requests(formset.policy, 'append', {
+            'key': 'new',
+            'initial': {'name': 'Koko II'},
+        })
+        row_policy = GluePolicy.from_token(introduced[0]['policy_token'])
+
+        row_context = AttributeCallRequestContext.model_construct(
+            request=request_with_session(),
+            target_glue_policy=row_policy,
+            target_glue_updates={},
+            target_attribute_name='validate',
+            target_attribute_call_kwargs={},
+            reintroduce=[],
+        )
+        row = FormGlue.from_attribute_call_resolver_context(row_context)
+        row_entry, _ = row.process_attribute_call(row_context)
+        # The client holds the renewed token when the call sent one.
+        row_token = row_entry.get('policy_token', introduced[0]['policy_token'])
+
+        popped, _ = call_across_requests(GluePolicy.from_token(entry['policy_token']), 'pop', {
+            'key': 'new',
+            '__submitted_forms': {'new': {'policy_token': row_token}},
+        })
+
+        self.assertEqual(list(GluePolicy.from_token(popped['policy_token']).children), [])
 
     def test_append_rejects_initial_for_a_field_the_form_does_not_expose(self):
         formset = with_request(FormSetGlue(FightNameForm, **glue_context(name='fights')))

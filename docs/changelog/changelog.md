@@ -1,5 +1,16 @@
 # Changelog for Django Glue
 
+## v1.2.1
+
+### Fixes
+
+- A formset accepts a new `ModelForm` row after that row makes a call of its
+  own, such as loading a field's choices or validating. In v1.2.0 the call
+  renewed the row's token with different `initial` values, so the formset's next
+  `pop`, `validate` or `save` failed with "Submitted form token does not belong
+  to this formset row." A form's token now signs the `initial` values the form
+  was given, on every request.
+
 ## v1.2.0
 
 ### Breaking
