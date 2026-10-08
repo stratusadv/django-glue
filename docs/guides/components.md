@@ -1,9 +1,9 @@
 # Components
 
 A component is a Glue object with a Django template. Put its class in a
-`components.py` module or `components/` package under the components root
-(default `settings.BASE_DIR`, overridable via `DJANGO_GLUE_COMPONENTS_ROOT`);
-Glue resolves it lazily when its tag is used.
+`components.py` module or `components/` package; Glue resolves it lazily when
+its tag is used. [Where components are found](#where-components-are-found)
+covers the lookup.
 
 ```python
 from django_glue import Glue
@@ -16,7 +16,7 @@ class CounterCardComponent(Glue.Component):
     count: int = Glue.attr(0, editable=True)
     counted = Glue.event()
 
-    def mount(self):
+    def __post_init__(self, request):
         self.count = self.start
 
     @Glue.attr
@@ -25,9 +25,11 @@ class CounterCardComponent(Glue.Component):
         self.counted(value=self.count)
 ```
 
-`mount()` runs after parameters are assigned and the request is bound, before
-the component's first policy and HTML are produced. It does not run when a
-signed policy is reconstructed for a later action.
+`__post_init__()` is where a component is validated and set up. It runs once,
+when the component first appears on a page: after its parameters are assigned
+and it is authorized for the request, and before its first policy and HTML are
+produced. [Set a component up in `__post_init__`](#set-a-component-up-in-__post_init__)
+covers what it can do.
 
 Stamp it with the ordinary Django template tag:
 
@@ -58,6 +60,290 @@ marker to that root.
 </section>
 ```
 
+## Where components are found
+
+Glue looks up a tag's directory the way Django looks up a template, configured
+by one setting shaped like `TEMPLATES`:
+
+```python
+DJANGO_GLUE_COMPONENTS = {
+    'DIRS': [BASE_DIR / 'app'],
+    'APP_DIRS': True,
+}
+```
+
+- `DIRS` lists directories, searched in order. It defaults to `[BASE_DIR]`.
+  With the setting above, `time_tracker/time_entry_day` is looked up in
+  `BASE_DIR/app/time_tracker/components`.
+- `APP_DIRS` defaults to `True`. The tag's directory is then also read as a
+  package path, and that package is searched when it is an installed app or
+  lies inside one. `django_spire/comment/comments` finds `CommentsComponent` in
+  `django_spire.comment.components`, in any project that installs that app.
+
+Both keys are optional, and so is the setting.
+
+Every `DIRS` entry is searched before the installed apps, and the first
+location whose `components` module defines the class wins. To override a
+library's component, define a class with the same name at the same tag path
+under one of your `DIRS`:
+
+```
+app/django_spire/comment/components.py    # your CommentsComponent wins
+```
+
+A tag that no location defines raises `GlueComponentRegistrationError`, naming
+every module searched. A `DIRS` directory must be importable: one that holds a
+`components` module outside every `sys.path` entry raises the same error, naming
+the entry, instead of being skipped.
+
+## Lists: render rows as partials unless a row is live
+
+**Render each row of a list as a template partial of the component that owns the
+list. Make a row its own component only when the row is live: it holds state of
+its own between requests, such as an inline edit mode and its draft text.**
+
+Ask of each row: *does it need to remember anything between requests?* A row
+that only shows data, or whose buttons can be handled by the list, is not live.
+Its buttons call the list's callables with the row's key:
+
+```python
+class CommentsComponent(Glue.Component):
+    template = 'comments/comments.html'
+
+    @Glue.attr(required_access=Glue.Access.DELETE)
+    def delete(self, request: HttpRequest, pk: int) -> None:
+        Comment.objects.get(pk=pk, user=request.user).delete()
+```
+
+```django
+<ul>
+    {% for comment in comments %}
+        <li>
+            {{ comment.text }}
+            <button @click="component.delete({{ comment.pk }})">Delete</button>
+        </li>
+    {% endfor %}
+</ul>
+```
+
+The row markup can live in its own template and be included in the loop; it is
+still part of the list component.
+
+The key comes from the client, so the callable checks it: the lookup above only
+finds the user's own comments.
+
+**Why.** Every component on a page carries its own signed token and its own
+address, and the browser tracks each one. A row component adds roughly 1.5 KB to
+the page, most of it a token that does not compress, so 20 row components add
+about 30 KB and 200 add about 300 KB, where the same rows as partials add almost
+nothing. A partial costs only its HTML. Queries are not the difference: a list that
+passes each row its loaded instance renders row components in one query (see
+[model parameters](#model-and-dataclass-parameters)).
+
+**When a row component is right.** A row that is live pays for itself:
+
+- It keeps its own state, such as an edit mode and a draft, without the list
+  tracking which row is being edited.
+- An action re-renders only that row, so the response stays the same size however
+  long the list is, where a list callable re-renders the whole list.
+- Its authorization lives in one place, its initializer, instead of in every list
+  callable.
+
+Keep such lists short, tens of rows rather than hundreds, and have the list pass
+each row the instance it already loaded.
+
+Livewire and Phoenix LiveView give the same advice: Livewire asks whether a nested
+piece "need[s] to be 'live'" before making it a component, and LiveView says to
+avoid live components "merely for code organization purposes".
+
+## Model and dataclass parameters
+
+A component that represents a database row declares it by decorating a method
+with `Glue.ComponentParameter`. The method is the parameter's initializer: it
+turns the row's primary key into the instance the component works with, and it
+applies whatever scope the component needs.
+
+```python
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int) -> TimeEntry:
+        return TimeEntry.objects.active().select_related('project').get(pk=pk, user=self.request.user)
+```
+
+The method name is the parameter name, its return annotation must be a model
+class, and it takes only the key. Pass the instance when you already have it, or
+its key when you do not:
+
+```python
+entry = TimeEntry.objects.active().select_related('project').get(pk=entry_id, user=request.user)
+return EntryModalComponent(entry=entry)
+```
+
+```django
+{% glue_component 'entries/entry_modal' entry=entry.pk %}
+```
+
+- A supplied instance is used as is, with no query. A supplied key is resolved
+  through the initializer on the first read of `self.entry`.
+- Only the key is signed. Every later request passes it to the initializer with
+  the current request, so scope is re-applied on every interaction. A row the
+  initializer no longer returns fails that component with
+  `model_instance_not_found`.
+- A supplied instance must be loaded the way the initializer loads it, with the
+  same `select_related()` and annotations. With
+  `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` on (it defaults to `DEBUG`), Glue checks:
+  an instance the initializer does not return raises
+  `GlueComponentParameterError`, and one missing an annotation or loaded relation
+  emits `GlueModelParameterMismatchWarning` and is replaced by the initializer's
+  instance. Escalate the warning to an error in your test settings to catch it in
+  CI.
+- A callable may assign an instance or a key to retarget the component, which
+  re-renders it. The initializer is never callable from the client, and a model
+  parameter cannot be editable.
+
+### A record that may not exist yet
+
+A component that creates a record or edits one uses the same model parameter for
+both. Annotate the initializer's key as `| None`, and build the new record when
+the key is `None`:
+
+```python
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    day: datetime.date = Glue.ComponentParameter()
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int | None) -> TimeEntry:
+        if pk is None:
+            return TimeEntry(date=self.day, user=self.request.user)
+        return TimeEntry.objects.active().get(pk=pk, user=self.request.user)
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def save(self, hours: Decimal) -> None:
+        self.entry.hours = hours
+        self.entry.save()
+```
+
+```django
+{% glue_component 'entries/entry_modal' day=day %}                {# a new entry #}
+{% glue_component 'entries/entry_modal' entry=entry day=day %}    {# an existing one #}
+```
+
+```python
+EntryModalComponent(day=day)
+EntryModalComponent(entry=entry, day=day)
+```
+
+- Leave the parameter out for a new record. Passing `None` means the same, so a
+  stamp whose `entry` is a row or `None` serves both cases.
+- The token signs a null key, and every later request calls the initializer
+  with `None`. The new record is rebuilt each time, so give it its starting
+  values in the initializer.
+- Starting values that come from the page, such as `day` above, are passed as
+  their own parameters and read from `self`. An unsaved instance is rejected,
+  because only the key is signed and anything set on it would be lost on the
+  next request.
+- Once a callable saves `self.entry`, Glue signs the new key and re-renders the
+  component, which now edits that record. Saving it again updates it. A callable
+  that creates and saves a different object assigns it: `self.entry = entry`.
+- A parameter whose key annotation does not include `None` stays required and
+  rejects `None`, as before.
+
+When a new record needs several starting values that the edit case does not,
+pass them as one optional parameter instead of one parameter each:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EntrySeed:
+    day: datetime.date
+    project_id: int
+
+
+class EntryModalComponent(Glue.Component):
+    template = 'entries/modal.html'
+
+    seed: EntrySeed | None = Glue.ComponentParameter(None)
+
+    @Glue.ComponentParameter
+    def entry(self, pk: int | None) -> TimeEntry:
+        if pk is None:
+            return TimeEntry(date=self.seed.day, project_id=self.seed.project_id, user=self.request.user)
+        return TimeEntry.objects.active().get(pk=pk, user=self.request.user)
+```
+
+```python
+EntryModalComponent(seed=EntrySeed(day=day, project_id=project.pk))    # a new entry
+EntryModalComponent(entry=entry)                                        # an existing one
+```
+
+- A dataclass keeps its types: a date is a date again on the next request.
+- A `dict[str, Any]` parameter works too, and is handy for a few strings or
+  integers. It is signed as JSON, so a date or decimal in it comes back as a
+  string on later requests. Use a dataclass, or a `TypedDict` from
+  `typing_extensions`, when the types matter.
+- Neither can hold a model instance. Pass its key, as `project_id` above.
+
+### A row from any of several models
+
+A component that serves rows of more than one model, such as a comment list that
+any commentable model can host, declares its initializer with the model as well as
+the key. The return annotation is then an upper bound: an abstract base, a concrete
+parent, or `Model` itself.
+
+```python
+class CommentsComponent(Glue.Component):
+    template = 'comments/comments.html'
+
+    @Glue.ComponentParameter
+    def host(self, model: type[Commentable], pk: int) -> Commentable:
+        return model._default_manager.get(pk=pk)
+```
+
+```django
+{% glue_component 'comments/comments' host=task %}
+```
+
+- Pass a saved instance of any concrete subclass of the bound. The token signs
+  its model label with the key, as `{'model': 'tasks.task', 'pk': 42}`.
+- Later requests call the initializer with the model that label names and the
+  key. A label that names no installed model, or a model outside the bound, fails
+  the component with `invalid_component_parameter` before the initializer runs.
+- A bare key is rejected, because it does not say which model it belongs to. Server
+  code that has no instance assigns the signed form,
+  `{'model': 'tasks.task', 'pk': 42}`.
+- This form does not accept `None` for a record that does not exist yet.
+- Every other model-parameter rule above applies unchanged.
+
+A concrete initializer, `(self, pk)`, must return a concrete model. An abstract
+model or `Model` itself has no rows of its own, so Glue asks for the bounded form.
+
+A value parameter annotated with a dataclass is signed as its JSON form and
+restored as the dataclass, including nested dates, decimals, and enums:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportWindow:
+    start: datetime.date
+    end: datetime.date
+
+
+class BudgetPanelComponent(Glue.Component):
+    template = 'reports/budget_panel.html'
+
+    window: ReportWindow = Glue.ComponentParameter()
+```
+
+A form is not a parameter. Build it as a child from the model parameter:
+
+```python
+@Glue.property
+def entry_form(self) -> FormGlue:
+    return Glue.form(target=TimeEntryForm(instance=self.entry))
+```
+
 The server template context exposes the Python component as `component`; the
 mounted Alpine scope exposes its client proxy under the same name. `$glue`
 resolves that proxy from an element inside the component. Outside Alpine,
@@ -65,12 +351,173 @@ resolves that proxy from an element inside the component. Outside Alpine,
 its current root. Components are addressed objects and do not receive global
 names under `Glue.component`.
 
-Changing a component parameter rerenders and morphs its mounted root. Call
-`component.$refresh()` when data outside that component changes, such as a
-record saved by a modal. The refresh recomputes its properties and markup,
-reconciles addressed children, and morphs the root. Stable child keys preserve
-their proxies and Alpine state; removed roots dispose their addresses.
-`render()` produces HTML for initial or host mounting.
+A successful callable re-renders its component in the same response and morphs
+its mounted root, so an action that saves data needs no follow-up refresh and
+no `render()` call:
+
+```python
+@Glue.attr(required_access=Glue.Access.CHANGE)
+def confirm(self, transaction_id: int) -> None:
+    Transaction.objects.get(pk=transaction_id).confirm()
+```
+
+Two kinds of callable skip the render. A callable whose declared result is a Glue
+object, such as one that returns a modal component, hands the interaction to that
+object. A callable declared with `skip_rerender=True` opts out, for example one
+that deletes the row its component shows:
+
+```python
+@Glue.attr(required_access=Glue.Access.DELETE, skip_rerender=True)
+def delete_entry(self) -> None:
+    self.entry.delete()
+    Glue.event(self, 'deleted', {'pk': self.entry_id})
+```
+
+`skip_rerender` only applies to a component's own callables. Declaring it on a
+model, queryset, form, service, or other Glue object raises a `TypeError` when
+the class is defined, because nothing there re-renders.
+
+A callable that changes one of the component's parameters or other retained
+values re-renders regardless, so the markup always matches the component's
+state. Only the component whose callable ran re-renders.
+
+Call `component.$refresh()` when data outside that component changes, such as a
+record saved by a modal. The refresh recomputes its properties and markup and
+morphs the root; removed child roots dispose their addresses. To re-render when
+another component announces a change, list its events in `rerender_on` (see
+[declared events](advanced/event_listeners.md)). `render()` produces HTML for
+initial or host mounting.
+
+### A parent's re-render keeps its children
+
+When a component re-renders after a page has loaded, the children it stamps
+with `{% glue_component %}` and that are still on the page are kept as they are:
+the server sends a placeholder for each, and the child keeps its markup, its
+state, and its Alpine data. Only children that are new, or that the parent now
+stamps with different parameters or access, are rendered. A child stamped with
+different parameters is a new child, mounted fresh.
+
+A kept child is only as current as its last render, so a child that shows data
+another component changes declares the events that change it:
+
+```python
+class CloseProgressComponent(Glue.Component):
+    template = 'close/component/close_progress.html'
+    rerender_on = (TransactionRowComponent.confirmed, TransactionRowComponent.receipt_attached)
+```
+
+A child that is simply a view of data its parent re-reads, with parameters that
+do not change when that data does, can instead be stamped with the
+`rerender_with_parent` flag. It then renders with every render of its parent,
+and is mounted fresh each time, so it keeps no state of its own between them:
+
+```django
+{% for date in dates %}
+    {% glue_component 'entries/day' date=date key=date rerender_with_parent %}
+{% endfor %}
+```
+
+## Set a component up in `__post_init__`
+
+**Put the code that should run once, when the component first appears on a
+page, in `__post_init__(self, request)`.** It is the one place to validate the
+component, load its starting state, decide what the user may do, and give the
+page its context.
+
+```python
+class WeekComponent(Glue.Component):
+    template = 'entries/week.html'
+    view_template = 'entries/page.html'
+
+    week_of: datetime.date | None = Glue.ComponentParameter(None)
+    entry_count: int = Glue.attr(0)
+
+    def __post_init__(self, request):
+        if self.week_of is None:
+            requested = request.GET.get('date')
+            self.week_of = (
+                datetime.date.fromisoformat(requested) if requested else timezone.localdate()
+            )
+
+        self.entry_count = TimeEntry.objects.in_week(self.week_of).count()
+
+        if request.user.has_perm('entries.change_entry'):
+            self.access = Glue.Access.CHANGE
+
+        self.context_data['page_title'] = f'Week of {self.week_of:%B %-d}'
+```
+
+Glue calls it after the component's parameters are assigned and the user has
+passed `is_authorized()`, and before the first render. It can do four things:
+
+- **Set starting state.** Assign to the component's declared attributes.
+- **Fill a parameter from the request.** Give the parameter a default, and
+  assign it when it was not passed. The `if ... is None` check keeps a value a
+  parent or URL supplied.
+- **Set the access level.** Assign `self.access`. A component starts with the
+  level it was given, `VIEW` when none was, and Glue checks `is_authorized()`
+  again at the level the hook leaves. A component returned from another
+  component's callable never gets more access than that component has.
+- **Add page context.** Put values in `self.context_data`, and the view
+  template around the component can read them, as `{{ page_title }}` here.
+
+**It does not run again when the user acts.** Each later action rebuilds the
+component from its signed state, without calling `__post_init__`. Three rules
+follow:
+
+- A value a later action reads must be assigned to a declared attribute, as
+  `entry_count` is. A plain `self.something = ...` is gone on the next request.
+- What the component's own template shows comes from the component:
+  `{{ component.entry_count }}`, a `@Glue.property`, or a `cached_property`.
+  The template's only context variable on a re-render is `component`.
+- `context_data` is for the page around the component and exists for the first
+  render only. A callable that changes it raises an error.
+
+```python
+class WeekComponent(Glue.Component):
+    ...
+
+    @cached_property
+    def entries(self):
+        return list(TimeEntry.objects.in_week(self.week_of))
+```
+
+```django
+{% for entry in component.entries %}...{% endfor %}
+```
+
+### Values that are not parameters
+
+A value passed under a name that is not a declared parameter goes to the
+keyword of `__post_init__` with that name. It is not signed and is gone once
+the hook returns, so use it for something the hook only needs in order to set
+the component up:
+
+```python
+class GorillaCardComponent(Glue.Component):
+    template = 'gorilla/card.html'
+    name: str = Glue.attr('')
+
+    def __post_init__(self, request, pk: int):
+        self.name = Gorilla.objects.values_list('name', flat=True).get(pk=pk)
+```
+
+```python
+path('gorillas/<int:pk>/', GorillaCardComponent.as_view())
+```
+
+```django
+{% glue_component 'gorilla/gorilla_card' pk=gorilla.pk key=gorilla.pk %}
+```
+
+A name that is neither a parameter nor a keyword of the hook is still an
+"Unknown parameters" error; a hook written with `**kwargs` accepts any name. A
+value the tag passes this way must be JSON-serializable.
+
+`mount()`, the earlier name for this hook, is deprecated: it still runs, before
+`__post_init__`, and warns. `get_view_kwargs()`, `get_context_data()` and
+`as_page()` are removed; a class that still defines one of the first two raises
+an error naming its replacement.
 
 ## Use a component as a URL view
 
@@ -84,7 +531,7 @@ urlpatterns = [
     path('cards/<int:start>/', CounterCardComponent.as_view(), name='card-fragment'),
     path(
         'cards/<int:start>/page/',
-        CounterCardComponent.as_view(layout_template='cards/page.html'),
+        CounterCardComponent.as_view(view_template='cards/page.html'),
         name='card-page',
     ),
 ]
@@ -92,33 +539,26 @@ urlpatterns = [
 
 Named URL captures supply declared component parameters. The default response
 is the component's own template as an HTML fragment, for fetching with
-`Glue.view(url)`. Set a layout template to respond with a full page instead:
-the layout template contains the component and marks where it renders. Declare
-it on the class with `layout_template`, or pass `layout_template=` to
+`Glue.view(url)`. Set a view template to respond with a full page instead:
+the view template contains the component and marks where it renders. Declare
+it on the class with `view_template`, or pass `view_template=` to
 `as_view()` to override the class attribute for one URL:
 
 ```python
 class CounterCardComponent(Glue.Component):
     template = 'cards/counter_card.html'
-    layout_template = 'cards/page.html'
+    view_template = 'cards/page.html'
 ```
 
-A layout template does not change the component's own `template`, which it
-keeps for every later re-render.
+A view template does not change the component's own `template`, which it
+keeps for every later re-render. A denial by `is_authorized()` responds 403,
+and an unknown or missing parameter raises the component's normal error.
 
-For parameters or access derived from the request, override the class hook:
+When parameters, access, or the page's own context depend on the request,
+derive them in [`__post_init__`](#set-a-component-up-in-__post_init__). There is
+no separate view to write.
 
-```python
-@classmethod
-def get_view_kwargs(cls, request, **url_kwargs):
-    return {**url_kwargs, 'user_id': request.user.pk}
-```
-
-The returned kwargs go to the component constructor; `access` may be included
-to set the request's capability ceiling. The default hook returns the URL and
-`as_view()` kwargs unchanged.
-
-The layout template places the rendered component with the no-argument tag:
+The view template places the rendered component with the no-argument tag:
 
 ```django
 {% extends 'base.html' %}
@@ -127,7 +567,7 @@ The layout template places the rendered component with the no-argument tag:
 ```
 
 The no-argument tag renders the component supplied by `as_view()`. Outside a
-component view, it raises an error. The layout template must load Glue with
+component view, it raises an error. The view template must load Glue with
 `{% django_glue_init %}`, directly or through the template it extends. These URLs serve GET and HEAD; component actions use
 Glue's normal addressed endpoint.
 
@@ -153,7 +593,7 @@ urlpatterns = [
     path(
         'entries/',
         permission_required('entries.view_entry', raise_exception=True)(
-            EntryPage.as_view(layout_template='entries/page.html', access=Glue.Access.CHANGE)
+            EntryPage.as_view(view_template='entries/page.html', access=Glue.Access.CHANGE)
         ),
     ),
 ]
@@ -164,6 +604,14 @@ permission check. The URL decorator controls page access, and
 `is_authorized()` uses the current request for both the first render and
 subsequent operations. For an object-specific rule, check the component's
 signed identity and the current database scope inside `is_authorized()`.
+
+A denial at the first render depends on how the component was created. A
+component served by `as_view()` responds 403. A component stamped with
+`{% glue_component %}` renders nothing and introduces no address, so the rest of
+the page renders normally; the template does not need its own permission check
+around the tag. A denied `@Glue.property` child resolves to absent. After the first
+render, a denied action or refresh fails only that component's entry with
+`not_authorized`.
 
 An action may return another component for a host to mount. The returned
 component owns its declared child form or formset:
@@ -183,3 +631,81 @@ children and listeners.
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound
 parameter syntax.
+
+## Server-side state (ComponentSession)
+
+Some state a component needs is invisible to the client: a rate-limit counter,
+a multi-step flow's position, a scratch value shared by the component's
+instances. Signed parameters and state snapshots exist for state the client
+sees, and a private field dies on every request, so Glue provides
+`self.session`: a mutable mapping over one entry in the request's Django
+session, scoped by the component class's module-qualified name, so two
+classes that share a name in different modules do not share state (ADR 031).
+
+```python
+class OnboardingComponent(Glue.Component):
+    template = 'onboarding/panel.html'
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def skip(self):
+        self.session['skipped'] = True
+```
+
+- The session persists itself. Setting or deleting a key marks the session
+  modified, and Django saves a modified session when the request completes,
+  so a request that writes nothing saves nothing. A write a call makes
+  before it raises is kept.
+- A list or dict changed in place is not saved until you assign it back:
+  after `items = self.session['items']` and `items.append(pk)`, write
+  `self.session['items'] = items`.
+- Every instance of the class shares the entry within one user's session;
+  the state is per-user. State shared across users, or durable state,
+  belongs in the database.
+- The session never crosses the wire: it is not part of the policy token or
+  the computed data, and the client cannot read or write it.
+- Keys must be strings, and values must be serializable by your session
+  backend.
+
+### Showing a session value to the client
+
+Declare the value with `Glue.SessionAttr` when the browser should see it. The
+value is stored in the session under its own name, and the client reads it
+like any other component value:
+
+```python
+class OnboardingComponent(Glue.Component):
+    template = 'onboarding/panel.html'
+
+    step: int = Glue.SessionAttr(0)
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def advance(self):
+        self.step += 1
+```
+
+```html
+<span x-text="component.step"></span>
+<button @click="component.advance()">Next</button>
+```
+
+- A callable changes the value by assigning it. The client cannot write it,
+  and it is not signed into the token, so it survives a page load and a stale
+  page cannot put an old value back.
+- Reading a value that was never set returns the default and saves nothing.
+  Use `default_factory` for a list or dict: `seen: list[int] =
+  Glue.SessionAttr(default_factory=list)`. As with the mapping, assign a
+  changed list or dict back to save it.
+- Every instance of the class shares the value within one user's session. Do
+  not use it for per-row state on a component stamped once per row.
+- The new value reaches the browser with the callable's own re-render. A
+  callable declared with `skip_rerender=True` still sends it, whether you
+  assigned `self.step` or wrote `self.session['step']`, so `component.step`
+  updates. The template is not rendered again, so markup that printed the
+  value on the server keeps the old one.
+- Another mounted instance of the class keeps its old value until it renders
+  again; list an event the writer emits in its `rerender_on` to keep it
+  current.
+- `Glue.SessionAttr(...)` is `Glue.attr(..., session=True)`. It cannot be
+  combined with `parameter`, `editable`, `render_as_html`, `skip_rerender` or
+  `glue_factory`, cannot decorate a method or property, and is only valid on
+  a component.

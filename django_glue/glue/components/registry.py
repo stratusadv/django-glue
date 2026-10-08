@@ -5,10 +5,10 @@ import re
 from typing import TYPE_CHECKING
 
 from django_glue.exceptions import GlueComponentRegistrationError
-from django_glue.glue.component_discovery import resolve_component
+from django_glue.glue.components.discovery import resolve_component
 
 if TYPE_CHECKING:
-    from django_glue.glue.component import Component
+    from django_glue.glue.components.component import Component
 
 
 TAG_NAME_PATTERN = re.compile(r'^[a-z0-9]+(?:_[a-z0-9]+)*(?:/[a-z0-9]+(?:_[a-z0-9]+)*)*$')

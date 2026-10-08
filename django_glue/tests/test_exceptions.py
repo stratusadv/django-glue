@@ -42,6 +42,23 @@ class GlueExceptionsTestCase(TestCase):
                 f'{exc_class.__name__} should inherit from GlueError',
             )
 
+    def test_glue_authorization_error_names_the_operation(self):
+        from django_glue.access import GlueAccess
+        from django_glue.exceptions import GlueAuthorizationError
+        from django_glue.glue.operation import GlueOperation, GlueOperationKind
+
+        introduce = GlueOperation(kind=GlueOperationKind.INTRODUCE, attribute=None, required_access=GlueAccess.VIEW)
+        call = GlueOperation(kind=GlueOperationKind.CALL, attribute='save', required_access=GlueAccess.CHANGE)
+
+        self.assertEqual(
+            str(GlueAuthorizationError(object_name='card', operation=introduce)),
+            "Authorization denied for introduce on Glue object 'card'.",
+        )
+        self.assertEqual(
+            str(GlueAuthorizationError(object_name='card', operation=call)),
+            "Authorization denied for call attribute 'save' on Glue object 'card'.",
+        )
+
     def test_glue_request_error(self):
         """GlueRequestError should support precise codes, statuses, and details."""
         exc = GlueRequestError(

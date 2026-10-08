@@ -109,9 +109,10 @@ class GlueHttp {
         kwargs = {},
         reintroduce = null,
         companions = [],
+        mounted = [],
         signal = null,
+        batch = null,
     }) {
-        const formData = new FormData()
         const {files, data} = this._extractFiles(serializeValue(updates))
 
         const entry = {
@@ -121,12 +122,23 @@ class GlueHttp {
         }
         if (attribute !== null) entry.call = {attribute, kwargs}
         if (reintroduce) entry.reintroduce = reintroduce
-        const companionEntries = companions.map(companion => ({
+        if (mounted.length) entry.mounted = mounted
+        const entries = [entry, ...companions.map(companion => ({
             address: companion.address,
             policy_token: companion.policyToken,
             updates: {},
-        }))
-        formData.append('objects', JSON.stringify([entry, ...companionEntries]))
+        }))]
+
+        // A request with files travels alone, as does one its batch refuses.
+        if (!batch?.accepts(entries) || Object.keys(files).length) {
+            return await this._postEntries(entries, files, signal)
+        }
+        return await batch.add(entries)
+    }
+
+    async _postEntries(entries, files, signal) {
+        const formData = new FormData()
+        formData.append('objects', JSON.stringify(entries))
 
         Object.entries(files).forEach(([key, value]) => {
             if (value instanceof FileList) {
@@ -213,4 +225,60 @@ class GlueHttp {
     }
 }
 
+// Collects up to `size` attribute requests into one POST and hands each
+// caller its own share of the response (ADR 025). It sends when the last
+// request arrives, or on the next task if some never do.
+class GlueRequestBatch {
+    constructor(http, size) {
+        this._http = http
+        this._size = size
+        this._pending = []
+        this._timer = null
+        this._sent = false
+    }
+
+    // A batch takes no request after it is sent, and never two entries for
+    // one address, which the endpoint rejects as a whole.
+    accepts(entries) {
+        if (this._sent) return false
+        const addresses = new Set(this._pending.flatMap(item => item.entries.map(entry => entry.address)))
+        return entries.every(entry => !addresses.has(entry.address))
+    }
+
+    add(entries) {
+        return new Promise((resolve, reject) => {
+            this._pending.push({entries, resolve, reject})
+            if (this._pending.length >= this._size) this._send()
+            else this._timer ??= setTimeout(() => this._send(), 0)
+        })
+    }
+
+    async _send() {
+        clearTimeout(this._timer)
+        this._sent = true
+        const pending = this._pending
+        try {
+            const response = await this._http._postEntries(pending.flatMap(item => item.entries), {}, null)
+            // The response lists each requested entry followed by the
+            // children it introduced; hand each caller its own run.
+            const owners = new Map(pending.flatMap((item, index) => (
+                item.entries.map(entry => [entry.address, index])
+            )))
+            const shares = pending.map(() => [])
+            let owner = 0
+            ;(response.data?.objects || []).forEach(object => {
+                owner = owners.get(object?.address) ?? owner
+                shares[owner].push(object)
+            })
+            pending.forEach((item, index) => item.resolve({
+                ...response,
+                data: {...response.data, objects: shares[index]},
+            }))
+        } catch (error) {
+            pending.forEach(item => item.reject(error))
+        }
+    }
+}
+
+export {GlueRequestBatch}
 export default GlueHttp

@@ -82,6 +82,114 @@ starts only with explicit implementation authorization.
   rendering may be added later as performance strategies, but must preserve
   address ownership, introduced-object registration, response ordering, and keyed DOM
   reconciliation.
+- [x] **Model and dataclass component parameters.** Accepted and implemented in
+  [ADR 021](decisions/021-component-parameter-initializers.md): a method decorated
+  with `Glue.ComponentParameter` declares a model parameter that signs only its
+  key and resolves it through the method, and every value parameter is encoded
+  through its annotation's adapter, so dataclass parameters work. Its gate, with
+  verification off unless stated:
+  - a modal or row component constructed from an instance its parent already
+    loaded issues no query for that row, including the portal's
+    `edit_entry_modal`;
+  - an initializer scoped by `self.request` stops resolving another user's row on
+    the next interaction, and a `DoesNotExist` on reconstruction fails the address
+    with `model_instance_not_found`;
+  - assigning an instance or a key to a model parameter in an action re-renders the
+    component with the new row;
+  - with verification on, a supplied instance the initializer cannot resolve raises
+    `invalid_component_parameter`, and one lacking an annotation or loaded
+    relation of the resolved instance emits `GlueModelParameterMismatchWarning`;
+  - an initializer never appears among the client-callable attributes, and a cycle
+    between initializers raises `invalid_component_parameter`;
+  - the decorator rejects `editable=True`, a return annotation that is not a model
+    class, and a signature other than `(self, pk)`;
+  - a dataclass parameter with nested `date`, `Decimal`, and enum fields renders,
+    and reconstruction restores it as an equal dataclass instance; a dataclass
+    field holding a model instance is rejected at construction.
+- [x] **Bounded model parameters.** Accepted and implemented in
+  [ADR 026](decisions/026-bounded-model-parameters.md): an initializer taking
+  `(self, model, pk)` accepts a row of any concrete subclass of its return
+  annotation. Its gate:
+  - one component class renders and reconstructs rows of two different models,
+    and a supplied instance issues no query;
+  - the token signs `{'model': <label>, 'pk': <key>}`, and assigning a signed
+    value in an action retargets the parameter to another model and re-renders;
+  - a label outside the bound, an unknown label, and a bare key are rejected with
+    `invalid_component_parameter`;
+  - a row that leaves the initializer's scope fails with
+    `model_instance_not_found`, and verification resolves a supplied instance
+    through its own model;
+  - the concrete form rejects an abstract model or `Model` itself at class
+    definition, naming the bounded form;
+  - a signed mapping with a null key or a label that is not a string is rejected
+    with `invalid_component_parameter`.
+- [x] **Draft model parameters.** Accepted and implemented in
+  [ADR 029](decisions/029-draft-model-parameters.md): a model parameter whose
+  initializer's key annotation admits `None` may be left out for a row that does
+  not exist yet. Its gate:
+  - leaving the parameter out, or passing `None`, builds the draft through the
+    initializer, seeded from the component's other parameters, signs a null key,
+    and is rebuilt on a later request; a stamp that leaves it out does the same;
+  - a draft seeded from an optional dataclass parameter and a dict parameter is
+    rebuilt with the same values on a later request, and the edit case leaves
+    both out;
+  - a callable that saves the draft signs its new key and re-renders, even with
+    `skip_rerender=True`, and the next request edits that record instead of
+    creating another;
+  - the parameter still takes a saved row or its key, and rejects an unsaved
+    instance, naming the fix; a parameter that does not opt in stays required;
+  - `Optional[...]` is accepted as the annotation, a key annotation without
+    `None` rejects `None`, and a bounded parameter that declares a draft is
+    rejected at class definition.
+- [x] **Formsets edit saved records.** Accepted and implemented in
+  [ADR 028](decisions/028-formsets-edit-saved-records.md): a formset is seeded
+  with `instances` and `initial`, and removing a saved row signs a pending
+  deletion that `save` applies. Its gate:
+  - seeding `instances` binds each row to its record in one query, orders them
+    before `initial` rows, and rejects an unsaved instance, another model, a form
+    of another class, a bound form, and a seed beyond `max_num`;
+  - `pop` of a saved row signs its key into `state_snapshot.removed_pks` without
+    deleting it, and `pop` of an unsaved row signs nothing;
+  - `pop` of a saved row is rejected without `DELETE`, a live row's `pop` is
+    rejected without that row's token, and another row's token is rejected;
+  - `save` deletes the removed records and clears the list, in a query count
+    that does not grow with the number removed, and an invalid row leaves every
+    record untouched;
+  - `save_forms` and `delete_removed` overrides replace the default writes and
+    survive reconstruction;
+  - `validate` and `save` load their submitted rows in a query count that does
+    not grow with the rows, `save` writes only the saved rows that changed, and
+    an unedited new row is still created;
+  - a form with foreign-key fields loads its rows in one query and runs
+    Django's two validation queries per foreign-key field per row, no more;
+  - `validate` called over the wire on a formset with rows returns each row's
+    address;
+  - in the browser, removing seeded rows and saving leaves only the remaining
+    records in the database;
+  - in the browser, a `CHANGE` component with a `DELETE` formset child edits and
+    deletes its owner's records and leaves another owner's untouched;
+  - `append` rejects an `initial` key the form does not let a user edit, and
+    `new_row_defaults` set unexposed fields on appended and seeded new rows,
+    win over the client's `initial`, and survive reconstruction;
+  - a default on an editable field can be changed by the user, and a default on
+    a disabled field cannot;
+  - an unsaved form passed through `instances` gets the defaults, and a form for
+    a saved record does not;
+  - in the browser, a row added in a component's formset is saved under that
+    component's owner, and an `append` naming another owner is refused.
+- [x] **Component callables re-render by default.** Accepted and implemented in
+  [ADR 022](decisions/022-component-callables-re-render-by-default.md). Its gate:
+  - a component callable that writes data without moving a retained value returns
+    the component's re-rendered HTML in its own response, with no `render()` call
+    and no follow-up `$refresh()`;
+  - a callable returning a component (the portal's modal factories) does not
+    re-render its component;
+  - `skip_rerender=True` suppresses the render (the portal's `delete_entry`),
+    except when the callable changed a retained value;
+  - the owner of the re-rendered component is not re-rendered;
+  - a render failure after a successful callable fails that address like any other
+    error, advancing nothing;
+  - `test_project/gorilla/components.py` no longer returns `self.render()`.
 - **Client-evaluated parameters and delayed mounting.** `{% glue_component %}`
   resolves parameters on the server and mounts during the stamping render. An
   Alpine-evaluated parameter source, or `lazy`/`defer` mounting, would each need
@@ -150,9 +258,8 @@ directly and remain part of the state-model implementation.
 
 ## Implementation verification checklist
 
-The branch implementation and conformance records for these contracts are in
-`STATE_MODEL_HANDOFF.md`. The production-shaped payload measurement and the
-security-hardening items above remain separate follow-up work.
+The production-shaped payload measurement and the security-hardening items above
+remain separate follow-up work.
 
 - Measure production-shaped policy tokens with retained drafts, queryset
   continuations, and signed collection membership, plus aggregate request size

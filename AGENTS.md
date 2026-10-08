@@ -19,13 +19,12 @@ and reconciles each response as authoritative.
 
 ## Design authority
 
-`design/AGENTS.md` governs work on the reactive system (the state-model
-refactor). Before editing `django_glue/` or `client_js/` for that work: read
-the active phase and its gate in `design/roadmap.md`, then the
-governing sections of `design/specs/core/state-model.md` (and
+`design/AGENTS.md` describes the design documents for the reactive system (the
+state-model refactor). Before editing `django_glue/` or `client_js/` for that
+work: read the active phase and its gate in `design/roadmap.md`, then the
+relevant sections of `design/specs/core/state-model.md` (and
 `design/specs/core/component-system.md` for components). This file describes
-the tree as it is; where it and the design docs disagree about the target
-architecture, the design docs win.
+the tree as it is.
 
 ## Project structure
 
@@ -40,7 +39,7 @@ django-glue/
 │   │   ├── attributes/             # DeclaredAttribute, definitions, collector, adapters
 │   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue
 │   │   ├── function.py             # FunctionGlue
-│   │   ├── component.py            # Component rendering and lifecycle
+│   │   ├── components/             # Component, tag, lookup (discovery), registry, naming, root, session
 │   │   └── operation.py            # GlueOperation authorization records
 │   ├── resolver/
 │   │   ├── attribute_call/         # /__dg__/callable_attribute/ endpoint (batch entries)
@@ -75,8 +74,7 @@ django-glue/
 │                                   # comments, lab, core)
 ├── design/                         # Reactive-system design docs (authority)
 ├── docs/                           # MkDocs site
-├── justfile                        # All dev commands
-└── STATE_MODEL_HANDOFF.md          # State-model implementation and release handoff
+└── justfile                        # All dev commands
 ```
 
 ## Server: Glue objects
@@ -118,7 +116,7 @@ BaseGlue (django_glue/glue/base.py)
 ├── FormGlue        (glue/objects/django/form/object.py)
 ├── FormSetGlue     (glue/objects/django/formset.py, via BaseCollectionGlue)
 ├── FunctionGlue    (glue/function.py)
-└── Component       (glue/component.py)
+└── Component       (glue/components/component.py)
 ```
 
 ### Declared attributes

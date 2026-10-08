@@ -230,9 +230,10 @@
       kwargs = {},
       reintroduce = null,
       companions = [],
-      signal = null
+      mounted = [],
+      signal = null,
+      batch = null
     }) {
-      const formData = new FormData;
       const { files, data } = this._extractFiles(serializeValue(updates));
       const entry = {
         address,
@@ -243,12 +244,21 @@
         entry.call = { attribute, kwargs };
       if (reintroduce)
         entry.reintroduce = reintroduce;
-      const companionEntries = companions.map((companion) => ({
+      if (mounted.length)
+        entry.mounted = mounted;
+      const entries = [entry, ...companions.map((companion) => ({
         address: companion.address,
         policy_token: companion.policyToken,
         updates: {}
-      }));
-      formData.append("objects", JSON.stringify([entry, ...companionEntries]));
+      }))];
+      if (!batch?.accepts(entries) || Object.keys(files).length) {
+        return await this._postEntries(entries, files, signal);
+      }
+      return await batch.add(entries);
+    }
+    async _postEntries(entries, files, signal) {
+      const formData = new FormData;
+      formData.append("objects", JSON.stringify(entries));
       Object.entries(files).forEach(([key, value]) => {
         if (value instanceof FileList) {
           Array.from(value).forEach((file) => formData.append(key, file));
@@ -313,6 +323,52 @@
         payload: errorData || null,
         responseBody: body
       });
+    }
+  }
+
+  class GlueRequestBatch {
+    constructor(http, size) {
+      this._http = http;
+      this._size = size;
+      this._pending = [];
+      this._timer = null;
+      this._sent = false;
+    }
+    accepts(entries) {
+      if (this._sent)
+        return false;
+      const addresses = new Set(this._pending.flatMap((item) => item.entries.map((entry) => entry.address)));
+      return entries.every((entry) => !addresses.has(entry.address));
+    }
+    add(entries) {
+      return new Promise((resolve, reject) => {
+        this._pending.push({ entries, resolve, reject });
+        if (this._pending.length >= this._size)
+          this._send();
+        else
+          this._timer ??= setTimeout(() => this._send(), 0);
+      });
+    }
+    async _send() {
+      clearTimeout(this._timer);
+      this._sent = true;
+      const pending = this._pending;
+      try {
+        const response = await this._http._postEntries(pending.flatMap((item) => item.entries), {}, null);
+        const owners = new Map(pending.flatMap((item, index) => item.entries.map((entry) => [entry.address, index])));
+        const shares = pending.map(() => []);
+        let owner = 0;
+        (response.data?.objects || []).forEach((object) => {
+          owner = owners.get(object?.address) ?? owner;
+          shares[owner].push(object);
+        });
+        pending.forEach((item, index) => item.resolve({
+          ...response,
+          data: { ...response.data, objects: shares[index] }
+        }));
+      } catch (error2) {
+        pending.forEach((item) => item.reject(error2));
+      }
     }
   }
   var http_default = GlueHttp;
@@ -3966,6 +4022,11 @@ ${expression ? 'Expression: "' + expression + `"
   // client_js/src/alpine.js
   module_default.plugin(module_default2);
   module_default.magic("glue", (element) => globalThis.Glue?.from(element) || null);
+  module_default.directive("glue-component", (element) => {
+    const proxy = globalThis.Glue?.from(element);
+    if (proxy)
+      module_default.addScopeToNode(element, { component: proxy });
+  }).before("data");
   var installed = false;
   var started2 = false;
   function installAlpine() {
@@ -4000,8 +4061,14 @@ ${expression ? 'Expression: "' + expression + `"
   function morph2(element, html, options = {}) {
     return module_default.morph(element, html, options);
   }
-  function addScopeToNode2(element, scope) {
-    module_default.addScopeToNode(element, scope);
+  function addComponentScope(element, proxy) {
+    if (!element._x_marker) {
+      element.setAttribute("x-glue-component", "");
+      return;
+    }
+    if (element._x_dataStack?.some((scope) => scope.component === proxy))
+      return;
+    module_default.addScopeToNode(element, { component: proxy });
   }
 
   // client_js/src/htmlRenderer.js
@@ -4040,14 +4107,24 @@ ${expression ? 'Expression: "' + expression + `"
     }
     _morphHtml(element, next, inner = false) {
       const client = this._client;
-      const previousAddresses = client ? [
+      const previousNodes = [
         ...element.matches?.("[data-glue-address]") ? [element] : [],
         ...element.querySelectorAll("[data-glue-address]")
-      ].map((node) => node.getAttribute("data-glue-address")) : [];
+      ];
+      const previousAddresses = client ? previousNodes.map((node) => node.getAttribute("data-glue-address")) : [];
+      next.querySelectorAll("template[data-glue-keep]").forEach((placeholder) => {
+        const address = placeholder.getAttribute("data-glue-keep");
+        const live = previousNodes.find((node) => node.getAttribute("data-glue-address") === address);
+        if (!live)
+          return placeholder.remove();
+        const shell = live.cloneNode(false);
+        shell._glueKeep = true;
+        placeholder.replaceWith(shell);
+      });
       morph2(element, next, {
         key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
         updating(node, to, childrenOnly, skip) {
-          if (node.hasAttribute?.("data-morph-ignore"))
+          if (to?._glueKeep || node.hasAttribute?.("data-morph-ignore"))
             return skip();
           if (inner && node === element)
             childrenOnly();
@@ -4289,7 +4366,7 @@ ${expression ? 'Expression: "' + expression + `"
         return await this._singleCall(attribute, kwargs, options);
       }
     }
-    async _singleCall(attribute, kwargs, { submit = true, companions = [] } = {}) {
+    async _singleCall(attribute, kwargs, { submit = true, companions = [], batch = null } = {}) {
       const requestCapture = this._record.captureRequest();
       if (!submit)
         requestCapture.updates = {};
@@ -4309,7 +4386,9 @@ ${expression ? 'Expression: "' + expression + `"
           attribute,
           kwargs,
           companions,
-          signal: controller?.signal ?? null
+          signal: controller?.signal ?? null,
+          batch,
+          ...this._requestFields()
         });
       } catch (error2) {
         if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -4350,9 +4429,7 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
-      if (target.html !== undefined && this._policy.namespace === "component" && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
-        await result.renderOuterHtml(this.$el);
-      }
+      await this._applyResponse(target, result);
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);
         if (childRecord && !childRecord.owner) {
@@ -4363,6 +4440,10 @@ ${expression ? 'Expression: "' + expression + `"
       this._processEffects(target);
       return { result, response: response.data };
     }
+    _requestFields() {
+      return {};
+    }
+    async _applyResponse(target, result) {}
     async _reintroduceWithOwner() {
       const owner = this._record.owner;
       if (!owner?.path)
@@ -4463,12 +4544,6 @@ ${expression ? 'Expression: "' + expression + `"
           reportError(error2);
         }
       });
-      const sourceElement = event.source.$el;
-      if (this.$el && typeof CustomEvent !== "undefined" && !(this !== event.source && event.type === event.sourceType && sourceElement && this.$el.contains(sourceElement))) {
-        const domEvent = new CustomEvent(event.type, { detail: event.detail, bubbles: true });
-        domEvent.source = event.source;
-        this.$el.dispatchEvent(domEvent);
-      }
     }
     _convertResult(result, attribute = null) {
       if (Array.isArray(result)) {
@@ -4566,20 +4641,22 @@ ${expression ? 'Expression: "' + expression + `"
       return form;
     }
     _singleCall(attribute, kwargs, options = {}) {
-      if (attribute !== null && attribute !== "append" && attribute !== "pop") {
-        const forms = Object.fromEntries(Object.entries(this._policy.children || {}).map(([key, address]) => {
-          const record = this._registry.getRecord(address);
-          if (!record || record.disposed) {
-            throw new Error(`Formset row "${key}" is unavailable.`);
-          }
-          return [key, {
-            policy_token: record.policyToken,
-            updates: record.captureRequest().updates
-          }];
-        }));
-        return super._singleCall(attribute, { ...kwargs, __forms: forms }, options);
+      if (attribute === null || attribute === "append") {
+        return super._singleCall(attribute, kwargs, options);
       }
-      return super._singleCall(attribute, kwargs, options);
+      const children = this._policy.children || {};
+      const keys = attribute === "pop" ? [kwargs.key] : Object.keys(children);
+      const forms = Object.fromEntries(keys.map((key) => {
+        const record = this._registry.getRecord(children[key]);
+        if (!record || record.disposed) {
+          throw new Error(`Formset row "${key}" is unavailable.`);
+        }
+        return [key, {
+          policy_token: record.policyToken,
+          updates: attribute === "pop" ? {} : record.captureRequest().updates
+        }];
+      }));
+      return super._singleCall(attribute, { ...kwargs, __submitted_forms: forms }, options);
     }
     async validate() {
       const result = await this._callAttribute("validate");
@@ -4812,6 +4889,54 @@ ${expression ? 'Expression: "' + expression + `"
     async _getHtml(payload = {}) {
       const result = await this._callAttribute("render", payload);
       return result?.html ?? result;
+    }
+    _requestFields() {
+      const root = this.$el;
+      if (!root)
+        return {};
+      return {
+        mounted: [...root.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address"))
+      };
+    }
+    _deliverEvent(event) {
+      super._deliverEvent(event);
+      const root = this.$el;
+      const sourceElement = event.source.$el;
+      if (root && typeof CustomEvent !== "undefined" && !(this !== event.source && event.type === event.sourceType && sourceElement && root.contains(sourceElement))) {
+        const domEvent = new CustomEvent(event.type, { detail: event.detail, bubbles: true });
+        domEvent.source = event.source;
+        root.dispatchEvent(domEvent);
+      }
+    }
+    _deliverEvents(target) {
+      const eventIds = this._record.staticData?.event_ids || {};
+      const events = (target.effects?.events || []).filter(({ name }) => eventIds[name]).map(({ name, detail }) => ({
+        event: eventIds[name],
+        source_token: this._record.policyToken,
+        detail
+      }));
+      if (!events.length)
+        return [];
+      const ancestors = new Set(this._record.policy.identity?.ancestors || []);
+      const deliveries = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el).map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
+      if (!deliveries.length)
+        return [];
+      const batch = new GlueRequestBatch(this._http, deliveries.length);
+      return deliveries.map(([proxy, reactions]) => proxy._callAttribute("$receive", { events: reactions }, { batch }));
+    }
+    _reactionsTo(events, fromDescendant) {
+      const staticData = this._record.staticData || {};
+      const reacting = new Set([
+        ...staticData.rerender_on || [],
+        ...fromDescendant ? staticData.listeners || [] : []
+      ]);
+      return events.filter(({ event }) => reacting.has(event));
+    }
+    async _applyResponse(target, result) {
+      await Promise.allSettled(this._deliverEvents(target));
+      if (target.html !== undefined && this.$el && htmlToFragment(target.html).firstElementChild?.getAttribute("data-glue-address") === this._record.address) {
+        await result.renderOuterHtml(this.$el);
+      }
     }
   }
   var component_default = GlueComponentProxy;
@@ -5787,7 +5912,7 @@ ${expression ? 'Expression: "' + expression + `"
         }
         if (!node.hasAttribute("x-data"))
           node.setAttribute("x-data", "{}");
-        addScopeToNode2(node, { component: proxy });
+        addComponentScope(node, proxy);
       });
       return nodes;
     }

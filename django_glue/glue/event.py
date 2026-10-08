@@ -51,6 +51,7 @@ def emit_event(instance: Any, name: str, detail: dict[str, Any]) -> None:
 class GlueEvent:
     def __init__(self) -> None:
         self.name: str | None = None
+        self.identity: str | None = None
 
     def __set_name__(self, owner: type, name: str) -> None:
         if is_reserved_event_name(name):
@@ -58,6 +59,7 @@ class GlueEvent:
                 f'Glue event {name!r} conflicts with a browser event or reserved name.'
             )
         self.name = name
+        self.identity = f'{owner.__module__}.{owner.__qualname__}.{name}'
 
     def __get__(self, instance: Any, owner: type | None = None) -> Any:
         if instance is None:

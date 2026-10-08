@@ -7,19 +7,21 @@ from html import unescape
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
 from django.template import Context, Template
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
+    GlueAuthorizationError,
     GlueComponentRegistrationError,
     GlueRequestError,
     GlueRequestErrorCode,
 )
 from django_glue.glue.attributes import BoundGlueAttribute, GlueAttributeCollector
-from django_glue.glue.component import Component
-from django_glue.glue.component_registry import component_registry
+from django_glue.glue.base import BaseGlue
+from django_glue.glue.components import Component, component_registry
 from django_glue.glue.context import GlueContextManager
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.registry import glue_class_registry
@@ -36,7 +38,7 @@ from django_glue.tests.glue.test_callable_parameters import call_context
 
 class GreetingComponent(Glue.Component):
     namespace = 'greetingComponent'
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     def __init__(
         self,
@@ -46,9 +48,6 @@ class GreetingComponent(Glue.Component):
     ) -> None:
         super().__init__(**kwargs)
         self.greeting = greeting
-
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': self.greeting}
 
     @classmethod
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> GreetingComponent:
@@ -121,7 +120,7 @@ class ChildOwnerComponent(GreetingComponent):
         self.child_factory_calls += 1
         return self.child_value
 
-    @Glue.attr
+    @Glue.attr(skip_rerender=True)
     def ping(self) -> str:
         return 'pong'
 
@@ -169,7 +168,7 @@ class MountedResultComponent(Component):
     template = 'glue_template_test.html'
     label: str = Glue.attr('initial')
 
-    def mount(self) -> None:
+    def __post_init__(self, request) -> None:
         self.label = 'mounted'
 
 
@@ -203,7 +202,7 @@ def test_declared_parameters_are_signed_and_reconstructed_without_remount(mock_r
         draft: str = Glue.attr('', parameter=True, editable=True)
         internal: str = Glue.attr('initial')
 
-        def mount(self) -> None:
+        def __post_init__(self, request) -> None:
             self.internal = 'mounted'
 
     component = Glue.object(mock_request, ParameterComponent(count='3'))
@@ -218,6 +217,173 @@ def test_declared_parameters_are_signed_and_reconstructed_without_remount(mock_r
     assert type(reconstructed) is ParameterComponent
     assert reconstructed.count == 3
     assert reconstructed.internal == 'mounted'
+
+
+def test_post_init_runs_with_the_request_bound_and_not_at_construction(mock_request) -> None:
+    class RequestReadingComponent(Component):
+        template = 'glue_template_test.html'
+        seen_request: bool = Glue.attr(False)
+
+        def __post_init__(self, request) -> None:
+            self.seen_request = request is mock_request and self.request is request
+
+    component = RequestReadingComponent()
+
+    assert component.seen_request is False
+
+    Glue.object(mock_request, component)
+
+    assert component.seen_request is True
+
+
+def test_post_init_can_fill_a_defaulted_parameter_before_it_is_signed(mock_request) -> None:
+    class DerivedParameterComponent(Component):
+        template = 'glue_template_test.html'
+        week: int | None = Glue.attr(None, parameter=True)
+
+        def __post_init__(self, request) -> None:
+            if self.week is None:
+                self.week = 40
+
+    derived = Glue.object(mock_request, DerivedParameterComponent())
+    stamped = Glue.object(mock_request, DerivedParameterComponent(week=12, name='stamped'))
+
+    assert derived.policy.identity['parameters'] == {'week': 40}
+    assert stamped.policy.identity['parameters'] == {'week': 12}
+
+
+def test_overriding_mount_is_deprecated_but_still_run_before_post_init(mock_request) -> None:
+    with pytest.warns(DeprecationWarning, match='__post_init__'):
+        class LegacyMountComponent(Component):
+            template = 'glue_template_test.html'
+            steps: str = Glue.attr('')
+
+            def mount(self) -> None:
+                self.steps += 'mount,'
+
+            def __post_init__(self, request) -> None:
+                self.steps += 'post_init'
+
+    component = Glue.object(mock_request, LegacyMountComponent())
+
+    assert component.steps == 'mount,post_init'
+
+
+def test_an_undeclared_value_reaches_the_post_init_keyword_that_names_it(mock_request) -> None:
+    class NamedKeywordComponent(Component):
+        template = 'glue_template_test.html'
+        count: int = Glue.attr(parameter=True)
+        loaded: str = Glue.attr('')
+
+        def __post_init__(self, request, pk: int = 0) -> None:
+            self.loaded = f'row {pk}'
+
+    component = Glue.object(mock_request, NamedKeywordComponent(count=1, pk=7))
+    defaulted = Glue.object(mock_request, NamedKeywordComponent(count=1, name='defaulted'))
+
+    assert component.loaded == 'row 7'
+    assert defaulted.loaded == 'row 0'
+    assert component.policy.identity['parameters'] == {'count': 1}
+    assert not hasattr(component, 'pk')
+    with pytest.raises(Exception, match=r"Unknown parameters.*\['slug'\]"):
+        NamedKeywordComponent(count=1, pk=7, slug='x')
+
+
+def test_a_post_init_taking_kwargs_receives_every_undeclared_value(mock_request) -> None:
+    class AnyKeywordComponent(Component):
+        template = 'glue_template_test.html'
+        count: int = Glue.attr(parameter=True)
+        received: str = Glue.attr('')
+
+        def __post_init__(self, request, **kwargs: Any) -> None:
+            self.received = ','.join(sorted(kwargs))
+
+    component = Glue.object(mock_request, AnyKeywordComponent(count=1, pk=7, slug='x'))
+
+    assert component.received == 'pk,slug'
+    assert component.policy.identity['parameters'] == {'count': 1}
+
+
+def test_a_url_capture_that_is_not_a_parameter_reaches_post_init(mock_request) -> None:
+    class CapturedKeywordComponent(Component):
+        template = 'glue_template_test.html'
+        loaded: str = Glue.attr('')
+
+        def __post_init__(self, request, pk: int) -> None:
+            self.loaded = f'row {pk}'
+
+    response = CapturedKeywordComponent.as_view()(mock_request, pk=5)
+    html = response.content.decode()
+    entries = json.loads(unescape(html.split('data-glue-objects="', 1)[1].split('"', 1)[0]))
+
+    assert GluePolicy.from_token(entries[0]['policy_token']).state_snapshot['loaded'] == 'row 5'
+
+
+class ElevatingComponent(Component):
+    template = 'glue_template_test.html'
+
+    def __post_init__(self, request) -> None:
+        self.access = GlueAccess.DELETE
+
+
+class ElevatingProducerComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.attr
+    def spawn(self) -> ElevatingComponent:
+        return ElevatingComponent()
+
+
+def test_post_init_sets_the_access_the_component_is_signed_with(mock_request) -> None:
+    class UntouchedComponent(Component):
+        template = 'glue_template_test.html'
+
+    elevated = Glue.object(mock_request, ElevatingComponent())
+    untouched = Glue.object(mock_request, UntouchedComponent())
+
+    assert elevated.policy.access == 'delete'
+    assert untouched.policy.access == 'view'
+
+
+def test_access_changed_in_post_init_is_authorized_again(mock_request) -> None:
+    class ViewOnlyElevatingComponent(ElevatingComponent):
+        def is_authorized(self, request, operation) -> bool:
+            return operation.required_access is GlueAccess.VIEW
+
+    class ViewOnlyComponent(Component):
+        template = 'glue_template_test.html'
+
+        def is_authorized(self, request, operation) -> bool:
+            return operation.required_access is GlueAccess.VIEW
+
+    denied = ViewOnlyElevatingComponent()
+
+    with pytest.raises(GlueAuthorizationError):
+        Glue.object(mock_request, denied)
+
+    assert denied.request is None
+    assert Glue.object(mock_request, ViewOnlyComponent()).access is GlueAccess.VIEW
+
+
+def test_access_raised_in_post_init_is_capped_at_the_callers_access(mock_request) -> None:
+    def spawned_access(producer_access: GlueAccess) -> str:
+        producer = Glue.object(
+            mock_request,
+            ElevatingProducerComponent(access=producer_access, name=f'producer_{producer_access}'),
+        )
+        context = call_context(producer, 'spawn')
+        reconstructed = ElevatingProducerComponent.from_attribute_call_resolver_context(context)
+        entry, introduced = reconstructed.process_attribute_call(context)
+        result_entry = next(
+            introduced_entry
+            for introduced_entry in introduced
+            if introduced_entry['address'] == entry['result']
+        )
+        return GluePolicy.from_token(result_entry['policy_token']).access
+
+    assert spawned_access(GlueAccess.VIEW) == 'view'
+    assert spawned_access(GlueAccess.CHANGE) == 'change'
+    assert spawned_access(GlueAccess.DELETE) == 'delete'
 
 
 def test_component_returned_from_a_callable_is_mounted_at_introduction(mock_request) -> None:
@@ -248,7 +414,7 @@ def test_returned_component_introduces_its_owned_children(mock_request) -> None:
 
 
 class WeekComponent(Component):
-    template = 'glue_template_test.html'
+    template = 'glue_component_greeting_test.html'
 
     week: int = Glue.attr(parameter=True)
     note: str = Glue.attr('', editable=True)
@@ -257,8 +423,9 @@ class WeekComponent(Component):
     def _label(self) -> str:
         return f'week {self.week}'
 
-    def get_context_data(self) -> dict[str, str]:
-        return {'greeting': self._label}
+    @property
+    def greeting(self) -> str:
+        return self._label
 
     @Glue.property
     def label(self) -> str:
@@ -274,6 +441,18 @@ class WeekComponent(Component):
 
     @Glue.attr
     def annotate(self) -> None:
+        self.note = 'noted'
+
+    @Glue.attr
+    def report(self) -> str:
+        return 'reported'
+
+    @Glue.attr(skip_rerender=True)
+    def report_quietly(self) -> str:
+        return 'reported'
+
+    @Glue.attr(skip_rerender=True)
+    def annotate_quietly(self) -> None:
         self.note = 'noted'
 
 
@@ -303,15 +482,86 @@ def test_refresh_returns_current_component_markup(mock_request) -> None:
     assert entry['computed_data']['label'] == 'week 1'
 
 
-def test_state_only_change_does_not_rerender(mock_request) -> None:
+def _call_week(mock_request, attribute: str) -> dict[str, Any]:
     component = Glue.object(mock_request, WeekComponent(week=1))
-
-    context = call_context(component, 'annotate')
+    context = call_context(component, attribute)
     reconstructed = WeekComponent.from_attribute_call_resolver_context(context)
+    entry, _introduced = reconstructed.process_attribute_call(context)
+    return entry
+
+
+def test_state_change_rerenders(mock_request) -> None:
+    entry = _call_week(mock_request, 'annotate')
+
+    assert '>week 1</span>' in entry['html']
+    assert GluePolicy.from_token(entry['policy_token']).state_snapshot['note'] == 'noted'
+
+
+def test_callable_that_changes_no_retained_value_rerenders(mock_request) -> None:
+    entry = _call_week(mock_request, 'report')
+
+    assert entry['result'] == 'reported'
+    assert '>week 1</span>' in entry['html']
+    assert 'policy_token' not in entry
+
+
+def test_skip_rerender_suppresses_the_render(mock_request) -> None:
+    entry = _call_week(mock_request, 'report_quietly')
+
+    assert entry['result'] == 'reported'
+    assert 'html' not in entry
+
+
+def test_skip_rerender_is_overridden_when_a_retained_value_changed(mock_request) -> None:
+    entry = _call_week(mock_request, 'annotate_quietly')
+
+    assert '>week 1</span>' in entry['html']
+    assert GluePolicy.from_token(entry['policy_token']).state_snapshot['note'] == 'noted'
+
+
+def test_callable_returning_a_component_does_not_rerender_its_component(mock_request) -> None:
+    producer = Glue.object(mock_request, ResultProducerComponent())
+
+    context = call_context(producer, 'spawn')
+    reconstructed = ResultProducerComponent.from_attribute_call_resolver_context(context)
     entry, _introduced = reconstructed.process_attribute_call(context)
 
     assert 'html' not in entry
-    assert GluePolicy.from_token(entry['policy_token']).state_snapshot['note'] == 'noted'
+
+
+def test_skip_rerender_is_rejected_on_a_value_attribute() -> None:
+    with pytest.raises(ValueError, match='cannot declare callable options'):
+        class InvalidComponent(Component):
+            template = 'glue_template_test.html'
+
+            note: str = Glue.attr('', skip_rerender=True)
+
+        GlueAttributeCollector.collect(InvalidComponent)
+
+
+def test_skip_rerender_is_rejected_off_a_component() -> None:
+    from django.db import models
+
+    with pytest.raises(RuntimeError) as glue_object:
+        class NotAComponentGlue(BaseGlue):
+            namespace = 'notAComponent'
+
+            @Glue.attr(skip_rerender=True)
+            def save(self) -> None:
+                pass
+
+    with pytest.raises(RuntimeError) as model_method:
+        class Report(models.Model):
+            class Meta:
+                app_label = 'gorilla'
+
+            @Glue.attr(skip_rerender=True)
+            def archive(self) -> None:
+                pass
+
+    for raised in (glue_object, model_method):
+        assert isinstance(raised.value.__cause__, TypeError)
+        assert 'only means something on a Glue.Component' in str(raised.value.__cause__)
 
 
 def test_component_rejects_undeclared_or_missing_parameters() -> None:
@@ -355,6 +605,35 @@ def test_component_template_tag_stamps_typed_keyed_components(mock_request) -> N
     assert len(entries) == 2
     assert all(GluePolicy.from_token(entry['policy_token']).identity['parameters']['start'] in {1, 2} for entry in entries)
     assert entries[0]['address'] != entries[1]['address']
+
+
+def test_denied_component_stamped_by_tag_renders_nothing(mock_request) -> None:
+    mock_request.user = AnonymousUser()
+
+    html = Template(
+        "{% load django_glue %}<main>{% glue_component 'gorilla/protected_counter_card' start=1 %}</main>"
+    ).render(Context({'request': mock_request}))
+
+    assert html == '<main></main>'
+    assert GlueContextManager(mock_request).serialized_objects == []
+
+
+def test_denied_child_stamped_in_a_parent_template_renders_nothing(mock_request) -> None:
+    mock_request.user = AnonymousUser()
+    parent = Glue.object(mock_request, WeekComponent(week=1))
+
+    html = Template(
+        '{% load django_glue %}<section>'
+        "{% glue_component 'gorilla/protected_counter_card' start=1 %}"
+        "{% glue_component 'gorilla/counter_card' start=2 %}"
+        '</section>'
+    ).render(Context({'request': mock_request, 'component': parent}))
+
+    assert html.count('data-glue-address=') == 1
+    addresses = [entry['address'] for entry in GlueContextManager(mock_request).serialized_objects]
+    assert len(addresses) == 2
+    assert parent.address in addresses
+    assert not any('protected_counter_card' in item for item in addresses)
 
 
 def test_stamped_component_root_carries_its_children_entries(mock_request) -> None:
@@ -435,10 +714,70 @@ def test_component_requires_template_path() -> None:
         MissingTemplateComponent()
 
 
-def test_component_context_exposes_itself_by_default() -> None:
-    component = GreetingComponent()
+def test_context_data_set_in_post_init_joins_the_first_render_only(mock_request) -> None:
+    class PageContextComponent(Component):
+        template = 'glue_template_test.html'
 
-    assert Component.get_context_data(component) == {'component': component}
+        def __post_init__(self, request) -> None:
+            self.context_data['greeting'] = 'From the page context'
+            self.context_data['component'] = 'never replaces the component'
+
+    component = Glue.object(mock_request, PageContextComponent())
+    context = call_context(component, 'render')
+    rebuilt = PageContextComponent.from_attribute_call_resolver_context(context)
+
+    assert component._template_context() == {
+        'greeting': 'From the page context',
+        'component': component,
+    }
+    assert 'From the page context' in component.render().html
+    assert rebuilt.context_data == {}
+    assert 'From the page context' not in rebuilt.render().html
+
+
+class ContextDataCallComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.attr(skip_rerender=True)
+    def assign(self) -> None:
+        self.context_data = {'greeting': 'assigned'}
+
+    @Glue.attr(skip_rerender=True)
+    def mutate(self) -> None:
+        self.context_data['greeting'] = 'mutated'
+
+    @Glue.attr(skip_rerender=True)
+    def read(self) -> int:
+        return len(self.context_data)
+
+
+@pytest.mark.parametrize('attribute', ['assign', 'mutate'])
+def test_a_callable_that_changes_context_data_is_refused(mock_request, attribute: str) -> None:
+    component = Glue.object(mock_request, ContextDataCallComponent(name=f'context_{attribute}'))
+    context = call_context(component, attribute)
+    rebuilt = ContextDataCallComponent.from_attribute_call_resolver_context(context)
+
+    with pytest.raises(RuntimeError, match=rf'{attribute}\(\) changed context_data'):
+        rebuilt.process_attribute_call(context)
+
+
+def test_a_callable_that_only_reads_context_data_runs(mock_request) -> None:
+    component = Glue.object(mock_request, ContextDataCallComponent(name='context_read'))
+    context = call_context(component, 'read')
+    rebuilt = ContextDataCallComponent.from_attribute_call_resolver_context(context)
+
+    entry, _introduced = rebuilt.process_attribute_call(context)
+
+    assert entry['result'] == 0
+
+
+def test_defining_the_removed_get_context_data_fails_at_class_definition() -> None:
+    with pytest.raises(TypeError, match='context_data'):
+        class LegacyContextComponent(Component):
+            template = 'glue_template_test.html'
+
+            def get_context_data(self) -> dict[str, Any]:
+                return {'component': self}
 
 
 def test_component_render_requires_request_binding() -> None:

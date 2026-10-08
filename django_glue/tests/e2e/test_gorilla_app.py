@@ -9,7 +9,7 @@ from playwright.sync_api import expect
 
 from limelight import DemoSession
 
-from test_project.gorilla.models import Gorilla
+from test_project.gorilla.models import Gorilla, Skill
 
 if TYPE_CHECKING:
     from playwright.sync_api import Locator, Page
@@ -102,6 +102,67 @@ def test_contact_formset_keeps_surviving_draft_across_requests(
     page.get_by_role('button', name='Submit contacts').click()
 
     expect(page.locator('#contact-result')).to_have_text('{"valid":true,"names":["Bee"]}')
+
+
+def test_skill_formset_edits_seeded_records_and_creates_new_rows(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    del seeded_gorillas
+
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-skill-formset')
+    demo.goto('gorilla:skill_formset')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    rows = page.locator('.skill-row')
+    expect(rows).to_have_count(3)
+    expect(rows.nth(0).get_by_label('Skill name')).to_have_value('Chest Pound')
+    expect(rows.nth(1).get_by_label('Skill name')).to_have_value('Jungle Roar')
+    expect(rows.nth(2).get_by_label('Skill name')).to_have_value('Prefilled new skill')
+
+    rows.nth(0).get_by_label('Skill name').fill('Chest Slam')
+    rows.nth(2).get_by_label('Skill level').fill('20')
+    page.get_by_role('button', name='Validate skills').click()
+    expect(page.locator('#skill-result')).to_contain_text('"valid":true')
+    assert Skill.objects.filter(name='Chest Slam').count() == 0
+
+    page.get_by_role('button', name='Save skills').click()
+
+    expect(page.locator('#skill-result')).to_have_text('{"valid":true}')
+    assert list(Skill.objects.order_by('pk').values_list('name', flat=True)) == [
+        'Chest Slam',
+        'Jungle Roar',
+        'Prefilled new skill',
+    ]
+
+
+def test_skill_formset_removed_records_are_deleted_on_save(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    del seeded_gorillas
+
+    demo = DemoSession.start(page, application, shot_directory_name='gorilla-skill-formset-remove')
+    demo.goto('gorilla:skill_formset')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    rows = page.locator('.skill-row')
+    expect(rows).to_have_count(3)
+
+    rows.nth(0).get_by_role('button', name='Remove row').click()
+    expect(rows).to_have_count(2)
+    rows.nth(0).get_by_role('button', name='Remove row').click()
+    expect(rows).to_have_count(1)
+    expect(rows.nth(0).get_by_label('Skill name')).to_have_value('Prefilled new skill')
+    assert Skill.objects.count() == 2
+
+    page.get_by_role('button', name='Save skills').click()
+
+    expect(page.locator('#skill-result')).to_have_text('{"valid":true}')
+    expect(rows).to_have_count(1)
+    assert list(Skill.objects.values_list('name', flat=True)) == ['Prefilled new skill']
 
 
 def test_queryset_filter_order_slice_demo(

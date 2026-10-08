@@ -7,6 +7,8 @@ class DjangoGlueConfig(AppConfig):
     verbose_name = 'Django Glue'
 
     def ready(self) -> None:
+        from django_glue.glue.components.discovery import check_components_setting
         from django_glue.middleware import check_glue_view_middleware
 
         register(check_glue_view_middleware)
+        register(check_components_setting)

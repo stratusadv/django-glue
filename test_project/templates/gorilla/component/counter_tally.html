@@ -1,0 +1,7 @@
+{% load django_glue %}
+<div data-testid="counter-tally">
+    <p data-testid="tally-summary">Last counted {{ component.last_counted_start }}, {{ component.counted_since_mount }} counts</p>
+    {% for start in component.starts %}
+        {% glue_component 'gorilla/counter_card' start=start key=start %}
+    {% endfor %}
+</div>

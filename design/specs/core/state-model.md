@@ -94,6 +94,32 @@ site or `{% glue_component %}` resolves every parameter before the object is
 introduced, and the client never supplies one. Whether later client updates are
 allowed is determined by the value's independent editable role.
 
+A method decorated with `Glue.ComponentParameter` declares a model parameter; its
+name is the parameter name, it takes a primary key, and it returns an instance of
+its annotated model class. `target.parameters` holds only the key. Construction,
+and assignment by server code, use a supplied instance as is and pass a supplied
+key to the initializer; every later request passes the signed key to it, failing
+the address with `model_instance_not_found` on `DoesNotExist`. The initializer
+runs lazily, on the first read of the parameter with the request bound, and at
+most once per object. A supplied instance must have the shape the initializer
+returns. When `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` is on (it defaults to
+`DEBUG`), the first read of a supplied instance also calls the initializer: a `DoesNotExist`
+raises `invalid_component_parameter`, and a missing annotation or loaded relation
+emits `GlueModelParameterMismatchWarning` and uses the resolved instance. Model
+parameters are reconstructors; they cannot be editable, and an initializer is
+never client-callable
+([ADR 021](../../decisions/021-component-parameter-initializers.md)).
+
+An initializer that takes `(self, model, pk)` declares a bounded model parameter.
+Its return annotation is an upper bound, which may be abstract or `Model` itself:
+it accepts a row of any concrete subclass. `target.parameters` holds
+`{'model': <label>, 'pk': <key>}`, and decoding rejects a label that names no
+installed model or a model outside the bound with `invalid_component_parameter`
+before the initializer runs. Construction takes an instance or that signed
+mapping, never a bare key. Every later request calls the initializer with the
+labelled model and the key; all other rules above apply unchanged
+([ADR 026](../../decisions/026-bounded-model-parameters.md)).
+
 **The reconstructor role is the default.** A bare `Glue.attr(x)` survives in the
 signed policy token's `state_snapshot` and cannot be changed by the client.
 `Glue.attr(parameter=True)` has the same role but is supplied through the
@@ -140,6 +166,12 @@ Glue is stateless between requests, so the only place ordinary component memory
 can survive is the token the client holds. Parameterized values go in
 `target.parameters`; non-parameterized reconstructors and server-acknowledged
 editable draft state go in `state_snapshot`.
+
+A component may also keep per-user state in the host application's Django
+session ([ADR 031](../../decisions/031-component-session.md),
+component-system.md "Server-side component state"). That store is the host's,
+not part of this model: the browser never carries it back, so it is not signed,
+and reconstruction, admission and authorization read only the token.
 
 **No** → it is a **derived output** or construction metadata. The server
 recomputes it or ignores it, so authenticity of the browser's copy is
@@ -302,8 +334,10 @@ It is consulted at exactly three points, in this order:
 
 1. **Introduction** — before an address is assigned and its first token issued,
    with `kind='introduce'`. A denial means the object is never introduced and no
-   token exists for it. A page-root denial is a server-side error in the view; a
-   child denial means the owner's declared slot resolves to absent.
+   token exists for it. A page-root denial is a server-side error in the view: a
+   component served by `as_view()` responds 403. A child denial means the owner's
+   declared slot resolves to absent, and a component stamped by
+   `{% glue_component %}` renders nothing, whether or not it has an owner.
 2. **Reconstruction** — after the token is verified and the target is
    reconstructed, before protocol admission, with `kind='refresh'`, `'update'`
    or `'call'` as the interaction requires. A denial fails that address's entry
@@ -686,7 +720,7 @@ map. Child policies and state remain independent.
 | `ModelGlue`                  | model class, target PK, exposure/configuration, exposed editable values (row baseline plus acknowledged draft overlay) | the`editable=` projection (§9), derived from field metadata when omitted | current persisted read-only fields, annotations, relation children, errors | re-fetch and authorize the model; validate the draft before persistence; define stale-row conflict behaviour                                                                      |
 | `FormGlue` / `ModelForm`   | form class, target PK, initial/server state, acknowledged bound-data draft          | enabled exposed fields                                                      | errors, labels, widgets, choices                                           | preserve complete raw bound data for cross-field validation; files need a handler                                                                                                 |
 | `QuerySetGlue`               | authenticated query continuation, configuration, cursor and pagination bookkeeping  | declared query controls only                                                | rows, annotations, counts, and keyed child references                      | verify before unpickling through an allowlisting unpickler; bound payload size; close filter/order allowlists; key row construction by the editable projection; preserve batching |
-| `FormSetGlue`                | construction rules, stable membership/order, acknowledged form drafts               | keyed form fields and declared collection operations                        | form/non-form errors and keyed child references                            | replace positional identity with keys; preserve management-form invariants                                                                                                        |
+| `FormSetGlue`                | construction rules, stable membership/order, acknowledged form drafts, pending deletions of removed saved rows (ADR 028) | keyed form fields and declared collection operations                        | form/non-form errors and keyed child references                            | replace positional identity with keys; preserve management-form invariants                                                                                                        |
 | `SequenceGlue`               | reconstructable provider identity and server-owned order when applicable            | declared collection operations                                              | keyed child references                                                     | define reconstruction, membership, and ordering; an empty identity is invalid                                                                                                     |
 | `FunctionGlue`               | callable capability and target                                                      | none; call arguments are untrusted inputs                                   | result/effects and parameter metadata                                      | validate arguments and prevent request/context injection                                                                                                                          |
 | `Glue.view` and HTML results | none for the fragment transport; introduced objects carry their own signed policies | none unless represented by an addressed object                              | negotiated HTML envelope, introduced object entries, and effects           | request the actual target URL through normal Django middleware; content negotiation grants no authority                                                                           |
@@ -1045,7 +1079,11 @@ never hydrated, and grants no authority to a listener. JavaScript may dispatch
 a browser event with the same name, so no DOM event is evidence of a successful
 server operation. A handler that calls or refreshes another object uses that
 target's own policy and passes through its normal admission, validation, and
-authorization.
+authorization. This holds for a component's declared `Glue.listener` too
+(ADR 024): the client delivers the event as a `$receive` call on the listening
+component's own policy, the relayed detail is untrusted input, and only the
+source token that accompanies it is verified, as a descendant of the listener
+emitting an event its class declares.
 
 An event is a best-effort notification about one successfully produced
 response, not durable messaging or an exactly-once domain guarantee. Events
@@ -1144,6 +1182,22 @@ This is narrower than annotation-driven *declaration*, which is rejected (§
 Rejected Alternatives). `Glue.attr` still declares state explicitly; the
 annotation is consulted only to answer "coerce back to what?" A missing
 annotation falls back to the registry or leaves the value untouched.
+
+The built-in set includes a model-key handler for model parameters
+(§1, [ADR 021](../../decisions/021-component-parameter-initializers.md)).
+It encodes a model instance to its primary key for `target.parameters` and
+decodes the signed key to the primary key's Python type. For a bounded model
+parameter it encodes the model's label with the key and decodes the label to the
+model class, checked against the bound
+([ADR 026](../../decisions/026-bounded-model-parameters.md)). It never loads a row:
+turning a key into a row is the parameter's initializer, which is application
+code the handler does not replace.
+
+Every other parameter is encoded through its annotation's adapter in JSON mode,
+the same adapter that decodes it, so both directions accept the same types. A
+dataclass parameter is therefore signed as its JSON form and restored as an
+instance of the dataclass, with nested dates, decimals, and enums restored to
+their Python types.
 
 Replaces `GlueResponseJSONEncoder`, the seven attribute `state` implementations,
 the client's `parseFieldValue` type special-casing, and hand-written coercion of
@@ -1986,7 +2040,7 @@ existing proxy, editable draft, Alpine scope, and request queue* applies. The
 client keeps the user's work and receives a fresh token for it.
 
 The reintroduced object is a new introduction on the server: its retained
-state comes from the factory and, for a component, from `mount()`, never from
+state comes from the factory and, for a component, from `__post_init__()`, never from
 the expired token. Retained state the client cannot edit therefore restarts,
 and the client's editable draft reaches the fresh object as ordinary `updates`
 on its next call. Reading state out of the expired token would honor it past
@@ -1999,6 +2053,30 @@ and names its owner, so composition code (or a default client behaviour) can
 issue the owner request that repairs it. A page root has no owner and therefore
 no reintroduction path; an expired root is a reload, which is the correct
 outcome for a page whose session-scoped capability has run out.
+
+A request entry for a component also carries an optional `mounted` list: the
+addresses of the component roots the client has inside that component's root
+(ADR 025). When that component re-renders itself for this entry, a stamped child
+whose address is listed is not re-stamped; the list affects no other entry and
+no other render, such as a direct `render` call; the tag emits `<template data-glue-keep="ADDRESS">` and the
+client keeps the live child. A stamped child's address includes a hash of its
+signed parameters and access, so a child the parent now stamps differently is
+not in the list and renders fresh. Like `reintroduce`, the list is untrusted and
+needs no signing: listing a child the client does not have only denies that
+client the child's markup.
+
+```json
+{
+  "objects": [
+    {
+      "address": "review#7f3a9c21",
+      "policy_token": "...",
+      "call": {"attribute": "$receive", "kwargs": {"events": []}},
+      "mounted": ["review#7f3a9c21[banking/transaction_row:int:412:9c1e04ab]"]
+    }
+  ]
+}
+```
 
 A fixed named child may omit a key, in which case the property path itself is
 its stable identity. If reevaluation may intentionally select a different

@@ -1,5 +1,5 @@
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.objects.django import (
     FormGlue,

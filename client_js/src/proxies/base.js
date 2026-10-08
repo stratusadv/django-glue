@@ -1,5 +1,5 @@
 import {GlueAddressError, GlueProxyError} from "../errors"
-import {htmlResultFromResponse, htmlToFragment} from "../htmlRenderer"
+import {htmlResultFromResponse} from "../htmlRenderer"
 
 class BaseGlueProxy {
     constructor({http, record, registry, client = null, owner = null}) {
@@ -107,7 +107,7 @@ class BaseGlueProxy {
         }
     }
 
-    async _singleCall(attribute, kwargs, {submit = true, companions = []} = {}) {
+    async _singleCall(attribute, kwargs, {submit = true, companions = [], batch = null} = {}) {
         const requestCapture = this._record.captureRequest()
         if (!submit) requestCapture.updates = {}
         const companionCaptures = companions.map(record => {
@@ -127,6 +127,8 @@ class BaseGlueProxy {
                 kwargs,
                 companions,
                 signal: controller?.signal ?? null,
+                batch,
+                ...this._requestFields(),
             })
         } catch (error) {
             if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -183,19 +185,7 @@ class BaseGlueProxy {
         const result = target.html === undefined
             ? this._convertResult(rawResult, attribute)
             : htmlResultFromResponse(target, this._client)
-        // Only HTML rooted at this component's own address (its render(),
-        // whether called directly or returned by an action) replaces it. Any
-        // other HTML attribute on a component (a modal body, a row) is a
-        // fragment for its caller to place.
-        if (
-            target.html !== undefined
-            && this._policy.namespace === 'component'
-            && this.$el
-            && htmlToFragment(target.html).firstElementChild
-                ?.getAttribute('data-glue-address') === this._record.address
-        ) {
-            await result.renderOuterHtml(this.$el)
-        }
+        await this._applyResponse(target, result)
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
             const childRecord = this._registry.getRecord(rawResult)
             if (childRecord && !childRecord.owner) {
@@ -206,6 +196,16 @@ class BaseGlueProxy {
         this._processEffects(target)
         return {result, response: response.data}
     }
+
+    // Fields this proxy's request entries carry beyond its address, token,
+    // updates, and call.
+    _requestFields() {
+        return {}
+    }
+
+    // What this proxy does with an accepted response once its state is
+    // reconciled and before its effects are processed.
+    async _applyResponse(target, result) {}
 
     async _reintroduceWithOwner() {
         const owner = this._record.owner
@@ -312,21 +312,6 @@ class BaseGlueProxy {
                 reportError(error)
             }
         })
-        const sourceElement = event.source.$el
-        if (
-            this.$el
-            && typeof CustomEvent !== 'undefined'
-            && !(
-                this !== event.source
-                && event.type === event.sourceType
-                && sourceElement
-                && this.$el.contains(sourceElement)
-            )
-        ) {
-            const domEvent = new CustomEvent(event.type, {detail: event.detail, bubbles: true})
-            domEvent.source = event.source
-            this.$el.dispatchEvent(domEvent)
-        }
     }
 
     _convertResult(result, attribute = null) {

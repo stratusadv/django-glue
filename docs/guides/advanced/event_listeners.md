@@ -57,5 +57,57 @@ An ancestor DOM listener sees bubbling events from every descendant, so inspect
 `$event.detail.$address` when it needs a specific child. `$on()` is always
 source-scoped, including for non-rendered models, forms, and querysets.
 
+## Reacting to a child's event on the server
+
+A component that shows something its children change declares which of their
+events re-render it, instead of wiring `$refresh()` into its template:
+
+```python
+class TransactionReviewComponent(Glue.Component):
+    template = 'banking/component/transaction_review.html'
+    rerender_on = (
+        TransactionRowComponent.confirmed,
+        TransactionRowComponent.merchant_rule_created,
+    )
+```
+
+When a row stamped in this component's template emits `confirmed`, the client
+delivers the event to this component, which re-renders. The row keeps its place
+in that render and updates itself from its own response, which waits until this
+component's render has arrived, so the page changes once.
+
+- **List the declared events, not their names.**
+  `TransactionRowComponent.confirmed` fails at import if the row does not declare
+  it, and a subclass of the row still matches.
+- **`rerender_on` hears the event from anywhere on the page.** Any mounted
+  component that lists the event re-renders, whether it is the source's parent,
+  an ancestor further up, or a sibling such as a summary panel next to the
+  rows. All the components one response wakes re-render in a single request.
+
+To run code when a descendant's event arrives, decorate a method with
+`Glue.listener`. A listener only hears its descendants: a component stamped in
+its template, stamped inside one of those, or returned by one of their
+callables, wherever its host mounts it on the page. The component re-renders after it, like after any component
+callable; pass `skip_rerender=True` to opt out, though a listener that changes a
+retained value re-renders anyway. `required_access=` works as it does on
+`Glue.attr`. Take the event to learn which child changed: `event.source` is the
+emitting component, rebuilt from its signed token, with its parameters and
+scope. Type it with `Glue.ReceivedEvent[...]`:
+
+```python
+@Glue.listener(TransactionRowComponent.confirmed)
+def row_confirmed(self, event: Glue.ReceivedEvent[TransactionRowComponent]) -> None:
+    self.last_confirmed_merchant = event.source.transaction.merchant
+```
+
+`event.detail` is the payload the client relayed and is untrusted, like callable
+arguments. Read what you need from `event.source` or the database.
+
+A re-render redraws the component's own markup, not the children it stamps: a
+child still mounted on the page is kept as it is, with its state. So a child
+that shows data another component changes must declare `rerender_on` for the
+events that change it, or it shows what it last rendered. See
+[keeping children](../components.md#a-parents-re-render-keeps-its-children).
+
 Loading and transport errors remain normal promise behavior: set local loading
 state before `await`, catch errors, and clear loading state in `finally`.

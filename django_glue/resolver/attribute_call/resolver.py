@@ -8,8 +8,6 @@ from pydantic import ValidationError
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueError,
-    GlueInvalidSessionError,
-    GlueInvalidUserError,
     GlueRequestError,
     GlueRequestErrorCode,
 )
@@ -98,9 +96,10 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             target_attribute_name=entry.call.attribute if entry.call else None,
             target_attribute_call_kwargs=entry.call.kwargs if entry.call else {},
             reintroduce=entry.reintroduce,
+            mounted=entry.mounted,
         )
         try:
-            self._validate_session_and_user(context.request, decoded)
+            decoded.verify_request(context.request)
             glue_object = glue_class_registry.get_glue_class(decoded.namespace).from_attribute_call_resolver_context(
                 call_context
             )
@@ -109,24 +108,6 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             return [self._error_entry(entry, error)]
 
         return [entry_payload, *introduced]
-
-    @staticmethod
-    def _validate_session_and_user(request: HttpRequest, decoded: policy.GluePolicy) -> None:
-        current_session_id = request.session.session_key
-        if decoded.session_id != current_session_id:
-            raise GlueInvalidSessionError(
-                decoded.name,
-                policy_session_id=decoded.session_id,
-                current_session_id=current_session_id,
-            )
-
-        current_user_id = getattr(getattr(request, 'user', None), 'id', None)
-        if decoded.request_user_id != current_user_id:
-            raise GlueInvalidUserError(
-                decoded.name,
-                policy_user_id=decoded.request_user_id,
-                current_user_id=current_user_id,
-            )
 
     @staticmethod
     def _error_entry(entry: AddressedObjectEntry, error: GlueError) -> dict[str, Any]:

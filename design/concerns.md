@@ -33,9 +33,67 @@ tabulated in `state-model.md` §9 so the callable form is written down rather th
 inferred from examples. Revisit only if the overload starts producing real
 mistakes in review.
 
+### Form instances are not component parameters
+
+A parent could want to hand a child a form it built, with initial values or with
+errors from a failed submission. A parameter is fixed once stamped, while a form's
+input, errors, and draft values change with every interaction and are already
+signed and admitted by `FormGlue`. As a parameter the form would either freeze or
+become a second copy of state `FormGlue` owns, and building a form saves the
+parent no query.
+
+**Decision: a component builds its form as a `@Glue.property` child from its
+parameters** (the row as a model parameter, per ADR 021, plus any scalar initial
+values). The parent passes what the form is built from, never the form.
+
 ---
 
 ## Acknowledged — no action now
+
+### Querysets as component parameters
+
+Considered with ADR 021. A queryset parameter could be signed as its pickled query,
+reusing `QuerySetGlue`'s signing, restricted unpickler, and
+`DJANGO_GLUE_MAX_QUERY_ENCODED_BYTES`: the token grows with the query rather than
+the rows, every request re-runs it so results stay current, and its selections,
+annotations, and filters travel with it. Signing the rows' primary keys instead
+was rejected outright, because the token would grow with the rows and the list
+would freeze to the rows that existed when the child was stamped.
+
+It was not adopted because no current component needs it. Server-side lists are
+built in a `cached_property` from scalar parameters, and a list the client pages or
+filters is a `QuerySetGlue` child. The costs are a signed query in every
+instance's token and markup, which suits one widget per page but not one per row,
+and a parent saves a query only by passing the exact queryset it evaluated, not a
+filtered slice of it.
+
+**Reopen when** a reusable component must be handed an arbitrary query by its
+parent, such as a generic table or picker, which scalar parameters cannot describe.
+
+### Form classes as component parameters
+
+A generic modal could take which form to render as a parameter signed by its dotted
+path and restricted to subclasses of an allowed base, as `FormGlue` already signs
+its form class. Today one `FormComponent` subclass per form covers the case in a
+few lines, so the gain does not yet justify a new signed type and its import
+restriction.
+
+**Reopen when** the number of single-purpose form component subclasses becomes a
+maintenance cost in a consuming project.
+
+### Seeding derived values at construction
+
+Considered with ADR 021: a value derived from a component's own parameters, such
+as the entries a `TimeEntryDayComponent` lists, could be supplied by a parent that
+already computed it, so the portal's week dashboard would issue one entry query
+instead of eight. It was not adopted because such a value is not a parameter:
+nothing about it is signed, and accepting it at construction would add a second
+way into a component beside its parameters. The per-day cost is fixed at seven
+children, not proportional to rows.
+
+**Reopen when** a component tree pays a derived query per child at a scale that
+grows with data, and restructuring it as one component with partials is not an
+option.
 
 ### Family shortcuts change meaning by omission
 
@@ -79,3 +137,11 @@ its complexity. The roadmap's row-scale measurement constraint decides it.
 
 Rows therefore keep self-contained policies for now, reconstructed through the
 introducing queryset rather than the default manager.
+
+### Glue-wide live re-scoping of signed keys
+
+`ModelGlue` rebuilds its row with `model_class.objects.all()` and the signed key,
+so a row that leaves a user's scope stays actionable until its token expires. ADR
+021's model parameters re-apply scope on every interaction through their
+initializer. Whether `ModelGlue` and queryset rows should also re-apply a
+request-dependent scope is a separate, Glue-wide decision.

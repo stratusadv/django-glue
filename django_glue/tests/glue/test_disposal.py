@@ -9,7 +9,7 @@ from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.component import Component
+from django_glue.glue.components import Component
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
 

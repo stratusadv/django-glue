@@ -14,6 +14,8 @@ from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.attributes.definition import GlueAttributeKind
 
 if TYPE_CHECKING:
+    from django.http import HttpRequest
+
     from django_glue.glue.base import BaseGlue
 
 
@@ -92,7 +94,7 @@ class GluePolicy(BaseModel):
             'attributes': attributes,
             'address': glue_object.address,
             'children': glue_object.children,
-            'state_snapshot': glue_object._retained_state(),
+            'state_snapshot': glue_object._get_retained_state(),
             'capability': glue_object.get_capability(),
         })
 
@@ -139,6 +141,26 @@ class GluePolicy(BaseModel):
             raise GlueInvalidPolicyError('policy') from exc
 
         return cls.model_validate({**data, 'token': token})
+
+    def verify_request(self, request: HttpRequest) -> None:
+        """Reject a policy issued to another session or user than ``request``'s."""
+        from django_glue.exceptions import GlueInvalidSessionError, GlueInvalidUserError  # noqa: PLC0415
+
+        current_session_id = request.session.session_key
+        if self.session_id != current_session_id:
+            raise GlueInvalidSessionError(
+                self.name,
+                policy_session_id=self.session_id,
+                current_session_id=current_session_id,
+            )
+
+        current_user_id = getattr(getattr(request, 'user', None), 'id', None)
+        if self.request_user_id != current_user_id:
+            raise GlueInvalidUserError(
+                self.name,
+                policy_user_id=self.request_user_id,
+                current_user_id=current_user_id,
+            )
 
     @model_validator(mode='after')
     def validate_not_expired(self) -> Self:

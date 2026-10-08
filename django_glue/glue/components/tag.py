@@ -1,25 +1,37 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import TYPE_CHECKING, Any
 
 from django.template import Context, Node, TemplateSyntaxError
 from django.template.loader import get_template
+from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueComponentKeyError
+from django_glue.exceptions import (
+    GlueAuthorizationError,
+    GlueComponentKeyError,
+    GlueComponentParameterError,
+)
 from django_glue.glue import address
-from django_glue.glue.component import VIEW_COMPONENT_CONTEXT_KEY
-from django_glue.glue.component_naming import canonical_key, component_name
-from django_glue.glue.component_registry import component_registry
+from django_glue.glue.components.component import (
+    MOUNTED_CHILDREN_CONTEXT_KEY,
+    VIEW_COMPONENT_CONTEXT_KEY,
+    Component,
+)
+from django_glue.glue.components.naming import canonical_key, component_name
+from django_glue.glue.components.registry import component_registry
+from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.context import GlueContextManager
-from django_glue.glue.component_root import inject_component_root
 
 if TYPE_CHECKING:
     from django.template.base import FilterExpression, Parser, Token
 
 
 STAMPED_KEYS_ATTR = '_django_glue_stamped_component_keys'
+RERENDER_WITH_PARENT_FLAG = 'rerender_with_parent'
 
 
 class GlueComponentNode(Node):
@@ -29,11 +41,14 @@ class GlueComponentNode(Node):
         parameters: dict[str, FilterExpression],
         key_expression: FilterExpression | None,
         access_expression: FilterExpression | None,
+        *,
+        rerender_with_parent: bool = False,
     ) -> None:
         self.tag_expression = tag_expression
         self.parameters = parameters
         self.key_expression = key_expression
         self.access_expression = access_expression
+        self.rerender_with_parent = rerender_with_parent
 
     def render(self, context: Context) -> str:
         if self.tag_expression is None:
@@ -79,10 +94,36 @@ class GlueComponentNode(Node):
             **{key: expression.resolve(context) for key, expression in self.parameters.items()},
         )
         if parent is not None:
-            component._address = address.item(parent_address, f'{tag_name}:{canonical}')
-        GlueContextManager(request).add_glue(component)
+            # The address carries a hash of what this stamp passes the child, so
+            # a child stamped with new parameters or access is a new child and is
+            # not kept (ADR 025).
+            stamp = {'parameters': component.identity['parameters'], 'access': component.access}
+            if component._post_init_kwargs:
+                stamp['post_init'] = component._post_init_kwargs
+            try:
+                stamped = json.dumps(stamp, sort_keys=True)
+            except TypeError as error:
+                raise GlueComponentParameterError(
+                    f"'{tag_name}' was stamped with a value for __post_init__() that is not "
+                    'JSON-serializable, so a later render cannot tell whether it changed.'
+                ) from error
+            fingerprint = hashlib.blake2s(stamped.encode(), digest_size=4).hexdigest()
+            component._address = address.item(parent_address, f'{tag_name}:{canonical}:{fingerprint}')
+        if isinstance(parent, Component):
+            component._ancestors = parent.lineage
+        if (
+            not self.rerender_with_parent
+            and component.address in context.get(MOUNTED_CHILDREN_CONTEXT_KEY, ())
+        ):
+            # The client still has this child, and its parameters are unchanged
+            # (they are in its address): keep it rather than re-stamp it (ADR 025).
+            return format_html('<template data-glue-keep="{}"></template>', component.address)
+        try:
+            GlueContextManager(request).add_glue(component)
+        except GlueAuthorizationError:
+            return ''
         template = get_template(component.template)
-        with context.push(**component.get_context_data()):
+        with context.push(**component._template_context()):
             html = template.template.render(context)
         return mark_safe(inject_component_root(
             html,
@@ -102,11 +143,16 @@ def register_component_tags(register: Any) -> None:
         key_expression = None
         access_expression = None
         seen: set[str] = set()
+        rerender_with_parent = False
         for bit in bits[2:]:
+            if bit == RERENDER_WITH_PARENT_FLAG:
+                rerender_with_parent = True
+                continue
             key, separator, raw_value = bit.partition('=')
             if not separator or not raw_value:
                 raise TemplateSyntaxError(
-                    '{% glue_component %} accepts keyword arguments after the tag name.'
+                    '{% glue_component %} accepts keyword arguments and the '
+                    f'{RERENDER_WITH_PARENT_FLAG} flag after the tag name, not {bit!r}.'
                 )
             if key in seen:
                 raise TemplateSyntaxError(f'Duplicate component argument: {key!r}.')
@@ -120,7 +166,13 @@ def register_component_tags(register: Any) -> None:
                 access_expression = expression
             else:
                 parameters[key] = expression
-        return GlueComponentNode(tag_expression, parameters, key_expression, access_expression)
+        return GlueComponentNode(
+            tag_expression,
+            parameters,
+            key_expression,
+            access_expression,
+            rerender_with_parent=rerender_with_parent,
+        )
 
     def reject_end_tag(parser: Parser, token: Token) -> Node:
         _ = parser, token

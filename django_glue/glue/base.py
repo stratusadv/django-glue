@@ -307,12 +307,14 @@ class BaseGlue(ABC):
         }
 
     def get_static_data(self) -> dict[str, Any]:
-        """Client-visible static data (state-model.md §10 "Responses omit what
+        """
+        Client-visible static data (state-model.md §10 "Responses omit what
         did not change"): field descriptors with ``value_path`` state-path
         mappings, addressed-child kind/nullable slots, and callable argument
         shapes. Down-only and client-forgets: stable across calls for an
         unchanged object, omitted from the response when it did not change,
-        and never sent back to the server."""
+        and never sent back to the server.
+        """
         fields: dict[str, Any] = {}
         children: dict[str, Any] = {}
         callables: dict[str, Any] = {}
@@ -415,12 +417,21 @@ class BaseGlue(ABC):
         context: AttributeCallRequestContext
     ) -> Self:
         glue_object = cls._reconstruct_from_policy(context.target_glue_policy)
-        glue_object.request = context.request
-        glue_object._address = context.target_glue_policy.address
+        glue_object._authorize_reconstruction(context)
 
-        attribute = glue_object._bound_attributes.get(context.target_attribute_name)
+        return glue_object
+
+    def _authorize_reconstruction(self, context: AttributeCallRequestContext) -> None:
+        """
+        Bind a reconstructed object to its request and address, then authorize
+        the interaction as a whole (state-model.md §3, "Reconstruction").
+        """
+        self.request = context.request
+        self._address = context.target_glue_policy.address
+
+        attribute = self._bound_attributes.get(context.target_attribute_name)
         required_access = (
-            glue_object._resolve_required_access(attribute.definition.required_access)
+            self._resolve_required_access(attribute.definition.required_access)
             if attribute is not None
             else GlueAccess.VIEW
         )
@@ -430,13 +441,11 @@ class BaseGlue(ABC):
             kind = GlueOperationKind.UPDATE
         else:
             kind = GlueOperationKind.REFRESH
-        glue_object._require_authorization(GlueOperation(
+        self._require_authorization(GlueOperation(
             kind=kind,
             attribute=None,
             required_access=required_access,
         ))
-
-        return glue_object
 
     @classmethod
     @abstractmethod
@@ -444,11 +453,14 @@ class BaseGlue(ABC):
         """Reconstruct a GlueObject from a signed policy."""
         raise NotImplementedError
 
-    def _retained_state(self) -> dict[str, Any]:
-        """Non-parameterized retained state signed into the successor policy
+    def _get_retained_state(self) -> dict[str, Any]:
+        """
+        Non-parameterized retained state signed into the successor policy
         token's ``state_snapshot``: internal reconstructors plus the family's
-        acknowledged editable state (state-model.md §5, §10)."""
+        acknowledged editable state (state-model.md §5, §10).
+        """
         retained: dict[str, Any] = {}
+
         for path, attribute in self._bound_attributes.items():
             definition = attribute.definition
             if (
@@ -456,6 +468,7 @@ class BaseGlue(ABC):
                 and definition.value_role is GlueValueRole.RECONSTRUCTOR
             ):
                 retained[path] = attribute.get()
+
         return retained
 
     def _admit_updates(
@@ -725,15 +738,29 @@ class BaseGlue(ABC):
             required_access=required_access,
         ))
 
+        def invoke() -> Any:
+            hydrated_attribute = self._bound_attributes[call_context.target_attribute_name]
+            return hydrated_attribute.call(
+                **self._resolve_callable_arguments(hydrated_attribute, call_context)
+            )
+
+        return self._run_call(call_context, invoke, render_as_html=definition.render_as_html)
+
+    def _run_call(
+        self,
+        call_context: AttributeCallRequestContext,
+        invoke: Callable[[], Any],
+        *,
+        render_as_html: bool = False,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Hydrate, run an admitted and authorized call, and build its entry.
+
+        ``invoke`` runs after hydration, against the hydrated object.
+        """
+        policy = call_context.target_glue_policy
         incoming_static_data = self.get_static_data()
         self._hydrate(policy, call_context.target_glue_updates)
-        bound_attribute = self._bound_attributes[call_context.target_attribute_name]
-        call_result = bound_attribute.call(
-            **self._resolve_callable_arguments(
-                bound_attribute,
-                call_context,
-            )
-        )
+        call_result = invoke()
 
         self.__dict__['_bound_children'] = self._bind_children(
             live_children=policy.children,
@@ -754,7 +781,7 @@ class BaseGlue(ABC):
 
         response = GlueResponse.from_result(
             call_result,
-            render_as_html=definition.render_as_html,
+            render_as_html=render_as_html,
         )
         introduced.extend(response.objects)
         result = response.result
@@ -765,9 +792,7 @@ class BaseGlue(ABC):
                     introduced_entry['address'] for introduced_entry in introduced
                 }
             ):
-                result._address = address.transient(self.address)
-                result.cap_access(self.access)
-                result.introduce(self.request)
+                self._introduce_result(result)
                 introduced.append(result.entry.model_dump())
                 introduced.extend(result._serialized_child_entries())
             result = result.address
@@ -778,6 +803,12 @@ class BaseGlue(ABC):
             entry['html'] = response.html
         entry['effects'] = self._effects_payload(response, introduced)
         return entry, introduced
+
+    def _introduce_result(self, result: BaseGlue) -> None:
+        """Introduce a Glue object this object's callable returned, as its owner."""
+        result._address = address.transient(self.address)
+        result.cap_access(self.access)
+        result.introduce(self.request)
 
     def _effects_payload(
         self,

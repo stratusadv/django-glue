@@ -1,5 +1,166 @@
 # Changelog for Django Glue
 
+## v1.2.0
+
+### Breaking
+
+- A component's re-render after page load keeps the stamped children still on
+  the page instead of re-stamping them, so they keep their state and the
+  response carries only the parent's markup (ADR 025). A page that re-renders or
+  `$refresh()`es a parent so that its children redraw must now have each child
+  declare `rerender_on` for the events that change it, or stamp it with the new
+  `rerender_with_parent` flag. Otherwise those children show what they last
+  rendered.
+- `rerender_on` reaches every mounted component that lists the event, not only
+  the source's ancestors, and one response's deliveries travel in one request.
+  `Glue.listener` still hears only descendants.
+- `DJANGO_GLUE_COMPONENTS_ROOT` is removed. Replace it with
+  `DJANGO_GLUE_COMPONENTS = {'DIRS': [<root>]}`. A project that still sets it
+  fails the system check `django_glue.E004`, whose hint gives the replacement
+  (ADR 027).
+- The component modules moved into the `django_glue.glue.components` package:
+  `django_glue.glue.component` is now `django_glue.glue.components.component`,
+  and `component_registry`, `component_discovery`, `component_naming`,
+  `component_root` and `component_tag` are its `registry`, `discovery`,
+  `naming`, `root` and `tag` modules. `Glue.Component` is unchanged, and
+  `Component` and `component_registry` import from
+  `django_glue.glue.components`.
+- A formset's `save()` saves nothing when any row is invalid. It previously
+  saved the valid rows. It also no longer calls each row's own `save`; it
+  validates the rows and passes their Django forms to `save_forms` (ADR 028).
+- `Component.get_view_kwargs()` is removed. Give a request-derived parameter a
+  default and fill it in `__post_init__(request)`, and set `self.access` there.
+  A class that still defines it raises `TypeError` when it is defined
+  (ADR 030).
+- `Component.get_context_data()` is removed, and a component's template context
+  on a re-render is `component` alone. Read what the template shows from the
+  component, as `{{ component.entries }}`, and add page context such as
+  navigation to `self.context_data` in `__post_init__()`. A class that still
+  defines it raises `TypeError` when it is defined (ADR 030).
+- `layout_template` is renamed `view_template`, as a class attribute and as an
+  `as_view()` argument. A class that still defines `layout_template` raises
+  `TypeError` when it is defined (ADR 030).
+
+### Features
+
+- `@Glue.ComponentParameter` on a method declares a model parameter whose
+  initializer turns the signed primary key into the row. A construction site may
+  pass the loaded instance, which is used without a query; later requests resolve
+  the key through the initializer. `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS` (default
+  `DEBUG`) checks supplied instances and emits
+  `GlueModelParameterMismatchWarning` (ADR 021).
+- A model parameter whose initializer takes the model as well as the key,
+  `def host(self, model, pk)`, accepts a row of any concrete subclass of its
+  return annotation, so one component can serve rows of several models. The
+  token signs the model's label with the key (ADR 026).
+- A model parameter whose initializer annotates its key as `| None`, such as
+  `def entry(self, pk: int | None) -> TimeEntry`, may be left out for a record
+  that does not exist yet. The initializer builds it on every request, and once
+  a callable saves it the component is signed with the new key and edits that
+  record. One component can therefore create a record or edit one (ADR 029).
+- Component parameters are encoded through their annotation's adapter, so
+  dataclass parameters are signed and restored (ADR 021).
+- `__post_init__(self, request, **kwargs)` is the one hook that validates and
+  sets up a component. It runs once when the component first appears on a
+  page, after the user is authorized and before the first render (ADR 030):
+    - Assigning `self.access` sets the level the component is signed with. A
+      changed level is authorized again, and a component returned from a
+      callable is capped at its caller's level.
+    - Values added to `self.context_data` join the template context of the
+      first render and of the view template. They are not kept, and a callable
+      that changes `context_data` raises an error.
+    - A URL capture, `as_view()` argument, or template-tag argument that is not
+      a declared parameter is passed to the keyword of `__post_init__` with
+      that name. It is not signed.
+- A component's `rerender_on = (ChildComponent.event, ...)` re-renders it when
+  a descendant emits one of those events, and `@Glue.listener(ChildComponent.event)`
+  runs a method first. The client delivers the event through the component's
+  built-in `$receive` call, and the child applies its own markup once the
+  component's render has arrived, so the page changes once. A listener's `event.source` is the emitting
+  component, rebuilt from its signed token (ADR 024).
+- A component's signed identity records its ancestors: the component whose
+  template stamped it, or whose callable returned it, and theirs.
+- `DJANGO_GLUE_COMPONENTS` configures where component tags are looked up, shaped
+  like Django's `TEMPLATES`: `DIRS` lists directories searched in order, and
+  `APP_DIRS` (default `True`) also searches the installed apps by package path.
+  A library's components resolve in any project that installs its apps, and a
+  project overrides one by defining the same class at the same tag path under
+  one of its `DIRS` (ADR 027).
+- `Glue.formset()` and `Glue.FormSet` take `instances` (saved records to edit)
+  and `initial` (prefilled blank rows), so a formset can load existing records.
+  Removing a saved row with `pop` deletes its record on the next `save()`, and
+  needs `Glue.Access.DELETE`. `save_forms` and `delete_removed` on a
+  `Glue.FormSet` subclass replace how rows are saved and deleted (ADR 028).
+- `new_row_defaults` on `Glue.formset()` and `Glue.FormSet` sets starting values
+  on every new row, such as the key of the record the rows belong to. The values
+  are signed and may name fields the form does not expose. The browser cannot
+  change a default on a field the form does not expose or disables; a default on
+  an editable field prefills it (ADR 028).
+- A formset's `validate()` and `save()` load all submitted rows in one query,
+  and `save()` writes only the saved rows that changed. Django's own validation
+  queries for a form's foreign-key and unique fields still run per row
+  (ADR 028).
+- `Component.session` is a mutable mapping of server-side scratch state,
+  scoped by the component class's module-qualified name and backed by the
+  request's Django session. Setting or deleting a key marks the session
+  modified, and Django saves it when the request completes, so a request that
+  writes nothing saves nothing. The state is per-user, never signed, and
+  never sent to the client. `DJANGO_GLUE_COMPONENT_SESSION_KEY_PREFIX`
+  (default `django_glue:component_session:`) sets the prefix of the session
+  keys it uses (ADR 031).
+- `Glue.SessionAttr(default)`, a shortcut for `Glue.attr(default, session=True)`,
+  declares a component value stored in the component's session. The client
+  reads it and cannot write it, a callable changes it by assignment, and it
+  survives a page load because the session, not the token, holds it. A
+  callable that does not re-render its component, such as one declared with
+  `skip_rerender=True`, still sends the session values it changed (ADR 031).
+
+### Deprecated
+
+- `Component.mount()` is deprecated and will be removed in a future version.
+  Rename it to `__post_init__(self, request)`. An overridden `mount()` still
+  runs, before `__post_init__`, and emits a `DeprecationWarning` (ADR 030).
+
+### Changes
+
+- A component constructed without a `name` is named after its class, as
+  `as_view()` already named it, instead of the shared name `component`.
+- A successful component callable re-renders its component in the same
+  response. A callable returning a Glue object skips the render, and
+  `@Glue.attr(skip_rerender=True)` opts any other callable out unless it changed
+  one of the component's retained values (ADR 022). Callables that returned
+  `self.render()` can return `None`, and a client `$refresh()` after the
+  component's own action is no longer needed. Mark a callable that deletes the
+  row its component shows with `skip_rerender=True`. The option is a
+  `TypeError` at class definition anywhere but on a component.
+- A component stamped by `{% glue_component %}` whose `is_authorized()` denies it
+  renders nothing instead of failing the page. `as_view()` still responds 403.
+- `GlueAuthorizationError` messages name the denied operation and attribute.
+
+### Fixes
+
+- A formset's `append(initial)` rejects any `initial` key that is not a field
+  the form lets a user edit. It previously accepted every key, so a browser
+  could set model fields the form did not expose on a new row, including the
+  key of the record the row belongs to. A page that passed such a key declares
+  `new_row_defaults` instead (ADR 028).
+- A formset accepts a submitted row only if that formset issued it. It
+  previously accepted a row issued by another formset with the same name, so a
+  user could delete a record through a formset where they held
+  `Glue.Access.DELETE` using a row from one where they held only `CHANGE`. A
+  page loaded before the upgrade keeps working: its rows carry no issuer check
+  until the page is loaded again (ADR 028).
+- Describing a form's foreign-key or many-to-many field no longer loads the whole
+  related table. The rows were read and then discarded, once per relation field
+  for every form and every formset row. What the client receives is unchanged.
+- A component nested inside another component, or inside any element with
+  `x-data`, now sees its ancestors' Alpine data, as ordinary nested `x-data`
+  does. Glue previously attached the `component` scope before Alpine had
+  initialized the ancestors, so their `x-data` was missing from the nested
+  component's scope.
+- Re-rendering no longer stacks another `component` scope on a component root
+  that Alpine had already initialized.
+
 ## v1.1.0
 
 The full migration guide for these changes is at [Migration Guide](../migration.md).

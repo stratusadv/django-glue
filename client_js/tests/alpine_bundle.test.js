@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, test} from "bun:test"
 import {Window} from "happy-dom"
+import {createEntry} from "./testUtils"
 
 const bundle = await Bun.file('django_glue/static/django_glue/js/django_glue.js').text()
 const windows = []
@@ -48,6 +49,36 @@ describe('bundled Alpine startup', () => {
         await page.happyDOM.waitUntilComplete()
 
         expect(page.document.querySelector('div').textContent).toBe('ready')
+    })
+
+    test('a nested component root inherits its ancestors x-data under its own component scope', async () => {
+        const page = createPage()
+        page.eval(bundle)
+        const component = address => createEntry({
+            policy: {name: address, namespace: 'component', address, attributes: [], state_snapshot: {}},
+            static_data: {fields: {}, callables: {}},
+        })
+        page.document.body.innerHTML = `
+            <div data-glue-address="tally#test" x-data="{categories: ['Software']}">
+                <div data-glue-address="tally#test[card]" x-data="{open: false}">
+                    <span x-text="[categories[0], component.$el.getAttribute('data-glue-address'), open].join(':')"></span>
+                </div>
+            </div>`
+        page.document.querySelector('[data-glue-address="tally#test"]')
+            .setAttribute('data-glue-objects', JSON.stringify([component('tally#test')]))
+        page.document.querySelector('[data-glue-address="tally#test[card]"]')
+            .setAttribute('data-glue-objects', JSON.stringify([component('tally#test[card]')]))
+        page.eval('window.Glue = new GlueClient({objects: []})')
+
+        page.document.dispatchEvent(new page.Event('DOMContentLoaded'))
+        await page.Alpine.nextTick()
+        page.Glue.registerComponentsFromDom()
+        const card = page.document.querySelector('[data-glue-address="tally#test[card]"]')
+        const scopes = card._x_dataStack.length
+        page.Glue.registerComponentsFromDom()
+
+        expect(page.document.querySelector('span').textContent).toBe('Software:tally#test[card]:false')
+        expect(card._x_dataStack.length).toBe(scopes)
     })
 
     test('rejects an already loaded external Alpine runtime', () => {

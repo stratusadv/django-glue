@@ -40,14 +40,29 @@ const HtmlRenderer = (Base = class {}) => class extends Base {
 
     _morphHtml(element, next, inner = false) {
         const client = this._client
-        const previousAddresses = client ? [
+        const previousNodes = [
             ...(element.matches?.('[data-glue-address]') ? [element] : []),
             ...element.querySelectorAll('[data-glue-address]'),
-        ].map(node => node.getAttribute('data-glue-address')) : []
+        ]
+        const previousAddresses = client
+            ? previousNodes.map(node => node.getAttribute('data-glue-address'))
+            : []
+        // A child the server kept arrives as a placeholder (ADR 025). Put an
+        // empty copy of the live child's element there, so the morph pairs the
+        // two, and mark it so the morph leaves the live child untouched. A
+        // deep copy would carry nodes Alpine generated, such as x-for items.
+        next.querySelectorAll('template[data-glue-keep]').forEach(placeholder => {
+            const address = placeholder.getAttribute('data-glue-keep')
+            const live = previousNodes.find(node => node.getAttribute('data-glue-address') === address)
+            if (!live) return placeholder.remove()
+            const shell = live.cloneNode(false)
+            shell._glueKeep = true
+            placeholder.replaceWith(shell)
+        })
         morph(element, next, {
             key: node => node.getAttribute?.('data-glue-address') || node.getAttribute?.('key') || node.id,
             updating(node, to, childrenOnly, skip) {
-                if (node.hasAttribute?.('data-morph-ignore')) return skip()
+                if (to?._glueKeep || node.hasAttribute?.('data-morph-ignore')) return skip()
                 if (inner && node === element) childrenOnly()
             },
         })

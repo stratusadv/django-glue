@@ -8,7 +8,7 @@ from django.urls import reverse
 from django_glue import Glue
 from test_project.gorilla.forms import GorillaGlueModelForm
 from test_project.gorilla.models import Gorilla, Skill
-from test_project.gorilla.forms import GorillaForm
+from test_project.gorilla.forms import GorillaForm, SkillForm
 from test_project.test_forms import ContactFormSet
 
 
@@ -19,6 +19,19 @@ def component_view(request: HttpRequest) -> HttpResponse:
 def contact_formset_view(request: HttpRequest) -> HttpResponse:
     Glue.formset(request, 'contacts', ContactFormSet, Glue.Access.CHANGE)
     return render(request, 'gorilla/page/contact_formset_page.html')
+
+
+def skill_formset_view(request: HttpRequest) -> HttpResponse:
+    Glue.formset(
+        request,
+        'skills',
+        SkillForm,
+        Glue.Access.DELETE,
+        instances=Skill.objects.order_by('pk')[:10],
+        initial=[{'name': 'Prefilled new skill', 'difficulty': 3}],
+        can_delete=True,
+    )
+    return render(request, 'gorilla/page/skill_formset_page.html')
 
 
 def list_view(request: HttpRequest) -> HttpResponse:

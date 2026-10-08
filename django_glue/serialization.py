@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Any
 from django import forms
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
-from pydantic import TypeAdapter
+from pydantic import PydanticUserError, TypeAdapter
+from pydantic_core import PydanticSerializationError
 from pydantic import ValidationError as PydanticValidationError
 
 if TYPE_CHECKING:
@@ -29,6 +30,12 @@ class GlueSerializerHandler(ABC):
     @abstractmethod
     def decode(self, value: Any, target: Any) -> Any:
         raise NotImplementedError
+
+    def encode(self, value: Any, target: Any) -> Any:
+        """The value in its wire form. A handler whose values already are
+        keeps this default."""
+        _ = target
+        return value
 
 
 class GlueSerializerRegistry:
@@ -68,6 +75,16 @@ class GlueSerializerRegistry:
         for handler in self._handlers:
             if handler.supports(target):
                 return handler.decode(value, target)
+        return value
+
+    def encode(
+        self,
+        value: Any,
+        target: Any,
+    ) -> Any:
+        for handler in self._handlers:
+            if handler.supports(target):
+                return handler.encode(value, target)
         return value
 
 
@@ -136,18 +153,41 @@ class DjangoFormFieldSerializer(GlueSerializerHandler):
         return value
 
 
+_ADAPTERS: dict[Any, TypeAdapter[Any]] = {}
+
+
+def _adapter(target: Any) -> TypeAdapter[Any]:
+    """The adapter for an annotation, built once: building one compiles a
+    schema, which costs 30-200x as much as using it, and a component's
+    parameters are coerced and encoded on every construction."""
+    try:
+        return _ADAPTERS[target]
+    except KeyError:
+        adapter = _ADAPTERS[target] = TypeAdapter(target)
+        return adapter
+    except TypeError:
+        # An unhashable annotation cannot be a cache key.
+        return TypeAdapter(target)
+
+
 class AnnotationSerializer(GlueSerializerHandler):
     def supports(self, target: Any) -> bool:
         return target is not None
 
     def coerce(self, value: Any, target: Any) -> Any:
         try:
-            return TypeAdapter(target).validate_python(value)
-        except (PydanticValidationError, TypeError, ValueError) as error:
+            return _adapter(target).validate_python(value)
+        except (PydanticValidationError, PydanticUserError, TypeError, ValueError) as error:
             raise GlueSerializerError(str(error)) from error
 
     def decode(self, value: Any, target: Any) -> Any:
         return self.coerce(value, target)
+
+    def encode(self, value: Any, target: Any) -> Any:
+        try:
+            return _adapter(target).dump_python(value, mode='json')
+        except (PydanticUserError, PydanticSerializationError) as error:
+            raise GlueSerializerError(str(error)) from error
 
 
 glue_serializer_registry = GlueSerializerRegistry(

@@ -5,6 +5,15 @@ import {GlueAlpineError} from "./errors"
 Alpine.plugin(morphPlugin)
 Alpine.magic('glue', element => globalThis.Glue?.from(element) || null)
 
+// Alpine runs directive handlers after walking the whole tree, parents first.
+// Ordered before x-data, this attaches a component root's `component` scope
+// after its ancestors' x-data exist, so the root inherits them, and before its
+// own x-data, which layers on top.
+Alpine.directive('glue-component', element => {
+    const proxy = globalThis.Glue?.from(element)
+    if (proxy) Alpine.addScopeToNode(element, {component: proxy})
+}).before('data')
+
 let installed = false
 let started = false
 
@@ -43,8 +52,15 @@ function morph(element, html, options = {}) {
     return Alpine.morph(element, html, options)
 }
 
-function addScopeToNode(element, scope) {
-    Alpine.addScopeToNode(element, scope)
+// A root Alpine has not initialized yet gets its scope from the directive
+// above. One Alpine already initialized gets it here, once.
+function addComponentScope(element, proxy) {
+    if (!element._x_marker) {
+        element.setAttribute('x-glue-component', '')
+        return
+    }
+    if (element._x_dataStack?.some(scope => scope.component === proxy)) return
+    Alpine.addScopeToNode(element, {component: proxy})
 }
 
-export {installAlpine, reactive, morph, addScopeToNode}
+export {installAlpine, reactive, morph, addComponentScope}

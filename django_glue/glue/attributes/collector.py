@@ -209,6 +209,7 @@ class GlueAttributeCollector:
                 allowed_arguments=allowed_arguments,
                 injected_arguments=injected_arguments,
                 render_as_html=options.render_as_html,
+                skip_rerender=options.skip_rerender,
                 expected_type=expected_type,
                 is_nullable=is_nullable,
             ),
