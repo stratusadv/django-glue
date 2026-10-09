@@ -181,3 +181,57 @@ describe('component listeners', () => {
         expect(errors).toEqual([`Glue request for address "${TALLY}" failed: denied`])
     })
 })
+
+describe('$dispatch', () => {
+    test('reaches $on listeners and the page with no request when no component reacts', async () => {
+        const {client, card} = tallyClient({listeners: []})
+        const requests = respond(client, {tally: {}})
+        const heard = []
+        const bubbled = []
+        card.$on('counted', event => heard.push([event.type, event.detail, event.source === card]))
+        document.body.addEventListener('counted', event => bubbled.push(event.detail), {once: true})
+
+        await card.$dispatch('counted', {value: 3})
+
+        expect(requests).toEqual([])
+        expect(heard).toEqual([['counted', {value: 3, $address: CARD}, true]])
+        expect(bubbled).toEqual([{value: 3, $address: CARD}])
+    })
+
+    test('tells a component that reacts to the event, as a fired event does', async () => {
+        const {client, card, cardToken} = tallyClient()
+        const requests = respond(client, {tally: {}})
+
+        await card.$dispatch('counted', {value: 3})
+
+        expect(requests.map(request => [request.address, request.attribute])).toEqual([
+            [TALLY, '$receive'],
+        ])
+        expect(requests[0].kwargs).toEqual({
+            events: [{event: COUNTED, source_token: cardToken, detail: {value: 3}}],
+        })
+    })
+
+    test('refuses an event the object does not declare', async () => {
+        const {card} = tallyClient()
+
+        await expect(card.$dispatch('cancelled')).rejects.toThrow(
+            'Event "cancelled" is not declared on this Glue object.',
+        )
+    })
+
+    test('raises a declared event on an object that is not a component', async () => {
+        const entry = createEntry({
+            policy: {name: 'koko', address: 'koko#test'},
+            staticData: {events: ['saved']},
+        })
+        const client = new GlueClient({objects: [entry]})
+        const model = client._registry.getProxy(entry.address)
+        const heard = []
+        model.$on('saved', event => heard.push(event.detail))
+
+        await model.$dispatch('saved', {pk: 7})
+
+        expect(heard).toEqual([{pk: 7, $address: 'koko#test'}])
+    })
+})

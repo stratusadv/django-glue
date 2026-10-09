@@ -3,7 +3,7 @@ import type {GlueEvent} from "./base"
 import HtmlRenderer, {htmlToFragment} from "../htmlRenderer"
 import type {HtmlResult} from "../htmlRenderer"
 import {GlueRequestBatch} from "../http"
-import type {GlueAddressedEntry, GlueStaticData} from "../wire"
+import type {GlueAddressedEntry, GlueEmittedEvent, GlueStaticData} from "../wire"
 
 // Component.get_static_data() in django_glue/glue/components/component.py
 // adds each declared event's identity and the identities the component
@@ -69,11 +69,19 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
         }
     }
 
+    // A component's event also reaches the components that react to it, which
+    // costs a request only when one does.
+    async $dispatch(name: string, detail: Record<string, unknown> = {}): Promise<void> {
+        this._requireDeclaredEvent(name)
+        await Promise.allSettled(this._deliverEvents({effects: {events: [{name, detail}]}}))
+        this._raiseEvent(name, detail)
+    }
+
     // Calls `$receive` on every component that reacts to this response's
     // events (ADR 024, ADR 025): any mounted component that re-renders on one,
     // anywhere on the page, and any mounted ancestor with a listener for one.
     // The calls travel in one request. Returns their promises.
-    _deliverEvents(target: GlueAddressedEntry): Promise<unknown>[] {
+    _deliverEvents(target: {effects?: {events?: GlueEmittedEvent[]}}): Promise<unknown>[] {
         const eventIds = (this._record.staticData as GlueComponentStaticData)?.event_ids || {}
         const events = (target.effects?.events || [])
             .filter(({name}) => eventIds[name])

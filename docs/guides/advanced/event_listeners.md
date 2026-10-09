@@ -57,6 +57,37 @@ An ancestor DOM listener sees bubbling events from every descendant, so inspect
 `$event.detail.$address` when it needs a specific child. `$on()` is always
 source-scoped, including for non-rendered models, forms, and querysets.
 
+## Raising an event from the browser
+
+`$dispatch(name, detail)` raises one of an object's declared events without a
+call to the server, for an outcome the browser already knows, such as a prompt
+being cancelled:
+
+```html
+<button type="button" @click="component.$dispatch('cancelled')">Cancel</button>
+```
+
+It reaches everything a fired event reaches: the object's `$on()` listeners,
+the bubbling DOM event from a component's root, and any mounted component that
+re-renders on or listens for the event. Only the last of those makes a request,
+and only when such a component exists. `$dispatch()` returns a promise that
+settles once those components have responded.
+
+It is not Alpine's `$dispatch`, which it is named after and which is still
+available inside a component:
+
+| | Alpine's `$dispatch('saved')` | Glue's `component.$dispatch('saved')` |
+|---|---|---|
+| Event name | Any | One the object declares |
+| `$on()` listeners | Not called | Called |
+| DOM event | From the current element | From the component's root |
+| Components that react on the server | Not told | Told |
+
+Because the browser can raise an event, a listener on the server must not take
+one as proof that an action happened. The server checks that the source is an
+object the user holds and that the receiver listens for the event, and nothing
+more. A listener that acts on an event reads what it needs from the database.
+
 ## Reacting to a child's event on the server
 
 A component that shows something its children change declares which of their

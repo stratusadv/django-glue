@@ -4314,10 +4314,17 @@ ${expression ? 'Expression: "' + expression + `"
     get $owner() {
       return this._owner;
     }
-    $on(name, callback) {
+    _requireDeclaredEvent(name) {
       if (!(this._record.staticData?.events || []).includes(name)) {
         throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`);
       }
+    }
+    async $dispatch(name, detail = {}) {
+      this._requireDeclaredEvent(name);
+      this._raiseEvent(name, detail);
+    }
+    $on(name, callback) {
+      this._requireDeclaredEvent(name);
       const listeners = this._eventListeners.get(name) || new Set;
       listeners.add(callback);
       this._eventListeners.set(name, listeners);
@@ -4526,14 +4533,14 @@ ${expression ? 'Expression: "' + expression + `"
         const handler = this._onMessage || window.Glue?._onMessage;
         handler?.({ messages, proxy: this });
       }
-      effects.events?.forEach(({ name, detail }) => {
-        const event = {
-          type: name,
-          sourceType: name,
-          detail: { ...detail, $address: this._record.address },
-          source: this
-        };
-        this._deliverEvent(event);
+      effects.events?.forEach(({ name, detail }) => this._raiseEvent(name, detail));
+    }
+    _raiseEvent(name, detail) {
+      this._deliverEvent({
+        type: name,
+        sourceType: name,
+        detail: { ...detail, $address: this._record.address },
+        source: this
       });
     }
     _deliverEvent(event) {
@@ -4917,6 +4924,11 @@ ${expression ? 'Expression: "' + expression + `"
         domEvent.source = event.source;
         root.dispatchEvent(domEvent);
       }
+    }
+    async $dispatch(name, detail = {}) {
+      this._requireDeclaredEvent(name);
+      await Promise.allSettled(this._deliverEvents({ effects: { events: [{ name, detail }] } }));
+      this._raiseEvent(name, detail);
     }
     _deliverEvents(target) {
       const eventIds = this._record.staticData?.event_ids || {};

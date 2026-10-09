@@ -57,19 +57,19 @@ django-glue/
 │   ├── templates/django_glue/      # init template (context JSON + client bootstrap)
 │   └── tests/                      # pytest suite (glue/, resolver/, e2e/, security/, ...)
 ├── client_js/
-│   ├── django_glue.js              # Entry: globalThis.GlueClient, installs Alpine
+│   ├── django_glue.ts              # Entry: globalThis.GlueClient, installs Alpine
 │   ├── scripts/build.js            # Bun bundler → django_glue/static/django_glue/js/
 │   ├── src/
-│   │   ├── client.js               # GlueClient: namespace getters, addressed entry registration
+│   │   ├── client.ts               # GlueClient: namespace getters, addressed entry registration
 │   │   ├── http.ts                 # Multipart attribute requests, file extraction
 │   │   ├── policy.ts               # Signed-policy-token client
 │   │   ├── wire.ts                 # Wire-format types, each naming the Python it mirrors
-│   │   ├── alpine.js               # The only module that references Alpine/morph
+│   │   ├── alpine.ts               # The only module that references Alpine/morph
 │   │   ├── runtime/                # addressRegistry, addressRecord, attributeMaterializer,
 │   │   │                           # childBinder, responseDispatcher, state
 │   │   ├── proxies/                # base, model, queryset, form, formset, function,
 │   │   │                           # component, sequence, fieldBacked + fields/
-│   │   └── view.js                 # Glue.view (server-rendered fragments)
+│   │   └── view.ts                 # Glue.view (server-rendered fragments)
 │   └── tests/                      # bun test (happy-dom)
 ├── test_project/                   # Django app used by all tests (gorilla, fight,
 │                                   # comments, lab, core)
@@ -216,16 +216,17 @@ await Glue.view('/gorilla/detail/').renderInnerHtml('#panel')
   resolve result → apply effects).
 - `client_js/src/proxies/` holds the per-namespace proxy classes;
   proxy-specific behavior (chaining, caching, hydration, row lists) lives on
-  the subclass, never in `base.ts` or `client.js`.
+  the subclass, never in `base.ts` or `client.ts`.
 - `GlueClient` stays namespace-agnostic: it resolves a namespace to a proxy
   class and constructs. The one `namespace === 'function'` check is a known
   wart, not a precedent.
-- The client is being converted to TypeScript one module at a time, so `.js`
-  and `.ts` files sit side by side and import each other without extensions.
-  `tsconfig.json` sets `useDefineForClassFields: false` so that a class field
+- The client source is TypeScript, checked strictly; its tests are still
+  JavaScript and are not type-checked. A proxy's fields, callables and
+  children are defined at runtime from server data, so they are not in its
+  type. `tsconfig.json` sets `useDefineForClassFields: false` so that a class field
   declared only for its type emits nothing: several proxy members are defined
   non-enumerable in the constructor, and an emitted field would redefine them.
-- Alpine.js enters through `client_js/src/alpine.js` only; everything else
+- Alpine.js enters through `client_js/src/alpine.ts` only; everything else
   imports `reactive()`/`morph()` from it. The bundle exposes `window.Alpine`
   and starts it; consuming apps never load a separate Alpine or call
   `Alpine.start()`.
@@ -241,7 +242,7 @@ require. `just --list` shows every recipe; the gates are:
 | One test file/pattern | `just test-app django_glue/tests/glue/test_formset.py` |
 | E2E (Playwright via pytest) | `just test-e2e -x -q` (sets `DJANGO_GLUE_RUN_E2E=1`) |
 | JS tests | `just js-tests` (bun test, happy-dom) |
-| JS type check | `just js-typecheck` (`tsc --noEmit`; checks the `.ts` files, `.js` files are not yet checked) |
+| JS type check | `just js-typecheck` (`tsc --noEmit` over `client_js/src` and the bundle entry) |
 | Build JS bundle | `just js-build` (outputs to `django_glue/static/django_glue/js/`) |
 | Dev server | `just run-server` |
 | Migrations | `just make-migrations` / `just migrate` |
