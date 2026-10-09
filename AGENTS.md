@@ -63,6 +63,7 @@ django-glue/
 │   │   ├── client.js               # GlueClient: namespace getters, addressed entry registration
 │   │   ├── http.js                 # Multipart attribute requests, file extraction
 │   │   ├── policy.js               # Signed-policy-token client
+│   │   ├── wire.ts                 # Wire-format types, each naming the Python it mirrors
 │   │   ├── alpine.js               # The only module that references Alpine/morph
 │   │   ├── runtime/                # addressRegistry, addressRecord, attributeMaterializer,
 │   │   │                           # childBinder, responseDispatcher, state
@@ -235,14 +236,16 @@ require. `just --list` shows every recipe; the gates are:
 | One test file/pattern | `just test-app django_glue/tests/glue/test_formset.py` |
 | E2E (Playwright via pytest) | `just test-e2e -x -q` (sets `DJANGO_GLUE_RUN_E2E=1`) |
 | JS tests | `just js-tests` (bun test, happy-dom) |
+| JS type check | `just js-typecheck` (`tsc --noEmit`; checks the `.ts` files, `.js` files are not yet checked) |
 | Build JS bundle | `just js-build` (outputs to `django_glue/static/django_glue/js/`) |
 | Dev server | `just run-server` |
 | Migrations | `just make-migrations` / `just migrate` |
 | Docs build (strict) | `just docs` |
 
 **Run the gates after any change, before finishing:** Python changes →
-`just test`; JS changes → `just js-build` then `just js-tests`; both → all
-three. `ruff check` / `ruff format` for Python style (see `ruff.toml`); the
+`just test`; JS changes → `just js-typecheck`, `just js-build`, then
+`just js-tests`; both → all four. A change to the wire format on either side
+updates `client_js/src/wire.ts` in the same change. `ruff check` / `ruff format` for Python style (see `ruff.toml`); the
 pre-existing `ruff --select F` findings are a known baseline — don't add new
 ones.
 

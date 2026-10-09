@@ -15,10 +15,12 @@
         "alpinejs": "3.15.12"
     },
     "devDependencies": {
-        "@happy-dom/global-registrator": "^20.7.0"
+        "@happy-dom/global-registrator": "^20.7.0",
+        "typescript": "^7.0.2"
     },
     "scripts": {
         "build": "bun run client_js/scripts/build.js",
+        "typecheck": "tsc --noEmit",
         "watch": "bun --watch run client_js/scripts/build.js",
         "test": "bun test",
         "test:watch": "bun test --watch",
