@@ -15,7 +15,7 @@
 | [`011`](011-collection-owned-item-keys.md) | Accepted; implemented on branch | Let each collection own its item-key derivation; no `BaseGlue.key` |
 | [`012`](012-formset-is-a-keyed-collection.md) | Accepted; implemented on branch; partly superseded by 028 | FormSetGlue is a keyed collection of FormGlue, not a BaseFormSet |
 | [`013`](013-policy-token-lifetime.md) | Accepted; implemented on branch | The policy-token lifetime is 24 hours from issuance |
-| [`014`](014-lazy-snake-case-component-discovery.md) | Accepted; implemented on branch; partly superseded by 027 | Lazy snake_case component discovery by name |
+| [`014`](014-lazy-snake-case-component-discovery.md) | Accepted; implemented on branch; partly superseded by 027 and 032 | Lazy snake_case component discovery by name |
 | [`015`](015-signed-queryset-query-permissions.md) | Accepted; implemented on branch | Queryset query permissions are signed full paths and lookups, derived from exposure by default |
 | [`016`](016-field-metadata-never-shadows-field-members.md) | Accepted; implemented on branch | Server field metadata never shadows a member the field class defines |
 | [`017`](017-signed-queryset-seek-keys.md) | Accepted; implemented on branch | Queryset seek keys are signed continuation data bound to their queryset and query |
@@ -33,6 +33,7 @@
 | [`029`](029-draft-model-parameters.md) | Accepted; implemented on branch | A model parameter whose initializer's key annotation admits `None` may be left out for a row that does not exist yet; the initializer builds it, and a saved draft is signed by its new key |
 | [`030`](030-component-post-init.md) | Accepted; implemented on branch | `__post_init__(request, **kwargs)` is the one hook that validates and sets up a component: it may set access and add `context_data`; `mount()` is deprecated, and `as_page()`, `get_view_kwargs()` and `get_context_data()` are removed; `layout_template` is renamed `view_template` |
 | [`031`](031-component-session.md) | Accepted; implemented on branch | `Component.session` is a per-user mutable mapping backed by the request's Django session, scoped by the component class's module-qualified name, saved with the session when the request changes it, never crossing the wire except for a value declared with `Glue.SessionAttr`, which the client reads and cannot write |
+| [`032`](032-nested-directories-and-dotted-paths-in-component-tags.md) | Accepted; implemented on branch | A path tag names every directory between the `components` package and the class, a tag two readings resolve to different classes is refused as ambiguous, and a tag may instead be the class's dotted `module.qualname` |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

@@ -1,5 +1,43 @@
 # Changelog for Django Glue
 
+## v1.2.2
+
+### Breaking
+
+- A component in a directory inside a `components` package is stamped with that
+  directory in its tag (ADR 032): a class in `app/components/cards/fancy.py` is
+  `app/cards/fancy`, where it was `app/fancy`. Glue no longer searches the
+  directories below the package a tag names, so the old tag raises
+  `GlueComponentRegistrationError`. Add the directories to the tag, or import
+  the class in `components/__init__.py` to keep the short one. A component in a
+  module directly inside `components/` is unaffected.
+
+  A tag with a directory in it can be read two ways: `app/cards/fancy` is also
+  the `components` module of `app/cards`. A tag that both readings resolve to
+  different classes is refused as ambiguous.
+
+### Features
+
+- `{% glue_component %}` accepts a class's dotted path in place of a tag, such
+  as `'app.components.cards.fancy.FancyComponent'`. It names one class, which
+  may live outside any `components` module, and is not looked up in
+  `DJANGO_GLUE_COMPONENTS`.
+
+### Fixes
+
+- A nested directory of a `components` package no longer needs an
+  `__init__.py`. One without it was skipped silently.
+
+- Disposing an object on the client also disposes every child whose address is
+  derived from it. A child that arrived in a callable's response after its owner
+  was only linked to that owner once it was read, so a child that was never read,
+  such as the form of a model that was never rendered, stayed in the client's
+  registry after its owner was disposed.
+
+  Code that disposed a returned collection and kept using its items must now keep
+  the collection for as long as it uses them: the items' addresses are derived
+  from the collection's, so they are disposed with it.
+
 ## v1.2.1
 
 ### Fixes
