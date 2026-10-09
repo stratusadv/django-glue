@@ -166,14 +166,20 @@ export interface GlueAddressedEntry {
     effects: GlueEffects
 }
 
-// A requested address that failed: AttributeCallResolver._error_entry() in
+// An error as the browser receives it, whether one object's call failed or
+// the whole request did: GlueResponse.error_data() in django_glue/response.py.
+export interface GlueErrorData {
+    code: string
+    message: string
+    status: number
+    details: Record<string, unknown>
+}
+
+// A requested address that failed: GlueAttributeCallResolver._error_entry() in
 // django_glue/resolver/attribute_call/resolver.py.
 export interface GlueErrorEntry {
     address: string
-    error: {
-        code: string
-        message: string
-    }
+    error: GlueErrorData
 }
 
 export type GlueResponseEntry = GlueAddressedEntry | GlueObjectEntry | GlueErrorEntry
@@ -186,12 +192,7 @@ export interface GlueAttributeCallResponse {
 // GlueResponse.from_error() in django_glue/response.py.
 export interface GlueEnvelopeFault {
     result: {
-        error: {
-            code: string
-            message: string
-            status: number
-            details: Record<string, unknown>
-        }
+        error: GlueErrorData
     }
     messages: GlueMessage[]
 }

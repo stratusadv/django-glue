@@ -1,5 +1,16 @@
+import type {GluePolicyPayload} from "./wire"
+
+// A policy nested in another's attributes carries its own token; the outer
+// payload does not, and takes the token it was decoded from.
+type GlueDecodedPolicy = GluePolicyPayload & {token?: string}
+
+// The constructor copies the decoded payload onto the instance.
+interface GluePolicy extends GluePolicyPayload {
+    token: string
+}
+
 class GluePolicy {
-    static fromSignedPolicyToken(token) {
+    static fromSignedPolicyToken(token: string): GluePolicy {
         if (typeof token !== 'string') {
             throw new TypeError('Glue policy token must be a string.')
         }
@@ -15,12 +26,12 @@ class GluePolicy {
             .padEnd(Math.ceil(encodedPayload.length / 4) * 4, '=')
         const binary = atob(base64)
         const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
-        const payload = JSON.parse(new TextDecoder().decode(bytes))
+        const payload: GluePolicyPayload = JSON.parse(new TextDecoder().decode(bytes))
 
         return this._fromDecodedPayload(payload, token)
     }
 
-    static _fromDecodedPayload(payload, token = payload.token) {
+    static _fromDecodedPayload(payload: GlueDecodedPolicy, token: string = payload.token!): GluePolicy {
         const attributes = (payload.attributes || []).map(attribute => {
             if (typeof attribute !== 'object' || attribute === null) {
                 return attribute
@@ -31,7 +42,7 @@ class GluePolicy {
         return new this({...payload, attributes, token})
     }
 
-    constructor(data) {
+    constructor(data: GluePolicyPayload & {token: string}) {
         Object.assign(this, data)
     }
 }

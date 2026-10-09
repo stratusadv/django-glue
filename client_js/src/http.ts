@@ -1,12 +1,57 @@
+import type GlueConfig from "./config"
 import {GlueHttpError} from "./errors"
 import {serializeValue, shouldJsonSerializePostData} from "./utils"
+import type {GlueAttributeCallResponse, GlueErrorData, GlueRequestEntry, GlueResponseEntry} from "./wire"
+
+interface GlueRequestOptions {
+    method?: string
+    headers?: Record<string, string>
+    contentType?: string | null
+    payload?: unknown
+    body?: unknown
+    csrfProtected?: boolean
+    timeoutSeconds?: number
+    signal?: AbortSignal | null
+}
+
+interface GlueHttpResponse<TData = unknown> {
+    ok: boolean
+    payload: string
+    httpResponse: Response
+    data: TData | null
+}
+
+type GlueFileValue = File | Blob | FileList | (File | Blob)[]
+
+// Another address refreshed in the same request as the one being called.
+interface GlueCompanion {
+    address: string
+    policyToken: string
+}
+
+interface GlueAttributeRequest {
+    address: string
+    policyToken: string
+    updates?: Record<string, unknown>
+    attribute?: string | null
+    kwargs?: Record<string, unknown>
+    reintroduce?: string[] | null
+    companions?: GlueCompanion[]
+    mounted?: string[]
+    signal?: AbortSignal | null
+    batch?: GlueRequestBatch | null
+}
+
+type GlueAttributeResponse = GlueHttpResponse<GlueAttributeCallResponse>
 
 class GlueHttp {
-    constructor(config) {
+    _config: GlueConfig
+
+    constructor(config: GlueConfig) {
         this._config = config
     }
 
-    getCookie(name) {
+    getCookie(name: string): string | null {
         if (document?.cookie !== '') {
             const cookies = document.cookie.split(';').map(cookie => cookie.trim())
             for (const cookie of cookies) {
@@ -18,12 +63,12 @@ class GlueHttp {
         return null
     }
 
-    async sendRequest(url, requestOptions = {}) {
+    async sendRequest<TData = unknown>(url: string, requestOptions: GlueRequestOptions = {}): Promise<GlueHttpResponse<TData>> {
         const timeoutSeconds = requestOptions.timeoutSeconds ?? this._config.requestTimeoutSeconds
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000)
         requestOptions.signal?.addEventListener('abort', () => controller.abort(), {once: true})
-        const headers = {...(requestOptions.headers || {})}
+        const headers: Record<string, string | null> = {...(requestOptions.headers || {})}
         const method = requestOptions.method || 'GET'
         let contentType = requestOptions.contentType
         let payload = requestOptions.payload ?? requestOptions.body
@@ -52,8 +97,9 @@ class GlueHttp {
         try {
             const response = await fetch(url, {
                 method,
-                body: payload,
-                headers,
+                body: payload as BodyInit | null | undefined,
+                // fetch sends a header whose value is null as the text "null".
+                headers: headers as Record<string, string>,
                 signal: controller.signal,
             })
 
@@ -73,15 +119,15 @@ class GlueHttp {
         }
     }
 
-    async get(url, params, headers = {}) {
-        return await this.sendRequest(url, {
+    async get<TData = unknown>(url: string, params?: unknown, headers: Record<string, string> = {}) {
+        return await this.sendRequest<TData>(url, {
             payload: params,
             headers: headers,
         })
     }
 
-    async postJson(url, data, headers = {}, csrfProtected = true) {
-        return await this.sendRequest(url, {
+    async postJson<TData = unknown>(url: string, data: unknown, headers: Record<string, string> = {}, csrfProtected = true) {
+        return await this.sendRequest<TData>(url, {
             payload: data,
             method: 'POST',
             headers: headers,
@@ -90,8 +136,14 @@ class GlueHttp {
         })
     }
 
-    async postForm(url, data, headers = {}, csrfProtected = true, signal = null) {
-        return await this.sendRequest(url, {
+    async postForm<TData = unknown>(
+        url: string,
+        data: FormData,
+        headers: Record<string, string> = {},
+        csrfProtected = true,
+        signal: AbortSignal | null = null,
+    ) {
+        return await this.sendRequest<TData>(url, {
             payload: data,
             method: 'POST',
             contentType: 'multipart/form-data',
@@ -112,10 +164,10 @@ class GlueHttp {
         mounted = [],
         signal = null,
         batch = null,
-    }) {
-        const {files, data} = this._extractFiles(serializeValue(updates))
+    }: GlueAttributeRequest): Promise<GlueAttributeResponse> {
+        const {files, data} = this._extractFiles(serializeValue(updates) as Record<string, unknown>)
 
-        const entry = {
+        const entry: GlueRequestEntry = {
             address,
             policy_token: policyToken,
             updates: data,
@@ -136,7 +188,11 @@ class GlueHttp {
         return await batch.add(entries)
     }
 
-    async _postEntries(entries, files, signal) {
+    async _postEntries(
+        entries: GlueRequestEntry[],
+        files: Record<string, GlueFileValue>,
+        signal: AbortSignal | null,
+    ): Promise<GlueAttributeResponse> {
         const formData = new FormData()
         formData.append('objects', JSON.stringify(entries))
 
@@ -153,16 +209,16 @@ class GlueHttp {
         return await this.postForm(this._config.attributeUrlPath, formData, {}, true, signal)
     }
 
-    _extractFiles(obj) {
-        const files = {}
-        const data = {}
+    _extractFiles(obj: Record<string, unknown> | null | undefined) {
+        const files: Record<string, GlueFileValue> = {}
+        const data: Record<string, unknown> = {}
 
-        const isFileValue = value =>
+        const isFileValue = (value: unknown): value is File | Blob | FileList =>
             value instanceof File ||
             value instanceof Blob ||
             value instanceof FileList
 
-        const extractFromValue = (value, key) => {
+        const extractFromValue = (value: unknown, key: string): unknown => {
             if (isFileValue(value)) {
                 files[key] = value
                 return undefined
@@ -179,7 +235,7 @@ class GlueHttp {
             }
 
             if (value && typeof value === 'object') {
-                const nested = this._extractFiles(value)
+                const nested = this._extractFiles(value as Record<string, unknown>)
                 Object.entries(nested.files).forEach(([nestedKey, fileValue]) => {
                     files[`${key}.${nestedKey}`] = fileValue
                 })
@@ -190,8 +246,9 @@ class GlueHttp {
         }
 
         Object.entries(obj || {}).forEach(([key, value]) => {
-            if (value && typeof value === 'object' && isFileValue(value.value)) {
-                files[key] = value.value
+            const wrapped = value && typeof value === 'object' ? (value as {value?: unknown}).value : undefined
+            if (isFileValue(wrapped)) {
+                files[key] = wrapped
                 return
             }
 
@@ -204,9 +261,9 @@ class GlueHttp {
         return {files, data}
     }
 
-    async _buildRequestError(response) {
+    async _buildRequestError(response: Response): Promise<GlueHttpError> {
         const body = await response.text()
-        let payload = null
+        let payload: {result?: {error?: GlueErrorData}, error?: GlueErrorData} | null = null
 
         try {
             payload = JSON.parse(body)
@@ -225,11 +282,23 @@ class GlueHttp {
     }
 }
 
+interface GluePendingRequest {
+    entries: GlueRequestEntry[]
+    resolve: (response: GlueAttributeResponse) => void
+    reject: (error: unknown) => void
+}
+
 // Collects up to `size` attribute requests into one POST and hands each
 // caller its own share of the response (ADR 025). It sends when the last
 // request arrives, or on the next task if some never do.
 class GlueRequestBatch {
-    constructor(http, size) {
+    _http: GlueHttp
+    _size: number
+    _pending: GluePendingRequest[]
+    _timer: ReturnType<typeof setTimeout> | null
+    _sent: boolean
+
+    constructor(http: GlueHttp, size: number) {
         this._http = http
         this._size = size
         this._pending = []
@@ -239,13 +308,13 @@ class GlueRequestBatch {
 
     // A batch takes no request after it is sent, and never two entries for
     // one address, which the endpoint rejects as a whole.
-    accepts(entries) {
+    accepts(entries: GlueRequestEntry[]): boolean {
         if (this._sent) return false
         const addresses = new Set(this._pending.flatMap(item => item.entries.map(entry => entry.address)))
         return entries.every(entry => !addresses.has(entry.address))
     }
 
-    add(entries) {
+    add(entries: GlueRequestEntry[]): Promise<GlueAttributeResponse> {
         return new Promise((resolve, reject) => {
             this._pending.push({entries, resolve, reject})
             if (this._pending.length >= this._size) this._send()
@@ -254,7 +323,7 @@ class GlueRequestBatch {
     }
 
     async _send() {
-        clearTimeout(this._timer)
+        if (this._timer !== null) clearTimeout(this._timer)
         this._sent = true
         const pending = this._pending
         try {
@@ -262,9 +331,9 @@ class GlueRequestBatch {
             // The response lists each requested entry followed by the
             // children it introduced; hand each caller its own run.
             const owners = new Map(pending.flatMap((item, index) => (
-                item.entries.map(entry => [entry.address, index])
+                item.entries.map((entry): [string, number] => [entry.address, index])
             )))
-            const shares = pending.map(() => [])
+            const shares: GlueResponseEntry[][] = pending.map(() => [])
             let owner = 0
             ;(response.data?.objects || []).forEach(object => {
                 owner = owners.get(object?.address) ?? owner
@@ -280,5 +349,6 @@ class GlueRequestBatch {
     }
 }
 
+export type {GlueAttributeRequest, GlueAttributeResponse, GlueCompanion, GlueHttpResponse, GlueRequestOptions}
 export {GlueRequestBatch}
 export default GlueHttp

@@ -45,7 +45,7 @@
     resolveUrl: () => resolveUrl
   });
 
-  // client_js/src/config.js
+  // client_js/src/config.ts
   class GlueConfig {
     constructor(config = {}) {
       const urls = config.urls || {};
@@ -57,7 +57,7 @@
   }
   var config_default = GlueConfig;
 
-  // client_js/src/errors.js
+  // client_js/src/errors.ts
   class GlueHttpError extends Error {
     constructor({ message, status, code = null, payload = null, responseBody = null }) {
       super(message);
@@ -95,7 +95,7 @@
     }
   }
 
-  // client_js/src/utils.js
+  // client_js/src/utils.ts
   function isPlainObject(value) {
     return Object.prototype.toString.call(value) === "[object Object]";
   }
@@ -123,7 +123,7 @@
   function resolveUrl(urlPathTemplate, kwargs = {}) {
     let url = urlPathTemplate;
     for (const [key, value] of Object.entries(kwargs)) {
-      url = url.replace(`\${${key}}`, value);
+      url = url.replace(`\${${key}}`, String(value));
     }
     return url;
   }
@@ -138,7 +138,7 @@
     return tag === "[object Object]" || tag === "[object Array]";
   }
 
-  // client_js/src/http.js
+  // client_js/src/http.ts
   class GlueHttp {
     constructor(config) {
       this._config = config;
@@ -300,8 +300,9 @@
         return value;
       };
       Object.entries(obj || {}).forEach(([key, value]) => {
-        if (value && typeof value === "object" && isFileValue(value.value)) {
-          files[key] = value.value;
+        const wrapped = value && typeof value === "object" ? value.value : undefined;
+        if (isFileValue(wrapped)) {
+          files[key] = wrapped;
           return;
         }
         const extracted = extractFromValue(value, key);
@@ -352,7 +353,8 @@
       });
     }
     async _send() {
-      clearTimeout(this._timer);
+      if (this._timer !== null)
+        clearTimeout(this._timer);
       this._sent = true;
       const pending = this._pending;
       try {
@@ -4249,7 +4251,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var view_default = GlueView;
 
-  // client_js/src/policy.js
+  // client_js/src/policy.ts
   class GluePolicy {
     static fromSignedPolicyToken(token) {
       if (typeof token !== "string") {
@@ -4963,7 +4965,7 @@ ${expression ? 'Expression: "' + expression + `"
     registerProxyClass(namespace, proxyClass);
   });
 
-  // client_js/src/runtime/state.js
+  // client_js/src/runtime/state.ts
   function isPlainObject2(value) {
     if (value === null || typeof value !== "object")
       return false;
@@ -5003,10 +5005,11 @@ ${expression ? 'Expression: "' + expression + `"
       return value;
     if (cache.has(value))
       return cache.get(value);
-    Object.keys(value).forEach((key) => {
-      value[key] = observeValue(value[key], onMutation, cache);
+    const container = value;
+    Object.keys(container).forEach((key) => {
+      container[key] = observeValue(container[key], onMutation, cache);
     });
-    const observed = new Proxy(value, {
+    const observed = new Proxy(container, {
       set(target, key, nextValue) {
         const changed = !valuesEqual(target[key], nextValue);
         target[key] = observeValue(nextValue, onMutation, cache);
@@ -5049,9 +5052,9 @@ ${expression ? 'Expression: "' + expression + `"
         merged[path] = cloneValue(value);
         return;
       }
-      merged.fields = merged.fields || {};
+      const fields = merged.fields = merged.fields || {};
       Object.entries(value || {}).forEach(([fieldPath, fieldData]) => {
-        merged.fields[fieldPath] = cloneValue(fieldData);
+        fields[fieldPath] = cloneValue(fieldData);
       });
     });
     return merged;

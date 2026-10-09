@@ -61,8 +61,8 @@ django-glue/
 │   ├── scripts/build.js            # Bun bundler → django_glue/static/django_glue/js/
 │   ├── src/
 │   │   ├── client.js               # GlueClient: namespace getters, addressed entry registration
-│   │   ├── http.js                 # Multipart attribute requests, file extraction
-│   │   ├── policy.js               # Signed-policy-token client
+│   │   ├── http.ts                 # Multipart attribute requests, file extraction
+│   │   ├── policy.ts               # Signed-policy-token client
 │   │   ├── wire.ts                 # Wire-format types, each naming the Python it mirrors
 │   │   ├── alpine.js               # The only module that references Alpine/morph
 │   │   ├── runtime/                # addressRegistry, addressRecord, attributeMaterializer,
@@ -220,6 +220,11 @@ await Glue.view('/gorilla/detail/').renderInnerHtml('#panel')
 - `GlueClient` stays namespace-agnostic: it resolves a namespace to a proxy
   class and constructs. The one `namespace === 'function'` check is a known
   wart, not a precedent.
+- The client is being converted to TypeScript one module at a time, so `.js`
+  and `.ts` files sit side by side and import each other without extensions.
+  `tsconfig.json` sets `useDefineForClassFields: false` so that a class field
+  declared only for its type emits nothing: several proxy members are defined
+  non-enumerable in the constructor, and an emitted field would redefine them.
 - Alpine.js enters through `client_js/src/alpine.js` only; everything else
   imports `reactive()`/`morph()` from it. The bundle exposes `window.Alpine`
   and starts it; consuming apps never load a separate Alpine or call

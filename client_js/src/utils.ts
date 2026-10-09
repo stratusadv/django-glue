@@ -1,30 +1,30 @@
-function isPlainObject(value) {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
     return Object.prototype.toString.call(value) === '[object Object]'
 }
 
-function cloneValue(value) {
+function cloneValue<T>(value: T): T {
     if (value === null || value === undefined) {
         return value
     }
 
     if (value instanceof Date) {
-        return new Date(value)
+        return new Date(value) as T
     }
 
     if (Array.isArray(value)) {
-        return value.map(item => cloneValue(item))
+        return value.map(item => cloneValue(item)) as T
     }
 
     if (isPlainObject(value)) {
         return Object.fromEntries(
             Object.entries(value).map(([key, item]) => [key, cloneValue(item)])
-        )
+        ) as T
     }
 
     return value
 }
 
-function serializeValue(value) {
+function serializeValue(value: unknown): unknown {
     if (value === null || value === undefined) {
         return value
     }
@@ -52,19 +52,19 @@ function serializeValue(value) {
     return value
 }
 
-function parseJsonScriptById(scriptId) {
-    return JSON.parse(document.getElementById(scriptId).textContent)
+function parseJsonScriptById<T = unknown>(scriptId: string): T {
+    return JSON.parse(document.getElementById(scriptId)!.textContent!)
 }
 
-function resolveUrl(urlPathTemplate, kwargs = {}) {
+function resolveUrl(urlPathTemplate: string, kwargs: Record<string, string | number> = {}): string {
     let url = urlPathTemplate
     for (const [key, value] of Object.entries(kwargs)) {
-        url = url.replace(`\${${key}}`, value)
+        url = url.replace(`\${${key}}`, String(value))
     }
     return url
 }
 
-function shouldJsonSerializePostData(value) {
+function shouldJsonSerializePostData(value: unknown): boolean {
     if (typeof value !== 'object' || value === null) {
         return false
     }
