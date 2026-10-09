@@ -1,5 +1,15 @@
 # Changelog for Django Glue
 
+## v1.2.3
+
+### Fixes
+
+- Verifying a model parameter no longer raises `RecursionError` when its
+  initializer loads a one-to-one with `select_related`. Django caches each side
+  of a one-to-one on the other, and the check that names what a supplied row is
+  missing followed that loop without end. It affected only requests that verify
+  model parameters: `DEBUG`, or `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True`.
+
 ## v1.2.2
 
 ### Breaking
