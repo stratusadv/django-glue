@@ -33,10 +33,20 @@ class BaseGlueProxy {
         return this._owner
     }
 
-    $on(name, callback) {
+    _requireDeclaredEvent(name) {
         if (!(this._record.staticData?.events || []).includes(name)) {
             throw new GlueProxyError(`Event "${name}" is not declared on this Glue object.`)
         }
+    }
+
+    // Raises a declared event from the browser, as if a call had fired it.
+    async $dispatch(name, detail = {}) {
+        this._requireDeclaredEvent(name)
+        this._raiseEvent(name, detail)
+    }
+
+    $on(name, callback) {
+        this._requireDeclaredEvent(name)
         const listeners = this._eventListeners.get(name) || new Set()
         listeners.add(callback)
         this._eventListeners.set(name, listeners)
@@ -289,14 +299,15 @@ class BaseGlueProxy {
             const handler = this._onMessage || window.Glue?._onMessage
             handler?.({messages, proxy: this})
         }
-        effects.events?.forEach(({name, detail}) => {
-            const event = {
-                type: name,
-                sourceType: name,
-                detail: {...detail, $address: this._record.address},
-                source: this,
-            }
-            this._deliverEvent(event)
+        effects.events?.forEach(({name, detail}) => this._raiseEvent(name, detail))
+    }
+
+    _raiseEvent(name, detail) {
+        this._deliverEvent({
+            type: name,
+            sourceType: name,
+            detail: {...detail, $address: this._record.address},
+            source: this,
         })
     }
 

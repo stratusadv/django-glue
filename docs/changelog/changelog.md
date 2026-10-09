@@ -18,6 +18,12 @@
   decorator. A page load the decorator denies responds the way the decorator
   answered, so `login_required` redirects to the login page.
 
+- `$dispatch(name, detail)` raises one of an object's declared events from the
+  browser, with no call to the server. It reaches the object's `$on()`
+  listeners, the DOM event from a component's root, and any component that
+  re-renders on or listens for the event, and makes a request only for the
+  last. See [declared events](../guides/advanced/event_listeners.md).
+
 - An error on one object's call carries the same `status` and `details` as an
   error that fails a whole request. On the client they are `error.status` and
   `error.details` on the `GlueAddressError` the call rejects with, so a handler

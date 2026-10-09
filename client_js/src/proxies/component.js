@@ -49,6 +49,14 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
         }
     }
 
+    // A component's event also reaches the components that react to it, which
+    // costs a request only when one does.
+    async $dispatch(name, detail = {}) {
+        this._requireDeclaredEvent(name)
+        await Promise.allSettled(this._deliverEvents({effects: {events: [{name, detail}]}}))
+        this._raiseEvent(name, detail)
+    }
+
     // Calls `$receive` on every component that reacts to this response's
     // events (ADR 024, ADR 025): any mounted component that re-renders on one,
     // anywhere on the page, and any mounted ancestor with a listener for one.
