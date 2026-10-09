@@ -133,6 +133,17 @@ class GlueAddQuerysetCreationTestCase(_AttributeRequestMixin, TestCase):
         self.assertEqual(entry['error']['code'], 'not_authorized')
         self.assertNotIn('policy_token', entry)
 
+    def test_an_objects_error_carries_its_status_and_details(self):
+        """An object's own failure is described as fully as a failed request."""
+        glue_object = self.bound_queryset(GlueAccess.VIEW)
+
+        response = self.call('gorillas', glue_object.policy, 'new', kwargs={'initial': {}})
+
+        error = self.entry(response)['error']
+        self.assertEqual(set(error), {'code', 'message', 'status', 'details'})
+        self.assertEqual(error['status'], 403)
+        self.assertIsInstance(error['details'], dict)
+
     def test_add_queryset_new_returns_unsaved_add_draft(self):
         """new(initial) on an ADD queryset introduces an unsaved ADD draft
         without persisting anything."""

@@ -326,6 +326,44 @@ describe('formset proxy facade', () => {
     })
 })
 
+describe('a failed call on one object', () => {
+    async function failedSave(error) {
+        const entry = createEntry({policy: {name: 'koko', address: 'koko#test'}})
+        const client = new GlueClient({objects: [entry]})
+        client.http.sendAttributeRequest = async () => ({
+            data: {objects: [{address: entry.address, error}]},
+        })
+
+        try {
+            await client._registry.getProxy(entry.address).save()
+        } catch (caught) {
+            return caught
+        }
+    }
+
+    test('rejects with the status and details the server sent', async () => {
+        const error = await failedSave({
+            code: 'model_instance_not_found',
+            message: 'Gorilla with pk=7 does not exist.',
+            status: 404,
+            details: {model: 'Gorilla', pk: 7},
+        })
+
+        expect(error.name).toBe('GlueAddressError')
+        expect(error.code).toBe('model_instance_not_found')
+        expect(error.status).toBe(404)
+        expect(error.details).toEqual({model: 'Gorilla', pk: 7})
+    })
+
+    test('has no status and empty details when the server sent neither', async () => {
+        const error = await failedSave({code: 'not_authorized', message: 'denied'})
+
+        expect(error.code).toBe('not_authorized')
+        expect(error.status).toBeNull()
+        expect(error.details).toEqual({})
+    })
+})
+
 describe('model proxy identity', () => {
     function model(targetPk) {
         const entry = createEntry({policy: {

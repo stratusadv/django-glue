@@ -20,6 +20,7 @@ from django_glue.resolver.attribute_call.context import (
     AttributeCallRequestContext,
 )
 from django_glue.resolver.base import GlueResolver
+from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -113,5 +114,5 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
     def _error_entry(entry: AddressedObjectEntry, error: GlueError) -> dict[str, Any]:
         return {
             'address': entry.address,
-            'error': {'code': error.code, 'message': str(error)},
+            'error': GlueResponse.error_data(error),
         }

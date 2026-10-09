@@ -163,7 +163,9 @@ class BaseGlueProxy {
             throw new GlueAddressError(
                 target.error.code,
                 target.error.message,
-                this._record.address
+                this._record.address,
+                null,
+                {status: target.error.status ?? null, details: target.error.details ?? {}},
             )
         }
         if (target.html !== undefined) {
