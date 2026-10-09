@@ -17,12 +17,14 @@ class GlueProxyError extends Error {
 }
 
 class GlueAddressError extends GlueProxyError {
-    constructor(code, message, address, owner = null) {
+    constructor(code, message, address, owner = null, {status = null, details = {}} = {}) {
         super(`Glue request for address "${address}" failed: ${message}`)
         this.name = 'GlueAddressError'
         this.code = code
         this.address = address
         this.owner = owner
+        this.status = status
+        this.details = details
     }
 }
 

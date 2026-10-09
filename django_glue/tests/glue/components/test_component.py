@@ -1103,6 +1103,8 @@ def test_bad_reintroduce_fails_only_its_own_entry(mock_request) -> None:
         'error': {
             'code': 'invalid_reintroduce',
             'message': 'reintroduce names a path that is not a declared child slot.',
+            'status': 400,
+            'details': {'paths': ['not_a_slot']},
         },
     }
     assert objects[1]['address'] == owner_b.address

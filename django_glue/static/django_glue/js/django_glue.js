@@ -77,12 +77,14 @@
   }
 
   class GlueAddressError extends GlueProxyError {
-    constructor(code, message, address, owner = null) {
+    constructor(code, message, address, owner = null, { status = null, details = {} } = {}) {
       super(`Glue request for address "${address}" failed: ${message}`);
       this.name = "GlueAddressError";
       this.code = code;
       this.address = address;
       this.owner = owner;
+      this.status = status;
+      this.details = details;
     }
   }
 
@@ -4413,7 +4415,7 @@ ${expression ? 'Expression: "' + expression + `"
       const companionAddresses = new Set(companions.map((record) => record.address));
       const introduced = objects.filter((entry) => entry !== target && !companionAddresses.has(entry?.address));
       if (target.error) {
-        throw new GlueAddressError(target.error.code, target.error.message, this._record.address);
+        throw new GlueAddressError(target.error.code, target.error.message, this._record.address, null, { status: target.error.status ?? null, details: target.error.details ?? {} });
       }
       if (target.html !== undefined) {
         this._client.loadObjects(introduced);

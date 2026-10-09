@@ -18,7 +18,16 @@
   decorator. A page load the decorator denies responds the way the decorator
   answered, so `login_required` redirects to the login page.
 
+- An error on one object's call carries the same `status` and `details` as an
+  error that fails a whole request. On the client they are `error.status` and
+  `error.details` on the `GlueAddressError` the call rejects with, so a handler
+  can tell a missing row from a denial without matching on the code.
+
 ### Fixes
+
+- An error of status 500 or above on one object's call no longer sends its own
+  message to the browser unless `DEBUG` is on. It sends "An unexpected Glue
+  server error occurred.", as a failed request already did.
 
 - `is_authorized()` authorizes only by returning `True`. Glue accepted any
   truthy value, so a view decorator placed on the method, which answers a
