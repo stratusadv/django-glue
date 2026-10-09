@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## v1.3.0
+## v1.2.2
 
 ### Fixes
 

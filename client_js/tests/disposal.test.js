@@ -552,17 +552,18 @@ describe('disposal of a child introduced after its owner', () => {
 
     test('a record whose address only begins the same way is kept', () => {
         const registry = introducedByAResponse()
-        const lookalikeAddress = 'root#test["t1a2bc"]'
+        const lookalikeAddress = `${childAddress}set`
 
         registry.introduce(createEntry({
             policy: {
-                name: 'other', namespace: 'model', address: lookalikeAddress,
+                name: 'formset', namespace: 'form', address: lookalikeAddress,
                 state_snapshot: {},
             },
         }))
-        registry.dispose(resultAddress)
+        registry.dispose(childAddress)
 
         expect(registry.getRecord(childAddress)).toBeUndefined()
         expect(registry.getRecord(lookalikeAddress)).toBeDefined()
+        expect(registry.getRecord(resultAddress)).toBeDefined()
     })
 })
