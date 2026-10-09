@@ -13,5 +13,5 @@
         "skipLibCheck": true,
         "types": []
     },
-    "include": ["client_js/django_glue.js", "client_js/src"]
+    "include": ["client_js/django_glue.ts", "client_js/src"]
 }

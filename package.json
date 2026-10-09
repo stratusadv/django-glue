@@ -16,6 +16,8 @@
     },
     "devDependencies": {
         "@happy-dom/global-registrator": "^20.7.0",
+        "@types/alpinejs": "^3.17.0",
+        "@types/alpinejs__morph": "^3.13.5",
         "typescript": "^7.0.2"
     },
     "scripts": {

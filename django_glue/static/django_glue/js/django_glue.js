@@ -37,7 +37,7 @@
       });
   };
 
-  // client_js/django_glue.js
+  // client_js/django_glue.ts
   var exports_django_glue = {};
   __export(exports_django_glue, {
     GlueClient: () => client_default,
@@ -4023,7 +4023,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var module_default2 = src_default2;
 
-  // client_js/src/alpine.js
+  // client_js/src/alpine.ts
   module_default.plugin(module_default2);
   module_default.magic("glue", (element) => globalThis.Glue?.from(element) || null);
   module_default.directive("glue-component", (element) => {
@@ -4204,7 +4204,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var htmlRenderer_default = HtmlRenderer;
 
-  // client_js/src/view.js
+  // client_js/src/view.ts
   function toQueryString(data) {
     const params = new URLSearchParams;
     Object.entries(data).forEach(([key, value]) => {
@@ -5856,7 +5856,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var responseDispatcher_default = GlueResponseDispatcher;
 
-  // client_js/src/client.js
+  // client_js/src/client.ts
   class GlueClient {
     constructor(context) {
       this._onMessage = null;
@@ -5965,9 +5965,10 @@ ${expression ? 'Expression: "' + expression + `"
       if (this._directNamespaces.has(namespace)) {
         throw new GlueProxyError(`Cannot register named Glue proxy "${namespace}.${name}" because that namespace is already registered directly.`);
       }
+      const namespaces = this;
       if (!(namespace in this))
-        this[namespace] = {};
-      Object.defineProperty(this[namespace], name, {
+        namespaces[namespace] = {};
+      Object.defineProperty(namespaces[namespace], name, {
         get: () => this._registry.getProxy(this._publicAddresses.get(key)),
         enumerable: true,
         configurable: true
@@ -5976,7 +5977,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var client_default = GlueClient;
 
-  // client_js/django_glue.js
+  // client_js/django_glue.ts
   globalThis.GlueClient = client_default;
   globalThis.parseJsonScriptById = parseJsonScriptById;
   globalThis.resolveUrl = resolveUrl;

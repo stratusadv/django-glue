@@ -2,6 +2,13 @@ import Alpine from "alpinejs"
 import morphPlugin from "@alpinejs/morph"
 import {GlueAlpineError} from "./errors"
 
+// The morph options Glue passes. Alpine types its callbacks for any node;
+// Glue morphs elements only.
+interface GlueMorphOptions {
+    key?: (node: Element) => string
+    updating?: (node: Element, to: Element | undefined, childrenOnly: () => void, skip: () => void) => void
+}
+
 Alpine.plugin(morphPlugin)
 Alpine.magic('glue', element => globalThis.Glue?.from(element) || null)
 
@@ -17,7 +24,7 @@ Alpine.directive('glue-component', element => {
 let installed = false
 let started = false
 
-function installAlpine() {
+function installAlpine(): void {
     if (globalThis.Alpine && globalThis.Alpine !== Alpine) {
         throw new GlueAlpineError('Glue bundles Alpine.js. Remove the separate Alpine core script from this page.')
     }
@@ -43,18 +50,18 @@ function installAlpine() {
     }
 }
 
-function reactive(object) {
+function reactive<T>(object: T): T {
     if (object === null || typeof object !== 'object') return object
     return Alpine.reactive(object)
 }
 
-function morph(element, html, options = {}) {
-    return Alpine.morph(element, html, options)
+function morph(element: Element, html: string | Element, options: GlueMorphOptions = {}): void {
+    return Alpine.morph(element, html, options as Parameters<typeof Alpine.morph>[2])
 }
 
 // A root Alpine has not initialized yet gets its scope from the directive
 // above. One Alpine already initialized gets it here, once.
-function addComponentScope(element, proxy) {
+function addComponentScope(element: Alpine.ElementWithXAttributes<Element>, proxy: object): void {
     if (!element._x_marker) {
         element.setAttribute('x-glue-component', '')
         return
