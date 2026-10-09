@@ -1,20 +1,51 @@
 import {reactive} from "../alpine"
+import type GlueClient from "../client"
 import {GlueProxyError} from "../errors"
+import type GlueHttp from "../http"
 import GluePolicy from "../policy"
 import {BaseGlueProxy, NAMESPACE_TO_PROXY_CLASS} from "../proxies"
+import type {GlueObjectEntry} from "../wire"
 import GlueAddressRecord from "./addressRecord"
+import type {GlueRecordProxy} from "./addressRecord"
+import type GlueAttributeMaterializer from "./attributeMaterializer"
 import {isOwnedBy} from "./childBinder"
+import type GlueChildBinder from "./childBinder"
+
+interface GlueProxyOptions {
+    http: GlueHttp
+    record: GlueAddressRecord
+    registry: GlueAddressRegistry
+    client: GlueClient
+}
+
+interface GlueProxyClass {
+    new (options: GlueProxyOptions): GlueRecordProxy
+    create?(options: GlueProxyOptions): GlueRecordProxy
+}
 
 class GlueAddressRegistry {
-    constructor({client, http, materializer, childBinder}) {
+    client: GlueClient
+    http: GlueHttp
+    materializer: GlueAttributeMaterializer
+    childBinder: GlueChildBinder
+    records: Map<string, GlueAddressRecord>
+
+    constructor({client, http, materializer, childBinder}: {
+        client: GlueClient
+        http: GlueHttp
+        materializer: GlueAttributeMaterializer
+        childBinder?: GlueChildBinder
+    }) {
         this.client = client
         this.http = http
         this.materializer = materializer
-        this.childBinder = childBinder
+        // The binder needs the registry to exist, so the client sets it after
+        // constructing both.
+        this.childBinder = childBinder as GlueChildBinder
         this.records = new Map()
     }
 
-    introduce(entry) {
+    introduce(entry: GlueObjectEntry): GlueRecordProxy | null {
         if (!entry?.address || !entry?.policy_token) {
             throw new GlueProxyError('Glue entries require address and policy_token.')
         }
@@ -40,7 +71,7 @@ class GlueAddressRegistry {
         return record.proxy
     }
 
-    refresh(record) {
+    refresh(record: GlueAddressRecord): void {
         this.materializer.refresh(record)
         this.childBinder.refresh(record)
         const displaced = record.displacedChildren
@@ -55,7 +86,7 @@ class GlueAddressRegistry {
     // both are registered and one of them is refreshed or read, so a child that
     // arrived after its owner and was never read has no link. Its address is
     // still derived from its owner's, which is what makes it a child.
-    dispose(address) {
+    dispose(address: string): void {
         const record = this.records.get(address)
         if (!record || record.disposed) return
         const doomed = [address]
@@ -80,16 +111,19 @@ class GlueAddressRegistry {
         })
     }
 
-    getRecord(address) {
+    getRecord(address: string): GlueAddressRecord | undefined {
         return this.records.get(address)
     }
 
-    getProxy(address) {
+    getProxy(address: string): GlueRecordProxy | null {
         return this.records.get(address)?.proxy || null
     }
 
-    _createProxy(record) {
-        const ProxyClass = NAMESPACE_TO_PROXY_CLASS[record.policy.namespace] || BaseGlueProxy
+    _createProxy(record: GlueAddressRecord): GlueRecordProxy {
+        // The proxy classes are still JavaScript, so their types are asserted
+        // here until they are converted.
+        const proxyClasses = NAMESPACE_TO_PROXY_CLASS as unknown as Record<string, GlueProxyClass | undefined>
+        const ProxyClass = proxyClasses[record.policy.namespace] || (BaseGlueProxy as unknown as GlueProxyClass)
         const options = {
             http: this.http,
             record,
@@ -97,10 +131,11 @@ class GlueAddressRegistry {
             client: this.client,
         }
         const proxy = record.policy.namespace === 'function'
-            ? ProxyClass.create(options)
+            ? ProxyClass.create!(options)
             : new ProxyClass(options)
         return reactive(proxy)
     }
 }
 
+export type {GlueProxyOptions}
 export default GlueAddressRegistry

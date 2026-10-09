@@ -1,19 +1,24 @@
+import type GlueAddressRecord from "./addressRecord"
+import type {GlueRecordProxy} from "./addressRecord"
+import type GlueAddressRegistry from "./addressRegistry"
 import {definePath} from "./attributeMaterializer"
 
 // A child's address is derived from its owner's address (state-model.md §10):
 // `owner.path`, `owner[key]`, or `owner["t…"]`. A record that binds an address
 // it did not derive only holds a reference, which never makes it an owner
 // (§4), so it neither claims the child nor disposes it when the reference goes.
-export function isOwnedBy(address, ownerAddress) {
+export function isOwnedBy(address: string, ownerAddress: string): boolean {
     return address.startsWith(`${ownerAddress}.`) || address.startsWith(`${ownerAddress}[`)
 }
 
 class GlueChildBinder {
-    constructor(registry) {
+    registry: GlueAddressRegistry
+
+    constructor(registry: GlueAddressRegistry) {
         this.registry = registry
     }
 
-    refresh(record) {
+    refresh(record: GlueAddressRecord): void {
         if (!record.proxy) return
         record.displacedChildren = this._displacedAddresses(record)
         const paths = new Set([
@@ -26,7 +31,7 @@ class GlueChildBinder {
                 const child = this.registry.getProxy(childAddress)
                 if (child) this._link(child, record, path)
             }
-            definePath(record.proxy, path, {
+            definePath(record.proxy!, path, {
                 get: () => {
                     const childAddress = record.policy.children?.[path]
                     if (!childAddress) return null
@@ -40,9 +45,9 @@ class GlueChildBinder {
         record.boundChildren = {...(record.policy.children || {})}
     }
 
-    _displacedAddresses(record) {
+    _displacedAddresses(record: GlueAddressRecord): string[] {
         const current = record.policy.children || {}
-        const displaced = []
+        const displaced: string[] = []
         Object.entries(record.boundChildren || {}).forEach(([path, oldAddress]) => {
             if (current[path] !== oldAddress && isOwnedBy(oldAddress, record.address)) {
                 displaced.push(oldAddress)
@@ -51,7 +56,7 @@ class GlueChildBinder {
         return displaced
     }
 
-    _link(child, record, path) {
+    _link(child: GlueRecordProxy, record: GlueAddressRecord, path: string): void {
         if (!isOwnedBy(child._record.address, record.address)) return
         if (child._owner !== record.proxy) child._owner = record.proxy
         child._record.owner = {address: record.address, path}

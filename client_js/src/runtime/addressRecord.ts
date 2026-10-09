@@ -1,5 +1,7 @@
 import {reactive} from "../alpine"
 import GluePolicy from "../policy"
+import type FieldGlue from "../proxies/fields/base"
+import type {GlueAddressedEntry, GlueComputedData, GlueFieldComputed, GlueObjectEntry, GlueStaticData} from "../wire"
 import {
     applyUpdates,
     assembleAuthoritative,
@@ -9,9 +11,67 @@ import {
     observeValue,
     valuesEqual,
 } from "./state"
+import type {GlueValues} from "./state"
+
+// What the runtime needs of the proxy a record holds. The proxy classes
+// implement it; the runtime depends on nothing else of theirs.
+interface GlueRecordProxy {
+    _record: GlueAddressRecord
+    _owner: GlueRecordProxy | null
+    _fields?: Record<string, FieldGlue>
+    _refreshMaterializedInterface(): void
+    _afterRecordRefresh?(): void
+    _onDispose?(): void
+    _callAttribute(attribute: string | null, kwargs?: Record<string, unknown>): Promise<unknown>
+}
+
+// Where a record sits under its owner. A null path means the owner produced
+// it as a call's result rather than holding it in a child slot.
+interface GlueRecordOwner {
+    address: string
+    path: string | null
+}
+
+// A record's state as a request left with it, kept to reconcile the response.
+interface GlueRequestCapture {
+    canonical: GlueValues
+    updates: GlueValues
+    revisions: Map<string, number>
+    generation: number
+}
+
+// The parts of a response entry a record reconciles; each is omitted when
+// unchanged.
+type GlueReconcileEntry = Partial<Pick<GlueAddressedEntry, 'policy_token' | 'static_data' | 'computed_data'>>
 
 class GlueAddressRecord {
-    constructor({address, policyToken, staticData = {}, computedData = {}}) {
+    address: string
+    policyToken: string
+    policy: GluePolicy
+    staticData: GlueStaticData
+    computedData: GlueComputedData
+    receivedComputedData: GlueComputedData | null
+    canonical: GlueValues
+    editablePaths: Set<string>
+    revisions: Map<string, number>
+    generation: number
+    owner: GlueRecordOwner | null
+    stale: boolean
+    disposed: boolean
+    boundChildren: Record<string, string>
+    displacedChildren: string[] | null
+    proxy: GlueRecordProxy | null
+    _queue: Promise<unknown>
+    inFlightController: AbortController | null
+    _suppressMutations: boolean
+    reactiveValues: GlueValues
+
+    constructor({address, policyToken, staticData = {}, computedData = {}}: {
+        address: string
+        policyToken: string
+        staticData?: GlueStaticData
+        computedData?: GlueComputedData
+    }) {
         this.address = address
         this.policyToken = policyToken
         this.policy = GluePolicy.fromSignedPolicyToken(policyToken)
@@ -35,7 +95,7 @@ class GlueAddressRecord {
         this._replaceReactive(this.canonical)
     }
 
-    dispose() {
+    dispose(): void {
         this.disposed = true
         this.generation += 1
         this._queue = Promise.resolve()
@@ -43,32 +103,32 @@ class GlueAddressRecord {
         this.inFlightController = null
     }
 
-    attachProxy(proxy) {
+    attachProxy(proxy: GlueRecordProxy): void {
         this.proxy = proxy
         proxy._refreshMaterializedInterface()
     }
 
-    setEditablePaths(paths) {
+    setEditablePaths(paths: string[]): void {
         this.editablePaths = new Set(paths)
         paths.forEach(path => {
             if (!this.revisions.has(path)) this.revisions.set(path, 0)
         })
     }
 
-    getValue(path) {
+    getValue(path: string): unknown {
         return this.reactiveValues[path]
     }
 
-    setValue(path, value) {
+    setValue(path: string, value: unknown): void {
         this.reactiveValues[path] = this._observe(path, cloneValue(value))
         if (!this._suppressMutations) this._incrementRevision(path)
     }
 
-    getFieldComputed(path) {
+    getFieldComputed(path: string): Partial<GlueFieldComputed> {
         return this.computedData?.fields?.[path] || {}
     }
 
-    captureRequest() {
+    captureRequest(): GlueRequestCapture {
         return {
             canonical: cloneValue(this.canonical),
             updates: deriveUpdates(
@@ -81,13 +141,13 @@ class GlueAddressRecord {
         }
     }
 
-    enqueue(operation) {
+    enqueue<T>(operation: () => Promise<T>): Promise<T> {
         const queued = this._queue.then(operation, operation)
         this._queue = queued.catch(() => undefined)
         return queued
     }
 
-    introduce(entry) {
+    introduce(entry: GlueObjectEntry): void {
         const wasStale = this.stale
         this._applyPolicyToken(entry.policy_token)
         this.staticData = cloneValue(entry.static_data || {})
@@ -101,7 +161,7 @@ class GlueAddressRecord {
         this.proxy?._refreshMaterializedInterface()
     }
 
-    reconcile(entry, requestCapture) {
+    reconcile(entry: GlueReconcileEntry, requestCapture: GlueRequestCapture): void {
         if (
             requestCapture?.generation !== undefined &&
             requestCapture.generation !== this.generation
@@ -123,7 +183,7 @@ class GlueAddressRecord {
         this.proxy?._refreshMaterializedInterface()
     }
 
-    _applyPolicyToken(policyToken) {
+    _applyPolicyToken(policyToken: string): void {
         const policy = GluePolicy.fromSignedPolicyToken(policyToken)
         if (policy.address !== this.address) {
             throw new Error(`Glue response address "${policy.address}" does not match "${this.address}".`)
@@ -133,7 +193,7 @@ class GlueAddressRecord {
         this.stale = false
     }
 
-    _applyAuthoritative(expected, authoritative, requestCapture) {
+    _applyAuthoritative(expected: GlueValues, authoritative: GlueValues, requestCapture: GlueRequestCapture | null): void {
         const paths = new Set([
             ...Object.keys(expected || {}),
             ...Object.keys(authoritative || {}),
@@ -157,7 +217,7 @@ class GlueAddressRecord {
         }
     }
 
-    _hasNewerEditableMutation(path, requestCapture, expected) {
+    _hasNewerEditableMutation(path: string, requestCapture: GlueRequestCapture | null, expected: GlueValues): boolean {
         if (!this.editablePaths.has(path)) return false
         if (requestCapture) {
             return (this.revisions.get(path) || 0) > (requestCapture.revisions.get(path) || 0)
@@ -165,7 +225,7 @@ class GlueAddressRecord {
         return !valuesEqual(this.reactiveValues[path], expected?.[path])
     }
 
-    _replaceReactive(values) {
+    _replaceReactive(values: GlueValues): void {
         this._suppressMutations = true
         try {
             Object.keys(this.reactiveValues).forEach(path => delete this.reactiveValues[path])
@@ -177,16 +237,17 @@ class GlueAddressRecord {
         }
     }
 
-    _observe(path, value) {
+    _observe<T>(path: string, value: T): T {
         return observeValue(value, () => {
             if (!this._suppressMutations) this._incrementRevision(path)
         })
     }
 
-    _incrementRevision(path) {
+    _incrementRevision(path: string): void {
         if (!this.editablePaths.has(path)) return
         this.revisions.set(path, (this.revisions.get(path) || 0) + 1)
     }
 }
 
+export type {GlueReconcileEntry, GlueRecordOwner, GlueRecordProxy, GlueRequestCapture}
 export default GlueAddressRecord

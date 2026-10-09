@@ -5060,7 +5060,7 @@ ${expression ? 'Expression: "' + expression + `"
     return merged;
   }
 
-  // client_js/src/runtime/addressRecord.js
+  // client_js/src/runtime/addressRecord.ts
   class GlueAddressRecord {
     constructor({ address, policyToken, staticData = {}, computedData = {} }) {
       this.address = address;
@@ -5576,7 +5576,8 @@ ${expression ? 'Expression: "' + expression + `"
     return new base_default2(options);
   }
 
-  // client_js/src/runtime/attributeMaterializer.js
+  // client_js/src/runtime/attributeMaterializer.ts
+  var createField = createFieldGlue;
   function resolveOwner(root, path) {
     return path.reduce((owner, segment) => {
       if (!Object.prototype.hasOwnProperty.call(owner, segment)) {
@@ -5610,6 +5611,7 @@ ${expression ? 'Expression: "' + expression + `"
       const proxy = record.proxy;
       if (!proxy)
         return;
+      const members = proxy;
       const fields = record.staticData.fields || {};
       const childPaths = new Set(Object.keys(record.staticData.children || {}));
       const callablePaths = Object.keys(record.staticData.callables || {});
@@ -5623,7 +5625,7 @@ ${expression ? 'Expression: "' + expression + `"
           continue;
         const segments = previousPath.split(".");
         const name = segments.pop();
-        let owner = proxy;
+        let owner = members;
         for (const segment of segments)
           owner = owner?.[segment];
         if (owner)
@@ -5631,11 +5633,12 @@ ${expression ? 'Expression: "' + expression + `"
       }
       this.pathsByRecord.set(record, paths);
       proxy._fields ||= {};
+      const proxyFields = proxy._fields;
       Object.entries(fields).forEach(([fieldPath, staticData]) => {
         const valuePath = staticData.value_path || fieldPath;
         const fieldName = fieldPath.split(".").at(-1);
-        const current = proxy._fields[fieldPath];
-        const field = createFieldGlue({
+        const current = proxyFields[fieldPath];
+        const field = createField({
           owner: proxy,
           name: fieldName,
           fieldPath,
@@ -5646,7 +5649,7 @@ ${expression ? 'Expression: "' + expression + `"
           },
           existingField: current
         });
-        proxy._fields[fieldPath] = field;
+        proxyFields[fieldPath] = field;
         if (!childPaths.has(fieldPath)) {
           definePath(proxy, fieldPath, {
             get() {
@@ -5661,13 +5664,13 @@ ${expression ? 'Expression: "' + expression + `"
           });
         }
       });
-      Object.keys(proxy._fields).forEach((path) => {
+      Object.keys(proxyFields).forEach((path) => {
         if (!Object.prototype.hasOwnProperty.call(fields, path)) {
-          delete proxy._fields[path];
+          delete proxyFields[path];
         }
       });
       callablePaths.forEach((path) => {
-        if (!path.includes(".") && !Object.prototype.hasOwnProperty.call(proxy, path) && typeof proxy[path] === "function")
+        if (!path.includes(".") && !Object.prototype.hasOwnProperty.call(proxy, path) && typeof members[path] === "function")
           return;
         definePath(proxy, path, {
           value: async (kwargs) => await proxy._callAttribute(path, kwargs || {}),
@@ -5680,7 +5683,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var attributeMaterializer_default = GlueAttributeMaterializer;
 
-  // client_js/src/runtime/childBinder.js
+  // client_js/src/runtime/childBinder.ts
   function isOwnedBy(address, ownerAddress) {
     return address.startsWith(`${ownerAddress}.`) || address.startsWith(`${ownerAddress}[`);
   }
@@ -5739,7 +5742,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var childBinder_default = GlueChildBinder;
 
-  // client_js/src/runtime/addressRegistry.js
+  // client_js/src/runtime/addressRegistry.ts
   class GlueAddressRegistry {
     constructor({ client, http, materializer, childBinder }) {
       this.client = client;
@@ -5814,7 +5817,8 @@ ${expression ? 'Expression: "' + expression + `"
       return this.records.get(address)?.proxy || null;
     }
     _createProxy(record) {
-      const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[record.policy.namespace] || base_default;
+      const proxyClasses = NAMESPACE_TO_PROXY_CLASS2;
+      const ProxyClass = proxyClasses[record.policy.namespace] || base_default;
       const options = {
         http: this.http,
         record,
@@ -5827,7 +5831,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var addressRegistry_default = GlueAddressRegistry;
 
-  // client_js/src/runtime/responseDispatcher.js
+  // client_js/src/runtime/responseDispatcher.ts
   class GlueResponseDispatcher {
     constructor(registry) {
       this.registry = registry;
