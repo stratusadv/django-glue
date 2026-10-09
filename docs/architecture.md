@@ -74,4 +74,4 @@ issuance by default.
 | Components and template tag | `django_glue/glue/components/`, `django_glue/templatetags/django_glue.py` |
 | Client registry and reconciliation | `client_js/src/runtime/` |
 | Client family proxies | `client_js/src/proxies/` |
-| HTML rendering and view transport | `client_js/src/htmlRenderer.js`, `django_glue/middleware.py` |
+| HTML rendering and view transport | `client_js/src/htmlRenderer.ts`, `django_glue/middleware.py` |

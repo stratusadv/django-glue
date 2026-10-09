@@ -72,7 +72,7 @@ construction, `_mergeState`, and GLUE-93 are all reasoned in Alpine's terms —
 while being forbidden from using Alpine's affordances.
 
 Glue bundles Alpine and its morph plugin at matching, pinned versions (currently
-3.15.12). `client_js/src/alpine.js` is the only client module that references
+3.15.12). `client_js/src/alpine.ts` is the only client module that references
 `Alpine`. Consuming projects remove their separate Alpine core and morph
 scripts. Optional plugins remain project-owned and register against
 `window.Alpine`, the runtime exposed by Glue.
@@ -1255,7 +1255,7 @@ Findings:
   `Glue.view` responses use `render_html_payload()` to produce HTML and the
   shared flat `objects` collection. Attribute transports carry the HTML result
   in their addressed response entry; view transports return the HTML envelope
-  directly. `client_js/src/htmlRenderer.js` handles the public render methods.
+  directly. `client_js/src/htmlRenderer.ts` handles the public render methods.
   `TemplateGlue` and its template proxy are removed.
 - **`Glue.view` uses the target URL's middleware chain.** It requests the actual
   same-origin target with a Glue-specific `Accept` media type. A response
