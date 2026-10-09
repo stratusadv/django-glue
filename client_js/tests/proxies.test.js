@@ -325,3 +325,31 @@ describe('formset proxy facade', () => {
         expect(client.formSet.contacts.length).toBe(0)
     })
 })
+
+describe('model proxy identity', () => {
+    function model(targetPk) {
+        const entry = createEntry({policy: {
+            name: 'koko', address: 'koko#test',
+            identity: {target_pk: targetPk, pk_field_name: 'id'},
+            attributes: ['name'], state_snapshot: {name: 'Koko'},
+        }})
+        const client = new GlueClient({objects: [entry]})
+
+        return client._registry.getProxy(entry.address)
+    }
+
+    test('$pk is the signed primary key, with the key field not exposed', () => {
+        const saved = model(7)
+
+        expect(saved.id).toBeUndefined()
+        expect(saved.$pk).toBe(7)
+        expect(saved.$key).toBe(7)
+    })
+
+    test('an unsaved model has no $pk and is keyed by its name', () => {
+        const unsaved = model(null)
+
+        expect(unsaved.$pk ?? null).toBeNull()
+        expect(unsaved.$key).toBe('koko')
+    })
+})
