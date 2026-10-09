@@ -351,9 +351,11 @@ class Component(BaseGlue):
             attribute=None,
             required_access=self.access,
         )
-        if not self.is_authorized(request, operation):
+        try:
+            self._authorize(request, operation)
+        except GlueAuthorizationError:
             self.request = None
-            raise GlueAuthorizationError(object_name=self.name, operation=operation)
+            raise
 
     def mount(self) -> None:
         pass
@@ -424,7 +426,8 @@ class Component(BaseGlue):
         URL captures and ``parameters`` construct the component. It is
         introduced, then rendered inside the view template (the argument,
         else the class's ``view_template``), or alone as a fragment when
-        there is none. A denial at introduction responds 403.
+        there is none. A denial at introduction responds 403, or with the
+        response a view decorator on ``is_authorized()`` answered it with.
         """
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
@@ -443,6 +446,8 @@ class Component(BaseGlue):
                     )
                 return HttpResponse(component.render().html)
             except GlueAuthorizationError as error:
+                if error.response is not None:
+                    return error.response
                 raise PermissionDenied from error
 
         return view

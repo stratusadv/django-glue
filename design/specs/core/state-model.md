@@ -323,7 +323,12 @@ class BaseGlue:
 ```
 
 `is_authorized()` is a **pure predicate**. It receives the reconstructed object, the
-current request, and what is being attempted; it returns a boolean. It may not
+current request, and what is being attempted; it returns a boolean. Only `True`
+authorizes. `False`, a response returned in its place, or `PermissionDenied`
+raised from it is a denial, the last two being how a Django view decorator
+placed on the method answers one (ADR 033); any other value is a `TypeError`.
+A denial that carries a response keeps it for the caller that can use it, the
+component view. It may not
 mutate the object, may not see or alter editable updates, may not widen or
 narrow the capability, and may not change reconstruction order. That is what
 distinguishes it from the rejected `hydrate()` / `dehydrate()` / `boot()` hooks:

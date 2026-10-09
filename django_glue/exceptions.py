@@ -12,6 +12,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from django.http.response import HttpResponseBase
+
     from django_glue.glue.operation import GlueOperation
 
 
@@ -121,9 +123,13 @@ class GlueAuthorizationError(GlueError):
         self,
         object_name: str,
         operation: GlueOperation,
+        response: HttpResponseBase | None = None,
     ) -> None:
         self.object_name = object_name
         self.operation = operation
+        # What a view decorator on is_authorized() answered the denial with,
+        # which a component view returns in place of a 403 (ADR 033).
+        self.response = response
         attribute = (
             f" attribute '{operation.attribute}'"
             if operation.attribute

@@ -2,7 +2,33 @@
 
 ## v1.2.3
 
+### Features
+
+- A Django view decorator can guard a component from `is_authorized()`, applied
+  with `method_decorator` (ADR 033):
+
+  ```python
+  @method_decorator(permission_required('entries.view_entry'))
+  def is_authorized(self, request, operation):
+      return True
+  ```
+
+  The rule then covers the page load, a `{% glue_component %}` stamp and every
+  later call, and the URL pattern no longer needs `as_view()` wrapped in the
+  decorator. A page load the decorator denies responds the way the decorator
+  answered, so `login_required` redirects to the login page.
+
 ### Fixes
+
+- `is_authorized()` authorizes only by returning `True`. Glue accepted any
+  truthy value, so a view decorator placed on the method, which answers a
+  denial with a redirect response, authorized the request it meant to deny.
+  A response returned from `is_authorized()`, or `PermissionDenied` raised
+  from it, is now a denial.
+
+  An `is_authorized()` that returns something other than `True`, `False` or a
+  response now raises `TypeError`. Return a boolean, for example
+  `return owner is not None` in place of `return owner`.
 
 - Verifying a model parameter no longer raises `RecursionError` when its
   initializer loads a one-to-one with `select_related`. Django caches each side

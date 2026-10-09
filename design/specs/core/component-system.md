@@ -666,6 +666,13 @@ endpoint. The component's `access=` value caps the signed operations, while
 introduction and on later calls. An `is_authorized()` denial during direct URL
 rendering becomes Django's HTTP 403 response.
 
+A view decorator may instead be placed on `is_authorized()` with Django's
+`method_decorator`, so that one declaration guards the page load, a stamp and
+every later call (ADR 033). A decorator that stops the request answers with a
+response or raises `PermissionDenied`; either is a denial. During direct URL
+rendering a denial that carries a response returns that response, which is how
+`login_required` redirects to the login page, and any other denial is the 403.
+
 #### Keys
 
 A key identifies a child among its siblings and **is chosen where the child is

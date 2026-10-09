@@ -606,42 +606,61 @@ component view, it raises an error. The view template must load Glue with
 `{% django_glue_init %}`, directly or through the template it extends. These URLs serve GET and HEAD; component actions use
 Glue's normal addressed endpoint.
 
-Use Django's view decorators to guard the initial URL. Override
-`is_authorized()` on the component to check permission again for later Glue
-calls:
+### Guard a component with a view decorator
+
+Override `is_authorized()` to decide who may use a component. Glue asks it on
+the page load, when the component is stamped with `{% glue_component %}`, and
+on every later call, so one rule covers all three. Put Django's view decorators
+on it with `method_decorator`:
 
 ```python
 from django.contrib.auth.decorators import permission_required
+from django.utils.decorators import method_decorator
 from django_glue import Glue
 
 
 class EntryPage(Glue.Component):
     template = 'entries/entry.html'
+    view_template = 'entries/page.html'
 
+    @method_decorator(permission_required('entries.view_entry'))
     def is_authorized(self, request, operation):
         if operation.required_access == Glue.Access.CHANGE:
             return request.user.has_perm('entries.change_entry')
-        return request.user.has_perm('entries.view_entry')
+        return True
 
 
 urlpatterns = [
-    path(
-        'entries/',
-        permission_required('entries.view_entry', raise_exception=True)(
-            EntryPage.as_view(view_template='entries/page.html', access=Glue.Access.CHANGE)
-        ),
-    ),
+    path('entries/', EntryPage.as_view(access=Glue.Access.CHANGE)),
 ]
 ```
 
+The URL needs no wrapper. A decorator that lets the request through runs the
+method, which returns `True` or `False`. A decorator that stops the request
+denies it, and when the component is served by `as_view()` the page responds
+the way the decorator answered: `login_required` redirects to the login page,
+and a decorator that raises `PermissionDenied` responds 403.
+
+`method_decorator` is needed because a view decorator expects the request as
+the first argument, and a method's first argument is `self`. The decorator
+receives the request and the operation, not the URL's captured arguments, so
+one that reads an argument such as `pk` does not work here; check the
+component's own parameters in the method instead.
+
+`is_authorized()` must return `True` or `False`. Any other value raises a
+`TypeError` naming the class.
+
+You can still wrap `as_view()` in a decorator in the URL pattern, as with any
+view. That guards the page load only: later calls go to Glue's own endpoint,
+not to your URL.
+
 `access=` sets the component's maximum Glue capability; it is not a Django
-permission check. The URL decorator controls page access, and
-`is_authorized()` uses the current request for both the first render and
-subsequent operations. For an object-specific rule, check the component's
-signed identity and the current database scope inside `is_authorized()`.
+permission check. For an object-specific rule, check the component's signed
+identity and the current database scope inside `is_authorized()`.
 
 A denial at the first render depends on how the component was created. A
-component served by `as_view()` responds 403. A component stamped with
+component served by `as_view()` responds 403, or with the response a decorator
+on `is_authorized()` gave. A component stamped with
 `{% glue_component %}` renders nothing and introduces no address, so the rest of
 the page renders normally; the template does not need its own permission check
 around the tag. A denied `@Glue.property` child resolves to absent. After the first
