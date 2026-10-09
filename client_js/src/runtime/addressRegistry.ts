@@ -120,10 +120,7 @@ class GlueAddressRegistry {
     }
 
     _createProxy(record: GlueAddressRecord): GlueRecordProxy {
-        // The proxy classes are still JavaScript, so their types are asserted
-        // here until they are converted.
-        const proxyClasses = NAMESPACE_TO_PROXY_CLASS as unknown as Record<string, GlueProxyClass | undefined>
-        const ProxyClass = proxyClasses[record.policy.namespace] || (BaseGlueProxy as unknown as GlueProxyClass)
+        const ProxyClass: GlueProxyClass = NAMESPACE_TO_PROXY_CLASS[record.policy.namespace] || BaseGlueProxy
         const options = {
             http: this.http,
             record,
@@ -137,5 +134,5 @@ class GlueAddressRegistry {
     }
 }
 
-export type {GlueProxyOptions}
+export type {GlueProxyClass, GlueProxyOptions}
 export default GlueAddressRegistry

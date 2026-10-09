@@ -1,11 +1,14 @@
+import type {GlueChoice} from "../../wire"
 import RelationFieldGlue from "./relation"
 
 class ManyRelationFieldGlue extends RelationFieldGlue {
-    get selectedPks() {
-        return (this.value || []).filter(value => value != null)
+    declare _retainedSelectedChoices: GlueChoice[] | undefined
+
+    get selectedPks(): unknown[] {
+        return ((this.value || []) as unknown[]).filter(value => value != null)
     }
 
-    get selectedChoices() {
+    get selectedChoices(): GlueChoice[] {
         const selectedPks = new Set(this.selectedPks.map(value => String(value)))
         if (selectedPks.size === 0) return []
 
@@ -20,16 +23,16 @@ class ManyRelationFieldGlue extends RelationFieldGlue {
             ...(this.choices || []),
         ]
         const choicesByValue = new Map(
-            candidates.map(choice => [String(choice.value), choice])
+            candidates.map((choice): [string, GlueChoice] => [String(choice.value), choice])
         )
         return this.selectedPks
             .map(value => choicesByValue.get(String(value)))
-            .filter(Boolean)
+            .filter(Boolean) as GlueChoice[]
     }
 
-    _rememberSelectedChoice() {
+    _rememberSelectedChoice(): void {
         const retainedByValue = new Map(
-            (this._retainedSelectedChoices || []).map(choice => [String(choice.value), choice])
+            (this._retainedSelectedChoices || []).map((choice): [string, GlueChoice] => [String(choice.value), choice])
         )
         for (const choice of this.selectedChoices) {
             retainedByValue.set(String(choice.value), choice)
@@ -37,24 +40,24 @@ class ManyRelationFieldGlue extends RelationFieldGlue {
         this._retainedSelectedChoices = Array.from(retainedByValue.values())
     }
 
-    hasChoiceSelected(value) {
+    hasChoiceSelected(value: unknown): boolean {
         return this.selectedPks.some(item => String(item) === String(value))
     }
 
-    addChoice(value) {
+    addChoice(value: unknown): this {
         if (this.hasChoiceSelected(value)) {
             return this
         }
-        this.value = [...(this.value || []), value]
+        this.value = [...((this.value || []) as unknown[]), value]
         return this
     }
 
-    removeChoice(value) {
-        this.value = (this.value || []).filter(item => String(item) !== String(value))
+    removeChoice(value: unknown): this {
+        this.value = ((this.value || []) as unknown[]).filter(item => String(item) !== String(value))
         return this
     }
 
-    toggleChoice(value) {
+    toggleChoice(value: unknown): this {
         return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value)
     }
 }

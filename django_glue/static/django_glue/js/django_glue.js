@@ -4075,7 +4075,7 @@ ${expression ? 'Expression: "' + expression + `"
     module_default.addScopeToNode(element, { component: proxy });
   }
 
-  // client_js/src/htmlRenderer.js
+  // client_js/src/htmlRenderer.ts
   function htmlToFragment(html) {
     const template = document.createElement("template");
     template.innerHTML = html;
@@ -4085,100 +4085,104 @@ ${expression ? 'Expression: "' + expression + `"
     return typeof target === "string" ? document.querySelector(target) : target;
   }
   var HtmlRenderer = (Base = class {
-  }) => class extends Base {
-    async renderInnerHtml(target, payload = {}) {
-      const element = this._resolveHtmlTarget(target);
-      const html = await this._getHtml(payload);
-      if (html === null)
-        return null;
-      const next = element.cloneNode(false);
-      next.innerHTML = html;
-      this._morphHtml(element, next, true);
-      return html;
-    }
-    async renderOuterHtml(target, payload = {}) {
-      const element = this._resolveHtmlTarget(target);
-      const html = await this._getHtml(payload);
-      if (html === null)
-        return null;
-      const fragment = htmlToFragment(html);
-      const nodes = [...fragment.childNodes].filter((node) => node.nodeType !== Node.COMMENT_NODE && !(node.nodeType === Node.TEXT_NODE && !node.textContent.trim()));
-      if (nodes.length !== 1 || nodes[0].nodeType !== Node.ELEMENT_NODE) {
-        throw new GlueProxyError("renderOuterHtml requires exactly one root element.");
+  }) => {
+
+    class HtmlRendering extends Base {
+      async renderInnerHtml(target, payload = {}) {
+        const element = this._resolveHtmlTarget(target);
+        const html = await this._getHtml(payload);
+        if (html === null)
+          return null;
+        const next = element.cloneNode(false);
+        next.innerHTML = html;
+        this._morphHtml(element, next, true);
+        return html;
       }
-      this._morphHtml(element, nodes[0]);
-      return html;
-    }
-    _morphHtml(element, next, inner = false) {
-      const client = this._client;
-      const previousNodes = [
-        ...element.matches?.("[data-glue-address]") ? [element] : [],
-        ...element.querySelectorAll("[data-glue-address]")
-      ];
-      const previousAddresses = client ? previousNodes.map((node) => node.getAttribute("data-glue-address")) : [];
-      next.querySelectorAll("template[data-glue-keep]").forEach((placeholder) => {
-        const address = placeholder.getAttribute("data-glue-keep");
-        const live = previousNodes.find((node) => node.getAttribute("data-glue-address") === address);
-        if (!live)
-          return placeholder.remove();
-        const shell = live.cloneNode(false);
-        shell._glueKeep = true;
-        placeholder.replaceWith(shell);
-      });
-      morph2(element, next, {
-        key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
-        updating(node, to, childrenOnly, skip) {
-          if (to?._glueKeep || node.hasAttribute?.("data-morph-ignore"))
-            return skip();
-          if (inner && node === element)
-            childrenOnly();
+      async renderOuterHtml(target, payload = {}) {
+        const element = this._resolveHtmlTarget(target);
+        const html = await this._getHtml(payload);
+        if (html === null)
+          return null;
+        const fragment = htmlToFragment(html);
+        const nodes = [...fragment.childNodes].filter((node) => node.nodeType !== Node.COMMENT_NODE && !(node.nodeType === Node.TEXT_NODE && !node.textContent.trim()));
+        if (nodes.length !== 1 || nodes[0].nodeType !== Node.ELEMENT_NODE) {
+          throw new GlueProxyError("renderOuterHtml requires exactly one root element.");
         }
-      });
-      client?.registerComponentsFromDom(document);
-      previousAddresses.forEach((address) => {
-        if (![...document.querySelectorAll("[data-glue-address]")].some((node) => node.getAttribute("data-glue-address") === address))
-          client._registry.dispose(address);
-      });
-    }
-    _resolveHtmlTarget(target) {
-      const element = resolveElement(target);
-      if (!element || element.nodeType !== Node.ELEMENT_NODE) {
-        throw new GlueProxyError(`HTML target was not found or is not an element: ${target}`);
+        this._morphHtml(element, nodes[0]);
+        return html;
       }
-      return element;
-    }
-    async _renderInsertAdjacentHtml(target, position, payload = {}) {
-      if (!["beforebegin", "afterbegin", "beforeend", "afterend"].includes(position)) {
-        throw new GlueProxyError(`Invalid insert position: ${position}`);
+      _morphHtml(element, next, inner = false) {
+        const client = this._client;
+        const previousNodes = [
+          ...element.matches?.("[data-glue-address]") ? [element] : [],
+          ...element.querySelectorAll("[data-glue-address]")
+        ];
+        const previousAddresses = client ? previousNodes.map((node) => node.getAttribute("data-glue-address")) : [];
+        next.querySelectorAll("template[data-glue-keep]").forEach((placeholder) => {
+          const address = placeholder.getAttribute("data-glue-keep");
+          const live = previousNodes.find((node) => node.getAttribute("data-glue-address") === address);
+          if (!live)
+            return placeholder.remove();
+          const shell = live.cloneNode(false);
+          shell._glueKeep = true;
+          placeholder.replaceWith(shell);
+        });
+        morph2(element, next, {
+          key: (node) => node.getAttribute?.("data-glue-address") || node.getAttribute?.("key") || node.id,
+          updating(node, to, childrenOnly, skip) {
+            if (to?._glueKeep || node.hasAttribute?.("data-morph-ignore"))
+              return skip();
+            if (inner && node === element)
+              childrenOnly();
+          }
+        });
+        client?.registerComponentsFromDom(document);
+        previousAddresses.forEach((address) => {
+          if (![...document.querySelectorAll("[data-glue-address]")].some((node) => node.getAttribute("data-glue-address") === address))
+            client._registry.dispose(address);
+        });
       }
-      const element = this._resolveHtmlTarget(target);
-      const html = await this._getHtml(payload);
-      if (html === null)
-        return null;
-      const fragment = htmlToFragment(html);
-      if (position === "beforebegin")
-        element.before(fragment);
-      else if (position === "afterbegin")
-        element.prepend(fragment);
-      else if (position === "beforeend")
-        element.append(fragment);
-      else
-        element.after(fragment);
-      this._client?.registerComponentsFromDom(document);
-      return html;
+      _resolveHtmlTarget(target) {
+        const element = resolveElement(target);
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+          throw new GlueProxyError(`HTML target was not found or is not an element: ${target}`);
+        }
+        return element;
+      }
+      async _renderInsertAdjacentHtml(target, position, payload = {}) {
+        if (!["beforebegin", "afterbegin", "beforeend", "afterend"].includes(position)) {
+          throw new GlueProxyError(`Invalid insert position: ${position}`);
+        }
+        const element = this._resolveHtmlTarget(target);
+        const html = await this._getHtml(payload);
+        if (html === null)
+          return null;
+        const fragment = htmlToFragment(html);
+        if (position === "beforebegin")
+          element.before(fragment);
+        else if (position === "afterbegin")
+          element.prepend(fragment);
+        else if (position === "beforeend")
+          element.append(fragment);
+        else
+          element.after(fragment);
+        this._client?.registerComponentsFromDom(document);
+        return html;
+      }
+      async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
+        return this._renderInsertAdjacentHtml(target, "beforebegin", payload);
+      }
+      async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
+        return this._renderInsertAdjacentHtml(target, "afterbegin", payload);
+      }
+      async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
+        return this._renderInsertAdjacentHtml(target, "beforeend", payload);
+      }
+      async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
+        return this._renderInsertAdjacentHtml(target, "afterend", payload);
+      }
     }
-    async renderInsertAdjacentHtmlBeforeBegin(target, payload = {}) {
-      return this._renderInsertAdjacentHtml(target, "beforebegin", payload);
-    }
-    async renderInsertAdjacentHtmlAfterBegin(target, payload = {}) {
-      return this._renderInsertAdjacentHtml(target, "afterbegin", payload);
-    }
-    async renderInsertAdjacentHtmlBeforeEnd(target, payload = {}) {
-      return this._renderInsertAdjacentHtml(target, "beforeend", payload);
-    }
-    async renderInsertAdjacentHtmlAfterEnd(target, payload = {}) {
-      return this._renderInsertAdjacentHtml(target, "afterend", payload);
-    }
+    return HtmlRendering;
   };
 
   class HtmlResult extends HtmlRenderer() {
@@ -4282,9 +4286,9 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var policy_default = GluePolicy;
 
-  // client_js/src/proxies/base.js
+  // client_js/src/proxies/base.ts
   class BaseGlueProxy {
-    constructor({ http, record, registry, client = null, owner = null }) {
+    constructor({ http, record, registry, client, owner = null }) {
       Object.defineProperties(this, {
         _http: { value: http, enumerable: false, configurable: true },
         _record: { value: record, enumerable: false, configurable: true },
@@ -4416,7 +4420,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       const companionAddresses = new Set(companions.map((record) => record.address));
       const introduced = objects.filter((entry) => entry !== target && !companionAddresses.has(entry?.address));
-      if (target.error) {
+      if ("error" in target) {
         throw new GlueAddressError(target.error.code, target.error.message, this._record.address, null, { status: target.error.status ?? null, details: target.error.details ?? {} });
       }
       if (target.html !== undefined) {
@@ -4426,7 +4430,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       companionCaptures.forEach(({ record, capture }) => {
         const entry = objects.find((candidate) => candidate?.address === record.address);
-        if (!entry || entry.error || record.disposed)
+        if (!entry || "error" in entry || record.disposed)
           return;
         this._client._dispatcher.reconcile(record.address, entry, capture);
       });
@@ -4469,11 +4473,11 @@ ${expression ? 'Expression: "' + expression + `"
         if (!Array.isArray(objects))
           return false;
         const ownerEntry = objects.find((entry) => entry?.address === owner.address);
-        if (!ownerEntry || ownerEntry.error)
+        if (!ownerEntry || "error" in ownerEntry)
           return false;
         objects.filter((entry) => entry !== ownerEntry).forEach((entry) => this._registry.introduce(entry));
         this._client._dispatcher.reconcile(owner.address, ownerEntry, ownerCapture);
-        return objects.some((entry) => entry?.address === this._record.address && !entry.error);
+        return objects.some((entry) => entry?.address === this._record.address && !("error" in entry));
       } catch {
         return false;
       }
@@ -4490,7 +4494,7 @@ ${expression ? 'Expression: "' + expression + `"
         return null;
       const ownerProxy = this._registry.getProxy(owner.address);
       return {
-        name: ownerProxy?._name ?? owner.address,
+        name: ownerProxy?._record.policy.name ?? owner.address,
         address: owner.address
       };
     }
@@ -4558,8 +4562,9 @@ ${expression ? 'Expression: "' + expression + `"
       }
       if (!result || typeof result !== "object")
         return result;
-      Object.keys(result).forEach((key) => {
-        result[key] = this._convertResult(result[key], attribute);
+      const members = result;
+      Object.keys(members).forEach((key) => {
+        members[key] = this._convertResult(members[key], attribute);
       });
       return result;
     }
@@ -4571,7 +4576,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var base_default = BaseGlueProxy;
 
-  // client_js/src/proxies/sequence.js
+  // client_js/src/proxies/sequence.ts
   class GlueSequenceProxy extends base_default {
     get items() {
       const keys = this._policy.identity?.item_keys || Object.keys(this._policy.children || {});
@@ -4589,7 +4594,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var sequence_default = GlueSequenceProxy;
 
-  // client_js/src/proxies/fieldBacked.js
+  // client_js/src/proxies/fieldBacked.ts
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
@@ -4614,12 +4619,12 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var fieldBacked_default = FieldBackedGlueProxy;
 
-  // client_js/src/proxies/form.js
+  // client_js/src/proxies/form.ts
   class GlueFormProxy extends fieldBacked_default {
   }
   var form_default = GlueFormProxy;
 
-  // client_js/src/proxies/formset.js
+  // client_js/src/proxies/formset.ts
   class GlueFormSetProxy extends base_default {
     constructor(options) {
       super(options);
@@ -4670,21 +4675,22 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var formset_default = GlueFormSetProxy;
 
-  // client_js/src/proxies/function.js
+  // client_js/src/proxies/function.ts
   class GlueFunctionProxy extends base_default {
     static create(options) {
       const object = new GlueFunctionProxy(options);
+      const members = object;
       const callable = async (kwargs = {}) => await object.execute(kwargs);
       return new Proxy(callable, {
         get(target, prop) {
           if (prop in object) {
-            const value = object[prop];
+            const value = members[prop];
             return typeof value === "function" ? value.bind(object) : value;
           }
           return target[prop];
         },
         set(target, prop, value) {
-          object[prop] = value;
+          members[prop] = value;
           return true;
         }
       });
@@ -4706,7 +4712,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var function_default = GlueFunctionProxy;
 
-  // client_js/src/proxies/model.js
+  // client_js/src/proxies/model.ts
   class GlueModelProxy extends fieldBacked_default {
     _singleCall(attribute, kwargs, options = {}) {
       const producer = this._record.owner;
@@ -4719,7 +4725,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var model_default = GlueModelProxy;
 
-  // client_js/src/proxies/queryset.js
+  // client_js/src/proxies/queryset.ts
   var QUERY_CACHE_LIMIT = 64;
 
   class GlueQuerySetProxy extends base_default {
@@ -4883,7 +4889,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var queryset_default = GlueQuerySetProxy;
 
-  // client_js/src/proxies/component.js
+  // client_js/src/proxies/component.ts
   class GlueComponentProxy extends htmlRenderer_default(base_default) {
     get $el() {
       if (this._record.disposed || typeof document === "undefined")
@@ -4922,7 +4928,8 @@ ${expression ? 'Expression: "' + expression + `"
       if (!events.length)
         return [];
       const ancestors = new Set(this._record.policy.identity?.ancestors || []);
-      const deliveries = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el).map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
+      const mounted = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el);
+      const deliveries = mounted.map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
       if (!deliveries.length)
         return [];
       const batch = new GlueRequestBatch(this._http, deliveries.length);
@@ -4945,13 +4952,13 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var component_default = GlueComponentProxy;
 
-  // client_js/src/proxies/registry.js
+  // client_js/src/proxies/registry.ts
   var NAMESPACE_TO_PROXY_CLASS = {};
   function registerProxyClass(namespace, proxyClass) {
     NAMESPACE_TO_PROXY_CLASS[namespace] = proxyClass;
   }
 
-  // client_js/src/proxies/index.js
+  // client_js/src/proxies/index.ts
   var NAMESPACE_TO_PROXY_CLASS2 = {
     sequence: sequence_default,
     form: form_default,
@@ -5224,7 +5231,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var addressRecord_default = GlueAddressRecord;
 
-  // client_js/src/proxies/fields/base.js
+  // client_js/src/proxies/fields/base.ts
   class FieldGlue {
     constructor({ owner, name, fieldPath = name, stateKey, metadata = {} }) {
       this.name = name;
@@ -5258,8 +5265,9 @@ ${expression ? 'Expression: "' + expression + `"
       return this.errors.join(", ");
     }
     updateMetadata(metadata = {}) {
+      const members = this;
       for (const key of this._metadataKeys || [])
-        delete this[key];
+        delete members[key];
       const prototype = Object.getPrototypeOf(this);
       const assignable = Object.fromEntries(Object.entries(metadata).filter(([key]) => !(key in prototype)));
       Object.assign(this, assignable);
@@ -5293,7 +5301,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var base_default2 = FieldGlue;
 
-  // client_js/src/proxies/fields/choice.js
+  // client_js/src/proxies/fields/choice.ts
   class ChoiceFieldGlue extends base_default2 {
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
@@ -5311,7 +5319,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var choice_default = ChoiceFieldGlue;
 
-  // client_js/src/proxies/fields/manyChoice.js
+  // client_js/src/proxies/fields/manyChoice.ts
   class ManyChoiceFieldGlue extends choice_default {
     get selectedValues() {
       return this.value || [];
@@ -5340,7 +5348,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var manyChoice_default = ManyChoiceFieldGlue;
 
-  // client_js/src/proxies/fields/relation.js
+  // client_js/src/proxies/fields/relation.ts
   class RelationFieldGlue extends choice_default {
     static loadingCache = new Map;
     get choices() {
@@ -5461,8 +5469,8 @@ ${expression ? 'Expression: "' + expression + `"
     }
     _getChoicesCacheKey() {
       return this.choices_cache_key || [
-        this.owner._policy.identity.model_class_path,
-        this.owner._policy.identity.form_class_path,
+        this.owner._record.policy.identity.model_class_path,
+        this.owner._record.policy.identity.form_class_path,
         this.choice_model_path,
         this.name
       ].filter(Boolean).join(":");
@@ -5504,7 +5512,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var relation_default = RelationFieldGlue;
 
-  // client_js/src/proxies/fields/manyRelation.js
+  // client_js/src/proxies/fields/manyRelation.ts
   class ManyRelationFieldGlue extends relation_default {
     get selectedPks() {
       return (this.value || []).filter((value) => value != null);
@@ -5548,7 +5556,7 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var manyRelation_default = ManyRelationFieldGlue;
 
-  // client_js/src/proxies/fields/index.js
+  // client_js/src/proxies/fields/index.ts
   function createFieldGlue({ owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null }) {
     if (existingField?.__glue__isFieldProxy) {
       existingField.updateMetadata(metadata);
@@ -5558,7 +5566,7 @@ ${expression ? 'Expression: "' + expression + `"
       return existingField;
     }
     const options = { owner, name, fieldPath, stateKey, metadata };
-    if (metadata.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(metadata.type)) {
+    if (metadata.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(metadata.type ?? "")) {
       return new manyRelation_default(options);
     }
     if (metadata.choice_model_path) {
@@ -5568,7 +5576,7 @@ ${expression ? 'Expression: "' + expression + `"
       const stateValue = owner._record.getValue(stateKey);
       const multipleChoiceTypes = ["MultipleChoiceField", "TypedMultipleChoiceField"];
       const multipleChoiceWidgets = ["CheckboxSelectMultiple", "SelectMultiple"];
-      if (Array.isArray(stateValue) || multipleChoiceTypes.includes(metadata.type) || multipleChoiceWidgets.includes(metadata.widget)) {
+      if (Array.isArray(stateValue) || multipleChoiceTypes.includes(metadata.type ?? "") || multipleChoiceWidgets.includes(metadata.widget ?? "")) {
         return new manyChoice_default(options);
       }
       return new choice_default(options);
@@ -5577,7 +5585,6 @@ ${expression ? 'Expression: "' + expression + `"
   }
 
   // client_js/src/runtime/attributeMaterializer.ts
-  var createField = createFieldGlue;
   function resolveOwner(root, path) {
     return path.reduce((owner, segment) => {
       if (!Object.prototype.hasOwnProperty.call(owner, segment)) {
@@ -5638,7 +5645,7 @@ ${expression ? 'Expression: "' + expression + `"
         const valuePath = staticData.value_path || fieldPath;
         const fieldName = fieldPath.split(".").at(-1);
         const current = proxyFields[fieldPath];
-        const field = createField({
+        const field = createFieldGlue({
           owner: proxy,
           name: fieldName,
           fieldPath,
@@ -5817,8 +5824,7 @@ ${expression ? 'Expression: "' + expression + `"
       return this.records.get(address)?.proxy || null;
     }
     _createProxy(record) {
-      const proxyClasses = NAMESPACE_TO_PROXY_CLASS2;
-      const ProxyClass = proxyClasses[record.policy.namespace] || base_default;
+      const ProxyClass = NAMESPACE_TO_PROXY_CLASS2[record.policy.namespace] || base_default;
       const options = {
         http: this.http,
         record,

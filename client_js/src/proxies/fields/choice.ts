@@ -1,14 +1,20 @@
+import type {GlueChoice} from "../../wire"
 import FieldGlue from "./base"
 
+// The server's choices arrive as metadata and are copied onto the field.
+interface ChoiceFieldGlue {
+    choices?: GlueChoice[]
+}
+
 class ChoiceFieldGlue extends FieldGlue {
-    get selectedChoice() {
+    get selectedChoice(): GlueChoice | undefined {
         return (this.choices || []).find(choice => String(choice.value) === String(this.value))
     }
 
     // Label of a choice, safe for assignment to innerHTML: choices whose
     // server-side label was rendered by a formatter carry has_html_label and
     // pass through as-is, everything else is escaped plain text.
-    choiceLabelHtml(choice) {
+    choiceLabelHtml(choice: GlueChoice | null | undefined): string {
         const label = String(choice?.label ?? '')
         if (choice?.has_html_label) {
             return label
@@ -21,7 +27,7 @@ class ChoiceFieldGlue extends FieldGlue {
 
     // Plain text content of a choice label, for inputs and other text-only
     // spots that cannot render HTML.
-    choiceLabelText(choice) {
+    choiceLabelText(choice: GlueChoice | null | undefined): string {
         return String(choice?.label ?? '').replace(/<[^>]*>/g, '')
     }
 }

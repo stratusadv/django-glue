@@ -1,25 +1,29 @@
+import type {GlueProxyOptions} from "../runtime/addressRegistry"
 import BaseGlueProxy from "./base"
+import type FieldGlue from "./fields/base"
 
 class FieldBackedGlueProxy extends BaseGlueProxy {
-    constructor(options) {
+    _fields: Record<string, FieldGlue>
+
+    constructor(options: GlueProxyOptions) {
         super(options)
         this._fields = {}
     }
 
-    get $fields() {
+    get $fields(): Record<string, FieldGlue> {
         return this._fields
     }
 
-    get $pk() {
+    get $pk(): unknown {
         const pkField = this._policy?.identity?.pk_field_name || 'id'
         return this._policy?.identity?.target_pk ?? this._record.getValue(pkField)
     }
 
-    get $key() {
+    get $key(): unknown {
         return this.$pk ?? this._name
     }
 
-    hasErrors(fieldName = null) {
+    hasErrors(fieldName: string | null = null): boolean {
         if (fieldName) {
             return Boolean(this._record.getFieldComputed(fieldName).errors?.length)
         }

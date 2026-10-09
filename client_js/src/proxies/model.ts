@@ -1,3 +1,4 @@
+import type {GlueCallOptions, GlueCallOutcome} from "./base"
 import FieldBackedGlueProxy from "./fieldBacked"
 
 class GlueModelProxy extends FieldBackedGlueProxy {
@@ -7,7 +8,7 @@ class GlueModelProxy extends FieldBackedGlueProxy {
      * the same batch and the relation's membership reconciles in the same
      * exchange (state-model.md §4).
      */
-    _singleCall(attribute, kwargs, options = {}) {
+    _singleCall(attribute: string | null, kwargs: Record<string, unknown>, options: GlueCallOptions = {}): Promise<GlueCallOutcome> {
         const producer = this._record.owner
         const producerRecord = attribute === 'save' && this._policy.identity?.relation && producer?.path === null
             ? this._registry.getRecord(producer.address)

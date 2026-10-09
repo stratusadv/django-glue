@@ -1,7 +1,22 @@
+import type {GlueRecordProxy} from "../runtime/addressRecord"
+import type {GlueProxyOptions} from "../runtime/addressRegistry"
 import BaseGlueProxy from "./base"
+import type {GlueCallOptions, GlueCallOutcome} from "./base"
+import type FieldBackedGlueProxy from "./fieldBacked"
+
+// What FormSetGlue.validate() returns, in
+// django_glue/glue/objects/django/formset.py.
+interface GlueFormSetValidation {
+    valid: boolean
+    form_list: unknown[]
+    non_form_errors: string[]
+}
 
 class GlueFormSetProxy extends BaseGlueProxy {
-    constructor(options) {
+    nonFormErrors: string[]
+    _nextKey: number
+
+    constructor(options: GlueProxyOptions) {
         super(options)
         this.nonFormErrors = []
         this._nextKey = Math.max(
@@ -12,38 +27,38 @@ class GlueFormSetProxy extends BaseGlueProxy {
         ) + 1
     }
 
-    get forms() {
+    get forms(): GlueRecordProxy[] {
         return Object.entries(this._policy.children || {})
             .map(([, address]) => this._registry.getProxy(address))
-            .filter(Boolean)
+            .filter(Boolean) as GlueRecordProxy[]
     }
 
-    get length() {
+    get length(): number {
         return this.forms.length
     }
 
-    async append(initial = {}) {
+    async append(initial: Record<string, unknown> = {}): Promise<unknown> {
         const key = String(this._nextKey++)
         return await this._callAttribute('append', {key, initial})
     }
 
-    async pop(key) {
+    async pop(key: unknown): Promise<GlueRecordProxy | null | undefined> {
         const entry = Object.entries(this._policy.children || {})
-            .find(([, address]) => this._registry.getProxy(address)?.$key === key)
+            .find(([, address]) => (this._registry.getProxy(address) as FieldBackedGlueProxy | null)?.$key === key)
         if (!entry) return undefined
         const form = this._registry.getProxy(entry[1])
         await this._callAttribute('pop', {key: entry[0]})
         return form
     }
 
-    _singleCall(attribute, kwargs, options = {}) {
+    _singleCall(attribute: string | null, kwargs: Record<string, unknown>, options: GlueCallOptions = {}): Promise<GlueCallOutcome> {
         if (attribute === null || attribute === 'append') {
             return super._singleCall(attribute, kwargs, options)
         }
         const children = this._policy.children || {}
         // pop submits only the removed row, without its edits: an uncoercible
         // draft value must not block removing the row.
-        const keys = attribute === 'pop' ? [kwargs.key] : Object.keys(children)
+        const keys = attribute === 'pop' ? [kwargs.key as string] : Object.keys(children)
         const forms = Object.fromEntries(keys.map(key => {
             const record = this._registry.getRecord(children[key])
             if (!record || record.disposed) {
@@ -57,8 +72,8 @@ class GlueFormSetProxy extends BaseGlueProxy {
         return super._singleCall(attribute, {...kwargs, __submitted_forms: forms}, options)
     }
 
-    async validate() {
-        const result = await this._callAttribute('validate')
+    async validate(): Promise<GlueFormSetValidation | undefined> {
+        const result = await this._callAttribute('validate') as GlueFormSetValidation | undefined
         this.nonFormErrors = result?.non_form_errors || []
         return result
     }

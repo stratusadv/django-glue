@@ -1,3 +1,4 @@
+import type {GlueProxyClass} from "../runtime/addressRegistry"
 import BaseGlueProxy from "./base"
 import GlueSequenceProxy from "./sequence"
 import GlueFormProxy from "./form"
@@ -8,7 +9,7 @@ import GlueQuerySetProxy from "./queryset"
 import GlueComponentProxy from "./component"
 import {getProxyClass, registerProxyClass} from "./registry"
 
-const NAMESPACE_TO_PROXY_CLASS = {
+const NAMESPACE_TO_PROXY_CLASS: Record<string, GlueProxyClass> = {
     sequence: GlueSequenceProxy,
     form: GlueFormProxy,
     formSet: GlueFormSetProxy,

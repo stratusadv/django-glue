@@ -1,18 +1,5 @@
 import {createFieldGlue} from "../proxies/fields"
-import type FieldGlue from "../proxies/fields/base"
 import type GlueAddressRecord from "./addressRecord"
-import type {GlueRecordProxy} from "./addressRecord"
-
-// The field classes are still JavaScript, so the factory's type is asserted
-// here until they are converted.
-const createField = createFieldGlue as unknown as (options: {
-    owner: GlueRecordProxy
-    name: string | undefined
-    fieldPath: string
-    stateKey: string
-    metadata: Record<string, unknown>
-    existingField: FieldGlue | undefined
-}) => FieldGlue
 
 // A proxy's fields, children and callables are defined on it by path at
 // runtime, so the materializer reads and writes it as a bag of members.
@@ -79,9 +66,9 @@ class GlueAttributeMaterializer {
 
         Object.entries(fields).forEach(([fieldPath, staticData]) => {
             const valuePath = staticData.value_path || fieldPath
-            const fieldName = fieldPath.split('.').at(-1)
+            const fieldName = fieldPath.split('.').at(-1)!
             const current = proxyFields[fieldPath]
-            const field = createField({
+            const field = createFieldGlue({
                 owner: proxy,
                 name: fieldName,
                 fieldPath,

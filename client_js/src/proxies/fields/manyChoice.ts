@@ -1,20 +1,21 @@
+import type {GlueChoice} from "../../wire"
 import ChoiceFieldGlue from "./choice"
 
 class ManyChoiceFieldGlue extends ChoiceFieldGlue {
-    get selectedValues() {
-        return this.value || []
+    get selectedValues(): unknown[] {
+        return (this.value || []) as unknown[]
     }
 
-    get selectedChoices() {
+    get selectedChoices(): GlueChoice[] {
         const selectedValues = new Set(this.selectedValues.map(value => String(value)))
         return (this.choices || []).filter(choice => selectedValues.has(String(choice.value)))
     }
 
-    hasChoiceSelected(value) {
+    hasChoiceSelected(value: unknown): boolean {
         return this.selectedValues.some(item => String(item) === String(value))
     }
 
-    addChoice(value) {
+    addChoice(value: unknown): this {
         if (this.hasChoiceSelected(value)) {
             return this
         }
@@ -22,12 +23,12 @@ class ManyChoiceFieldGlue extends ChoiceFieldGlue {
         return this
     }
 
-    removeChoice(value) {
+    removeChoice(value: unknown): this {
         this.value = this.selectedValues.filter(item => String(item) !== String(value))
         return this
     }
 
-    toggleChoice(value) {
+    toggleChoice(value: unknown): this {
         return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value)
     }
 }

@@ -1,10 +1,35 @@
+import type {GlueChoice} from "../../wire"
+import type {GlueFieldOwner} from "./base"
 import ChoiceFieldGlue from "./choice"
+
+// A relation's owner serves its choices through a `foreign_key_choices`
+// callable, materialized on the proxy when the server declares it.
+interface GlueRelationFieldOwner extends GlueFieldOwner {
+    foreign_key_choices?(kwargs: {field_name: string, search?: string}): Promise<{results?: GlueChoice[]} | null | undefined>
+}
+
+// The choices every field with the same cache key shares.
+interface GlueChoicesCache {
+    loaded: boolean
+    promise: Promise<GlueChoice[]> | null
+    choices: GlueChoice[]
+    fields: Set<RelationFieldGlue>
+}
 
 class RelationFieldGlue extends ChoiceFieldGlue {
     // Static cache tracks loading state only, not data
-    static loadingCache = new Map()
+    static loadingCache = new Map<string, GlueChoicesCache>()
 
-    get choices() {
+    declare owner: GlueRelationFieldOwner
+    declare _choices: GlueChoice[] | undefined
+    declare _choicesOverridden: boolean | undefined
+    declare _searchQuery: string | undefined
+    declare _searchChoices: GlueChoice[] | null | undefined
+    declare _searchPromise: Promise<GlueChoice[]> | null | undefined
+    declare _searchGeneration: number | undefined
+    declare _retainedSelectedChoice: GlueChoice | undefined
+
+    get choices(): GlueChoice[] {
         if (this._searchQuery) {
             return this._searchChoices || []
         }
@@ -14,7 +39,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return this._choices || []
     }
 
-    set choices(value) {
+    set choices(value: GlueChoice[]) {
         this._choices = value
     }
 
@@ -28,7 +53,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // instead of the field's own default foreign_key_choices() lookup.
     // Independent of search -- see searchChoices()/clearSearch(), which
     // hold their own results and leave this override alone.
-    overrideChoices(choices) {
+    overrideChoices(choices: GlueChoice[]): GlueChoice[] {
         this._choices = Array.isArray(choices) ? choices : []
         this._choicesOverridden = true
         return this._choices
@@ -36,23 +61,23 @@ class RelationFieldGlue extends ChoiceFieldGlue {
 
     // Reverts to the default cache-backed behavior -- the next read of
     // `choices` calls ensureChoices() again as normal.
-    clearChoicesOverride() {
+    clearChoicesOverride(): void {
         this._choicesOverridden = false
     }
 
-    get pk() {
+    get pk(): unknown {
         const value = this.value
         if (value && typeof value === 'object') {
-            return value.value
+            return (value as {value?: unknown}).value
         }
         return value
     }
 
-    set pk(value) {
+    set pk(value: unknown) {
         this.value = value
     }
 
-    get selectedChoice() {
+    get selectedChoice(): GlueChoice | undefined {
         const pk = this.pk
         if (pk == null) return undefined
 
@@ -75,11 +100,11 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return undefined
     }
 
-    get isSearchingChoices() {
+    get isSearchingChoices(): boolean {
         return Boolean(this._searchPromise)
     }
 
-    ensureChoices() {
+    ensureChoices(): Promise<GlueChoice[]> {
         const cacheKey = this._getChoicesCacheKey()
         const cache = this._getOrCreateCache(cacheKey)
         cache.fields.add(this)
@@ -121,7 +146,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // overrideChoices()/_choicesOverridden -- those track a caller-supplied
     // choice list (e.g. a dependent-choices reload) that has nothing to do
     // with search and must survive a search starting and ending around it.
-    async searchChoices(query) {
+    async searchChoices(query: string): Promise<GlueChoice[]> {
         if (!query) {
             return this.clearSearch()
         }
@@ -131,7 +156,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         const searchGeneration = this._searchGeneration
         this._searchQuery = query
 
-        const searchPromise = this.owner.foreign_key_choices({
+        const searchPromise = this.owner.foreign_key_choices!({
             field_name: this.choice_field || this.name,
             search: query,
         }).then(result => {
@@ -160,7 +185,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     // state; a choice list assigned via overrideChoices() is untouched and
     // reasserts itself once _searchQuery is cleared (see the choices
     // getter).
-    clearSearch() {
+    clearSearch(): GlueChoice[] {
         this._rememberSelectedChoice()
         this._searchGeneration = (this._searchGeneration || 0) + 1
         this._searchQuery = ''
@@ -169,23 +194,23 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return this.choices
     }
 
-    _rememberSelectedChoice() {
+    _rememberSelectedChoice(): void {
         const selectedChoice = this.selectedChoice
         if (selectedChoice) {
             this._retainedSelectedChoice = selectedChoice
         }
     }
 
-    _getChoicesCacheKey() {
+    _getChoicesCacheKey(): string {
         return this.choices_cache_key || [
-            this.owner._policy.identity.model_class_path,
-            this.owner._policy.identity.form_class_path,
+            this.owner._record.policy.identity.model_class_path,
+            this.owner._record.policy.identity.form_class_path,
             this.choice_model_path,
             this.name,
         ].filter(Boolean).join(':')
     }
 
-    _getOrCreateCache(cacheKey) {
+    _getOrCreateCache(cacheKey: string): GlueChoicesCache {
         let cache = RelationFieldGlue.loadingCache.get(cacheKey)
         if (!cache) {
             cache = {
@@ -199,7 +224,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
         return cache
     }
 
-    _mergeChoices(newChoices) {
+    _mergeChoices(newChoices: GlueChoice[]): void {
         const cache = this._getOrCreateCache(this._getChoicesCacheKey())
         const current = cache.choices
         const merged = [...current]
@@ -224,4 +249,5 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     }
 }
 
+export type {GlueRelationFieldOwner}
 export default RelationFieldGlue

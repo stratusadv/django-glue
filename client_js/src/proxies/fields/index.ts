@@ -1,10 +1,14 @@
 import FieldGlue from "./base"
+import type {GlueFieldOptions} from "./base"
 import ChoiceFieldGlue from "./choice"
 import ManyChoiceFieldGlue from "./manyChoice"
 import RelationFieldGlue from "./relation"
 import ManyRelationFieldGlue from "./manyRelation"
 
-function createFieldGlue({owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null}) {
+function createFieldGlue({owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null}: GlueFieldOptions & {
+    stateKey: string
+    existingField?: FieldGlue | null
+}): FieldGlue {
     if (existingField?.__glue__isFieldProxy) {
         existingField.updateMetadata(metadata)
         existingField.name = name
@@ -14,7 +18,7 @@ function createFieldGlue({owner, name, fieldPath = name, stateKey, metadata = {}
     }
 
     const options = {owner, name, fieldPath, stateKey, metadata}
-    if (metadata.choice_model_path && ['ManyToManyField', 'ModelMultipleChoiceField'].includes(metadata.type)) {
+    if (metadata.choice_model_path && ['ManyToManyField', 'ModelMultipleChoiceField'].includes(metadata.type ?? '')) {
         return new ManyRelationFieldGlue(options)
     }
     if (metadata.choice_model_path) {
@@ -26,8 +30,8 @@ function createFieldGlue({owner, name, fieldPath = name, stateKey, metadata = {}
         const multipleChoiceWidgets = ['CheckboxSelectMultiple', 'SelectMultiple']
         if (
             Array.isArray(stateValue)
-            || multipleChoiceTypes.includes(metadata.type)
-            || multipleChoiceWidgets.includes(metadata.widget)
+            || multipleChoiceTypes.includes(metadata.type ?? '')
+            || multipleChoiceWidgets.includes(metadata.widget ?? '')
         ) {
             return new ManyChoiceFieldGlue(options)
         }

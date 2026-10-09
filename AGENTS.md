@@ -216,7 +216,7 @@ await Glue.view('/gorilla/detail/').renderInnerHtml('#panel')
   resolve result → apply effects).
 - `client_js/src/proxies/` holds the per-namespace proxy classes;
   proxy-specific behavior (chaining, caching, hydration, row lists) lives on
-  the subclass, never in `base.js` or `client.js`.
+  the subclass, never in `base.ts` or `client.js`.
 - `GlueClient` stays namespace-agnostic: it resolves a namespace to a proxy
   class and constructs. The one `namespace === 'function'` check is a known
   wart, not a precedent.

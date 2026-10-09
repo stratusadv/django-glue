@@ -1,5 +1,36 @@
+import type GlueAddressRecord from "../../runtime/addressRecord"
+import type {GlueFieldComputed, GlueFieldDescriptor} from "../../wire"
+
+// What a field needs of the proxy that owns it.
+interface GlueFieldOwner {
+    _record: GlueAddressRecord
+}
+
+// A field's server metadata: its static descriptor merged with its computed
+// output.
+type GlueFieldMetadata = Partial<GlueFieldDescriptor & GlueFieldComputed>
+
+interface GlueFieldOptions {
+    owner: GlueFieldOwner
+    name: string
+    fieldPath?: string
+    stateKey?: string
+    metadata?: GlueFieldMetadata
+}
+
+// updateMetadata() copies the metadata onto the field, except the keys a
+// field class defines itself.
+interface FieldGlue extends Omit<GlueFieldMetadata, 'errors' | 'choices'> {}
+
 class FieldGlue {
-    constructor({owner, name, fieldPath = name, stateKey, metadata = {}}) {
+    name: string
+    fieldPath: string
+    stateKey: string
+    declare owner: GlueFieldOwner
+    declare _metadataKeys: string[] | undefined
+    declare readonly __glue__isFieldProxy: true
+
+    constructor({owner, name, fieldPath = name, stateKey, metadata = {}}: GlueFieldOptions) {
         this.name = name
         this.fieldPath = fieldPath
         this.stateKey = stateKey || name
@@ -9,7 +40,7 @@ class FieldGlue {
             enumerable: false,
             configurable: true,
         })
-        
+
         this.updateMetadata(metadata)
 
         Object.defineProperty(this, '__glue__isFieldProxy', {
@@ -19,31 +50,32 @@ class FieldGlue {
         })
     }
 
-    get value() {
+    get value(): unknown {
         return this.owner._record.getValue(this.stateKey)
     }
 
-    set value(value) {
+    set value(value: unknown) {
         this.owner._record.setValue(this.stateKey, value)
     }
 
-    get errors() {
+    get errors(): string[] {
         return this.owner._record.getFieldComputed(this.fieldPath).errors || []
     }
 
-    get hasErrors() {
+    get hasErrors(): boolean {
         return Boolean(this.errors?.length)
     }
 
-    get errorText() {
+    get errorText(): string {
         return this.errors.join(', ')
     }
 
     // Server metadata lands as plain data properties and never writes through
     // or shadows a member the field class defines (errors, choices, value...):
     // those own client-side state that a refresh must not reset.
-    updateMetadata(metadata = {}) {
-        for (const key of this._metadataKeys || []) delete this[key]
+    updateMetadata(metadata: GlueFieldMetadata = {}): void {
+        const members = this as unknown as Record<string, unknown>
+        for (const key of this._metadataKeys || []) delete members[key]
         const prototype = Object.getPrototypeOf(this)
         const assignable = Object.fromEntries(
             Object.entries(metadata).filter(([key]) => !(key in prototype))
@@ -52,7 +84,7 @@ class FieldGlue {
         this._metadataKeys = Object.keys(assignable)
     }
 
-    primitiveValue(hint = 'default') {
+    primitiveValue(hint = 'default'): unknown {
         const value = this.value
         if (value === null || value === undefined) {
             return ''
@@ -66,21 +98,22 @@ class FieldGlue {
         return value
     }
 
-    [Symbol.toPrimitive](hint) {
+    [Symbol.toPrimitive](hint: string): unknown {
         return this.primitiveValue(hint)
     }
 
-    toString() {
+    toString(): string {
         return String(this.primitiveValue())
     }
 
-    valueOf() {
+    valueOf(): unknown {
         return this.primitiveValue()
     }
 
-    toJSON() {
+    toJSON(): unknown {
         return this.value
     }
 }
 
+export type {GlueFieldMetadata, GlueFieldOptions, GlueFieldOwner}
 export default FieldGlue
