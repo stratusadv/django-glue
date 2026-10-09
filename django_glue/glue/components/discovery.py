@@ -26,12 +26,9 @@ def _candidate_class_names(leaf: str) -> list[str]:
     return [f'{pascal}Component', pascal]
 
 
-def _component_tag_parts(tag_name: str) -> tuple[str, str]:
-    directory, _, leaf = tag_name.rpartition('/')
-    return directory, leaf
-
-
-def _has_components_module(location: Path) -> bool:
+def _has_components_module(location: Path, nested: tuple[str, ...]) -> bool:
+    if nested:
+        return (location / 'components').joinpath(*nested).is_dir()
     return (location / 'components.py').is_file() or (location / 'components').is_dir()
 
 
@@ -62,18 +59,21 @@ def _import_name_for(target: Path) -> str | None:
     return '.'.join(best_parts)
 
 
-def _components_module_names(tag_name: str, directory: str) -> Iterator[str]:
+def _components_module_names(
+    tag_name: str, directory: str, nested: tuple[str, ...],
+) -> Iterator[str]:
     """
-    The dotted name of each ``components`` module the tag's directory names, in
-    search order: under every ``DIRS`` entry, then inside the installed apps
-    when ``APP_DIRS`` is on. A location with no ``components`` module is
-    skipped, and one module may be named more than once.
+    The dotted name of each module one reading of the tag names, in search
+    order: under every ``DIRS`` entry, then inside the installed apps when
+    ``APP_DIRS`` is on. The module is the ``components`` module that is a child
+    of ``directory``, or the package at ``nested`` inside it. A location that
+    does not have it is skipped, and one module may be named more than once.
     """
     configured = getattr(django_settings, 'DJANGO_GLUE_COMPONENTS', None) or {}
 
     for entry in configured.get('DIRS', [django_settings.BASE_DIR]):
         location = Path(entry) / directory
-        if not _has_components_module(location):
+        if not _has_components_module(location, nested):
             continue
         import_name = _import_name_for(location / 'components')
         if import_name is None:
@@ -85,7 +85,7 @@ def _components_module_names(tag_name: str, directory: str) -> Iterator[str]:
                 'be imported, because no sys.path entry contains it. Put the directory on '
                 'sys.path or remove the entry.'
             )
-        yield import_name
+        yield '.'.join((import_name, *nested))
 
     if not directory or not configured.get('APP_DIRS', True):
         return
@@ -96,8 +96,39 @@ def _components_module_names(tag_name: str, directory: str) -> Iterator[str]:
         if package != app_config.name and not package.startswith(f'{app_config.name}.'):
             continue
         inside_app = package.removeprefix(app_config.name).strip('.').replace('.', '/')
-        if _has_components_module(Path(app_config.path) / inside_app):
-            yield f'{package}.components'
+        if _has_components_module(Path(app_config.path) / inside_app, nested):
+            yield '.'.join((package, 'components', *nested))
+
+
+def _find_component_class(import_name: str, candidates: list[str]) -> type[Component] | None:
+    """
+    The candidate class defined in the module's own namespace or, when it is a
+    package, in one of its direct modules. A package inside it is not searched:
+    its name is part of the tag.
+    """
+    from django_glue.glue.components.component import Component
+
+    try:
+        package = importlib.import_module(import_name)
+    except ModuleNotFoundError as error:
+        if error.name != import_name:
+            raise
+        # A directory left beside a ``components.py`` module is not a package
+        # inside it.
+        return None
+
+    modules: list[object] = [package]
+    for module_info in pkgutil.iter_modules(getattr(package, '__path__', ())):
+        if module_info.ispkg or module_info.name.startswith('_'):
+            continue
+        modules.append(importlib.import_module(f'{import_name}.{module_info.name}'))
+
+    for module in modules:
+        for candidate in candidates:
+            cls = getattr(module, candidate, None)
+            if isinstance(cls, type) and issubclass(cls, Component):
+                return cls
+    return None
 
 
 def resolve_component(tag_name: str) -> type[Component]:
@@ -105,45 +136,45 @@ def resolve_component(tag_name: str) -> type[Component]:
     Resolve a snake_case component tag to its class, on demand.
 
     The tag is an optional directory prefix, then the component name. The last
-    segment names the class (``Foo`` or ``FooComponent``); the segments before
-    it are a directory, and the component lives in the ``components`` module or
-    package that is a child of that directory.
+    segment names the class (``Foo`` or ``FooComponent``). The segments before
+    it are a directory holding a ``components`` module or package, then any
+    directories inside that package: ``app/cards/foo`` reads as the
+    ``components`` module of ``app/cards`` and as ``app/components/cards``.
 
-    The directory is looked up the way Django looks up a template: under each
+    Each reading is looked up the way Django looks up a template: under each
     ``DIRS`` entry of ``DJANGO_GLUE_COMPONENTS``, then inside the installed
-    apps. The first location whose ``components`` module defines the class
-    wins.
+    apps, and the first location that defines the class wins. A tag that two
+    readings resolve to different classes is ambiguous and is refused.
     """
-    from django_glue.glue.components.component import Component
-
-    directory, leaf = _component_tag_parts(tag_name)
+    *directories, leaf = tag_name.split('/')
     candidates = _candidate_class_names(leaf)
 
     searched: list[str] = []
-    for import_name in _components_module_names(tag_name, directory):
-        if import_name in searched:
-            continue
-        searched.append(import_name)
-        package = importlib.import_module(import_name)
+    resolved: list[type[Component]] = []
+    for depth in range(len(directories), -1, -1):
+        directory, nested = '/'.join(directories[:depth]), tuple(directories[depth:])
+        for import_name in _components_module_names(tag_name, directory, nested):
+            if import_name in searched:
+                continue
+            searched.append(import_name)
+            cls = _find_component_class(import_name, candidates)
+            if cls is not None:
+                if cls not in resolved:
+                    resolved.append(cls)
+                break
 
-        modules: list[object] = [package]
-        package_path = getattr(package, '__path__', None)
-        if package_path is not None:
-            for _, submodule_name, _ in pkgutil.walk_packages(package_path, f'{import_name}.'):
-                if any(part.startswith('_') for part in submodule_name.split('.')):
-                    continue
-                modules.append(importlib.import_module(submodule_name))
-
-        for module in modules:
-            for candidate in candidates:
-                cls = getattr(module, candidate, None)
-                if isinstance(cls, type) and issubclass(cls, Component):
-                    return cls
-
+    if len(resolved) > 1:
+        raise GlueComponentRegistrationError(
+            f'Component tag {tag_name!r} is ambiguous: it names '
+            f'{" and ".join(f"{cls.__module__}.{cls.__qualname__}" for cls in resolved)}. '
+            'Rename one, or stamp the one you mean by its dotted path.'
+        )
+    if resolved:
+        return resolved[0]
     if not searched:
         raise GlueComponentRegistrationError(
             f'Cannot resolve component {tag_name!r}: searched no components module. '
-            f'No DJANGO_GLUE_COMPONENTS DIRS entry or installed app has one at {directory!r}.'
+            f'No DJANGO_GLUE_COMPONENTS DIRS entry or installed app has one for {tag_name!r}.'
         )
     raise GlueComponentRegistrationError(
         f'Cannot resolve component {tag_name!r}: no class named {candidates[0]!r} or '

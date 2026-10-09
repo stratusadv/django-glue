@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 
 TAG_NAME_PATTERN = re.compile(r'^[a-z0-9]+(?:_[a-z0-9]+)*(?:/[a-z0-9]+(?:_[a-z0-9]+)*)*$')
+DOTTED_PATH_PATTERN = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+$')
 CAMEL_BOUNDARY = re.compile(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
 
 
@@ -37,14 +38,21 @@ class ComponentRegistry:
         resolved = self.by_tag_name.get(tag_name)
         if resolved is not None:
             return resolved
-        if not TAG_NAME_PATTERN.fullmatch(tag_name):
+        if TAG_NAME_PATTERN.fullmatch(tag_name):
+            component_class = resolve_component(tag_name)
+        elif DOTTED_PATH_PATTERN.fullmatch(tag_name):
+            # A dotted path is the class's own ``module.qualname``, the identity
+            # a policy token signs, so it is found the way reconstruction finds it.
+            component_class = self.from_identifier(tag_name)
+        else:
             raise GlueComponentRegistrationError(f'Invalid Glue component tag name: {tag_name!r}')
-        component_class = resolve_component(tag_name)
         self.by_tag_name[tag_name] = component_class
         self.register(component_class)
         return component_class
 
     def from_identifier(self, identifier: str) -> type[Component]:
+        from django_glue.glue.components.component import Component
+
         resolved = self.by_identifier.get(identifier)
         if resolved is not None:
             return resolved
@@ -57,8 +65,12 @@ class ComponentRegistry:
             raise GlueComponentRegistrationError(
                 f'Unknown Glue component identifier: {identifier!r}',
             ) from error
-        self.by_identifier[identifier] = component_class  # type: ignore[assignment]
-        return component_class  # type: ignore[return-value]
+        if not (isinstance(component_class, type) and issubclass(component_class, Component)):
+            raise GlueComponentRegistrationError(
+                f'{identifier!r} is not a Glue component: it does not name a Component subclass.'
+            )
+        self.by_identifier[identifier] = component_class
+        return component_class
 
 
 component_registry = ComponentRegistry()

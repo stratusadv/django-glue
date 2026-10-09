@@ -2,7 +2,10 @@
 
 Status: Accepted; implemented on branch; partly superseded by
 [ADR 027](027-component-lookup-like-templates.md), which replaces the single
-components root and `DJANGO_GLUE_COMPONENTS_ROOT` with `DJANGO_GLUE_COMPONENTS`
+components root and `DJANGO_GLUE_COMPONENTS_ROOT` with `DJANGO_GLUE_COMPONENTS`,
+and by [ADR 032](032-nested-directories-and-dotted-paths-in-component-tags.md),
+which puts the directories inside a `components` package in the tag instead of
+scanning them
 
 Date: 2026-09-25
 

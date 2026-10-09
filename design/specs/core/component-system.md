@@ -530,20 +530,39 @@ neither is part of this one.
 
 The tag is a **snake_case path**: an optional directory prefix, then the
 component name, separated by slashes. The last segment names the class
-(`TimeEntryDayComponent`, else `TimeEntryDay`); the segments before it are a
-directory, and the component lives in the `components` package that is a child
-of that directory:
+(`TimeEntryDayComponent`, else `TimeEntryDay`). The segments before it are a
+directory that holds a `components` module or package, then every directory
+inside that package (ADR 032):
 
 ```django
 {% glue_component 'time_entry_day' date=date user_id=user.pk key=date %}
 {% glue_component 'time_tracker/time_entry_day' date=date user_id=user.pk key=date %}
+{% glue_component 'time_tracker/modals/time_entry_form' entry=entry.pk %}
 ```
 
 The first addresses `TimeEntryDay(Component)` in `<location>/components`; the
 second addresses the same class in `<location>/time_tracker/components`. The
-class is matched by name while scanning that `components` package — **the file
-it lives in does not matter** — and is imported and resolved lazily on first
-use, never at startup.
+third has two readings: `<location>/time_tracker/modals/components`, and the
+`modals` directory inside `<location>/time_tracker/components`. Every reading
+is looked up. A tag that two readings resolve to different classes is ambiguous
+and fails with `GlueComponentRegistrationError`, naming both.
+
+The class is matched by name in the package a reading names: its own namespace
+and its direct modules. **The file it lives in does not matter**, but a
+directory does: a package inside the one a reading names is not searched,
+because its name belongs in the tag. A nested directory needs no `__init__.py`.
+The class is imported and resolved lazily on first use, never at startup.
+
+The tag may instead be the class's **dotted path**, its `module.qualname`:
+
+```django
+{% glue_component 'app.time_tracker.components.modals.forms.TimeEntryFormComponent' entry=entry.pk %}
+```
+
+A dotted path names one class, anywhere the project can import it from, and is
+resolved the way reconstruction resolves the signed `component_id`. It is not
+looked up in `DIRS` or the installed apps, so a project cannot override it, and
+the name must be a `Component` subclass.
 
 The locations are configured the way Django configures template lookup
 (ADR 027):
@@ -561,9 +580,10 @@ DJANGO_GLUE_COMPONENTS = {
   dotted package path (`django_spire/comment` is `django_spire.comment`), and
   that package is searched when it is an installed app or lies inside one.
 - Every `DIRS` entry is searched before any installed app. A location with no
-  `components` module is skipped. The first location whose `components` module
-  defines the class wins, so a project overrides a library's component by
-  defining the same class at the same tag path under one of its `DIRS`.
+  `components` module is skipped. For each reading of the tag, the first
+  location that defines the class wins, so a project overrides a library's
+  component by defining the same class at the same tag path under one of its
+  `DIRS`.
 - When no location defines the class, resolution fails with
   `GlueComponentRegistrationError`, naming every module searched.
 
@@ -571,8 +591,9 @@ The system check `django_glue.E004` rejects the removed
 `DJANGO_GLUE_COMPONENTS_ROOT` setting, and `django_glue.E005` rejects a
 malformed `DJANGO_GLUE_COMPONENTS`.
 
-Names are lowercase snake_case segments; the directory is a slash-separated
-import path of such segments. Because the tag *is* the address, the class name
+A path's names are lowercase snake_case segments; the directory is a
+slash-separated import path of such segments. A tag that is neither such a path
+nor a dotted path is refused. Because the tag *is* the address, the class name
 is fixed by it: `time_entry_day` can only be `TimeEntryDay(Component)`.
 Reconstruction is independent of the tag — it still resolves from the signed
 `component_id` (`module.qualname`) — so moving or renaming the tag does not

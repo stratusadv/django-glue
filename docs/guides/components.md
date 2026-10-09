@@ -45,7 +45,9 @@ directory, then the component name. The last segment names the class —
 `counter_card` resolves to `CounterCardComponent` (else `CounterCard`) — and the
 segments before it are a directory, so the component must live in the
 `components` module or package that is a child of that directory. Glue imports
-and scans it lazily on first use; the file it lives in does not matter. Named
+and scans it lazily on first use; the file it lives in does not matter.
+[Nested directories and dotted paths](#nested-directories-and-dotted-paths)
+covers a component inside a directory of a `components` package. Named
 arguments resolve as Django filter expressions, so `start=start` passes the
 Python value. Only declared parameters are accepted. `key` is required inside
 a loop, must remain stable for the same logical child, and cannot be a loop
@@ -95,6 +97,39 @@ A tag that no location defines raises `GlueComponentRegistrationError`, naming
 every module searched. A `DIRS` directory must be importable: one that holds a
 `components` module outside every `sys.path` entry raises the same error, naming
 the entry, instead of being skipped.
+
+### Nested directories and dotted paths
+
+A directory inside a `components` package is part of the tag. It goes after the
+directory that holds the package:
+
+```
+gorilla/
+└── components/
+    ├── counter_card.py         {% glue_component 'gorilla/counter_card' %}
+    └── modals/
+        └── rename.py           {% glue_component 'gorilla/modals/rename' %}
+```
+
+The file name is still left out, and a nested directory needs no `__init__.py`.
+`gorilla/rename` does not find `RenameComponent` here: Glue searches the
+package a tag names and the modules directly in it, not the directories below
+it.
+
+A tag such as `gorilla/modals/rename` can also mean the `components` module of
+a `gorilla/modals` directory. Glue looks for both. If both define the class,
+the tag is ambiguous and raises `GlueComponentRegistrationError`, naming the two
+classes; rename one, or stamp the one you mean by its dotted path.
+
+A tag can also be the class's dotted import path:
+
+```django
+{% glue_component 'gorilla.components.modals.rename.RenameComponent' %}
+```
+
+A dotted path names exactly one class, which may live outside any `components`
+module. It is not looked up in `DIRS` or the installed apps, so a project
+cannot override a component stamped this way.
 
 ## Lists: render rows as partials unless a row is live
 
