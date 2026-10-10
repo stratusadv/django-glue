@@ -201,6 +201,13 @@ def test_a_call_that_reads_no_child_is_unaffected_by_a_bad_submission(card) -> N
     assert introduced == []
 
 
+def test_a_render_call_binds_new_children_whatever_was_submitted(card) -> None:
+    # A host mounting a component calls render, which runs every slot's initializer.
+    entry, _ = call(card, 'render', child_submissions(card, contact=VALID_CONTACT))
+
+    assert 'html' in entry
+
+
 def test_a_call_without_submissions_reads_fresh_children(card) -> None:
     entry, _ = call(card, 'send')
 

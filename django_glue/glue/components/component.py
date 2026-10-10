@@ -39,7 +39,11 @@ from django_glue.response import GlueResponse, GlueTemplateResponse
 from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+
     from django.http import HttpRequest
+
+    from django_glue.glue.children import BoundGlueChild
 
 
 class _DefaultFactory:
@@ -501,6 +505,23 @@ class Component(BaseGlue):
                 return entry, introduced
 
         return self._rerendered(entry, introduced, call_context)
+
+    def _bind_children(
+        self,
+        *,
+        live_children: Mapping[str, str] | None = None,
+        reintroduce: Iterable[str] = (),
+    ) -> tuple[BoundGlueChild, ...]:
+        """
+        Binding a slot runs its initializer for a new child. A submitted child
+        is an existing one, already bound, so submissions are set aside here.
+        """
+        call_context = self.__dict__.pop('_call_context', None)
+        try:
+            return super()._bind_children(live_children=live_children, reintroduce=reintroduce)
+        finally:
+            if call_context is not None:
+                self.__dict__['_call_context'] = call_context
 
     def _submitted_child(self, path: str) -> BaseGlue | None:
         """

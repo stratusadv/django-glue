@@ -2157,6 +2157,11 @@ child derived from the user's changes, such as field errors, with the call's
 result. When no submission exists for a slot, reading it runs the slot's
 factory, and each read returns a new object.
 
+A submission never stands in for a slot's factory. When the owner binds its
+children during the call (a nullable slot, a reintroduced one, or a `render`
+that introduces every slot), each factory runs and produces a new child,
+whatever was submitted for that slot.
+
 A fixed named child may omit a key, in which case the property path itself is
 its stable identity. If reevaluation may intentionally select a different
 child for the same public path, the construction must supply a key derived from
