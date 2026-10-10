@@ -25,7 +25,6 @@ async function build(options) {
         target: 'browser',
         format: 'iife',
         define: {
-            'CDN': 'true',
             'process.env.NODE_ENV': "'production'",
         },
     })
