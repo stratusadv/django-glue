@@ -239,7 +239,7 @@ family introduce an addressed child without rendering HTML:
 ```python
 class ChatPanel(Glue.Component):
     @Glue.child
-    def chats(self) -> QuerySetGlue:
+    def chats(self) -> Glue.QuerySet:
         return Glue.queryset(
             target=Chat.objects.by_user(self.request.user).active(),
             fields=['id', 'name'],
@@ -295,7 +295,7 @@ read in the call returns the same object:
 ```python
 class InvoiceBuilderComponent(Glue.Component):
     @Glue.child
-    def header_form(self) -> FormGlue:
+    def header_form(self) -> Glue.Form:
         return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
 
     @Glue.child

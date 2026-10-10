@@ -9,7 +9,7 @@
 
   ```python
   @Glue.child
-  def header(self) -> FormGlue:
+  def header(self) -> Glue.Form:
       return Glue.form(target=InvoiceHeaderForm(), access=self.access)
   ```
 
@@ -19,6 +19,12 @@
   changes applied, so one call can validate and save several forms and
   formsets together. What a read child derives from those changes, such as a
   form's errors, returns in the same response.
+
+- The Glue object types are on `Glue`, for annotations: `Glue.Form`,
+  `Glue.Model`, `Glue.QuerySet` and `Glue.Sequence`, beside `Glue.FormSet` and
+  `Glue.Component`. `Glue.Operation` and `Glue.OperationKind` are the types
+  `is_authorized()` receives. Nothing needs importing from inside
+  `django_glue.glue` to write a component.
 
 - A Glue form and a Glue formset have `is_valid()` and `cleaned_data`, as a
   Django form and formset do. `is_valid()` validates as `validate()` does and
@@ -78,6 +84,10 @@
   check before building the bundle.
 
 ### Fixes
+
+- A formset validated and then saved in the same call saves a changed saved
+  record. Validating wrote the new values onto the record, so the save that
+  followed saw nothing changed and skipped it.
 
 - An error of status 500 or above on one object's call no longer sends its own
   message to the browser unless `DEBUG` is on. It sends "An unexpected Glue

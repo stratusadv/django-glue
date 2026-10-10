@@ -1,10 +1,11 @@
 import inspect
 import warnings
+from collections import abc
 from dataclasses import replace
 from functools import update_wrapper
-from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, TypeVar, Union
 
-from django.db.models import Model, QuerySet
+from django.db import models
 from django.forms import BaseForm, ModelForm
 from django.http import HttpRequest
 
@@ -27,6 +28,8 @@ from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import DEFAULT_BATCH_SIZE, QuerySetGlue
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
+from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.options.django import (
     DEFAULT_SEARCH_LIMIT,
     configure_choices,
@@ -79,7 +82,7 @@ class _GlueChildDescriptor(_GluePropertyDescriptor):
     initializes it, and its return annotation names the Glue object:
 
         @Glue.child
-        def header(self) -> FormGlue:
+        def header(self) -> Glue.Form:
             return Glue.form(target=InvoiceHeaderForm(), access=self.access)
 
     On a Glue.Component, a child the user may change is submitted with every
@@ -100,7 +103,7 @@ class _GlueChildDescriptor(_GluePropertyDescriptor):
         if self.__glue_options__.expected_type is None:
             msg = (
                 f'Glue.child {func.__qualname__}() needs a return annotation naming the Glue '
-                'object it initializes, such as -> FormGlue.'
+                'object it initializes, such as -> Glue.Form.'
             )
             raise TypeError(msg)
         self.__glue_options__ = replace(self.__glue_options__, is_declared_child=True)
@@ -228,7 +231,13 @@ ChoiceSource = TypeVar('ChoiceSource')
 class Glue:
     Access = GlueAccess
     Component = Component
+    Form = FormGlue
     FormSet = FormSetGlue
+    Model = ModelGlue
+    QuerySet = QuerySetGlue
+    Sequence = SequenceGlue
+    Operation = GlueOperation
+    OperationKind = GlueOperationKind
     attribute = _attr
     attr = _attr
     ComponentParameter = _component_parameter
@@ -244,7 +253,7 @@ class Glue:
     RedirectResponse = GlueRedirectResponse
 
     @staticmethod
-    def fields(*paths: str, **relations: Sequence[str]) -> tuple[str, ...]:
+    def fields(*paths: str, **relations: abc.Sequence[str]) -> tuple[str, ...]:
         """Build a field selection from leaf names and per-relation subfields,
         normalized to the canonical ``relation__leaf`` paths ``fields`` and
         ``exclude`` already accept (state-model.md §9). Nest a ``Glue.fields()``
@@ -273,8 +282,8 @@ class Glue:
     def choices(
         source: ChoiceSource,
         *,
-        search_fields: Sequence[str] = (),
-        fields: Sequence[str] = (),
+        search_fields: abc.Sequence[str] = (),
+        fields: abc.Sequence[str] = (),
         search_limit: int = DEFAULT_SEARCH_LIMIT,
         label_formatter: Callable | str | None = None,
     ) -> ChoiceSource:
@@ -309,17 +318,17 @@ class Glue:
     def model(
         request: HttpRequest | None = None,
         unique_name: str | None = None,
-        target: Model | None = None,
+        target: models.Model | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         *,
-        fields: Sequence[str] | Literal['__all__'] = (),
-        exclude: Sequence[str] | Literal['__all__'] = (),
-        editable: Sequence[str] | None = None,
+        fields: abc.Sequence[str] | Literal['__all__'] = (),
+        exclude: abc.Sequence[str] | Literal['__all__'] = (),
+        editable: abc.Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
-        select_related: Sequence[str] | None = None,
+        select_related: abc.Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        choices: Mapping[str, QuerySet] | None = None,
+        choices: Mapping[str, models.QuerySet] | None = None,
     ) -> ModelGlue:
         glue_object = ModelGlue(
             instance=target,
@@ -343,18 +352,18 @@ class Glue:
     def queryset(
         request: HttpRequest | None = None,
         unique_name: str | None = None,
-        target: QuerySet | None = None,
+        target: models.QuerySet | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         *,
-        fields: Sequence[str] | Literal['__all__'] = (),
-        exclude: Sequence[str] | Literal['__all__'] = (),
-        editable: Sequence[str] | None = None,
-        filters: Mapping[str, Sequence[str]] | None = None,
-        ordering: Sequence[str] | None = None,
+        fields: abc.Sequence[str] | Literal['__all__'] = (),
+        exclude: abc.Sequence[str] | Literal['__all__'] = (),
+        editable: abc.Sequence[str] | None = None,
+        filters: Mapping[str, abc.Sequence[str]] | None = None,
+        ordering: abc.Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        choices: Mapping[str, QuerySet] | None = None,
+        choices: Mapping[str, models.QuerySet] | None = None,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
     ) -> QuerySetGlue:
         glue_object = QuerySetGlue(
@@ -384,7 +393,7 @@ class Glue:
         target: BaseForm | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         *,
-        editable: Sequence[str] | None = None,
+        editable: abc.Sequence[str] | None = None,
     ) -> FormGlue:
         glue_object = FormGlue(
             form=target,
@@ -405,7 +414,7 @@ class Glue:
         access: GlueAccess = GlueAccess.CHANGE,
         *,
         initial: Iterable[Mapping[str, Any]] = (),
-        instances: Iterable[Model | BaseForm] = (),
+        instances: Iterable[models.Model | BaseForm] = (),
         new_row_defaults: Mapping[str, Any] | None = None,
         min_num: int | None = None,
         max_num: int | None = None,

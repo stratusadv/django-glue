@@ -115,7 +115,7 @@ class ChildOwnerComponent(GreetingComponent):
         self.child_factory_calls = 0
         self.child_value: ChildComponent | None = ChildComponent()
 
-    @Glue.property
+    @Glue.child
     def child(self) -> ChildComponent:
         self.child_factory_calls += 1
         return self.child_value
@@ -131,7 +131,7 @@ class NullableChildOwnerComponent(GreetingComponent):
         self.child_factory_calls = 0
         self.child_value: ChildComponent | None = ChildComponent()
 
-    @Glue.property
+    @Glue.child
     def child(self) -> ChildComponent | None:
         self.child_factory_calls += 1
         return self.child_value
@@ -149,7 +149,7 @@ class DeniedChildOwnerComponent(GreetingComponent):
         super().__init__(**kwargs)
         self.child_value = DeniedChildComponent()
 
-    @Glue.property
+    @Glue.child
     def child(self) -> DeniedChildComponent:
         return self.child_value
 

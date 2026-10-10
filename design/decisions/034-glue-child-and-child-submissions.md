@@ -38,7 +38,7 @@ the child, and its return annotation names the Glue object:
 ```python
 class InvoiceBuilderComponent(Glue.Component):
     @Glue.child
-    def header_form(self) -> FormGlue:
+    def header_form(self) -> Glue.Form:
         return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
 
     @Glue.child

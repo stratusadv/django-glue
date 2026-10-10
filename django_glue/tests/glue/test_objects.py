@@ -163,7 +163,7 @@ class NestedDashboardGlue(BaseGlue):
         super().__init__(name='dashboard', access=GlueAccess.CHANGE)
         self.child_factory_calls = 0
 
-    @Glue.property
+    @Glue.child
     def stats(self) -> NestedStatsGlue:
         self.child_factory_calls += 1
         return NestedStatsGlue()
@@ -203,7 +203,7 @@ class CollectionDashboardGlue(BaseGlue):
     def __init__(self):
         super().__init__(name='collectionDashboard', access=GlueAccess.VIEW)
 
-    @Glue.property
+    @Glue.child
     def day_collection(self) -> SequenceGlue:
         return SequenceGlue([NestedStatsGlue()], name='internal_days')
 

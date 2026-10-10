@@ -377,12 +377,14 @@ the Glue object:
 
 ```python
 @Glue.child
-def entry_form(self) -> FormGlue:
+def entry_form(self) -> Glue.Form:
     return Glue.form(target=TimeEntryForm(instance=self.entry))
 ```
 
 `Glue.child` raises `TypeError` when the class is defined if the annotation is
-missing or names something that is not a Glue object. Until 1.3.0 a child was
+missing or names something that is not a Glue object. The Glue objects to name
+are on `Glue` itself: `Glue.Form`, `Glue.FormSet`, `Glue.Model`,
+`Glue.QuerySet`, `Glue.Sequence` and `Glue.Component`. Until 1.3.0 a child was
 declared with `Glue.property`; that still works and now warns.
 
 The server template context exposes the Python component as `component`; the
@@ -446,7 +448,7 @@ class InvoiceBuilderComponent(Glue.Component):
     template = 'invoicing/component/invoice_builder.html'
 
     @Glue.child
-    def header_form(self) -> FormGlue:
+    def header_form(self) -> Glue.Form:
         return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
 
     @Glue.child
@@ -739,7 +741,7 @@ class EntryModal(Glue.Component):
     template = 'entry/modal.html'
 
     @Glue.child
-    def entry(self) -> ModelGlue:
+    def entry(self) -> Glue.Model:
         return Glue.model(target=..., form=EntryForm)
 ```
 

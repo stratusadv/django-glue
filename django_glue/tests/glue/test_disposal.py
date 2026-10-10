@@ -65,7 +65,7 @@ class ChildSlotOwnerComponent(DisposalProbeComponent):
         super().__init__(**kwargs)
         self.child_value = DisposalProbeChildGlue(access=GlueAccess.VIEW)
 
-    @Glue.property
+    @Glue.child
     def child(self) -> DisposalProbeChildGlue:
         return self.child_value
 
