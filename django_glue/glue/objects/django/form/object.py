@@ -364,4 +364,7 @@ class FormGlue(BaseGlue):
         has_instance = getattr(self.form, 'instance', None) is not None
         if isinstance(self.form, forms.ModelForm) and has_instance:
             kwargs['instance'] = self.form.instance
+            # Validation writes the cleaned values onto the instance, so a second
+            # bind would read them as its initial and report nothing changed.
+            kwargs['initial'] = self.form.initial
         return form_class(**kwargs)

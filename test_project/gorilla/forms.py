@@ -139,6 +139,10 @@ class FightNameForm(forms.ModelForm):
         fields = ['name']
 
 
+class GorillaNameForm(forms.Form):
+    name = forms.CharField(max_length=255)
+
+
 class SkillForm(forms.ModelForm):
     class Meta:
         model = Skill

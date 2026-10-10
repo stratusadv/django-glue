@@ -10,7 +10,11 @@ from django_glue.exceptions import GlueRequestError
 from django_glue.glue.components import Component
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
+from django_glue.glue.objects.django.model.object import ModelGlue
+from django_glue.glue.objects.django.queryset import QuerySetGlue
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
+from django_glue.glue.sequence import SequenceGlue
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.fight.forms import ContactPromoterForm
 from test_project.gorilla.forms import SkillForm
@@ -255,6 +259,23 @@ def test_a_property_child_does_not_submit_with_its_owner(mock_request) -> None:
     entry, _ = rebuilt.process_attribute_call(context)
 
     assert entry['result'] is False
+
+
+def test_the_glue_object_types_are_named_on_glue() -> None:
+    assert Glue.Form is FormGlue
+    assert Glue.Model is ModelGlue
+    assert Glue.QuerySet is QuerySetGlue
+    assert Glue.Sequence is SequenceGlue
+    assert (Glue.Operation, Glue.OperationKind) == (GlueOperation, GlueOperationKind)
+
+    class Card(Component):
+        template = 'glue_template_test.html'
+
+        @Glue.child
+        def contact(self) -> Glue.Form:
+            return Glue.form(target=ContactPromoterForm(), access=self.access)
+
+    assert Card.__dict__['contact'].__glue_options__.expected_type is FormGlue
 
 
 def test_a_child_needs_a_glue_object_return_type() -> None:

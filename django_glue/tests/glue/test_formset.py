@@ -194,6 +194,16 @@ class HookSavingGorillaFormSet(Glue.FormSet):
             gorilla.save()
 
 
+class CheckedSavingGorillaFormSet(Glue.FormSet):
+    form_class = TestModelForm
+
+    @Glue.attr(required_access=GlueAccess.CHANGE)
+    def checked_save(self) -> dict:
+        if not self.is_valid():
+            return {'valid': False}
+        return self.save()
+
+
 def call_across_requests(policy, attribute, kwargs):
     """
     Run one attribute call the way a later request would: rebuilt from the token alone.
@@ -276,6 +286,21 @@ class FormSetGlueRemovalTestCase(TestCase):
             ['Harambe II'],
         )
         self.assertNotIn('removed_pks', GluePolicy.from_token(entry['policy_token']).state_snapshot)
+
+    def test_a_saved_rows_change_is_saved_after_the_formset_was_validated(self):
+        formset = self.seeded_formset(formset_class=CheckedSavingGorillaFormSet)
+        tokens = row_tokens(formset)
+
+        entry, _ = call_across_requests(formset.policy, 'checked_save', {'__submitted_forms': {
+            '0': {'policy_token': tokens['0'], 'updates': {'name': 'Koko II'}},
+            '1': {'policy_token': tokens['1'], 'updates': {}},
+        }})
+
+        self.assertEqual(entry['result'], {'valid': True})
+        self.assertEqual(
+            list(Gorilla.objects.order_by('pk').values_list('name', flat=True)),
+            ['Koko II', 'Harambe'],
+        )
 
     def test_save_with_an_invalid_row_saves_and_deletes_nothing(self):
         formset = self.seeded_formset(initial=[{'name': 'New'}])
