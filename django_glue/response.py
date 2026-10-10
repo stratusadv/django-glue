@@ -63,26 +63,29 @@ class GlueResponse:
 
         return cls(result=result)
 
+    @staticmethod
+    def error_data(error: GlueError) -> dict[str, Any]:
+        """
+        The error as the browser receives it, whether the whole request
+        failed or one object's call did. A server error's message and details
+        are withheld unless DEBUG is on.
+        """
+        expose_details = settings.DEBUG or error.status < 500
+
+        return {
+            'code': error.code,
+            'message': (
+                str(error)
+                if expose_details
+                else 'An unexpected Glue server error occurred.'
+            ),
+            'status': error.status,
+            'details': error.details() if expose_details else {},
+        }
+
     @classmethod
     def from_error(cls, error: GlueError) -> Self:
-        is_server_error = error.status >= 500
-        expose_details = settings.DEBUG or not is_server_error
-
-        return cls(
-            result={
-                'error': {
-                    'code': error.code,
-                    'message': (
-                        str(error)
-                        if expose_details
-                        else 'An unexpected Glue server error occurred.'
-                    ),
-                    'status': error.status,
-                    'details': error.details() if expose_details else {},
-                }
-            },
-            status=error.status,
-        )
+        return cls(result={'error': cls.error_data(error)}, status=error.status)
 
     def to_json_response(self) -> JsonResponse:
         return JsonResponse(

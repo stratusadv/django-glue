@@ -367,9 +367,25 @@ def test_namespace_provider_cycle_is_compile_error() -> None:
         )
 
 
-def test_typed_property_compiles_child_slot() -> None:
+def test_a_typed_property_still_compiles_a_child_slot_and_warns() -> None:
+    with pytest.warns(DeprecationWarning, match='Glue.child'):
+        class PanelOwner:
+            @Glue.property
+            def panel(self) -> Component:
+                ...
+
+    definition = GlueAttributeRegistry(
+        GlueAttributeCollector.collect(PanelOwner)
+    ).get('panel')
+
+    assert definition is not None
+    assert definition.kind == GlueAttributeKind.CHILD
+    assert not definition.is_declared_child
+
+
+def test_child_compiles_child_slot() -> None:
     class PanelOwner:
-        @Glue.property
+        @Glue.child
         def panel(self) -> Component:
             ...
 
@@ -384,9 +400,9 @@ def test_typed_property_compiles_child_slot() -> None:
     assert not definition.is_nullable
 
 
-def test_nullable_child_property_compiles_nullable_slot() -> None:
+def test_nullable_child_compiles_nullable_slot() -> None:
     class PanelOwner:
-        @Glue.property
+        @Glue.child
         def panel(self) -> Component | None:
             return None
 

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import zlib from 'zlib'
 
-const ENTRYPOINT_FILE_NAME = 'django_glue.js'
+const ENTRYPOINT_FILE_NAME = 'django_glue.ts'
 const ENTRYPOINT = `./client_js/${ENTRYPOINT_FILE_NAME}`
 const OUT_DIR = './django_glue/static/django_glue/js'
 const OUT_FILE_NAME = 'django_glue.js'
@@ -25,7 +25,6 @@ async function build(options) {
         target: 'browser',
         format: 'iife',
         define: {
-            'CDN': 'true',
             'process.env.NODE_ENV': "'production'",
         },
     })

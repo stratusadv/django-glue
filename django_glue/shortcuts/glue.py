@@ -1,8 +1,11 @@
 import inspect
+import warnings
+from collections import abc
+from dataclasses import replace
 from functools import update_wrapper
-from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
+from typing import Any, Callable, Iterable, Literal, Mapping, TypeVar, Union
 
-from django.db.models import Model, QuerySet
+from django.db import models
 from django.forms import BaseForm, ModelForm
 from django.http import HttpRequest
 
@@ -25,6 +28,8 @@ from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.formset import FormSetGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.objects.django.queryset import DEFAULT_BATCH_SIZE, QuerySetGlue
+from django_glue.glue.operation import GlueOperation, GlueOperationKind
+from django_glue.glue.sequence import SequenceGlue
 from django_glue.glue.options.django import (
     DEFAULT_SEARCH_LIMIT,
     configure_choices,
@@ -54,6 +59,13 @@ class _GluePropertyDescriptor:
             expected_type=expected_type,
             is_nullable=is_nullable,
         )
+        if expected_type is not None and type(self) is _GluePropertyDescriptor:
+            warnings.warn(
+                f'Glue.property on {func.__qualname__}() declares a child Glue object. Declare a '
+                'child with Glue.child; Glue.property will only compute values in django-glue 2.0.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name
@@ -62,6 +74,46 @@ class _GluePropertyDescriptor:
         if instance is None:
             return self
         return self._property.__get__(instance, owner)
+
+
+class _GlueChildDescriptor(_GluePropertyDescriptor):
+    """
+    A Glue object its owner declares as a child. The decorated method
+    initializes it, and its return annotation names the Glue object:
+
+        @Glue.child
+        def header(self) -> Glue.Form:
+            return Glue.form(target=InvoiceHeaderForm(), access=self.access)
+
+    On a Glue.Component, a child the user may change is submitted with every
+    call the component makes. Reading it during that call returns it with the
+    user's unsaved changes applied, so one call can validate and save several
+    children together:
+
+        @Glue.attr(required_access=Glue.Access.ADD)
+        def send(self) -> None:
+            if self.header.validate()['valid']:
+                ...
+
+    A child with VIEW access is never submitted.
+    """
+
+    def __init__(self, func: Callable) -> None:
+        super().__init__(func)
+        if self.__glue_options__.expected_type is None:
+            msg = (
+                f'Glue.child {func.__qualname__}() needs a return annotation naming the Glue '
+                'object it initializes, such as -> Glue.Form.'
+            )
+            raise TypeError(msg)
+        self.__glue_options__ = replace(self.__glue_options__, is_declared_child=True)
+
+    def __get__(self, instance, owner=None):
+        if isinstance(instance, Component):
+            submitted = instance._submitted_child(self._name)
+            if submitted is not None:
+                return submitted
+        return super().__get__(instance, owner)
 
 def _attr(*args: Any, **kwargs: Any) -> Any:
     return DeclaredAttribute(*args, **kwargs)
@@ -179,7 +231,13 @@ ChoiceSource = TypeVar('ChoiceSource')
 class Glue:
     Access = GlueAccess
     Component = Component
+    Form = FormGlue
     FormSet = FormSetGlue
+    Model = ModelGlue
+    QuerySet = QuerySetGlue
+    Sequence = SequenceGlue
+    Operation = GlueOperation
+    OperationKind = GlueOperationKind
     attribute = _attr
     attr = _attr
     ComponentParameter = _component_parameter
@@ -190,11 +248,12 @@ class Glue:
     html_attr = _html_attr
     namespace = GlueNamespace
     property = _GluePropertyDescriptor
+    child = _GlueChildDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
 
     @staticmethod
-    def fields(*paths: str, **relations: Sequence[str]) -> tuple[str, ...]:
+    def fields(*paths: str, **relations: abc.Sequence[str]) -> tuple[str, ...]:
         """Build a field selection from leaf names and per-relation subfields,
         normalized to the canonical ``relation__leaf`` paths ``fields`` and
         ``exclude`` already accept (state-model.md §9). Nest a ``Glue.fields()``
@@ -223,8 +282,8 @@ class Glue:
     def choices(
         source: ChoiceSource,
         *,
-        search_fields: Sequence[str] = (),
-        fields: Sequence[str] = (),
+        search_fields: abc.Sequence[str] = (),
+        fields: abc.Sequence[str] = (),
         search_limit: int = DEFAULT_SEARCH_LIMIT,
         label_formatter: Callable | str | None = None,
     ) -> ChoiceSource:
@@ -259,17 +318,17 @@ class Glue:
     def model(
         request: HttpRequest | None = None,
         unique_name: str | None = None,
-        target: Model | None = None,
+        target: models.Model | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         *,
-        fields: Sequence[str] | Literal['__all__'] = (),
-        exclude: Sequence[str] | Literal['__all__'] = (),
-        editable: Sequence[str] | None = None,
+        fields: abc.Sequence[str] | Literal['__all__'] = (),
+        exclude: abc.Sequence[str] | Literal['__all__'] = (),
+        editable: abc.Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
-        select_related: Sequence[str] | None = None,
+        select_related: abc.Sequence[str] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        choices: Mapping[str, QuerySet] | None = None,
+        choices: Mapping[str, models.QuerySet] | None = None,
     ) -> ModelGlue:
         glue_object = ModelGlue(
             instance=target,
@@ -293,18 +352,18 @@ class Glue:
     def queryset(
         request: HttpRequest | None = None,
         unique_name: str | None = None,
-        target: QuerySet | None = None,
+        target: models.QuerySet | None = None,
         access: GlueAccess = GlueAccess.VIEW,
         *,
-        fields: Sequence[str] | Literal['__all__'] = (),
-        exclude: Sequence[str] | Literal['__all__'] = (),
-        editable: Sequence[str] | None = None,
-        filters: Mapping[str, Sequence[str]] | None = None,
-        ordering: Sequence[str] | None = None,
+        fields: abc.Sequence[str] | Literal['__all__'] = (),
+        exclude: abc.Sequence[str] | Literal['__all__'] = (),
+        editable: abc.Sequence[str] | None = None,
+        filters: Mapping[str, abc.Sequence[str]] | None = None,
+        ordering: abc.Sequence[str] | None = None,
         form: FormOrClass | None = None,
         forms: Mapping[str, FormOrClass] | None = None,
         computed_attributes: Mapping[str, ComputedAttribute] | None = None,
-        choices: Mapping[str, QuerySet] | None = None,
+        choices: Mapping[str, models.QuerySet] | None = None,
         batch_size: int | None | Literal['__default__'] = DEFAULT_BATCH_SIZE,
     ) -> QuerySetGlue:
         glue_object = QuerySetGlue(
@@ -334,7 +393,7 @@ class Glue:
         target: BaseForm | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         *,
-        editable: Sequence[str] | None = None,
+        editable: abc.Sequence[str] | None = None,
     ) -> FormGlue:
         glue_object = FormGlue(
             form=target,
@@ -355,11 +414,12 @@ class Glue:
         access: GlueAccess = GlueAccess.CHANGE,
         *,
         initial: Iterable[Mapping[str, Any]] = (),
-        instances: Iterable[Model | BaseForm] = (),
+        instances: Iterable[models.Model | BaseForm] = (),
         new_row_defaults: Mapping[str, Any] | None = None,
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
+        extra: int | None = None,
     ) -> FormSetGlue:
         if isinstance(target, type) and issubclass(target, FormSetGlue):
             glue_object = target(
@@ -371,6 +431,7 @@ class Glue:
                 min_num=min_num,
                 max_num=max_num,
                 can_delete=can_delete,
+                extra=extra,
             )
         else:
             if not (isinstance(target, type) and issubclass(target, BaseForm)):
@@ -392,6 +453,7 @@ class Glue:
                 min_num=min_num,
                 max_num=max_num,
                 can_delete=can_delete,
+                extra=extra,
             )
         return Glue._add_to_context(
             request,

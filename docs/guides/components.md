@@ -371,13 +371,21 @@ class BudgetPanelComponent(Glue.Component):
     window: ReportWindow = Glue.ComponentParameter()
 ```
 
-A form is not a parameter. Build it as a child from the model parameter:
+A form is not a parameter. Build it as a child from the model parameter, with
+`Glue.child`. The method initializes the child, and its return annotation names
+the Glue object:
 
 ```python
-@Glue.property
-def entry_form(self) -> FormGlue:
+@Glue.child
+def entry_form(self) -> Glue.Form:
     return Glue.form(target=TimeEntryForm(instance=self.entry))
 ```
+
+`Glue.child` raises `TypeError` when the class is defined if the annotation is
+missing or names something that is not a Glue object. The Glue objects to name
+are on `Glue` itself: `Glue.Form`, `Glue.FormSet`, `Glue.Model`,
+`Glue.QuerySet`, `Glue.Sequence` and `Glue.Component`. Until 1.3.0 a child was
+declared with `Glue.property`; that still works and now warns.
 
 The server template context exposes the Python component as `component`; the
 mounted Alpine scope exposes its client proxy under the same name. `$glue`
@@ -422,6 +430,64 @@ morphs the root; removed child roots dispose their addresses. To re-render when
 another component announces a change, list its events in `rerender_on` (see
 [declared events](advanced/event_listeners.md)). `render()` produces HTML for
 initial or host mounting.
+
+### Save several forms in one call
+
+A component's call can read what the user typed into the component's own
+children. Every `Glue.child` the user may change (any access above
+`Glue.Access.VIEW`) is sent with each call the component makes, and reading it
+inside the call returns it with the user's unsaved changes applied. One call
+can therefore validate several forms and formsets and save them together, or
+save nothing:
+
+```python
+from django.forms.formsets import all_valid
+
+
+class InvoiceBuilderComponent(Glue.Component):
+    template = 'invoicing/component/invoice_builder.html'
+
+    @Glue.child
+    def header_form(self) -> Glue.Form:
+        return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
+
+    @Glue.child
+    def lines_form(self) -> InvoiceLineFormSet:
+        return InvoiceLineFormSet(access=Glue.Access.ADD)
+
+    @Glue.attr(required_access=Glue.Access.ADD)
+    def send_invoice(self) -> Glue.Response | None:
+        if not all_valid([self.header_form, self.lines_form]):
+            return None
+
+        header = self.header_form.cleaned_data
+        invoice = Invoice.services.factory.send(
+            customer_name=header['customer_name'],
+            lines=self.lines_form.cleaned_data,
+        )
+        return Glue.RedirectResponse('invoicing:detail', pk=invoice.pk)
+```
+
+The template binds its fields to the children as it would anywhere else, and
+the button calls `component.send_invoice()` with no arguments.
+
+- **Errors need no handling.** A child the call read answers in the same
+  response, so each form's errors appear under its fields.
+- **`all_valid` is Django's.** It calls `is_valid()` on everything it is given
+  and does not stop at the first failure, so every form shows its errors.
+- **A child is only checked when the call reads it.** A call that reads none of
+  them is unaffected by what was sent.
+- **A view-only child is never sent**, and neither is one declared with
+  `Glue.property`.
+- **A chosen file in a child's field is not sent.** Take a file on the
+  component itself.
+- **The browser can still call a child's own `save()`.** When only the
+  component's call may write, override `save()` on the form class to do
+  nothing.
+
+In a test that calls the component without a browser, nothing is submitted, so
+each read of a child builds a new one. Submit the children with the call, or
+hold the child in a variable.
 
 ### A parent's re-render keeps its children
 
@@ -606,45 +672,64 @@ component view, it raises an error. The view template must load Glue with
 `{% django_glue_init %}`, directly or through the template it extends. These URLs serve GET and HEAD; component actions use
 Glue's normal addressed endpoint.
 
-Use Django's view decorators to guard the initial URL. Override
-`is_authorized()` on the component to check permission again for later Glue
-calls:
+### Guard a component with a view decorator
+
+Override `is_authorized()` to decide who may use a component. Glue asks it on
+the page load, when the component is stamped with `{% glue_component %}`, and
+on every later call, so one rule covers all three. Put Django's view decorators
+on it with `method_decorator`:
 
 ```python
 from django.contrib.auth.decorators import permission_required
+from django.utils.decorators import method_decorator
 from django_glue import Glue
 
 
 class EntryPage(Glue.Component):
     template = 'entries/entry.html'
+    view_template = 'entries/page.html'
 
+    @method_decorator(permission_required('entries.view_entry'))
     def is_authorized(self, request, operation):
         if operation.required_access == Glue.Access.CHANGE:
             return request.user.has_perm('entries.change_entry')
-        return request.user.has_perm('entries.view_entry')
+        return True
 
 
 urlpatterns = [
-    path(
-        'entries/',
-        permission_required('entries.view_entry', raise_exception=True)(
-            EntryPage.as_view(view_template='entries/page.html', access=Glue.Access.CHANGE)
-        ),
-    ),
+    path('entries/', EntryPage.as_view(access=Glue.Access.CHANGE)),
 ]
 ```
 
+The URL needs no wrapper. A decorator that lets the request through runs the
+method, which returns `True` or `False`. A decorator that stops the request
+denies it, and when the component is served by `as_view()` the page responds
+the way the decorator answered: `login_required` redirects to the login page,
+and a decorator that raises `PermissionDenied` responds 403.
+
+`method_decorator` is needed because a view decorator expects the request as
+the first argument, and a method's first argument is `self`. The decorator
+receives the request and the operation, not the URL's captured arguments, so
+one that reads an argument such as `pk` does not work here; check the
+component's own parameters in the method instead.
+
+`is_authorized()` must return `True` or `False`. Any other value raises a
+`TypeError` naming the class.
+
+You can still wrap `as_view()` in a decorator in the URL pattern, as with any
+view. That guards the page load only: later calls go to Glue's own endpoint,
+not to your URL.
+
 `access=` sets the component's maximum Glue capability; it is not a Django
-permission check. The URL decorator controls page access, and
-`is_authorized()` uses the current request for both the first render and
-subsequent operations. For an object-specific rule, check the component's
-signed identity and the current database scope inside `is_authorized()`.
+permission check. For an object-specific rule, check the component's signed
+identity and the current database scope inside `is_authorized()`.
 
 A denial at the first render depends on how the component was created. A
-component served by `as_view()` responds 403. A component stamped with
+component served by `as_view()` responds 403, or with the response a decorator
+on `is_authorized()` gave. A component stamped with
 `{% glue_component %}` renders nothing and introduces no address, so the rest of
 the page renders normally; the template does not need its own permission check
-around the tag. A denied `@Glue.property` child resolves to absent. After the first
+around the tag. A denied `@Glue.child` resolves to absent. After the first
 render, a denied action or refresh fails only that component's entry with
 `not_authorized`.
 
@@ -655,8 +740,8 @@ component owns its declared child form or formset:
 class EntryModal(Glue.Component):
     template = 'entry/modal.html'
 
-    @Glue.property
-    def entry(self):
+    @Glue.child
+    def entry(self) -> Glue.Model:
         return Glue.model(target=..., form=EntryForm)
 ```
 

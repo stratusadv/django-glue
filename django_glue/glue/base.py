@@ -7,7 +7,9 @@ from dataclasses import replace
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Callable, Self
 
+from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest
+from django.http.response import HttpResponseBase
 
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
@@ -226,6 +228,33 @@ class BaseGlue(ABC):
         _ = request, operation
         return True
 
+    def _authorize(self, request: HttpRequest, operation: GlueOperation) -> None:
+        """
+        Raise ``GlueAuthorizationError`` unless ``is_authorized()`` answers
+        ``True``. A view decorator on ``is_authorized()`` answers a denial with
+        a response or by raising ``PermissionDenied`` (ADR 033); the error
+        keeps the response.
+        """
+        try:
+            answer = self.is_authorized(request, operation)
+        except PermissionDenied as error:
+            raise GlueAuthorizationError(object_name=self.name, operation=operation) from error
+        if answer is True:
+            return
+        if answer is False:
+            raise GlueAuthorizationError(object_name=self.name, operation=operation)
+        if isinstance(answer, HttpResponseBase):
+            raise GlueAuthorizationError(
+                object_name=self.name,
+                operation=operation,
+                response=answer,
+            )
+        msg = (
+            f'{type(self).__name__}.is_authorized() must return True or False, '
+            f'not {type(answer).__name__}.'
+        )
+        raise TypeError(msg)
+
     def cap_access(self, ceiling: GlueAccess) -> None:
         """Lower this object's access to ``ceiling`` when it exceeds it
         (state-model.md §10: an introduced capability cannot exceed the
@@ -239,8 +268,7 @@ class BaseGlue(ABC):
             attribute=None,
             required_access=self.access,
         )
-        if not self.is_authorized(request, operation):
-            raise GlueAuthorizationError(object_name=self.name, operation=operation)
+        self._authorize(request, operation)
         self.request = request
 
     def _require_authorization(self, operation: GlueOperation) -> None:
@@ -248,11 +276,7 @@ class BaseGlue(ABC):
             msg = f"Cannot authorize unbound Glue object '{self.name}'."
             raise RuntimeError(msg)
 
-        if not self.is_authorized(self.request, operation):
-            raise GlueAuthorizationError(
-                object_name=self.name,
-                operation=operation,
-            )
+        self._authorize(self.request, operation)
 
     def _resolve_required_access(
         self,
@@ -622,6 +646,18 @@ class BaseGlue(ABC):
         }
         self._load_client_state({**retained_draft, **updates})
         self._invalidate_attributes()
+
+    def _hydrate_submission(
+        self,
+        context: AttributeCallRequestContext,
+        submission: Mapping[str, Any],
+    ) -> None:
+        """Apply what the browser submitted for this object as its owner's child."""
+        self._hydrate(context.target_glue_policy, context.target_glue_updates)
+
+    def _submission_entries(self) -> list[dict[str, Any]]:
+        """This object's response entries after its owner read it as a submitted child."""
+        return [self.entry.model_dump()]
 
     def _retained_draft(self, policy: GluePolicy) -> dict[str, Any]:
         """The acknowledged editable draft the verified token carries: every

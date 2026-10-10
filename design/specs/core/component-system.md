@@ -72,7 +72,7 @@ construction, `_mergeState`, and GLUE-93 are all reasoned in Alpine's terms —
 while being forbidden from using Alpine's affordances.
 
 Glue bundles Alpine and its morph plugin at matching, pinned versions (currently
-3.15.12). `client_js/src/alpine.js` is the only client module that references
+3.15.12). `client_js/src/alpine.ts` is the only client module that references
 `Alpine`. Consuming projects remove their separate Alpine core and morph
 scripts. Optional plugins remain project-owned and register against
 `window.Alpine`, the runtime exposed by Glue.
@@ -225,20 +225,21 @@ construction, signs only its key, and resolves the key through the method on
 later requests
 ([ADR 021](../../decisions/021-component-parameter-initializers.md)).
 
-#### Properties may declare configured Glue-object children
+#### `Glue.child` declares a configured Glue-object child
 
-A typed `@Glue.property` on any addressed Glue object may return a configured
-`BaseGlue` object. Plain property values remain down-only derived data; a
-declared Glue-object result instead defines a stable named child relationship
-and is encoded as a reference to that child's address. Components use this for
-composition, but the same mechanism lets a `ModelGlue` expose a configured
-form, a custom object expose a queryset, or any other Glue family introduce an
-addressed child without rendering HTML:
+A `@Glue.child` method on any addressed Glue object initializes a configured
+`BaseGlue` object
+([ADR 034](../../decisions/034-glue-child-and-child-submissions.md)). It
+defines a stable named child relationship and is encoded as a reference to that
+child's address; a `@Glue.property` value remains down-only derived data.
+Components use this for composition, but the same mechanism lets a `ModelGlue`
+expose a configured form, a custom object expose a queryset, or any other Glue
+family introduce an addressed child without rendering HTML:
 
 ```python
 class ChatPanel(Glue.Component):
-    @Glue.property
-    def chats(self) -> QuerySetGlue:
+    @Glue.child
+    def chats(self) -> Glue.QuerySet:
         return Glue.queryset(
             target=Chat.objects.by_user(self.request.user).active(),
             fields=['id', 'name'],
@@ -255,10 +256,15 @@ error because no field, operation, query, or access capability has been
 configured.
 
 The return annotation is part of the declaration: it compiles the child slot,
-expected Glue family, and nullability into schema. Glue requires the runtime
-result to match. An unannotated `@Glue.property` remains ordinary derived data
-and fails loudly if it unexpectedly returns `BaseGlue`; a normal Python
-`@property` remains entirely server-internal.
+expected Glue family, and nullability into schema. `Glue.child` refuses a
+method without one, or with one that names no Glue object, when the class is
+defined, and Glue requires the runtime result to match. A `@Glue.property` is
+ordinary derived data and fails loudly if it unexpectedly returns `BaseGlue`; a
+normal Python `@property` remains entirely server-internal.
+
+A `@Glue.property` whose return annotation names a Glue object still declares
+the same child slot and emits a `DeprecationWarning`. It is the spelling
+`Glue.child` replaces, and it stops declaring a child in django-glue 2.0.
 
 The component owns the relationship and the child lifecycle, not the child's
 state. `chat-panel.chats` has its own policy, state snapshot, request queue, and
@@ -274,6 +280,46 @@ does so through an explicit component callable. If the child mutation and
 component transition must be atomic, one component callable owns the complete
 operation. Glue never copies child draft state into the parent or automatically
 refreshes an owner on every child update.
+
+#### A component callable reads its writable children
+
+One component callable can own a complete operation over several children
+because a component's call carries them
+([ADR 034](../../decisions/034-glue-child-and-child-submissions.md)). Every
+`Glue.child` of the component whose access is above `VIEW` is submitted with
+each call the component makes: the child's own signed token and its unsaved
+changes, and for a formset its rows. Reading the child inside the callable
+returns it reconstructed from that token with the changes applied, and every
+read in the call returns the same object:
+
+```python
+class InvoiceBuilderComponent(Glue.Component):
+    @Glue.child
+    def header_form(self) -> Glue.Form:
+        return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
+
+    @Glue.child
+    def lines_form(self) -> InvoiceLineFormSet:
+        return InvoiceLineFormSet(access=Glue.Access.ADD)
+
+    @Glue.attr(required_access=Glue.Access.ADD)
+    def send_invoice(self) -> Glue.Response | None:
+        if not all_valid([self.header_form, self.lines_form]):
+            return None
+        ...
+```
+
+The child still owns its state. The component holds no copy of the draft; it
+reads the child through the child's own token for the length of one call, and
+each child the call read returns its own response entry, so a form's errors
+reach its fields in the same response. A child the call does not read is not
+reconstructed and not checked. The wire shape and admission rules are in
+`state-model.md` (§Child submissions).
+
+A child declared with `Glue.property`, a child with `VIEW` access, a queryset's
+rows and the children of a child are not submitted. A refresh submits nothing.
+When nothing was submitted for a slot, reading it runs the initializer and
+returns a new child on each read.
 
 #### Post-init
 
@@ -666,6 +712,13 @@ endpoint. The component's `access=` value caps the signed operations, while
 introduction and on later calls. An `is_authorized()` denial during direct URL
 rendering becomes Django's HTTP 403 response.
 
+A view decorator may instead be placed on `is_authorized()` with Django's
+`method_decorator`, so that one declaration guards the page load, a stamp and
+every later call (ADR 033). A decorator that stops the request answers with a
+response or raises `PermissionDenied`; either is a denial. During direct URL
+rendering a denial that carries a response returns that response, which is how
+`login_required` redirects to the login page, and any other denial is the 403.
+
 #### Keys
 
 A key identifies a child among its siblings and **is chosen where the child is
@@ -799,7 +852,7 @@ The same composition path therefore applies when no UI component participates.
 A `ModelGlue` may introduce a configured `FormGlue` at `model.form`; a
 `QuerySetGlue` may introduce keyed `ModelGlue` rows; a `FormSetGlue` may
 introduce keyed `FormGlue` objects; and a custom `BaseGlue` may return any
-configured Glue family from a typed `@Glue.property`. Components add HTML rendering and
+configured Glue family from a `@Glue.child`. Components add HTML rendering and
 mount lifecycle, not a privileged object-composition mechanism.
 
 Client syntax remains intentionally fluent across the boundary. For example,
@@ -1248,7 +1301,7 @@ Findings:
   `Glue.view` responses use `render_html_payload()` to produce HTML and the
   shared flat `objects` collection. Attribute transports carry the HTML result
   in their addressed response entry; view transports return the HTML envelope
-  directly. `client_js/src/htmlRenderer.js` handles the public render methods.
+  directly. `client_js/src/htmlRenderer.ts` handles the public render methods.
   `TemplateGlue` and its template proxy are removed.
 - **`Glue.view` uses the target URL's middleware chain.** It requests the actual
   same-origin target with a Glue-specific `Accept` media type. A response

@@ -50,6 +50,18 @@ class FormGlue(BaseGlue):
         ``None`` before one ran -- e.g. for ``save(commit=False)``."""
         return self._bound_form
 
+    def is_valid(self) -> bool:
+        """Validates the form as ``validate()`` does and answers only whether it passed."""
+        return self.validate()['valid']
+
+    @property
+    def cleaned_data(self) -> dict[str, Any]:
+        """The validated form's cleaned data, as a Django form has it after ``is_valid()``."""
+        if self._bound_form is None:
+            msg = f"FormGlue '{self.name}' has no cleaned_data before it is validated."
+            raise AttributeError(msg)
+        return self._bound_form.cleaned_data
+
     def get_attribute_providers(self) -> tuple[Any, ...]:
         self.form._glue_event_owner = self
         return (self.form,)
@@ -300,7 +312,8 @@ class FormGlue(BaseGlue):
         bound_form = self._bind_form()
         self._bound_form = bound_form
         valid = bound_form.is_valid()
-        self._field_errors = dict(bound_form.errors)
+        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
+        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
@@ -310,7 +323,8 @@ class FormGlue(BaseGlue):
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
-        self._field_errors = dict(bound_form.errors)
+        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
+        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
@@ -350,4 +364,7 @@ class FormGlue(BaseGlue):
         has_instance = getattr(self.form, 'instance', None) is not None
         if isinstance(self.form, forms.ModelForm) and has_instance:
             kwargs['instance'] = self.form.instance
+            # Validation writes the cleaned values onto the instance, so a second
+            # bind would read them as its initial and report nothing changed.
+            kwargs['initial'] = self.form.initial
         return form_class(**kwargs)

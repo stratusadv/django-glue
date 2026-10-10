@@ -323,7 +323,12 @@ class BaseGlue:
 ```
 
 `is_authorized()` is a **pure predicate**. It receives the reconstructed object, the
-current request, and what is being attempted; it returns a boolean. It may not
+current request, and what is being attempted; it returns a boolean. Only `True`
+authorizes. `False`, a response returned in its place, or `PermissionDenied`
+raised from it is a denial, the last two being how a Django view decorator
+placed on the method answers one (ADR 033); any other value is a `TypeError`.
+A denial that carries a response keeps it for the caller that can use it, the
+component view. It may not
 mutate the object, may not see or alter editable updates, may not widen or
 narrow the capability, and may not change reconstruction order. That is what
 distinguishes it from the rejected `hydrate()` / `dehydrate()` / `boot()` hooks:
@@ -502,21 +507,29 @@ they do not use `BaseGlue` merely to obtain grouping or methods.
 Configured Glue objects may enter the graph only through an explicit
 address-producing route:
 
-1. a typed `@Glue.property` on any `BaseGlue` returns a stable named child;
+1. a `@Glue.child` on any `BaseGlue` returns a stable named child;
 2. a built-in adapter exposes an equivalent named or keyed child, such as
    a model's configured form, a queryset row, a formset form, or a projected
    relation;
 3. an addressed collection exposes stable-key items; or
 4. an authorized callable directly returns one declared transient child.
 
-An ordinary `@Glue.property` result is derived output in `computed_data`. A
-Glue-object return annotation instead declares a child slot and makes the
-property its server-owned factory. Glue requires the result to be `None` for a
-nullable slot or a configured, unbound `BaseGlue` matching that annotation,
-binds it beneath the canonical property path, and records its address in the
-owner's signed `children` map. An unannotated ordinary property that returns a
-`BaseGlue` fails loudly rather than changing kind at runtime. A server-internal
-helper uses normal Python `@property`, not `@Glue.property`.
+A `@Glue.property` result is derived output in `computed_data`. A `@Glue.child`
+instead declares a child slot, named by its required Glue-object return
+annotation, and makes the method its server-owned factory
+([ADR 034](../../decisions/034-glue-child-and-child-submissions.md)). Glue
+requires the result to be `None` for a nullable slot or a configured, unbound
+`BaseGlue` matching that annotation, binds it beneath the canonical attribute
+path, and records its address in the owner's signed `children` map. An
+unannotated property that returns a `BaseGlue` fails loudly rather than
+changing kind at runtime. A server-internal helper uses normal Python
+`@property`, not `@Glue.property`.
+
+A `@Glue.property` with a Glue-object return annotation declares the same slot
+and is deprecated: it warns, and in django-glue 2.0 it only computes a value.
+Wherever this document says a child slot is declared by `@Glue.child`, the
+deprecated spelling behaves identically, except that it is never submitted with
+its owner's calls (§Child submissions).
 
 Raw Django models, querysets, forms, and formsets are rejected. The public
 family shortcuts such as `Glue.model`, `Glue.form`, `Glue.queryset`, and
@@ -628,7 +641,7 @@ class Report(models.Model):
         return ReportServices(self, region=settings.REPORT_REGION)
 ```
 
-This is the same shape a child-producing `@Glue.property` already uses — the
+This is the same shape a `@Glue.child` already uses — the
 annotation declares, the body produces — so it introduces no new concept. The
 return annotation is **required**, because it is the only thing that names the
 provider class without running the body, and a body returning something other
@@ -1924,8 +1937,8 @@ verified incoming token is the owner's live child set.** A first render has no
 incoming token, so every declared slot is new.
 
 The consequence worth stating is what the server is therefore *not* required to
-do. Child slots are declared statically — the return annotation of a typed
-`@Glue.property`, a built-in adapter's named child, a keyed collection's item
+do. Child slots are declared statically — the return annotation of a
+`@Glue.child`, a built-in adapter's named child, a keyed collection's item
 family — and that declaration is available from schema compilation without
 running any application code. The server compares declared slots against the
 incoming live set **before invoking any factory**, and resolves each slot one of
@@ -1938,7 +1951,7 @@ four ways:
 | Live and independently participating            | yes, on its own entry | yes                   | same address           |
 | Live but listed in the request's`reintroduce` | yes                   | yes, reintroduced     | same address           |
 
-The second row is the important one. A child-producing `@Glue.property` is a
+The second row is the important one. A `@Glue.child` is a
 **factory for introduction, not a derivation**: `ChatPanel.chats` does not
 construct its queryset, evaluate its configuration, or touch the database on
 every parent interaction. Its address is carried forward from the owner's
@@ -2077,6 +2090,77 @@ client the child's markup.
   ]
 }
 ```
+
+#### Child submissions
+
+A request entry for a component that makes a call also carries an optional
+`child_submissions` map
+([ADR 034](../../decisions/034-glue-child-and-child-submissions.md)). It is
+keyed by slot path and holds, for each `@Glue.child` of the component whose
+access is above `VIEW`, that child's own signed token and its unsaved editable
+changes. A formset adds `forms`, the same map of row key to token and changes
+that its own calls send as `__submitted_forms`. The component's static data
+marks the slots that take part with `submits_with_owner`. A refresh sends no
+map.
+
+```json
+{
+  "objects": [
+    {
+      "address": "builder#7f3a9c21",
+      "policy_token": "...",
+      "call": {"attribute": "send_invoice", "kwargs": {}},
+      "child_submissions": {
+        "header_form": {
+          "policy_token": "...",
+          "updates": {"customer_name": "Maple Studio Co."}
+        },
+        "lines_form": {
+          "policy_token": "...",
+          "updates": {},
+          "forms": {
+            "a41c": {"policy_token": "...", "updates": {"description": "Design"}}
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+The map is untrusted and is not admitted with the entry. **A submission is
+checked when the callable first reads that child, and only then**, so a call
+that reads no child succeeds whatever the map holds. On that read the server:
+
+1. verifies the submitted token for this request's session and user;
+2. requires its address to equal the address the component's verified token
+   records for that slot in `children`, and its access to be above `VIEW`;
+3. reconstructs the child from the token and hydrates it with the submitted
+   changes through the same admission the child applies when it is addressed
+   directly; and
+4. returns that one object for every later read of the slot in the call.
+
+A failure of the first two steps fails the component's entry with
+`invalid_child_submission`. The submission grants nothing the child's own token
+does not: a changed field the child does not sign as editable is refused by the
+child, exactly as on its own entry.
+
+This does not embed one policy token inside another in the sense the batching
+rule forbids. The component's token supplies no authority over the child and
+the two state snapshots are not merged; the child is reconstructed and admitted
+against its own address and token. What the component gains is the ability to
+read that reconstructed child for the length of one call.
+
+Each child the call read contributes its own response entry, in place of any
+entry the call introduced for the same address, so the client reconciles what the
+child derived from the user's changes, such as field errors, with the call's
+result. When no submission exists for a slot, reading it runs the slot's
+factory, and each read returns a new object.
+
+A submission never stands in for a slot's factory. When the owner binds its
+children during the call (a nullable slot, a reintroduced one, or a `render`
+that introduces every slot), each factory runs and produces a new child,
+whatever was submitted for that slot.
 
 A fixed named child may omit a key, in which case the property path itself is
 its stable identity. If reevaluation may intentionally select a different
@@ -2344,14 +2428,16 @@ reconciled against its own address. `effects` and fragments never mix into
 `computed_data`. Batching provides no causal ordering: a parent refresh that
 must observe a child save is a subsequent request, normally triggered after
 the child's result or declared event. A truly atomic cross-object transition
-belongs to one authorized callable.
+belongs to one authorized callable; on a component, that callable reads its
+writable children as submitted with the call (§Child submissions).
 
-A configured Glue object returned by a typed `@Glue.property` on any addressed
+A configured Glue object returned by a `@Glue.child` on any addressed
 Glue object is a named addressed child, not a value inserted into the parent's
 state snapshot. The parent's signed `children` map carries the child address; the
 child carries its own policy, retained state, editable drafts, and response
 entry. The relationship does not make child state available during an isolated
-parent reconstruction and does not cause automatic parent refresh. Client code binds directly to the
+parent reconstruction, apart from a component callable reading a submitted
+child, and does not cause automatic parent refresh. Client code binds directly to the
 reactive child where possible and explicitly sequences a parent refresh or
 callable after a child outcome when parent-owned output must change.
 
