@@ -183,7 +183,7 @@ class ModelGlue(
                 lambda owner, name=name: owner._get_derived_attribute_value(name)
             )
         for relation_name, subfields in self._projected_relations:
-            declarations[relation_name] = Glue.property(
+            declarations[relation_name] = Glue.child(
                 self._relation_child_factory(relation_name, subfields)
             )
         named_forms = tuple(
@@ -206,7 +206,7 @@ class ModelGlue(
                     path=path,
                 )
 
-            declarations[path] = Glue.property(get_form)
+            declarations[path] = Glue.child(get_form)
         return (
             (self, declarations),
         )

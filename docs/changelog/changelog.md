@@ -4,6 +4,38 @@
 
 ### Features
 
+- `Glue.child` declares a child Glue object (ADR 034). The method initializes
+  the child and its return annotation names the Glue object:
+
+  ```python
+  @Glue.child
+  def header(self) -> FormGlue:
+      return Glue.form(target=InvoiceHeaderForm(), access=self.access)
+  ```
+
+  On a component, a child declared this way that the user may change (any
+  access above `VIEW`) is submitted with every call the component makes.
+  Reading the child during that call returns it with the user's unsaved
+  changes applied, so one call can validate and save several forms and
+  formsets together. What a read child derives from those changes, such as a
+  form's errors, returns in the same response.
+
+- A Glue form and a Glue formset have `is_valid()` and `cleaned_data`, as a
+  Django form and formset do. `is_valid()` validates as `validate()` does and
+  returns a boolean, so Django's `all_valid()` checks several of them at once.
+  A formset's `cleaned_data` is one dict per row.
+
+- A Glue formset takes `extra`, the number of blank rows it starts with after
+  any it was seeded with, set on the class or passed in. It defaults to 0. An
+  extra row is validated like any other row: unlike a Django formset, an
+  untouched one is not skipped.
+
+- A formset asks for access by whether its records are saved, as a single form
+  does. Adding a row and removing a new row need `ADD`. Validating and saving
+  need `ADD` while every row is new, and `CHANGE` once the formset holds a
+  saved record. All four needed `CHANGE` before, so a formset with `CHANGE`
+  access is unaffected. Removing a saved record still needs `DELETE`.
+
 - A Django view decorator can guard a component from `is_authorized()`, applied
   with `method_decorator` (ADR 033):
 
@@ -28,6 +60,22 @@
   error that fails a whole request. On the client they are `error.status` and
   `error.details` on the `GlueAddressError` the call rejects with, so a handler
   can tell a missing row from a denial without matching on the code.
+
+### Deprecations
+
+- `Glue.property` on a method that returns a Glue object warns: declare the
+  child with `Glue.child`. The child keeps working as it did, and is not
+  submitted with its component's calls. In django-glue 2.0 `Glue.property`
+  only computes values.
+
+### Changes
+
+- The client is written in TypeScript. The bundle keeps its path
+  (`django_glue/js/django_glue.js`), its globals and its API, so a project
+  using it changes nothing. Its source moved from `.js` to `.ts` files under
+  `client_js/`, with the wire format it shares with the server described in
+  `client_js/src/wire.ts`. `just js-typecheck` checks it, and CI runs the
+  check before building the bundle.
 
 ### Fixes
 

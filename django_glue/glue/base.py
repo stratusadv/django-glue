@@ -647,6 +647,18 @@ class BaseGlue(ABC):
         self._load_client_state({**retained_draft, **updates})
         self._invalidate_attributes()
 
+    def _hydrate_submission(
+        self,
+        context: AttributeCallRequestContext,
+        submission: Mapping[str, Any],
+    ) -> None:
+        """Apply what the browser submitted for this object as its owner's child."""
+        self._hydrate(context.target_glue_policy, context.target_glue_updates)
+
+    def _submission_entries(self) -> list[dict[str, Any]]:
+        """This object's response entries after its owner read it as a submitted child."""
+        return [self.entry.model_dump()]
+
     def _retained_draft(self, policy: GluePolicy) -> dict[str, Any]:
         """The acknowledged editable draft the verified token carries: every
         signed editable-state value."""

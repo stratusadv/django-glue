@@ -1,5 +1,5 @@
 ## Source
 
-```javascript title="client_js/src/proxies/form.js"
---8<-- "client_js/src/proxies/form.js"
+```typescript title="client_js/src/proxies/form.ts"
+--8<-- "client_js/src/proxies/form.ts"
 ```

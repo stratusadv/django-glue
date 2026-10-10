@@ -1,4 +1,6 @@
 import inspect
+import warnings
+from dataclasses import replace
 from functools import update_wrapper
 from typing import Any, Callable, Iterable, Literal, Mapping, Sequence, TypeVar, Union
 
@@ -54,6 +56,13 @@ class _GluePropertyDescriptor:
             expected_type=expected_type,
             is_nullable=is_nullable,
         )
+        if expected_type is not None and type(self) is _GluePropertyDescriptor:
+            warnings.warn(
+                f'Glue.property on {func.__qualname__}() declares a child Glue object. Declare a '
+                'child with Glue.child; Glue.property will only compute values in django-glue 2.0.',
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name
@@ -62,6 +71,46 @@ class _GluePropertyDescriptor:
         if instance is None:
             return self
         return self._property.__get__(instance, owner)
+
+
+class _GlueChildDescriptor(_GluePropertyDescriptor):
+    """
+    A Glue object its owner declares as a child. The decorated method
+    initializes it, and its return annotation names the Glue object:
+
+        @Glue.child
+        def header(self) -> FormGlue:
+            return Glue.form(target=InvoiceHeaderForm(), access=self.access)
+
+    On a Glue.Component, a child the user may change is submitted with every
+    call the component makes. Reading it during that call returns it with the
+    user's unsaved changes applied, so one call can validate and save several
+    children together:
+
+        @Glue.attr(required_access=Glue.Access.ADD)
+        def send(self) -> None:
+            if self.header.validate()['valid']:
+                ...
+
+    A child with VIEW access is never submitted.
+    """
+
+    def __init__(self, func: Callable) -> None:
+        super().__init__(func)
+        if self.__glue_options__.expected_type is None:
+            msg = (
+                f'Glue.child {func.__qualname__}() needs a return annotation naming the Glue '
+                'object it initializes, such as -> FormGlue.'
+            )
+            raise TypeError(msg)
+        self.__glue_options__ = replace(self.__glue_options__, is_declared_child=True)
+
+    def __get__(self, instance, owner=None):
+        if isinstance(instance, Component):
+            submitted = instance._submitted_child(self._name)
+            if submitted is not None:
+                return submitted
+        return super().__get__(instance, owner)
 
 def _attr(*args: Any, **kwargs: Any) -> Any:
     return DeclaredAttribute(*args, **kwargs)
@@ -190,6 +239,7 @@ class Glue:
     html_attr = _html_attr
     namespace = GlueNamespace
     property = _GluePropertyDescriptor
+    child = _GlueChildDescriptor
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
 
@@ -360,6 +410,7 @@ class Glue:
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
+        extra: int | None = None,
     ) -> FormSetGlue:
         if isinstance(target, type) and issubclass(target, FormSetGlue):
             glue_object = target(
@@ -371,6 +422,7 @@ class Glue:
                 min_num=min_num,
                 max_num=max_num,
                 can_delete=can_delete,
+                extra=extra,
             )
         else:
             if not (isinstance(target, type) and issubclass(target, BaseForm)):
@@ -392,6 +444,7 @@ class Glue:
                 min_num=min_num,
                 max_num=max_num,
                 can_delete=can_delete,
+                extra=extra,
             )
         return Glue._add_to_context(
             request,

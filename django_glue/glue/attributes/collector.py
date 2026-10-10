@@ -175,6 +175,7 @@ class GlueAttributeCollector:
                     required_access=options.required_access,
                     expected_type=options.expected_type,
                     is_nullable=options.is_nullable,
+                    is_declared_child=options.is_declared_child,
                 ),
             )
         kind = (

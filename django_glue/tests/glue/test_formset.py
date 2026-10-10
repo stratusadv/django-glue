@@ -56,6 +56,126 @@ class SubmittingContactFormSet(Glue.FormSet):
         }
 
 
+class ExtraRowContactFormSet(Glue.FormSet):
+    form_class = ContactForm
+    extra = 2
+
+
+class FormSetGlueExtraRowsTestCase(TestCase):
+    def test_a_formset_starts_empty_without_extra(self):
+        self.assertEqual(FormSetGlue(ContactForm, **glue_context(name='contacts'))._forms, [])
+
+    def test_extra_starts_the_formset_with_that_many_blank_rows(self):
+        formset = ExtraRowContactFormSet(**glue_context(name='contacts'))
+
+        self.assertEqual([key for key, _ in formset._forms], ['0', '1'])
+        self.assertEqual([form.form.initial for _, form in formset._forms], [{}, {}])
+
+    def test_extra_rows_follow_the_seeded_ones_and_take_the_new_row_defaults(self):
+        formset = FormSetGlue(
+            ContactForm,
+            **glue_context(name='contacts'),
+            initial=[{'name': 'Ada'}],
+            new_row_defaults={'priority': 'low'},
+            extra=1,
+        )
+
+        self.assertEqual(
+            [form.form.initial for _, form in formset._forms],
+            [{'name': 'Ada', 'priority': 'low'}, {'priority': 'low'}],
+        )
+
+    def test_the_argument_overrides_the_class(self):
+        formset = ExtraRowContactFormSet(**glue_context(name='contacts'), extra=0)
+
+        self.assertEqual(formset._forms, [])
+
+    def test_a_formset_rebuilt_from_its_token_does_not_add_the_rows_again(self):
+        formset = with_request(ExtraRowContactFormSet(**glue_context(name='contacts')))
+
+        rebuilt = FormSetGlue._reconstruct_from_policy(formset.policy)
+
+        self.assertIsInstance(rebuilt, ExtraRowContactFormSet)
+        self.assertEqual(rebuilt._forms, [])
+        self.assertEqual(len(rebuilt._live_children), 2)
+
+    def test_an_extra_row_is_validated_like_any_other(self):
+        formset = with_request(ExtraRowContactFormSet(**glue_context(name='contacts')))
+
+        self.assertFalse(formset.is_valid())
+
+    def test_the_shortcut_passes_extra_through(self):
+        formset = Glue.formset(target=ContactForm, unique_name='contacts', extra=3)
+
+        self.assertEqual(len(formset._forms), 3)
+
+
+class FormSetGlueRequiredAccessTestCase(TestCase):
+    """A formset asks for access as a single form does: by whether its records are saved."""
+
+    def formset(self, access, **kwargs):
+        return with_request(FormSetGlue(
+            TestModelForm,
+            can_delete=True,
+            **glue_context(name='gorillas', access=access),
+            **kwargs,
+        ))
+
+    def submitted(self, formset):
+        return {
+            '__submitted_forms': {
+                key: {'policy_token': token, 'updates': {}}
+                for key, token in row_tokens(formset).items()
+            },
+        }
+
+    def test_add_access_appends_a_row(self):
+        formset = self.formset(GlueAccess.ADD)
+
+        entry, _ = call_across_requests(formset.policy, 'append', {'key': '0'})
+
+        self.assertEqual(list(GluePolicy.from_token(entry['policy_token']).children), ['0'])
+
+    def test_view_access_cannot_append_a_row(self):
+        formset = self.formset(GlueAccess.VIEW)
+
+        with self.assertRaises(GlueAccessError):
+            call_across_requests(formset.policy, 'append', {'key': '0'})
+
+    def test_add_access_removes_a_new_row(self):
+        formset = self.formset(GlueAccess.ADD, extra=2)
+        tokens = row_tokens(formset)
+
+        entry, _ = call_across_requests(formset.policy, 'pop', {
+            'key': '0',
+            '__submitted_forms': {'0': {'policy_token': tokens['0']}},
+        })
+
+        self.assertEqual(list(GluePolicy.from_token(entry['policy_token']).children), ['1'])
+
+    def test_add_access_validates_and_saves_new_rows(self):
+        formset = self.formset(GlueAccess.ADD, extra=1)
+
+        for attribute in ('validate', 'save'):
+            entry, _ = call_across_requests(formset.policy, attribute, self.submitted(formset))
+
+            self.assertIn('valid', entry['result'])
+
+    def test_add_access_cannot_validate_or_save_a_saved_record(self):
+        formset = self.formset(GlueAccess.ADD, instances=[Gorilla.objects.create(name='Koko')], extra=1)
+
+        for attribute in ('validate', 'save'):
+            with self.assertRaises(GlueAccessError):
+                call_across_requests(formset.policy, attribute, self.submitted(formset))
+
+    def test_change_access_validates_a_saved_record(self):
+        formset = self.formset(GlueAccess.CHANGE, instances=[Gorilla.objects.create(name='Koko')])
+
+        entry, _ = call_across_requests(formset.policy, 'validate', self.submitted(formset))
+
+        self.assertIn('valid', entry['result'])
+
+
 class SoftDeletingGorillaFormSet(Glue.FormSet):
     form_class = TestModelForm
     can_delete = True

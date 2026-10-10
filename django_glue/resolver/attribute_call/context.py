@@ -24,7 +24,11 @@ class AddressedObjectEntry(BaseModel):
     ``mounted`` lists the component roots the client has inside a
     component's root. A render keeps them instead of re-stamping them
     (ADR 025). It is untrusted: a client that lists a child it does not have
-    only denies itself that child's markup."""
+    only denies itself that child's markup.
+
+    ``child_submissions`` carries, by slot path, the signed token and unsaved
+    changes of each child a component declares with ``Glue.child``. It is
+    untrusted, and is only read when the call reads that child."""
 
     address: str
     policy_token: str
@@ -32,6 +36,7 @@ class AddressedObjectEntry(BaseModel):
     call: AttributeCall | None = None
     reintroduce: list[str] = Field(default_factory=list)
     mounted: list[str] = Field(default_factory=list)
+    child_submissions: dict[str, Any] = Field(default_factory=dict)
 
 
 class AttributeCallRequestContext(BaseModel):
@@ -46,6 +51,7 @@ class AttributeCallRequestContext(BaseModel):
     target_attribute_call_kwargs: dict[str, Any] = Field(default_factory=dict)
     reintroduce: list[str] = Field(default_factory=list)
     mounted: list[str] = Field(default_factory=list)
+    child_submissions: dict[str, Any] = Field(default_factory=dict)
 
 
 class AttributeCallBatchContext(BaseModel):
