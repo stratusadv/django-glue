@@ -132,6 +132,7 @@ class GlueAttributeDefinition:
     value_type: Any | None = None
     expected_type: type[Any] | None = None
     is_nullable: bool = False
+    is_declared_child: bool = False
     allowed_arguments: tuple[str, ...] = ()
     injected_arguments: tuple[str, ...] = ()
     render_as_html: bool = False

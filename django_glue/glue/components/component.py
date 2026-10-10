@@ -9,12 +9,14 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.shortcuts import render as render_template
 from django.views.decorators.http import require_safe
+from pydantic import ValidationError
 
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
     GlueComponentParameterError,
+    GlueError,
     GlueRequestError,
     GlueRequestErrorCode,
 )
@@ -329,6 +331,9 @@ class Component(BaseGlue):
         if event_identities:
             static_data['event_ids'] = event_identities
         static_data.update(_reactions(type(self)))
+        for path, slot in static_data.get('children', {}).items():
+            if self._bound_attributes[path].definition.is_declared_child:
+                slot['submits_with_owner'] = True
         return static_data
 
     def cap_access(self, ceiling: GlueAccess) -> None:
@@ -398,9 +403,14 @@ class Component(BaseGlue):
         """
         Refuse a call that changed ``context_data``: the next render is built
         from the token, which does not carry it.
+
+        Every child the call read with the user's changes applied answers in
+        the same response, so what it derived from them (a form's errors)
+        reaches the browser.
         """
         context_data = dict(self.context_data)
-        result = super()._run_call(call_context, invoke, render_as_html=render_as_html)
+        self.__dict__['_call_context'] = call_context
+        entry, introduced = super()._run_call(call_context, invoke, render_as_html=render_as_html)
 
         if self.context_data != context_data:
             message = (
@@ -410,7 +420,16 @@ class Component(BaseGlue):
             )
             raise RuntimeError(message)
 
-        return result
+        submitted = [
+            child_entry
+            for child in self.__dict__.get('_submitted_children', {}).values()
+            for child_entry in child._submission_entries()
+        ]
+        addresses = {child_entry['address'] for child_entry in submitted}
+        return entry, [
+            *submitted,
+            *(child_entry for child_entry in introduced if child_entry['address'] not in addresses),
+        ]
 
     @classmethod
     def as_view(
@@ -482,6 +501,59 @@ class Component(BaseGlue):
                 return entry, introduced
 
         return self._rerendered(entry, introduced, call_context)
+
+    def _submitted_child(self, path: str) -> BaseGlue | None:
+        """
+        The child at ``path`` as the browser submitted it with this call: rebuilt
+        from its own signed token, with the user's unsaved changes applied. None
+        when there is no call, or the browser sent nothing for the slot.
+
+        The submission is checked here, when a call first reads the child, so a
+        call that reads no child is unaffected by what was sent with it.
+        """
+        from django_glue.glue.registry import glue_class_registry  # noqa: PLC0415
+
+        call_context = self.__dict__.get('_call_context')
+        if call_context is None or path not in call_context.child_submissions:
+            return None
+
+        submitted = self.__dict__.setdefault('_submitted_children', {})
+        if path in submitted:
+            return submitted[path]
+
+        submission = call_context.child_submissions[path]
+        try:
+            child_policy = GluePolicy.from_token(submission['policy_token'])
+            child_policy.verify_request(call_context.request)
+        except (GlueError, ValidationError, KeyError, TypeError) as error:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_CHILD_SUBMISSION,
+                message='A submitted child needs its own valid signed token.',
+                details={'path': path},
+            ) from error
+
+        if (
+            child_policy.address != call_context.target_glue_policy.children.get(path)
+            or not child_policy.access.has_access(GlueAccess.ADD)
+        ):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.INVALID_CHILD_SUBMISSION,
+                message='The submitted token is not a writable child in this slot.',
+                details={'path': path},
+            )
+
+        child_context = AttributeCallRequestContext.model_construct(
+            request=call_context.request,
+            target_glue_policy=child_policy,
+            target_glue_updates=submission.get('updates', {}),
+            target_attribute_name=None,
+        )
+        child = glue_class_registry.get_glue_class(
+            child_policy.namespace,
+        ).from_attribute_call_resolver_context(child_context)
+        child._hydrate_submission(child_context, submission)
+        submitted[path] = child
+        return child
 
     def _receive(
         self,

@@ -138,7 +138,7 @@ class BaseGlueProxy {
                 companions,
                 signal: controller?.signal ?? null,
                 batch,
-                ...this._requestFields(),
+                ...this._requestFields(attribute),
             })
         } catch (error) {
             if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -211,8 +211,17 @@ class BaseGlueProxy {
 
     // Fields this proxy's request entries carry beyond its address, token,
     // updates, and call.
-    _requestFields() {
+    _requestFields(attribute) {
         return {}
+    }
+
+    // What an owner submits for this object when it is the owner's child: its
+    // signed token and the changes the user has not saved.
+    _submission() {
+        return {
+            policy_token: this._record.policyToken,
+            updates: this._record.captureRequest().updates,
+        }
     }
 
     // What this proxy does with an accepted response once its state is

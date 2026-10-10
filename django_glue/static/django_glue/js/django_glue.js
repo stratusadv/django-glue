@@ -233,6 +233,7 @@
       reintroduce = null,
       companions = [],
       mounted = [],
+      childSubmissions = null,
       signal = null,
       batch = null
     }) {
@@ -248,6 +249,8 @@
         entry.reintroduce = reintroduce;
       if (mounted.length)
         entry.mounted = mounted;
+      if (childSubmissions)
+        entry.child_submissions = serializeValue(childSubmissions);
       const entries = [entry, ...companions.map((companion) => ({
         address: companion.address,
         policy_token: companion.policyToken,
@@ -4397,7 +4400,7 @@ ${expression ? 'Expression: "' + expression + `"
           companions,
           signal: controller?.signal ?? null,
           batch,
-          ...this._requestFields()
+          ...this._requestFields(attribute)
         });
       } catch (error2) {
         if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
@@ -4449,8 +4452,14 @@ ${expression ? 'Expression: "' + expression + `"
       this._processEffects(target);
       return { result, response: response.data };
     }
-    _requestFields() {
+    _requestFields(attribute) {
       return {};
+    }
+    _submission() {
+      return {
+        policy_token: this._record.policyToken,
+        updates: this._record.captureRequest().updates
+      };
     }
     async _applyResponse(target, result) {}
     async _reintroduceWithOwner() {
@@ -4653,19 +4662,24 @@ ${expression ? 'Expression: "' + expression + `"
       if (attribute === null || attribute === "append") {
         return super._singleCall(attribute, kwargs, options);
       }
+      const forms = attribute === "pop" ? this._submittedForms([kwargs.key], false) : this._submittedForms();
+      return super._singleCall(attribute, { ...kwargs, __submitted_forms: forms }, options);
+    }
+    _submittedForms(keys = Object.keys(this._policy.children || {}), withUpdates = true) {
       const children = this._policy.children || {};
-      const keys = attribute === "pop" ? [kwargs.key] : Object.keys(children);
-      const forms = Object.fromEntries(keys.map((key) => {
+      return Object.fromEntries(keys.map((key) => {
         const record = this._registry.getRecord(children[key]);
         if (!record || record.disposed) {
           throw new Error(`Formset row "${key}" is unavailable.`);
         }
         return [key, {
           policy_token: record.policyToken,
-          updates: attribute === "pop" ? {} : record.captureRequest().updates
+          updates: withUpdates ? record.captureRequest().updates : {}
         }];
       }));
-      return super._singleCall(attribute, { ...kwargs, __submitted_forms: forms }, options);
+    }
+    _submission() {
+      return { ...super._submission(), forms: this._submittedForms() };
     }
     async validate() {
       const result = await this._callAttribute("validate");
@@ -4899,13 +4913,28 @@ ${expression ? 'Expression: "' + expression + `"
       const result = await this._callAttribute("render", payload);
       return result?.html ?? result;
     }
-    _requestFields() {
+    _requestFields(attribute) {
+      const fields = {};
       const root = this.$el;
-      if (!root)
-        return {};
-      return {
-        mounted: [...root.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address"))
-      };
+      if (root) {
+        fields.mounted = [...root.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address"));
+      }
+      if (attribute === null)
+        return fields;
+      const submissions = {};
+      Object.entries(this._record.staticData?.children || {}).forEach(([path, slot]) => {
+        if (!slot.submits_with_owner)
+          return;
+        const record = this._registry.getRecord(this._record.policy.children?.[path]);
+        if (!record?.proxy || record.disposed || record.stale)
+          return;
+        if (record.policy.access === "view")
+          return;
+        submissions[path] = record.proxy._submission();
+      });
+      if (Object.keys(submissions).length)
+        fields.childSubmissions = submissions;
+      return fields;
     }
     _deliverEvent(event) {
       super._deliverEvent(event);

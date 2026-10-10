@@ -98,6 +98,7 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             target_attribute_call_kwargs=entry.call.kwargs if entry.call else {},
             reintroduce=entry.reintroduce,
             mounted=entry.mounted,
+            child_submissions=entry.child_submissions,
         )
         try:
             decoded.verify_request(context.request)

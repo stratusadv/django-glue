@@ -40,6 +40,19 @@ def _row_binding(identity: Mapping[str, Any], access: GlueAccess) -> str:
     return hashlib.blake2s(payload, digest_size=8).hexdigest()
 
 
+def _required_rows_access(formset: FormSetGlue) -> GlueAccess:
+    """
+    The access validating or saving the formset's rows requires, as a single
+    form's does (ADR 009): ADD while every row is new, and CHANGE once the
+    formset holds a saved record or has removed one.
+    """
+    has_saved_record = bool(formset._removed_pks) or any(
+        form.get_identity()['target_pk'] is not None
+        for _, form in formset._forms
+    )
+    return GlueAccess.CHANGE if has_saved_record else GlueAccess.ADD
+
+
 class FormSetGlue(BaseCollectionGlue):
     """A keyed collection of ``FormGlue`` children sharing a single form class.
 
@@ -47,7 +60,9 @@ class FormSetGlue(BaseCollectionGlue):
     the order/membership (the keys) and the formset-level concerns; per-form
     work is delegated to the ``FormGlue`` children. The collection starts
     empty unless seeded with ``instances`` (saved model rows to edit, for a
-    ``ModelForm``) and/or ``initial`` (one dict per prefilled blank row) --
+    ``ModelForm``) and/or ``initial`` (one dict per prefilled blank row), or
+    given ``extra`` blank rows to start with after those. An extra row is a
+    row like any other and is validated, unlike a Django formset's.
     ``min_num`` / ``max_num`` are validation floors/ceilings, not a
     "spawn N blank forms" count. Application code subclasses ``Glue.FormSet``
     and optionally overrides ``clean()`` for cross-form validation; it never
@@ -60,6 +75,7 @@ class FormSetGlue(BaseCollectionGlue):
     min_num: int = 0
     max_num: int | None = None
     can_delete: bool = False
+    extra: int = 0
 
     def __init__(
         self,
@@ -73,6 +89,7 @@ class FormSetGlue(BaseCollectionGlue):
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
+        extra: int | None = None,
         _reconstructed: bool = False,
     ) -> None:
         super().__init__(name=name, access=access)
@@ -114,6 +131,13 @@ class FormSetGlue(BaseCollectionGlue):
                 raise TypeError(msg)
             initial_forms.append(
                 self.form_class(initial={**row_initial, **self.new_row_defaults}),
+            )
+
+        # A formset rebuilt from its token already has its rows signed there.
+        if not _reconstructed:
+            initial_forms.extend(
+                self.form_class(initial=dict(self.new_row_defaults))
+                for _ in range(cls.extra if extra is None else extra)
             )
 
         self._forms: list[tuple[str, FormGlue]] = []
@@ -256,7 +280,7 @@ class FormSetGlue(BaseCollectionGlue):
         """
         queryset.delete()
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.ADD)
     def append(self, key: str, initial: dict[str, Any] | None = None) -> FormGlue:
         """
         ``initial`` comes from the client, so it may only prefill fields the
@@ -281,7 +305,7 @@ class FormSetGlue(BaseCollectionGlue):
             key,
         )
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=GlueAccess.ADD)
     def pop(self, key: str) -> None:
         if not self.can_delete:
             raise GlueRequestError(
@@ -309,7 +333,7 @@ class FormSetGlue(BaseCollectionGlue):
         del self._live_children[key]
         self._forms = [(row_key, form) for row_key, form in self._forms if row_key != key]
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @DeclaredAttribute(required_access=_required_rows_access)
     def validate(self) -> dict[str, Any]:
         form_glues = [form for _, form in self._forms]
         per_form = [form.validate() for form in form_glues]
@@ -328,7 +352,16 @@ class FormSetGlue(BaseCollectionGlue):
             'non_form_errors': non_form_errors,
         }
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    def is_valid(self) -> bool:
+        """Validates every row as ``validate()`` does and answers only whether all passed."""
+        return self.validate()['valid']
+
+    @property
+    def cleaned_data(self) -> list[dict[str, Any]]:
+        """Each validated row's cleaned data, in row order, as a Django formset has it."""
+        return [form.cleaned_data for _, form in self._forms]
+
+    @DeclaredAttribute(required_access=_required_rows_access)
     def save(self) -> dict[str, Any]:
         form_glues = [form for _, form in self._forms]
         results = [form.validate() for form in form_glues]
@@ -385,6 +418,20 @@ class FormSetGlue(BaseCollectionGlue):
         if submitted is not None:
             introduced.extend(form.entry.model_dump() for _, form in self._forms)
         return entry, introduced
+
+    def _hydrate_submission(
+        self,
+        context: AttributeCallRequestContext,
+        submission: Mapping[str, Any],
+    ) -> None:
+        self._hydrate_submitted_forms(context, submission.get('forms'), self._live_children)
+        super()._hydrate_submission(context, submission)
+
+    def _submission_entries(self) -> list[dict[str, Any]]:
+        return [
+            *super()._submission_entries(),
+            *(form.entry.model_dump() for _, form in self._forms),
+        ]
 
     def _run_call(
         self,

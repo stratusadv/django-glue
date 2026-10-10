@@ -16,14 +16,28 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
     }
 
     // A render keeps the children still mounted in this component (ADR 025).
-    _requestFields() {
+    // A call carries each child the component declares with Glue.child that
+    // the user may change, so the call can read what was typed into it.
+    _requestFields(attribute) {
+        const fields = {}
         const root = this.$el
-        if (!root) return {}
-        return {
-            mounted: [...root.querySelectorAll('[data-glue-address]')].map(
+        if (root) {
+            fields.mounted = [...root.querySelectorAll('[data-glue-address]')].map(
                 element => element.getAttribute('data-glue-address'),
-            ),
+            )
         }
+        if (attribute === null) return fields
+
+        const submissions = {}
+        Object.entries(this._record.staticData?.children || {}).forEach(([path, slot]) => {
+            if (!slot.submits_with_owner) return
+            const record = this._registry.getRecord(this._record.policy.children?.[path])
+            if (!record?.proxy || record.disposed || record.stale) return
+            if (record.policy.access === 'view') return
+            submissions[path] = record.proxy._submission()
+        })
+        if (Object.keys(submissions).length) fields.childSubmissions = submissions
+        return fields
     }
 
     // A rendered component also dispatches its events as bubbling DOM events

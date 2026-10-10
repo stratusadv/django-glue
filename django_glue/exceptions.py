@@ -27,6 +27,7 @@ class GlueRequestErrorCode(StrEnum):
     INVALID_UPDATES = 'invalid_updates'
     INVALID_REINTRODUCE = 'invalid_reintroduce'
     INVALID_DISPOSE = 'invalid_dispose'
+    INVALID_CHILD_SUBMISSION = 'invalid_child_submission'
 
     # Missing required fields
     MISSING_FIELD = 'missing_field'

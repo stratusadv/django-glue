@@ -40,21 +40,31 @@ class GlueFormSetProxy extends BaseGlueProxy {
         if (attribute === null || attribute === 'append') {
             return super._singleCall(attribute, kwargs, options)
         }
-        const children = this._policy.children || {}
         // pop submits only the removed row, without its edits: an uncoercible
         // draft value must not block removing the row.
-        const keys = attribute === 'pop' ? [kwargs.key] : Object.keys(children)
-        const forms = Object.fromEntries(keys.map(key => {
+        const forms = attribute === 'pop'
+            ? this._submittedForms([kwargs.key], false)
+            : this._submittedForms()
+        return super._singleCall(attribute, {...kwargs, __submitted_forms: forms}, options)
+    }
+
+    _submittedForms(keys = Object.keys(this._policy.children || {}), withUpdates = true) {
+        const children = this._policy.children || {}
+        return Object.fromEntries(keys.map(key => {
             const record = this._registry.getRecord(children[key])
             if (!record || record.disposed) {
                 throw new Error(`Formset row "${key}" is unavailable.`)
             }
             return [key, {
                 policy_token: record.policyToken,
-                updates: attribute === 'pop' ? {} : record.captureRequest().updates,
+                updates: withUpdates ? record.captureRequest().updates : {},
             }]
         }))
-        return super._singleCall(attribute, {...kwargs, __submitted_forms: forms}, options)
+    }
+
+    // A formset is submitted with its rows, as its own calls submit them.
+    _submission() {
+        return {...super._submission(), forms: this._submittedForms()}
     }
 
     async validate() {

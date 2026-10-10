@@ -110,6 +110,7 @@ class GlueHttp {
         reintroduce = null,
         companions = [],
         mounted = [],
+        childSubmissions = null,
         signal = null,
         batch = null,
     }) {
@@ -123,6 +124,7 @@ class GlueHttp {
         if (attribute !== null) entry.call = {attribute, kwargs}
         if (reintroduce) entry.reintroduce = reintroduce
         if (mounted.length) entry.mounted = mounted
+        if (childSubmissions) entry.child_submissions = serializeValue(childSubmissions)
         const entries = [entry, ...companions.map(companion => ({
             address: companion.address,
             policy_token: companion.policyToken,
