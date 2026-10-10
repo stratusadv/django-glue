@@ -46,6 +46,9 @@ js-install:
 js-tests:
 	bun run test
 
+js-typecheck:
+	bun run typecheck
+
 js-tests-watch:
 	bun run test:watch
 

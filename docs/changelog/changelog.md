@@ -68,6 +68,15 @@
   submitted with its component's calls. In django-glue 2.0 `Glue.property`
   only computes values.
 
+### Changes
+
+- The client is written in TypeScript. The bundle keeps its path
+  (`django_glue/js/django_glue.js`), its globals and its API, so a project
+  using it changes nothing. Its source moved from `.js` to `.ts` files under
+  `client_js/`, with the wire format it shares with the server described in
+  `client_js/src/wire.ts`. `just js-typecheck` checks it, and CI runs the
+  check before building the bundle.
+
 ### Fixes
 
 - An error of status 500 or above on one object's call no longer sends its own
