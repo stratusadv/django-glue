@@ -707,7 +707,10 @@ ordinary middleware checks.
 
 Django view decorators may guard the URL, as with any other view. That guard
 applies to page retrieval; later addressed component calls use their own
-endpoint. The component's `access=` value caps the signed operations, while
+endpoint. A rule a project's middleware enforces by URL reaches those calls
+through the middleware's `process_glue_call` hook, which runs for each called
+object against the path that issued it (ADR 035). The component's `access=`
+value caps the signed operations, while
 `is_authorized(request, operation)` enforces current application permission at
 introduction and on later calls. An `is_authorized()` denial during direct URL
 rendering becomes Django's HTTP 403 response.

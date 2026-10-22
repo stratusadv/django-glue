@@ -343,7 +343,8 @@ It is consulted at exactly three points, in this order:
    component served by `as_view()` responds 403. A child denial means the owner's
    declared slot resolves to absent, and a component stamped by
    `{% glue_component %}` renders nothing, whether or not it has an owner.
-2. **Reconstruction** — after the token is verified and the target is
+2. **Reconstruction** — after the token is verified, the project's
+   `process_glue_call` hooks have allowed the entry (below), and the target is
    reconstructed, before protocol admission, with `kind='refresh'`, `'update'`
    or `'call'` as the interaction requires. A denial fails that address's entry
    and issues no successor token.
@@ -379,6 +380,39 @@ A family whose default is permissive is not thereby unguarded — it is guarded 
 capability and declaration, and `is_authorized()` is the seam for the rule only the
 application can state. Documentation must say this plainly rather than implying
 that signing confers permission.
+
+#### Project middleware guards each call by the object's origin
+
+Every policy signs `origin`, the `path_info` of the request that issued the
+object: the page or `Glue.view` fragment that introduced it. An object
+introduced while a call is being resolved inherits the origin of the entry being
+resolved, never the call endpoint's path. The origin is provenance, not
+authority: it never widens what a token may do.
+
+A Django middleware listed in `MIDDLEWARE` that defines
+`process_glue_call(request, glue_call)` runs for every entry a call resolves,
+in list order, after the token is verified and before the object is
+reconstructed (ADR 035). `glue_call` is a read-only `GlueCall` carrying the
+resolved `origin` (a `ResolverMatch`), the `address`, the `namespace`, the
+operation `kind` and the `attribute` called, if any; the access an operation
+requires is not known until the object is reconstructed. Returning `None`
+continues; raising `PermissionDenied`,
+`GlueAuthorizationError` or `Http404` denies that entry alone with code
+`not_authorized`. Glue resolves the origin only when at least one such hook is
+installed; an origin that no longer resolves then denies the entry. Glue
+builds its own instance of each such class, so the hook must not depend on state
+Django's instance set up.
+
+This is how a rule the project already enforces by URL, such as tenant
+membership read from a URL argument, also governs calls: the same middleware
+reads the tenant from the live URL in `process_view` and from the object's
+origin in `process_glue_call`. It covers every family, including factory-built
+objects whose `is_authorized()` a project cannot override. A hook can deny but
+never grant: an object is authorized only when every hook and its own
+`is_authorized()` allow it. Context a hook sets on the request is in place when
+the object is reconstructed and when `is_authorized()` runs; a hook that sets
+context sets or clears it for every entry. The hook does not run at
+introduction, where Django's own middleware has already run for the request.
 
 ### 4. Addressed objects and attributes use one pipeline, not one class
 
@@ -1697,6 +1731,7 @@ Conceptual decoded policy-token payload:
 {
   "protocol_version": 1,
   "subject": { "session_id": "9a73f51d8c2e4b29", "user_id": 184 },
+  "origin": "/time-tracker/dashboard/",
   "target": {
     "namespace": "time_tracker",
     "address": "dash#7f3a9c21",
@@ -1724,6 +1759,10 @@ Conceptual decoded policy-token payload:
   }
 }
 ```
+
+`origin` is the `path_info` of the request that issued the object, inherited by
+objects introduced during a call (§3). The server resolves it for the project's
+`process_glue_call` hooks; a token without one is an invalid policy.
 
 The `address` and the `dispose` path above are shown in their opaque wire form on
 purpose. An address must not be derived from parameter values: `week_of` advances
@@ -2251,9 +2290,9 @@ default stateless contract.
 
 That boundary has five consequences:
 
-1. Session, user, address, capability, and current application authorization
-   are checked on every call. Signed retained state never substitutes for
-   reauthorization.
+1. Session, user, address, capability, the project's middleware against the
+   object's origin, and current application authorization are checked on every
+   call. Signed retained state never substitutes for reauthorization.
 2. The browser serializes calls for one canonical address: the next call is not
    sent until the prior response has advanced canonical data and the token.
    Independent addresses may proceed concurrently.
