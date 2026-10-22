@@ -92,7 +92,7 @@ class _AttributeRequestMixin:
         return next(item for item in objects if item.get('address') == address)
 
     def request_context(self):
-        return type('Request', (), {'session': self.session, 'FILES': {}})()
+        return type('Request', (), {'session': self.session, 'FILES': {}, 'path_info': '/'})()
 
     @staticmethod
     def decode(token):

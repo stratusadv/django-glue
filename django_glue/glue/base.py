@@ -13,6 +13,7 @@ from django.http.response import HttpResponseBase
 
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
+from django_glue.constants import DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
@@ -452,6 +453,9 @@ class BaseGlue(ABC):
         """
         self.request = context.request
         self._address = context.target_glue_policy.address
+        # Objects this call introduces are issued under this object's origin (ADR 035).
+        origin = context.target_glue_policy.origin
+        self.request.__dict__[DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY] = origin
 
         attribute = self._bound_attributes.get(context.target_attribute_name)
         required_access = (
@@ -459,14 +463,8 @@ class BaseGlue(ABC):
             if attribute is not None
             else GlueAccess.VIEW
         )
-        if context.target_attribute_name is not None:
-            kind = GlueOperationKind.CALL
-        elif context.target_glue_updates:
-            kind = GlueOperationKind.UPDATE
-        else:
-            kind = GlueOperationKind.REFRESH
         self._require_authorization(GlueOperation(
-            kind=kind,
+            kind=context.operation_kind,
             attribute=None,
             required_access=required_access,
         ))

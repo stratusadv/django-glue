@@ -16,6 +16,7 @@ class GluePolicyTokenTestCase(TestCase):
         return GluePolicy.new_signed_policy({
             'session_id': 'session-1',
             'request_user_id': None,
+            'origin': '/',
             'name': 'project_form',
             'namespace': 'form',
             'identity': {

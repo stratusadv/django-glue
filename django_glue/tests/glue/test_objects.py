@@ -49,7 +49,7 @@ GORILLA_PATH = 'test_project.gorilla.models.Gorilla'
 
 
 def request_with_session(session_key='test-session'):
-    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={})
+    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={}, path_info='/')
 
 
 def glue_context(name='gorilla', access=GlueAccess.CHANGE):
@@ -765,6 +765,7 @@ class GluePolicyTestCase(TestCase):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
             'request_user_id': None,
+            'origin': '/',
             'name': 'gorilla',
             'namespace': 'model',
             'identity': {'model_class_path': 'test_project.gorilla.models.Gorilla', 'target_pk': 1},
@@ -785,6 +786,7 @@ class GluePolicyTestCase(TestCase):
         policy = GluePolicy.new_signed_policy({
             'session_id': 'test-session',
             'request_user_id': None,
+            'origin': '/',
             'name': 'agreement_form',
             'namespace': 'form',
             'identity': {

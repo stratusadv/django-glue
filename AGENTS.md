@@ -43,7 +43,7 @@ django-glue/
 │   │   └── operation.py            # GlueOperation authorization records
 │   ├── resolver/
 │   │   ├── attribute_call/         # /__dg__/callable_attribute/ endpoint (batch entries)
-│   ├── middleware.py               # Glue.view response middleware
+│   ├── middleware/                 # view.py: Glue.view response middleware; call.py: process_glue_call hooks
 │   ├── shortcuts/glue.py           # Glue.model/queryset/form/formset/function/...
 │   ├── shortcuts/urls.py           # django_glue_urls()
 │   ├── access.py                   # GlueAccess (VIEW/ADD/CHANGE/DELETE)

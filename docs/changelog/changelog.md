@@ -4,6 +4,32 @@
 
 ### Features
 
+- A Django middleware can guard Glue calls with a `process_glue_call(request,
+  glue_call)` method (ADR 035). Glue runs it for every object in a call, before
+  the object is rebuilt, against the path of the page or `Glue.view` fragment
+  that issued the object. A rule a project enforces by URL, such as membership
+  of the company named in the URL, then also governs calls, with one class:
+
+  ```python
+  class CompanyMiddleware(GlueMiddlewareMixin):
+      def process_view(self, request, view_func, view_args, view_kwargs):
+          company_uuid = view_kwargs.pop('company_uuid', None)
+          if company_uuid is not None and not is_member(request, company_uuid):
+              raise Http404
+
+      def process_glue_call(self, request, glue_call):
+          company_uuid = glue_call.origin.kwargs.get('company_uuid')
+          if company_uuid is not None and not is_member(request, company_uuid):
+              raise Http404
+  ```
+
+  `glue_call.origin` is the resolved `ResolverMatch` of that path. Raising
+  `PermissionDenied` or `Http404` refuses that object with `not_authorized`;
+  the other objects in the call go ahead. The hook covers every Glue object,
+  including `Glue.model()`, `Glue.form()` and `Glue.queryset()` objects, whose
+  `is_authorized()` a project cannot override. Glue finds the hook on any class
+  in `MIDDLEWARE`; `GlueMiddlewareMixin` documents it.
+
 - `Glue.child` declares a child Glue object (ADR 034). The method initializes
   the child and its return annotation names the Glue object:
 
@@ -83,7 +109,17 @@
   `client_js/src/wire.ts`. `just js-typecheck` checks it, and CI runs the
   check before building the bundle.
 
+- A policy token records the path that issued its object. Tokens issued by an
+  earlier version have none and are refused, so an open page whose objects
+  were issued before the upgrade needs reloading once.
+
+- `django_glue.middleware` is a package. `django_glue.middleware.GlueViewMiddleware`
+  is imported and listed in `MIDDLEWARE` as before.
+
 ### Fixes
+
+- A validly signed token whose payload has the wrong shape is refused as an
+  invalid policy. It made the call fail with a server error.
 
 - A formset validated and then saved in the same call saves a changed saved
   record. Validating wrote the new values onto the record, so the save that

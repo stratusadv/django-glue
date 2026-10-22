@@ -341,7 +341,7 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.assertNotIn('computed_data', data)
 
     def request_context(self):
-        return type('Request', (), {'session': self.session, 'FILES': {}})()
+        return type('Request', (), {'session': self.session, 'FILES': {}, 'path_info': '/'})()
 
 
 def sample_function(amount: int, tax: int = 0):
@@ -415,4 +415,4 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         self.assertNotIn('error', data)
 
     def request_context(self, session_key):
-        return type('Request', (), {'session': MockSession(session_key=session_key), 'FILES': {}})()
+        return type('Request', (), {'session': MockSession(session_key=session_key), 'FILES': {}, 'path_info': '/'})()

@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 from django.conf import settings
 from django.core import signing
 from django.utils import timezone
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
+from django_glue.constants import DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.attributes.definition import GlueAttributeKind
 
@@ -55,6 +56,7 @@ class GluePolicy(BaseModel):
 
     session_id: str
     request_user_id: Any
+    origin: str
     name: str
     namespace: str
     identity: dict[str, Any]
@@ -87,6 +89,11 @@ class GluePolicy(BaseModel):
         return cls.new_signed_policy({
             'session_id': glue_object.request.session.session_key,
             'request_user_id': getattr(getattr(glue_object.request, 'user', None), 'id', None),
+            # A call's objects keep the origin of the entry that introduced them (ADR 035).
+            'origin': glue_object.request.__dict__.get(
+                DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY,
+                glue_object.request.path_info,
+            ),
             'name': glue_object.name,
             'namespace': glue_object.namespace,
             'identity': glue_object.identity,
@@ -140,7 +147,13 @@ class GluePolicy(BaseModel):
             from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
             raise GlueInvalidPolicyError('policy') from exc
 
-        return cls.model_validate({**data, 'token': token})
+        try:
+            return cls.model_validate({**data, 'token': token})
+        except ValidationError as exc:
+            # A validly signed payload of another shape, such as a token issued
+            # before the policy gained a field, is refused like a forged one.
+            from django_glue.exceptions import GlueInvalidPolicyError  # noqa: PLC0415
+            raise GlueInvalidPolicyError(data.get('name', 'policy')) from exc
 
     def verify_request(self, request: HttpRequest) -> None:
         """Reject a policy issued to another session or user than ``request``'s."""

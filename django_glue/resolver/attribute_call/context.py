@@ -2,10 +2,12 @@ import json
 from typing import Any
 
 from django.http import HttpRequest
+from django.urls import ResolverMatch
 from pydantic import BaseModel, Field, ValidationError
 
 from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
 from django_glue.glue import policy
+from django_glue.glue.operation import GlueOperationKind
 
 
 class AttributeCall(BaseModel):
@@ -53,12 +55,23 @@ class AttributeCallRequestContext(BaseModel):
     mounted: list[str] = Field(default_factory=list)
     child_submissions: dict[str, Any] = Field(default_factory=dict)
 
+    @property
+    def operation_kind(self) -> GlueOperationKind:
+        """The interaction this entry asks for: a call, an update, or a refresh."""
+        if self.target_attribute_name is not None:
+            return GlueOperationKind.CALL
+        if self.target_glue_updates:
+            return GlueOperationKind.UPDATE
+        return GlueOperationKind.REFRESH
+
 
 class AttributeCallBatchContext(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
     request: HttpRequest
     entries: list[AddressedObjectEntry]
+    # Each origin is resolved once per request, however many entries share it.
+    resolved_origins: dict[str, ResolverMatch] = Field(default_factory=dict)
 
 
 class AttributeCallContextFactory:

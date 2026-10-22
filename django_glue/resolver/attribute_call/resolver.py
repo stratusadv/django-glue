@@ -13,6 +13,7 @@ from django_glue.exceptions import (
 )
 from django_glue.glue import policy
 from django_glue.glue.registry import glue_class_registry
+from django_glue.middleware.call import run_glue_call_hooks
 from django_glue.resolver.attribute_call.context import (
     AddressedObjectEntry,
     AttributeCallBatchContext,
@@ -102,6 +103,7 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
         )
         try:
             decoded.verify_request(context.request)
+            run_glue_call_hooks(call_context, context.resolved_origins)
             glue_object = glue_class_registry.get_glue_class(decoded.namespace).from_attribute_call_resolver_context(
                 call_context
             )

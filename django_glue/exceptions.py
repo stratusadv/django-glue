@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from django.http.response import HttpResponseBase
 
-    from django_glue.glue.operation import GlueOperation
+    from django_glue.glue.operation import GlueOperation, GlueOperationKind
 
 
 class GlueRequestErrorCode(StrEnum):
@@ -146,6 +146,35 @@ class GlueAuthorizationError(GlueError):
             'kind': self.operation.kind.value,
             'attribute': self.operation.attribute,
             'required_access': self.operation.required_access.value,
+        }
+
+
+class GlueCallDeniedError(GlueError):
+    """Raised when a middleware ``process_glue_call`` hook denies an object in a call (ADR 035)."""
+
+    code = 'not_authorized'
+    status = 403
+
+    def __init__(
+        self,
+        object_name: str,
+        *,
+        kind: GlueOperationKind,
+        attribute: str | None,
+    ) -> None:
+        self.object_name = object_name
+        self.kind = kind
+        self.attribute = attribute
+        attribute_text = f" attribute '{attribute}'" if attribute else ''
+        super().__init__(
+            f"Middleware denied {kind}{attribute_text} on Glue object '{object_name}'."
+        )
+
+    def details(self) -> dict:
+        return {
+            'object': self.object_name,
+            'kind': self.kind.value,
+            'attribute': self.attribute,
         }
 
 
