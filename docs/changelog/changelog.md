@@ -126,6 +126,12 @@
 - `django_glue.middleware` is a package. `django_glue.middleware.GlueViewMiddleware`
   is imported and listed in `MIDDLEWARE` as before.
 
+- A component callable that returns `Glue.RedirectResponse` no longer
+  re-renders its component, even when it changed a retained value (ADR 037).
+  The browser follows the redirect, so the render was never shown. A callable
+  that logs the user in and redirects therefore no longer has its component
+  re-checked as the new user.
+
 ### Fixes
 
 - A validly signed token whose payload has the wrong shape is refused as an

@@ -4,12 +4,13 @@ import inspect
 import json
 from functools import cached_property
 from html import unescape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AnonymousUser, User
 from django.test import RequestFactory
 from django.template import Context, Template
+from django.urls import reverse
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
@@ -34,6 +35,11 @@ from django_glue.resolver.attribute_call.context import (
 from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 
 from django_glue.tests.glue.test_callable_parameters import call_context
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
+
+    from django_glue.glue.operation import GlueOperation
 
 
 class GreetingComponent(Glue.Component):
@@ -455,6 +461,27 @@ class WeekComponent(Component):
     def annotate_quietly(self) -> None:
         self.note = 'noted'
 
+    @Glue.attr
+    def advance_and_leave(self) -> GlueResponse:
+        self.week += 1
+        return Glue.RedirectResponse('gorilla:components')
+
+
+class SignUpComponent(Component):
+    """Admits only a visitor without an account, and logs one in as its call's last act."""
+
+    template = 'glue_component_greeting_test.html'
+    greeting = 'Sign up'
+
+    def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool:
+        _ = operation
+        return not request.user.is_authenticated
+
+    @Glue.attr
+    def sign_up(self) -> GlueResponse:
+        self.request.user = User.objects.create_user('dana.reyes')
+        return Glue.RedirectResponse('gorilla:components')
+
 
 def test_parameter_change_rerenders_from_a_fresh_instance(mock_request) -> None:
     component = Glue.object(mock_request, WeekComponent(week=1))
@@ -517,6 +544,32 @@ def test_skip_rerender_is_overridden_when_a_retained_value_changed(mock_request)
 
     assert '>week 1</span>' in entry['html']
     assert GluePolicy.from_token(entry['policy_token']).state_snapshot['note'] == 'noted'
+
+
+def test_a_redirect_skips_the_render_even_when_a_retained_value_changed(
+    mock_request: HttpRequest,
+) -> None:
+    entry = _call_week(mock_request, 'advance_and_leave')
+
+    assert 'html' not in entry
+    assert entry['effects']['redirect'] == {'url': reverse('gorilla:components')}
+    assert GluePolicy.from_token(entry['policy_token']).identity['parameters'] == {'week': 2}
+
+
+@pytest.mark.django_db
+def test_a_call_that_logs_in_and_redirects_is_not_refused_by_its_own_guard(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = AnonymousUser()
+    component = Glue.object(mock_request, SignUpComponent())
+
+    context = call_context(component, 'sign_up')
+    reconstructed = SignUpComponent.from_attribute_call_resolver_context(context)
+    entry, _introduced = reconstructed.process_attribute_call(context)
+
+    assert entry['effects']['redirect'] == {'url': reverse('gorilla:components')}
+    assert 'html' not in entry
+    assert User.objects.filter(username='dana.reyes').exists()
 
 
 def test_callable_returning_a_component_does_not_rerender_its_component(mock_request) -> None:

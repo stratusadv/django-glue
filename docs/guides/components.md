@@ -424,6 +424,19 @@ A callable that changes one of the component's parameters or other retained
 values re-renders regardless, so the markup always matches the component's
 state. Only the component whose callable ran re-renders.
 
+A callable that returns `Glue.RedirectResponse` never re-renders, whatever it
+changed, because the browser is leaving the page. That includes a callable that
+logs the user in or out before redirecting, so a component whose
+`is_authorized()` admits only logged-out visitors can still log one in:
+
+```python
+@Glue.attr(required_access=Glue.Access.ADD)
+def sign_up(self) -> Glue.Response:
+    user = create_account(...)
+    login(self.request, user)
+    return Glue.RedirectResponse('home:dashboard')
+```
+
 Call `component.$refresh()` when data outside that component changes, such as a
 record saved by a modal. The refresh recomputes its properties and markup and
 morphs the root; removed child roots dispose their addresses. To re-render when

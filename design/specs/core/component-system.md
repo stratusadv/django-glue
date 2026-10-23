@@ -923,8 +923,12 @@ action needs no follow-up `$refresh()`
 ([ADR 022](../../decisions/022-component-callables-re-render-by-default.md)). A
 callable whose declared result is a Glue object does not re-render its component,
 and `skip_rerender=True` opts any other callable out, unless the callable changed
-one of the component's retained values. Only the component whose callable ran
-re-renders; its owner and other components refresh as described below.
+one of the component's retained values. A callable whose response redirects
+never re-renders, even when it changed a retained value, because the browser is
+leaving the page
+([ADR 037](../../decisions/037-a-redirecting-call-does-not-re-render.md)). Only
+the component whose callable ran re-renders; its owner and other components
+refresh as described below.
 
 Glue does not attempt to infer a dependency graph from a model save. Arbitrary
 query predicates and computed properties make that both incomplete and

@@ -28,6 +28,29 @@ field descriptions and current validation errors. An invalid `validate()` or
 the draft into a server-side session object. A successful model-form save
 advances its target identity in the successor policy.
 
+A form class can declare its own action as a Glue callable. It runs on the form
+bound with the user's draft, so `self.is_valid()` validates what the user typed
+and its errors reach `$fields` as `validate()`'s do. A parameter named `request`
+receives the request:
+
+```python
+class SignUpForm(forms.Form):
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput)
+
+    @Glue.attr(required_access=Glue.Access.ADD)
+    def sign_up(self, request: HttpRequest) -> Glue.Response | None:
+        if not self.is_valid():
+            return None
+        user = create_account(self.cleaned_data['email'], self.cleaned_data['password'])
+        login(request, user)
+        return Glue.RedirectResponse('home:dashboard')
+```
+
+```javascript
+await Glue.form.sign_up.sign_up()
+```
+
 `editable=` limits which declared form fields accept browser updates. Choice
 fields remain scalar or flat-list values on the wire; Glue rejects nested
 objects in their place. File inputs travel as multipart file parts.

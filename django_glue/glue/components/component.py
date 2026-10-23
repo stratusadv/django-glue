@@ -485,7 +485,8 @@ class Component(BaseGlue):
         result is a Glue object, which hands the interaction to that object, or
         it declares ``skip_rerender=True``; either exception is overridden when
         the callable changed a retained value, because the markup would no
-        longer match the component's state. The render runs on a fresh
+        longer match the component's state. A callable whose response
+        redirects never re-renders (ADR 037). The render runs on a fresh
         instance built from the successor token rather than on ``self``, whose
         derived values (cached properties and the like) were computed before
         the call. That render's output is the authoritative HTML and computed
@@ -496,6 +497,10 @@ class Component(BaseGlue):
 
         entry, introduced = super().process_attribute_call(call_context)
         if 'html' in entry:
+            return entry, introduced
+
+        # The browser is leaving the page, so nothing on it needs to match the component (ADR 037).
+        if entry.get('effects', {}).get('redirect') is not None:
             return entry, introduced
 
         attribute_name = call_context.target_attribute_name
