@@ -13,6 +13,7 @@ from django.db import models
 from django_glue.access import GlueAccess
 from django_glue.conf import settings
 from django_glue.exceptions import (
+    GlueAuthorizationError,
     GlueModelInstanceNotFoundError,
     GlueQuerySetCursorValidationError,
     GlueQuerySetFilterValidationError,
@@ -827,14 +828,16 @@ class QuerySetGlue(
                     name=f'{self.name}.{relation_name}.{related_key}',
                     subfields=subfields,
                 )
-                if not child.is_authorized(
-                    self.request,
-                    GlueOperation(
-                        kind=GlueOperationKind.INTRODUCE,
-                        attribute=None,
-                        required_access=child.access,
-                    ),
-                ):
+                try:
+                    child._authorize(
+                        self.request,
+                        GlueOperation(
+                            kind=GlueOperationKind.INTRODUCE,
+                            attribute=None,
+                            required_access=child.access,
+                        ),
+                    )
+                except GlueAuthorizationError:
                     continue
                 child.request = self.request
                 children[member] = BoundGlueChild(

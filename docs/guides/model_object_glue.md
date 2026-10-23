@@ -32,6 +32,12 @@ failed save may return errors while preserving the draft. `$refresh()` asks
 the server to re-derive output without discarding edits made during the
 request.
 
+`task.$pk` is the record's primary key. It comes from the object's signed
+identity, so it is there whether or not the primary-key field is among
+`fields`, and it has no value on an unsaved model. `task.$key` is the same
+value, falling back to the object's name when there is no key, which makes it
+a stable `:key` for a list of models.
+
 ## Relations
 
 `project` exposes the raw foreign-key identity through

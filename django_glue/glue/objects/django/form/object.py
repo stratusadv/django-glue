@@ -39,6 +39,12 @@ class FormGlue(BaseGlue):
         # fills from its instance. The identity signs the initial this form
         # was given, so a token renewed by a call names the same form.
         self._initial = form.initial
+        # A PasswordInput never renders its value back, so Glue never sends it either (ADR 036).
+        self._write_only = frozenset(
+            name
+            for name, field in form.fields.items()
+            if isinstance(field.widget, forms.PasswordInput) and not field.widget.render_value
+        )
         self.editable = self._normalize_editable(editable)
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
@@ -49,6 +55,18 @@ class FormGlue(BaseGlue):
         """The Django form bound and validated by the last ``validate()``, or
         ``None`` before one ran -- e.g. for ``save(commit=False)``."""
         return self._bound_form
+
+    def is_valid(self) -> bool:
+        """Validates the form as ``validate()`` does and answers only whether it passed."""
+        return self.validate()['valid']
+
+    @property
+    def cleaned_data(self) -> dict[str, Any]:
+        """The validated form's cleaned data, as a Django form has it after ``is_valid()``."""
+        if self._bound_form is None:
+            msg = f"FormGlue '{self.name}' has no cleaned_data before it is validated."
+            raise AttributeError(msg)
+        return self._bound_form.cleaned_data
 
     def get_attribute_providers(self) -> tuple[Any, ...]:
         self.form._glue_event_owner = self
@@ -131,6 +149,8 @@ class FormGlue(BaseGlue):
         }
 
     def _get_form_attribute_value(self, name: str) -> Any:
+        if name in self._write_only:
+            return None
         if name in self._editable_draft:
             return self._editable_draft[name]
         return self.form[name].value()
@@ -148,6 +168,7 @@ class FormGlue(BaseGlue):
             name: field.prepare_value(self._ordered(value)) if field else value
             for name, value in self._initial.items()
             for field in [self.form.fields.get(name)]
+            if name not in self._write_only
         }
 
     @staticmethod
@@ -285,12 +306,19 @@ class FormGlue(BaseGlue):
         super()._load_client_state(state)
         self.form = self._bind_form()
 
+        # A retained draft holds no write-only value, so one in state came in this call's updates.
+        if self.request is not None and self._write_only.intersection(state):
+            sensitive = getattr(self.request, 'sensitive_post_parameters', [])
+            if sensitive != '__ALL__' and 'objects' not in sensitive:
+                self.request.sensitive_post_parameters = [*sensitive, 'objects']
+
     def _get_retained_state(self) -> dict[str, Any]:
         retained = super()._get_retained_state()
 
         retained.update({
             name: self._get_form_attribute_value(name)
             for name in self.editable
+            if name not in self._write_only
         })
 
         return retained
@@ -300,7 +328,8 @@ class FormGlue(BaseGlue):
         bound_form = self._bind_form()
         self._bound_form = bound_form
         valid = bound_form.is_valid()
-        self._field_errors = dict(bound_form.errors)
+        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
+        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
@@ -310,7 +339,8 @@ class FormGlue(BaseGlue):
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
-        self._field_errors = dict(bound_form.errors)
+        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
+        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
@@ -350,4 +380,7 @@ class FormGlue(BaseGlue):
         has_instance = getattr(self.form, 'instance', None) is not None
         if isinstance(self.form, forms.ModelForm) and has_instance:
             kwargs['instance'] = self.form.instance
+            # Validation writes the cleaned values onto the instance, so a second
+            # bind would read them as its initial and report nothing changed.
+            kwargs['initial'] = self.form.initial
         return form_class(**kwargs)

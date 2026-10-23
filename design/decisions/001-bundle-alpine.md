@@ -39,7 +39,7 @@ Alpine internals as its API.
   CSP-compatible Alpine replaces the evaluator, which is a build-time choice
   rather than a runtime flag. Bundling and the CSP goal are therefore in tension,
   and the resolution is two published bundles from one pinned Alpine version —
-  the default and a CSP variant — selected at install time. `client_js/src/alpine.js`
+  the default and a CSP variant — selected at install time. `client_js/src/alpine.ts`
   is the only module that touches Alpine, so it is also the only module that
   varies between them; that module is being written on this branch and should be
   structured for the split now rather than refactored for it later.

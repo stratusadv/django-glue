@@ -1,6 +1,7 @@
 from django.template.response import TemplateResponse
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 
+from django_glue.exceptions import GlueAccessError, GlueRequestError
 from django_glue.message import GlueMessage
 from django_glue.response import GlueResponse, GlueTemplateResponse
 from django_glue.tests.conftest import MockSession
@@ -57,6 +58,59 @@ class GlueResponseTestCase(TestCase):
 
         with self.assertRaises(TypeError):
             GlueResponse.from_result(HttpResponse('raw'))
+
+
+class GlueResponseErrorDataTestCase(TestCase):
+    def test_a_client_error_carries_its_code_message_status_and_details(self):
+        error = GlueAccessError('save', 'change', 'view')
+
+        self.assertEqual(GlueResponse.error_data(error), {
+            'code': 'not_authorized',
+            'message': str(error),
+            'status': 403,
+            'details': {
+                'attribute': 'save',
+                'required_access': 'change',
+                'current_access': 'view',
+            },
+        })
+
+    def test_a_server_errors_message_and_details_are_withheld(self):
+        error = GlueRequestError(
+            code='boom',
+            message='The database password is hunter2.',
+            details={'secret': 'hunter2'},
+            status=500,
+        )
+
+        data = GlueResponse.error_data(error)
+
+        self.assertEqual(data['code'], 'boom')
+        self.assertEqual(data['status'], 500)
+        self.assertEqual(data['message'], 'An unexpected Glue server error occurred.')
+        self.assertEqual(data['details'], {})
+
+    @override_settings(DEBUG=True)
+    def test_a_server_error_is_shown_in_full_when_debugging(self):
+        error = GlueRequestError(
+            code='boom',
+            message='The query failed.',
+            details={'table': 'gorilla'},
+            status=500,
+        )
+
+        data = GlueResponse.error_data(error)
+
+        self.assertEqual(data['message'], 'The query failed.')
+        self.assertEqual(data['details'], {'table': 'gorilla'})
+
+    def test_from_error_wraps_the_same_data_with_the_errors_status(self):
+        error = GlueAccessError('save', 'change', 'view')
+
+        response = GlueResponse.from_error(error)
+
+        self.assertEqual(response.result, {'error': GlueResponse.error_data(error)})
+        self.assertEqual(response.status, 403)
 
 
 class GlueTemplateResponseTestCase(TestCase):

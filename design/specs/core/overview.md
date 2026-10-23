@@ -103,10 +103,11 @@ server objects.
     resolves the nearest addressed component root in plain JavaScript, and
     `component.$el` returns that root. These mappings follow morph-preserved
     identity and fail after disposal.
-19. **Object relationships and reactions are explicit.** A typed
-    `@Glue.property` on any addressed Glue object may return a configured Glue
-    object and thereby declare a named child address. The child remains the
-    sole owner of its state. UI may bind to the reactive child directly; any child outcome that
+19. **Object relationships and reactions are explicit.** A `@Glue.child` on
+    any addressed Glue object returns a configured Glue object and thereby
+    declares a named child address. The child remains the sole owner of its
+    state; a component's call may read a writable child with the user's unsaved
+    changes, submitted with that call. UI may bind to the reactive child directly; any child outcome that
     should refresh or call the parent is named explicitly by the composition
     code rather than inferred from nesting or database writes.
 20. **A Glue object is never an ordinary value.** `BaseGlue` means an
@@ -149,11 +150,12 @@ The deciding test is: **will the server consume the browser-carried value on the
 next request?** If yes, it must have signed continuity. If no, the server must
 recompute or ignore it.
 
-A Glue-object-typed `@Glue.property` is also the server-owned production point
-for an addressed Glue child. An ordinary return value follows the table above;
-a configured `BaseGlue` return matching the annotation is registered as a child
+A `@Glue.child` is the server-owned production point for an addressed Glue
+child. A `@Glue.property` value follows the table above; a `@Glue.child`'s
+configured `BaseGlue` return matching its annotation is registered as a child
 and represented by an internal address reference instead of being inserted
-into `computed_data`. Raw Django models, forms, querysets, and formsets are not
+into `computed_data`. A Glue-object-typed `@Glue.property` still does the same
+and is deprecated. Raw Django models, forms, querysets, and formsets are not
 promoted implicitly.
 
 ## Transport outline

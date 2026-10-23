@@ -24,11 +24,22 @@ if TYPE_CHECKING:
 RESOLVING_PARAMETERS_ATTRIBUTE = '_glue_resolving_model_parameters'
 
 
-def _missing_loads(resolved: Model, supplied: Model, prefix: str = '') -> set[str]:
-    """What ``resolved`` has loaded and ``supplied`` lacks, named as the queryset
+def _missing_loads(
+    resolved: Model,
+    supplied: Model,
+    prefix: str = '',
+    ancestors: frozenset[int] = frozenset(),
+) -> set[str]:
+    """
+    What ``resolved`` has loaded and ``supplied`` lacks, named as the queryset
     arguments that load it: annotations and fields, prefetched relations, and
     ``select_related`` relations, followed into each relation both have loaded
-    so a nested load is named by its path (``project__client``)."""
+    so a nested load is named by its path (``project__client``).
+
+    A relation that leads back to a row already on the path is not followed:
+    ``select_related`` across a one-to-one caches each side on the other.
+    """
+    ancestors |= {id(resolved)}
     internal = {'_state', '_prefetched_objects_cache'}
     names = set(resolved.__dict__) - set(supplied.__dict__) - internal
     names |= (
@@ -41,8 +52,9 @@ def _missing_loads(resolved: Model, supplied: Model, prefix: str = '') -> set[st
             missing.add(f'{prefix}{name}')
             continue
         supplied_related = supplied._state.fields_cache[name]
-        if related is not None and supplied_related is not None:
-            missing |= _missing_loads(related, supplied_related, f'{prefix}{name}__')
+        if related is None or supplied_related is None or id(related) in ancestors:
+            continue
+        missing |= _missing_loads(related, supplied_related, f'{prefix}{name}__', ancestors)
     return missing
 
 

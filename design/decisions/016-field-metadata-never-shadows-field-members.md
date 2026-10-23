@@ -6,7 +6,7 @@ Date: 2026-09-28
 
 ## Context
 
-A client field proxy (`client_js/src/proxies/fields/base.js`) receives server
+A client field proxy (`client_js/src/proxies/fields/base.ts`) receives server
 metadata such as label, required, widget, and choices whenever its form is
 introduced or refreshed. The proxy applied it with
 `Object.assign(this, metadata)`, excluding only `errors`, which an earlier fix

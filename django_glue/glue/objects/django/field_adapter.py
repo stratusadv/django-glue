@@ -65,6 +65,8 @@ class FormFieldAdapter(GlueAttributeAdapter):
         )
         schema['value_path'] = self.name
         schema['widget'] = self.field.widget.__class__.__name__
+        if self.name in self.owner._write_only:
+            schema['write_only'] = True
         if not hasattr(self.field, 'queryset'):
             return schema
 

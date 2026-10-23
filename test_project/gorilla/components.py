@@ -1,9 +1,11 @@
 from typing import Any
 
+from django.db import transaction
+from django.forms.formsets import all_valid
 from django.http import HttpRequest
 
 from django_glue import Glue, GlueOperation
-from test_project.gorilla.forms import FightNameForm
+from test_project.gorilla.forms import FightNameForm, GorillaNameForm, KeeperSignUpForm
 from test_project.gorilla.models import Gorilla
 
 
@@ -108,7 +110,11 @@ class GorillaFightsEditorComponent(Glue.Component):
     def gorilla(self, pk: int) -> Gorilla:
         return Gorilla.objects.get(pk=pk)
 
-    @Glue.property
+    @Glue.child
+    def name_form(self) -> Glue.Form:
+        return Glue.form(target=GorillaNameForm(initial={'name': self.gorilla.name}), access=self.access)
+
+    @Glue.child
     def fights(self) -> Glue.FormSet:
         # Whoever may change the gorilla may edit and remove its fights.
         can_change = self.access.has_access(Glue.Access.CHANGE)
@@ -130,6 +136,36 @@ class GorillaFightsEditorComponent(Glue.Component):
         # formset child.
         self.checks += 1
 
+    saves: int = Glue.attr(0)
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def save_all(self) -> None:
+        # Reads both children as the browser submitted them, and saves
+        # neither unless both are valid.
+        if not all_valid([self.name_form, self.fights]):
+            return
+
+        with transaction.atomic():
+            Gorilla.objects.filter(pk=self.gorilla.pk).update(name=self.name_form.cleaned_data['name'])
+            self.fights.save()
+        self.saves += 1
+
+
+class KeeperSignUpComponent(Glue.Component):
+    template = 'gorilla/component/keeper_sign_up.html'
+
+    @Glue.child
+    def sign_up_form(self) -> Glue.Form:
+        return Glue.form(target=KeeperSignUpForm(), access=Glue.Access.ADD)
+
+    sign_ups: int = Glue.attr(0)
+
+    @Glue.attr
+    def sign_up(self) -> None:
+        # Both passwords must arrive with the call for the form to be valid.
+        if self.sign_up_form.is_valid():
+            self.sign_ups += 1
+
 
 class CounterBadgeComponent(Glue.Component):
     template = 'glue_template_test.html'
@@ -142,6 +178,6 @@ class CounterBadgeOwnerComponent(Glue.Component):
         super().__init__(**kwargs)
         self.badge_value = CounterBadgeComponent()
 
-    @Glue.property
+    @Glue.child
     def badge(self) -> CounterBadgeComponent:
         return self.badge_value

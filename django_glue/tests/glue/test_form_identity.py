@@ -14,7 +14,7 @@ from test_project.test_forms import ContactForm
 
 
 def request_with_session(session_key='test-session'):
-    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={})
+    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={}, path_info='/')
 
 
 class FormIdentityTestCase(TestCase):

@@ -12,7 +12,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from django_glue.glue.operation import GlueOperation
+    from django.http.response import HttpResponseBase
+
+    from django_glue.glue.operation import GlueOperation, GlueOperationKind
 
 
 class GlueRequestErrorCode(StrEnum):
@@ -25,6 +27,7 @@ class GlueRequestErrorCode(StrEnum):
     INVALID_UPDATES = 'invalid_updates'
     INVALID_REINTRODUCE = 'invalid_reintroduce'
     INVALID_DISPOSE = 'invalid_dispose'
+    INVALID_CHILD_SUBMISSION = 'invalid_child_submission'
 
     # Missing required fields
     MISSING_FIELD = 'missing_field'
@@ -121,9 +124,13 @@ class GlueAuthorizationError(GlueError):
         self,
         object_name: str,
         operation: GlueOperation,
+        response: HttpResponseBase | None = None,
     ) -> None:
         self.object_name = object_name
         self.operation = operation
+        # What a view decorator on is_authorized() answered the denial with,
+        # which a component view returns in place of a 403 (ADR 033).
+        self.response = response
         attribute = (
             f" attribute '{operation.attribute}'"
             if operation.attribute
@@ -139,6 +146,35 @@ class GlueAuthorizationError(GlueError):
             'kind': self.operation.kind.value,
             'attribute': self.operation.attribute,
             'required_access': self.operation.required_access.value,
+        }
+
+
+class GlueCallDeniedError(GlueError):
+    """Raised when a middleware ``process_glue_call`` hook denies an object in a call (ADR 035)."""
+
+    code = 'not_authorized'
+    status = 403
+
+    def __init__(
+        self,
+        object_name: str,
+        *,
+        kind: GlueOperationKind,
+        attribute: str | None,
+    ) -> None:
+        self.object_name = object_name
+        self.kind = kind
+        self.attribute = attribute
+        attribute_text = f" attribute '{attribute}'" if attribute else ''
+        super().__init__(
+            f"Middleware denied {kind}{attribute_text} on Glue object '{object_name}'."
+        )
+
+    def details(self) -> dict:
+        return {
+            'object': self.object_name,
+            'kind': self.kind.value,
+            'attribute': self.attribute,
         }
 
 

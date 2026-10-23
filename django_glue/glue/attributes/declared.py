@@ -34,6 +34,7 @@ class DeclaredAttributeOptions:
     provider_type: type[Any] | None = None
     expected_type: type[Any] | None = None
     is_nullable: bool = False
+    is_declared_child: bool = False
 
 
 class DeclaredAttribute:

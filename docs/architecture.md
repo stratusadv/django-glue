@@ -16,8 +16,9 @@ template site. `{% django_glue_init %}` emits named page objects as a flat
 Each entry has an opaque address and signed policy token, plus unsigned
 `static_data` and `computed_data`. `static_data` describes the interface;
 `computed_data` contains current derived output. A token carries
-reconstruction parameters, server-retained state, capability, and shallow
-child addresses. Ordinary values never contain a Glue object recursively.
+reconstruction parameters, server-retained state, capability, shallow child
+addresses, and the origin: the path of the request that issued the object.
+Ordinary values never contain a Glue object recursively.
 
 ## Addressed requests
 
@@ -29,8 +30,10 @@ such as queryset chaining or model saving.
 An attribute request posts an `objects` array to
 `/__dg__/callable_attribute/`. Each requested entry contains its address,
 policy token, editable `updates`, and optional `call`. The server verifies
-the token, reconstructs and authorizes the object, admits updates, performs
-the call, and returns addressed response entries. An entry may fail without
+the token, runs each middleware's `process_glue_call` hook against the
+object's origin, reconstructs and authorizes the object, admits updates,
+performs the call, and returns addressed response entries. Objects introduced
+during the call keep the origin of the object that introduced them. An entry may fail without
 advancing other entries in the batch. Malformed envelopes fail as a whole.
 
 The client registers introduced entries before resolving results, reconciles
@@ -57,9 +60,15 @@ by the view. The target route's normal middleware and view authorization run.
 ## Security boundary
 
 The signed policy is a capability, not a client-editable state object. The
-server intersects current declarations, signed permission, and current
-application authorization. `VIEW < ADD < CHANGE < DELETE` separates creation
-from edits to persisted objects. Query continuations are signed and bounded
+server intersects current declarations, signed permission, the project's
+`process_glue_call` middleware hooks, and current application authorization.
+A hook checks each called object against the resolved path that issued it, so
+a rule the project enforces by URL, such as tenant membership, also governs
+calls; it may refuse an object but never grant one. `VIEW < ADD < CHANGE < DELETE` separates creation
+from edits to persisted objects. The policy is signed, not encrypted, so a
+secret never enters it: a form field with a `PasswordInput` that hides its
+value is write-only, accepted as an update and never signed or echoed back.
+Query continuations are signed and bounded
 before deserialization; the internal unpickler admits only approved classes.
 CSRF protection applies to requests. The policy lifetime is 24 hours from
 issuance by default.
@@ -74,4 +83,5 @@ issuance by default.
 | Components and template tag | `django_glue/glue/components/`, `django_glue/templatetags/django_glue.py` |
 | Client registry and reconciliation | `client_js/src/runtime/` |
 | Client family proxies | `client_js/src/proxies/` |
-| HTML rendering and view transport | `client_js/src/htmlRenderer.js`, `django_glue/middleware.py` |
+| HTML rendering and view transport | `client_js/src/htmlRenderer.ts`, `django_glue/middleware/view.py` |
+| Middleware hooks on calls | `django_glue/middleware/call.py`, `django_glue/resolver/attribute_call/resolver.py` |

@@ -13,7 +13,7 @@ from test_project.gorilla.models import Gorilla
 
 
 def request_with_session(session_key='test-session'):
-    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={})
+    return SimpleNamespace(session=SimpleNamespace(session_key=session_key), FILES={}, path_info='/')
 
 
 def build_glue(queryset=None, **kwargs):

@@ -1,4 +1,6 @@
 <section class="fights-editor" data-testid="fights-editor" x-data="{result: null}">
+    <input aria-label="Gorilla name" x-model="component.name_form.name">
+    <div data-testid="name-errors" x-text="component.name_form.$fields.name.errors.join(' ')"></div>
     <template x-for="form in component.fights.forms" :key="form.$key">
         <div class="fight-row">
             <input aria-label="Fight name" x-model="form.name">
@@ -8,6 +10,8 @@
     <button type="button" @click="await component.fights.append()">Add fight</button>
     <button type="button" @click="result = await component.fights.save()">Save fights</button>
     <button type="button" @click="await component.check()">Check fights</button>
+    <button type="button" @click="await component.save_all()">Save all</button>
     <div data-testid="fights-result" x-text="result ? JSON.stringify(result) : ''"></div>
     <div data-testid="fights-checks" x-text="component.checks"></div>
+    <div data-testid="fights-saves">{{ component.saves }}</div>
 </section>

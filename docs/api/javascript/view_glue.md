@@ -1,11 +1,11 @@
 ## Source
 
-```javascript title="client_js/src/view.js"
---8<-- "client_js/src/view.js"
+```typescript title="client_js/src/view.ts"
+--8<-- "client_js/src/view.ts"
 ```
 
 The rendering methods are inherited from the shared renderer:
 
-```javascript title="client_js/src/htmlRenderer.js"
---8<-- "client_js/src/htmlRenderer.js"
+```typescript title="client_js/src/htmlRenderer.ts"
+--8<-- "client_js/src/htmlRenderer.ts"
 ```

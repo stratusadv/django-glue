@@ -116,6 +116,36 @@ which mode deserves the short name would then have changed.
 
 ---
 
+### A child its owner saves still offers its own `save`
+
+A component's call can read its writable children and save them together (ADR
+034). Each child is still an addressed object with its own `save`, and the
+access that lets the user type into it and have it validated also permits that
+call. The browser can therefore save a child directly, outside the component's
+call. A formset's rows are the sharpest case: each is a form with its own
+`save`. For a user who holds the access this is an integrity gap, not a
+security one: a record written without the rest of the operation.
+
+Considered and not taken:
+
+- **A `can_save` setting on the form and formset.** A parameter that exists
+  only to switch off something access already granted.
+- **A draft level in the access cascade**, between `VIEW` and `ADD`: edit and
+  validate, never save. It fixes the cause, since typing and validating write
+  nothing, at the cost of a fifth level in an enum compared throughout Glue
+  and its client.
+- **The owner authorizing its children's calls** through its own
+  `is_authorized()`. A child is authorized against its own address and token,
+  with no ancestor authority, and the owner would have to be rebuilt on every
+  child call.
+- **A row asking its formset's `is_authorized()`.** Narrower, but leaves a
+  `Glue.form()` child with nowhere to put the rule.
+
+**Decision: no Glue change for now.** A form whose owner saves it overrides
+`save()` on the form class to do nothing, as Profitly's invoice line form does.
+One page needs this today. Revisit when a second owner-saved form appears, or
+when a stray `save` would succeed and matter.
+
 ## Open — pending discussion
 
 ### Collection-row policy size

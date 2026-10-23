@@ -1,5 +1,166 @@
 # Changelog for Django Glue
 
+## v1.3.0
+
+### Features
+
+- A Django middleware can guard Glue calls with a `process_glue_call(request,
+  glue_call)` method (ADR 035). Glue runs it for every object in a call, before
+  the object is rebuilt, against the path of the page or `Glue.view` fragment
+  that issued the object. A rule a project enforces by URL, such as membership
+  of the company named in the URL, then also governs calls, with one class:
+
+  ```python
+  class CompanyMiddleware(GlueMiddlewareMixin):
+      def process_view(self, request, view_func, view_args, view_kwargs):
+          company_uuid = view_kwargs.pop('company_uuid', None)
+          if company_uuid is not None and not is_member(request, company_uuid):
+              raise Http404
+
+      def process_glue_call(self, request, glue_call):
+          company_uuid = glue_call.origin.kwargs.get('company_uuid')
+          if company_uuid is not None and not is_member(request, company_uuid):
+              raise Http404
+  ```
+
+  `glue_call.origin` is the resolved `ResolverMatch` of that path. Raising
+  `PermissionDenied` or `Http404` refuses that object with `not_authorized`;
+  the other objects in the call go ahead. The hook covers every Glue object,
+  including `Glue.model()`, `Glue.form()` and `Glue.queryset()` objects, whose
+  `is_authorized()` a project cannot override. Glue finds the hook on any class
+  in `MIDDLEWARE`; `GlueMiddlewareMixin` documents it.
+
+- `Glue.child` declares a child Glue object (ADR 034). The method initializes
+  the child and its return annotation names the Glue object:
+
+  ```python
+  @Glue.child
+  def header(self) -> Glue.Form:
+      return Glue.form(target=InvoiceHeaderForm(), access=self.access)
+  ```
+
+  On a component, a child declared this way that the user may change (any
+  access above `VIEW`) is submitted with every call the component makes.
+  Reading the child during that call returns it with the user's unsaved
+  changes applied, so one call can validate and save several forms and
+  formsets together. What a read child derives from those changes, such as a
+  form's errors, returns in the same response.
+
+- The Glue object types are on `Glue`, for annotations: `Glue.Form`,
+  `Glue.Model`, `Glue.QuerySet` and `Glue.Sequence`, beside `Glue.FormSet` and
+  `Glue.Component`. `Glue.Operation` and `Glue.OperationKind` are the types
+  `is_authorized()` receives. Nothing needs importing from inside
+  `django_glue.glue` to write a component.
+
+- A Glue form and a Glue formset have `is_valid()` and `cleaned_data`, as a
+  Django form and formset do. `is_valid()` validates as `validate()` does and
+  returns a boolean, so Django's `all_valid()` checks several of them at once.
+  A formset's `cleaned_data` is one dict per row.
+
+- A Glue formset takes `extra`, the number of blank rows it starts with after
+  any it was seeded with, set on the class or passed in. It defaults to 0. An
+  extra row is validated like any other row: unlike a Django formset, an
+  untouched one is not skipped.
+
+- A formset asks for access by whether its records are saved, as a single form
+  does. Adding a row and removing a new row need `ADD`. Validating and saving
+  need `ADD` while every row is new, and `CHANGE` once the formset holds a
+  saved record. All four needed `CHANGE` before, so a formset with `CHANGE`
+  access is unaffected. Removing a saved record still needs `DELETE`.
+
+- A Django view decorator can guard a component from `is_authorized()`, applied
+  with `method_decorator` (ADR 033):
+
+  ```python
+  @method_decorator(permission_required('entries.view_entry'))
+  def is_authorized(self, request, operation):
+      return True
+  ```
+
+  The rule then covers the page load, a `{% glue_component %}` stamp and every
+  later call, and the URL pattern no longer needs `as_view()` wrapped in the
+  decorator. A page load the decorator denies responds the way the decorator
+  answered, so `login_required` redirects to the login page.
+
+- `$dispatch(name, detail)` raises one of an object's declared events from the
+  browser, with no call to the server. It reaches the object's `$on()`
+  listeners, the DOM event from a component's root, and any component that
+  re-renders on or listens for the event, and makes a request only for the
+  last. See [declared events](../guides/advanced/event_listeners.md).
+
+- An error on one object's call carries the same `status` and `details` as an
+  error that fails a whole request. On the client they are `error.status` and
+  `error.details` on the `GlueAddressError` the call rejects with, so a handler
+  can tell a missing row from a denial without matching on the code.
+
+- A password field in a Glue form is write-only (ADR 036). A field whose
+  widget is a `PasswordInput` with `render_value=False`, Django's default,
+  takes the user's value with each call but is never sent back: it is not in
+  the policy token, the response, or the form's signed initial. The browser
+  keeps what the user typed, even after a failed submission, and sends it with
+  every call the form makes. A call that carries one hides its body from
+  Django's error reports, as `@sensitive_post_parameters` does for a form post.
+  `PasswordInput(render_value=True)` keeps the old behaviour, as it does in
+  Django.
+
+### Deprecations
+
+- `Glue.property` on a method that returns a Glue object warns: declare the
+  child with `Glue.child`. The child keeps working as it did, and is not
+  submitted with its component's calls. In django-glue 2.0 `Glue.property`
+  only computes values.
+
+### Changes
+
+- The client is written in TypeScript. The bundle keeps its path
+  (`django_glue/js/django_glue.js`), its globals and its API, so a project
+  using it changes nothing. Its source moved from `.js` to `.ts` files under
+  `client_js/`, with the wire format it shares with the server described in
+  `client_js/src/wire.ts`. `just js-typecheck` checks it, and CI runs the
+  check before building the bundle.
+
+- A policy token records the path that issued its object. Tokens issued by an
+  earlier version have none and are refused, so an open page whose objects
+  were issued before the upgrade needs reloading once.
+
+- `django_glue.middleware` is a package. `django_glue.middleware.GlueViewMiddleware`
+  is imported and listed in `MIDDLEWARE` as before.
+
+- A component callable that returns `Glue.RedirectResponse` no longer
+  re-renders its component, even when it changed a retained value (ADR 037).
+  The browser follows the redirect, so the render was never shown. A callable
+  that logs the user in and redirects therefore no longer has its component
+  re-checked as the new user.
+
+### Fixes
+
+- A validly signed token whose payload has the wrong shape is refused as an
+  invalid policy. It made the call fail with a server error.
+
+- A formset validated and then saved in the same call saves a changed saved
+  record. Validating wrote the new values onto the record, so the save that
+  followed saw nothing changed and skipped it.
+
+- An error of status 500 or above on one object's call no longer sends its own
+  message to the browser unless `DEBUG` is on. It sends "An unexpected Glue
+  server error occurred.", as a failed request already did.
+
+- `is_authorized()` authorizes only by returning `True`. Glue accepted any
+  truthy value, so a view decorator placed on the method, which answers a
+  denial with a redirect response, authorized the request it meant to deny.
+  A response returned from `is_authorized()`, or `PermissionDenied` raised
+  from it, is now a denial.
+
+  An `is_authorized()` that returns something other than `True`, `False` or a
+  response now raises `TypeError`. Return a boolean, for example
+  `return owner is not None` in place of `return owner`.
+
+- Verifying a model parameter no longer raises `RecursionError` when its
+  initializer loads a one-to-one with `select_related`. Django caches each side
+  of a one-to-one on the other, and the check that names what a supplied row is
+  missing followed that loop without end. It affected only requests that verify
+  model parameters: `DEBUG`, or `DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True`.
+
 ## v1.2.2
 
 ### Breaking

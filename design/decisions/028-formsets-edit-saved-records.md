@@ -118,8 +118,15 @@ formset. A client cannot name a record the application did not put in the
 formset.
 
 **Removing a saved row requires `DELETE`; removing an unsaved row requires
-`CHANGE`.** The check runs in `pop`, before anything is recorded, so a refused
+`ADD`.** The check runs in `pop`, before anything is recorded, so a refused
 removal leaves the row on the page.
+
+**The other actions ask by whether a record is saved, as a single form does
+(ADR 009).** `append` requires `ADD`. `validate` and `save` require `ADD` while
+every row is new, and `CHANGE` once the formset holds a saved record or has
+removed one. Until 1.3.0 all four required `CHANGE`, so a formset that only
+creates rows could not be used with `ADD` access, and its owner had to give it
+more access than the user had.
 
 **`save` is all-or-nothing.** It validates every row first. If any row is
 invalid it saves nothing, deletes nothing, and returns `{'valid': False}`, and

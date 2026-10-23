@@ -190,6 +190,56 @@ def test_verification_names_a_missing_nested_load_by_its_path(mock_request, gori
         _ = component.fight
 
 
+class Champion(models.Model):
+    class Meta:
+        app_label = 'gorilla'
+        managed = False
+
+
+class Belt(models.Model):
+    holder = models.OneToOneField(Champion, on_delete=models.CASCADE, related_name='belt')
+
+    class Meta:
+        app_label = 'gorilla'
+        managed = False
+
+
+def belt_held_by_a_champion(pk: int, **champion_annotations: Any) -> Belt:
+    """A belt as ``select_related('holder')`` loads it: each side of a one-to-one caches the other."""
+    belt = Belt(pk=pk, holder_id=pk)
+    champion = Champion(pk=pk)
+    vars(champion).update(champion_annotations)
+    Belt.holder.field.set_cached_value(belt, champion)
+    Belt.holder.field.remote_field.set_cached_value(champion, belt)
+    return belt
+
+
+class BeltCardComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.ComponentParameter
+    def belt(self, pk: int) -> Belt:
+        return belt_held_by_a_champion(pk, title_count=3)
+
+
+def test_verification_accepts_a_one_to_one_whose_sides_cache_each_other(mock_request, settings) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True
+    supplied = belt_held_by_a_champion(1, title_count=3)
+    component = Glue.object(mock_request, BeltCardComponent(belt=supplied))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', GlueModelParameterMismatchWarning)
+        assert component.belt is supplied
+
+
+def test_verification_names_a_missing_load_across_a_one_to_one(mock_request, settings) -> None:
+    settings.DJANGO_GLUE_VERIFY_MODEL_PARAMETERS = True
+    component = Glue.object(mock_request, BeltCardComponent(belt=belt_held_by_a_champion(1)))
+
+    with pytest.warns(GlueModelParameterMismatchWarning, match='without holder__title_count,'):
+        _ = component.belt
+
+
 def test_model_parameter_is_not_client_callable(mock_request, loaded_gorilla) -> None:
     component = Glue.object(mock_request, GorillaCardComponent(gorilla=loaded_gorilla))
 

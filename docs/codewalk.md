@@ -16,11 +16,11 @@ parameters, retained state, and child mapping. `resolver/attribute_call/`
 validates the flat `objects` request envelope and processes each address.
 `response.py` serializes addressed entries, results, and effects.
 
-In the browser, `client_js/src/client.js` installs named roots and dispatches
-responses. `client_js/src/runtime/addressRegistry.js` owns one live proxy per
+In the browser, `client_js/src/client.ts` installs named roots and dispatches
+responses. `client_js/src/runtime/addressRegistry.ts` owns one live proxy per
 address; the neighboring runtime modules materialize attributes, bind child
 paths, and reconcile state. The `proxies/` modules add family behavior.
-`client_js/src/htmlRenderer.js` morphs returned HTML after introduced objects
+`client_js/src/htmlRenderer.ts` morphs returned HTML after introduced objects
 are registered.
 
 Read [Architecture](architecture.md) for the wire and lifecycle overview.

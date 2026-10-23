@@ -28,9 +28,49 @@ field descriptions and current validation errors. An invalid `validate()` or
 the draft into a server-side session object. A successful model-form save
 advances its target identity in the successor policy.
 
+A form class can declare its own action as a Glue callable. It runs on the form
+bound with the user's draft, so `self.is_valid()` validates what the user typed
+and its errors reach `$fields` as `validate()`'s do. A parameter named `request`
+receives the request:
+
+```python
+class SignUpForm(forms.Form):
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput)
+
+    @Glue.attr(required_access=Glue.Access.ADD)
+    def submit(self, request: HttpRequest) -> Glue.Response | None:
+        if not self.is_valid():
+            return None
+        user = create_account(self.cleaned_data['email'], self.cleaned_data['password'])
+        login(request, user)
+        return Glue.RedirectResponse('home:dashboard')
+```
+
+```javascript
+await Glue.form.sign_up.submit()
+```
+
 `editable=` limits which declared form fields accept browser updates. Choice
 fields remain scalar or flat-list values on the wire; Glue rejects nested
 objects in their place. File inputs travel as multipart file parts.
+
+A password field is write-only, as it is in a Django form. A field whose
+widget is a `PasswordInput` keeps its value out of the policy token and out of
+every response, so the password the user typed never comes back from the
+server:
+
+```python
+class SignUpForm(forms.Form):
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput)
+```
+
+The browser keeps the typed value and sends it with each call, so the field
+stays filled in after `validate()` reports an error elsewhere. A call that
+carries it hides its body from Django's error reports. A field that should
+show its value again says so as in Django, with
+`forms.PasswordInput(render_value=True)`.
 
 `Glue.formset()` creates a keyed collection of form children from an importable
 form class or `Glue.FormSet` subclass. It does not wrap a Django `BaseFormSet`
@@ -45,12 +85,32 @@ class EntryFormSet(Glue.FormSet):
     can_delete = True
 ```
 
-The collection starts empty unless it is seeded. Call
+The collection starts empty unless it is seeded. Set `extra` to start with
+blank rows, after any it was seeded with:
+
+```python
+class InvoiceLineFormSet(Glue.FormSet):
+    form_class = InvoiceLineForm
+    min_num = 1
+    extra = 1
+```
+
+`extra` defaults to 0 and can also be passed to the constructor or to
+`Glue.formset()`. Unlike a Django formset, an extra row is validated like any
+other: one the user never touched must be filled in or removed.
+
+Call
 `await formset.append(initial)` to add a row and `await formset.pop(key)` to
 remove one. Each form has its own address and draft; signed membership carries
 rows across requests. `validate()` uses the current child values and enforces
 minimum, maximum, and cross-form rules. A subclass can declare its own save
 action and emit a `Glue.event()` after a successful save.
+
+In Python, a Glue form and a Glue formset answer as Django's do. `is_valid()`
+validates as `validate()` does and returns a boolean, and `cleaned_data` is the
+form's dict, or for a formset one dict per row. Reading a form's `cleaned_data`
+before it is validated raises `AttributeError`. A component uses them to
+[save several forms in one call](components.md#save-several-forms-in-one-call).
 
 ### Editing saved records
 
@@ -79,8 +139,12 @@ Removing a row with `pop` does not delete anything by itself. When the row is a
 saved record, the formset remembers it and `save()` deletes it along with saving
 the rest. Reloading the page before saving brings the row back.
 
-Removing a saved record needs `Glue.Access.DELETE` on the formset. With
-`Glue.Access.CHANGE`, a user can remove rows they added but not saved records.
+Removing a saved record needs `Glue.Access.DELETE` on the formset. With less, a
+user can remove rows they added but not saved records.
+
+A formset that only creates rows needs `Glue.Access.ADD`: that is enough to add
+rows, remove them, validate and save. Once the formset holds a saved record,
+validating and saving need `Glue.Access.CHANGE`.
 
 ### New rows that belong to a record
 

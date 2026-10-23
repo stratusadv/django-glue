@@ -13,6 +13,7 @@ from django_glue.exceptions import (
 )
 from django_glue.glue import policy
 from django_glue.glue.registry import glue_class_registry
+from django_glue.middleware.call import run_glue_call_hooks
 from django_glue.resolver.attribute_call.context import (
     AddressedObjectEntry,
     AttributeCallBatchContext,
@@ -20,6 +21,7 @@ from django_glue.resolver.attribute_call.context import (
     AttributeCallRequestContext,
 )
 from django_glue.resolver.base import GlueResolver
+from django_glue.response import GlueResponse
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -97,9 +99,11 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             target_attribute_call_kwargs=entry.call.kwargs if entry.call else {},
             reintroduce=entry.reintroduce,
             mounted=entry.mounted,
+            child_submissions=entry.child_submissions,
         )
         try:
             decoded.verify_request(context.request)
+            run_glue_call_hooks(call_context, context.resolved_origins)
             glue_object = glue_class_registry.get_glue_class(decoded.namespace).from_attribute_call_resolver_context(
                 call_context
             )
@@ -113,5 +117,5 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
     def _error_entry(entry: AddressedObjectEntry, error: GlueError) -> dict[str, Any]:
         return {
             'address': entry.address,
-            'error': {'code': error.code, 'message': str(error)},
+            'error': GlueResponse.error_data(error),
         }
