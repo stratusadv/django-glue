@@ -179,6 +179,15 @@ irrelevant because that copy is never read.
 
 A browser-carried value is therefore safe in one of three ways: signed,
 admitted as an editable update and revalidated before domain use, or ignored.
+
+A secret is the exception to "yes". A `FormGlue` field whose widget is a
+`PasswordInput` with `render_value=False` is **write-only**
+([ADR 036](../../decisions/036-password-inputs-are-write-only.md)): the server
+consumes the browser's value on the request that carries it, but never signs,
+echoes or otherwise emits it, so the client resends it with each call instead
+of the server retaining it. Django's widget is the declaration; nothing is
+signed to say a field is write-only, because the server derives it from the
+form class each time it builds the form.
 `week_of` and `total_hours` look
 identical from the browser — neither can be changed directly — but for opposite
 reasons. `week_of` is signed because the next request consumes it;
@@ -844,6 +853,10 @@ form.$fields.email.errors  // computed field output
 form.$fields.email.label   // static_data
 ```
 
+A write-only field (§2) has the same descriptor plus `"write_only": true`, and
+no leaf in `state_snapshot`: the client keeps its reactive value out of
+canonical state and reconciliation (§5).
+
 The schema's `editable` flag lets the client render the right interface, but it
 is advisory and grants no authority. The server still checks the current
 declaration, signed capability, and current authorization. Fixed field choices
@@ -1058,7 +1071,11 @@ revision, captured when a request is sent:
   while canonical still advances to the server value so the edit remains dirty
   for the next request; and
 - an intentional reset or replacement must be an explicit effect rather than
-  an accidental consequence of merging state.
+  an accidental consequence of merging state; and
+- a write-only leaf (descriptor `write_only: true`, §2) never enters canonical
+  state and is never patched, replaced or deleted by a response: the reactive
+  value is the only copy, so a typed value is a pending update on every call the
+  record makes and survives a failed submission.
 
 Absence is a value, and its meaning is per role. Both `state_snapshot` and
 `computed_data` are complete rather than differential, so a key missing from the
@@ -1558,6 +1575,10 @@ Glue.model(
 - `FormGlue` derives its equivalent set from enabled, non-disabled form fields
   and accepts the same explicit narrowing. The form's own `disabled` flag remains
   authoritative when it is stricter.
+- A `FormGlue` field with a `PasswordInput(render_value=False)` widget is
+  write-only (§2): writable under the same projection, never emitted. Its
+  editable value is admitted as an update and bound for that call only; it is
+  never retained in `state_snapshot` or signed in the identity's `initial`.
 
 The signed capability carries the normalized result, and the server revalidates
 it against current model metadata on every request, exactly as the query

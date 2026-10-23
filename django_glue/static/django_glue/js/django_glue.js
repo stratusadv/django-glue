@@ -5122,6 +5122,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.receivedComputedData = computedData;
       this.canonical = assembleAuthoritative(this.policy, this.computedData);
       this.editablePaths = new Set;
+      this.writeOnlyPaths = new Set;
       this.revisions = new Map;
       this.generation = 0;
       this.owner = null;
@@ -5153,6 +5154,9 @@ ${expression ? 'Expression: "' + expression + `"
         if (!this.revisions.has(path))
           this.revisions.set(path, 0);
       });
+    }
+    setWriteOnlyPaths(paths) {
+      this.writeOnlyPaths = new Set(paths);
     }
     getValue(path) {
       return this.reactiveValues[path];
@@ -5228,6 +5232,8 @@ ${expression ? 'Expression: "' + expression + `"
       this._suppressMutations = true;
       try {
         paths.forEach((path) => {
+          if (this.writeOnlyPaths.has(path))
+            return;
           if (valuesEqual(expected?.[path], authoritative?.[path]))
             return;
           if (this._hasNewerEditableMutation(path, requestCapture, expected))
@@ -5730,6 +5736,7 @@ ${expression ? 'Expression: "' + expression + `"
         });
       });
       record.setEditablePaths(Object.entries(fields).filter(([, descriptor]) => descriptor.editable === true).map(([, descriptor]) => descriptor.value_path));
+      record.setWriteOnlyPaths(Object.entries(fields).filter(([, descriptor]) => descriptor.write_only === true).map(([, descriptor]) => descriptor.value_path));
     }
   }
   var attributeMaterializer_default = GlueAttributeMaterializer;

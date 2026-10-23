@@ -120,6 +120,11 @@ class GlueAttributeMaterializer {
                 .filter(([, descriptor]) => descriptor.editable === true)
                 .map(([, descriptor]) => descriptor.value_path),
         )
+        record.setWriteOnlyPaths(
+            Object.entries(fields)
+                .filter(([, descriptor]) => descriptor.write_only === true)
+                .map(([, descriptor]) => descriptor.value_path),
+        )
     }
 }
 

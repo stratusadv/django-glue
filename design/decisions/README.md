@@ -37,6 +37,7 @@
 | [`033`](033-view-decorators-on-is-authorized.md) | Accepted; implemented on branch | A view decorator placed on `is_authorized()` with `method_decorator` guards a component everywhere: only `True` authorizes, a response or `PermissionDenied` is a denial, and `as_view()` returns the response a denial carries |
 | [`034`](034-glue-child-and-child-submissions.md) | Accepted; implemented on branch | `Glue.child` declares a child Glue object, and a component's call carries each such child the user may change, checked when the call reads it; a child declared with `Glue.property` is deprecated and is not submitted |
 | [`035`](035-middleware-guards-glue-calls-by-origin.md) | Accepted | A policy signs the path that issued its object, and every `MIDDLEWARE` class that defines `process_glue_call(request, glue_call)` runs per entry against that origin, before reconstruction; it may deny the entry but never grant |
+| [`036`](036-password-inputs-are-write-only.md) | Accepted | A `FormGlue` field whose widget is a `PasswordInput` with `render_value=False` is write-only: its value arrives as an update and is never signed, echoed or patched back; the client keeps what was typed and resends it, and the call is marked sensitive |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

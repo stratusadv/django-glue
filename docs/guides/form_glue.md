@@ -32,6 +32,23 @@ advances its target identity in the successor policy.
 fields remain scalar or flat-list values on the wire; Glue rejects nested
 objects in their place. File inputs travel as multipart file parts.
 
+A password field is write-only, as it is in a Django form. A field whose
+widget is a `PasswordInput` keeps its value out of the policy token and out of
+every response, so the password the user typed never comes back from the
+server:
+
+```python
+class SignUpForm(forms.Form):
+    email = forms.EmailField()
+    password = forms.CharField(widget=forms.PasswordInput)
+```
+
+The browser keeps the typed value and sends it with each call, so the field
+stays filled in after `validate()` reports an error elsewhere. A call that
+carries it hides its body from Django's error reports. A field that should
+show its value again says so as in Django, with
+`forms.PasswordInput(render_value=True)`.
+
 `Glue.formset()` creates a keyed collection of form children from an importable
 form class or `Glue.FormSet` subclass. It does not wrap a Django `BaseFormSet`
 instance or a `formset_factory()` class. Configure cross-form behavior on a

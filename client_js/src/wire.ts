@@ -71,6 +71,8 @@ export interface GlueChoice {
 export interface GlueFieldDescriptor {
     value_path: string
     editable: boolean
+    // The server never sends this field's value back (ADR 036).
+    write_only?: boolean
     namespace?: 'field'
     type?: string
     label?: string

@@ -65,7 +65,10 @@ server intersects current declarations, signed permission, the project's
 A hook checks each called object against the resolved path that issued it, so
 a rule the project enforces by URL, such as tenant membership, also governs
 calls; it may refuse an object but never grant one. `VIEW < ADD < CHANGE < DELETE` separates creation
-from edits to persisted objects. Query continuations are signed and bounded
+from edits to persisted objects. The policy is signed, not encrypted, so a
+secret never enters it: a form field with a `PasswordInput` that hides its
+value is write-only, accepted as an update and never signed or echoed back.
+Query continuations are signed and bounded
 before deserialization; the internal unpickler admits only approved classes.
 CSRF protection applies to requests. The policy lifetime is 24 hours from
 issuance by default.

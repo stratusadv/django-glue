@@ -39,6 +39,12 @@ class FormGlue(BaseGlue):
         # fills from its instance. The identity signs the initial this form
         # was given, so a token renewed by a call names the same form.
         self._initial = form.initial
+        # A PasswordInput never renders its value back, so Glue never sends it either (ADR 036).
+        self._write_only = frozenset(
+            name
+            for name, field in form.fields.items()
+            if isinstance(field.widget, forms.PasswordInput) and not field.widget.render_value
+        )
         self.editable = self._normalize_editable(editable)
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
@@ -143,6 +149,8 @@ class FormGlue(BaseGlue):
         }
 
     def _get_form_attribute_value(self, name: str) -> Any:
+        if name in self._write_only:
+            return None
         if name in self._editable_draft:
             return self._editable_draft[name]
         return self.form[name].value()
@@ -160,6 +168,7 @@ class FormGlue(BaseGlue):
             name: field.prepare_value(self._ordered(value)) if field else value
             for name, value in self._initial.items()
             for field in [self.form.fields.get(name)]
+            if name not in self._write_only
         }
 
     @staticmethod
@@ -297,12 +306,19 @@ class FormGlue(BaseGlue):
         super()._load_client_state(state)
         self.form = self._bind_form()
 
+        # A retained draft holds no write-only value, so one in state came in this call's updates.
+        if self.request is not None and self._write_only.intersection(state):
+            sensitive = getattr(self.request, 'sensitive_post_parameters', [])
+            if sensitive != '__ALL__' and 'objects' not in sensitive:
+                self.request.sensitive_post_parameters = [*sensitive, 'objects']
+
     def _get_retained_state(self) -> dict[str, Any]:
         retained = super()._get_retained_state()
 
         retained.update({
             name: self._get_form_attribute_value(name)
             for name in self.editable
+            if name not in self._write_only
         })
 
         return retained

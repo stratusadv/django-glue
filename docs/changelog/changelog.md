@@ -93,6 +93,16 @@
   `error.details` on the `GlueAddressError` the call rejects with, so a handler
   can tell a missing row from a denial without matching on the code.
 
+- A password field in a Glue form is write-only (ADR 036). A field whose
+  widget is a `PasswordInput` with `render_value=False`, Django's default,
+  takes the user's value with each call but is never sent back: it is not in
+  the policy token, the response, or the form's signed initial. The browser
+  keeps what the user typed, even after a failed submission, and sends it with
+  every call the form makes. A call that carries one hides its body from
+  Django's error reports, as `@sensitive_post_parameters` does for a form post.
+  `PasswordInput(render_value=True)` keeps the old behaviour, as it does in
+  Django.
+
 ### Deprecations
 
 - `Glue.property` on a method that returns a Glue object warns: declare the

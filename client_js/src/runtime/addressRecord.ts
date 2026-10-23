@@ -61,6 +61,7 @@ class GlueAddressRecord {
     receivedComputedData: GlueComputedData | null
     canonical: GlueValues
     editablePaths: Set<string>
+    writeOnlyPaths: Set<string>
     revisions: Map<string, number>
     generation: number
     owner: GlueRecordOwner | null
@@ -88,6 +89,7 @@ class GlueAddressRecord {
         this.receivedComputedData = computedData
         this.canonical = assembleAuthoritative(this.policy, this.computedData)
         this.editablePaths = new Set()
+        this.writeOnlyPaths = new Set()
         this.revisions = new Map()
         this.generation = 0
         this.owner = null
@@ -121,6 +123,10 @@ class GlueAddressRecord {
         paths.forEach(path => {
             if (!this.revisions.has(path)) this.revisions.set(path, 0)
         })
+    }
+
+    setWriteOnlyPaths(paths: string[]): void {
+        this.writeOnlyPaths = new Set(paths)
     }
 
     getValue(path: string): unknown {
@@ -209,6 +215,8 @@ class GlueAddressRecord {
         this._suppressMutations = true
         try {
             paths.forEach(path => {
+                // The server never sends a write-only value, so the reactive copy is the only one (ADR 036).
+                if (this.writeOnlyPaths.has(path)) return
                 if (valuesEqual(expected?.[path], authoritative?.[path])) return
                 if (this._hasNewerEditableMutation(path, requestCapture, expected)) return
                 if (!Object.prototype.hasOwnProperty.call(authoritative, path)) {
