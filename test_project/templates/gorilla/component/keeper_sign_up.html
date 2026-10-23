@@ -1,0 +1,8 @@
+<section data-testid="keeper-sign-up">
+    <input aria-label="Name" x-model="component.sign_up_form.name">
+    <div data-testid="name-errors" x-text="component.sign_up_form.$fields.name.errors.join(' ')"></div>
+    <input type="password" aria-label="Password" x-model="component.sign_up_form.password">
+    <input type="password" aria-label="Repeat password" x-model="component.sign_up_form.repeat_password">
+    <button type="button" @click="await component.sign_up()">Sign up</button>
+    <div data-testid="sign-ups">{{ component.sign_ups }}</div>
+</section>

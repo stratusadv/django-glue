@@ -143,6 +143,18 @@ class GorillaNameForm(forms.Form):
     name = forms.CharField(max_length=255)
 
 
+class KeeperSignUpForm(forms.Form):
+    name = forms.CharField(max_length=255)
+    password = forms.CharField(widget=forms.PasswordInput)
+    repeat_password = forms.CharField(widget=forms.PasswordInput)
+
+    def clean(self) -> dict:
+        cleaned_data = super().clean()
+        if cleaned_data.get('password') != cleaned_data.get('repeat_password'):
+            raise forms.ValidationError('The passwords do not match.')
+        return cleaned_data
+
+
 class SkillForm(forms.ModelForm):
     class Meta:
         model = Skill

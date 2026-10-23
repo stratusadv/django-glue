@@ -192,6 +192,38 @@ def test_component_callable_saves_no_child_when_one_is_invalid(
     assert list(alpha.fights_as_red_corner.values_list('name', flat=True)) == ['Alpha vs Beta']
 
 
+def test_password_survives_a_refused_call_and_is_never_sent_back(
+    page: Page,
+    application: Application,
+) -> None:
+    glue_responses = []
+    page.on(
+        'response',
+        lambda response: glue_responses.append(response) if '/__dg__/' in response.url else None,
+    )
+    page.goto(application.url('gorilla:keeper_sign_up', {}))
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    sign_up = page.get_by_test_id('keeper-sign-up')
+    sign_up.get_by_label('Password', exact=True).fill('banana-vault-42')
+    sign_up.get_by_label('Repeat password').fill('banana-vault-42')
+    sign_up.get_by_role('button', name='Sign up').click()
+
+    expect(sign_up.get_by_test_id('name-errors')).to_have_text('This field is required.')
+    expect(sign_up.get_by_test_id('sign-ups')).to_have_text('0')
+    # The refused call re-rendered the component, and what the user typed survives it.
+    expect(sign_up.get_by_label('Password', exact=True)).to_have_value('banana-vault-42')
+    expect(sign_up.get_by_label('Repeat password')).to_have_value('banana-vault-42')
+
+    # Valid only if the browser resends both passwords without the user retyping them.
+    sign_up.get_by_label('Name').fill('Keeper Kim')
+    sign_up.get_by_role('button', name='Sign up').click()
+
+    expect(sign_up.get_by_test_id('sign-ups')).to_have_text('1')
+    assert len(glue_responses) == 2
+    assert all('banana-vault-42' not in response.text() for response in glue_responses)
+
+
 def test_parent_listener_rerenders_when_a_stamped_child_emits(
     page: Page,
     application: Application,

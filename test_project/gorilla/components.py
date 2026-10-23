@@ -5,7 +5,7 @@ from django.forms.formsets import all_valid
 from django.http import HttpRequest
 
 from django_glue import Glue, GlueOperation
-from test_project.gorilla.forms import FightNameForm, GorillaNameForm
+from test_project.gorilla.forms import FightNameForm, GorillaNameForm, KeeperSignUpForm
 from test_project.gorilla.models import Gorilla
 
 
@@ -149,6 +149,22 @@ class GorillaFightsEditorComponent(Glue.Component):
             Gorilla.objects.filter(pk=self.gorilla.pk).update(name=self.name_form.cleaned_data['name'])
             self.fights.save()
         self.saves += 1
+
+
+class KeeperSignUpComponent(Glue.Component):
+    template = 'gorilla/component/keeper_sign_up.html'
+
+    @Glue.child
+    def sign_up_form(self) -> Glue.Form:
+        return Glue.form(target=KeeperSignUpForm(), access=Glue.Access.ADD)
+
+    sign_ups: int = Glue.attr(0)
+
+    @Glue.attr
+    def sign_up(self) -> None:
+        # Both passwords must arrive with the call for the form to be valid.
+        if self.sign_up_form.is_valid():
+            self.sign_ups += 1
 
 
 class CounterBadgeComponent(Glue.Component):
