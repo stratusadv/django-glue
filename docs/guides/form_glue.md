@@ -39,7 +39,7 @@ class SignUpForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput)
 
     @Glue.attr(required_access=Glue.Access.ADD)
-    def sign_up(self, request: HttpRequest) -> Glue.Response | None:
+    def submit(self, request: HttpRequest) -> Glue.Response | None:
         if not self.is_valid():
             return None
         user = create_account(self.cleaned_data['email'], self.cleaned_data['password'])
@@ -48,7 +48,7 @@ class SignUpForm(forms.Form):
 ```
 
 ```javascript
-await Glue.form.sign_up.sign_up()
+await Glue.form.sign_up.submit()
 ```
 
 `editable=` limits which declared form fields accept browser updates. Choice
