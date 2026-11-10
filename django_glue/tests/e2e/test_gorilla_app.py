@@ -309,6 +309,46 @@ def test_fight_page_hydrates_fields_demo(
     }
 
 
+def test_loaded_relation_choices_keep_their_cache_across_calls(
+    page: Page,
+    application: Application,
+    seeded_gorillas: dict,
+) -> None:
+    """
+    Loading a relation field's choices runs its query, and a later call on the
+    form must still name the same cache. A key that changed once the choices
+    loaded sent an open dropdown back to an empty cache, so its options were
+    re-rendered under the user's click.
+    """
+    del seeded_gorillas
+
+    demo = DemoSession.start(page, application, shot_directory_name='fight-relation-choice-cache')
+    demo.goto('fight:schedule')
+    page.wait_for_function('window.Glue && window.Alpine')
+
+    cache = page.evaluate(
+        """async () => {
+            const form = window.Glue.form.fight_form;
+            const field = form.$fields.red_corner;
+            const keyBeforeLoading = field.choices_cache_key;
+            await field.ensureChoices();
+            const keyAfterLoading = field.choices_cache_key;
+            await form.validate();
+            return {
+                keyBeforeLoading,
+                keyAfterLoading,
+                keyAfterValidating: field.choices_cache_key,
+                choices: field.choices.map((choice) => choice.label),
+            };
+        }"""
+    )
+
+    assert cache['keyBeforeLoading']
+    assert cache['keyAfterLoading'] == cache['keyBeforeLoading']
+    assert cache['keyAfterValidating'] == cache['keyBeforeLoading']
+    assert cache['choices'] == ['Alpha Atlas', 'Beta Boulder', 'Gamma Grove']
+
+
 def test_searchable_choice_retains_selection_after_search_clears_demo(
     page: Page,
     application: Application,
