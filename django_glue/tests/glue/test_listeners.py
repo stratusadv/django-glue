@@ -318,13 +318,14 @@ def test_receive_travels_the_ordinary_call_endpoint(mock_request) -> None:
 
 
 def test_listener_must_be_declared_on_a_component() -> None:
-    with pytest.raises(RuntimeError) as raised:
+    # Python 3.11 wraps an error raised in __set_name__ in RuntimeError; 3.12 and later raise it as is.
+    with pytest.raises((RuntimeError, GlueComponentRegistrationError)) as raised:
         class NotAComponent:
             @Glue.listener(CounterCardComponent.counted)
             def heard(self) -> None:
                 pass
 
-    assert isinstance(raised.value.__cause__, GlueComponentRegistrationError)
+    assert isinstance(raised.value.__cause__ or raised.value, GlueComponentRegistrationError)
 
 
 def test_listener_takes_declared_events_only() -> None:
