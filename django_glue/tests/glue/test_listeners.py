@@ -318,7 +318,7 @@ def test_receive_travels_the_ordinary_call_endpoint(mock_request) -> None:
 
 
 def test_listener_must_be_declared_on_a_component() -> None:
-    # Python 3.11 wraps an error raised in __set_name__ in RuntimeError; 3.12 and later raise it as is.
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
     with pytest.raises((RuntimeError, GlueComponentRegistrationError)) as raised:
         class NotAComponent:
             @Glue.listener(CounterCardComponent.counted)

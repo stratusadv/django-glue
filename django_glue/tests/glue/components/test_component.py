@@ -595,7 +595,7 @@ def test_skip_rerender_is_rejected_on_a_value_attribute() -> None:
 def test_skip_rerender_is_rejected_off_a_component() -> None:
     from django.db import models
 
-    # Python 3.11 wraps an error raised in __set_name__ in RuntimeError; 3.12 and later raise it as is.
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
     with pytest.raises((RuntimeError, TypeError)) as glue_object:
         class NotAComponentGlue(BaseGlue):
             namespace = 'notAComponent'

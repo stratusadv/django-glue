@@ -79,7 +79,7 @@ def test_component_parameter_is_a_shortcut_for_attr_parameter() -> None:
 
 
 def test_parameter_on_non_component_glue_object_raises() -> None:
-    # Python 3.11 wraps an error raised in __set_name__ in RuntimeError; 3.12 and later raise it as is.
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
     with pytest.raises((RuntimeError, TypeError)) as exc_info:
 
         class NonComponentParameterGlue(BaseGlue):

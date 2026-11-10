@@ -549,7 +549,7 @@ def test_session_attr_rejects_a_method_or_property() -> None:
 
 
 def test_session_attr_on_a_non_component_raises() -> None:
-    # Python 3.11 wraps an error raised in __set_name__ in RuntimeError; 3.12 and later raise it as is.
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
     with pytest.raises((RuntimeError, TypeError)) as raised:
 
         class NonComponentSessionGlue(BaseGlue):
