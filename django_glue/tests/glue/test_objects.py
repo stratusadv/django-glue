@@ -1983,6 +1983,22 @@ class DjangoFormGlueObjectTestCase(TestCase):
             GlueRelatedModelChoices(queryset.all()).fingerprint(),
         )
 
+    def test_choice_queryset_fingerprint_is_stable_once_the_query_has_run(self):
+        """Running a query caches state on it, which must not change its fingerprint."""
+        queryset = Skill.objects.filter(name='Visible')
+        before = GlueRelatedModelChoices(queryset).fingerprint()
+
+        list(queryset)
+        str(queryset.query)
+
+        self.assertEqual(GlueRelatedModelChoices(queryset).fingerprint(), before)
+
+    def test_choice_queryset_fingerprint_tells_an_empty_queryset_apart(self):
+        self.assertNotEqual(
+            GlueRelatedModelChoices(Skill.objects.none()).fingerprint(),
+            GlueRelatedModelChoices(Skill.objects.all()).fingerprint(),
+        )
+
     def test_choice_queryset_fingerprint_includes_query(self):
         visible_queryset = Glue.choices(
             Skill.objects.filter(name='Visible'),

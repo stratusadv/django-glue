@@ -34,6 +34,13 @@
   [choice querysets](../decisions/choice-querysets.md) describes, so fields
   share choices only when their querysets match.
 
+- A choice queryset's fingerprint stays the same once its query has run. It
+  hashed the pickled Django `Query`, which caches state the first time it is
+  compiled, so a field's `choices_cache_key` changed after its choices loaded.
+  An open dropdown then switched between two caches, one of them empty, and
+  re-rendered under the user's click. The fingerprint now hashes the query's
+  SQL and parameters.
+
 ## v1.3.0
 
 ### Features
