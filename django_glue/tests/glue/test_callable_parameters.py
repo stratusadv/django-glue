@@ -278,7 +278,7 @@ def test_client_cannot_supply_injected_request(
     assert error.value.details()['arguments'] == ['request']
 
 
-def test_missing_required_parameter_raises(
+def test_missing_required_argument_is_invalid_kwargs(
     mock_request: HttpRequest,
 ) -> None:
     glue_object = Glue.object(
@@ -290,8 +290,11 @@ def test_missing_required_parameter_raises(
         'required',
     )
 
-    with pytest.raises(ValueError, match="missing required argument: 'volume'"):
+    with pytest.raises(GlueRequestError) as error:
         glue_object.process_attribute_call(context)
+
+    assert error.value.code == 'invalid_kwargs'
+    assert error.value.details() == {'attribute': 'required', 'argument': 'volume'}
 
 
 def test_dotted_namespace_call_uses_bound_provider(

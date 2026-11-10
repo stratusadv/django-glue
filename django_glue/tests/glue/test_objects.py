@@ -1671,7 +1671,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         payload, _introduced = glue_object.process_attribute_call(context)
 
         self.assertEqual(payload['computed_data']['fields']['name'], {'errors': []})
-        self.assertEqual(payload['computed_data']['fields']['skill'], {'errors': []})
+        self.assertEqual(payload['computed_data']['fields']['skill']['errors'], [])
 
     def test_form_foreign_key_choices_returns_configured_choices(self):
         from django import forms
@@ -1700,6 +1700,29 @@ class DjangoFormGlueObjectTestCase(TestCase):
             'label': 'Grappling',
             'obj': {'pk': skill.pk, '__str__': 'Grappling'},
         }])
+
+    def test_unsearchable_choices_share_a_cache_key_only_with_the_same_queryset(self):
+        """
+        A form that narrows a field's queryset per instance, such as one leaving
+        out the row being edited, must not hand its choices to the next form.
+        """
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Skill.objects.all())
+
+        grappling = Skill.objects.create(name='Grappling')
+
+        def cache_key(queryset: QuerySet) -> str:
+            form = SkillForm()
+            form.fields['skill'].queryset = queryset
+            glue_object = with_request(FormGlue(form, **glue_context(name='skill-form')))
+            return glue_object.attributes['skill'].computed_data()['choices_cache_key']
+
+        every_skill = cache_key(Skill.objects.all())
+
+        self.assertEqual(every_skill, cache_key(Skill.objects.all()))
+        self.assertNotEqual(every_skill, cache_key(Skill.objects.exclude(pk=grappling.pk)))
 
     def test_unsearchable_foreign_key_choices_returns_every_row(self):
         from django import forms
@@ -1958,6 +1981,22 @@ class DjangoFormGlueObjectTestCase(TestCase):
         self.assertEqual(
             GlueRelatedModelChoices(queryset).fingerprint(),
             GlueRelatedModelChoices(queryset.all()).fingerprint(),
+        )
+
+    def test_choice_queryset_fingerprint_is_stable_once_the_query_has_run(self):
+        """Running a query caches state on it, which must not change its fingerprint."""
+        queryset = Skill.objects.filter(name='Visible')
+        before = GlueRelatedModelChoices(queryset).fingerprint()
+
+        list(queryset)
+        str(queryset.query)
+
+        self.assertEqual(GlueRelatedModelChoices(queryset).fingerprint(), before)
+
+    def test_choice_queryset_fingerprint_tells_an_empty_queryset_apart(self):
+        self.assertNotEqual(
+            GlueRelatedModelChoices(Skill.objects.none()).fingerprint(),
+            GlueRelatedModelChoices(Skill.objects.all()).fingerprint(),
         )
 
     def test_choice_queryset_fingerprint_includes_query(self):
@@ -3047,6 +3086,21 @@ class RelationProjectionTestCase(TestCase):
         assert GlueRelatedModelChoices(choice_queryset).fingerprint() in computed[
             'choices_cache_key'
         ]
+
+    def test_unsearchable_choices_share_a_cache_key_only_with_the_same_queryset(self) -> None:
+        def cache_key(queryset: QuerySet) -> str:
+            glue_object = with_request(ModelGlue(
+                self.fight,
+                **glue_context(name='fight'),
+                fields=['red_corner'],
+                choices={'red_corner': Glue.choices(queryset)},
+            ))
+            return glue_object.attributes['red_corner'].computed_data()['choices_cache_key']
+
+        everyone = cache_key(Gorilla.objects.all())
+
+        assert everyone == cache_key(Gorilla.objects.all())
+        assert everyone != cache_key(Gorilla.objects.exclude(pk=self.red.pk))
 
     def test_flat_many_to_many_is_raw_membership(self) -> None:
         grappling = Skill.objects.create(name='Grappling')

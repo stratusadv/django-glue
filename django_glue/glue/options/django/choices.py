@@ -6,7 +6,7 @@ import pickle
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
-from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError
 from django.db.models import Model, Q, QuerySet
 from django.template import Context, Template
 from django.template.response import TemplateResponse
@@ -73,12 +73,19 @@ class GlueRelatedModelChoices:
         return bool(self.options.search_fields)
 
     def fingerprint(self) -> str:
-        query = self.queryset.query.clone()
-        if hasattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE):
-            delattr(query, QUERYSET_CHOICE_OPTIONS_ATTRIBUTE)
+        """
+        A hash of the query's SQL and parameters, the effective options and the
+        value field. The query is hashed as SQL rather than as a pickled Query,
+        because running a query caches state on it that would change the hash.
+        """
+        try:
+            sql_with_params = self.queryset.query.clone().sql_with_params()
+        except EmptyResultSet:
+            sql_with_params = None
 
         fingerprint_value = (
-            query,
+            self.queryset.model._meta.label_lower,
+            sql_with_params,
             self.options,
             self.value_field_name,
         )

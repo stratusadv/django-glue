@@ -1,5 +1,46 @@
 # Changelog for Django Glue
 
+## v1.3.1
+
+### Fixes
+
+- A form's, model's or queryset's declared events now reach the components
+  that list them in `rerender_on` (ADR 039), as the events guide promised.
+  Before, only a component's events were delivered, so a summary listing a
+  form's `saved` never re-rendered:
+
+  ```python
+  class TaskSummaryComponent(Glue.Component):
+      template = 'tasks/component/summary.html'
+      rerender_on = (TaskForm.saved,)
+  ```
+
+  Listeners still hear only their component descendants. `$dispatch()` on any
+  object reaches the same components a fired event does.
+
+- An event assigned to a second class attribute keeps the name and identity of
+  the class that declared it, instead of being renamed in place.
+
+- A call that leaves out an argument with no default fails that object with
+  `invalid_kwargs`. It raised `ValueError`, which failed the whole request with
+  a server error, every other object in it included.
+
+- A relation field without search fields keeps its own choices when another
+  form or model on the page narrows the same field differently. The browser
+  shared one cached list per form class, model and field, so a form that leaves
+  out the row being edited showed the first edited row's list to every later
+  one. Every queryset-backed relation field now carries a `choices_cache_key`
+  that includes its query's fingerprint, as
+  [choice querysets](../decisions/choice-querysets.md) describes, so fields
+  share choices only when their querysets match.
+
+- A choice queryset's fingerprint stays the same once its query has run. It
+  hashed the pickled Django `Query`, which caches state the first time it is
+  compiled, so a field's `choices_cache_key` changed after its choices loaded.
+  An open dropdown then switched between two caches, one of them empty, and
+  re-rendered under the user's click. The fingerprint now hashes the query's
+  SQL and parameters.
+
 ## v1.3.0
 
 ### Features

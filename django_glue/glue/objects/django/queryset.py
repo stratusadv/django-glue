@@ -300,6 +300,10 @@ class QuerySetGlue(
         # queryset instance as `self` inside the method.
         return (self.queryset,)
 
+    @classmethod
+    def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
+        return (cls, _resolve_queryset_class(policy.identity.get('queryset_class_path')))
+
     @property
     def _model_meta(self) -> Any:
         """Return the Django model's _meta options."""

@@ -54,6 +54,7 @@ function createStaticData(overrides = {}) {
         },
         ...(overrides.params ? {params: overrides.params} : {}),
         ...(overrides.events ? {events: overrides.events} : {}),
+        ...(overrides.event_ids ? {event_ids: overrides.event_ids} : {}),
         ...(overrides.children ? {children: overrides.children} : {}),
     }
 }

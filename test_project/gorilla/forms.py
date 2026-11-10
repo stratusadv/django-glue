@@ -155,6 +155,18 @@ class KeeperSignUpForm(forms.Form):
         return cleaned_data
 
 
+class KeeperNoteForm(forms.Form):
+    """A form that announces each note it saves, for components that re-render on it."""
+
+    note = forms.CharField(max_length=255)
+    saved = Glue.event()
+
+    @Glue.attr(required_access=Glue.Access.ADD)
+    def save_note(self) -> None:
+        if self.is_valid():
+            self.saved(note=self.cleaned_data['note'])
+
+
 class SkillForm(forms.ModelForm):
     class Meta:
         model = Skill
