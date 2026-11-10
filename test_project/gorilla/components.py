@@ -5,7 +5,7 @@ from django.forms.formsets import all_valid
 from django.http import HttpRequest
 
 from django_glue import Glue, GlueOperation
-from test_project.gorilla.forms import FightNameForm, GorillaNameForm, KeeperSignUpForm
+from test_project.gorilla.forms import FightNameForm, GorillaNameForm, KeeperNoteForm, KeeperSignUpForm
 from test_project.gorilla.models import Gorilla
 
 
@@ -181,3 +181,18 @@ class CounterBadgeOwnerComponent(Glue.Component):
     @Glue.child
     def badge(self) -> CounterBadgeComponent:
         return self.badge_value
+
+
+class KeeperNoteCountComponent(Glue.Component):
+    """Re-renders when a keeper note form anywhere on the page saves."""
+
+    template = 'glue_template_test.html'
+    rerender_on = (KeeperNoteForm.saved,)
+
+
+class KeeperNoteListenerComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+    @Glue.listener(KeeperNoteForm.saved)
+    def note_saved(self) -> None:
+        pass

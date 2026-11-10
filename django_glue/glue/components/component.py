@@ -29,7 +29,7 @@ from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_regis
 from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.components.session import ComponentSession
 from django_glue.glue.context import GlueContextManager
-from django_glue.glue.event import GlueEvent
+from django_glue.glue.event import GlueEvent, declared_event_identities
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
 from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
@@ -97,16 +97,6 @@ def _reactions(component_class: type[Component]) -> dict[str, list[str]]:
         }),
     }
     return {key: identities for key, identities in reactions.items() if identities}
-
-
-@cache
-def _event_identities(component_class: type[Component]) -> dict[str, str]:
-    """Each event the class declares or inherits, by name, mapped to its identity (ADR 024)."""
-    return {
-        name: declaration.identity
-        for name, declaration in inspect.getmembers_static(component_class)
-        if isinstance(declaration, GlueEvent)
-    }
 
 
 class Component(BaseGlue):
@@ -326,14 +316,17 @@ class Component(BaseGlue):
                 setattr(component, key, glue_serializer_registry.decode(value, annotation))
         return component
 
+    @classmethod
+    def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
+        return (component_registry.from_identifier(policy.identity['component_id']),)
+
     def get_static_data(self) -> dict[str, Any]:
-        """Adds the identities of the events this component emits, re-renders
-        on, and listens for, which the client uses to route events (ADR 024,
-        ADR 025): ``rerender_on`` page-wide, ``listeners`` to ancestors only."""
+        """
+        Adds the identities of the events this component re-renders on and
+        listens for, which the client uses to route events (ADR 024, ADR 025):
+        ``rerender_on`` page-wide, ``listeners`` to ancestors only.
+        """
         static_data = super().get_static_data()
-        event_identities = _event_identities(type(self))
-        if event_identities:
-            static_data['event_ids'] = event_identities
         static_data.update(_reactions(type(self)))
         for path, slot in static_data.get('children', {}).items():
             if self._bound_attributes[path].definition.is_declared_child:
@@ -648,13 +641,18 @@ class Component(BaseGlue):
         self,
         call_context: AttributeCallRequestContext,
     ) -> list[tuple[str, ReceivedEvent[Any], bool]]:
-        """Verify each delivered event's source before any listener runs.
-
-        The source token must be genuine, issued to this session and user to a
-        component, and belong to a class that declares or inherits the event.
-        Each event comes back with whether its source names this component
-        among its signed ancestors. The detail stays untrusted.
         """
+        Verify each delivered event's source before any listener runs.
+
+        The source token must be genuine and issued to this session and user,
+        and the source must declare or inherit the event, on its own class or
+        an attribute provider's (ADR 039). Any Glue object may be the source.
+        Each event comes back with whether its source names this component
+        among its signed ancestors, which only a component's token can. The
+        detail stays untrusted.
+        """
+        from django_glue.glue.registry import glue_class_registry  # noqa: PLC0415
+
         kwargs = call_context.target_attribute_call_kwargs
         deliveries = kwargs.get('events')
         if set(kwargs) != {'events'} or not isinstance(deliveries, list) or not deliveries:
@@ -677,15 +675,18 @@ class Component(BaseGlue):
                 )
             source_policy = GluePolicy.from_token(delivery['source_token'])
             source_policy.verify_request(call_context.request)
-            if source_policy.namespace != self.namespace:
+            try:
+                glue_class = glue_class_registry.get_glue_class(source_policy.namespace)
+            except KeyError as error:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_KWARGS,
-                    message='The event source is not a component.',
+                    message='The event source is not a Glue object.',
                     details={'source': source_policy.address},
-                )
-            source_class = component_registry.from_identifier(source_policy.identity['component_id'])
+                ) from error
+            declaring_classes = glue_class.event_declaring_classes(source_policy)
+            source_class = declaring_classes[0]
             names_by_identity = {
-                identity: name for name, identity in _event_identities(source_class).items()
+                identity: name for name, identity in declared_event_identities(*declaring_classes).items()
             }
             if delivery['event'] not in names_by_identity:
                 raise GlueRequestError(

@@ -92,9 +92,11 @@ class FormFieldAdapter(GlueAttributeAdapter):
         return glue_serializer_registry.decode(value, self.field)
 
     def computed_data(self) -> dict[str, Any]:
-        """Complete current state-dependent output (state-model.md §10
-        `$fields`): the current selection and the field's validation errors.
-        Emitted only when the adapter re-derived this request."""
+        """
+        Complete current state-dependent output (state-model.md §10 `$fields`):
+        the current selection, the choices cache key, and the field's validation
+        errors. Emitted only when the adapter re-derived this request.
+        """
         output = {'errors': self.owner._field_errors.get(self.name, [])}
         if not hasattr(self.field, 'queryset'):
             return output
@@ -102,6 +104,11 @@ class FormFieldAdapter(GlueAttributeAdapter):
         related_choices = GlueRelatedModelChoices(
             self.field.queryset,
             value_field_name=getattr(self.field, 'to_field_name', None),
+        )
+        form_class = type(self.owner.form)
+        output['choices_cache_key'] = (
+            f'{form_class.__module__}.{form_class.__qualname__}.{self.name}.'
+            f'{self.field.queryset.model._meta.label_lower}.{related_choices.fingerprint()}'
         )
         if not related_choices.is_searchable:
             return output
@@ -190,13 +197,13 @@ class ModelFieldAdapter(GlueAttributeAdapter):
             choice_queryset,
             value_field_name=self.owner._choice_value_field_name_for_field(field_name),
         )
-        if not related_choices.is_searchable:
-            return output
-
         output['choices_cache_key'] = (
             f'{self.owner.instance.__class__._meta.label_lower}.{self.name}.'
             f'{related_model._meta.label_lower}.{related_choices.fingerprint()}'
         )
+        if not related_choices.is_searchable:
+            return output
+
         selected_value = self.owner._get_model_attribute_value(self.name)
         selected_values = (
             selected_value

@@ -1022,19 +1022,24 @@ root and therefore exposes the same event only through `$on()`. The
 source-scoped proxy event is the universal contract; the component DOM event is
 its browser integration.
 
-A component that depends on another component's changes declares it on its
-class (ADR 024, ADR 025): `rerender_on = (OtherComponent.event, ...)` re-renders
-it when any mounted component emits one of those events, and
+A component that depends on another object's changes declares it on its
+class (ADR 024, ADR 025, ADR 039): `rerender_on = (OtherComponent.event,
+SomeForm.saved, ...)` re-renders it when any mounted Glue object, a component,
+form, model or queryset, emits one of those events, and
 `@Glue.listener(ChildComponent.event)` runs a method first, for events from its
-descendants only. A component's signed identity records its ancestor chain: the
+component descendants only. Every Glue object's `static_data.event_ids` maps
+each event it declares, on its class or an attribute provider's, to the
+event's identity. A component's signed identity records its ancestor chain: the
 component whose template stamped it or whose callable returned it, then that
-component's chain. When a component's response carries an event, the client
+component's chain; no other Glue object has one. When any object's response
+carries an event, the client
 calls the built-in `$receive` callable on each mounted component whose
 `static_data.rerender_on` names the event's identity, and on each mounted
 ancestor whose `static_data.listeners` does, passing the event, its detail, and
 the source's current token. All of one response's deliveries travel in one
 request. The server verifies that the source token is genuine and that its
-class declares the event, runs the matching listeners only when the source
+class, or an attribute provider's class its identity names, declares the event,
+runs the matching listeners only when the source
 names the receiving component among its ancestors, and re-renders the
 component when an event is in its `rerender_on` or a listener that ran does not
 skip rendering. The source's own morph waits for those calls, so the source and

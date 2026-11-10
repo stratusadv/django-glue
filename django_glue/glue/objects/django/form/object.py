@@ -72,6 +72,10 @@ class FormGlue(BaseGlue):
         self.form._glue_event_owner = self
         return (self.form,)
 
+    @classmethod
+    def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
+        return (cls, get_attr_from_path_string(policy.identity['form_class_path']))
+
     def get_identity(self) -> dict[str, Any]:
         return {
             'form_class_path': f'{self.form.__class__.__module__}.{self.form.__class__.__name__}',

@@ -221,6 +221,17 @@ class BaseGlue(ABC):
     def get_attribute_providers(self) -> Iterable[Any]:
         return ()
 
+    @classmethod
+    def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
+        """
+        The classes that declare the events an object rebuilt from ``policy``
+        can emit, the Glue class it is rebuilt as first, without rebuilding it
+        (ADR 039). They are the classes of the object and its attribute
+        providers, which a subclass with providers names from its identity.
+        """
+        _ = policy
+        return (cls,)
+
     def is_authorized(
         self,
         request: HttpRequest,
@@ -382,6 +393,9 @@ class BaseGlue(ABC):
         events = names
         if events:
             static_data['events'] = events
+            # The identity of each event, which the client uses to route it to
+            # the components that re-render on it (ADR 024, ADR 039).
+            static_data['event_ids'] = {name: declaration.identity for name, declaration in declarations}
         return static_data
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
@@ -903,10 +917,10 @@ class BaseGlue(ABC):
             }:
                 continue
             elif parameter.default is inspect.Parameter.empty:
-                msg = (
-                    f"Attribute '{attribute.definition.path}' missing required "
-                    f"argument: '{name}'."
+                raise GlueRequestError(
+                    code=GlueRequestErrorCode.INVALID_KWARGS,
+                    message='A required argument is missing.',
+                    details={'attribute': attribute.definition.path, 'argument': name},
                 )
-                raise ValueError(msg)
 
         return resolved

@@ -1,33 +1,21 @@
 import BaseGlueProxy from "./base"
-import type {GlueEvent, GlueRequestFields} from "./base"
+import type {GlueEvent, GlueReceivedEvent, GlueRequestFields} from "./base"
 import HtmlRenderer, {htmlToFragment} from "../htmlRenderer"
 import type {HtmlResult} from "../htmlRenderer"
-import {GlueRequestBatch} from "../http"
 import type {
     GlueAddressedEntry,
     GlueChildSlot,
     GlueChildSubmission,
-    GlueEmittedEvent,
     GlueStaticData,
 } from "../wire"
 
 // Component.get_static_data() in django_glue/glue/components/component.py
-// adds each declared event's identity, the identities the component
-// re-renders on and listens for, and a mark on each child slot that is
-// submitted with the component's calls.
+// adds the identities the component re-renders on and listens for, and a
+// mark on each child slot that is submitted with the component's calls.
 interface GlueComponentStaticData extends GlueStaticData {
     children?: Record<string, GlueChildSlot & {submits_with_owner?: boolean}>
-    event_ids?: Record<string, string>
     rerender_on?: string[]
     listeners?: string[]
-}
-
-// An event as `$receive` takes it: its identity, the emitter's token and the
-// detail it was emitted with.
-interface GlueReceivedEvent {
-    event: string
-    source_token: string
-    detail: Record<string, unknown>
 }
 
 class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
@@ -91,44 +79,6 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
             domEvent.source = event.source
             root.dispatchEvent(domEvent)
         }
-    }
-
-    // A component's event also reaches the components that react to it, which
-    // costs a request only when one does.
-    async $dispatch(name: string, detail: Record<string, unknown> = {}): Promise<void> {
-        this._requireDeclaredEvent(name)
-        await Promise.allSettled(this._deliverEvents({effects: {events: [{name, detail}]}}))
-        this._raiseEvent(name, detail)
-    }
-
-    // Calls `$receive` on every component that reacts to this response's
-    // events (ADR 024, ADR 025): any mounted component that re-renders on one,
-    // anywhere on the page, and any mounted ancestor with a listener for one.
-    // The calls travel in one request. Returns their promises.
-    _deliverEvents(target: {effects?: {events?: GlueEmittedEvent[]}}): Promise<unknown>[] {
-        const eventIds = (this._record.staticData as GlueComponentStaticData)?.event_ids || {}
-        const events = (target.effects?.events || [])
-            .filter(({name}) => eventIds[name])
-            .map(({name, detail}): GlueReceivedEvent => ({
-                event: eventIds[name],
-                source_token: this._record.policyToken,
-                detail,
-            }))
-        if (!events.length) return []
-
-        const ancestors = new Set(this._record.policy.identity?.ancestors || [])
-        const mounted = [...this._registry.records.values()]
-            .map(record => record.proxy)
-            .filter(proxy => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el) as GlueComponentProxy[]
-        const deliveries = mounted
-            .map((proxy): [GlueComponentProxy, GlueReceivedEvent[]] => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))])
-            .filter(([, reactions]) => reactions.length)
-        if (!deliveries.length) return []
-
-        const batch = new GlueRequestBatch(this._http, deliveries.length)
-        return deliveries.map(([proxy, reactions]) => (
-            proxy._callAttribute('$receive', {events: reactions}, {batch})
-        ))
     }
 
     // The events this component reacts to: those it re-renders on, and those

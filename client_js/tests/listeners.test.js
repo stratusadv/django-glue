@@ -3,6 +3,7 @@ import GlueClient from "../src/client"
 import {attributeResponse, createEntry} from "./testUtils"
 
 const COUNTED = 'gorilla.components.CounterCardComponent.counted'
+const NOTE_SAVED = 'gorilla.forms.KeeperNoteForm.saved'
 const TALLY = 'tally#test'
 const CARD = 'tally#test[card]'
 
@@ -120,6 +121,41 @@ describe('component listeners', () => {
         ])
     })
 
+    test("an object's fired event reaches a component that re-renders on it, not a listener", async () => {
+        const {client} = tallyClient({listeners: [NOTE_SAVED]})
+        const form = createEntry({
+            policy: {name: 'note', namespace: 'form', address: 'note#test', attributes: ['save_note']},
+            staticData: {
+                callables: {save_note: {allowed_arguments: []}},
+                events: ['saved'],
+                event_ids: {saved: NOTE_SAVED},
+            },
+        })
+        client.loadObjects([form, componentEntry({address: 'panel#test', staticData: {rerender_on: [NOTE_SAVED]}})])
+        document.body.insertAdjacentHTML('beforeend', '<div data-glue-address="panel#test"></div>')
+        const requests = []
+        client.http.sendAttributeRequest = async request => {
+            requests.push(request)
+            if (request.address === 'note#test') {
+                return attributeResponse('note#test', {
+                    result: null,
+                    effects: {messages: [], events: [{name: 'saved', detail: {}}]},
+                })
+            }
+            return attributeResponse(request.address, {result: null, effects: {messages: []}})
+        }
+
+        await client._registry.getProxy('note#test').save_note()
+
+        expect(requests.map(request => [request.address, request.attribute])).toEqual([
+            ['note#test', 'save_note'],
+            ['panel#test', '$receive'],
+        ])
+        expect(requests[1].kwargs.events).toEqual([
+            {event: NOTE_SAVED, source_token: form.policy_token, detail: {}},
+        ])
+    })
+
     test('a component call reports the component roots mounted inside it', async () => {
         const {client} = tallyClient()
         const requests = respond(client, {tally: {}})
@@ -218,6 +254,21 @@ describe('$dispatch', () => {
         await expect(card.$dispatch('cancelled')).rejects.toThrow(
             'Event "cancelled" is not declared on this Glue object.',
         )
+    })
+
+    test("tells a component that re-renders on an object's event, as a fired event does", async () => {
+        const {client} = tallyClient({listeners: []})
+        const form = createEntry({
+            policy: {name: 'note', namespace: 'form', address: 'note#test'},
+            staticData: {events: ['saved'], event_ids: {saved: NOTE_SAVED}},
+        })
+        client.loadObjects([form, componentEntry({address: 'panel#test', staticData: {rerender_on: [NOTE_SAVED]}})])
+        document.body.insertAdjacentHTML('beforeend', '<div data-glue-address="panel#test"></div>')
+        const requests = respond(client, {tally: {}})
+
+        await client._registry.getProxy('note#test').$dispatch('saved')
+
+        expect(requests.map(request => [request.address, request.attribute])).toEqual([['panel#test', '$receive']])
     })
 
     test('raises a declared event on an object that is not a component', async () => {

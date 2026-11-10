@@ -32,9 +32,12 @@ from test_project.gorilla.components import (
     CounterDashboardComponent,
     CounterTallyComponent,
     GuardedCounterTallyComponent,
+    KeeperNoteCountComponent,
+    KeeperNoteListenerComponent,
     QuietCounterTallyComponent,
     RerenderingCounterDashboardComponent,
 )
+from test_project.gorilla.forms import KeeperNoteForm
 
 COUNTED = CounterCardComponent.counted.identity
 
@@ -70,6 +73,49 @@ def _receive(tally: CounterTallyComponent, events: list[dict[str, Any]]) -> dict
 
 def _counted_from(card: dict[str, Any], **detail: Any) -> dict[str, Any]:
     return {'event': COUNTED, 'source_token': card['policy_token'], 'detail': detail}
+
+
+def _note_saved_from(mock_request, event: str = KeeperNoteForm.saved.identity) -> dict[str, Any]:
+    """A keeper note form's event, as the client delivers it from the form's own token (ADR 039)."""
+    form = Glue.form(request=mock_request, unique_name='keeper_note', target=KeeperNoteForm(), access=Glue.Access.ADD)
+    return {'event': event, 'source_token': form.policy.token, 'detail': {}}
+
+
+def test_a_form_publishes_the_identities_of_its_events(mock_request) -> None:
+    form = Glue.form(request=mock_request, unique_name='keeper_note', target=KeeperNoteForm(), access=Glue.Access.ADD)
+
+    assert form.get_static_data()['event_ids'] == {'saved': KeeperNoteForm.saved.identity}
+
+
+def test_rerender_on_takes_an_event_from_a_form(mock_request) -> None:
+    count = Glue.object(mock_request, KeeperNoteCountComponent())
+
+    entry = _receive(count, [_note_saved_from(mock_request)])
+
+    assert 'html' in entry
+
+
+def test_a_listener_refuses_an_event_from_a_form(mock_request) -> None:
+    listening = Glue.object(mock_request, KeeperNoteListenerComponent())
+
+    with pytest.raises(GlueRequestError, match='not a descendant'):
+        _receive(listening, [_note_saved_from(mock_request)])
+
+
+def test_receive_rejects_an_event_the_form_does_not_declare(mock_request) -> None:
+    count = Glue.object(mock_request, KeeperNoteCountComponent())
+
+    with pytest.raises(GlueRequestError, match='does not declare'):
+        _receive(count, [_note_saved_from(mock_request, event=COUNTED)])
+
+
+def test_an_event_assigned_to_a_second_class_keeps_its_identity() -> None:
+    class Aliasing:
+        alias = CounterCardComponent.counted
+
+    assert Aliasing.alias is CounterCardComponent.counted
+    assert CounterCardComponent.counted.identity == 'test_project.gorilla.components.CounterCardComponent.counted'
+    assert CounterCardComponent.counted.name == 'counted'
 
 
 def test_a_stamped_child_signs_its_ancestor_chain(mock_request) -> None:

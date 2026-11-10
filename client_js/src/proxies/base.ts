@@ -3,7 +3,8 @@ import {GlueAddressError, GlueProxyError} from "../errors"
 import type {GlueOwnerReference} from "../errors"
 import {htmlResultFromResponse} from "../htmlRenderer"
 import type GlueHttp from "../http"
-import type {GlueAttributeRequest, GlueRequestBatch} from "../http"
+import {GlueRequestBatch} from "../http"
+import type {GlueAttributeRequest} from "../http"
 import type GluePolicy from "../policy"
 import type GlueAddressRecord from "../runtime/addressRecord"
 import type {GlueRecordProxy} from "../runtime/addressRecord"
@@ -13,6 +14,7 @@ import type {
     GlueAddressedEntry,
     GlueAttributeCallResponse,
     GlueChildSubmission,
+    GlueEmittedEvent,
     GlueErrorEntry,
     GlueMessage,
     GlueObjectEntry,
@@ -47,6 +49,25 @@ interface GlueEvent {
 }
 
 type GlueEventListener = (event: GlueEvent) => unknown
+
+// An event as `$receive` takes it: its identity, the emitter's token and the
+// detail it was emitted with.
+interface GlueReceivedEvent {
+    event: string
+    source_token: string
+    detail: Record<string, unknown>
+}
+
+// A proxy that can react to other objects' events: a mounted component
+// (ADR 024, ADR 025). Any object's events reach it (ADR 039).
+interface GlueEventReceiver extends BaseGlueProxy {
+    readonly $el: Element | null
+    _reactionsTo(events: GlueReceivedEvent[], fromDescendant: boolean): GlueReceivedEvent[]
+}
+
+function isEventReceiver(proxy: unknown): proxy is GlueEventReceiver {
+    return typeof (proxy as Partial<GlueEventReceiver> | null | undefined)?._reactionsTo === 'function'
+}
 
 type GlueMessageHandler = (context: {messages: GlueMessage[], proxy: BaseGlueProxy}) => void
 
@@ -105,9 +126,12 @@ class BaseGlueProxy implements GlueRecordProxy {
         }
     }
 
-    // Raises a declared event from the browser, as if a call had fired it.
+    // Raises a declared event from the browser, as if a call had fired it: it
+    // also reaches the components that react to it, which costs a request only
+    // when one does.
     async $dispatch(name: string, detail: Record<string, unknown> = {}): Promise<void> {
         this._requireDeclaredEvent(name)
+        await Promise.allSettled(this._deliverEvents({effects: {events: [{name, detail}]}}))
         this._raiseEvent(name, detail)
     }
 
@@ -297,8 +321,44 @@ class BaseGlueProxy implements GlueRecordProxy {
     }
 
     // What this proxy does with an accepted response once its state is
-    // reconciled and before its effects are processed.
-    async _applyResponse(target: GlueAddressedEntry, result: unknown): Promise<void> {}
+    // reconciled and before its effects are processed: its events reach the
+    // components that react to them.
+    async _applyResponse(target: GlueAddressedEntry, result: unknown): Promise<void> {
+        await Promise.allSettled(this._deliverEvents(target))
+    }
+
+    // Calls `$receive` on every component that reacts to this response's
+    // events (ADR 024, ADR 025, ADR 039): any mounted component that
+    // re-renders on one, anywhere on the page, whatever kind of object emitted
+    // it, and any mounted ancestor with a listener for one. Only a component
+    // has ancestors. The calls travel in one request. Returns their promises.
+    _deliverEvents(target: {effects?: {events?: GlueEmittedEvent[]}}): Promise<unknown>[] {
+        const eventIds = this._record.staticData?.event_ids || {}
+        const events = (target.effects?.events || [])
+            .filter(({name}) => eventIds[name])
+            .map(({name, detail}): GlueReceivedEvent => ({
+                event: eventIds[name],
+                source_token: this._record.policyToken,
+                detail,
+            }))
+        if (!events.length) return []
+
+        const ancestors = new Set(this._record.policy.identity?.ancestors || [])
+        const mounted = [...this._registry.records.values()]
+            .map(record => record.proxy)
+            .filter((proxy): proxy is GlueEventReceiver => (
+                isEventReceiver(proxy) && proxy !== (this as unknown) && Boolean(proxy.$el)
+            ))
+        const deliveries = mounted
+            .map((proxy): [GlueEventReceiver, GlueReceivedEvent[]] => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))])
+            .filter(([, reactions]) => reactions.length)
+        if (!deliveries.length) return []
+
+        const batch = new GlueRequestBatch(this._http, deliveries.length)
+        return deliveries.map(([proxy, reactions]) => (
+            proxy._callAttribute('$receive', {events: reactions}, {batch})
+        ))
+    }
 
     async _reintroduceWithOwner(): Promise<boolean> {
         const owner = this._record.owner
@@ -436,6 +496,7 @@ export type {
     GlueEvent,
     GlueEventListener,
     GlueMessageHandler,
+    GlueReceivedEvent,
     GlueRequestFields,
 }
 export default BaseGlueProxy

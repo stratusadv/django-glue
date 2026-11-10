@@ -106,6 +106,9 @@ export interface GlueStaticData {
     children?: Record<string, GlueChildSlot>
     callables?: Record<string, GlueCallableSchema>
     events?: string[]
+    // Each declared event's identity by name, which routes it to the
+    // components that react to it (ADR 024, ADR 039).
+    event_ids?: Record<string, string>
 }
 
 // One entry of computed_data.fields: the field adapters' computed_data() in

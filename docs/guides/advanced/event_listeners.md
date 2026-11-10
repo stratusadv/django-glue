@@ -114,11 +114,26 @@ component's render has arrived, so the page changes once.
   component that lists the event re-renders, whether it is the source's parent,
   an ancestor further up, or a sibling such as a summary panel next to the
   rows. All the components one response wakes re-render in a single request.
+- **The source can be any Glue object.** A form, model or queryset that declares
+  an event reaches `rerender_on` too, so a summary can re-render when a form
+  saves:
+
+  ```python
+  class TaskForm(forms.ModelForm):
+      saved = Glue.event()
+      ...
+
+  class TaskSummaryComponent(Glue.Component):
+      template = 'tasks/component/summary.html'
+      rerender_on = (TaskForm.saved,)
+  ```
 
 To run code when a descendant's event arrives, decorate a method with
 `Glue.listener`. A listener only hears its descendants: a component stamped in
 its template, stamped inside one of those, or returned by one of their
-callables, wherever its host mounts it on the page. The component re-renders after it, like after any component
+callables, wherever its host mounts it on the page. Only components are
+descendants, so a listener never hears a form's or model's event; list that in
+`rerender_on` instead. The component re-renders after it, like after any component
 callable; pass `skip_rerender=True` to opt out, though a listener that changes a
 retained value re-renders anyway. `required_access=` works as it does on
 `Glue.attr`. Take the event to learn which child changed: `event.source` is the
