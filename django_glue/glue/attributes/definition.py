@@ -4,7 +4,7 @@ import inspect
 import json
 from collections.abc import Mapping
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from types import NoneType, UnionType
 from typing import (
@@ -135,6 +135,7 @@ class GlueAttributeDefinition:
     is_declared_child: bool = False
     allowed_arguments: tuple[str, ...] = ()
     injected_arguments: tuple[str, ...] = ()
+    argument_types: Mapping[str, Any] = field(default_factory=dict)
     render_as_html: bool = False
     skip_rerender: bool = False
     getter: Callable[[Any], Any] | None = None

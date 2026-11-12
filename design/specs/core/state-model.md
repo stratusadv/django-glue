@@ -2289,6 +2289,19 @@ wants a client-supplied value must not name it `request`.
 Ordinary annotations such as `bool` describe client input and do not reserve a
 name.
 
+**Admitted argument values are coerced by their annotations**
+([ADR 038](../../decisions/038-callable-arguments-are-coerced-by-annotation.md)).
+When the callable is invoked, after authorization, each client-supplied argument
+is coerced through the serializer registry against its annotation, leniently by
+default, as editable updates are. `Annotated` metadata such as `Strict()` or
+`Field(ge=1)` applies. An unannotated argument, or one annotated `object` or
+`Any`, is passed unchanged. A value the annotation refuses, or a missing argument
+with no default, fails that address with `invalid_kwargs` and runs nothing; the
+details name the argument, never the value. Each client-supplied argument's
+annotation is resolved, and its serializer prepared, when the declaration is
+compiled. An annotation that cannot be resolved or serialized is a declaration
+error, never an unchecked argument. Injected parameters are not resolved.
+
 A callable accepting `**kwargs` does not imply an open client-input capability.
 Its permitted extra names must be declared explicitly and included in the
 signed `allowed_arguments`; otherwise they are rejected. Variadic forwarding

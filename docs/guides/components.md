@@ -131,6 +131,54 @@ A dotted path names exactly one class, which may live outside any `components`
 module. It is not looked up in `DIRS` or the installed apps, so a project
 cannot override a component stamped this way.
 
+## Callable arguments
+
+The arguments a browser passes to a callable are checked against their
+annotations before the method runs, the same way editable values are:
+
+```python
+from typing import Annotated
+
+from pydantic import Field, Strict
+
+PageNumber = Annotated[int, Strict(), Field(ge=1, le=1_000)]
+
+
+class ContactListComponent(Glue.Component):
+    template = 'contact/component/contact_list.html'
+
+    @Glue.attr(required_access=Glue.Access.DELETE)
+    def delete_contact(self, pk: int) -> None:
+        Contact.objects.filter(pk=pk).delete()
+
+    @Glue.html_attr
+    def rows(self, page: PageNumber) -> TemplateResponse:
+        ...
+```
+
+- **Values are converted where they safely can be.** `component.delete_contact({pk: '12'})`
+  calls `delete_contact(pk=12)`, so a value read from a `<select>` or a
+  `data-` attribute, which is always a string, works as it is. `'abc'`, `1.5`,
+  a list or an object is refused.
+- **`Annotated` adds rules.** `Strict()` refuses anything that is not already
+  the declared type, including `true` for an `int`. `Field(ge=1)` and Pydantic's
+  other constraints apply as written.
+- **A refused value runs nothing.** The call fails with `invalid_kwargs`,
+  naming the argument, and so does a call that leaves out an argument with no
+  default. Other objects in the same request are unaffected.
+- **Leave an argument unannotated, or annotate it `object` or `Any`,** to
+  receive whatever the browser sent.
+- **An annotation must be importable at runtime.** A type imported only under
+  `if TYPE_CHECKING:` cannot be resolved, and neither can a type no serializer
+  handles, such as a model class: either raises `TypeError` naming the callable
+  and the argument the first time the class is used. Pass a key and look the
+  row up instead of annotating with the model. The injected `request` argument
+  is the exception and may stay a type-checking import.
+
+This applies to every Glue callable, not only to components. A `Glue.function`
+target is the exception: it receives its arguments as one `kwargs` mapping,
+so its own annotations are not checked.
+
 ## Lists: render rows as partials unless a row is live
 
 **Render each row of a list as a template partial of the component that owns the

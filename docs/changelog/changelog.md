@@ -2,8 +2,43 @@
 
 ## v1.4.0
 
+### Features
+
+- A callable's arguments are checked against their annotations before it runs
+  (ADR 038), through the same serializer registry that checks editable values
+  and component parameters. A value is converted where it safely can be, so
+  `'12'` reaches an `int` argument as `12`, and refused otherwise.
+  `Annotated` adds rules:
+
+  ```python
+  PageNumber = Annotated[int, Strict(), Field(ge=1)]
+
+  @Glue.html_attr
+  def rows(self, page: PageNumber) -> TemplateResponse:
+      ...
+  ```
+
+  An unannotated argument, or one annotated `object` or `Any`, receives what
+  the browser sent, as before. A `Glue.function` target's own arguments are not
+  checked: it receives them as one mapping. See
+  [callable arguments](../guides/components.md#callable-arguments).
+
+- `GlueSerializerHandler.prepare(target)` lets a serializer refuse a type before
+  any value arrives. Glue calls it for each annotated callable argument when the
+  class is first used. It does nothing unless a handler overrides it.
+
 ### Breaking
 
+- A value its annotation refuses fails the call with `invalid_kwargs`, naming
+  the argument, where the callable used to receive it: `null` or a number for a
+  `str`, a list or an object for an `int`, `''` for an `int | None`.
+- A value its annotation converts arrives converted. `'12'` for an `int` is
+  `12`, and `'false'` for a `bool` is `False`, no longer a truthy string.
+- An annotation that cannot be resolved at runtime, such as a type imported only
+  under `if TYPE_CHECKING:`, or one no serializer handles, such as a model
+  class, raises `TypeError` naming the callable and the argument the first time
+  the class is used. Import the type at runtime, or take a key and look the row
+  up. The injected `request` argument may stay a type-checking import.
 - A glued form or formset offers the browser Glue's default `save()` only when
   its model form's `Meta` sets `glue_default_save = True` (ADR 040). Without
   it, the browser is not sent `save`, and a call to it is refused as

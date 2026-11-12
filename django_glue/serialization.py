@@ -37,6 +37,13 @@ class GlueSerializerHandler(ABC):
         _ = target
         return value
 
+    def prepare(self, target: Any) -> None:
+        """
+        Refuse a target this handler cannot serialize before any value
+        arrives. A handler with nothing to check keeps this default.
+        """
+        _ = target
+
 
 class GlueSerializerRegistry:
     def __init__(
@@ -86,6 +93,15 @@ class GlueSerializerRegistry:
             if handler.supports(target):
                 return handler.encode(value, target)
         return value
+
+    def prepare(
+        self,
+        target: Any,
+    ) -> None:
+        for handler in self._handlers:
+            if handler.supports(target):
+                handler.prepare(target)
+                return
 
 
 class DjangoModelFieldSerializer(GlueSerializerHandler):
@@ -187,6 +203,12 @@ class AnnotationSerializer(GlueSerializerHandler):
         try:
             return _adapter(target).dump_python(value, mode='json')
         except (PydanticUserError, PydanticSerializationError) as error:
+            raise GlueSerializerError(str(error)) from error
+
+    def prepare(self, target: Any) -> None:
+        try:
+            _adapter(target)
+        except PydanticUserError as error:
             raise GlueSerializerError(str(error)) from error
 
 

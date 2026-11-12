@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import replace
 from functools import cache, partial
@@ -13,6 +13,7 @@ from django_glue.glue.attributes.definition import (
     GlueValueRole,
     _resolve_glue_result_annotation,
 )
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.glue.attributes.declared import DeclaredAttributeOptions
@@ -183,13 +184,13 @@ class GlueAttributeCollector:
             if options.is_callable
             else GlueAttributeKind.VALUE
         )
-        allowed_arguments, injected_arguments = (
+        allowed_arguments, injected_arguments, argument_types = (
             GlueAttributeCollector._compile_callable_arguments(
                 declaration,
                 path,
             )
             if kind == GlueAttributeKind.CALLABLE
-            else ((), ())
+            else ((), (), {})
         )
         expected_type, is_nullable = (
             _resolve_glue_result_annotation(
@@ -209,6 +210,7 @@ class GlueAttributeCollector:
                 is_parameter=options.is_parameter,
                 allowed_arguments=allowed_arguments,
                 injected_arguments=injected_arguments,
+                argument_types=argument_types,
                 render_as_html=options.render_as_html,
                 skip_rerender=options.skip_rerender,
                 expected_type=expected_type,
@@ -220,7 +222,7 @@ class GlueAttributeCollector:
     def _compile_callable_arguments(
         declaration: Any | None,
         path: str,
-    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    ) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]:
         target = getattr(declaration, 'target', declaration)
         if target is None or not callable(target):
             msg = f'Callable attribute {path!r} requires a callable target.'
@@ -228,7 +230,9 @@ class GlueAttributeCollector:
 
         allowed_arguments = []
         injected_arguments = []
-        for name, parameter in inspect.signature(inspect.unwrap(target)).parameters.items():
+        argument_types = {}
+        unwrapped = inspect.unwrap(target)
+        for name, parameter in inspect.signature(unwrapped).parameters.items():
             if name == 'self' or parameter.kind in {
                 inspect.Parameter.VAR_POSITIONAL,
                 inspect.Parameter.VAR_KEYWORD,
@@ -255,8 +259,44 @@ class GlueAttributeCollector:
                 injected_arguments.append(name)
             else:
                 allowed_arguments.append(name)
+                if annotation is not inspect.Parameter.empty:
+                    argument_types[name] = GlueAttributeCollector._resolve_argument_type(
+                        unwrapped,
+                        path,
+                        name,
+                        annotation,
+                    )
 
-        return tuple(allowed_arguments), tuple(injected_arguments)
+        return tuple(allowed_arguments), tuple(injected_arguments), argument_types
+
+    @staticmethod
+    def _resolve_argument_type(
+        target: Callable[..., Any],
+        path: str,
+        name: str,
+        annotation: Any,
+    ) -> Any:
+        """
+        One client-supplied argument's annotation, resolved on its own so an
+        injected argument's type-checking-only import cannot block it, and
+        evaluated rather than read through get_type_hints so Annotated metadata
+        survives (ADR 038).
+        """
+        if isinstance(annotation, str):
+            try:
+                annotation = eval(annotation, dict(getattr(target, '__globals__', {})))  # noqa: S307
+            except (AttributeError, NameError, SyntaxError, TypeError) as error:
+                msg = (
+                    f'Callable attribute {path!r} cannot resolve the annotation of '
+                    f'argument {name!r}: {error}. Import its type at runtime.'
+                )
+                raise TypeError(msg) from error
+        try:
+            glue_serializer_registry.prepare(annotation)
+        except GlueSerializerError as error:
+            msg = f'Callable attribute {path!r} cannot serialize argument {name!r}: {error}'
+            raise TypeError(msg) from error
+        return annotation
 
     @staticmethod
     def _is_request_annotation(annotation: Any) -> bool:

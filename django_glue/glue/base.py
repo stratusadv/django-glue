@@ -34,7 +34,7 @@ from django_glue.glue.event import GlueEvent
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
-from django_glue.serialization import GlueSerializerError
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -901,16 +901,30 @@ class BaseGlue(ABC):
         attribute: BoundGlueAttribute,
         call_context: AttributeCallRequestContext,
     ) -> dict[str, Any]:
+        definition = attribute.definition
         target = attribute.get()
         signature = inspect.signature(inspect.unwrap(target))
         supplied = call_context.target_attribute_call_kwargs
         resolved: dict[str, Any] = {}
 
         for name, parameter in signature.parameters.items():
-            if name in attribute.definition.injected_arguments:
+            if name in definition.injected_arguments:
                 resolved[name] = call_context.request
             elif name in supplied:
-                resolved[name] = supplied[name]
+                if name not in definition.argument_types:
+                    resolved[name] = supplied[name]
+                    continue
+                try:
+                    resolved[name] = glue_serializer_registry.coerce(
+                        supplied[name],
+                        definition.argument_types[name],
+                    )
+                except GlueSerializerError as error:
+                    raise GlueRequestError(
+                        code=GlueRequestErrorCode.INVALID_KWARGS,
+                        message='Argument value could not be coerced.',
+                        details={'attribute': definition.path, 'argument': name},
+                    ) from error
             elif parameter.kind in {
                 inspect.Parameter.VAR_POSITIONAL,
                 inspect.Parameter.VAR_KEYWORD,
@@ -920,7 +934,7 @@ class BaseGlue(ABC):
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_KWARGS,
                     message='A required argument is missing.',
-                    details={'attribute': attribute.definition.path, 'argument': name},
+                    details={'attribute': definition.path, 'argument': name},
                 )
 
         return resolved
