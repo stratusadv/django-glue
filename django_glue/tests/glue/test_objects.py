@@ -2317,7 +2317,8 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         self.assertEqual(policy.namespace, 'form')
         self.assertIn('validate', policy.attributes)
-        self.assertIn('save', policy.attributes)
+        # A plain form never offers the default save (ADR 040).
+        self.assertNotIn('save', policy.attributes)
         self.assertEqual(policy.state_snapshot['name'], 'Ada')
         self.assertEqual(static_data['fields']['email']['type'], 'EmailField')
 

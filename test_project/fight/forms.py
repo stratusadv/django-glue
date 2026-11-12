@@ -30,6 +30,8 @@ class FightForm(forms.ModelForm):
             'spectator_count',
             'terrain_type',
         ]
+        # The schedule and fight list pages save this form from the browser.
+        glue_default_save = True
 
 
 class SearchableFighterChoiceForm(forms.Form):

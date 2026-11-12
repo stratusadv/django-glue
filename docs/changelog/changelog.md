@@ -1,5 +1,32 @@
 # Changelog for Django Glue
 
+## v1.4.0
+
+### Breaking
+
+- A glued form or formset offers the browser Glue's default `save()` only when
+  its model form's `Meta` sets `glue_default_save = True` (ADR 040). Without
+  it, the browser is not sent `save`, and a call to it is refused as
+  `missing_attribute`. Until now every glued form offered it, so a form whose
+  model is saved through a service, or that only feeds a component's call, was
+  also a way to write the model directly. A page that calls `form.save()` or
+  `formset.save()` from the browser must opt in:
+
+  ```python
+  class GorillaForm(forms.ModelForm):
+      class Meta:
+          model = Gorilla
+          fields = ['name', 'age']
+          glue_default_save = True
+  ```
+
+  A formset follows its row form. The form's own `save()`, a form's declared
+  callables such as `save_model_obj`, and `Glue.model()`'s `save()` are
+  unchanged. A plain `Form` no longer offers a `save()` that saved nothing, and
+  setting the option on a form without a `save()`, or to a value that is not a
+  bool, raises `ImproperlyConfigured`. See
+  [saving from the browser](../guides/form_glue.md#saving-from-the-browser).
+
 ## v1.3.0
 
 ### Features

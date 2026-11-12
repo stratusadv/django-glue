@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from django import forms
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.forms.models import model_to_dict
 
@@ -19,7 +20,48 @@ from django_glue.utils import get_attr_from_path_string
 if TYPE_CHECKING:
     from django.db.models import Model
 
+    from django_glue.glue.attributes import GlueAttributeDefinition
     from django_glue.glue.policy import GluePolicy
+
+
+DEFAULT_SAVE_PATH = 'save'
+
+
+def offers_default_save(form_class: type[forms.BaseForm]) -> bool:
+    """
+    Whether Glue offers the browser its default ``save`` for rows of this form
+    class: only when the class's ``Meta`` sets ``glue_default_save = True``
+    (ADR 040). Django ignores the option, so it is read from ``Meta`` itself.
+    """
+    enabled = getattr(getattr(form_class, 'Meta', None), 'glue_default_save', False)
+
+    if not isinstance(enabled, bool):
+        msg = (
+            f'{form_class.__qualname__}.Meta.glue_default_save must be True or False, '
+            f'not {enabled!r}.'
+        )
+        raise ImproperlyConfigured(msg)
+
+    if enabled and not callable(getattr(form_class, 'save', None)):
+        msg = (
+            f'{form_class.__qualname__} sets glue_default_save = True but has no save(); only a '
+            'form with a save(), such as a ModelForm, can offer the default save.'
+        )
+        raise ImproperlyConfigured(msg)
+
+    return enabled
+
+
+def without_default_save(
+    definitions: tuple[GlueAttributeDefinition, ...],
+    providers: dict[str, Any],
+) -> tuple[GlueAttributeDefinition, ...]:
+    """The definitions less the object's own ``save``; one a provider declares is kept."""
+    return tuple(
+        definition
+        for definition in definitions
+        if definition.path != DEFAULT_SAVE_PATH or definition.path in providers
+    )
 
 
 class FormGlue(BaseGlue):
@@ -33,6 +75,8 @@ class FormGlue(BaseGlue):
         access: GlueAccess = GlueAccess.CHANGE,
         editable: Sequence[str] | None = None,
     ) -> None:
+        # Checked first, so a form that opts in wrongly is refused when it is glued.
+        offers_default_save(type(form))
         super().__init__(name=name, access=access)
         self.form = form
         # A call replaces self.form with a bound form, whose initial Django
@@ -71,6 +115,16 @@ class FormGlue(BaseGlue):
     def get_attribute_providers(self) -> tuple[Any, ...]:
         self.form._glue_event_owner = self
         return (self.form,)
+
+    def _collect_attributes(
+        self,
+    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
+        definitions, providers = super()._collect_attributes()
+
+        if offers_default_save(type(self.form)):
+            return definitions, providers
+
+        return without_default_save(definitions, providers), providers
 
     def get_identity(self) -> dict[str, Any]:
         return {

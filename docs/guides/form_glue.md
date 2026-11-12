@@ -19,14 +19,47 @@ const form = Glue.form.contact
 form.name = 'Ada'
 form.email = 'ada@example.com'
 await form.validate()
-if (!form.$fields.email.errors.length) await form.save()
 ```
 
 The proxy exposes declared fields as editable properties. `$fields` contains
-field descriptions and current validation errors. An invalid `validate()` or
-`save()` acknowledges the submitted draft and returns errors without turning
-the draft into a server-side session object. A successful model-form save
-advances its target identity in the successor policy.
+field descriptions and current validation errors. An invalid `validate()`
+acknowledges the submitted draft and returns errors without turning the draft
+into a server-side session object.
+
+### Saving from the browser
+
+A form saves through an action the application declares, such as a form
+callable or a component's call, so the application's own rules run. Glue also
+has a default `save()`, which validates the form and runs Django's
+`ModelForm.save()`. It is offered to the browser only when the model form's
+`Meta` asks for it (ADR 040):
+
+```python
+class GorillaForm(forms.ModelForm):
+    class Meta:
+        model = Gorilla
+        fields = ['name', 'age']
+        glue_default_save = True
+```
+
+```javascript
+const form = Glue.form.gorilla
+await form.save()
+```
+
+Without `glue_default_save = True`, the browser is not sent `save`, and a call
+to it is refused as `missing_attribute`. Use the default only when
+`ModelForm.save()` is the whole of what saving should do; a form whose model is
+saved through a service, or that feeds a component's action, leaves it off.
+The option governs only what Glue offers the browser: server code may still
+call the form's own `save()`. A plain `Form` has no `save()` and never offers
+one, and setting the option on it raises `ImproperlyConfigured`. A subclass
+keeps the option when its `Meta` inherits the parent's, as
+`class Meta(GorillaForm.Meta)`, and loses it with a fresh `class Meta`, as
+Django's other `Meta` options do.
+
+A successful default save advances the form's target identity in the successor
+policy, and an invalid one returns errors as `validate()` does.
 
 A form class can declare its own action as a Glue callable. It runs on the form
 bound with the user's draft, so `self.is_valid()` validates what the user typed
@@ -133,7 +166,10 @@ Glue.formset(
 
 `await formset.save()` validates every row. If any row is invalid, nothing is
 saved and each invalid row shows its errors. Otherwise every row is saved in one
-transaction: edited records are updated and new rows are created.
+transaction: edited records are updated and new rows are created. A formset
+offers `save()` to the browser only when its row form's `Meta` sets
+`glue_default_save = True`, as a single form does; without it, save the rows
+from a component's call.
 
 Removing a row with `pop` does not delete anything by itself. When the row is a
 saved record, the formset remembers it and `save()` deletes it along with saving

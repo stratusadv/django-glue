@@ -494,9 +494,10 @@ the button calls `component.send_invoice()` with no arguments.
   `Glue.property`.
 - **A chosen file in a child's field is not sent.** Take a file on the
   component itself.
-- **The browser can still call a child's own `save()`.** When only the
-  component's call may write, override `save()` on the form class to do
-  nothing.
+- **Only the component's call writes.** A child form or formset offers the
+  browser no `save()` of its own unless its model form's `Meta` sets
+  `glue_default_save = True` ([forms](form_glue.md#saving-from-the-browser)),
+  so a child that only feeds the call needs nothing more.
 
 In a test that calls the component without a browser, nothing is submitted, so
 each read of a child builds a new one. Submit the children with the call, or

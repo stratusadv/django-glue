@@ -39,6 +39,7 @@
 | [`035`](035-middleware-guards-glue-calls-by-origin.md) | Accepted | A policy signs the path that issued its object, and every `MIDDLEWARE` class that defines `process_glue_call(request, glue_call)` runs per entry against that origin, before reconstruction; it may deny the entry but never grant |
 | [`036`](036-password-inputs-are-write-only.md) | Accepted | A `FormGlue` field whose widget is a `PasswordInput` with `render_value=False` is write-only: its value arrives as an update and is never signed, echoed or patched back; the client keeps what was typed and resends it, and the call is marked sensitive |
 | [`037`](037-a-redirecting-call-does-not-re-render.md) | Accepted | A component callable whose response redirects does not re-render its component, whatever else it changed, because the browser is leaving the page |
+| [`040`](040-glue-default-save-is-opt-in.md) | Proposed | A glued form or formset offers the browser Glue's default `save` only when its model form's `Meta` sets `glue_default_save = True`; otherwise `save` is not sent and a call to it is refused, while the form's own `save()` and declared callables are unchanged |
 
 Accepted records preserve why a choice was made. If an outcome changes, add a
 record that supersedes the earlier one instead of rewriting its decision.

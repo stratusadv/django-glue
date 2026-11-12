@@ -52,6 +52,7 @@ class TestModelForm(forms.ModelForm):
     class Meta:
         model = Gorilla
         fields = ['name', 'description', 'age', 'weight', 'height']
+        glue_default_save = True
 
 
 class FightForm(forms.ModelForm):

@@ -15,7 +15,11 @@ from django_glue.exceptions import (
 )
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.collection import BaseCollectionGlue
-from django_glue.glue.objects.django.form.object import FormGlue
+from django_glue.glue.objects.django.form.object import (
+    FormGlue,
+    offers_default_save,
+    without_default_save,
+)
 from django_glue.glue.policy import GluePolicy, GluePolicyTokenSerializer
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.utils import get_attr_from_path_string
@@ -26,6 +30,7 @@ if TYPE_CHECKING:
     from django import forms
     from django.db.models import Model, QuerySet
 
+    from django_glue.glue.attributes import GlueAttributeDefinition
     from django_glue.glue.base import BaseGlue
 
 
@@ -99,6 +104,9 @@ class FormSetGlue(BaseCollectionGlue):
         if self.form_class is None:
             msg = f"FormSetGlue '{name}' requires a form_class."
             raise ValueError(msg)
+
+        # Checked here as well as by each row, so a formset with no rows is refused too.
+        offers_default_save(self.form_class)
 
         self.min_num = cls.min_num if min_num is None else min_num
         self.max_num = cls.max_num if max_num is None else max_num
@@ -217,6 +225,16 @@ class FormSetGlue(BaseCollectionGlue):
 
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return list(self._forms)
+
+    def _collect_attributes(
+        self,
+    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
+        definitions, providers = super()._collect_attributes()
+
+        if offers_default_save(self.form_class):
+            return definitions, providers
+
+        return without_default_save(definitions, providers), providers
 
     def _membership(
         self,

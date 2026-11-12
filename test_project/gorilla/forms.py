@@ -29,6 +29,8 @@ class GorillaForm(forms.ModelForm):
             'skills',
             'fighting_stats',
         ]
+        # The gorilla list page's form-proxy modal saves this form from the browser.
+        glue_default_save = True
 
 
 class GorillaGlueModelForm(forms.ModelForm):
@@ -137,6 +139,8 @@ class FightNameForm(forms.ModelForm):
     class Meta:
         model = Fight
         fields = ['name']
+        # The fights editor saves its formset of these from the browser.
+        glue_default_save = True
 
 
 class GorillaNameForm(forms.Form):
@@ -159,3 +163,5 @@ class SkillForm(forms.ModelForm):
     class Meta:
         model = Skill
         fields = ['name', 'description', 'difficulty', 'level']
+        # The skill formset page saves its formset of these from the browser.
+        glue_default_save = True
