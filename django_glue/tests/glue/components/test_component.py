@@ -595,7 +595,8 @@ def test_skip_rerender_is_rejected_on_a_value_attribute() -> None:
 def test_skip_rerender_is_rejected_off_a_component() -> None:
     from django.db import models
 
-    with pytest.raises(RuntimeError) as glue_object:
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
+    with pytest.raises((RuntimeError, TypeError)) as glue_object:
         class NotAComponentGlue(BaseGlue):
             namespace = 'notAComponent'
 
@@ -603,7 +604,7 @@ def test_skip_rerender_is_rejected_off_a_component() -> None:
             def save(self) -> None:
                 pass
 
-    with pytest.raises(RuntimeError) as model_method:
+    with pytest.raises((RuntimeError, TypeError)) as model_method:
         class Report(models.Model):
             class Meta:
                 app_label = 'gorilla'
@@ -613,8 +614,9 @@ def test_skip_rerender_is_rejected_off_a_component() -> None:
                 pass
 
     for raised in (glue_object, model_method):
-        assert isinstance(raised.value.__cause__, TypeError)
-        assert 'only means something on a Glue.Component' in str(raised.value.__cause__)
+        error = raised.value.__cause__ or raised.value
+        assert isinstance(error, TypeError)
+        assert 'only means something on a Glue.Component' in str(error)
 
 
 def test_component_rejects_undeclared_or_missing_parameters() -> None:

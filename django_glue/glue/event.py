@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 from functools import partial
 from typing import Any
 
@@ -54,6 +56,10 @@ class GlueEvent:
         self.identity: str | None = None
 
     def __set_name__(self, owner: type, name: str) -> None:
+        # An event assigned to a second class attribute is the same event: it
+        # keeps the name and identity of the class that declared it.
+        if self.identity is not None:
+            return
         if is_reserved_event_name(name):
             raise GlueComponentRegistrationError(
                 f'Glue event {name!r} conflicts with a browser event or reserved name.'
@@ -68,3 +74,13 @@ class GlueEvent:
 
     def emit(self, instance: Any, **detail: Any) -> None:
         emit_event(instance, self.name, detail)
+
+
+def declared_event_identities(*owners: type) -> dict[str, str]:
+    """Each event the classes declare or inherit, by name, mapped to its identity (ADR 024)."""
+    return {
+        name: declaration.identity
+        for owner in owners
+        for name, declaration in inspect.getmembers_static(owner)
+        if isinstance(declaration, GlueEvent)
+    }

@@ -79,13 +79,14 @@ def test_component_parameter_is_a_shortcut_for_attr_parameter() -> None:
 
 
 def test_parameter_on_non_component_glue_object_raises() -> None:
-    with pytest.raises(RuntimeError) as exc_info:
+    # Python 3.11 wraps a __set_name__ error in RuntimeError; 3.12 and later raise it as is.
+    with pytest.raises((RuntimeError, TypeError)) as exc_info:
 
         class NonComponentParameterGlue(BaseGlue):
             namespace = 'nonComponentParameter'
             param = Glue.ComponentParameter(0)
 
-    underlying = exc_info.value.__cause__ or exc_info.value.__context__
+    underlying = exc_info.value.__cause__ or exc_info.value
     assert isinstance(underlying, TypeError)
     assert 'only valid on Glue.Component' in str(underlying)
 

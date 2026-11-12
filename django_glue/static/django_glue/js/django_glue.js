@@ -4291,6 +4291,10 @@ ${expression ? 'Expression: "' + expression + `"
   var policy_default = GluePolicy;
 
   // client_js/src/proxies/base.ts
+  function isEventReceiver(proxy) {
+    return typeof proxy?._reactionsTo === "function";
+  }
+
   class BaseGlueProxy {
     constructor({ http, record, registry, client, owner = null }) {
       Object.defineProperties(this, {
@@ -4325,6 +4329,7 @@ ${expression ? 'Expression: "' + expression + `"
     }
     async $dispatch(name, detail = {}) {
       this._requireDeclaredEvent(name);
+      await Promise.allSettled(this._deliverEvents({ effects: { events: [{ name, detail }] } }));
       this._raiseEvent(name, detail);
     }
     $on(name, callback) {
@@ -4468,7 +4473,26 @@ ${expression ? 'Expression: "' + expression + `"
         updates: this._record.captureRequest().updates
       };
     }
-    async _applyResponse(target, result) {}
+    async _applyResponse(target, result) {
+      await Promise.allSettled(this._deliverEvents(target));
+    }
+    _deliverEvents(target) {
+      const eventIds = this._record.staticData?.event_ids || {};
+      const events = (target.effects?.events || []).filter(({ name }) => eventIds[name]).map(({ name, detail }) => ({
+        event: eventIds[name],
+        source_token: this._record.policyToken,
+        detail
+      }));
+      if (!events.length)
+        return [];
+      const ancestors = new Set(this._record.policy.identity?.ancestors || []);
+      const mounted = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => isEventReceiver(proxy) && proxy !== this && Boolean(proxy.$el));
+      const deliveries = mounted.map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
+      if (!deliveries.length)
+        return [];
+      const batch = new GlueRequestBatch(this._http, deliveries.length);
+      return deliveries.map(([proxy, reactions]) => proxy._callAttribute("$receive", { events: reactions }, { batch }));
+    }
     async _reintroduceWithOwner() {
       const owner = this._record.owner;
       if (!owner?.path)
@@ -4956,28 +4980,6 @@ ${expression ? 'Expression: "' + expression + `"
         domEvent.source = event.source;
         root.dispatchEvent(domEvent);
       }
-    }
-    async $dispatch(name, detail = {}) {
-      this._requireDeclaredEvent(name);
-      await Promise.allSettled(this._deliverEvents({ effects: { events: [{ name, detail }] } }));
-      this._raiseEvent(name, detail);
-    }
-    _deliverEvents(target) {
-      const eventIds = this._record.staticData?.event_ids || {};
-      const events = (target.effects?.events || []).filter(({ name }) => eventIds[name]).map(({ name, detail }) => ({
-        event: eventIds[name],
-        source_token: this._record.policyToken,
-        detail
-      }));
-      if (!events.length)
-        return [];
-      const ancestors = new Set(this._record.policy.identity?.ancestors || []);
-      const mounted = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => proxy instanceof GlueComponentProxy && proxy !== this && proxy.$el);
-      const deliveries = mounted.map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
-      if (!deliveries.length)
-        return [];
-      const batch = new GlueRequestBatch(this._http, deliveries.length);
-      return deliveries.map(([proxy, reactions]) => proxy._callAttribute("$receive", { events: reactions }, { batch }));
     }
     _reactionsTo(events, fromDescendant) {
       const staticData = this._record.staticData || {};

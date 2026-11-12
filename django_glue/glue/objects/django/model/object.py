@@ -123,6 +123,10 @@ class ModelGlue(
     def get_attribute_providers(self) -> tuple[Any, ...]:
         return (self.instance,)
 
+    @classmethod
+    def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
+        return (cls, get_attr_from_path_string(policy.identity['model_class_path']))
+
     def get_identity(self) -> dict[str, Any]:
         instance = self.instance
         identity = {
