@@ -1,5 +1,140 @@
 # Changelog for Django Glue
 
+## v1.4.0
+
+### Features
+
+- A callable's arguments are checked against their annotations before it runs
+  (ADR 038), by the same serializers that check editable values and component
+  parameters. A value is converted where it safely can be, so
+  `'12'` reaches an `int` argument as `12`, and refused otherwise.
+  `Annotated` adds rules:
+
+  ```python
+  PageNumber = Annotated[int, Strict(), Field(ge=1)]
+
+  @Glue.html_attr
+  def rows(self, page: PageNumber) -> TemplateResponse:
+      ...
+  ```
+
+  An unannotated argument, or one annotated `object` or `Any`, receives what
+  the browser sent, as before. A `Glue.function` target's own arguments are not
+  checked: it receives them as one mapping. See
+  [callable arguments](../guides/components.md#callable-arguments).
+
+- Each declaration has one serializer, a `GlueSerializer`, that carries its
+  values both ways (ADR 042): `load` for what the browser sends, `restore` for a
+  signed value, `dump` for the wire form, `check` to refuse a declaration
+  before any value arrives (Glue calls it for each annotated callable argument
+  when the class is first used), `default` for an attribute that declares no
+  default, and `adopt` for a default or assigned value. Register your own with
+  `glue_serializer_registry.register(MySerializer)`.
+
+- An attribute can hold a value that is not JSON when its type hint can dump
+  it, such as a dataclass. Values that were sent before are sent exactly as
+  before.
+
+- An attribute typed as a Django form class holds that form as the owner's
+  state (ADR 042). It is signed and updated as one editable value, so it holds
+  through a refresh and a re-render, and Spire's field templates bind to its
+  fields:
+
+  ```python
+  class AccountListComponent(Component):
+      filters: AccountFilterForm = Glue.attr(editable=True)
+
+      def get_queryset(self):
+          if self.filters.is_valid():
+              search = self.filters.cleaned_data['search']
+  ```
+
+  See [a form as state](../guides/components.md#a-form-as-state).
+
+- A formset takes `form_kwargs` and builds every row form with them, as a Django
+  formset does (ADR 041), including rows added in the browser and rows rebuilt
+  on a later request. They are signed, so they are plain values. A row form can
+  then narrow a choice field by what the server knows:
+
+  ```python
+  JournalLineFormSet(access=Glue.Access.ADD, form_kwargs={'company_id': company.pk})
+  ```
+
+  Override `get_form_kwargs()` to give every row values the formset derives once
+  per request, such as the rows each form looks its choice up in. See
+  [rows that need constructor arguments](../guides/form_glue.md#rows-that-need-constructor-arguments).
+
+### Breaking
+
+- A value its annotation refuses fails the call with `invalid_kwargs`, naming
+  the argument, where the callable used to receive it: `null` or a number for a
+  `str`, a list or an object for an `int`, `''` for an `int | None`.
+- A value its annotation converts arrives converted. `'12'` for an `int` is
+  `12`, and `'false'` for a `bool` is `False`, no longer a truthy string.
+- `GlueSerializerHandler` is replaced by `GlueSerializer` (ADR 042). A handler
+  becomes a `GlueSerializer` subclass: `supports` is a classmethod, `coerce` is
+  `load`, `decode` is `restore`, `encode` is `dump`, `prepare` is `check`, and
+  each reads its target from `self.target`. Register the class, not an
+  instance.
+- `glue_serializer_registry` no longer converts a value itself: its `coerce`,
+  `decode`, `encode` and `prepare` are gone. Ask it for the serializer with
+  `glue_serializer_registry.resolve(target)` and call that.
+- `BaseGlue.get_attribute_adapters()` is `get_value_attribute_presentations()`,
+  and `GlueAttributeAdapter` is `GlueValueAttributePresentation`, without
+  `coerce` and `decode`: a declaration built at runtime names what converts its
+  values with `Glue.attr(value_type=...)`.
+- `DeclaredAttribute`, exported from `django_glue`, is
+  `GlueAttributeDeclaration`, and `GlueAttributeDefinition` is `GlueAttribute`.
+  `Glue.attr` is unchanged.
+- The wire between the server and its bundled client changes shape (ADR 042):
+  `static_data.fields` is `static_data.value_attributes`, and `computed_data`
+  holds derived values under `values` and presentation output under
+  `value_attributes`, so a derived attribute named `fields` is no longer lost.
+  `$fields` and the members of the objects in it are unchanged, and pages need
+  no change. Code that reads either dict directly, usually a test, must follow:
+
+  | 1.3 | 1.4 |
+  |---|---|
+  | `entry['computed_data']['total_hours']` (a derived value) | `entry['computed_data']['values']['total_hours']` |
+  | `entry['computed_data']['fields']['email']['errors']` | `entry['computed_data']['value_attributes']['email']['errors']` |
+  | `entry['static_data']['fields']` | `entry['static_data']['value_attributes']` |
+  | `bound_attribute.definition` | `bound_attribute.attribute` |
+  | `from django_glue.glue.attributes.definition import GlueAttributeKind` | `from django_glue.glue.attributes import GlueAttributeKind` |
+
+  The client's `FieldGlue` classes are `GlueValueAttribute`,
+  `GlueChoiceAttribute`, `GlueManyChoiceAttribute`, `GlueRelationAttribute` and
+  `GlueManyRelationAttribute`.
+- An attribute's default is adapted as an assigned value is (ADR 042). A
+  non-empty default list on an attribute with a `glue_factory` now becomes a
+  `SequenceGlue`, as the same list assigned in code already did.
+- An annotation that cannot be resolved at runtime, such as a type imported only
+  under `if TYPE_CHECKING:`, or one no serializer handles, such as a model
+  class, raises `TypeError` naming the callable and the argument the first time
+  the class is used. Import the type at runtime, or take a key and look the row
+  up. The injected `request` argument may stay a type-checking import.
+- A glued form or formset offers the browser Glue's default `save()` only when
+  its model form's `Meta` sets `glue_default_save = True` (ADR 040). Without
+  it, the browser is not sent `save`, and a call to it is refused as
+  `missing_attribute`. Until now every glued form offered it, so a form whose
+  model is saved through a service, or that only feeds a component's call, was
+  also a way to write the model directly. A page that calls `form.save()` or
+  `formset.save()` from the browser must opt in:
+
+  ```python
+  class GorillaForm(forms.ModelForm):
+      class Meta:
+          model = Gorilla
+          fields = ['name', 'age']
+          glue_default_save = True
+  ```
+
+  A formset follows its row form. The form's own `save()`, a form's declared
+  callables such as `save_model_obj`, and `Glue.model()`'s `save()` are
+  unchanged. A plain `Form` no longer offers a `save()` that saved nothing, and
+  setting the option on a form without a `save()`, or to a value that is not a
+  bool, raises `ImproperlyConfigured`. See
+  [saving from the browser](../guides/form_glue.md#saving-from-the-browser).
+
 ## v1.3.1
 
 ### Fixes

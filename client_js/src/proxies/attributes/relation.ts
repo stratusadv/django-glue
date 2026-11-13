@@ -1,10 +1,13 @@
+import type GlueAddressRecord from "../../runtime/addressRecord"
 import type {GlueChoice} from "../../wire"
-import type {GlueFieldOwner} from "./base"
-import ChoiceFieldGlue from "./choice"
+import type {GlueValueAttributeOwner} from "./base"
+import GlueChoiceAttribute from "./choice"
 
 // A relation's owner serves its choices through a `foreign_key_choices`
-// callable, materialized on the proxy when the server declares it.
-interface GlueRelationFieldOwner extends GlueFieldOwner {
+// callable, materialized on the proxy when the server declares it, and its
+// record's policy names the model or form the choices belong to.
+interface GlueRelationAttributeOwner extends GlueValueAttributeOwner {
+    _record: GlueAddressRecord
     foreign_key_choices?(kwargs: {field_name: string, search?: string}): Promise<{results?: GlueChoice[]} | null | undefined>
 }
 
@@ -13,14 +16,14 @@ interface GlueChoicesCache {
     loaded: boolean
     promise: Promise<GlueChoice[]> | null
     choices: GlueChoice[]
-    fields: Set<RelationFieldGlue>
+    fields: Set<GlueRelationAttribute>
 }
 
-class RelationFieldGlue extends ChoiceFieldGlue {
+class GlueRelationAttribute extends GlueChoiceAttribute {
     // Static cache tracks loading state only, not data
     static loadingCache = new Map<string, GlueChoicesCache>()
 
-    declare owner: GlueRelationFieldOwner
+    declare owner: GlueRelationAttributeOwner
     declare _choices: GlueChoice[] | undefined
     declare _choicesOverridden: boolean | undefined
     declare _searchQuery: string | undefined
@@ -91,7 +94,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
             return this._retainedSelectedChoice
         }
 
-        // selected_choice metadata seeds the current value of a searchable
+        // selected_choice presentation seeds the current value of a searchable
         // relation before the user has issued a query.
         if (this.selected_choice && String(this.selected_choice.value) === String(pk)) {
             return this.selected_choice
@@ -211,7 +214,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     }
 
     _getOrCreateCache(cacheKey: string): GlueChoicesCache {
-        let cache = RelationFieldGlue.loadingCache.get(cacheKey)
+        let cache = GlueRelationAttribute.loadingCache.get(cacheKey)
         if (!cache) {
             cache = {
                 loaded: false,
@@ -219,7 +222,7 @@ class RelationFieldGlue extends ChoiceFieldGlue {
                 choices: [],
                 fields: new Set(),
             }
-            RelationFieldGlue.loadingCache.set(cacheKey, cache)
+            GlueRelationAttribute.loadingCache.set(cacheKey, cache)
         }
         return cache
     }
@@ -249,5 +252,5 @@ class RelationFieldGlue extends ChoiceFieldGlue {
     }
 }
 
-export type {GlueRelationFieldOwner}
-export default RelationFieldGlue
+export type {GlueRelationAttributeOwner}
+export default GlueRelationAttribute

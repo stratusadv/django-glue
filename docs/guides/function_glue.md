@@ -16,8 +16,11 @@ const total = await Glue.function.calculate_total({hours: 4, rate: 125})
 
 The callable's declared parameter names and allowed arguments are compiled
 into its capability. The server validates a call against that signed
-capability and the current declaration. Values are serialized through the
-ordinary Glue value boundary.
+capability and the current declaration. The arguments reach the function as
+the browser sent them: unlike a component's or form's callable, whose
+arguments are checked against their annotations
+([callable arguments](components.md#callable-arguments)), a function's
+annotations are not checked, so validate its arguments inside it.
 
 A callable may return ordinary serializable data or a directly declared,
 configured Glue object. An introduced object receives its own address and

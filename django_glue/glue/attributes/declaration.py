@@ -7,11 +7,13 @@ from types import MethodType
 from typing import TYPE_CHECKING, Any, Callable
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.definition import GlueValueRole
+from django_glue.glue.attributes.attribute import GlueValueRole
 from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
+from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
+    from django_glue.serialization import GlueSerializer
 
 _MISSING = object()
 _SESSION_VALUE_ONLY = (
@@ -21,7 +23,7 @@ _SESSION_VALUE_ONLY = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DeclaredAttributeOptions:
+class GlueAttributeDeclarationOptions:
     """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
 
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
@@ -30,6 +32,7 @@ class DeclaredAttributeOptions:
     skip_rerender: bool = False
     is_parameter: bool = False
     value_role: GlueValueRole | None = None
+    value_type: Any | None = None
     is_namespace: bool = False
     provider_type: type[Any] | None = None
     expected_type: type[Any] | None = None
@@ -37,7 +40,7 @@ class DeclaredAttributeOptions:
     is_declared_child: bool = False
 
 
-class DeclaredAttribute:
+class GlueAttributeDeclaration:
     """
     Descriptor for marking methods or values as Glue attributes.
 
@@ -76,11 +79,12 @@ class DeclaredAttribute:
         default_factory: Callable[[], Any] | object = _MISSING,
         glue_factory: Callable[..., Any] | None = None,
         value_adapters: list[GlueValueAdapter] | None = None,
+        value_type: Any | None = None,
     ) -> None:
         if value is not _MISSING and default is not _MISSING:
-            raise TypeError('DeclaredAttribute received both value and default.')
+            raise TypeError('GlueAttributeDeclaration received both value and default.')
         if default is not _MISSING and default_factory is not _MISSING:
-            raise TypeError('DeclaredAttribute received both default and default_factory.')
+            raise TypeError('GlueAttributeDeclaration received both default and default_factory.')
 
         self.required_access = required_access
         self._parameter = parameter
@@ -92,6 +96,10 @@ class DeclaredAttribute:
         self.default_factory = default_factory
         self.glue_factory = glue_factory
         self.value_adapters = value_adapters if value_adapters is not None else DEFAULT_VALUE_ADAPTERS
+        # What a type hint says for a class attribute: a declaration built at
+        # runtime has no hint, so it names its type here.
+        self._value_type = value_type
+        self._serializers: dict[type[Any], GlueSerializer] = {}
         self.name: str | None = None
         self.storage_name: str | None = None
         self.target: Any = None
@@ -112,13 +120,14 @@ class DeclaredAttribute:
 
     def _update_glue_options(self) -> None:
         """Create and attach the __glue_options__ based on current state."""
-        self.__glue_options__ = DeclaredAttributeOptions(
+        self.__glue_options__ = GlueAttributeDeclarationOptions(
             required_access=self.required_access,
             is_callable=self._is_callable,
             render_as_html=self._render_as_html,
             skip_rerender=self._skip_rerender,
             is_parameter=self._parameter,
             value_role=self._resolve_value_role(),
+            value_type=self._value_type,
         )
 
     def _store_in_session(self) -> None:
@@ -225,14 +234,32 @@ class DeclaredAttribute:
         if self.storage_name in instance.__dict__:
             return instance.__dict__[self.storage_name]
         if self.default_factory is not _MISSING:
-            value = self._prepare_default(self.default_factory())
-            instance.__dict__[self._get_storage_name()] = value
-            return value
+            return self._store(instance, self._prepare_default(self.default_factory()))
         if self.default is not _MISSING:
-            value = self._prepare_default(self._clone_default())
-            instance.__dict__[self._get_storage_name()] = value
-            return value
-        return None
+            return self._store(instance, self._prepare_default(self._clone_default()))
+        value = self._serializer(type(instance)).default()
+        if value is None:
+            return None
+        return self._store(instance, self._prepare_default(value))
+
+    def _serializer(self, owner_type: type[Any]) -> GlueSerializer:
+        """This declaration's serializer on one owner class, found once per class."""
+        try:
+            return self._serializers[owner_type]
+        except KeyError:
+            pass
+
+        from django_glue.glue.attributes.collector import GlueAttributeCollector  # noqa: PLC0415
+
+        serializer = self._serializers[owner_type] = next(
+            (
+                attribute.serializer
+                for attribute in GlueAttributeCollector.collect(owner_type)
+                if attribute.path == self.name and attribute.serializer is not None
+            ),
+            glue_serializer_registry.resolve(None),
+        )
+        return serializer
 
     def __set__(self, instance: Any, value: Any) -> None:
         if isinstance(self.target, property) and self.target.fset is not None:
@@ -241,8 +268,13 @@ class DeclaredAttribute:
         if hasattr(self.target, '__set__'):
             self.target.__set__(instance, value)
             return
-        value = self._adapt_value(value, instance)
+        self._store(instance, value)
+
+    def _store(self, instance: Any, value: Any) -> Any:
+        """Holds a default or an assigned value as its serializer adopts it and a value adapter converts it."""
+        value = self._adapt_value(self._serializer(type(instance)).adopt(value), instance)
         instance.__dict__[self._get_storage_name()] = value
+        return value
 
     def _adapt_value(self, value: Any, instance: Any) -> Any:
         """Run value through the first matching GlueValueAdapter, if any."""
@@ -260,7 +292,7 @@ class DeclaredAttribute:
             return
         instance.__dict__.pop(self._get_storage_name(), None)
 
-    def _bind_target(self, target: Callable[..., Any] | property) -> DeclaredAttribute:
+    def _bind_target(self, target: Callable[..., Any] | property) -> GlueAttributeDeclaration:
         self.target = target
         self._is_callable = not isinstance(target, property)
         self._validate_callable_options()

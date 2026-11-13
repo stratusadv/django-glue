@@ -1,19 +1,19 @@
-from django_glue.glue.attributes.collector import GlueAttributeCollector
-from django_glue.glue.attributes.declared import DeclaredAttribute
-from django_glue.glue.attributes.definition import (
+from django_glue.glue.attributes.attribute import (
     BoundGlueAttribute,
-    GlueAttributeDefinition,
+    GlueAttribute,
     GlueAttributeKind,
     GlueValueRole,
 )
+from django_glue.glue.attributes.collector import GlueAttributeCollector
+from django_glue.glue.attributes.declaration import GlueAttributeDeclaration
 from django_glue.glue.attributes.namespace import GlueNamespace
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 
 __all__ = [
     'BoundGlueAttribute',
-    'DeclaredAttribute',
+    'GlueAttribute',
     'GlueAttributeCollector',
-    'GlueAttributeDefinition',
+    'GlueAttributeDeclaration',
     'GlueAttributeKind',
     'GlueAttributeRegistry',
     'GlueNamespace',

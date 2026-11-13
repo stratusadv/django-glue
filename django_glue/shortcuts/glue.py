@@ -10,12 +10,12 @@ from django.forms import BaseForm, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import DeclaredAttribute
-from django_glue.glue.attributes.declared import DeclaredAttributeOptions
-from django_glue.glue.attributes.definition import (
+from django_glue.glue.attributes import GlueAttributeDeclaration
+from django_glue.glue.attributes.attribute import (
     GlueValueRole,
     _resolve_glue_result_annotation,
 )
+from django_glue.glue.attributes.declaration import GlueAttributeDeclarationOptions
 from django_glue.glue.attributes.namespace import GlueNamespace
 from django_glue.glue.components import Component
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
@@ -52,7 +52,7 @@ class _GluePropertyDescriptor:
         self._property = property(func)
         self._name: str | None = None
         expected_type, is_nullable = _resolve_glue_result_annotation(func)
-        self.__glue_options__ = DeclaredAttributeOptions(
+        self.__glue_options__ = GlueAttributeDeclarationOptions(
             required_access=GlueAccess.VIEW,
             is_callable=False,
             value_role=GlueValueRole.DERIVED_OUTPUT,
@@ -116,18 +116,18 @@ class _GlueChildDescriptor(_GluePropertyDescriptor):
         return super().__get__(instance, owner)
 
 def _attr(*args: Any, **kwargs: Any) -> Any:
-    return DeclaredAttribute(*args, **kwargs)
+    return GlueAttributeDeclaration(*args, **kwargs)
 
 
 _attr = update_wrapper(
     _attr,
-    DeclaredAttribute,
+    GlueAttributeDeclaration,
     assigned=('__module__', '__name__', '__qualname__', '__doc__'),
     updated=(),
 )
 
 
-def _html_attr(*args, **kwargs) -> DeclaredAttribute:
+def _html_attr(*args, **kwargs) -> GlueAttributeDeclaration:
     """
     Shortcut for @Glue.attr(render_as_html=True).
 
@@ -146,10 +146,10 @@ def _html_attr(*args, **kwargs) -> DeclaredAttribute:
             ...
     """
     kwargs.setdefault('render_as_html', True)
-    return DeclaredAttribute(*args, **kwargs)
+    return GlueAttributeDeclaration(*args, **kwargs)
 
 
-def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
+def _component_parameter(*args: Any, **kwargs: Any) -> GlueAttributeDeclaration:
     """
     Shortcut for @Glue.attr(parameter=True).
 
@@ -181,10 +181,10 @@ def _component_parameter(*args: Any, **kwargs: Any) -> DeclaredAttribute:
             return BoundedModelParameter(args[0])
         return ConcreteModelParameter(args[0])
     kwargs.setdefault('parameter', True)
-    return DeclaredAttribute(*args, **kwargs)
+    return GlueAttributeDeclaration(*args, **kwargs)
 
 
-def _session_attr(*args: Any, **kwargs: Any) -> DeclaredAttribute:
+def _session_attr(*args: Any, **kwargs: Any) -> GlueAttributeDeclaration:
     """
     Shortcut for Glue.attr(session=True).
 
@@ -201,7 +201,7 @@ def _session_attr(*args: Any, **kwargs: Any) -> DeclaredAttribute:
                 self.step += 1
     """
     kwargs.setdefault('session', True)
-    return DeclaredAttribute(*args, **kwargs)
+    return GlueAttributeDeclaration(*args, **kwargs)
 
 
 def _event(obj: Any | None = None, name: str | None = None, payload: dict[str, Any] | None = None) -> GlueEvent | None:
@@ -416,6 +416,7 @@ class Glue:
         initial: Iterable[Mapping[str, Any]] = (),
         instances: Iterable[models.Model | BaseForm] = (),
         new_row_defaults: Mapping[str, Any] | None = None,
+        form_kwargs: Mapping[str, Any] | None = None,
         min_num: int | None = None,
         max_num: int | None = None,
         can_delete: bool | None = None,
@@ -426,6 +427,7 @@ class Glue:
                 initial=initial,
                 instances=instances,
                 new_row_defaults=new_row_defaults,
+                form_kwargs=form_kwargs,
                 name=unique_name,
                 access=access,
                 min_num=min_num,
@@ -448,6 +450,7 @@ class Glue:
                 initial=initial,
                 instances=instances,
                 new_row_defaults=new_row_defaults,
+                form_kwargs=form_kwargs,
                 name=unique_name,
                 access=access,
                 min_num=min_num,

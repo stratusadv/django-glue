@@ -1,13 +1,13 @@
 import {reactive} from "../alpine"
 import GluePolicy from "../policy"
-import type FieldGlue from "../proxies/fields/base"
+import type GlueValueAttribute from "../proxies/attributes/base"
 import type {
     GlueAddressedEntry,
     GlueChildSubmission,
     GlueComputedData,
-    GlueFieldComputed,
     GlueObjectEntry,
     GlueStaticData,
+    GlueValueComputedData,
 } from "../wire"
 import {
     applyUpdates,
@@ -25,7 +25,7 @@ import type {GlueValues} from "./state"
 interface GlueRecordProxy {
     _record: GlueAddressRecord
     _owner: GlueRecordProxy | null
-    _fields?: Record<string, FieldGlue>
+    _valueAttributes?: Record<string, GlueValueAttribute>
     _refreshMaterializedInterface(): void
     _afterRecordRefresh?(): void
     _onDispose?(): void
@@ -138,8 +138,8 @@ class GlueAddressRecord {
         if (!this._suppressMutations) this._incrementRevision(path)
     }
 
-    getFieldComputed(path: string): Partial<GlueFieldComputed> {
-        return this.computedData?.fields?.[path] || {}
+    getValueComputedData(path: string): Partial<GlueValueComputedData> {
+        return this.computedData?.value_attributes?.[path] || {}
     }
 
     captureRequest(): GlueRequestCapture {

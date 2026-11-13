@@ -1,17 +1,17 @@
 import type {GlueProxyOptions} from "../runtime/addressRegistry"
 import BaseGlueProxy from "./base"
-import type FieldGlue from "./fields/base"
+import type GlueValueAttribute from "./attributes/base"
 
 class FieldBackedGlueProxy extends BaseGlueProxy {
-    _fields: Record<string, FieldGlue>
+    _valueAttributes: Record<string, GlueValueAttribute>
 
     constructor(options: GlueProxyOptions) {
         super(options)
-        this._fields = {}
+        this._valueAttributes = {}
     }
 
-    get $fields(): Record<string, FieldGlue> {
-        return this._fields
+    get $fields(): Record<string, GlueValueAttribute> {
+        return this._valueAttributes
     }
 
     get $pk(): unknown {
@@ -25,10 +25,10 @@ class FieldBackedGlueProxy extends BaseGlueProxy {
 
     hasErrors(fieldName: string | null = null): boolean {
         if (fieldName) {
-            return Boolean(this._record.getFieldComputed(fieldName).errors?.length)
+            return Boolean(this._record.getValueComputedData(fieldName).errors?.length)
         }
-        return Object.values(this._record.computedData.fields || {}).some(
-            fieldData => fieldData?.errors?.length > 0
+        return Object.values(this._record.computedData.value_attributes || {}).some(
+            computedData => computedData?.errors?.length > 0
         )
     }
 }

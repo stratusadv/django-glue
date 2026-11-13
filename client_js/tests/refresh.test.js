@@ -4,7 +4,7 @@ import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
 function model() {
     const client = new GlueClient({objects: [createEntry({
-        computedData: {fields: {name: {errors: []}}},
+        computedData: {value_attributes: {name: {errors: []}}},
     })]})
     return {client, proxy: client.model.gorilla}
 }

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import pytest
+from pydantic import Field, Strict
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueRequestError
+from django_glue.exceptions import GlueError, GlueRequestError
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.glue.policy import GluePolicy
@@ -45,6 +46,38 @@ class CallableProbeGlue(BaseGlue):
     def _reconstruct_from_policy(cls, policy: GluePolicy) -> CallableProbeGlue:
         _ = policy
         return cls()
+
+
+class ArgumentProbeGlue(BaseGlue):
+    namespace = 'argumentProbe'
+
+    def __init__(self) -> None:
+        super().__init__(access=GlueAccess.VIEW)
+
+    @Glue.attr
+    def count(self, amount: int) -> dict[str, Any]:
+        return {'value': amount, 'type': type(amount).__name__}
+
+    @Glue.attr
+    def page(self, number: Annotated[int, Strict(), Field(ge=1)]) -> int:
+        return number
+
+    @Glue.attr
+    def passthrough(self, raw, anything: object = None, whatever: Any = None) -> list[Any]:  # noqa: ANN001
+        return [raw, anything, whatever]
+
+    @classmethod
+    def _reconstruct_from_policy(cls, policy: GluePolicy) -> ArgumentProbeGlue:
+        _ = policy
+        return cls()
+
+
+class CallDenyingArgumentProbeGlue(ArgumentProbeGlue):
+    namespace = 'callDenyingArgumentProbe'
+
+    def is_authorized(self, request: HttpRequest, operation: Glue.Operation) -> bool:
+        _ = request
+        return operation.kind is not Glue.OperationKind.CALL
 
 
 class CallableProvider:
@@ -209,11 +242,11 @@ def test_policy_signs_declared_client_arguments_only(
     )
 
     process = glue_object.policy.capability.callables['process']
-    definition = glue_object._attribute_registry.get('process')
+    attribute = glue_object._attribute_registry.get('process')
 
     assert process.allowed_arguments == ('step',)
-    assert definition is not None
-    assert definition.injected_arguments == ('request',)
+    assert attribute is not None
+    assert attribute.injected_arguments == ('request',)
 
 
 def test_call_injects_request_and_applies_editable_updates(
@@ -295,6 +328,123 @@ def test_missing_required_argument_is_invalid_kwargs(
 
     assert error.value.code == 'invalid_kwargs'
     assert error.value.details() == {'attribute': 'required', 'argument': 'volume'}
+
+
+def test_argument_is_coerced_to_its_annotation(
+    mock_request: HttpRequest,
+) -> None:
+    glue_object = Glue.object(mock_request, ArgumentProbeGlue())
+
+    payload, _introduced = glue_object.process_attribute_call(
+        call_context(glue_object, 'count', kwargs={'amount': '5'})
+    )
+
+    assert payload['result'] == {'value': 5, 'type': 'int'}
+
+
+def test_argument_its_annotation_refuses_is_invalid_kwargs(
+    mock_request: HttpRequest,
+) -> None:
+    glue_object = Glue.object(mock_request, ArgumentProbeGlue())
+    context = call_context(glue_object, 'count', kwargs={'amount': {'gt': 0}})
+
+    with pytest.raises(GlueRequestError) as error:
+        glue_object.process_attribute_call(context)
+
+    assert error.value.code == 'invalid_kwargs'
+    assert error.value.details() == {'attribute': 'count', 'argument': 'amount'}
+    assert 'gt' not in str(error.value)
+
+
+@pytest.mark.parametrize('number', [True, '1', 0])
+def test_annotated_metadata_constrains_the_argument(
+    mock_request: HttpRequest,
+    number: Any,
+) -> None:
+    glue_object = Glue.object(mock_request, ArgumentProbeGlue())
+    context = call_context(glue_object, 'page', kwargs={'number': number})
+
+    with pytest.raises(GlueRequestError) as error:
+        glue_object.process_attribute_call(context)
+
+    assert error.value.code == 'invalid_kwargs'
+
+
+def test_annotated_metadata_admits_a_conforming_argument(
+    mock_request: HttpRequest,
+) -> None:
+    glue_object = Glue.object(mock_request, ArgumentProbeGlue())
+
+    payload, _introduced = glue_object.process_attribute_call(
+        call_context(glue_object, 'page', kwargs={'number': 3})
+    )
+
+    assert payload['result'] == 3
+
+
+def test_unannotated_object_and_any_arguments_pass_unchanged(
+    mock_request: HttpRequest,
+) -> None:
+    glue_object = Glue.object(mock_request, ArgumentProbeGlue())
+    kwargs = {'raw': {'a': 1}, 'anything': [1, '2'], 'whatever': '3'}
+
+    payload, _introduced = glue_object.process_attribute_call(
+        call_context(glue_object, 'passthrough', kwargs=kwargs)
+    )
+
+    assert payload['result'] == [{'a': 1}, [1, '2'], '3']
+
+
+def test_unauthorized_call_is_refused_before_its_arguments_are_coerced(
+    mock_request: HttpRequest,
+) -> None:
+    glue_object = Glue.object(mock_request, CallDenyingArgumentProbeGlue())
+    context = call_context(glue_object, 'count', kwargs={'amount': {'gt': 0}})
+
+    with pytest.raises(GlueError) as error:
+        glue_object.process_attribute_call(context)
+
+    assert error.value.code == 'not_authorized'
+
+
+def test_unresolvable_argument_annotation_is_a_declaration_error() -> None:
+    class UnresolvableArgumentGlue(BaseGlue):
+        namespace = 'unresolvableArgument'
+
+        def __init__(self) -> None:
+            super().__init__(access=GlueAccess.VIEW)
+
+        @Glue.attr
+        def lookup(self, pk: UndefinedRecordId) -> None:  # noqa: F821
+            _ = pk
+
+        @classmethod
+        def _reconstruct_from_policy(cls, policy: GluePolicy) -> UnresolvableArgumentGlue:
+            _ = policy
+            return cls()
+
+    with pytest.raises(TypeError, match="'lookup' cannot resolve the annotation of argument 'pk'"):
+        _ = UnresolvableArgumentGlue()._attribute_registry
+
+
+def test_unserializable_argument_annotation_is_a_declaration_error() -> None:
+    class UnserializableArgumentGlue(BaseGlue):
+        namespace = 'unserializableArgument'
+
+        def __init__(self) -> None:
+            super().__init__(access=GlueAccess.VIEW)
+
+        @Glue.attr
+        def adopt(self, other: BaseGlue) -> None:
+            _ = other
+
+        @classmethod
+        def _reconstruct_from_policy(cls, policy: GluePolicy) -> UnserializableArgumentGlue:
+            _ = policy
+            return cls()
+
+    with pytest.raises(TypeError, match="'adopt' cannot serialize argument 'other'"):
+        _ = UnserializableArgumentGlue()._attribute_registry
 
 
 def test_dotted_namespace_call_uses_bound_provider(

@@ -114,7 +114,7 @@ describe('view and template facades', () => {
                 name: 'card', namespace: 'component', address: 'card#test',
                 attributes: ['render', 'edit_modal'], state_snapshot: {},
             },
-            staticData: {fields: {}, callables: {
+            staticData: {value_attributes: {}, callables: {
                 render: {allowed_arguments: []},
                 edit_modal: {allowed_arguments: []},
             }},

@@ -131,6 +131,115 @@ A dotted path names exactly one class, which may live outside any `components`
 module. It is not looked up in `DIRS` or the installed apps, so a project
 cannot override a component stamped this way.
 
+## Callable arguments
+
+The arguments a browser passes to a callable are checked against their
+annotations before the method runs, the same way editable values are:
+
+```python
+from typing import Annotated
+
+from pydantic import Field, Strict
+
+PageNumber = Annotated[int, Strict(), Field(ge=1, le=1_000)]
+
+
+class ContactListComponent(Glue.Component):
+    template = 'contact/component/contact_list.html'
+
+    @Glue.attr(required_access=Glue.Access.DELETE)
+    def delete_contact(self, pk: int) -> None:
+        Contact.objects.filter(pk=pk).delete()
+
+    @Glue.html_attr
+    def rows(self, page: PageNumber) -> TemplateResponse:
+        ...
+```
+
+- **Values are converted where they safely can be.** `component.delete_contact({pk: '12'})`
+  calls `delete_contact(pk=12)`, so a value read from a `<select>` or a
+  `data-` attribute, which is always a string, works as it is. `'abc'`, `1.5`,
+  a list or an object is refused.
+- **`Annotated` adds rules.** `Strict()` refuses anything that is not already
+  the declared type, including `true` for an `int`. `Field(ge=1)` and Pydantic's
+  other constraints apply as written.
+- **A refused value runs nothing.** The call fails with `invalid_kwargs`,
+  naming the argument, and so does a call that leaves out an argument with no
+  default. Other objects in the same request are unaffected.
+- **Leave an argument unannotated, or annotate it `object` or `Any`,** to
+  receive whatever the browser sent.
+- **An annotation must be importable at runtime.** A type imported only under
+  `if TYPE_CHECKING:` cannot be resolved, and neither can a type no serializer
+  handles, such as a model class: either raises `TypeError` naming the callable
+  and the argument the first time the class is used. Pass a key and look the
+  row up instead of annotating with the model. The injected `request` argument
+  is the exception and may stay a type-checking import.
+
+This applies to every Glue callable, not only to components. A `Glue.function`
+target is the exception: it receives its arguments as one `kwargs` mapping,
+so its own annotations are not checked.
+
+## A form as state
+
+When a component renders from a few form-shaped values, such as a list's
+filters, declare them as an editable attribute typed as a Django form. The
+attribute holds the form, bound to its values, and the values are the
+component's own state: signed in its token, sent back by a refresh, and there
+on every render.
+
+```python
+class AccountFilterForm(forms.Form):
+    search = forms.CharField(required=False)
+    account_types = forms.MultipleChoiceField(choices=AccountTypeChoices.choices, required=False)
+    sort = forms.ChoiceField(choices=AccountSortChoices.choices, initial=AccountSortChoices.TYPE)
+
+
+class AccountListComponent(Component):
+    template = 'chart_of_accounts/component/account_list.html'
+
+    filters: AccountFilterForm = Glue.attr(editable=True)
+
+    def get_queryset(self) -> AccountQuerySet:
+        accounts = Account.objects.by_company(self.request.company)
+        if not self.filters.is_valid():
+            return accounts
+        return accounts.search(self.filters.cleaned_data['search'])
+```
+
+In the template, each field's value is `component.filters.<name>`, and its
+label, choices and errors are `component.filters.$fields.<name>`, as a glued
+form's are:
+
+```django
+<input type="search" x-model="component.filters.search" @input.debounce="component.$refresh()">
+<span x-text="component.filters.$fields.sort.label"></span>
+```
+
+- **The form is bound from the first render.** With no default declared, the
+  attribute starts as the form class called with no arguments. That form, one
+  a `default_factory` returns, and one assigned in a call
+  (`self.filters = AccountFilterForm()` resets it) are each bound to their own
+  initial values, so `is_valid()` answers before the browser has sent anything.
+- **Validate where you read.** Glue never validates the form for you. A field
+  shows its errors after your code has called `is_valid()`.
+- **The whole form travels together.** Changing one field sends all of its
+  values, and all of them are signed in the component's token. Keep it to a
+  few fields.
+- **Import the form at runtime.** A form imported only under
+  `if TYPE_CHECKING:` cannot type the attribute, which is then `None`.
+- **Some fields cannot be state.** A form with a file field, a password field
+  that does not render its value, or a field over a queryset
+  (`ModelChoiceField`) raises `TypeError` the first time the component is
+  used. A model form works when it has no instance, and offers no save.
+- **The form is built from its values alone.** A form whose `__init__`
+  requires an argument raises `TypeError` the first time the component is
+  used, and any other argument you build it with, such as a `prefix`, is not
+  kept.
+
+Use a [child form](#save-several-forms-in-one-call) instead when a call
+consumes the values, or the form edits a record, has rows, or has callables or
+events of its own.
+
 ## Lists: render rows as partials unless a row is live
 
 **Render each row of a list as a template partial of the component that owns the
@@ -494,9 +603,10 @@ the button calls `component.send_invoice()` with no arguments.
   `Glue.property`.
 - **A chosen file in a child's field is not sent.** Take a file on the
   component itself.
-- **The browser can still call a child's own `save()`.** When only the
-  component's call may write, override `save()` on the form class to do
-  nothing.
+- **Only the component's call writes.** A child form or formset offers the
+  browser no `save()` of its own unless its model form's `Meta` sets
+  `glue_default_save = True` ([forms](form_glue.md#saving-from-the-browser)),
+  so a child that only feeds the call needs nothing more.
 
 In a test that calls the component without a browser, nothing is submitted, so
 each read of a child builds a new one. Submit the children with the call, or

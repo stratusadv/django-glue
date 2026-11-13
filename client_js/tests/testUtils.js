@@ -42,11 +42,11 @@ function createPolicy(overrides = {}) {
 
 function createStaticData(overrides = {}) {
     return {
-        fields: {
+        value_attributes: {
             id: {value_path: 'id', type: 'AutoField', label: 'ID', editable: false},
             name: {value_path: 'name', type: 'CharField', label: 'Name', editable: true},
             birthday: {value_path: 'birthday', type: 'DateField', label: 'Birthday', editable: true},
-            ...(overrides.fields || {}),
+            ...(overrides.value_attributes || {}),
         },
         callables: {
             save: {allowed_arguments: []},

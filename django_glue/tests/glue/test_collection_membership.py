@@ -83,7 +83,7 @@ class QuerySetMembershipTestCase(TestCase):
 
         self.assertEqual(successor.children, self.policy.children)
         self.assertEqual([entry['address'] for entry in introduced], [row_address])
-        self.assertEqual(introduced[0]['computed_data']['name'], 'Renamed')
+        self.assertEqual(introduced[0]['computed_data']['values']['name'], 'Renamed')
 
     def test_reintroducing_a_deleted_row_drops_it(self):
         key = next(iter(self.policy.children))
@@ -148,7 +148,7 @@ class QuerySetRelationChildMembershipTestCase(TestCase):
         address = self.policy.children[self.path]
         self.assertEqual(successor.children[self.path], address)
         self.assertEqual([entry['address'] for entry in introduced], [address])
-        self.assertEqual(introduced[0]['computed_data']['name'], 'Koko Renamed')
+        self.assertEqual(introduced[0]['computed_data']['values']['name'], 'Koko Renamed')
 
     def test_reintroducing_a_relation_child_no_row_references_drops_it(self):
         from test_project.fight.models import Fight

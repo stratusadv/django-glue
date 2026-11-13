@@ -16,7 +16,7 @@ from django_glue.exceptions import (
     GlueModelInstanceNotFoundError,
     GlueModelParameterMismatchWarning,
 )
-from django_glue.glue.attributes.declared import DeclaredAttribute
+from django_glue.glue.attributes.declaration import GlueAttributeDeclaration
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,7 +67,7 @@ def _key_annotation_admits_none(initializer: Callable[..., Model]) -> bool:
     return type(None) in get_args(get_type_hints(initializer).get(key_name))
 
 
-class ModelParameter(DeclaredAttribute):
+class ModelParameter(GlueAttributeDeclaration):
     """
     A component parameter whose value is a model row, declared by decorating
     its initializer with ``Glue.ComponentParameter`` (ADR 021).

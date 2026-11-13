@@ -54,7 +54,7 @@ export interface GluePolicyPayload {
     created_at: number
 }
 
-// A field's choice. _field_schema() in glue/objects/django/field_adapter.py
+// A field's choice. field_schema() in glue/objects/django/fields/presentation.py
 // sends value and label; GlueRelatedModelChoices.serialize_item() in
 // glue/options/django/choices.py adds obj and has_html_label.
 export interface GlueChoice {
@@ -64,13 +64,17 @@ export interface GlueChoice {
     has_html_label?: boolean
 }
 
-// One entry of static_data.fields. A value attribute without an adapter sends
-// only value_path and editable (BaseGlue.get_static_data() in glue/base.py);
-// the field adapters' schema() in glue/objects/django/field_adapter.py sends
-// the rest.
-export interface GlueFieldDescriptor {
+// One entry of static_data.value_attributes. A value attribute without a
+// presentation sends only value_path and editable (BaseGlue.get_static_data()
+// in glue/base.py); its presentation's schema() (GlueValueAttributePresentation
+// in glue/attributes/presentation.py, implemented for fields in
+// glue/objects/django/fields/presentation.py) sends the rest.
+export interface GlueValueAttributeSchema {
     value_path: string
     editable: boolean
+    // The fields of a value that is a form held as state, by name:
+    // FormValueAttributePresentation.schema() in glue/objects/django/form/serializer.py.
+    fields?: Record<string, Omit<GlueValueAttributeSchema, 'value_path' | 'fields'>>
     // The server never sends this field's value back (ADR 036).
     write_only?: boolean
     namespace?: 'field'
@@ -102,7 +106,7 @@ export interface GlueCallableSchema {
 
 // BaseGlue.get_static_data() in glue/base.py. Each key is omitted when empty.
 export interface GlueStaticData {
-    fields?: Record<string, GlueFieldDescriptor>
+    value_attributes?: Record<string, GlueValueAttributeSchema>
     children?: Record<string, GlueChildSlot>
     callables?: Record<string, GlueCallableSchema>
     events?: string[]
@@ -111,20 +115,29 @@ export interface GlueStaticData {
     event_ids?: Record<string, string>
 }
 
-// One entry of computed_data.fields: the field adapters' computed_data() in
-// glue/objects/django/field_adapter.py.
-export interface GlueFieldComputed {
+// One entry of computed_data.value_attributes: the part of a value attribute's
+// presentation that changes with state (errors, selection), not a derived
+// value. Its presentation's computed_data() (GlueValueAttributePresentation in
+// glue/attributes/presentation.py, implemented for fields in
+// glue/objects/django/fields/presentation.py).
+export interface GlueValueComputedData {
     errors: string[]
+    // The errors of each field of a form held as state, by name:
+    // FormValueAttributePresentation.computed_data() in glue/objects/django/form/serializer.py.
+    field_errors?: Record<string, string[]>
     selected_choice?: GlueChoice
     selected_choices?: GlueChoice[]
     choices_cache_key?: string
 }
 
-// BaseGlue.get_computed_data() in glue/base.py: derived values by path, and
-// adapter output under `fields`. An omitted key means the previous value stands.
+// BaseGlue.get_computed_data() in glue/base.py: derived values by path under
+// `values`, and presentation output by path under `value_attributes`. A family
+// adds its own top-level keys (a queryset's window: items, seek_key...). An
+// omitted key means the previous value stands.
 export interface GlueComputedData {
-    fields?: Record<string, GlueFieldComputed>
-    [path: string]: unknown
+    values?: Record<string, unknown>
+    value_attributes?: Record<string, GlueValueComputedData>
+    [key: string]: unknown
 }
 
 // GlueMessage.to_dict() in django_glue/message.py.

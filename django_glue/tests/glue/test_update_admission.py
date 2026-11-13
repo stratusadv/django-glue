@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 import pytest
 from django.test import TestCase, override_settings
 
-from django_glue import Glue, GlueSerializerHandler, GlueSerializerRegistry
+from django_glue import Glue, GlueSerializer, GlueSerializerRegistry
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueAuthorizationError, GlueRequestError, GlueRequestErrorCode
 from django_glue.glue.base import BaseGlue
@@ -350,32 +350,38 @@ class RegisteredValue:
         self.value = value
 
 
-class RegisteredValueSerializer(GlueSerializerHandler):
-    def supports(self, target: Any) -> bool:
+class RegisteredValueSerializer(GlueSerializer):
+    @classmethod
+    def supports(cls, target: Any) -> bool:
         return target is RegisteredValue
 
-    def coerce(self, value: Any, target: Any) -> RegisteredValue:
-        _ = target
-        return RegisteredValue(int(value))
+    def load(self, raw: Any) -> RegisteredValue:
+        return RegisteredValue(int(raw))
 
-    def decode(self, value: Any, target: Any) -> RegisteredValue:
-        return self.coerce(value, target)
+    def dump(self, value: RegisteredValue) -> int:
+        return value.value
 
 
 class SerializerRegistryTestCase(TestCase):
-    def test_registered_handler_coerces_its_target_type(self) -> None:
+    def test_registered_serializer_loads_its_target_type(self) -> None:
         registry = GlueSerializerRegistry()
-        registry.register(RegisteredValueSerializer())
+        registry.register(RegisteredValueSerializer)
 
-        coerced = registry.coerce('7', RegisteredValue)
+        loaded = registry.resolve(RegisteredValue).load('7')
 
-        assert isinstance(coerced, RegisteredValue)
-        assert coerced.value == 7
+        assert isinstance(loaded, RegisteredValue)
+        assert loaded.value == 7
+
+    def test_a_signed_value_restores_as_it_loads_by_default(self) -> None:
+        registry = GlueSerializerRegistry()
+        registry.register(RegisteredValueSerializer)
+
+        assert registry.resolve(RegisteredValue).restore('7').value == 7
 
     def test_missing_target_leaves_value_untouched(self) -> None:
         registry = GlueSerializerRegistry()
 
-        assert registry.coerce('7', None) == '7'
+        assert registry.resolve(None).load('7') == '7'
 
 
 class ModelStateSnapshotTestCase(TestCase):

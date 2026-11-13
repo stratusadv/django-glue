@@ -14,6 +14,7 @@ from django.http.response import HttpResponseBase
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
 from django_glue.constants import DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY
+from django_glue.serialization import GlueSerializerError
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
@@ -26,7 +27,7 @@ from django_glue.exceptions import (
 )
 from django_glue.glue import address
 from django_glue.glue.attributes.collector import GlueAttributeCollector
-from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
+from django_glue.glue.attributes.attribute import GlueAttributeKind, GlueValueRole
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.children import GlueChildBinder
 from django_glue.glue.context import GlueObjectEntry
@@ -34,16 +35,15 @@ from django_glue.glue.event import GlueEvent
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
-from django_glue.serialization import GlueSerializerError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from django_glue.glue.attributes.definition import (
+    from django_glue.glue.attributes.attribute import (
         BoundGlueAttribute,
-        GlueAttributeDefinition,
+        GlueAttribute,
     )
-    from django_glue.glue.attributes.adapter import GlueAttributeAdapter
+    from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
     from django_glue.glue.children import BoundGlueChild
     from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
@@ -136,42 +136,59 @@ class BaseGlue(ABC):
 
     @cached_property
     def _attribute_registry(self) -> GlueAttributeRegistry:
-        attribute_definitions, attribute_providers = self._collect_attributes()
+        attributes, attribute_providers = self._collect_attributes()
         return GlueAttributeRegistry(
-            attribute_definitions,
+            attributes,
             attribute_providers=attribute_providers,
         )
 
     def _collect_attributes(
         self,
-    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
-        provider_definitions, provider_bindings = GlueAttributeCollector.collect_from_providers(
+    ) -> tuple[tuple[GlueAttribute, ...], dict[str, Any]]:
+        provider_attributes, provider_bindings = GlueAttributeCollector.collect_from_providers(
             self.get_attribute_providers()
         )
-        extra_definitions, extra_bindings = GlueAttributeCollector.collect_extra_attributes(
+        extra_attributes, extra_bindings = GlueAttributeCollector.collect_extra_attributes(
             self.get_extra_attributes()
         )
-        adapters = self.get_attribute_adapters()
-        definitions = (
+        presentations = self.get_value_attribute_presentations()
+        attributes = (
             GlueAttributeCollector.collect(type(self))
-            + provider_definitions
-            + extra_definitions
+            + provider_attributes
+            + extra_attributes
         )
         return (
             tuple(
-                replace(definition, adapter=adapters.get(definition.path))
-                if definition.kind == GlueAttributeKind.VALUE
-                else definition
-                for definition in definitions
+                replace(
+                    attribute,
+                    presentation=presentations.get(attribute.path)
+                    or self._presentation_from_serializer(attribute),
+                )
+                if attribute.kind == GlueAttributeKind.VALUE
+                else attribute
+                for attribute in attributes
             ),
             provider_bindings | extra_bindings,
+        )
+
+    def _presentation_from_serializer(
+        self,
+        attribute: GlueAttribute,
+    ) -> GlueValueAttributePresentation | None:
+        """The presentation a value attribute's own serializer gives of it, if it gives one."""
+        if attribute.serializer is None:
+            return None
+        path = attribute.path
+        return attribute.serializer.presentation(
+            read=lambda: self._bound_attributes[path].get(),
+            editable=attribute.value_role is GlueValueRole.EDITABLE_STATE,
         )
 
     @cached_property
     def _bound_attributes(self) -> dict[str, BoundGlueAttribute]:
         return {
-            attribute.definition.path: attribute
-            for attribute in self._attribute_registry.bind(self)
+            bound.attribute.path: bound
+            for bound in self._attribute_registry.bind(self)
         }
 
     @cached_property
@@ -192,7 +209,7 @@ class BaseGlue(ABC):
     ) -> Iterable[tuple[Any, Mapping[str, Any]]]:
         return ()
 
-    def get_attribute_adapters(self) -> Mapping[str, GlueAttributeAdapter]:
+    def get_value_attribute_presentations(self) -> Mapping[str, GlueValueAttributePresentation]:
         return {}
 
     def _bind_children(
@@ -318,9 +335,9 @@ class BaseGlue(ABC):
     def get_capability(self) -> dict[str, Any]:
         return {
             'callables': {
-                definition.path: {'allowed_arguments': definition.allowed_arguments}
-                for definition in self._attribute_registry
-                if definition.kind == GlueAttributeKind.CALLABLE
+                attribute.path: {'allowed_arguments': attribute.allowed_arguments}
+                for attribute in self._attribute_registry
+                if attribute.kind == GlueAttributeKind.CALLABLE
             },
         }
 
@@ -331,52 +348,52 @@ class BaseGlue(ABC):
 
     def get_state(self) -> dict[str, Any]:
         return {
-            path: self._get_attribute_state(attribute)
-            for path, attribute in self._bound_attributes.items()
-            if attribute.definition.kind == GlueAttributeKind.VALUE
+            path: self._get_attribute_state(bound)
+            for path, bound in self._bound_attributes.items()
+            if bound.attribute.kind == GlueAttributeKind.VALUE
         }
 
-    def _get_attribute_state(self, attribute: BoundGlueAttribute) -> Any:
+    def _get_attribute_state(self, bound: BoundGlueAttribute) -> Any:
         return {
-            'value': attribute.get(),
-            **attribute.computed_data(),
+            'value': bound.wire_value(),
+            **bound.computed_data(),
         }
 
     def get_static_data(self) -> dict[str, Any]:
         """
         Client-visible static data (state-model.md §10 "Responses omit what
-        did not change"): field descriptors with ``value_path`` state-path
-        mappings, addressed-child kind/nullable slots, and callable argument
-        shapes. Down-only and client-forgets: stable across calls for an
-        unchanged object, omitted from the response when it did not change,
+        did not change"): value attribute presentations with ``value_path``
+        state-path mappings, addressed-child kind/nullable slots, and callable
+        argument shapes. Down-only and client-forgets: stable across calls for
+        an unchanged object, omitted from the response when it did not change,
         and never sent back to the server.
         """
-        fields: dict[str, Any] = {}
+        value_attributes: dict[str, Any] = {}
         children: dict[str, Any] = {}
         callables: dict[str, Any] = {}
-        for path, attribute in self._bound_attributes.items():
-            definition = attribute.definition
-            if definition.kind is GlueAttributeKind.VALUE:
-                if definition.adapter is None:
-                    fields[path] = {
+        for path, bound in self._bound_attributes.items():
+            attribute = bound.attribute
+            if attribute.kind is GlueAttributeKind.VALUE:
+                if attribute.presentation is None:
+                    value_attributes[path] = {
                         'value_path': path,
-                        'editable': definition.value_role is GlueValueRole.EDITABLE_STATE,
+                        'editable': attribute.value_role is GlueValueRole.EDITABLE_STATE,
                     }
                 else:
-                    fields[path] = attribute.schema()
-            elif definition.kind is GlueAttributeKind.CHILD:
+                    value_attributes[path] = {'value_path': path, **bound.schema()}
+            elif attribute.kind is GlueAttributeKind.CHILD:
                 children[path] = {
-                    'kind': definition.expected_type.namespace,
-                    'nullable': definition.is_nullable,
+                    'kind': attribute.expected_type.namespace,
+                    'nullable': attribute.is_nullable,
                 }
-            elif definition.kind is GlueAttributeKind.CALLABLE:
+            elif attribute.kind is GlueAttributeKind.CALLABLE:
                 callables[path] = {
-                    'allowed_arguments': list(definition.allowed_arguments),
-                    'returns_glue': definition.expected_type is not None,
+                    'allowed_arguments': list(attribute.allowed_arguments),
+                    'returns_glue': attribute.expected_type is not None,
                 }
         static_data: dict[str, Any] = {}
-        if fields:
-            static_data['fields'] = fields
+        if value_attributes:
+            static_data['value_attributes'] = value_attributes
         if children:
             static_data['children'] = children
         if callables:
@@ -399,32 +416,36 @@ class BaseGlue(ABC):
         return static_data
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
-        """Complete current down-only output (state-model.md §5, §10):
-        re-derived values at top level, and re-derived adapter output under
-        ``fields``.
+        """
+        Complete current down-only output (state-model.md §5, §10): re-derived
+        values under ``values``, and re-derived presentation output under
+        ``value_attributes``, both keyed by attribute path.
 
         Only output re-derived this request is included — "an adapter that
         did not re-derive its downward output omits the key entirely," so
-        omission means the client's previous value stands. ``include_all``
-        is the introduction surface, where every value is fresh by
-        construction.
+        omission means the client's previous value stands, and a section with
+        nothing in it is omitted. ``include_all`` is the introduction surface,
+        where every value is fresh by construction.
         """
-        computed: dict[str, Any] = {}
-        fields_output: dict[str, Any] = {}
-        for path, attribute in self._bound_attributes.items():
-            definition = attribute.definition
-            if definition.kind is not GlueAttributeKind.VALUE:
+        values: dict[str, Any] = {}
+        value_attributes: dict[str, Any] = {}
+        for path, bound in self._bound_attributes.items():
+            attribute = bound.attribute
+            if attribute.kind is not GlueAttributeKind.VALUE:
                 continue
-            if definition.value_role is GlueValueRole.DERIVED_OUTPUT:
+            if attribute.value_role is GlueValueRole.DERIVED_OUTPUT:
                 if include_all or path in self._derived_paths:
-                    computed[path] = attribute.get()
-            elif definition.adapter is not None:
+                    values[path] = bound.wire_value()
+            elif attribute.presentation is not None:
                 if include_all or path in self._derived_paths:
-                    adapter_output = attribute.computed_data()
-                    if adapter_output:
-                        fields_output[path] = adapter_output
-        if fields_output:
-            computed['fields'] = fields_output
+                    presentation_output = bound.computed_data()
+                    if presentation_output:
+                        value_attributes[path] = presentation_output
+        computed: dict[str, Any] = {}
+        if values:
+            computed['values'] = values
+        if value_attributes:
+            computed['value_attributes'] = value_attributes
         return computed
 
     @staticmethod
@@ -471,10 +492,10 @@ class BaseGlue(ABC):
         origin = context.target_glue_policy.origin
         self.request.__dict__[DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY] = origin
 
-        attribute = self._bound_attributes.get(context.target_attribute_name)
+        bound = self._bound_attributes.get(context.target_attribute_name)
         required_access = (
-            self._resolve_required_access(attribute.definition.required_access)
-            if attribute is not None
+            self._resolve_required_access(bound.attribute.required_access)
+            if bound is not None
             else GlueAccess.VIEW
         )
         self._require_authorization(GlueOperation(
@@ -497,13 +518,13 @@ class BaseGlue(ABC):
         """
         retained: dict[str, Any] = {}
 
-        for path, attribute in self._bound_attributes.items():
-            definition = attribute.definition
+        for path, bound in self._bound_attributes.items():
+            attribute = bound.attribute
             if (
-                definition.kind is GlueAttributeKind.VALUE
-                and definition.value_role is GlueValueRole.RECONSTRUCTOR
+                attribute.kind is GlueAttributeKind.VALUE
+                and attribute.value_role is GlueValueRole.RECONSTRUCTOR
             ):
-                retained[path] = attribute.get()
+                retained[path] = bound.wire_value()
 
         return retained
 
@@ -543,17 +564,17 @@ class BaseGlue(ABC):
         }
         admitted: dict[str, Any] = {}
         for path, value in updates.items():
-            attribute = self._bound_attributes.get(path)
-            if attribute is None:
+            bound = self._bound_attributes.get(path)
+            if bound is None:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_UPDATES,
                     message='Update targets an unknown attribute.',
                     details={'attribute': path},
                 )
-            definition = attribute.definition
+            attribute = bound.attribute
             if (
-                definition.kind != GlueAttributeKind.VALUE
-                or definition.value_role != GlueValueRole.EDITABLE_STATE
+                attribute.kind != GlueAttributeKind.VALUE
+                or attribute.value_role != GlueValueRole.EDITABLE_STATE
             ):
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_UPDATES,
@@ -567,7 +588,7 @@ class BaseGlue(ABC):
                     details={'attribute': path},
                 )
             try:
-                admitted[path] = attribute.coerce_update(value)
+                admitted[path] = bound.coerce_update(value)
             except GlueSerializerError as error:
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_UPDATES,
@@ -579,12 +600,12 @@ class BaseGlue(ABC):
     def _load_client_state(self, state: dict[str, Any]) -> None:
         """Apply retained state (signed snapshot plus admitted updates) to this
         Glue object (state-model.md §10)."""
-        for path, attribute in self._bound_attributes.items():
-            if attribute.definition.value_role != GlueValueRole.EDITABLE_STATE:
+        for path, bound in self._bound_attributes.items():
+            if bound.attribute.value_role != GlueValueRole.EDITABLE_STATE:
                 continue
             if path not in state:
                 continue
-            attribute.apply_update(state[path])
+            bound.apply_update(state[path])
             self._derived_paths.add(path)
 
     def _invalidate_attributes(self) -> None:
@@ -606,9 +627,9 @@ class BaseGlue(ABC):
         if not reintroduce:
             return
         declared = {
-            attribute.definition.path
-            for attribute in self._bound_attributes.values()
-            if attribute.definition.kind is GlueAttributeKind.CHILD
+            bound.attribute.path
+            for bound in self._bound_attributes.values()
+            if bound.attribute.kind is GlueAttributeKind.CHILD
         }
         unknown = [path for path in reintroduce if path not in declared]
         if unknown:
@@ -648,7 +669,7 @@ class BaseGlue(ABC):
                 kind=GlueOperationKind.UPDATE,
                 attribute=path,
                 required_access=self._resolve_required_access(
-                    self._bound_attributes[path].definition.required_access,
+                    self._bound_attributes[path].attribute.required_access,
                 ),
             ))
         retained_draft = {
@@ -675,10 +696,10 @@ class BaseGlue(ABC):
         """The acknowledged editable draft the verified token carries: every
         signed editable-state value."""
         return {
-            path: attribute.decode_retained(policy.state_snapshot[path])
-            for path, attribute in self._bound_attributes.items()
+            path: bound.decode_retained(policy.state_snapshot[path])
+            for path, bound in self._bound_attributes.items()
             if (
-                attribute.definition.value_role == GlueValueRole.EDITABLE_STATE
+                bound.attribute.value_role == GlueValueRole.EDITABLE_STATE
                 and path in policy.state_snapshot
             )
         }
@@ -743,11 +764,11 @@ class BaseGlue(ABC):
         if bound_attribute is None:
             raise GlueMissingAttributeError(call_context.target_attribute_name, self.name)
 
-        definition = bound_attribute.definition
-        if definition.kind != GlueAttributeKind.CALLABLE:
+        attribute = bound_attribute.attribute
+        if attribute.kind != GlueAttributeKind.CALLABLE:
             raise GlueCalledNonCallableAttributeError(call_context.target_attribute_name, self.name)
 
-        required_access = self._resolve_required_access(definition.required_access)
+        required_access = self._resolve_required_access(attribute.required_access)
         if not call_context.target_glue_policy.access.has_access(required_access):
             raise GlueAccessError(
                 attribute=call_context.target_attribute_name,
@@ -766,7 +787,7 @@ class BaseGlue(ABC):
 
         supplied_arguments = set(call_context.target_attribute_call_kwargs)
         admitted_arguments = (
-            set(definition.allowed_arguments)
+            set(attribute.allowed_arguments)
             & set(signed_callable.allowed_arguments)
         )
         invalid_arguments = supplied_arguments - admitted_arguments
@@ -775,7 +796,7 @@ class BaseGlue(ABC):
                 code=GlueRequestErrorCode.INVALID_KWARGS,
                 message='Callable arguments are not admitted by the signed capability.',
                 details={
-                    'attribute': definition.path,
+                    'attribute': attribute.path,
                     'arguments': sorted(invalid_arguments),
                 },
             )
@@ -792,7 +813,7 @@ class BaseGlue(ABC):
                 **self._resolve_callable_arguments(hydrated_attribute, call_context)
             )
 
-        return self._run_call(call_context, invoke, render_as_html=definition.render_as_html)
+        return self._run_call(call_context, invoke, render_as_html=attribute.render_as_html)
 
     def _run_call(
         self,
@@ -898,19 +919,30 @@ class BaseGlue(ABC):
 
     @staticmethod
     def _resolve_callable_arguments(
-        attribute: BoundGlueAttribute,
+        bound: BoundGlueAttribute,
         call_context: AttributeCallRequestContext,
     ) -> dict[str, Any]:
-        target = attribute.get()
+        attribute = bound.attribute
+        target = bound.get()
         signature = inspect.signature(inspect.unwrap(target))
         supplied = call_context.target_attribute_call_kwargs
         resolved: dict[str, Any] = {}
 
         for name, parameter in signature.parameters.items():
-            if name in attribute.definition.injected_arguments:
+            if name in attribute.injected_arguments:
                 resolved[name] = call_context.request
             elif name in supplied:
-                resolved[name] = supplied[name]
+                if name not in attribute.argument_types:
+                    resolved[name] = supplied[name]
+                    continue
+                try:
+                    resolved[name] = attribute.argument_types[name].load(supplied[name])
+                except GlueSerializerError as error:
+                    raise GlueRequestError(
+                        code=GlueRequestErrorCode.INVALID_KWARGS,
+                        message='Argument value could not be coerced.',
+                        details={'attribute': attribute.path, 'argument': name},
+                    ) from error
             elif parameter.kind in {
                 inspect.Parameter.VAR_POSITIONAL,
                 inspect.Parameter.VAR_KEYWORD,
@@ -920,7 +952,7 @@ class BaseGlue(ABC):
                 raise GlueRequestError(
                     code=GlueRequestErrorCode.INVALID_KWARGS,
                     message='A required argument is missing.',
-                    details={'attribute': attribute.definition.path, 'argument': name},
+                    details={'attribute': attribute.path, 'argument': name},
                 )
 
         return resolved

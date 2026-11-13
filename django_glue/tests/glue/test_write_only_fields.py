@@ -49,7 +49,7 @@ def wire(entry: dict[str, Any]) -> str:
 
 
 def test_only_a_password_input_hiding_its_value_is_write_only(mock_request: HttpRequest) -> None:
-    fields = account_form(mock_request).get_static_data()['fields']
+    fields = account_form(mock_request).get_static_data()['value_attributes']
 
     assert fields['password']['write_only'] is True
     assert fields['password']['editable'] is True
@@ -71,7 +71,7 @@ def test_a_view_only_password_field_reads_as_nothing(mock_request: HttpRequest) 
 
     computed = form.get_computed_data(include_all=True)
 
-    assert computed['password'] is None
+    assert computed['values']['password'] is None
     assert SECRET not in wire(form.entry.model_dump())
 
 
@@ -93,8 +93,8 @@ def test_a_failed_call_returns_errors_but_not_the_password(mock_request: HttpReq
     entry = validate(form, {'email': 'not-an-email', 'password': SECRET})
 
     assert entry['result']['valid'] is False
-    assert entry['computed_data']['fields']['email']['errors']
-    assert entry['computed_data']['fields']['password']['errors'] == []
+    assert entry['computed_data']['value_attributes']['email']['errors']
+    assert entry['computed_data']['value_attributes']['password']['errors'] == []
     assert SECRET not in wire(entry)
 
 
@@ -106,7 +106,7 @@ def test_a_call_without_the_password_update_finds_it_missing(mock_request: HttpR
     entry = validate(form, {})
 
     assert entry['result']['valid'] is False
-    assert entry['computed_data']['fields']['password']['errors']
+    assert entry['computed_data']['value_attributes']['password']['errors']
     assert 'email' not in entry['result']['errors']
 
 

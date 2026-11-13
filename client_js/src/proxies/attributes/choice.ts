@@ -1,12 +1,12 @@
 import type {GlueChoice} from "../../wire"
-import FieldGlue from "./base"
+import GlueValueAttribute from "./base"
 
-// The server's choices arrive as metadata and are copied onto the field.
-interface ChoiceFieldGlue {
+// The server's choices arrive as presentation and are copied onto the attribute.
+interface GlueChoiceAttribute {
     choices?: GlueChoice[]
 }
 
-class ChoiceFieldGlue extends FieldGlue {
+class GlueChoiceAttribute extends GlueValueAttribute {
     get selectedChoice(): GlueChoice | undefined {
         return (this.choices || []).find(choice => String(choice.value) === String(this.value))
     }
@@ -32,4 +32,4 @@ class ChoiceFieldGlue extends FieldGlue {
     }
 }
 
-export default ChoiceFieldGlue
+export default GlueChoiceAttribute

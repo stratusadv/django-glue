@@ -12,6 +12,7 @@ from django.views.decorators.http import require_safe
 from pydantic import ValidationError
 
 from django_glue.access import GlueAccess
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
@@ -20,9 +21,9 @@ from django_glue.exceptions import (
     GlueRequestError,
     GlueRequestErrorCode,
 )
-from django_glue.glue.attributes import DeclaredAttribute
-from django_glue.glue.attributes.declared import _MISSING
-from django_glue.glue.attributes.definition import GlueAttributeKind, GlueValueRole
+from django_glue.glue.attributes import GlueAttributeDeclaration
+from django_glue.glue.attributes.attribute import GlueAttributeKind, GlueValueRole
+from django_glue.glue.attributes.declaration import _MISSING
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.components.naming import component_name
 from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_registry
@@ -36,13 +37,13 @@ from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.response import GlueResponse, GlueTemplateResponse
-from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from django.http import HttpRequest
 
+    from django_glue.serialization import GlueSerializer
     from django_glue.glue.children import BoundGlueChild
 
 
@@ -63,6 +64,17 @@ def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
     return {
         key: declaration.model_class if isinstance(declaration, ModelParameter) else annotations[key]
         for key, declaration in component_class._declared_parameters().items()
+    }
+
+
+@cache
+def _parameter_serializers(component_class: type[Component]) -> dict[str, GlueSerializer]:
+    """The serializer of each parameter that is a value; a model parameter signs its own key."""
+    annotations = _parameter_types(component_class)
+    return {
+        key: glue_serializer_registry.resolve(annotations[key])
+        for key, declaration in component_class._declared_parameters().items()
+        if not isinstance(declaration, ModelParameter)
     }
 
 
@@ -176,12 +188,12 @@ class Component(BaseGlue):
             )
 
     @classmethod
-    def _declared_parameters(cls) -> dict[str, DeclaredAttribute]:
+    def _declared_parameters(cls) -> dict[str, GlueAttributeDeclaration]:
         return {
             key: value
             for base in reversed(cls.__mro__)
             for key, value in base.__dict__.items()
-            if isinstance(value, DeclaredAttribute) and value._parameter
+            if isinstance(value, GlueAttributeDeclaration) and value._parameter
         }
 
     def __init__(
@@ -224,7 +236,7 @@ class Component(BaseGlue):
             msg = f'{type(self).__name__} must declare a template path.'
             raise ValueError(msg)
 
-        parameter_types = _parameter_types(type(self))
+        serializers = _parameter_serializers(type(self))
         for key, declaration in declared.items():
             if key in parameters:
                 value = parameters[key]
@@ -239,7 +251,7 @@ class Component(BaseGlue):
                 setattr(self, key, value)
                 continue
             try:
-                setattr(self, key, glue_serializer_registry.coerce(value, parameter_types[key]))
+                setattr(self, key, serializers[key].load(value))
             except GlueSerializerError as error:
                 raise GlueComponentParameterError(
                     f'Invalid parameter {key!r} on {type(self).__name__}.'
@@ -247,14 +259,14 @@ class Component(BaseGlue):
 
     def _get_retained_state(self) -> dict[str, Any]:
         return {
-            path: attribute.get()
-            for path, attribute in self._bound_attributes.items()
-            if attribute.definition.kind is GlueAttributeKind.VALUE
+            path: bound.wire_value()
+            for path, bound in self._bound_attributes.items()
+            if bound.attribute.kind is GlueAttributeKind.VALUE
             and (
-                attribute.definition.value_role is GlueValueRole.EDITABLE_STATE
+                bound.attribute.value_role is GlueValueRole.EDITABLE_STATE
                 or (
-                    attribute.definition.value_role is GlueValueRole.RECONSTRUCTOR
-                    and not attribute.definition.is_parameter
+                    bound.attribute.value_role is GlueValueRole.RECONSTRUCTOR
+                    and not bound.attribute.is_parameter
                 )
             )
         }
@@ -266,12 +278,12 @@ class Component(BaseGlue):
 
     @property
     def identity(self) -> dict[str, Any]:
-        parameter_types = _parameter_types(type(self))
+        serializers = _parameter_serializers(type(self))
         parameters = {
             key: (
                 declaration.signed_value(self)
                 if isinstance(declaration, ModelParameter)
-                else glue_serializer_registry.encode(getattr(self, key), parameter_types[key])
+                else serializers[key].dump(getattr(self, key))
             )
             for key, declaration in self._declared_parameters().items()
         }
@@ -291,7 +303,7 @@ class Component(BaseGlue):
             # A session attribute's value was re-derived by the write, so this
             # response carries it even when nothing re-renders the component.
             declaration = inspect.getattr_static(type(self), key, None)
-            if isinstance(declaration, DeclaredAttribute) and declaration._session:
+            if isinstance(declaration, GlueAttributeDeclaration) and declaration._session:
                 self._derived_paths.add(key)
 
         return ComponentSession(
@@ -310,10 +322,10 @@ class Component(BaseGlue):
         )
         component._ancestors = tuple(policy.identity.get('ancestors', ()))
         for key, value in policy.state_snapshot.items():
-            attribute = component._bound_attributes.get(key)
-            if attribute is not None and attribute.definition.value_role is GlueValueRole.RECONSTRUCTOR:
+            bound = component._bound_attributes.get(key)
+            if bound is not None and bound.attribute.value_role is GlueValueRole.RECONSTRUCTOR:
                 annotation = get_type_hints(component_class).get(key)
-                setattr(component, key, glue_serializer_registry.decode(value, annotation))
+                setattr(component, key, glue_serializer_registry.resolve(annotation).restore(value))
         return component
 
     @classmethod
@@ -329,7 +341,7 @@ class Component(BaseGlue):
         static_data = super().get_static_data()
         static_data.update(_reactions(type(self)))
         for path, slot in static_data.get('children', {}).items():
-            if self._bound_attributes[path].definition.is_declared_child:
+            if self._bound_attributes[path].attribute.is_declared_child:
                 slot['submits_with_owner'] = True
         return static_data
 
@@ -498,8 +510,8 @@ class Component(BaseGlue):
 
         attribute_name = call_context.target_attribute_name
         if attribute_name is not None and 'policy_token' not in entry:
-            definition = self._bound_attributes[attribute_name].definition
-            if definition.skip_rerender or definition.expected_type is not None:
+            attribute = self._bound_attributes[attribute_name].attribute
+            if attribute.skip_rerender or attribute.expected_type is not None:
                 return entry, introduced
 
         return self._rerendered(entry, introduced, call_context)
@@ -739,7 +751,7 @@ class Component(BaseGlue):
                 entry[key] = render_entry[key]
         return entry, [*introduced, *render_introduced]
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def render(self) -> GlueResponse:
         if self.request is None:
             msg = f"Cannot render unbound component '{self.name}'."

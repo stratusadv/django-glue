@@ -493,7 +493,7 @@ def test_parameter_change_rerenders_from_a_fresh_instance(mock_request) -> None:
     assert entry['result'] == 2
     assert '>week 2</span>' in entry['html']
     assert f'data-glue-address="{component.address}"' in entry['html']
-    assert entry['computed_data']['label'] == 'week 2'
+    assert entry['computed_data']['values']['label'] == 'week 2'
     assert GluePolicy.from_token(entry['policy_token']).identity['parameters'] == {'week': 2}
 
 
@@ -506,7 +506,7 @@ def test_refresh_returns_current_component_markup(mock_request) -> None:
 
     assert '>week 1</span>' in entry['html']
     assert f'data-glue-address="{component.address}"' in entry['html']
-    assert entry['computed_data']['label'] == 'week 1'
+    assert entry['computed_data']['values']['label'] == 'week 1'
 
 
 def _call_week(mock_request, attribute: str) -> dict[str, Any]:
@@ -862,23 +862,23 @@ def test_component_render_is_exposed_as_glue_attribute() -> None:
     }
 
 
-def test_component_collects_static_attribute_definitions() -> None:
+def test_component_collects_static_attributes() -> None:
     component = GreetingComponent()
 
     assert tuple(
-        definition.path
-        for definition in component._attribute_registry.attribute_definitions
+        attribute.path
+        for attribute in component._attribute_registry.attributes
     ) == (
         'render',
     )
 
 
-def test_component_collects_static_and_extra_attribute_definitions() -> None:
+def test_component_collects_static_and_extra_attributes() -> None:
     component = ExtendedGreetingComponent()
 
     assert tuple(
-        definition.path
-        for definition in component._attribute_registry.attribute_definitions
+        attribute.path
+        for attribute in component._attribute_registry.attributes
     ) == (
         'render',
         'reset',
@@ -889,7 +889,7 @@ def test_component_collects_static_and_extra_attribute_definitions() -> None:
 def test_component_static_data_marks_editable_value_paths() -> None:
     component = ExtendedGreetingComponent()
 
-    assert component.get_static_data()['fields']['value'] == {
+    assert component.get_static_data()['value_attributes']['value'] == {
         'value_path': 'value',
         'editable': True,
     }
@@ -898,8 +898,8 @@ def test_component_static_data_marks_editable_value_paths() -> None:
 def test_component_binds_extra_attributes_to_external_object() -> None:
     component = ExtendedGreetingComponent()
     attributes = {
-        attribute.definition.path: attribute
-        for attribute in component._attribute_registry.bind(component)
+        bound.attribute.path: bound
+        for bound in component._attribute_registry.bind(component)
     }
 
     assert attributes['value'].get() == 'initial'
@@ -1016,14 +1016,14 @@ def test_component_rejects_glue_object_from_ordinary_value(result: object) -> No
 
     owner = ValueOwner()
     attribute = next(
-        bound
-        for bound in GlueAttributeCollector.collect(ValueOwner)
-        if bound.path == 'value'
+        candidate
+        for candidate in GlueAttributeCollector.collect(ValueOwner)
+        if candidate.path == 'value'
     )
 
     with pytest.raises(TypeError, match='outside an addressed child declaration'):
         BoundGlueAttribute(
-            definition=attribute,
+            attribute=attribute,
             owner=owner,
         ).get()
 

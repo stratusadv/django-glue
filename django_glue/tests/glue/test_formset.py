@@ -490,6 +490,7 @@ class DisabledNameGorillaForm(forms.ModelForm):
     class Meta:
         model = Gorilla
         fields = ['name', 'age']
+        glue_default_save = True
 
 
 class FormSetGlueNewRowTestCase(TestCase):

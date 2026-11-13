@@ -49,7 +49,10 @@ class QuerySetPaginationTestCase(TestCase):
             Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index, weight=100.0, height=1.5)
 
     def _names(self, glue_object, result):
-        return [row['computed_data']['name'] for row in addressed_row_entries(glue_object, result)]
+        return [
+            row['computed_data']['values']['name']
+            for row in addressed_row_entries(glue_object, result)
+        ]
 
     def _all_names_via_cursor(self, glue_object, **params):
         names = []
@@ -459,7 +462,10 @@ class QuerySetNullOrderingTestCase(TestCase):
             )
 
     def _names(self, glue_object, result):
-        return [row['computed_data']['name'] for row in addressed_row_entries(glue_object, result)]
+        return [
+            row['computed_data']['values']['name']
+            for row in addressed_row_entries(glue_object, result)
+        ]
 
     def _all_names_via_cursor(self, glue_object, **params):
         names = []
@@ -531,11 +537,11 @@ class QuerySetNullOrderingTestCase(TestCase):
 
         # Whichever direction, the three NULL-status fights land at the end.
         self.assertEqual(
-            [row['computed_data']['status'] for row in addressed_row_entries(glue_object, ascending)][-3:],
+            [row['computed_data']['values']['status'] for row in addressed_row_entries(glue_object, ascending)][-3:],
             [None, None, None],
         )
         self.assertEqual(
-            [row['computed_data']['status'] for row in addressed_row_entries(glue_object, descending)][-3:],
+            [row['computed_data']['values']['status'] for row in addressed_row_entries(glue_object, descending)][-3:],
             [None, None, None],
         )
 
@@ -598,7 +604,10 @@ class ProjectedQueryCapabilityTestCase(TestCase):
         )
 
         self.assertEqual(
-            [row['computed_data']['name'] for row in addressed_row_entries(restored, result)],
+            [
+                row['computed_data']['values']['name']
+                for row in addressed_row_entries(restored, result)
+            ],
             ['First Bout'],
         )
 

@@ -12,7 +12,7 @@ from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
 from django_glue.constants import DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY
 from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.glue.attributes.definition import GlueAttributeKind
+from django_glue.glue.attributes.attribute import GlueAttributeKind
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -78,9 +78,9 @@ class GluePolicy(BaseModel):
         glue_object: BaseGlue,
     ) -> Self:
         attributes = [
-            definition.path
-            for definition in glue_object._attribute_registry
-            if definition.kind in {
+            attribute.path
+            for attribute in glue_object._attribute_registry
+            if attribute.kind in {
                 GlueAttributeKind.VALUE,
                 GlueAttributeKind.CALLABLE,
             }

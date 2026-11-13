@@ -5,7 +5,7 @@ from types import MethodType
 from typing import Any, get_type_hints
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+from django_glue.glue.attributes.declaration import GlueAttributeDeclarationOptions
 
 _MISSING = object()
 
@@ -43,7 +43,7 @@ class GlueNamespace:
         self.target: Any = None
         self._is_function_form = False
         self._provider_type: type[Any] | None = None
-        self.__glue_options__: DeclaredAttributeOptions | None = None
+        self.__glue_options__: GlueAttributeDeclarationOptions | None = None
         if value is not _MISSING:
             self._bind(value)
 
@@ -91,7 +91,7 @@ class GlueNamespace:
         return annotation
 
     def _update_glue_options(self) -> None:
-        self.__glue_options__ = DeclaredAttributeOptions(
+        self.__glue_options__ = GlueAttributeDeclarationOptions(
             required_access=self.required_access,
             is_callable=False,
             is_namespace=True,

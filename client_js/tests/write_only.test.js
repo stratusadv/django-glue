@@ -6,7 +6,7 @@ const SNAPSHOT = {id: 1, name: 'Koko', birthday: '1971-07-04'}
 
 function form() {
     const client = new GlueClient({objects: [createEntry({
-        staticData: {fields: {
+        staticData: {value_attributes: {
             password: {value_path: 'password', type: 'CharField', label: 'Password', editable: true, write_only: true},
         }},
     })]})
@@ -15,7 +15,7 @@ function form() {
         sent.push(request)
         return attributeResponse('gorilla#test', {
             policy_token: createPolicyToken({state_snapshot: {...SNAPSHOT, name: 'Acknowledged'}}),
-            computed_data: {fields: {password: {errors: ['Too short.']}}},
+            computed_data: {value_attributes: {password: {errors: ['Too short.']}}},
             result: {},
         })
     }

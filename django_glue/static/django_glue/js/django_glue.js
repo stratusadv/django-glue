@@ -381,7 +381,7 @@
   }
   var http_default = GlueHttp;
 
-  // node_modules/alpinejs/dist/module.esm.js
+  // ../django-glue/node_modules/alpinejs/dist/module.esm.js
   var flushPending = false;
   var flushing = false;
   var queue = [];
@@ -3644,7 +3644,7 @@ ${expression ? 'Expression: "' + expression + `"
   var src_default = alpine_default;
   var module_default = src_default;
 
-  // node_modules/@alpinejs/morph/dist/module.esm.js
+  // ../django-glue/node_modules/@alpinejs/morph/dist/module.esm.js
   function morph(from, toHtml, options) {
     monkeyPatchDomSetAttributeToAllowAtSymbols();
     let context = createMorphContext(options);
@@ -4639,10 +4639,10 @@ ${expression ? 'Expression: "' + expression + `"
   class FieldBackedGlueProxy extends base_default {
     constructor(options) {
       super(options);
-      this._fields = {};
+      this._valueAttributes = {};
     }
     get $fields() {
-      return this._fields;
+      return this._valueAttributes;
     }
     get $pk() {
       const pkField = this._policy?.identity?.pk_field_name || "id";
@@ -4653,9 +4653,9 @@ ${expression ? 'Expression: "' + expression + `"
     }
     hasErrors(fieldName = null) {
       if (fieldName) {
-        return Boolean(this._record.getFieldComputed(fieldName).errors?.length);
+        return Boolean(this._record.getValueComputedData(fieldName).errors?.length);
       }
-      return Object.values(this._record.computedData.fields || {}).some((fieldData) => fieldData?.errors?.length > 0);
+      return Object.values(this._record.computedData.value_attributes || {}).some((computedData) => computedData?.errors?.length > 0);
     }
   }
   var fieldBacked_default = FieldBackedGlueProxy;
@@ -5083,9 +5083,8 @@ ${expression ? 'Expression: "' + expression + `"
   }
   function assembleAuthoritative(policy, computedData) {
     const values = cloneValue(policy?.state_snapshot || {});
-    Object.entries(computedData || {}).forEach(([path, value]) => {
-      if (path !== "fields")
-        values[path] = cloneValue(value);
+    Object.entries(computedData?.values || {}).forEach(([path, value]) => {
+      values[path] = cloneValue(value);
     });
     return values;
   }
@@ -5100,14 +5099,15 @@ ${expression ? 'Expression: "' + expression + `"
   }
   function mergeComputedData(current, incoming) {
     const merged = cloneValue(current || {});
-    Object.entries(incoming || {}).forEach(([path, value]) => {
-      if (path !== "fields") {
-        merged[path] = cloneValue(value);
+    Object.entries(incoming || {}).forEach(([key, value]) => {
+      if (key !== "values" && key !== "value_attributes") {
+        merged[key] = cloneValue(value);
         return;
       }
-      const fields = merged.fields = merged.fields || {};
-      Object.entries(value || {}).forEach(([fieldPath, fieldData]) => {
-        fields[fieldPath] = cloneValue(fieldData);
+      const section = merged[key] || {};
+      merged[key] = section;
+      Object.entries(value || {}).forEach(([path, data]) => {
+        section[path] = cloneValue(data);
       });
     });
     return merged;
@@ -5168,8 +5168,8 @@ ${expression ? 'Expression: "' + expression + `"
       if (!this._suppressMutations)
         this._incrementRevision(path);
     }
-    getFieldComputed(path) {
-      return this.computedData?.fields?.[path] || {};
+    getValueComputedData(path) {
+      return this.computedData?.value_attributes?.[path] || {};
     }
     captureRequest() {
       return {
@@ -5283,9 +5283,9 @@ ${expression ? 'Expression: "' + expression + `"
   }
   var addressRecord_default = GlueAddressRecord;
 
-  // client_js/src/proxies/fields/base.ts
-  class FieldGlue {
-    constructor({ owner, name, fieldPath = name, stateKey, metadata = {} }) {
+  // client_js/src/proxies/attributes/base.ts
+  class GlueValueAttribute {
+    constructor({ owner, name, fieldPath = name, stateKey, presentation = {} }) {
       this.name = name;
       this.fieldPath = fieldPath;
       this.stateKey = stateKey || name;
@@ -5294,8 +5294,8 @@ ${expression ? 'Expression: "' + expression + `"
         enumerable: false,
         configurable: true
       });
-      this.updateMetadata(metadata);
-      Object.defineProperty(this, "__glue__isFieldProxy", {
+      this.updatePresentation(presentation);
+      Object.defineProperty(this, "__glue__isValueAttribute", {
         value: true,
         enumerable: false,
         configurable: false
@@ -5308,7 +5308,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.owner._record.setValue(this.stateKey, value);
     }
     get errors() {
-      return this.owner._record.getFieldComputed(this.fieldPath).errors || [];
+      return this.owner._record.getValueComputedData(this.fieldPath).errors || [];
     }
     get hasErrors() {
       return Boolean(this.errors?.length);
@@ -5316,14 +5316,14 @@ ${expression ? 'Expression: "' + expression + `"
     get errorText() {
       return this.errors.join(", ");
     }
-    updateMetadata(metadata = {}) {
+    updatePresentation(presentation = {}) {
       const members = this;
-      for (const key of this._metadataKeys || [])
+      for (const key of this._presentationKeys || [])
         delete members[key];
       const prototype = Object.getPrototypeOf(this);
-      const assignable = Object.fromEntries(Object.entries(metadata).filter(([key]) => !(key in prototype)));
+      const assignable = Object.fromEntries(Object.entries(presentation).filter(([key]) => !(key in prototype)));
       Object.assign(this, assignable);
-      this._metadataKeys = Object.keys(assignable);
+      this._presentationKeys = Object.keys(assignable);
     }
     primitiveValue(hint = "default") {
       const value = this.value;
@@ -5351,10 +5351,10 @@ ${expression ? 'Expression: "' + expression + `"
       return this.value;
     }
   }
-  var base_default2 = FieldGlue;
+  var base_default2 = GlueValueAttribute;
 
-  // client_js/src/proxies/fields/choice.ts
-  class ChoiceFieldGlue extends base_default2 {
+  // client_js/src/proxies/attributes/choice.ts
+  class GlueChoiceAttribute extends base_default2 {
     get selectedChoice() {
       return (this.choices || []).find((choice) => String(choice.value) === String(this.value));
     }
@@ -5369,10 +5369,10 @@ ${expression ? 'Expression: "' + expression + `"
       return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
     }
   }
-  var choice_default = ChoiceFieldGlue;
+  var choice_default = GlueChoiceAttribute;
 
-  // client_js/src/proxies/fields/manyChoice.ts
-  class ManyChoiceFieldGlue extends choice_default {
+  // client_js/src/proxies/attributes/manyChoice.ts
+  class GlueManyChoiceAttribute extends choice_default {
     get selectedValues() {
       return this.value || [];
     }
@@ -5398,10 +5398,10 @@ ${expression ? 'Expression: "' + expression + `"
       return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value);
     }
   }
-  var manyChoice_default = ManyChoiceFieldGlue;
+  var manyChoice_default = GlueManyChoiceAttribute;
 
-  // client_js/src/proxies/fields/relation.ts
-  class RelationFieldGlue extends choice_default {
+  // client_js/src/proxies/attributes/relation.ts
+  class GlueRelationAttribute extends choice_default {
     static loadingCache = new Map;
     get choices() {
       if (this._searchQuery) {
@@ -5528,7 +5528,7 @@ ${expression ? 'Expression: "' + expression + `"
       ].filter(Boolean).join(":");
     }
     _getOrCreateCache(cacheKey) {
-      let cache = RelationFieldGlue.loadingCache.get(cacheKey);
+      let cache = GlueRelationAttribute.loadingCache.get(cacheKey);
       if (!cache) {
         cache = {
           loaded: false,
@@ -5536,7 +5536,7 @@ ${expression ? 'Expression: "' + expression + `"
           choices: [],
           fields: new Set
         };
-        RelationFieldGlue.loadingCache.set(cacheKey, cache);
+        GlueRelationAttribute.loadingCache.set(cacheKey, cache);
       }
       return cache;
     }
@@ -5562,10 +5562,10 @@ ${expression ? 'Expression: "' + expression + `"
       }
     }
   }
-  var relation_default = RelationFieldGlue;
+  var relation_default = GlueRelationAttribute;
 
-  // client_js/src/proxies/fields/manyRelation.ts
-  class ManyRelationFieldGlue extends relation_default {
+  // client_js/src/proxies/attributes/manyRelation.ts
+  class GlueManyRelationAttribute extends relation_default {
     get selectedPks() {
       return (this.value || []).filter((value) => value != null);
     }
@@ -5606,29 +5606,29 @@ ${expression ? 'Expression: "' + expression + `"
       return this.hasChoiceSelected(value) ? this.removeChoice(value) : this.addChoice(value);
     }
   }
-  var manyRelation_default = ManyRelationFieldGlue;
+  var manyRelation_default = GlueManyRelationAttribute;
 
-  // client_js/src/proxies/fields/index.ts
-  function createFieldGlue({ owner, name, fieldPath = name, stateKey, metadata = {}, existingField = null }) {
-    if (existingField?.__glue__isFieldProxy) {
-      existingField.updateMetadata(metadata);
-      existingField.name = name;
-      existingField.fieldPath = fieldPath;
-      existingField.stateKey = stateKey;
-      return existingField;
+  // client_js/src/proxies/attributes/index.ts
+  function createValueAttribute({ owner, name, fieldPath = name, stateKey, presentation = {}, existingAttribute = null }) {
+    if (existingAttribute?.__glue__isValueAttribute) {
+      existingAttribute.updatePresentation(presentation);
+      existingAttribute.name = name;
+      existingAttribute.fieldPath = fieldPath;
+      existingAttribute.stateKey = stateKey;
+      return existingAttribute;
     }
-    const options = { owner, name, fieldPath, stateKey, metadata };
-    if (metadata.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(metadata.type ?? "")) {
+    const options = { owner, name, fieldPath, stateKey, presentation };
+    if (presentation.choice_model_path && ["ManyToManyField", "ModelMultipleChoiceField"].includes(presentation.type ?? "")) {
       return new manyRelation_default(options);
     }
-    if (metadata.choice_model_path) {
+    if (presentation.choice_model_path) {
       return new relation_default(options);
     }
-    if (Array.isArray(metadata.choices)) {
+    if (Array.isArray(presentation.choices)) {
       const stateValue = owner._record.getValue(stateKey);
       const multipleChoiceTypes = ["MultipleChoiceField", "TypedMultipleChoiceField"];
       const multipleChoiceWidgets = ["CheckboxSelectMultiple", "SelectMultiple"];
-      if (Array.isArray(stateValue) || multipleChoiceTypes.includes(metadata.type ?? "") || multipleChoiceWidgets.includes(metadata.widget ?? "")) {
+      if (Array.isArray(stateValue) || multipleChoiceTypes.includes(presentation.type ?? "") || multipleChoiceWidgets.includes(presentation.widget ?? "")) {
         return new manyChoice_default(options);
       }
       return new choice_default(options);
@@ -5661,6 +5661,19 @@ ${expression ? 'Expression: "' + expression + `"
       configurable: true
     });
   }
+  function memberRecord(record, valuePath, fieldPath) {
+    return {
+      getValue: (name) => record.getValue(valuePath)?.[name],
+      setValue: (name, value) => {
+        const members = record.getValue(valuePath);
+        if (members)
+          members[name] = value;
+      },
+      getValueComputedData: (name) => ({
+        errors: record.getValueComputedData(fieldPath).field_errors?.[name] || []
+      })
+    };
+  }
 
   class GlueAttributeMaterializer {
     constructor() {
@@ -5671,11 +5684,11 @@ ${expression ? 'Expression: "' + expression + `"
       if (!proxy)
         return;
       const members = proxy;
-      const fields = record.staticData.fields || {};
+      const valueAttributes = record.staticData.value_attributes || {};
       const childPaths = new Set(Object.keys(record.staticData.children || {}));
       const callablePaths = Object.keys(record.staticData.callables || {});
       const paths = new Set([
-        ...Object.keys(fields),
+        ...Object.keys(valueAttributes),
         ...childPaths,
         ...callablePaths
       ]);
@@ -5691,41 +5704,67 @@ ${expression ? 'Expression: "' + expression + `"
           delete owner[name];
       }
       this.pathsByRecord.set(record, paths);
-      proxy._fields ||= {};
-      const proxyFields = proxy._fields;
-      Object.entries(fields).forEach(([fieldPath, staticData]) => {
-        const valuePath = staticData.value_path || fieldPath;
+      proxy._valueAttributes ||= {};
+      const proxyValueAttributes = proxy._valueAttributes;
+      const attributePaths = new Set(Object.keys(valueAttributes));
+      Object.entries(valueAttributes).forEach(([fieldPath, schema]) => {
+        const valuePath = schema.value_path || fieldPath;
         const fieldName = fieldPath.split(".").at(-1);
-        const current = proxyFields[fieldPath];
-        const field = createFieldGlue({
+        const current = proxyValueAttributes[fieldPath];
+        const field = createValueAttribute({
           owner: proxy,
           name: fieldName,
           fieldPath,
           stateKey: valuePath,
-          metadata: {
-            ...staticData,
-            ...record.getFieldComputed(fieldPath)
+          presentation: {
+            ...schema,
+            ...record.getValueComputedData(fieldPath)
           },
-          existingField: current
+          existingAttribute: current
         });
-        proxyFields[fieldPath] = field;
+        proxyValueAttributes[fieldPath] = field;
+        let memberFields = null;
+        if (schema.fields) {
+          const memberOwner = { _record: memberRecord(record, valuePath, fieldPath) };
+          memberFields = {};
+          for (const [memberName, memberSchema] of Object.entries(schema.fields)) {
+            const memberPath = `${fieldPath}.${memberName}`;
+            attributePaths.add(memberPath);
+            proxyValueAttributes[memberPath] = createValueAttribute({
+              owner: memberOwner,
+              name: memberName,
+              stateKey: memberName,
+              presentation: memberSchema,
+              existingAttribute: proxyValueAttributes[memberPath]
+            });
+            memberFields[memberName] = proxyValueAttributes[memberPath];
+          }
+        }
         if (!childPaths.has(fieldPath)) {
           definePath(proxy, fieldPath, {
             get() {
-              return record.getValue(valuePath);
+              const value = record.getValue(valuePath);
+              if (memberFields && isPlainObject2(value)) {
+                Object.defineProperty(value, "$fields", {
+                  value: memberFields,
+                  enumerable: false,
+                  configurable: true
+                });
+              }
+              return value;
             },
-            ...staticData.editable ? {
+            ...schema.editable ? {
               set(value) {
-                field.value = value?.__glue__isFieldProxy ? value.value : value;
+                field.value = value?.__glue__isValueAttribute ? value.value : value;
               }
             } : {},
             enumerable: true
           });
         }
       });
-      Object.keys(proxyFields).forEach((path) => {
-        if (!Object.prototype.hasOwnProperty.call(fields, path)) {
-          delete proxyFields[path];
+      Object.keys(proxyValueAttributes).forEach((path) => {
+        if (!attributePaths.has(path)) {
+          delete proxyValueAttributes[path];
         }
       });
       callablePaths.forEach((path) => {
@@ -5737,8 +5776,8 @@ ${expression ? 'Expression: "' + expression + `"
           writable: false
         });
       });
-      record.setEditablePaths(Object.entries(fields).filter(([, descriptor]) => descriptor.editable === true).map(([, descriptor]) => descriptor.value_path));
-      record.setWriteOnlyPaths(Object.entries(fields).filter(([, descriptor]) => descriptor.write_only === true).map(([, descriptor]) => descriptor.value_path));
+      record.setEditablePaths(Object.entries(valueAttributes).filter(([, schema]) => schema.editable === true).map(([, schema]) => schema.value_path));
+      record.setWriteOnlyPaths(Object.entries(valueAttributes).filter(([, schema]) => schema.write_only === true).map(([, schema]) => schema.value_path));
     }
   }
   var attributeMaterializer_default = GlueAttributeMaterializer;

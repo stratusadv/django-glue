@@ -14,7 +14,7 @@ function deferred() {
 
 function model() {
     const client = new GlueClient({objects: [createEntry({
-        computedData: {fields: {name: {errors: []}}},
+        computedData: {value_attributes: {name: {errors: []}}},
     })]})
     return {client, proxy: client.model.gorilla}
 }
@@ -83,7 +83,7 @@ describe('address record state model', () => {
         const {client, proxy} = model()
         const field = proxy.$fields.name
         client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
-            computed_data: {fields: {name: {errors: ['Required']}}},
+            computed_data: {value_attributes: {name: {errors: ['Required']}}},
             result: {},
         })
         await proxy.save()

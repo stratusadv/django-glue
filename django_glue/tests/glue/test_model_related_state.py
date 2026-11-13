@@ -96,7 +96,7 @@ class RelatedStateTestCase(TestCase):
         assert glue_object.instance.name == 'Updated'
         assert glue_object.instance.description == ''
 
-    def test_model_definitions_stage_editable_drafts(self):
+    def test_model_attributes_stage_editable_drafts(self):
         glue_object = ModelGlue(
             self.alpha,
             name='alpha',
@@ -104,28 +104,28 @@ class RelatedStateTestCase(TestCase):
             fields=['name', 'created_at'],
             editable=['name'],
         )
-        name_definition = glue_object._attribute_registry.get('name')
-        created_definition = glue_object._attribute_registry.get('created_at')
+        name_attribute = glue_object._attribute_registry.get('name')
+        created_attribute = glue_object._attribute_registry.get('created_at')
 
-        assert name_definition is not None
-        assert created_definition is not None
-        assert name_definition.value_role == GlueValueRole.EDITABLE_STATE
-        assert created_definition.value_role == GlueValueRole.DERIVED_OUTPUT
+        assert name_attribute is not None
+        assert created_attribute is not None
+        assert name_attribute.value_role == GlueValueRole.EDITABLE_STATE
+        assert created_attribute.value_role == GlueValueRole.DERIVED_OUTPUT
 
-        name_attribute = BoundGlueAttribute(
-            definition=name_definition,
+        name_bound = BoundGlueAttribute(
+            attribute=name_attribute,
             owner=glue_object,
         )
-        created_attribute = BoundGlueAttribute(
-            definition=created_definition,
+        created_bound = BoundGlueAttribute(
+            attribute=created_attribute,
             owner=glue_object,
         )
-        name_attribute.apply_update('Draft')
+        name_bound.apply_update('Draft')
 
-        assert name_attribute.get() == 'Draft'
+        assert name_bound.get() == 'Draft'
         assert glue_object.instance.name == 'Alpha'
         with pytest.raises(TypeError, match='does not accept client updates'):
-            created_attribute.apply_update(None)
+            created_bound.apply_update(None)
 
     def test_model_editable_projection_validates_its_boundary(self):
         with pytest.raises(ValueError, match='must be exposed'):
@@ -173,12 +173,12 @@ class RelatedStateTestCase(TestCase):
         )
         glue_object.request = request_with_session()
 
-        definition = glue_object._attribute_registry.get('form')
+        attribute = glue_object._attribute_registry.get('form')
         children = glue_object._bind_children()
 
-        assert definition is not None
-        assert definition.kind == GlueAttributeKind.CHILD
-        assert definition.expected_type is FormGlue
+        assert attribute is not None
+        assert attribute.kind == GlueAttributeKind.CHILD
+        assert attribute.expected_type is FormGlue
         assert len(children) == 1
         assert children[0].path == 'form'
         assert isinstance(children[0].glue_object, FormGlue)
@@ -202,13 +202,13 @@ class RelatedStateTestCase(TestCase):
             },
         )
 
-        definitions = glue_object._attribute_registry
+        attributes = glue_object._attribute_registry
         glue_object.request = request_with_session()
         children = glue_object._bind_children()
 
-        assert definitions.get('forms').kind == GlueAttributeKind.NAMESPACE
-        assert definitions.get('forms.edit').kind == GlueAttributeKind.CHILD
-        assert definitions.get('forms.review').kind == GlueAttributeKind.CHILD
+        assert attributes.get('forms').kind == GlueAttributeKind.NAMESPACE
+        assert attributes.get('forms.edit').kind == GlueAttributeKind.CHILD
+        assert attributes.get('forms.review').kind == GlueAttributeKind.CHILD
         assert tuple(child.path for child in children) == (
             'forms.edit',
             'forms.review',
@@ -278,11 +278,11 @@ class RelatedStateTestCase(TestCase):
         )
         glue_object.request = request_with_session()
 
-        identity_definition = glue_object._attribute_registry.get('red_corner_id')
-        assert identity_definition.value_role == GlueValueRole.EDITABLE_STATE
+        identity_attribute = glue_object._attribute_registry.get('red_corner_id')
+        assert identity_attribute.value_role == GlueValueRole.EDITABLE_STATE
 
         identity = BoundGlueAttribute(
-            definition=identity_definition,
+            attribute=identity_attribute,
             owner=glue_object,
         )
         assert identity.get() == self.alpha.pk
@@ -351,11 +351,11 @@ class RelatedStateTestCase(TestCase):
         )
         glue_object.request = request_with_session()
 
-        definition = glue_object._attribute_registry.get('skills')
-        assert definition is not None
-        assert definition.kind == GlueAttributeKind.CHILD
-        assert definition.expected_type is QuerySetGlue
-        assert definition.is_nullable is False
+        attribute = glue_object._attribute_registry.get('skills')
+        assert attribute is not None
+        assert attribute.kind == GlueAttributeKind.CHILD
+        assert attribute.expected_type is QuerySetGlue
+        assert attribute.is_nullable is False
         assert set(glue_object.state['skills_ids']['value']) == {
             grappling.pk,
             climbing.pk,
@@ -381,11 +381,11 @@ class RelatedStateTestCase(TestCase):
         )
         glue_object.request = request_with_session()
 
-        definition = glue_object._attribute_registry.get('fights_as_red_corner')
-        assert definition is not None
-        assert definition.kind == GlueAttributeKind.CHILD
-        assert definition.expected_type is QuerySetGlue
-        assert definition.is_nullable is False
+        attribute = glue_object._attribute_registry.get('fights_as_red_corner')
+        assert attribute is not None
+        assert attribute.kind == GlueAttributeKind.CHILD
+        assert attribute.expected_type is QuerySetGlue
+        assert attribute.is_nullable is False
         assert glue_object.state['fights_as_red_corner_ids']['value'] == (
             self.fight.pk,
         )
@@ -416,10 +416,10 @@ class RelatedStateTestCase(TestCase):
             'skills__id',
             'skills__name',
         )
-        definition = reconstructed._attribute_registry.get('skills')
-        assert definition is not None
-        assert definition.kind == GlueAttributeKind.CHILD
-        assert definition.expected_type is QuerySetGlue
+        attribute = reconstructed._attribute_registry.get('skills')
+        assert attribute is not None
+        assert attribute.kind == GlueAttributeKind.CHILD
+        assert attribute.expected_type is QuerySetGlue
         children = reconstructed._bind_children()
         assert len(children) == 1
         assert isinstance(children[0].glue_object, QuerySetGlue)

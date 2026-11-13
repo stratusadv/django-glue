@@ -246,7 +246,7 @@ def test_model_parameter_is_not_client_callable(mock_request, loaded_gorilla) ->
     static_data = component.get_static_data()
 
     assert 'gorilla' not in static_data['callables']
-    assert 'gorilla' in static_data['fields']
+    assert 'gorilla' in static_data['value_attributes']
 
 
 def test_other_values_are_rejected_at_construction(mock_request, db) -> None:

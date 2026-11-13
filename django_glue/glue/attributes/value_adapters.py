@@ -3,21 +3,21 @@ from __future__ import annotations
 from typing import Any, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from django_glue.glue.attributes.declared import DeclaredAttribute
+    from django_glue.glue.attributes.declaration import GlueAttributeDeclaration
 
 
 class GlueValueAdapter(Protocol):
     """Recognizes a plain assigned value and converts it into its Glue representation.
 
-    DeclaredAttribute.__set__ tries each adapter in turn (see
+    GlueAttributeDeclaration.__set__ tries each adapter in turn (see
     DEFAULT_VALUE_ADAPTERS); the first whose applies_to() matches wins.
     """
 
-    def applies_to(self, value: Any, *, attribute: DeclaredAttribute) -> bool:
+    def applies_to(self, value: Any, *, attribute: GlueAttributeDeclaration) -> bool:
         """Whether this adapter should handle the given assigned value."""
         ...
 
-    def adapt(self, value: Any, *, attribute: DeclaredAttribute, instance: Any) -> Any:
+    def adapt(self, value: Any, *, attribute: GlueAttributeDeclaration, instance: Any) -> Any:
         """Convert value into its Glue representation.
 
         instance is the BaseGlue object the attribute is being set on --
@@ -41,7 +41,7 @@ class SequenceAdapter:
     TimeEntryDayGlue used to pass self.access to each ModelGlue it built).
     """
 
-    def applies_to(self, value: Any, *, attribute: DeclaredAttribute) -> bool:
+    def applies_to(self, value: Any, *, attribute: GlueAttributeDeclaration) -> bool:
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 
         return (
@@ -53,7 +53,7 @@ class SequenceAdapter:
             )
         )
 
-    def adapt(self, value: Any, *, attribute: DeclaredAttribute, instance: Any) -> Any:
+    def adapt(self, value: Any, *, attribute: GlueAttributeDeclaration, instance: Any) -> Any:
         from django_glue.glue.sequence import SequenceGlue  # noqa: PLC0415
 
         attribute._get_storage_name()  # noqa: SLF001 -- raises if unbound; guarantees attribute.name is set

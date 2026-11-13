@@ -13,7 +13,7 @@ describe('family proxy facades', () => {
                 identity: {item_keys: ['monday']}, attributes: [], state_snapshot: {},
                 children: {monday: item.address},
             },
-            staticData: {fields: {}, callables: {}},
+            staticData: {value_attributes: {},callables: {}},
         })
         const client = new GlueClient({objects: [sequence, item]})
         expect(client.sequence.days.items).toEqual([client._registry.getProxy(item.address)])
@@ -26,7 +26,7 @@ describe('family proxy facades', () => {
                 name: 'gorillas', namespace: 'querySet', address: 'gorillas#test',
                 attributes: ['query_with_params'], state_snapshot: {},
             },
-            staticData: {fields: {}, callables: {query_with_params: {allowed_arguments: []}}},
+            staticData: {value_attributes: {},callables: {query_with_params: {allowed_arguments: []}}},
         })
         const row = createEntry({policy: {
             name: 'gorillas.1', address: 'gorillas#test[1]', state_snapshot: {id: 1, name: 'Koko'},
@@ -49,7 +49,7 @@ describe('family proxy facades', () => {
                 name: 'gorillas', namespace: 'querySet', address: 'gorillas#test',
                 attributes: ['query_with_params'], state_snapshot: {},
             },
-            staticData: {fields: {}, callables: {query_with_params: {allowed_arguments: []}}},
+            staticData: {value_attributes: {},callables: {query_with_params: {allowed_arguments: []}}},
         })
         const client = new GlueClient({objects: [queryset]})
         let kwargs

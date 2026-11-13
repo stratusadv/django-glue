@@ -9,7 +9,7 @@ from django.contrib.sessions.backends.cache import SessionStore
 from django_glue import Glue
 from django_glue.conf import settings
 from django_glue.exceptions import GlueComponentParameterError
-from django_glue.glue.attributes.definition import GlueValueRole
+from django_glue.glue.attributes.attribute import GlueValueRole
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.components import Component
 from django_glue.glue.components.session import ComponentSession
@@ -384,10 +384,10 @@ def test_reading_a_mutable_session_attr_default_returns_a_copy(mock_request: Htt
 
 def test_session_attr_reaches_the_client_but_not_the_token(mock_request: HttpRequest) -> None:
     component = Glue.object(mock_request, SessionAttrComponent())
-    fields = component.get_static_data()['fields']
+    value_attributes = component.get_static_data()['value_attributes']
 
-    assert component.get_computed_data(include_all=True) == {'seen': [], 'step': 0}
-    assert fields['step'] == {'value_path': 'step', 'editable': False}
+    assert component.get_computed_data(include_all=True) == {'values': {'seen': [], 'step': 0}}
+    assert value_attributes['step'] == {'value_path': 'step', 'editable': False}
     assert component.policy.state_snapshot == {'count': 0}
 
 
@@ -405,7 +405,7 @@ def test_callable_response_carries_the_session_attr_it_changed(mock_request: Htt
 
     entry = call_entry(component, 'advance')
 
-    assert entry['computed_data'] == {'seen': [], 'step': 1}
+    assert entry['computed_data'] == {'values': {'seen': [], 'step': 1}}
 
 
 @pytest.mark.parametrize('callable_name', ['advance_quietly', 'advance_through_the_mapping'])
@@ -416,7 +416,7 @@ def test_skip_rerender_callable_sends_the_session_attr_it_wrote(
 
     entry = call_entry(component, callable_name)
 
-    assert entry['computed_data'] == {'step': 1}
+    assert entry['computed_data'] == {'values': {'step': 1}}
     assert 'html' not in entry
     assert stored(mock_request, SessionAttrComponent)['step'] == 1
 
@@ -429,7 +429,7 @@ def test_skip_rerender_callable_sends_the_default_of_a_deleted_session_attr(
 
     entry = call_entry(component, 'reset_quietly')
 
-    assert entry['computed_data'] == {'step': 0}
+    assert entry['computed_data'] == {'values': {'step': 0}}
 
 
 def test_skip_rerender_callable_sends_nothing_for_other_session_keys(

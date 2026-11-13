@@ -1,12 +1,12 @@
 import {describe, expect, test} from "bun:test"
 import GlueClient from "../src/client"
-import {RelationFieldGlue} from "../src/proxies/fields"
+import {GlueRelationAttribute} from "../src/proxies/attributes"
 import {attributeResponse, createEntry, createPolicyToken} from "./testUtils"
 
 describe('field-backed proxy facades', () => {
     test('exposes field errors, primitive conversion, and stable identity', () => {
         const client = new GlueClient({objects: [createEntry({
-            computedData: {fields: {name: {errors: ['Required']}}},
+            computedData: {value_attributes: {name: {errors: ['Required']}}},
         })]})
         const proxy = client.model.gorilla
         const field = proxy.$fields.name
@@ -24,10 +24,10 @@ describe('field-backed proxy facades', () => {
     test('uses the full static field path for computed errors', () => {
         const manifest = createEntry({
             policy: {state_snapshot: {profile_name: ''}},
-            staticData: {fields: {
+            staticData: {value_attributes: {
                 'profile.name': {value_path: 'profile_name', type: 'CharField', editable: true},
             }},
-            computedData: {fields: {'profile.name': {errors: ['Required']}}},
+            computedData: {value_attributes: {'profile.name': {errors: ['Required']}}},
         })
         const proxy = new GlueClient({objects: [manifest]}).model.gorilla
 
@@ -48,10 +48,30 @@ describe('field-backed proxy facades', () => {
         expect(proxy.hasErrors()).toBeFalse()
     })
 
+    test('a derived value at path `fields` is a value, apart from presentation output', () => {
+        const manifest = createEntry({
+            policy: {
+                name: 'profile', namespace: 'form', address: 'profile#test',
+                state_snapshot: {name: 'Koko'},
+            },
+            staticData: {value_attributes: {fields: {value_path: 'fields', editable: false}}},
+            computedData: {
+                values: {fields: ['name', 'birthday']},
+                value_attributes: {name: {errors: ['Required']}},
+            },
+        })
+        const proxy = new GlueClient({objects: [manifest]}).form.profile
+
+        expect(proxy.fields).toEqual(['name', 'birthday'])
+        expect(proxy.$fields.name.errors).toEqual(['Required'])
+        expect(proxy.$fields.fields.errors).toEqual([])
+        expect(proxy.hasErrors()).toBeTrue()
+    })
+
     test('choice fields expose single and multiple selection helpers', () => {
         const manifest = createEntry({
             policy: {state_snapshot: {status: 'open', tags: ['a']}},
-            staticData: {fields: {
+            staticData: {value_attributes: {
                 status: {
                     value_path: 'status', type: 'ChoiceField', editable: true,
                     choices: [{value: 'open', label: 'Open'}, {value: 'closed', label: 'Closed'}],
@@ -72,14 +92,14 @@ describe('field-backed proxy facades', () => {
     })
 
     test('relation fields load and share choices by cache key', async () => {
-        RelationFieldGlue.loadingCache.clear()
+        GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({
             policy: {
                 state_snapshot: {skill: 1},
                 attributes: ['skill', 'foreign_key_choices'],
             },
             staticData: {
-                fields: {skill: {
+                value_attributes: {skill: {
                     value_path: 'skill', type: 'ModelChoiceField', editable: true,
                     choice_model_path: 'app.Skill', choices_cache_key: 'skill-cache',
                 }},
@@ -102,14 +122,14 @@ describe('field-backed proxy facades', () => {
     })
 
     test('search results retain a selected relation after search clears', async () => {
-        RelationFieldGlue.loadingCache.clear()
+        GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({
             policy: {
                 state_snapshot: {skill: null},
                 attributes: ['skill', 'foreign_key_choices'],
             },
             staticData: {
-                fields: {skill: {
+                value_attributes: {skill: {
                     value_path: 'skill', type: 'ModelChoiceField', editable: true,
                     choice_model_path: 'app.Skill', choices_cache_key: 'search-cache',
                 }},
@@ -130,14 +150,14 @@ describe('field-backed proxy facades', () => {
     })
 
     test('overridden relation choices survive a response that refreshes the field', async () => {
-        RelationFieldGlue.loadingCache.clear()
+        GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({
             policy: {
                 state_snapshot: {project: 93},
                 attributes: ['project', 'project_is_billable'],
             },
             staticData: {
-                fields: {project: {
+                value_attributes: {project: {
                     value_path: 'project', type: 'ModelChoiceField', editable: true,
                     choices: [], choice_model_path: 'app.Project',
                 }},
@@ -166,7 +186,7 @@ describe('field-backed proxy facades', () => {
                 address: 'gorilla#test', attributes: ['name'], state_snapshot: {name: 'Koko'},
             }),
             static_data: {
-                fields: {name: {value_path: 'name', type: 'CharField', editable: true}},
+                value_attributes: {name: {value_path: 'name', type: 'CharField', editable: true}},
             },
             computed_data: {},
         }
@@ -193,14 +213,14 @@ describe('field-backed proxy facades', () => {
     })
 
     test('relation multiple-choice fields expose pk-based selection helpers', async () => {
-        RelationFieldGlue.loadingCache.clear()
+        GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({
             policy: {
                 state_snapshot: {skills: [1]},
                 attributes: ['skills', 'foreign_key_choices'],
             },
             staticData: {
-                fields: {skills: {
+                value_attributes: {skills: {
                     value_path: 'skills', type: 'ManyToManyField', editable: true,
                     choice_model_path: 'app.Skill', choices_cache_key: 'skills-cache',
                 }},

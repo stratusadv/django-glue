@@ -23,7 +23,7 @@ from django_glue.exceptions import (
     GlueRequestErrorCode,
 )
 from django_glue.glue import address
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.children import BoundGlueChild
 from django_glue.glue.collection import BaseCollectionGlue
 from django_glue.glue.objects.django.computed_attributes import (
@@ -407,7 +407,7 @@ class QuerySetGlue(
         queryset.query = query
         return queryset
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def query_with_params(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -519,7 +519,7 @@ class QuerySetGlue(
 
         return result
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def count(
         self,
         filter: dict[str, Any] | None = None,  # noqa: A002
@@ -576,7 +576,7 @@ class QuerySetGlue(
     def _sign_seek_key(self, position_key: str | None) -> str | None:
         return None if position_key is None else self._seek_key_signer.sign(position_key)
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def get(self, pk: Any) -> ModelGlue:
         # A pk outside this queryset is a routine client outcome, not a server fault: a
         # row can leave the bound filter between render and refresh. Report it as 404 so
@@ -591,7 +591,7 @@ class QuerySetGlue(
 
         return self._row_glue(instance, bind=False)
 
-    @DeclaredAttribute(required_access=GlueAccess.ADD)
+    @GlueAttributeDeclaration(required_access=GlueAccess.ADD)
     def new(self, initial: dict | None = None) -> ModelGlue:
         # ADD admits creating a draft, not expanding it: the fields a client may
         # pre-fill are exactly the fields the signed policy marks editable

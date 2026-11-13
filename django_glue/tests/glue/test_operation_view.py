@@ -292,6 +292,50 @@ class GlueAttributeRequestViewTestCase(TestCase):
         self.gorilla.refresh_from_db()
         self.assertEqual(self.gorilla.name, 'Batched')
 
+    def test_batch_with_one_refused_argument_advances_every_other_entry(self):
+        policies = []
+        for name in ('valid', 'refused'):
+            glue_object = FunctionGlue(
+                'django_glue.tests.glue.test_operation_view.sample_function',
+                name=name,
+                access=GlueAccess.VIEW,
+            )
+            glue_object.request = self.request_context()
+            policies.append(glue_object.policy)
+        valid_policy, refused_policy = policies
+
+        entries = [
+            {
+                'address': valid_policy.address,
+                'policy_token': valid_policy.token,
+                'call': {'attribute': 'execute', 'kwargs': {'kwargs': {'amount': 5}}},
+            },
+            {
+                'address': refused_policy.address,
+                'policy_token': refused_policy.token,
+                'call': {'attribute': 'execute', 'kwargs': {'kwargs': 'not a mapping'}},
+            },
+        ]
+        request = self.factory.post(
+            '/__dg__/callable_attribute/',
+            data={'objects': json.dumps(entries)},
+        )
+        request.session = self.session
+        request.user = 'TestUser'
+
+        response = glue_attribute_call_view(request)
+
+        self.assertEqual(response.status_code, 200)
+        valid, refused = json.loads(response.content)['objects']
+        self.assertEqual(valid['result'], {'result': 5})
+        self.assertNotIn('error', valid)
+        self.assertEqual(refused['error']['code'], 'invalid_kwargs')
+        self.assertEqual(
+            refused['error']['details'],
+            {'attribute': 'execute', 'argument': 'kwargs'},
+        )
+        self.assertNotIn('result', refused)
+
     def test_attribute_request_view_executes_function(self):
         glue_object = FunctionGlue(
             'django_glue.tests.glue.test_operation_view.sample_function',
