@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -11,13 +12,10 @@ from django.core.exceptions import NON_FIELD_ERRORS
 
 from django_glue.serialization import GlueSerializer, GlueSerializerError, glue_serializer_registry
 from django_glue.glue.attributes.description import GlueFieldDescription
-from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS
 from django_glue.glue.objects.django.fields.description import field_schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from django_glue.glue.attributes.declared import DeclaredAttribute
 
 
 def _field_values(form: forms.BaseForm) -> dict[str, Any]:
@@ -25,8 +23,23 @@ def _field_values(form: forms.BaseForm) -> dict[str, Any]:
     return {bound_field.name: bound_field.value() for bound_field in form}
 
 
+def _required_arguments(form_class: type[forms.BaseForm]) -> list[str]:
+    """The arguments a form class cannot be built without."""
+    parameters = list(inspect.signature(form_class.__init__).parameters.values())[1:]
+    return [
+        parameter.name
+        for parameter in parameters
+        if parameter.default is inspect.Parameter.empty
+        and parameter.kind in (parameter.POSITIONAL_OR_KEYWORD, parameter.KEYWORD_ONLY)
+    ]
+
+
 class FormSerializer(GlueSerializer):
-    """A form class: its fields' values on the wire, and in Python the form bound to them."""
+    """
+    A form class: its fields' values on the wire, and in Python the form bound
+    to them. The form is built from its values alone, so it is refused if it
+    cannot be, and any other argument a form was built with is not kept.
+    """
 
     @classmethod
     def supports(cls, target: Any) -> bool:
@@ -34,6 +47,13 @@ class FormSerializer(GlueSerializer):
 
     def __init__(self, target: type[forms.BaseForm]) -> None:
         super().__init__(target)
+        required = _required_arguments(target)
+        if required:
+            message = (
+                f'{target.__name__} cannot be held as state: it is built from its values '
+                f'alone, and its __init__ requires {", ".join(required)}.'
+            )
+            raise GlueSerializerError(message)
         for name, field in target.base_fields.items():
             if isinstance(field, forms.FileField):
                 reason = 'a file is uploaded, not held as state'
@@ -63,6 +83,18 @@ class FormSerializer(GlueSerializer):
 
     def default(self) -> forms.BaseForm:
         return self.target()
+
+    def adopt(self, value: Any) -> Any:
+        """An unbound form is bound to its own initial values, so it validates before the browser sends any."""
+        if not isinstance(value, forms.BaseForm) or value.is_bound:
+            return value
+        if isinstance(value, forms.BaseModelForm) and value.instance.pk is not None:
+            message = (
+                f'{type(value).__name__} over a saved record cannot be held as state: '
+                'a form that edits a record is a Glue.child.'
+            )
+            raise TypeError(message)
+        return type(value)(data=_field_values(value))
 
     def description(
         self,
@@ -110,26 +142,4 @@ class FormStateDescription(GlueFieldDescription):
         }
 
 
-class UnboundFormBinder:
-    """
-    Binds an unbound form assigned to an attribute to its own initial values,
-    so it validates before the browser has sent any.
-    """
-
-    def applies_to(self, value: Any, *, attribute: DeclaredAttribute) -> bool:
-        _ = attribute
-        return isinstance(value, forms.BaseForm) and not value.is_bound
-
-    def adapt(self, value: forms.BaseForm, *, attribute: DeclaredAttribute, instance: Any) -> Any:
-        _ = instance
-        if isinstance(value, forms.BaseModelForm) and value.instance.pk is not None:
-            message = (
-                f'Attribute {attribute.name!r} cannot hold a form over a saved record: '
-                'a form that edits a record is a Glue.child.'
-            )
-            raise TypeError(message)
-        return type(value)(data=_field_values(value))
-
-
 glue_serializer_registry.register(FormSerializer)
-DEFAULT_VALUE_ADAPTERS.append(UnboundFormBinder())

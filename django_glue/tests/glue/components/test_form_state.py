@@ -294,6 +294,50 @@ def test_a_form_with_a_field_that_cannot_be_state_is_refused_when_first_used(
         Glue.object(mock_request, refused_component()).policy  # noqa: B018
 
 
+def test_a_form_that_needs_constructor_arguments_is_refused_when_first_used(mock_request) -> None:
+    class ScopedFilterForm(RosterFilterForm):
+        def __init__(self, *args: Any, company_id: int, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.company_id = company_id
+
+    scoped_component = type(
+        'ScopedComponent',
+        (Component,),
+        {
+            'template': 'glue_template_test.html',
+            '__annotations__': {'filters': ScopedFilterForm},
+            'filters': Glue.attr(editable=True),
+        },
+    )
+
+    with pytest.raises(TypeError, match='its __init__ requires company_id'):
+        Glue.object(mock_request, scoped_component()).policy  # noqa: B018
+
+
+def test_only_an_attribute_typed_as_a_form_binds_one(mock_request) -> None:
+    class UntypedComponent(Component):
+        template = 'glue_template_test.html'
+
+        stash = Glue.attr()
+
+    untyped = UntypedComponent()
+    untyped.stash = RosterFilterForm()
+
+    assert untyped.stash.is_bound is False
+
+
+def test_a_form_is_bound_whatever_value_adapters_the_declaration_names(mock_request) -> None:
+    class OwnAdaptersComponent(Component):
+        template = 'glue_template_test.html'
+
+        filters: RosterFilterForm = Glue.attr(editable=True, value_adapters=[])
+
+    own_adapters = Glue.object(mock_request, OwnAdaptersComponent())
+
+    assert own_adapters.filters.is_bound
+    assert own_adapters.policy.state_snapshot['filters'] == INITIAL_FILTERS
+
+
 def test_a_value_only_its_type_can_write_is_dumped_and_restored_by_it(roster) -> None:
     assert roster.policy.state_snapshot['window'] == {'start': '2026-09-01', 'end': '2026-09-30'}
 

@@ -234,19 +234,13 @@ class DeclaredAttribute:
         if self.storage_name in instance.__dict__:
             return instance.__dict__[self.storage_name]
         if self.default_factory is not _MISSING:
-            value = self._adapt_value(self._prepare_default(self.default_factory()), instance)
-            instance.__dict__[self._get_storage_name()] = value
-            return value
+            return self._store(instance, self._prepare_default(self.default_factory()))
         if self.default is not _MISSING:
-            value = self._adapt_value(self._prepare_default(self._clone_default()), instance)
-            instance.__dict__[self._get_storage_name()] = value
-            return value
+            return self._store(instance, self._prepare_default(self._clone_default()))
         value = self._serializer(type(instance)).default()
         if value is None:
             return None
-        value = self._adapt_value(self._prepare_default(value), instance)
-        instance.__dict__[self._get_storage_name()] = value
-        return value
+        return self._store(instance, self._prepare_default(value))
 
     def _serializer(self, owner_type: type[Any]) -> GlueSerializer:
         """This declaration's serializer on one owner class, found once per class."""
@@ -274,8 +268,13 @@ class DeclaredAttribute:
         if hasattr(self.target, '__set__'):
             self.target.__set__(instance, value)
             return
-        value = self._adapt_value(value, instance)
+        self._store(instance, value)
+
+    def _store(self, instance: Any, value: Any) -> Any:
+        """Holds a default or an assigned value as its serializer adopts it and a value adapter converts it."""
+        value = self._adapt_value(self._serializer(type(instance)).adopt(value), instance)
         instance.__dict__[self._get_storage_name()] = value
+        return value
 
     def _adapt_value(self, value: Any, instance: Any) -> Any:
         """Run value through the first matching GlueValueAdapter, if any."""

@@ -54,6 +54,13 @@ class GlueSerializer(ABC):
         """
         return None
 
+    def adopt(self, value: Any) -> Any:
+        """
+        A default or an assigned value as the attribute holds it. A serializer
+        whose values are held as they are given keeps this default.
+        """
+        return value
+
     def check(self) -> None:  # noqa: B027
         """
         Refuse a target this serializer cannot handle before any value arrives.
