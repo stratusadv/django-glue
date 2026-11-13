@@ -1,10 +1,10 @@
-import {createFieldGlue} from "../proxies/fields"
-import type {FieldGlue} from "../proxies/fields"
-import type {GlueFieldRecord} from "../proxies/fields/base"
+import {createValueAttribute} from "../proxies/attributes"
+import type {GlueValueAttribute} from "../proxies/attributes"
+import type {GlueValueAttributeRecord} from "../proxies/attributes/base"
 import type GlueAddressRecord from "./addressRecord"
 import {isPlainObject} from "./state"
 
-// A proxy's fields, children and callables are defined on it by path at
+// A proxy's value attributes, children and callables are defined on it by path at
 // runtime, so the materializer reads and writes it as a bag of members.
 type GlueMembers = Record<string, unknown>
 
@@ -35,16 +35,16 @@ function definePath(root: object, path: string, descriptor: PropertyDescriptor):
 
 // The record of the fields inside one object-valued attribute (a form held as
 // state): each reads and writes its own key of that value, and reads its
-// errors from the attribute's computed output.
-function memberRecord(record: GlueAddressRecord, valuePath: string, fieldPath: string): GlueFieldRecord {
+// errors from the attribute's computed data.
+function memberRecord(record: GlueAddressRecord, valuePath: string, fieldPath: string): GlueValueAttributeRecord {
     return {
         getValue: name => (record.getValue(valuePath) as GlueMembers | null | undefined)?.[name],
         setValue: (name, value) => {
             const members = record.getValue(valuePath) as GlueMembers | null | undefined
             if (members) members[name] = value
         },
-        getFieldComputed: name => ({
-            errors: record.getFieldComputed(fieldPath).field_errors?.[name] || [],
+        getValueComputedData: name => ({
+            errors: record.getValueComputedData(fieldPath).field_errors?.[name] || [],
         }),
     }
 }
@@ -61,11 +61,11 @@ class GlueAttributeMaterializer {
         if (!proxy) return
         const members = proxy as unknown as GlueMembers
 
-        const fields = record.staticData.fields || {}
+        const valueAttributes = record.staticData.value_attributes || {}
         const childPaths = new Set(Object.keys(record.staticData.children || {}))
         const callablePaths = Object.keys(record.staticData.callables || {})
         const paths = new Set([
-            ...Object.keys(fields),
+            ...Object.keys(valueAttributes),
             ...childPaths,
             ...callablePaths,
         ])
@@ -78,46 +78,46 @@ class GlueAttributeMaterializer {
             if (owner) delete owner[name]
         }
         this.pathsByRecord.set(record, paths)
-        proxy._fields ||= {}
+        proxy._valueAttributes ||= {}
         // Read back through the proxy, which is reactive: writes to the plain
         // object just assigned would not be tracked.
-        const proxyFields = proxy._fields
-        const fieldPaths = new Set(Object.keys(fields))
+        const proxyValueAttributes = proxy._valueAttributes
+        const attributePaths = new Set(Object.keys(valueAttributes))
 
-        Object.entries(fields).forEach(([fieldPath, staticData]) => {
-            const valuePath = staticData.value_path || fieldPath
+        Object.entries(valueAttributes).forEach(([fieldPath, schema]) => {
+            const valuePath = schema.value_path || fieldPath
             const fieldName = fieldPath.split('.').at(-1)!
-            const current = proxyFields[fieldPath]
-            const field = createFieldGlue({
+            const current = proxyValueAttributes[fieldPath]
+            const field = createValueAttribute({
                 owner: proxy,
                 name: fieldName,
                 fieldPath,
                 stateKey: valuePath,
-                metadata: {
-                    ...staticData,
-                    ...record.getFieldComputed(fieldPath),
+                presentation: {
+                    ...schema,
+                    ...record.getValueComputedData(fieldPath),
                 },
-                existingField: current,
+                existingAttribute: current,
             })
-            proxyFields[fieldPath] = field
+            proxyValueAttributes[fieldPath] = field
 
             // The value's own fields are reached beside it, as
             // `owner.attribute.$fields.<name>`, the way a form's are.
-            let memberFields: Record<string, FieldGlue> | null = null
-            if (staticData.fields) {
+            let memberFields: Record<string, GlueValueAttribute> | null = null
+            if (schema.fields) {
                 const memberOwner = {_record: memberRecord(record, valuePath, fieldPath)}
                 memberFields = {}
-                for (const [memberName, memberStaticData] of Object.entries(staticData.fields)) {
+                for (const [memberName, memberSchema] of Object.entries(schema.fields)) {
                     const memberPath = `${fieldPath}.${memberName}`
-                    fieldPaths.add(memberPath)
-                    proxyFields[memberPath] = createFieldGlue({
+                    attributePaths.add(memberPath)
+                    proxyValueAttributes[memberPath] = createValueAttribute({
                         owner: memberOwner,
                         name: memberName,
                         stateKey: memberName,
-                        metadata: memberStaticData,
-                        existingField: proxyFields[memberPath],
+                        presentation: memberSchema,
+                        existingAttribute: proxyValueAttributes[memberPath],
                     })
-                    memberFields[memberName] = proxyFields[memberPath]
+                    memberFields[memberName] = proxyValueAttributes[memberPath]
                 }
             }
 
@@ -134,9 +134,9 @@ class GlueAttributeMaterializer {
                         }
                         return value
                     },
-                    ...(staticData.editable ? {
-                        set(value: {__glue__isFieldProxy?: boolean, value?: unknown} | null | undefined) {
-                            field.value = value?.__glue__isFieldProxy ? value.value : value
+                    ...(schema.editable ? {
+                        set(value: {__glue__isValueAttribute?: boolean, value?: unknown} | null | undefined) {
+                            field.value = value?.__glue__isValueAttribute ? value.value : value
                         },
                     } : {}),
                     enumerable: true,
@@ -144,9 +144,9 @@ class GlueAttributeMaterializer {
             }
         })
 
-        Object.keys(proxyFields).forEach(path => {
-            if (!fieldPaths.has(path)) {
-                delete proxyFields[path]
+        Object.keys(proxyValueAttributes).forEach(path => {
+            if (!attributePaths.has(path)) {
+                delete proxyValueAttributes[path]
             }
         })
 
@@ -164,14 +164,14 @@ class GlueAttributeMaterializer {
         })
 
         record.setEditablePaths(
-            Object.entries(fields)
-                .filter(([, descriptor]) => descriptor.editable === true)
-                .map(([, descriptor]) => descriptor.value_path),
+            Object.entries(valueAttributes)
+                .filter(([, schema]) => schema.editable === true)
+                .map(([, schema]) => schema.value_path),
         )
         record.setWriteOnlyPaths(
-            Object.entries(fields)
-                .filter(([, descriptor]) => descriptor.write_only === true)
-                .map(([, descriptor]) => descriptor.value_path),
+            Object.entries(valueAttributes)
+                .filter(([, schema]) => schema.write_only === true)
+                .map(([, schema]) => schema.value_path),
         )
     }
 }

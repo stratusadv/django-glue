@@ -10,14 +10,14 @@ from django.db.models import QuerySet
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.children import BoundGlueChild
 from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
-from django_glue.glue.objects.django.fields import ModelFieldDescription
+from django_glue.glue.objects.django.fields import ModelFieldPresentation
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
@@ -216,9 +216,9 @@ class ModelGlue(
             (self, declarations),
         )
 
-    def get_field_descriptions(self) -> Mapping[str, ModelFieldDescription]:
+    def get_value_attribute_presentations(self) -> Mapping[str, ModelFieldPresentation]:
         return {
-            field_name: ModelFieldDescription(
+            field_name: ModelFieldPresentation(
                 owner=self,
                 name=field_name,
                 field=(
@@ -535,7 +535,7 @@ class ModelGlue(
 
         return self.request.FILES.get(field_name)
 
-    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
+    @GlueAttributeDeclaration(required_access=GlueAccess.required_save_access)
     def save(self) -> dict[str, Any]:
         """Persist the draft. A draft created through a relation attaches to
         that exact relation in the same transaction (state-model.md §4)."""
@@ -594,7 +594,7 @@ class ModelGlue(
             return value.get('value')
         return getattr(value, 'pk', value)
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,
@@ -648,7 +648,7 @@ class ModelGlue(
             return configured_queryset
         return related_model.objects.all()
 
-    @DeclaredAttribute(required_access=GlueAccess.DELETE)
+    @GlueAttributeDeclaration(required_access=GlueAccess.DELETE)
     def delete(self) -> None:
         self.instance.delete()
         self.dispose()

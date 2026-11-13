@@ -14,7 +14,7 @@ function componentEntry({address, ancestors = [], staticData = {}, attributes = 
             identity: {component_id: 'test', parameters: {}, ancestors},
             attributes, state_snapshot: {},
         },
-        static_data: {fields: {}, callables: {}, ...staticData},
+        static_data: {value_attributes: {}, callables: {}, ...staticData},
     })
 }
 

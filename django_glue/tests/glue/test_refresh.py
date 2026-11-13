@@ -137,7 +137,7 @@ class QuerySetRefreshTestCase(TestCase):
             for introduced_entry in introduced
             if introduced_entry['address'] == entry['computed_data']['items'][0]
         )
-        self.assertEqual(first_row['computed_data']['name'], 'Gorilla 06')
+        self.assertEqual(first_row['computed_data']['values']['name'], 'Gorilla 06')
 
     def test_refresh_before_any_query_derives_the_first_batch(self):
         entry, _introduced, _refreshed = request_entry(QuerySetGlue, self.policy, self.request)

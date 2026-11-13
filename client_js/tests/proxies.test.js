@@ -172,7 +172,7 @@ describe('formset proxy facade', () => {
                 children: {'0': form.address},
             },
             staticData: {
-                fields: {}, children: {'0': {kind: 'form', nullable: false}},
+                value_attributes: {}, children: {'0': {kind: 'form', nullable: false}},
                 callables: {append: {allowed_arguments: ['key', 'initial']}, validate: {allowed_arguments: []}},
             },
         })
@@ -189,7 +189,7 @@ describe('formset proxy facade', () => {
                 identity: {}, attributes: ['append'], state_snapshot: {}, children: {},
             },
             staticData: {
-                fields: {},
+                value_attributes: {},
                 children: {'0': {kind: 'form', nullable: false}},
                 callables: {append: {allowed_arguments: ['key', 'initial'], returns_glue: true}},
             },
@@ -224,7 +224,7 @@ describe('formset proxy facade', () => {
                 name: 'contacts', namespace: 'formSet', address: 'contacts#test',
                 identity: {}, attributes: ['validate'], state_snapshot: {}, children: {},
             },
-            staticData: {fields: {}, callables: {validate: {allowed_arguments: []}}},
+            staticData: {value_attributes: {}, callables: {validate: {allowed_arguments: []}}},
         })
         const client = new GlueClient({objects: [formset]})
         client.http.sendAttributeRequest = async () => attributeResponse('contacts#test', {
@@ -243,7 +243,7 @@ describe('formset proxy facade', () => {
                 name: 'contacts.first', namespace: 'form', address: 'contacts#test[first]',
                 state_snapshot: {name: 'Ada'}, attributes: ['name'],
             },
-            staticData: {fields: {name: {value_path: 'name', editable: true}}},
+            staticData: {value_attributes: {name: {value_path: 'name', editable: true}}},
         })
         const formset = createEntry({
             policy: {
@@ -275,7 +275,7 @@ describe('formset proxy facade', () => {
                 name: `contacts.${key}`, namespace: 'form', address: `contacts#test[${key}]`,
                 state_snapshot: {name: 'Ada'}, attributes: ['name'],
             },
-            staticData: {fields: {name: {value_path: 'name', editable: true}}},
+            staticData: {value_attributes: {name: {value_path: 'name', editable: true}}},
         }))
         const formset = createEntry({policy: {
             name: 'contacts', namespace: 'formSet', address: 'contacts#test',

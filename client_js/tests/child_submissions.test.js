@@ -12,7 +12,7 @@ function formEntry(path, {access = 'change'} = {}) {
             name: path, namespace: 'form', address: `${CARD}.${path}`, access,
             state_snapshot: {name: 'Ada'}, attributes: ['name'],
         },
-        staticData: {fields: {name: {value_path: 'name', editable: true}}},
+        staticData: {value_attributes: {name: {value_path: 'name', editable: true}}},
     })
 }
 
@@ -24,7 +24,7 @@ function cardClient({children, slots}) {
             attributes: ['send'], state_snapshot: {},
             children: Object.fromEntries(Object.entries(children).map(([path, entry]) => [path, entry.address])),
         },
-        static_data: {fields: {}, callables: {send: {allowed_arguments: []}}, children: slots},
+        static_data: {value_attributes: {}, callables: {send: {allowed_arguments: []}}, children: slots},
     })
     const client = new GlueClient({objects: [card, ...Object.values(children)]})
     const requests = []
@@ -93,14 +93,14 @@ describe('child submissions', () => {
                 name: 'lines.0', namespace: 'form', address: `${CARD}.lines[0]`,
                 state_snapshot: {name: 'Ada'}, attributes: ['name'],
             },
-            staticData: {fields: {name: {value_path: 'name', editable: true}}},
+            staticData: {value_attributes: {name: {value_path: 'name', editable: true}}},
         })
         const lines = createEntry({
             policy: {
                 name: 'lines', namespace: 'formSet', address: `${CARD}.lines`,
                 attributes: [], state_snapshot: {}, children: {0: row.address},
             },
-            staticData: {fields: {}, callables: {}},
+            staticData: {value_attributes: {}, callables: {}},
         })
         const {client, proxy, requests} = cardClient({
             children: {lines},

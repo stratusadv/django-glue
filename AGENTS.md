@@ -36,9 +36,10 @@ django-glue/
 │   │   ├── policy.py               # GluePolicy: signed token, state_snapshot, children
 │   │   ├── address.py              # Address derivation
 │   │   ├── context.py              # GlueContextManager (page load)
-│   │   ├── attributes/             # DeclaredAttribute, definitions, collector, field descriptions
+│   │   ├── attributes/             # GlueAttributeDeclaration -> GlueAttribute (collector) ->
+│   │   │                           # BoundGlueAttribute; registry; value attribute presentations
 │   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue; fields/ (field
-│   │   │                           # serializers and descriptions), form/state.py (a form as state)
+│   │   │                           # serializers and presentations), form/serializer.py (a form as state)
 │   │   ├── function.py             # FunctionGlue
 │   │   ├── components/             # Component, tag, lookup (discovery), registry, naming, root, session
 │   │   └── operation.py            # GlueOperation authorization records
@@ -84,7 +85,7 @@ django-glue/
 ### Registration
 
 ```python
-from django_glue import Glue, GlueAccess, DeclaredAttribute
+from django_glue import Glue, GlueAccess
 
 def list_view(request):
     Glue.queryset(
@@ -123,8 +124,10 @@ BaseGlue (django_glue/glue/base.py)
 
 ### Declared attributes
 
-`@DeclaredAttribute` is the only client-callable surface — there is no `@action`
-decorator and no action registry. A Glue class declares:
+`@Glue.attr` (a `GlueAttributeDeclaration`) is the only client-callable surface —
+there is no `@action` decorator and no action registry. The collector compiles
+each declaration once per class into a `GlueAttribute`, which is bound to an
+object per request as a `BoundGlueAttribute`. A Glue class declares:
 
 - **value attributes** with a `GlueValueRole` — `EDITABLE_STATE` (client writes
   round-trip in `updates`) or `COMPUTED` (down-only `computed_data`),
@@ -133,7 +136,7 @@ decorator and no action registry. A Glue class declares:
   Glue return type:
 
 ```python
-@DeclaredAttribute(required_access=GlueAccess.CHANGE)
+@Glue.attr(required_access=GlueAccess.CHANGE)
 def save(self) -> dict[str, Any]:
     self.instance.full_clean()
     self.instance.save()

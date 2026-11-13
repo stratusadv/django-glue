@@ -815,13 +815,15 @@ and the successor snapshot rebases the draft to those resulting server values.
 
 `$fields` remains the explicit form/editing interface used by `ModelGlue`,
 `FormGlue`, and each form inside `FormSetGlue`, but it is not another state
-tree. The client constructs stable field proxies from schema descriptors whose
-`value_path` points at the field's leaf in the assembled canonical view:
+tree. The client builds one stable value-attribute object for each entry of
+`static_data.value_attributes`, whose `value_path` points at the attribute's
+leaf in the assembled canonical view (ADR 042). `$fields` exposes those objects
+on forms and models, where they are fields:
 
 ```json
 {
   "static_data": {
-    "fields": {
+    "value_attributes": {
       "email": {
         "value_path": "email",
         "type": "EmailField",
@@ -835,7 +837,7 @@ tree. The client constructs stable field proxies from schema descriptors whose
     "email": "not-an-email"
   },
   "computed_data": {
-    "fields": {
+    "value_attributes": {
       "email": {
         "errors": ["Enter a valid email address."]
       }
@@ -843,6 +845,12 @@ tree. The client constructs stable field proxies from schema descriptors whose
   }
 }
 ```
+
+`computed_data` keeps each kind of output in its own section, so no attribute
+path can collide with a section name: `values` holds derived values by path,
+`value_attributes` holds the changing part of each value attribute's
+presentation (errors, selected choices), and a family may add sections of its
+own, such as a queryset's loaded window.
 
 That produces two aliases over one reactive leaf:
 
@@ -861,7 +869,7 @@ The schema's `editable` flag lets the client render the right interface, but it
 is advisory and grants no authority. The server still checks the current
 declaration, signed capability, and current authorization. Fixed field choices
 live in `static_data`; state-dependent choices and errors live under
-`computed_data.fields`; search results remain method results. Updating view
+`computed_data.value_attributes`; search results remain method results. Updating view
 data, state, or computed field output patches the existing field proxy rather
 than
 replacing it.
@@ -1858,7 +1866,7 @@ Page load:
         "children": {
           "entry_form": { "kind": "form", "nullable": false }
         },
-        "fields": {
+        "value_attributes": {
           "name": {
             "value_path": "name",
             "type": "CharField",
@@ -1867,13 +1875,13 @@ Page load:
           }
         }
       },
-      "computed_data": { "total_hours": 8.5 }
+      "computed_data": { "values": { "total_hours": 8.5 } }
     },
     {
       "address": "dash#7f3a9c21.entry_form",
       "policy_token": "...",
-      "static_data": { "fields": {} },
-      "computed_data": { "errors": {} }
+      "static_data": { "value_attributes": {} },
+      "computed_data": { "value_attributes": {} }
     }
   ]
 }
@@ -1903,7 +1911,7 @@ Response:
       "address": "dash#7f3a9c21",
       "policy_token": "...",
       "computed_data": {
-        "total_hours": 9.0
+        "values": { "total_hours": 9.0 }
       },
       "result": {},
       "effects": {
@@ -1945,7 +1953,7 @@ failure per address:
     {
       "address": "dash#7f3a9c21",
       "policy_token": "...",
-      "computed_data": { "total_hours": 9.0 }
+      "computed_data": { "values": { "total_hours": 9.0 } }
     },
     {
       "address": "dash#7f3a9c21.entry_form",
@@ -2448,7 +2456,7 @@ A failed `FormGlue.save()` therefore has this conceptual result:
     }
   },
   "computed_data": {
-    "fields": {
+    "value_attributes": {
       "email": {
         "errors": ["Enter a valid email address."]
       }

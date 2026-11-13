@@ -24,7 +24,7 @@ from django_glue.exceptions import GlueInvalidAttributeError
 if TYPE_CHECKING:
     from django_glue.access import GlueAccess
     from django_glue.serialization import GlueSerializer
-    from django_glue.glue.attributes.description import GlueFieldDescription
+    from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
     from django_glue.glue.base import BaseGlue
 
 _NAMESPACE_DEPTH_LIMIT = 20
@@ -122,7 +122,7 @@ def _resolve_glue_result_annotation(
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class GlueAttributeDefinition:
+class GlueAttribute:
     path: str
     source_name: str
     kind: GlueAttributeKind
@@ -142,7 +142,7 @@ class GlueAttributeDefinition:
     getter: Callable[[Any], Any] | None = None
     setter: Callable[[Any, Any], None] | None = None
     callable_target: Callable[[Any], Callable[..., Any]] | None = None
-    description: GlueFieldDescription | None = None
+    presentation: GlueValueAttributePresentation | None = None
 
     def __post_init__(self) -> None:
         self._validate_path()
@@ -239,23 +239,23 @@ class GlueAttributeDefinition:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BoundGlueAttribute:
-    definition: GlueAttributeDefinition
+    attribute: GlueAttribute
     owner: Any
     provider: Any | None = None
 
     def schema(self) -> dict[str, Any]:
-        if self.definition.description is None:
+        if self.attribute.presentation is None:
             return {}
-        return dict(self.definition.description.schema())
+        return dict(self.attribute.presentation.schema())
 
     def computed_data(self) -> dict[str, Any]:
-        if self.definition.description is None:
+        if self.attribute.presentation is None:
             return {}
-        return dict(self.definition.description.computed_data())
+        return dict(self.attribute.presentation.computed_data())
 
     def get(self) -> Any:
         value = self._read()
-        if self.definition.kind is GlueAttributeKind.VALUE:
+        if self.attribute.kind is GlueAttributeKind.VALUE:
             self._wire_form(value)
             self._mark_derived()
         return value
@@ -267,22 +267,22 @@ class BoundGlueAttribute:
         return wire_value
 
     def _read(self) -> Any:
-        if self.definition.callable_target is not None:
-            return self.definition.callable_target(self._binding_owner())
-        if self.definition.getter is not None:
-            return self.definition.getter(self._binding_owner())
+        if self.attribute.callable_target is not None:
+            return self.attribute.callable_target(self._binding_owner())
+        if self.attribute.getter is not None:
+            return self.attribute.getter(self._binding_owner())
         return getattr(
             self._resolve_attribute_owner(),
-            self.definition.source_name,
+            self.attribute.source_name,
         )
 
     def _mark_derived(self) -> None:
-        if self.definition.value_role is GlueValueRole.DERIVED_OUTPUT:
-            self.owner._derived_paths.add(self.definition.path)
+        if self.attribute.value_role is GlueValueRole.DERIVED_OUTPUT:
+            self.owner._derived_paths.add(self.attribute.path)
 
     def call(self, *args: Any, **kwargs: Any) -> Any:
-        if self.definition.kind != GlueAttributeKind.CALLABLE:
-            msg = f'Glue attribute {self.definition.path!r} is not callable.'
+        if self.attribute.kind != GlueAttributeKind.CALLABLE:
+            msg = f'Glue attribute {self.attribute.path!r} is not callable.'
             raise TypeError(msg)
         result = self.get()(*args, **kwargs)
         self._validate_callable_result(result)
@@ -291,47 +291,47 @@ class BoundGlueAttribute:
     def _validate_callable_result(self, result: Any) -> None:
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 
-        expected_type = self.definition.expected_type
+        expected_type = self.attribute.expected_type
         if expected_type is None:
             if isinstance(result, BaseGlue):
                 msg = (
-                    f'Glue callable {self.definition.path!r} returned a Glue object '
+                    f'Glue callable {self.attribute.path!r} returned a Glue object '
                     'without a Glue-object return annotation.'
                 )
                 raise TypeError(msg)
             return
 
         if result is None:
-            if self.definition.is_nullable:
+            if self.attribute.is_nullable:
                 return
-            msg = f'Non-nullable Glue callable {self.definition.path!r} returned None.'
+            msg = f'Non-nullable Glue callable {self.attribute.path!r} returned None.'
             raise TypeError(msg)
 
         if not isinstance(result, expected_type):
             msg = (
-                f'Glue callable {self.definition.path!r} must return an unbound '
+                f'Glue callable {self.attribute.path!r} must return an unbound '
                 f'{expected_type.__qualname__}, not {type(result).__qualname__}.'
             )
             raise TypeError(msg)
         if result.is_bound:
-            msg = f'Glue callable {self.definition.path!r} returned a bound Glue object.'
+            msg = f'Glue callable {self.attribute.path!r} returned a bound Glue object.'
             raise ValueError(msg)
 
     def resolve_child(self) -> BaseGlue | None:
-        if self.definition.kind != GlueAttributeKind.CHILD:
-            msg = f'Glue attribute {self.definition.path!r} is not a child slot.'
+        if self.attribute.kind != GlueAttributeKind.CHILD:
+            msg = f'Glue attribute {self.attribute.path!r} is not a child slot.'
             raise TypeError(msg)
 
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 
         glue_object = self.get()
         if glue_object is None:
-            if self.definition.is_nullable:
+            if self.attribute.is_nullable:
                 return None
-            msg = f'Non-nullable Glue child {self.definition.path!r} returned None.'
+            msg = f'Non-nullable Glue child {self.attribute.path!r} returned None.'
             raise TypeError(msg)
 
-        expected_type = self.definition.expected_type
+        expected_type = self.attribute.expected_type
         if expected_type is None or not isinstance(glue_object, expected_type):
             expected_name = (
                 expected_type.__qualname__
@@ -339,28 +339,28 @@ class BoundGlueAttribute:
                 else BaseGlue.__qualname__
             )
             msg = (
-                f'Glue child {self.definition.path!r} must return an unbound '
+                f'Glue child {self.attribute.path!r} must return an unbound '
                 f'{expected_name}, not {type(glue_object).__qualname__}.'
             )
             raise TypeError(msg)
         if glue_object.is_bound:
-            msg = f'Glue child {self.definition.path!r} returned a bound Glue object.'
+            msg = f'Glue child {self.attribute.path!r} returned a bound Glue object.'
             raise ValueError(msg)
         return glue_object
 
     def apply_update(self, value: Any) -> None:
-        if self.definition.value_role != GlueValueRole.EDITABLE_STATE:
-            msg = f'Glue attribute {self.definition.path!r} does not accept client updates.'
+        if self.attribute.value_role != GlueValueRole.EDITABLE_STATE:
+            msg = f'Glue attribute {self.attribute.path!r} does not accept client updates.'
             raise TypeError(msg)
-        if self.definition.setter is not None:
-            self.definition.setter(
+        if self.attribute.setter is not None:
+            self.attribute.setter(
                 self._binding_owner(),
                 value,
             )
             return
         setattr(
             self._resolve_attribute_owner(),
-            self.definition.source_name,
+            self.attribute.source_name,
             value,
         )
 
@@ -372,14 +372,14 @@ class BoundGlueAttribute:
 
     def _serializer(self) -> GlueSerializer:
         """The declared serializer, or for an undeclared attribute that of the value it holds."""
-        if self.definition.serializer is not None:
-            return self.definition.serializer
+        if self.attribute.serializer is not None:
+            return self.attribute.serializer
         current = self._read()
         return glue_serializer_registry.resolve(type(current) if current is not None else None)
 
     def _resolve_attribute_owner(self) -> Any:
         attribute_owner = self._binding_owner()
-        for segment in self.definition.path.split('.')[:-1]:
+        for segment in self.attribute.path.split('.')[:-1]:
             attribute_owner = getattr(attribute_owner, segment)
         return attribute_owner
 
@@ -395,7 +395,7 @@ class BoundGlueAttribute:
 
         if self._contains_type(value, BaseGlue, set()):
             msg = (
-                f'Glue value attribute {self.definition.path!r} returned a Glue '
+                f'Glue value attribute {self.attribute.path!r} returned a Glue '
                 'object outside an addressed child declaration.'
             )
             raise TypeError(msg)
@@ -408,7 +408,7 @@ class BoundGlueAttribute:
                 owner_type = type(self._binding_owner())
                 value_type = type(value)
                 raise GlueInvalidAttributeError(
-                    attribute=self.definition.path,
+                    attribute=self.attribute.path,
                     owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
                     value_type=f'{value_type.__module__}.{value_type.__qualname__}',
                 ) from error

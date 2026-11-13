@@ -62,19 +62,24 @@ class GlueSerializer(ABC):
     def restore(self, raw): ...              # what a signed token holds; loads by default
     def dump(self, value): ...               # the wire form; the value itself by default
     def default(self): ...                   # an attribute's value when it declares none; None
+    def adopt(self, value): ...              # a default or assigned value as held; unchanged
     def check(self): ...                     # refuse a declaration before any value arrives
-    def description(self, *, read, editable): ...   # none by default (rule 5)
+    def presentation(self, *, read, editable): ...  # none by default (rule 5)
 
 glue_serializer_registry.register(MySerializer)
 glue_serializer_registry.resolve(target)     # the first registered class that supports it
 ```
 
-1. **A declaration's serializer is resolved once.** The collector resolves a
-   value attribute's type hint and each callable argument's annotation when it
-   compiles the class, and stores the serializer on the definition. A
-   declaration built at runtime has no hint, so `Glue.attr(value_type=...)`
-   names its target: a glued form or model passes each field. An attribute
-   with no declared type still takes the serializer of the value it holds.
+1. **A declaration's serializer is resolved once.** The collector compiles each
+   declaration (a `GlueAttributeDeclaration`, rule 7) into a `GlueAttribute`
+   once per class, resolving a value attribute's type hint and each callable
+   argument's annotation, and stores the serializer on it. A declaration built
+   at runtime has no hint, so `Glue.attr(value_type=...)` names its target: a
+   glued form or model passes each field. An attribute with no declared type
+   still takes the serializer of the value it holds. The declaration asks the
+   same serializer for its `default()` when it declares none, and lets it
+   `adopt()` every default and assigned value, so behaviour that follows from
+   a type stays with that type's serializer.
 2. **Everything that crosses uses it.** An update is `load`ed, a signed value
    is `restore`d, a callable argument is `load`ed (ADR 038), and a component
    parameter is `load`ed, `dump`ed into its identity and `restore`d. The two
@@ -89,13 +94,17 @@ glue_serializer_registry.resolve(target)     # the first registered class that s
 4. **The built-in serializers** are the type hint (`AnnotationSerializer`, by
    pydantic), the model field and the form field, which live with the Django
    objects and register themselves, and the form class (rule 6).
-5. **A description says how to draw a control, and converts nothing.**
-   `GlueAttributeAdapter` becomes `GlueFieldDescription`, with `schema()` and
-   `computed_data()` only, supplied by the owner's `get_field_descriptions()`.
-   A serializer may describe its own values through `description()`, which the
-   owner uses for an attribute it gave no description of. The description is
-   handed a way to read the value and whether it is editable, and nothing else
-   of the owner.
+5. **A presentation says how the browser shows a value, and converts nothing.**
+   The serializer carries a value; a `GlueValueAttributePresentation` presents
+   it: label, type, choices, whether it is required or editable, its errors.
+   `GlueAttributeAdapter` becomes this class, with `schema()` (what does not
+   change) and `computed_data()` (what changes with state) only, supplied by
+   the owner's `get_value_attribute_presentations()`: `FormGlue` gives a
+   `FormFieldPresentation` per form field and `ModelGlue` a
+   `ModelFieldPresentation` per model field. A serializer may present its own
+   values through `presentation()`, which the owner uses for an attribute it
+   gave no presentation of. It is handed a way to read the value and whether
+   it is editable, and nothing else of the owner.
 6. **A form class has a serializer.** An attribute typed as a Django form holds
    the form, bound to its values. On the wire it is one value, an object of
    the fields' values, signed and updated whole as any editable value is.
@@ -120,22 +129,46 @@ glue_serializer_registry.resolve(target)     # the first registered class that s
    - An attribute that declares no default starts as the form class called
      with no arguments: the serializer's `default()`, which is `None` for every
      other serializer, so no other attribute's value changes.
-   - An unbound form, whether that default, a declared one or one assigned in
-     a call, is bound to its own initial values, so it validates before the
-     browser has sent any.
-   - The form describes each of its fields as a glued form does. The client
-     reaches them as `owner.attribute.$fields.<name>`, so Spire's field
-     templates bind unchanged, and each field reads its errors from a
-     validation that already ran. Glue never runs one to report errors.
+   - The serializer's `adopt()` binds an unbound form, whether that default, a
+     declared one or one assigned in a call, to its own initial values, so it
+     validates before the browser has sent any. Only an attribute typed as a
+     form binds one.
+   - The form is built from its values alone. A form class whose `__init__`
+     requires an argument is refused when its class is first used, and any
+     other argument a form was built with, such as a `prefix`, is not kept.
+   - Its `FormValueAttributePresentation` presents each of its fields as a
+     glued form does. The client reaches them as
+     `owner.attribute.$fields.<name>`, so Spire's field templates bind
+     unchanged, and each field reads its errors from a validation that already
+     ran. Glue never runs one to report errors.
    - A form with a file field, a write-only field (ADR 036) or a field over a
-     queryset is refused when its class is first used. The form is built from
-     its values alone, so nothing could narrow a queryset to what the request
-     may see.
+     queryset is refused when its class is first used: nothing could narrow a
+     queryset to what the request may see.
    - A model form with no instance is a form like any other, and offers no
      save. A model form over a saved record is refused: editing a record is a
      child's job.
    - A form class also types a callable's argument, which arrives as the form
      bound to what the browser sent.
+7. **Each stage of an attribute has its own name.** What `Glue.attr(...)`
+   returns is a `GlueAttributeDeclaration` (was `DeclaredAttribute`); the
+   collector compiles it, once per class, into a `GlueAttribute` (was
+   `GlueAttributeDefinition`); and a `GlueAttribute` bound to one object for
+   one request is a `BoundGlueAttribute`, whose `attribute` is the
+   `GlueAttribute` it binds, as Django's `BoundField.field` is its `Field`.
+8. **The wire names value attributes as such.** Every value attribute,
+   described or not, is one entry of `static_data.value_attributes` (was
+   `static_data.fields`): its `value_path`, `editable` and its presentation's
+   `schema()`. `computed_data` keeps each kind of output in its own section,
+   `values` for derived values by path and `value_attributes` for each
+   presentation's `computed_data()`, beside any section a family adds, such
+   as a queryset's loaded window. Before, derived values sat beside a reserved
+   `fields` key, so a derived attribute named `fields` was lost. The client
+   builds a `GlueValueAttribute` (was `FieldGlue`) for each entry, or a
+   `GlueChoiceAttribute`, `GlueManyChoiceAttribute`, `GlueRelationAttribute` or
+   `GlueManyRelationAttribute` when its presentation offers choices; the wire
+   types are `GlueValueAttributeSchema` and `GlueValueComputedData`. `$fields`
+   keeps its name where its items are fields: on forms, models and a form
+   held as state.
 
 `Glue.child` keeps everything that is an object with its own identity: a form
 over a saved record, a formset, a form with callables or events of its own,
@@ -152,9 +185,15 @@ form edits a record, has rows or has actions of its own, it is a child.
   `GlueSerializerRegistry` and `glue_serializer_registry`, but registers a
   class and answers `resolve(target)`, where it used to convert a value
   itself. `GlueSerializerError` is unchanged.
-  `BaseGlue.get_attribute_adapters()` is `get_field_descriptions()`, and an
-  adapter's `coerce` and `decode` are removed. Spire, Profitly, Showcase and
-  the Stratus portal use none of these.
+  `BaseGlue.get_attribute_adapters()` is `get_value_attribute_presentations()`,
+  `GlueAttributeAdapter` is `GlueValueAttributePresentation`, and an adapter's
+  `coerce` and `decode` are removed. `DeclaredAttribute` is
+  `GlueAttributeDeclaration`. Spire, Profitly, Showcase and the Stratus portal
+  use none of these.
+- **The wire changes shape** (rule 8). The server and the bundled client change
+  together, and no project reads `static_data`, `computed_data` or the client's
+  value-attribute classes directly; the public members of a value attribute
+  and `$fields` are unchanged.
 - No value that crossed before crosses differently. Model and form fields,
   untyped attributes, callable arguments and component parameters keep their
   formats, and their tests pass unchanged.
@@ -164,11 +203,16 @@ form edits a record, has rows or has actions of its own, it is a child.
   `glue_factory` becomes a `SequenceGlue` as an assigned one does.
 - A change to one field of a form held as state sends the whole form's values.
   It suits a few fields; a large form belongs in a child.
-- A form-typed attribute's description depends on its type hint resolving at
-  runtime. When a class's hints do not resolve, the form still crosses, by the
-  type of the value it holds, but it describes no fields.
+- A form-typed attribute depends on its type hint resolving at runtime. When a
+  class's hints do not resolve, the attribute has no serializer to default,
+  adopt or present it, so it is `None` until assigned, and an assigned form
+  crosses by the type of the value it holds but presents no fields.
+- On a component, a presentation reaches a template only through the value's
+  own `$fields`, which only the form serializer provides; components have no
+  `$fields` of their own. A future serializer whose values have no inner
+  fields would need components to expose one. Nothing needs that yet.
 - In `ModelGlue` and `FormGlue` the declaration of an editable field names the
-  field that types it, and the field's description only describes.
+  field that types it, and the field's presentation only presents.
 - The tests: a serializer loads, restores and dumps; every earlier test of
   updates, arguments, parameters and field payloads passes unchanged; a form
   held as state is bound before the browser sends anything, is one object per
@@ -176,9 +220,12 @@ form edits a record, has rows or has actions of its own, it is a child.
   a later request, reports field and whole-form errors only after a
   validation, refuses state that is not its fields, is rebound when an unbound
   form is assigned, types a callable argument, and is refused with a file,
-  write-only or queryset field or over a saved record; and on the client its
-  fields are reached beside its value, are not sent with it, send the whole
-  value when one changes, and read their own errors.
+  write-only or queryset field, with constructor arguments or over a saved
+  record; only a form-typed attribute binds a form, whatever value adapters
+  the declaration names; a derived attribute named `fields` reaches the
+  client; and on the client its fields are reached beside its value, are not
+  sent with it, send the whole value when one changes, and read their own
+  errors.
 
 ## Rejected Alternatives
 
@@ -193,10 +240,17 @@ form edits a record, has rows or has actions of its own, it is a child.
   microseconds where Django's encoder sends milliseconds, and a shorter
   `timedelta`, for attributes only: model and form field values would keep
   Django's formats, so one page would show two.
-- **Folding the description into the serializer.** A description needs its
+- **Folding the presentation into the serializer.** A presentation needs its
   owner: whether the field is editable, the request, the validation's errors.
   A callable argument and a component parameter have a type and nothing to
-  describe.
+  present.
+- **Binding an unbound form with a value adapter.** It was built that way
+  first. A value adapter does not know the attribute's type, so it bound a
+  form assigned to any attribute, and a declaration that named its own value
+  adapters lost it. `adopt()` puts it with the form's serializer.
+- **Field-named presentations and wire keys.** `GlueFieldDescription` and
+  `static_data.fields` called every value attribute a field, which reads as a
+  Django field, and `$fields` exists only on forms and models.
 - **`BaseGlue` as a serializer, or a child as an attribute whose type is a Glue
   object.** A serializer describes a kind of value inside its owner's state. A
   Glue object is one addressed instance with its own token, access and

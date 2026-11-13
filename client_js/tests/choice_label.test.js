@@ -5,7 +5,7 @@ import {createEntry} from "./testUtils"
 function statusField() {
     const entry = createEntry({
         policy: {state_snapshot: {status: 'open'}},
-        staticData: {fields: {
+        staticData: {value_attributes: {
             status: {
                 value_path: 'status', type: 'ChoiceField', editable: true,
                 choices: [{value: 'open', label: 'Open'}],

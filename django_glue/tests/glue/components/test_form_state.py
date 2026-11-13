@@ -143,7 +143,7 @@ def test_an_attribute_of_another_type_still_has_no_default(mock_request) -> None
 
 
 def test_the_browser_is_told_each_field_as_a_glued_form_would_tell_it(roster) -> None:
-    described = roster.get_static_data()['fields']['filters']
+    described = roster.get_static_data()['value_attributes']['filters']
 
     assert described['value_path'] == 'filters'
     assert described['editable'] is True
@@ -187,7 +187,7 @@ def test_a_value_the_form_refuses_is_an_error_on_its_field(roster) -> None:
     entry = call(roster, 'ping', updates={'filters': {**BOXERS_BY_AGE, 'sort': 'weight'}})
 
     assert '>invalid</span>' in entry['html']
-    computed = entry['computed_data']['fields']['filters']
+    computed = entry['computed_data']['value_attributes']['filters']
     assert computed['errors'] == []
     assert list(computed['field_errors']) == ['sort']
 
@@ -195,7 +195,7 @@ def test_a_value_the_form_refuses_is_an_error_on_its_field(roster) -> None:
 def test_an_error_of_the_whole_form_is_reported_beside_its_fields(roster) -> None:
     entry = call(roster, 'ping', updates={'filters': {**BOXERS_BY_AGE, 'search': 'everything'}})
 
-    assert entry['computed_data']['fields']['filters'] == {
+    assert entry['computed_data']['value_attributes']['filters'] == {
         'errors': ['Narrow the search.'],
         'field_errors': {},
     }
@@ -209,11 +209,29 @@ def test_no_errors_are_reported_for_a_form_nothing_validated(mock_request) -> No
 
     unread = Glue.object(mock_request, UnreadComponent())
 
-    assert unread.get_computed_data(include_all=True)['fields']['filters'] == {
+    assert unread.get_computed_data(include_all=True)['value_attributes']['filters'] == {
         'errors': [],
         'field_errors': {},
     }
     assert unread.filters._errors is None
+
+
+def test_a_derived_value_named_fields_keeps_its_own_key(mock_request: Any) -> None:
+    class FieldsComponent(Component):
+        template = 'glue_template_test.html'
+
+        filters: RosterFilterForm = Glue.attr(default_factory=RosterFilterForm, editable=True)
+
+        @Glue.property
+        def fields(self) -> list[str]:
+            return ['search', 'sort']
+
+    component = Glue.object(mock_request, FieldsComponent())
+
+    computed = component.get_computed_data(include_all=True)
+
+    assert computed['values'] == {'fields': ['search', 'sort']}
+    assert computed['value_attributes'] == {'filters': {'errors': [], 'field_errors': {}}}
 
 
 @pytest.mark.parametrize('filters', [{'search': 'ko', 'rank': 1}, ['ko'], 'ko', None])

@@ -25,9 +25,10 @@
 
 - Each declaration has one serializer, a `GlueSerializer`, that carries its
   values both ways (ADR 042): `load` for what the browser sends, `restore` for a
-  signed value, `dump` for the wire form, and `check` to refuse a declaration
-  before any value arrives, which Glue calls for each annotated callable
-  argument when the class is first used. Register your own with
+  signed value, `dump` for the wire form, `check` to refuse a declaration
+  before any value arrives (Glue calls it for each annotated callable argument
+  when the class is first used), `default` for an attribute that declares no
+  default, and `adopt` for a default or assigned value. Register your own with
   `glue_serializer_registry.register(MySerializer)`.
 
 - An attribute can hold a value that is not JSON when its type hint can dump
@@ -78,10 +79,18 @@
 - `glue_serializer_registry` no longer converts a value itself: its `coerce`,
   `decode`, `encode` and `prepare` are gone. Ask it for the serializer with
   `glue_serializer_registry.resolve(target)` and call that.
-- `BaseGlue.get_attribute_adapters()` is `get_field_descriptions()`, and
-  `GlueAttributeAdapter` is `GlueFieldDescription`, without `coerce` and
-  `decode`: a declaration built at runtime names what converts its values with
-  `Glue.attr(value_type=...)`.
+- `BaseGlue.get_attribute_adapters()` is `get_value_attribute_presentations()`,
+  and `GlueAttributeAdapter` is `GlueValueAttributePresentation`, without
+  `coerce` and `decode`: a declaration built at runtime names what converts its
+  values with `Glue.attr(value_type=...)`.
+- `DeclaredAttribute`, exported from `django_glue`, is
+  `GlueAttributeDeclaration`. `Glue.attr` is unchanged.
+- The wire between the server and its bundled client changes shape (ADR 042):
+  `static_data.fields` is `static_data.value_attributes`, and `computed_data`
+  holds derived values under `values` and presentation output under
+  `value_attributes`, so a derived attribute named `fields` is no longer lost.
+  Code that read either dict, or the client's `FieldGlue` classes, directly
+  must follow; `$fields` and the members of the objects in it are unchanged.
 - An attribute's default is adapted as an assigned value is (ADR 042). A
   non-empty default list on an attribute with a `glue_factory` now becomes a
   `SequenceGlue`, as the same list assigned in code already did.

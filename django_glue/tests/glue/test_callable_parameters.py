@@ -242,11 +242,11 @@ def test_policy_signs_declared_client_arguments_only(
     )
 
     process = glue_object.policy.capability.callables['process']
-    definition = glue_object._attribute_registry.get('process')
+    attribute = glue_object._attribute_registry.get('process')
 
     assert process.allowed_arguments == ('step',)
-    assert definition is not None
-    assert definition.injected_arguments == ('request',)
+    assert attribute is not None
+    assert attribute.injected_arguments == ('request',)
 
 
 def test_call_injects_request_and_applies_editable_updates(

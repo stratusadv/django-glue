@@ -16,7 +16,7 @@ describe('proxy lifecycle', () => {
         proxy.$on('saved', event => events.push([event.source, proxy.name]))
         client.http.sendAttributeRequest = async () => attributeResponse('gorilla#test', {
             result: {ok: true},
-            computed_data: {name: 'Updated'},
+            computed_data: {values: {name: 'Updated'}},
             effects: {events: [{name: 'saved', detail: {pk: 1}}]},
         })
 

@@ -3,7 +3,7 @@ from django_glue.shortcuts.urls import django_glue_urls
 from django_glue.access import GlueAccess
 from django_glue.exceptions import GlueModelParameterMismatchWarning
 from django_glue.response import GlueResponse
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.objects.django.model.object import ALL_FIELDS
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.serialization import (
@@ -15,9 +15,9 @@ from django_glue.serialization import (
 
 __all__ = [
     'ALL_FIELDS',
-    'DeclaredAttribute',
     'Glue',
     'GlueAccess',
+    'GlueAttributeDeclaration',
     'GlueModelParameterMismatchWarning',
     'GlueOperation',
     'GlueOperationKind',

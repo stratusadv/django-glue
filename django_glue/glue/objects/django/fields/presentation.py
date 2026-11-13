@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.forms import ModelMultipleChoiceField
 
-from django_glue.glue.attributes.description import GlueFieldDescription
+from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
 from django_glue.glue.options.django import GlueRelatedModelChoices
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ def field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
     if getattr(field, 'min_length', None):
         schema['min_length'] = field.min_length
     # A queryset-backed form field's choices are its whole related table; its
-    # adapter serves them on demand, so they are never enumerated here.
+    # owner's foreign_key_choices serves them on demand, so they are never enumerated here.
     if not hasattr(field, 'queryset') and getattr(field, 'choices', None):
         schema['choices'] = [
             {'value': str(value), 'label': str(choice_label)}
@@ -52,7 +52,7 @@ def field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
 
 
 @dataclass(frozen=True, slots=True)
-class FormFieldDescription(GlueFieldDescription):
+class FormFieldPresentation(GlueValueAttributePresentation):
     owner: FormGlue
     name: str
     field: forms.Field
@@ -88,7 +88,7 @@ class FormFieldDescription(GlueFieldDescription):
         """
         Complete current state-dependent output (state-model.md §10 `$fields`):
         the current selection, the choices cache key, and the field's validation
-        errors. Emitted only when the description re-derived this request.
+        errors. Emitted only when the presentation re-derived this request.
         """
         output = {'errors': self.owner._field_errors.get(self.name, [])}
         if not hasattr(self.field, 'queryset'):
@@ -126,7 +126,7 @@ class FormFieldDescription(GlueFieldDescription):
 
 
 @dataclass(frozen=True, slots=True)
-class ModelFieldDescription(GlueFieldDescription):
+class ModelFieldPresentation(GlueValueAttributePresentation):
     owner: ModelGlue
     name: str
     field: models.Field
@@ -168,7 +168,7 @@ class ModelFieldDescription(GlueFieldDescription):
         """
         Complete current state-dependent output (state-model.md §10 `$fields`):
         the current selection, the choices cache key, and the field's validation
-        errors. Emitted only when the description re-derived this request.
+        errors. Emitted only when the presentation re-derived this request.
         """
         output = {'errors': self.owner._field_errors.get(self.name, [])}
         field = self.field

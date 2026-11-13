@@ -8,9 +8,9 @@ from django.db.models import QuerySet
 from django.forms.models import model_to_dict
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.objects.django.fields import FormFieldDescription
+from django_glue.glue.objects.django.fields import FormFieldPresentation
 from django_glue.glue.options.django import (
     GlueRelatedModelChoices,
     RelatedModelChoicesResult,
@@ -20,7 +20,7 @@ from django_glue.utils import get_attr_from_path_string
 if TYPE_CHECKING:
     from django.db.models import Model
 
-    from django_glue.glue.attributes import GlueAttributeDefinition
+    from django_glue.glue.attributes import GlueAttribute
     from django_glue.glue.policy import GluePolicy
 
 
@@ -53,14 +53,14 @@ def offers_default_save(form_class: type[forms.BaseForm]) -> bool:
 
 
 def without_default_save(
-    definitions: tuple[GlueAttributeDefinition, ...],
+    attributes: tuple[GlueAttribute, ...],
     providers: dict[str, Any],
-) -> tuple[GlueAttributeDefinition, ...]:
-    """The definitions less the object's own ``save``; one a provider declares is kept."""
+) -> tuple[GlueAttribute, ...]:
+    """The attributes less the object's own ``save``; one a provider declares is kept."""
     return tuple(
-        definition
-        for definition in definitions
-        if definition.path != DEFAULT_SAVE_PATH or definition.path in providers
+        attribute
+        for attribute in attributes
+        if attribute.path != DEFAULT_SAVE_PATH or attribute.path in providers
     )
 
 
@@ -126,13 +126,13 @@ class FormGlue(BaseGlue):
 
     def _collect_attributes(
         self,
-    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
-        definitions, providers = super()._collect_attributes()
+    ) -> tuple[tuple[GlueAttribute, ...], dict[str, Any]]:
+        attributes, providers = super()._collect_attributes()
 
         if offers_default_save(type(self.form)):
-            return definitions, providers
+            return attributes, providers
 
-        return without_default_save(definitions, providers), providers
+        return without_default_save(attributes, providers), providers
 
     @classmethod
     def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
@@ -206,9 +206,9 @@ class FormGlue(BaseGlue):
             (self, declarations),
         )
 
-    def get_field_descriptions(self) -> Mapping[str, FormFieldDescription]:
+    def get_value_attribute_presentations(self) -> Mapping[str, FormFieldPresentation]:
         return {
-            name: FormFieldDescription(
+            name: FormFieldPresentation(
                 owner=self,
                 name=name,
                 field=field,
@@ -277,7 +277,7 @@ class FormGlue(BaseGlue):
             self._field_errors = {name: list(errors) for name, errors in form_errors.items()}
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
-        # Field descriptions read _field_errors. A provider callable (a
+        # Field presentations read _field_errors. A provider callable (a
         # save_model_obj-style method) validates the form itself and never
         # touches _field_errors, so re-sync from the form before deriving
         # downward output. The sync reflects only a validation that already
@@ -403,7 +403,7 @@ class FormGlue(BaseGlue):
 
         return retained
 
-    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
+    @GlueAttributeDeclaration(required_access=GlueAccess.required_save_access)
     def validate(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         self._bound_form = bound_form
@@ -413,7 +413,7 @@ class FormGlue(BaseGlue):
         self._derived_paths.update(self.form.fields)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
-    @DeclaredAttribute(required_access=GlueAccess.required_save_access)
+    @GlueAttributeDeclaration(required_access=GlueAccess.required_save_access)
     def save(self) -> dict[str, Any]:
         bound_form = self._bind_form()
         valid = bound_form.is_valid()
@@ -425,7 +425,7 @@ class FormGlue(BaseGlue):
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     # Choice loading is read-only; returning form state would trigger validation during serialization.
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def foreign_key_choices(
         self,
         field_name: str | None = None,

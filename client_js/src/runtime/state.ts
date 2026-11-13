@@ -1,4 +1,4 @@
-import type {GlueComputedData, GlueFieldComputed, GluePolicyPayload} from "../wire"
+import type {GlueComputedData, GluePolicyPayload} from "../wire"
 
 // An object's values by state path: its signed snapshot overlaid with its
 // derived output.
@@ -76,8 +76,8 @@ function assembleAuthoritative(
     computedData: GlueComputedData | null | undefined,
 ): GlueValues {
     const values = cloneValue(policy?.state_snapshot || {})
-    Object.entries(computedData || {}).forEach(([path, value]) => {
-        if (path !== 'fields') values[path] = cloneValue(value)
+    Object.entries(computedData?.values || {}).forEach(([path, value]) => {
+        values[path] = cloneValue(value)
     })
     return values
 }
@@ -101,15 +101,18 @@ function mergeComputedData(
     current: GlueComputedData | null | undefined,
     incoming: GlueComputedData | null | undefined,
 ): GlueComputedData {
-    const merged = cloneValue(current || {})
-    Object.entries(incoming || {}).forEach(([path, value]) => {
-        if (path !== 'fields') {
-            merged[path] = cloneValue(value)
+    const merged: Record<string, unknown> = cloneValue(current || {})
+    // The `values` and `value_attributes` sections are merged by path, since
+    // the server sends only the paths it re-derived; any other key is replaced.
+    Object.entries(incoming || {}).forEach(([key, value]) => {
+        if (key !== 'values' && key !== 'value_attributes') {
+            merged[key] = cloneValue(value)
             return
         }
-        const fields = merged.fields = merged.fields || {}
-        Object.entries((value || {}) as Record<string, GlueFieldComputed>).forEach(([fieldPath, fieldData]) => {
-            fields[fieldPath] = cloneValue(fieldData)
+        const section = (merged[key] || {}) as Record<string, unknown>
+        merged[key] = section
+        Object.entries((value || {}) as Record<string, unknown>).forEach(([path, data]) => {
+            section[path] = cloneValue(data)
         })
     })
     return merged

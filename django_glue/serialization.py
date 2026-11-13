@@ -10,7 +10,7 @@ from pydantic_core import PydanticSerializationError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from django_glue.glue.attributes.description import GlueFieldDescription
+    from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
 
 
 class GlueSerializerError(ValueError):
@@ -67,15 +67,15 @@ class GlueSerializer(ABC):
         A serializer with nothing to check keeps this default.
         """
 
-    def description(
+    def presentation(
         self,
         *,
         read: Callable[[], Any],
         editable: bool,
-    ) -> GlueFieldDescription | None:
+    ) -> GlueValueAttributePresentation | None:
         """
         What the browser needs to draw a control for one of its values, read
-        through ``read``. A serializer with nothing to describe keeps this default.
+        through ``read``. A serializer with nothing to present keeps this default.
         """
         _ = read, editable
         return None

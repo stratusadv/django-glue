@@ -13,7 +13,7 @@ from django_glue.exceptions import (
     GlueRequestError,
     GlueRequestErrorCode,
 )
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.collection import BaseCollectionGlue
 from django_glue.glue.objects.django.form.object import (
     FormGlue,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from django import forms
     from django.db.models import Model, QuerySet
 
-    from django_glue.glue.attributes import GlueAttributeDefinition
+    from django_glue.glue.attributes import GlueAttribute
     from django_glue.glue.base import BaseGlue
 
 
@@ -250,13 +250,13 @@ class FormSetGlue(BaseCollectionGlue):
 
     def _collect_attributes(
         self,
-    ) -> tuple[tuple[GlueAttributeDefinition, ...], dict[str, Any]]:
-        definitions, providers = super()._collect_attributes()
+    ) -> tuple[tuple[GlueAttribute, ...], dict[str, Any]]:
+        attributes, providers = super()._collect_attributes()
 
         if offers_default_save(self.form_class):
-            return definitions, providers
+            return attributes, providers
 
-        return without_default_save(definitions, providers), providers
+        return without_default_save(attributes, providers), providers
 
     def _membership(
         self,
@@ -320,7 +320,7 @@ class FormSetGlue(BaseCollectionGlue):
         """
         queryset.delete()
 
-    @DeclaredAttribute(required_access=GlueAccess.ADD)
+    @GlueAttributeDeclaration(required_access=GlueAccess.ADD)
     def append(self, key: str, initial: dict[str, Any] | None = None) -> FormGlue:
         """
         ``initial`` comes from the client, so it may only prefill fields the
@@ -345,7 +345,7 @@ class FormSetGlue(BaseCollectionGlue):
             key,
         )
 
-    @DeclaredAttribute(required_access=GlueAccess.ADD)
+    @GlueAttributeDeclaration(required_access=GlueAccess.ADD)
     def pop(self, key: str) -> None:
         if not self.can_delete:
             raise GlueRequestError(
@@ -373,7 +373,7 @@ class FormSetGlue(BaseCollectionGlue):
         del self._live_children[key]
         self._forms = [(row_key, form) for row_key, form in self._forms if row_key != key]
 
-    @DeclaredAttribute(required_access=_required_rows_access)
+    @GlueAttributeDeclaration(required_access=_required_rows_access)
     def validate(self) -> dict[str, Any]:
         form_glues = [form for _, form in self._forms]
         per_form = [form.validate() for form in form_glues]
@@ -401,7 +401,7 @@ class FormSetGlue(BaseCollectionGlue):
         """Each validated row's cleaned data, in row order, as a Django formset has it."""
         return [form.cleaned_data for _, form in self._forms]
 
-    @DeclaredAttribute(required_access=_required_rows_access)
+    @GlueAttributeDeclaration(required_access=_required_rows_access)
     def save(self) -> dict[str, Any]:
         form_glues = [form for _, form in self._forms]
         results = [form.validate() for form in form_glues]

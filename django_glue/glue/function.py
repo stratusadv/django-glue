@@ -6,7 +6,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Callable
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes import DeclaredAttribute
+from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.base import BaseGlue
 from django_glue.utils import get_attr_from_path_string
 
@@ -50,7 +50,7 @@ class FunctionGlue(BaseGlue):
             access=policy.access,
         )
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def execute(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         function = get_attr_from_path_string(self.target)
         result = function(**kwargs)

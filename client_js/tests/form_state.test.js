@@ -9,7 +9,7 @@ function roster() {
     const policy = {attributes: ['filters', 'save'], state_snapshot: {filters: FILTERS}}
     const client = new GlueClient({objects: [createEntry({
         policy,
-        staticData: {fields: {
+        staticData: {value_attributes: {
             filters: {value_path: 'filters', editable: true, fields: {
                 search: {type: 'CharField', label: 'Search', editable: true, widget: 'TextInput'},
                 styles: {type: 'MultipleChoiceField', label: 'Styles', editable: true, widget: 'SelectMultiple', choices: []},
@@ -22,7 +22,7 @@ function roster() {
         sent.push(request)
         return attributeResponse('gorilla#test', {
             policy_token: createPolicyToken({...policy, state_snapshot: {filters: request.updates.filters}}),
-            computed_data: {fields: {filters: {errors: [], field_errors: {sort: ['Pick a listed sort.']}}}},
+            computed_data: {value_attributes: {filters: {errors: [], field_errors: {sort: ['Pick a listed sort.']}}}},
             result: {},
         })
     }

@@ -13,7 +13,7 @@ describe('GlueClient registry', () => {
                 attributes: [],
                 state_snapshot: {},
             },
-            staticData: {fields: {}, callables: {}},
+            staticData: {value_attributes: {}, callables: {}},
         })
         const client = new GlueClient({objects: [named, direct]})
 
@@ -47,7 +47,7 @@ describe('GlueClient registry', () => {
                 state_snapshot: {id: 2, name: 'Matata'},
                 attributes: ['id', 'name'],
             },
-            staticData: {fields: {
+            staticData: {value_attributes: {
                 id: {value_path: 'id', editable: false},
                 name: {value_path: 'name', editable: false},
             }, callables: {}},
@@ -72,7 +72,7 @@ describe('GlueClient registry', () => {
                 state_snapshot: {},
             },
             staticData: {
-                fields: {},
+                value_attributes: {},
                 callables: {execute: {allowed_arguments: ['kwargs']}},
                 params: [{name: 'left'}, {name: 'right'}],
             },
@@ -112,7 +112,7 @@ describe('GlueClient registry', () => {
                 name: 'card_123', namespace: 'component', address: 'dashboard#test[card]',
                 attributes: ['render'], state_snapshot: {},
             },
-            staticData: {fields: {}, callables: {render: {allowed_arguments: []}}},
+            staticData: {value_attributes: {}, callables: {render: {allowed_arguments: []}}},
         })
         const client = new GlueClient({objects: []})
         document.body.innerHTML = '<div data-glue-address="dashboard#test[card]"><span id="inside"></span></div>'
@@ -133,7 +133,7 @@ describe('GlueClient registry', () => {
                 name: 'card', namespace: 'component', address: 'card#test',
                 attributes: ['form'], state_snapshot: {}, children: {form: child.address},
             },
-            staticData: {fields: {}, callables: {}, children: {form: {kind: 'model', nullable: false}}},
+            staticData: {value_attributes: {}, callables: {}, children: {form: {kind: 'model', nullable: false}}},
         })
         const client = new GlueClient({objects: []})
         document.body.innerHTML = '<div data-glue-address="card#test"></div>'
@@ -149,7 +149,7 @@ describe('GlueClient registry', () => {
     test('declared events reach source listeners and the component root', () => {
         const entry = createEntry({
             policy: {name: 'card_123', namespace: 'component', address: 'card#test', attributes: []},
-            staticData: {fields: {}, callables: {}, events: ['saved']},
+            staticData: {value_attributes: {}, callables: {}, events: ['saved']},
         })
         const client = new GlueClient({objects: [entry]})
         document.body.innerHTML = '<div data-glue-address="card#test"></div>'

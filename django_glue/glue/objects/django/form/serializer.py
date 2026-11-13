@@ -11,8 +11,8 @@ from django import forms
 from django.core.exceptions import NON_FIELD_ERRORS
 
 from django_glue.serialization import GlueSerializer, GlueSerializerError, glue_serializer_registry
-from django_glue.glue.attributes.description import GlueFieldDescription
-from django_glue.glue.objects.django.fields.description import field_schema
+from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
+from django_glue.glue.objects.django.fields.presentation import field_schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -96,17 +96,17 @@ class FormSerializer(GlueSerializer):
             raise TypeError(message)
         return type(value)(data=_field_values(value))
 
-    def description(
+    def presentation(
         self,
         *,
         read: Callable[[], forms.BaseForm],
         editable: bool,
-    ) -> FormStateDescription:
-        return FormStateDescription(form_class=self.target, read=read, editable=editable)
+    ) -> FormValueAttributePresentation:
+        return FormValueAttributePresentation(form_class=self.target, read=read, editable=editable)
 
 
 @dataclass(frozen=True, slots=True)
-class FormStateDescription(GlueFieldDescription):
+class FormValueAttributePresentation(GlueValueAttributePresentation):
     form_class: type[forms.BaseForm]
     read: Callable[[], forms.BaseForm]
     editable: bool

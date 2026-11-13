@@ -1,7 +1,7 @@
 import type {GlueChoice} from "../../wire"
-import ChoiceFieldGlue from "./choice"
+import GlueChoiceAttribute from "./choice"
 
-class ManyChoiceFieldGlue extends ChoiceFieldGlue {
+class GlueManyChoiceAttribute extends GlueChoiceAttribute {
     get selectedValues(): unknown[] {
         return (this.value || []) as unknown[]
     }
@@ -33,4 +33,4 @@ class ManyChoiceFieldGlue extends ChoiceFieldGlue {
     }
 }
 
-export default ManyChoiceFieldGlue
+export default GlueManyChoiceAttribute

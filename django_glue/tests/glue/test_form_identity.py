@@ -62,35 +62,35 @@ class FormIdentityTestCase(TestCase):
         assert glue_object.form.data['email'] == 'ada@example.com'
         assert glue_object.form.data['message'] == 'Hello'
 
-    def test_form_definitions_stage_only_editable_drafts(self):
+    def test_form_attributes_stage_only_editable_drafts(self):
         glue_object = FormGlue(
             ContactForm(initial={'name': 'Ada'}),
             name='contact',
             access=GlueAccess.CHANGE,
             editable=['name'],
         )
-        name_definition = glue_object._attribute_registry.get('name')
-        email_definition = glue_object._attribute_registry.get('email')
+        name_attribute = glue_object._attribute_registry.get('name')
+        email_attribute = glue_object._attribute_registry.get('email')
 
-        assert name_definition is not None
-        assert email_definition is not None
-        assert name_definition.value_role == GlueValueRole.EDITABLE_STATE
-        assert email_definition.value_role == GlueValueRole.DERIVED_OUTPUT
+        assert name_attribute is not None
+        assert email_attribute is not None
+        assert name_attribute.value_role == GlueValueRole.EDITABLE_STATE
+        assert email_attribute.value_role == GlueValueRole.DERIVED_OUTPUT
 
-        name_attribute = BoundGlueAttribute(
-            definition=name_definition,
+        name_bound = BoundGlueAttribute(
+            attribute=name_attribute,
             owner=glue_object,
         )
-        email_attribute = BoundGlueAttribute(
-            definition=email_definition,
+        email_bound = BoundGlueAttribute(
+            attribute=email_attribute,
             owner=glue_object,
         )
-        name_attribute.apply_update('Draft')
+        name_bound.apply_update('Draft')
 
-        assert name_attribute.get() == 'Draft'
+        assert name_bound.get() == 'Draft'
         assert glue_object.form['name'].value() == 'Ada'
         with pytest.raises(TypeError, match='does not accept client updates'):
-            email_attribute.apply_update('attacker@example.com')
+            email_bound.apply_update('attacker@example.com')
 
     def test_form_editable_projection_validates_its_boundary(self):
         with pytest.raises(ValueError, match='must be exposed'):

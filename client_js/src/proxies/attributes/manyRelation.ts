@@ -1,7 +1,7 @@
 import type {GlueChoice} from "../../wire"
-import RelationFieldGlue from "./relation"
+import GlueRelationAttribute from "./relation"
 
-class ManyRelationFieldGlue extends RelationFieldGlue {
+class GlueManyRelationAttribute extends GlueRelationAttribute {
     declare _retainedSelectedChoices: GlueChoice[] | undefined
 
     get selectedPks(): unknown[] {
@@ -16,7 +16,7 @@ class ManyRelationFieldGlue extends RelationFieldGlue {
         // the server's initial seed is the fallback, a retained choice covers a
         // selection whose search has since been cleared, and the current results
         // are the freshest source for anything still on screen. Mirrors the
-        // single-value `selectedChoice` getter in RelationFieldGlue.
+        // single-value `selectedChoice` getter in GlueRelationAttribute.
         const candidates = [
             ...(this.selected_choices || []),
             ...(this._retainedSelectedChoices || []),
@@ -62,4 +62,4 @@ class ManyRelationFieldGlue extends RelationFieldGlue {
     }
 }
 
-export default ManyRelationFieldGlue
+export default GlueManyRelationAttribute

@@ -231,6 +231,10 @@ form's are:
   that does not render its value, or a field over a queryset
   (`ModelChoiceField`) raises `TypeError` the first time the component is
   used. A model form works when it has no instance, and offers no save.
+- **The form is built from its values alone.** A form whose `__init__`
+  requires an argument raises `TypeError` the first time the component is
+  used, and any other argument you build it with, such as a `prefix`, is not
+  kept.
 
 Use a [child form](#save-several-forms-in-one-call) instead when a call
 consumes the values, or the form edits a record, has rows, or has callables or

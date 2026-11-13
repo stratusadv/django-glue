@@ -155,7 +155,7 @@ def test_all_valid_validates_every_child_when_the_first_fails(card) -> None:
 
     assert entry['result'] == {}
     errors_by_address = {
-        item['address']: item['computed_data'].get('fields', {})
+        item['address']: item['computed_data'].get('value_attributes', {})
         for item in introduced
     }
     assert errors_by_address[card.policy.children['contact']]['email']['errors']
@@ -180,8 +180,8 @@ def test_a_read_childs_errors_answer_on_its_own_entry(card) -> None:
 
     assert entry['result']['contact_valid'] is False
     contact_entry = next(item for item in introduced if item['address'] == card.policy.children['contact'])
-    assert contact_entry['computed_data']['fields']['email']['errors']
-    assert contact_entry['computed_data']['fields']['name']['errors'] == []
+    assert contact_entry['computed_data']['value_attributes']['email']['errors']
+    assert contact_entry['computed_data']['value_attributes']['name']['errors'] == []
 
 
 def test_a_read_formset_answers_with_its_rows(card) -> None:

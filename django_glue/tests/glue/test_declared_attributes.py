@@ -8,19 +8,19 @@ import pytest
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.collector import GlueAttributeCollector
-from django_glue.glue.attributes.definition import (
+from django_glue.glue.attributes.attribute import (
     BoundGlueAttribute,
-    GlueAttributeDefinition,
+    GlueAttribute,
     GlueAttributeKind,
     GlueValueRole,
 )
+from django_glue.glue.attributes.collector import GlueAttributeCollector
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.base import BaseGlue
 from django_glue.glue.components import Component
 
 if TYPE_CHECKING:
-    from django_glue.glue.attributes.declared import DeclaredAttributeOptions
+    from django_glue.glue.attributes.declaration import GlueAttributeDeclarationOptions
 
 
 class RoleDeclarations:
@@ -42,7 +42,7 @@ class RoleDeclarations:
         return None
 
 
-def options_for(name: str) -> DeclaredAttributeOptions:
+def options_for(name: str) -> GlueAttributeDeclarationOptions:
     declaration = inspect.getattr_static(RoleDeclarations, name)
     return declaration.__glue_options__
 
@@ -134,21 +134,21 @@ def test_callable_cannot_declare_value_options(role_option: str) -> None:
         )
 
 
-def definition_for(name: str) -> GlueAttributeDefinition:
+def attribute_for(name: str) -> GlueAttribute:
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(RoleDeclarations)
     )
-    definition = registry.get(name)
-    assert definition is not None
-    return definition
+    attribute = registry.get(name)
+    assert attribute is not None
+    return attribute
 
 
-def test_declarations_compile_to_ordered_attribute_definitions() -> None:
+def test_declarations_compile_to_ordered_attributes() -> None:
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(RoleDeclarations)
     )
 
-    assert tuple(definition.path for definition in registry.attribute_definitions) == (
+    assert tuple(attribute.path for attribute in registry.attributes) == (
         'callable_member',
         'derived_output',
         'internal_editable_state',
@@ -156,13 +156,13 @@ def test_declarations_compile_to_ordered_attribute_definitions() -> None:
         'parameterized_editable_state',
         'parameterized_reconstructor',
     )
-    assert definition_for('callable_member').kind == GlueAttributeKind.CALLABLE
-    assert definition_for('derived_output').kind == GlueAttributeKind.VALUE
-    assert definition_for('derived_output').value_role == GlueValueRole.DERIVED_OUTPUT
-    assert definition_for('parameterized_editable_state').is_parameter
+    assert attribute_for('callable_member').kind == GlueAttributeKind.CALLABLE
+    assert attribute_for('derived_output').kind == GlueAttributeKind.VALUE
+    assert attribute_for('derived_output').value_role == GlueValueRole.DERIVED_OUTPUT
+    assert attribute_for('parameterized_editable_state').is_parameter
 
 
-def test_registry_orders_attribute_definitions_by_path() -> None:
+def test_registry_orders_attributes_by_path() -> None:
     class LaterDeclarations:
         zulu = Glue.attr(0)
 
@@ -175,8 +175,8 @@ def test_registry_orders_attribute_definitions_by_path() -> None:
     ))
 
     assert tuple(
-        definition.path
-        for definition in registry.attribute_definitions
+        attribute.path
+        for attribute in registry.attributes
     ) == ('alpha', 'zulu')
 
 
@@ -206,8 +206,8 @@ def test_bound_attribute_applies_only_editable_updates() -> None:
         GlueAttributeCollector.collect(RoleDeclarations)
     )
     attributes = {
-        attribute.definition.path: attribute
-        for attribute in registry.bind(declarations)
+        bound.attribute.path: bound
+        for bound in registry.bind(declarations)
     }
 
     attributes['internal_editable_state'].apply_update('changed')
@@ -219,13 +219,13 @@ def test_bound_attribute_applies_only_editable_updates() -> None:
 
 
 def test_bound_attribute_is_immutable() -> None:
-    attribute = BoundGlueAttribute(
-        definition=definition_for('internal_reconstructor'),
+    bound = BoundGlueAttribute(
+        attribute=attribute_for('internal_reconstructor'),
         owner=RoleDeclarations(),
     )
 
     with pytest.raises(FrozenInstanceError):
-        attribute.owner = object()
+        bound.owner = object()
 
 
 class FunctionProvider:
@@ -262,7 +262,7 @@ def test_namespace_compiles_full_capability_paths() -> None:
         GlueAttributeCollector.collect(NamespacedOwner)
     )
 
-    assert tuple(definition.path for definition in registry) == (
+    assert tuple(attribute.path for attribute in registry) == (
         'services',
         'services.factory',
         'services.factory.duplicate',
@@ -375,13 +375,13 @@ def test_a_typed_property_still_compiles_a_child_slot_and_warns() -> None:
             def panel(self) -> Component:
                 ...
 
-    definition = GlueAttributeRegistry(
+    attribute = GlueAttributeRegistry(
         GlueAttributeCollector.collect(PanelOwner)
     ).get('panel')
 
-    assert definition is not None
-    assert definition.kind == GlueAttributeKind.CHILD
-    assert not definition.is_declared_child
+    assert attribute is not None
+    assert attribute.kind == GlueAttributeKind.CHILD
+    assert not attribute.is_declared_child
 
 
 def test_child_compiles_child_slot() -> None:
@@ -393,12 +393,12 @@ def test_child_compiles_child_slot() -> None:
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(PanelOwner)
     )
-    definition = registry.get('panel')
+    attribute = registry.get('panel')
 
-    assert definition is not None
-    assert definition.kind == GlueAttributeKind.CHILD
-    assert definition.expected_type is Component
-    assert not definition.is_nullable
+    assert attribute is not None
+    assert attribute.kind == GlueAttributeKind.CHILD
+    assert attribute.expected_type is Component
+    assert not attribute.is_nullable
 
 
 def test_nullable_child_compiles_nullable_slot() -> None:
@@ -410,12 +410,12 @@ def test_nullable_child_compiles_nullable_slot() -> None:
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(PanelOwner)
     )
-    definition = registry.get('panel')
+    attribute = registry.get('panel')
 
-    assert definition is not None
-    assert definition.kind == GlueAttributeKind.CHILD
-    assert definition.expected_type is Component
-    assert definition.is_nullable
+    assert attribute is not None
+    assert attribute.kind == GlueAttributeKind.CHILD
+    assert attribute.expected_type is Component
+    assert attribute.is_nullable
 
 
 def test_callable_compiles_glue_result_contract() -> None:
@@ -452,31 +452,31 @@ def test_generic_property_annotation_does_not_compile_child_slot() -> None:
     registry = GlueAttributeRegistry(
         GlueAttributeCollector.collect(PanelOwner)
     )
-    definition = registry.get('panels')
+    attribute = registry.get('panels')
 
-    assert definition is not None
-    assert definition.kind == GlueAttributeKind.VALUE
-    assert definition.expected_type is None
-    assert not definition.is_nullable
+    assert attribute is not None
+    assert attribute.kind == GlueAttributeKind.VALUE
+    assert attribute.expected_type is None
+    assert not attribute.is_nullable
 
 
 def test_plain_property_is_not_a_child_slot() -> None:
-    definition = definition_for('derived_output')
+    attribute = attribute_for('derived_output')
 
-    assert definition.kind == GlueAttributeKind.VALUE
-    assert definition.expected_type is None
-    assert not definition.is_nullable
+    assert attribute.kind == GlueAttributeKind.VALUE
+    assert attribute.expected_type is None
+    assert not attribute.is_nullable
 
 
 def test_registry_rejects_path_crossing_non_namespace() -> None:
-    value = GlueAttributeDefinition(
+    value = GlueAttribute(
         path='services',
         source_name='services',
         kind=GlueAttributeKind.VALUE,
         required_access=GlueAccess.VIEW,
         value_role=GlueValueRole.RECONSTRUCTOR,
     )
-    leaf = GlueAttributeDefinition(
+    leaf = GlueAttribute(
         path='services.ping',
         source_name='ping',
         kind=GlueAttributeKind.CALLABLE,
@@ -488,7 +488,7 @@ def test_registry_rejects_path_crossing_non_namespace() -> None:
 
 
 def test_registry_rejects_missing_namespace_prefix() -> None:
-    leaf = GlueAttributeDefinition(
+    leaf = GlueAttribute(
         path='services.ping',
         source_name='ping',
         kind=GlueAttributeKind.CALLABLE,
@@ -513,9 +513,9 @@ def test_registry_rejects_duplicate_paths_across_collectors() -> None:
         ))
 
 
-def test_namespace_definition_requires_provider_type() -> None:
+def test_namespace_attribute_requires_provider_type() -> None:
     with pytest.raises(ValueError, match='requires a provider type'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='services',
             source_name='services',
             kind=GlueAttributeKind.NAMESPACE,
@@ -523,9 +523,9 @@ def test_namespace_definition_requires_provider_type() -> None:
         )
 
 
-def test_child_definition_requires_expected_type() -> None:
+def test_child_attribute_requires_expected_type() -> None:
     with pytest.raises(ValueError, match='requires an expected Glue type'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='panel',
             source_name='panel',
             kind=GlueAttributeKind.CHILD,
@@ -533,9 +533,9 @@ def test_child_definition_requires_expected_type() -> None:
         )
 
 
-def test_non_editable_definition_rejects_setter() -> None:
+def test_non_editable_attribute_rejects_setter() -> None:
     with pytest.raises(ValueError, match='Only editable value'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='status',
             source_name='status',
             kind=GlueAttributeKind.VALUE,
@@ -545,9 +545,9 @@ def test_non_editable_definition_rejects_setter() -> None:
         )
 
 
-def test_non_callable_definition_rejects_callable_target() -> None:
+def test_non_callable_attribute_rejects_callable_target() -> None:
     with pytest.raises(ValueError, match='Non-callable attribute'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='status',
             source_name='status',
             kind=GlueAttributeKind.VALUE,
@@ -557,9 +557,9 @@ def test_non_callable_definition_rejects_callable_target() -> None:
         )
 
 
-def test_definition_rejects_empty_path_segments() -> None:
+def test_attribute_rejects_empty_path_segments() -> None:
     with pytest.raises(ValueError, match='empty segment'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='services..ping',
             source_name='ping',
             kind=GlueAttributeKind.CALLABLE,
@@ -567,9 +567,9 @@ def test_definition_rejects_empty_path_segments() -> None:
         )
 
 
-def test_definition_rejects_reserved_client_name() -> None:
+def test_attribute_rejects_reserved_client_name() -> None:
     with pytest.raises(ValueError, match='reserved client name'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='services.$fields.ping',
             source_name='ping',
             kind=GlueAttributeKind.CALLABLE,
@@ -577,9 +577,9 @@ def test_definition_rejects_reserved_client_name() -> None:
         )
 
 
-def test_definition_rejects_prototype_sensitive_client_name() -> None:
+def test_attribute_rejects_prototype_sensitive_client_name() -> None:
     with pytest.raises(ValueError, match='prototype-sensitive client name'):
-        GlueAttributeDefinition(
+        GlueAttribute(
             path='services.toString',
             source_name='toString',
             kind=GlueAttributeKind.CALLABLE,
@@ -593,7 +593,7 @@ def test_bound_namespace_constructs_provider_per_access() -> None:
         GlueAttributeCollector.collect(type(owner))
     )
     bound = BoundGlueAttribute(
-        definition=registry.get('services'),
+        attribute=registry.get('services'),
         owner=owner,
     )
 
@@ -628,8 +628,8 @@ def test_bound_namespace_resolves_nested_provider_at_access_time() -> None:
         GlueAttributeCollector.collect(Owner)
     )
     attributes = {
-        attribute.definition.path: attribute
-        for attribute in registry.bind(owner)
+        bound.attribute.path: bound
+        for bound in registry.bind(owner)
     }
 
     duplicate = attributes['services.factory.duplicate'].get()

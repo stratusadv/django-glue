@@ -33,8 +33,8 @@ from django_glue.glue import (
     QuerySetGlue,
     SequenceGlue,
 )
-from django_glue.glue.attributes import DeclaredAttribute
-from django_glue.glue.attributes.definition import GlueAttributeKind
+from django_glue.glue.attributes import GlueAttributeDeclaration
+from django_glue.glue.attributes.attribute import GlueAttributeKind
 from django_glue.glue.options.django import (
     GlueRelatedModelChoices,
 )
@@ -138,8 +138,8 @@ class NestedStatsGlue(BaseGlue):
     def metadata(self) -> dict:
         return {
             'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
+                name: bound.metadata
+                for name, bound in self.attributes.items()
             },
         }
 
@@ -147,11 +147,11 @@ class NestedStatsGlue(BaseGlue):
     def _reconstruct_from_policy(cls, policy):
         return cls()
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def score(self) -> int:
         return 42
 
-    @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+    @GlueAttributeDeclaration(required_access=GlueAccess.CHANGE)
     def reset(self) -> str:
         return 'reset'
 
@@ -176,8 +176,8 @@ class NestedDashboardGlue(BaseGlue):
     def metadata(self) -> dict:
         return {
             'attributes': {
-                name: attribute.metadata
-                for name, attribute in self.attributes.items()
+                name: bound.metadata
+                for name, bound in self.attributes.items()
             },
         }
 
@@ -214,8 +214,8 @@ class CollectionDashboardGlue(BaseGlue):
 
 class DescriptorDefaultGlue(BaseGlue):
     namespace = 'descriptorDefault'
-    count = DeclaredAttribute(0, required_access=GlueAccess.VIEW)
-    values = DeclaredAttribute(required_access=GlueAccess.VIEW, default_factory=list)
+    count = GlueAttributeDeclaration(0, required_access=GlueAccess.VIEW)
+    values = GlueAttributeDeclaration(required_access=GlueAccess.VIEW, default_factory=list)
 
     def __init__(self):
         super().__init__(name='descriptorDefault', access=GlueAccess.VIEW)
@@ -231,7 +231,7 @@ class PlainService:
 
 class DeclaredStateGlue(BaseGlue):
     namespace = 'declared_state'
-    count = DeclaredAttribute(3, required_access=GlueAccess.VIEW)
+    count = GlueAttributeDeclaration(3, required_access=GlueAccess.VIEW)
 
     def __init__(self):
         super().__init__(name='declared_state', access=GlueAccess.CHANGE)
@@ -246,13 +246,13 @@ class DeclaredStateGlue(BaseGlue):
 
 
 class InvalidServiceGlue(DeclaredStateGlue):
-    service = DeclaredAttribute(PlainService(), required_access=GlueAccess.DELETE)
+    service = GlueAttributeDeclaration(PlainService(), required_access=GlueAccess.DELETE)
 
 
 class GorillaCountingQuerySet(QuerySet):
     """QuerySet subclass with a @Glue.attr method, for QuerySetGlue.get_attribute_providers."""
 
-    @DeclaredAttribute(required_access=GlueAccess.VIEW)
+    @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def count_names_starting_with(self, letter: str) -> int:
         # `self` here must be this exact (already-filtered) queryset
         # instance, not Gorilla.objects.all() -- proves the method was
@@ -279,8 +279,8 @@ class SequenceAttributeGlue(BaseGlue):
 
     namespace = 'sequenceAttribute'
 
-    scores: list[RawScore] = DeclaredAttribute([], glue_factory=_build_score_glue)
-    already_glued: list[DeclaredStateGlue] = DeclaredAttribute([])
+    scores: list[RawScore] = GlueAttributeDeclaration([], glue_factory=_build_score_glue)
+    already_glued: list[DeclaredStateGlue] = GlueAttributeDeclaration([])
 
     def __init__(self):
         super().__init__(name='sequenceAttribute', access=GlueAccess.VIEW)
@@ -339,7 +339,7 @@ class AllFieldsTestCase(TestCase):
 
         row = addressed_row_entries(glue_object, glue_object.query_with_params())[0]
 
-        self.assertEqual(row['computed_data']['id'], self.gorilla.pk)
+        self.assertEqual(row['computed_data']['values']['id'], self.gorilla.pk)
 
     def test_pk_not_included_when_explicitly_excluded(self):
         model = ModelGlue(self.gorilla, **glue_context(), fields=['name'], exclude=['id'])
@@ -496,7 +496,7 @@ class AllFieldsTestCase(TestCase):
             fields=ALL_FIELDS,
         ))
 
-        fields = glue_object.get_static_data()['fields']
+        fields = glue_object.get_static_data()['value_attributes']
         self.assertIn('name', fields)
         self.assertIn('age', fields)
         self.assertNotIn('signature', fields)
@@ -517,8 +517,8 @@ class AllFieldsTestCase(TestCase):
 
         self.assertEqual(len(result['items']), 1)
         row = addressed_row_entries(glue_object, result)[0]
-        self.assertEqual(row['computed_data']['name'], 'Koko')
-        self.assertNotIn('signature', row['computed_data'])
+        self.assertEqual(row['computed_data']['values']['name'], 'Koko')
+        self.assertNotIn('signature', row['computed_data']['values'])
 
     def test_queryset_all_fields_uses_fk_attnames(self):
         from django_glue.glue.objects.django.model.object import ALL_FIELDS
@@ -542,8 +542,8 @@ class AllFieldsTestCase(TestCase):
         result = glue_object.query_with_params()
 
         row = addressed_row_entries(glue_object, result)[0]
-        self.assertIn('red_corner_id', row['computed_data'])
-        self.assertNotIn('red_corner', row['computed_data'])
+        self.assertIn('red_corner_id', row['computed_data']['values'])
+        self.assertNotIn('red_corner', row['computed_data']['values'])
 
     def test_queryset_all_fields_does_not_traverse_prefetch_related_relations(self):
         from django_glue.glue.objects.django.model.object import ALL_FIELDS
@@ -588,10 +588,10 @@ class AllFieldsTestCase(TestCase):
         result = glue_object.query_with_params()
 
         row = addressed_row_entries(glue_object, result)[0]
-        self.assertIn('red_corner_id', row['computed_data'])
-        self.assertNotIn('red_corner', row['computed_data'])
-        self.assertIn('blue_corner_id', row['computed_data'])
-        self.assertNotIn('blue_corner', row['computed_data'])
+        self.assertIn('red_corner_id', row['computed_data']['values'])
+        self.assertNotIn('red_corner', row['computed_data']['values'])
+        self.assertIn('blue_corner_id', row['computed_data']['values'])
+        self.assertNotIn('blue_corner', row['computed_data']['values'])
 
 
 class GluePolicyTestCase(TestCase):
@@ -803,30 +803,30 @@ class GluePolicyTestCase(TestCase):
         self.assertEqual(restored.identity['initial']['sent_datetime'], '2026-08-14T12:30:00Z')
 
 
-class DeclaredAttributeDefaultAccessTestCase(TestCase):
+class GlueAttributeDeclarationDefaultAccessTestCase(TestCase):
     def test_required_access_defaults_to_view_when_omitted(self):
-        @DeclaredAttribute
+        @GlueAttributeDeclaration
         def load(self):
             return 'loaded'
 
         self.assertEqual(load.__glue_options__.required_access, GlueAccess.VIEW)
 
     def test_required_access_can_still_be_overridden(self):
-        @DeclaredAttribute(required_access=GlueAccess.CHANGE)
+        @GlueAttributeDeclaration(required_access=GlueAccess.CHANGE)
         def save(self):
             return 'saved'
 
         self.assertEqual(save.__glue_options__.required_access, GlueAccess.CHANGE)
 
     def test_render_as_html_defaults_to_false(self):
-        @DeclaredAttribute
+        @GlueAttributeDeclaration
         def load(self):
             return 'loaded'
 
         self.assertFalse(load.__glue_options__.render_as_html)
 
     def test_render_as_html_can_be_set(self):
-        @DeclaredAttribute(render_as_html=True)
+        @GlueAttributeDeclaration(render_as_html=True)
         def render_panel(self):
             return 'rendered'
 
@@ -857,7 +857,7 @@ class TemplateResponseAttributeGlue(BaseGlue):
     def __init__(self):
         super().__init__(name='templateResponseAttribute', access=GlueAccess.VIEW)
 
-    @DeclaredAttribute
+    @GlueAttributeDeclaration
     def render_plain(self, request: 'HttpRequest'):
         from django.template.response import TemplateResponse
         return TemplateResponse(request, 'glue_template_test.html', {'greeting': 'Plain text'})
@@ -920,10 +920,10 @@ class DjangoModelGlueObjectTestCase(TestCase):
             **glue_context(access=GlueAccess.VIEW),
             fields=['created_at'],
         )
-        attribute = glue_object.attributes['created_at']
+        bound = glue_object.attributes['created_at']
 
-        self.assertEqual(attribute.definition.required_access, GlueAccess.VIEW)
-        schema = attribute.schema()
+        self.assertEqual(bound.attribute.required_access, GlueAccess.VIEW)
+        schema = bound.schema()
         self.assertEqual(schema['type'], 'DateTimeField')
         self.assertFalse(schema['editable'])
 
@@ -938,7 +938,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertNotIn('signature', glue_object.state)
         self.assertNotIn(
             'signature',
-            glue_object.get_static_data()['fields'],
+            glue_object.get_static_data()['value_attributes'],
         )
 
     def test_model_adapter_rejects_explicitly_excluded_field_types(self):
@@ -970,10 +970,10 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertIn('save', policy.attributes)
         self.assertIn('delete', policy.attributes)
         self.assertEqual(policy.state_snapshot['name'], 'Koko')
-        self.assertEqual(static_data['fields']['name']['type'], 'CharField')
-        self.assertFalse(static_data['fields']['name']['disabled'])
-        self.assertEqual(static_data['fields']['created_at']['type'], 'DateTimeField')
-        self.assertTrue(static_data['fields']['created_at']['disabled'])
+        self.assertEqual(static_data['value_attributes']['name']['type'], 'CharField')
+        self.assertFalse(static_data['value_attributes']['name']['disabled'])
+        self.assertEqual(static_data['value_attributes']['created_at']['type'], 'DateTimeField')
+        self.assertTrue(static_data['value_attributes']['created_at']['disabled'])
 
     def test_model_relation_field_metadata_has_stable_choice_shape(self):
         glue_object = ModelGlue(self.gorilla, **glue_context(), fields=['skills'])
@@ -1282,9 +1282,9 @@ class DjangoModelGlueObjectTestCase(TestCase):
         static_data = glue_object.get_static_data()
 
         self.assertIn('badge_data', policy.attributes)
-        self.assertIn('badge_data', static_data['fields'])
+        self.assertIn('badge_data', static_data['value_attributes'])
         self.assertEqual(
-            glue_object.get_computed_data(include_all=True)['badge_data'],
+            glue_object.get_computed_data(include_all=True)['values']['badge_data'],
             {'label': 'KOKO'},
         )
         self.assertTrue(
@@ -1523,7 +1523,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         self.assertIn('count', glue_object.policy.attributes)
         self.assertEqual(glue_object.policy.state_snapshot['count'], 3)
         self.assertEqual(
-            glue_object.get_static_data()['fields']['count'],
+            glue_object.get_static_data()['value_attributes']['count'],
             {'value_path': 'count', 'editable': False},
         )
 
@@ -1588,7 +1588,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
             )
         )
         self.assertEqual(
-            validation_payload['computed_data']['fields']['title'],
+            validation_payload['computed_data']['value_attributes']['title'],
             {'errors': ['This field is required.']},
         )
 
@@ -1608,7 +1608,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         self.assertFalse(save_payload['result']['success'])
         self.assertEqual(
-            save_payload['computed_data']['fields']['title'],
+            save_payload['computed_data']['value_attributes']['title'],
             {'errors': ['This field is required.']},
         )
 
@@ -1643,7 +1643,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         self.assertTrue(save_payload['result']['success'])
         self.assertEqual(
-            save_payload['computed_data']['fields']['title'],
+            save_payload['computed_data']['value_attributes']['title'],
             {'errors': []},
         )
 
@@ -1670,8 +1670,8 @@ class DjangoFormGlueObjectTestCase(TestCase):
 
         payload, _introduced = glue_object.process_attribute_call(context)
 
-        self.assertEqual(payload['computed_data']['fields']['name'], {'errors': []})
-        self.assertEqual(payload['computed_data']['fields']['skill']['errors'], [])
+        self.assertEqual(payload['computed_data']['value_attributes']['name'], {'errors': []})
+        self.assertEqual(payload['computed_data']['value_attributes']['skill']['errors'], [])
 
     def test_form_foreign_key_choices_returns_configured_choices(self):
         from django import forms
@@ -2191,10 +2191,10 @@ class DjangoFormGlueObjectTestCase(TestCase):
     def test_form_field_adapter_builds_metadata(self):
         form = ContactForm()
         glue_object = FormGlue(form, **glue_context(name='contact'))
-        attribute = glue_object.attributes['name']
+        bound = glue_object.attributes['name']
 
-        self.assertEqual(attribute.definition.required_access, GlueAccess.CHANGE)
-        schema = attribute.schema()
+        self.assertEqual(bound.attribute.required_access, GlueAccess.CHANGE)
+        schema = bound.schema()
         self.assertEqual(schema['type'], 'CharField')
         self.assertEqual(schema['max_length'], 100)
 
@@ -2359,7 +2359,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         # A plain form never offers the default save (ADR 040).
         self.assertNotIn('save', policy.attributes)
         self.assertEqual(policy.state_snapshot['name'], 'Ada')
-        self.assertEqual(static_data['fields']['email']['type'], 'EmailField')
+        self.assertEqual(static_data['value_attributes']['email']['type'], 'EmailField')
 
     def test_form_entry_serializes_model_multiple_choice_initial_values(self):
         skill = Skill.objects.create(name='Grappling')
@@ -2444,9 +2444,9 @@ class DjangoFormGlueObjectTestCase(TestCase):
             **glue_context(name='gorilla-form'),
         ))
 
-        attribute = glue_object.attributes['skills']
+        bound = glue_object.attributes['skills']
 
-        self.assertEqual(attribute.get(), [skill.pk])
+        self.assertEqual(bound.get(), [skill.pk])
         self.assertEqual(glue_object.state['skills']['value'], [skill.pk])
 
     def test_form_field_get_falls_back_to_field_initial(self):
@@ -2472,9 +2472,9 @@ class DjangoFormGlueObjectTestCase(TestCase):
         form.fields['name'].initial = 'Set via field.initial'
 
         glue_object = FormGlue(form, **glue_context(name='extra-field-form'))
-        attribute = glue_object.attributes['name']
+        bound = glue_object.attributes['name']
 
-        self.assertEqual(attribute.get(), 'Set via field.initial')
+        self.assertEqual(bound.get(), 'Set via field.initial')
 
     def test_form_field_get_prefers_form_initial_over_field_initial(self):
         from django import forms
@@ -2486,9 +2486,9 @@ class DjangoFormGlueObjectTestCase(TestCase):
         form.fields['name'].initial = 'Set via field.initial'
 
         glue_object = FormGlue(form, **glue_context(name='extra-field-form'))
-        attribute = glue_object.attributes['name']
+        bound = glue_object.attributes['name']
 
-        self.assertEqual(attribute.get(), 'Set via form.initial')
+        self.assertEqual(bound.get(), 'Set via form.initial')
 
     def test_form_adapter_reconstruction_preserves_initial_data(self):
         gorilla = Gorilla.objects.create(name='Instance Name', age=12)
@@ -2603,7 +2603,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertNotIn('signature', glue_object.attributes)
         self.assertNotIn(
             'signature',
-            glue_object.get_static_data().get('fields', {}),
+            glue_object.get_static_data().get('value_attributes', {}),
         )
 
     def test_queryset_adapter_requires_fields_or_exclude(self):
@@ -2669,7 +2669,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(policy.namespace, 'querySet')
         self.assertNotIn('form_identities', policy.identity)
         self.assertIn('query_with_params', policy.attributes)
-        self.assertNotIn('skills', static_data.get('fields', {}))
+        self.assertNotIn('skills', static_data.get('value_attributes', {}))
         self.assertEqual(list(resolved.queryset), [gorilla])
 
     def test_queryset_query_returns_child_model_proxy_payloads(self):
@@ -2690,7 +2690,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         self.assertEqual(row_policy.namespace, 'model')
         self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
         self.assertEqual(row_policy.state_snapshot['name'], 'Koko')
-        self.assertEqual(row['static_data']['fields']['name']['type'], 'CharField')
+        self.assertEqual(row['static_data']['value_attributes']['name']['type'], 'CharField')
 
     def test_queryset_query_rows_are_addressed_model_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
@@ -2708,7 +2708,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         row_policy = GluePolicy.from_token(row['policy_token'])
         self.assertEqual(row_policy.namespace, 'model')
         self.assertEqual(row_policy.name, f'gorillas.{gorilla.pk}')
-        self.assertEqual(row['computed_data']['name'], 'Koko')
+        self.assertEqual(row['computed_data']['values']['name'], 'Koko')
 
     def test_queryset_with_computed_attributes_adds_attribute_to_child_payloads(self):
         gorilla = Gorilla.objects.create(name='Koko')
@@ -2728,8 +2728,8 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         row = addressed_row_entries(glue_object, result)[0]
         self.assertIn('badge_data', GluePolicy.from_token(row['policy_token']).attributes)
-        self.assertIn('badge_data', row['static_data']['fields'])
-        self.assertEqual(row['computed_data']['badge_data'], {'label': 'KOKO'})
+        self.assertIn('badge_data', row['static_data']['value_attributes'])
+        self.assertEqual(row['computed_data']['values']['badge_data'], {'label': 'KOKO'})
         self.assertTrue(
             glue_object.policy.identity['computed_attributes']['badge_data']['path'].endswith(
                 'test_objects.gorilla_badge_data'
@@ -2755,7 +2755,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
 
         result = glue_object.query_with_params()
 
-        self.assertEqual(addressed_row_entries(glue_object, result)[0]['computed_data']['badge_data'], {'label': 'KOKO!'})
+        self.assertEqual(addressed_row_entries(glue_object, result)[0]['computed_data']['values']['badge_data'], {'label': 'KOKO!'})
         self.assertEqual(
             glue_object.policy.identity['computed_attributes']['badge_data']['kwargs'],
             {'suffix': '!'},
@@ -2775,7 +2775,7 @@ class DjangoQuerySetGlueObjectTestCase(TestCase):
         resolved.request = glue_object.request
         result = resolved.query_with_params()
 
-        self.assertEqual(addressed_row_entries(resolved, result)[0]['computed_data']['badge_data'], {'label': 'KOKO'})
+        self.assertEqual(addressed_row_entries(resolved, result)[0]['computed_data']['values']['badge_data'], {'label': 'KOKO'})
 
     def test_queryset_with_computed_attributes_rejects_non_importable_callables(self):
         with self.assertRaisesRegex(ValueError, 'importable top-level callables'):
@@ -2952,8 +2952,8 @@ class IntroductionTestCase(TestCase):
 
         entry = glue_object.entry.model_dump()
 
-        self.assertEqual(entry['computed_data']['id'], gorilla.pk)
-        self.assertEqual(entry['computed_data']['fields']['name'], {'errors': []})
+        self.assertEqual(entry['computed_data']['values']['id'], gorilla.pk)
+        self.assertEqual(entry['computed_data']['value_attributes']['name'], {'errors': []})
 
     def test_form_entry_carries_its_derived_output(self):
         form = ContactForm(initial={'name': 'Ada', 'email': 'ada@test.com'})
@@ -2961,7 +2961,7 @@ class IntroductionTestCase(TestCase):
 
         entry = glue_object.entry.model_dump()
 
-        self.assertIn('name', entry['computed_data']['fields'])
+        self.assertIn('name', entry['computed_data']['value_attributes'])
 
     def test_queryset_entry_carries_no_rows(self):
         Gorilla.objects.create(name='Koko')
@@ -2990,7 +2990,7 @@ class IntroductionTestCase(TestCase):
         self.assertEqual(len(result['items']), 1)
         item = addressed_row_entries(glue_object, result)[0]
         self.assertIn('computed_data', item)
-        self.assertEqual(item['computed_data']['name'], 'Koko')
+        self.assertEqual(item['computed_data']['values']['name'], 'Koko')
 
 
 class CachedPropertyTestCase(TestCase):
@@ -3076,9 +3076,9 @@ class RelationProjectionTestCase(TestCase):
             choices={'red_corner': choice_queryset},
         ))
 
-        attribute = glue_object.attributes['red_corner']
-        schema = attribute.schema()
-        computed = attribute.computed_data()
+        bound = glue_object.attributes['red_corner']
+        schema = bound.schema()
+        computed = bound.computed_data()
 
         assert schema['choices'] == []
         assert schema['pk_field'] == 'id'

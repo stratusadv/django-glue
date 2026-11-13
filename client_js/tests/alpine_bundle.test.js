@@ -56,7 +56,7 @@ describe('bundled Alpine startup', () => {
         page.eval(bundle)
         const component = address => createEntry({
             policy: {name: address, namespace: 'component', address, attributes: [], state_snapshot: {}},
-            static_data: {fields: {}, callables: {}},
+            static_data: {value_attributes: {}, callables: {}},
         })
         page.document.body.innerHTML = `
             <div data-glue-address="tally#test" x-data="{categories: ['Software']}">

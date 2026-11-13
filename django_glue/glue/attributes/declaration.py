@@ -7,7 +7,7 @@ from types import MethodType
 from typing import TYPE_CHECKING, Any, Callable
 
 from django_glue.access import GlueAccess
-from django_glue.glue.attributes.definition import GlueValueRole
+from django_glue.glue.attributes.attribute import GlueValueRole
 from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
 from django_glue.serialization import glue_serializer_registry
 
@@ -23,7 +23,7 @@ _SESSION_VALUE_ONLY = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DeclaredAttributeOptions:
+class GlueAttributeDeclarationOptions:
     """Configuration for a declared glue attribute, attached as __glue_options__ by the decorator."""
 
     required_access: GlueAccess | Callable[[BaseGlue], GlueAccess] = GlueAccess.VIEW
@@ -40,7 +40,7 @@ class DeclaredAttributeOptions:
     is_declared_child: bool = False
 
 
-class DeclaredAttribute:
+class GlueAttributeDeclaration:
     """
     Descriptor for marking methods or values as Glue attributes.
 
@@ -82,9 +82,9 @@ class DeclaredAttribute:
         value_type: Any | None = None,
     ) -> None:
         if value is not _MISSING and default is not _MISSING:
-            raise TypeError('DeclaredAttribute received both value and default.')
+            raise TypeError('GlueAttributeDeclaration received both value and default.')
         if default is not _MISSING and default_factory is not _MISSING:
-            raise TypeError('DeclaredAttribute received both default and default_factory.')
+            raise TypeError('GlueAttributeDeclaration received both default and default_factory.')
 
         self.required_access = required_access
         self._parameter = parameter
@@ -120,7 +120,7 @@ class DeclaredAttribute:
 
     def _update_glue_options(self) -> None:
         """Create and attach the __glue_options__ based on current state."""
-        self.__glue_options__ = DeclaredAttributeOptions(
+        self.__glue_options__ = GlueAttributeDeclarationOptions(
             required_access=self.required_access,
             is_callable=self._is_callable,
             render_as_html=self._render_as_html,
@@ -253,9 +253,9 @@ class DeclaredAttribute:
 
         serializer = self._serializers[owner_type] = next(
             (
-                definition.serializer
-                for definition in GlueAttributeCollector.collect(owner_type)
-                if definition.path == self.name and definition.serializer is not None
+                attribute.serializer
+                for attribute in GlueAttributeCollector.collect(owner_type)
+                if attribute.path == self.name and attribute.serializer is not None
             ),
             glue_serializer_registry.resolve(None),
         )
@@ -292,7 +292,7 @@ class DeclaredAttribute:
             return
         instance.__dict__.pop(self._get_storage_name(), None)
 
-    def _bind_target(self, target: Callable[..., Any] | property) -> DeclaredAttribute:
+    def _bind_target(self, target: Callable[..., Any] | property) -> GlueAttributeDeclaration:
         self.target = target
         self._is_callable = not isinstance(target, property)
         self._validate_callable_options()
