@@ -84,13 +84,26 @@
   `coerce` and `decode`: a declaration built at runtime names what converts its
   values with `Glue.attr(value_type=...)`.
 - `DeclaredAttribute`, exported from `django_glue`, is
-  `GlueAttributeDeclaration`. `Glue.attr` is unchanged.
+  `GlueAttributeDeclaration`, and `GlueAttributeDefinition` is `GlueAttribute`.
+  `Glue.attr` is unchanged.
 - The wire between the server and its bundled client changes shape (ADR 042):
   `static_data.fields` is `static_data.value_attributes`, and `computed_data`
   holds derived values under `values` and presentation output under
   `value_attributes`, so a derived attribute named `fields` is no longer lost.
-  Code that read either dict, or the client's `FieldGlue` classes, directly
-  must follow; `$fields` and the members of the objects in it are unchanged.
+  `$fields` and the members of the objects in it are unchanged, and pages need
+  no change. Code that reads either dict directly, usually a test, must follow:
+
+  | 1.3 | 1.4 |
+  |---|---|
+  | `entry['computed_data']['total_hours']` (a derived value) | `entry['computed_data']['values']['total_hours']` |
+  | `entry['computed_data']['fields']['email']['errors']` | `entry['computed_data']['value_attributes']['email']['errors']` |
+  | `entry['static_data']['fields']` | `entry['static_data']['value_attributes']` |
+  | `bound_attribute.definition` | `bound_attribute.attribute` |
+  | `from django_glue.glue.attributes.definition import GlueAttributeKind` | `from django_glue.glue.attributes import GlueAttributeKind` |
+
+  The client's `FieldGlue` classes are `GlueValueAttribute`,
+  `GlueChoiceAttribute`, `GlueManyChoiceAttribute`, `GlueRelationAttribute` and
+  `GlueManyRelationAttribute`.
 - An attribute's default is adapted as an assigned value is (ADR 042). A
   non-empty default list on an attribute with a `glue_factory` now becomes a
   `SequenceGlue`, as the same list assigned in code already did.

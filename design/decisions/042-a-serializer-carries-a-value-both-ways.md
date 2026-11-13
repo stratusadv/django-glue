@@ -190,10 +190,16 @@ form edits a record, has rows or has actions of its own, it is a child.
   `coerce` and `decode` are removed. `DeclaredAttribute` is
   `GlueAttributeDeclaration`. Spire, Profitly, Showcase and the Stratus portal
   use none of these.
-- **The wire changes shape** (rule 8). The server and the bundled client change
-  together, and no project reads `static_data`, `computed_data` or the client's
-  value-attribute classes directly; the public members of a value attribute
-  and `$fields` are unchanged.
+- **The wire changes shape, and so do the names tests reach into** (rules 7
+  and 8). The server and the bundled client change together, the public
+  members of a value attribute and `$fields` are unchanged, and no project's
+  application code reads the wire or these names. Their tests do: Profitly,
+  Spire, the Stratus portal and Showcase read `computed_data` and
+  `static_data` from responses, `BoundGlueAttribute.definition`, and the
+  module `glue.attributes.definition`, about 37 lines across 20 test files.
+  Each moves to the new key or name when the project takes 1.4.0. Keeping the
+  1.3 wire, an alias for `.definition` and a re-export of the old module was
+  weighed and rejected: it would have kept the names this decision retires.
 - No value that crossed before crosses differently. Model and form fields,
   untyped attributes, callable arguments and component parameters keep their
   formats, and their tests pass unchanged.
