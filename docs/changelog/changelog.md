@@ -5,8 +5,8 @@
 ### Features
 
 - A callable's arguments are checked against their annotations before it runs
-  (ADR 038), through the same serializer registry that checks editable values
-  and component parameters. A value is converted where it safely can be, so
+  (ADR 038), by the same serializers that check editable values and component
+  parameters. A value is converted where it safely can be, so
   `'12'` reaches an `int` argument as `12`, and refused otherwise.
   `Annotated` adds rules:
 
@@ -23,9 +23,45 @@
   checked: it receives them as one mapping. See
   [callable arguments](../guides/components.md#callable-arguments).
 
-- `GlueSerializerHandler.prepare(target)` lets a serializer refuse a type before
-  any value arrives. Glue calls it for each annotated callable argument when the
-  class is first used. It does nothing unless a handler overrides it.
+- Each declaration has one serializer, a `GlueSerializer`, that carries its
+  values both ways (ADR 042): `load` for what the browser sends, `restore` for a
+  signed value, `dump` for the wire form, and `check` to refuse a declaration
+  before any value arrives, which Glue calls for each annotated callable
+  argument when the class is first used. Register your own with
+  `glue_serializer_registry.register(MySerializer)`.
+
+- An attribute can hold a value that is not JSON when its type hint can dump
+  it, such as a dataclass. Values that were sent before are sent exactly as
+  before.
+
+- An attribute typed as a Django form class holds that form as the owner's
+  state (ADR 042). It is signed and updated as one editable value, so it holds
+  through a refresh and a re-render, and Spire's field templates bind to its
+  fields:
+
+  ```python
+  class AccountListComponent(Component):
+      filters: AccountFilterForm = Glue.attr(editable=True)
+
+      def get_queryset(self):
+          if self.filters.is_valid():
+              search = self.filters.cleaned_data['search']
+  ```
+
+  See [a form as state](../guides/components.md#a-form-as-state).
+
+- A formset takes `form_kwargs` and builds every row form with them, as a Django
+  formset does (ADR 041), including rows added in the browser and rows rebuilt
+  on a later request. They are signed, so they are plain values. A row form can
+  then narrow a choice field by what the server knows:
+
+  ```python
+  JournalLineFormSet(access=Glue.Access.ADD, form_kwargs={'company_id': company.pk})
+  ```
+
+  Override `get_form_kwargs()` to give every row values the formset derives once
+  per request, such as the rows each form looks its choice up in. See
+  [rows that need constructor arguments](../guides/form_glue.md#rows-that-need-constructor-arguments).
 
 ### Breaking
 
@@ -34,6 +70,21 @@
   `str`, a list or an object for an `int`, `''` for an `int | None`.
 - A value its annotation converts arrives converted. `'12'` for an `int` is
   `12`, and `'false'` for a `bool` is `False`, no longer a truthy string.
+- `GlueSerializerHandler` is replaced by `GlueSerializer` (ADR 042). A handler
+  becomes a `GlueSerializer` subclass: `supports` is a classmethod, `coerce` is
+  `load`, `decode` is `restore`, `encode` is `dump`, `prepare` is `check`, and
+  each reads its target from `self.target`. Register the class, not an
+  instance.
+- `glue_serializer_registry` no longer converts a value itself: its `coerce`,
+  `decode`, `encode` and `prepare` are gone. Ask it for the serializer with
+  `glue_serializer_registry.resolve(target)` and call that.
+- `BaseGlue.get_attribute_adapters()` is `get_field_descriptions()`, and
+  `GlueAttributeAdapter` is `GlueFieldDescription`, without `coerce` and
+  `decode`: a declaration built at runtime names what converts its values with
+  `Glue.attr(value_type=...)`.
+- An attribute's default is adapted as an assigned value is (ADR 042). A
+  non-empty default list on an attribute with a `glue_factory` now becomes a
+  `SequenceGlue`, as the same list assigned in code already did.
 - An annotation that cannot be resolved at runtime, such as a type imported only
   under `if TYPE_CHECKING:`, or one no serializer handles, such as a model
   class, raises `TypeError` naming the callable and the argument the first time

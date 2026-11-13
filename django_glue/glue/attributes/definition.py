@@ -17,13 +17,14 @@ from typing import (
     get_type_hints,
 )
 
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import GlueInvalidAttributeError
-from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.access import GlueAccess
-    from django_glue.glue.attributes.adapter import GlueAttributeAdapter
+    from django_glue.serialization import GlueSerializer
+    from django_glue.glue.attributes.description import GlueFieldDescription
     from django_glue.glue.base import BaseGlue
 
 _NAMESPACE_DEPTH_LIMIT = 20
@@ -129,19 +130,19 @@ class GlueAttributeDefinition:
     value_role: GlueValueRole | None = None
     is_parameter: bool = False
     provider_type: type[Any] | None = None
-    value_type: Any | None = None
+    serializer: GlueSerializer | None = None
     expected_type: type[Any] | None = None
     is_nullable: bool = False
     is_declared_child: bool = False
     allowed_arguments: tuple[str, ...] = ()
     injected_arguments: tuple[str, ...] = ()
-    argument_types: Mapping[str, Any] = field(default_factory=dict)
+    argument_types: Mapping[str, GlueSerializer] = field(default_factory=dict)
     render_as_html: bool = False
     skip_rerender: bool = False
     getter: Callable[[Any], Any] | None = None
     setter: Callable[[Any, Any], None] | None = None
     callable_target: Callable[[Any], Callable[..., Any]] | None = None
-    adapter: GlueAttributeAdapter | None = None
+    description: GlueFieldDescription | None = None
 
     def __post_init__(self) -> None:
         self._validate_path()
@@ -243,32 +244,41 @@ class BoundGlueAttribute:
     provider: Any | None = None
 
     def schema(self) -> dict[str, Any]:
-        if self.definition.adapter is None:
+        if self.definition.description is None:
             return {}
-        return dict(self.definition.adapter.schema())
+        return dict(self.definition.description.schema())
 
     def computed_data(self) -> dict[str, Any]:
-        if self.definition.adapter is None:
+        if self.definition.description is None:
             return {}
-        return dict(self.definition.adapter.computed_data())
+        return dict(self.definition.description.computed_data())
 
     def get(self) -> Any:
-        if self.definition.callable_target is not None:
-            value = self.definition.callable_target(self._binding_owner())
-        elif self.definition.getter is not None:
-            value = self.definition.getter(self._binding_owner())
-        else:
-            value = getattr(
-                self._resolve_attribute_owner(),
-                self.definition.source_name,
-            )
-        self._validate_value_result(value)
-        if (
-            self.definition.kind is GlueAttributeKind.VALUE
-            and self.definition.value_role is GlueValueRole.DERIVED_OUTPUT
-        ):
-            self.owner._derived_paths.add(self.definition.path)
+        value = self._read()
+        if self.definition.kind is GlueAttributeKind.VALUE:
+            self._wire_form(value)
+            self._mark_derived()
         return value
+
+    def wire_value(self) -> Any:
+        """A value attribute's value as it is signed and sent."""
+        wire_value = self._wire_form(self._read())
+        self._mark_derived()
+        return wire_value
+
+    def _read(self) -> Any:
+        if self.definition.callable_target is not None:
+            return self.definition.callable_target(self._binding_owner())
+        if self.definition.getter is not None:
+            return self.definition.getter(self._binding_owner())
+        return getattr(
+            self._resolve_attribute_owner(),
+            self.definition.source_name,
+        )
+
+    def _mark_derived(self) -> None:
+        if self.definition.value_role is GlueValueRole.DERIVED_OUTPUT:
+            self.owner._derived_paths.add(self.definition.path)
 
     def call(self, *args: Any, **kwargs: Any) -> Any:
         if self.definition.kind != GlueAttributeKind.CALLABLE:
@@ -355,22 +365,17 @@ class BoundGlueAttribute:
         )
 
     def coerce_update(self, value: Any) -> Any:
-        if self.definition.adapter is not None:
-            return self.definition.adapter.coerce(value)
-        target = self.definition.value_type
-        if target is None:
-            current = self.get()
-            target = type(current) if current is not None else None
-        return glue_serializer_registry.coerce(value, target)
+        return self._serializer().load(value)
 
     def decode_retained(self, value: Any) -> Any:
-        if self.definition.adapter is not None:
-            return self.definition.adapter.decode(value)
-        target = self.definition.value_type
-        if target is None:
-            current = self.get()
-            target = type(current) if current is not None else None
-        return glue_serializer_registry.decode(value, target)
+        return self._serializer().restore(value)
+
+    def _serializer(self) -> GlueSerializer:
+        """The declared serializer, or for an undeclared attribute that of the value it holds."""
+        if self.definition.serializer is not None:
+            return self.definition.serializer
+        current = self._read()
+        return glue_serializer_registry.resolve(type(current) if current is not None else None)
 
     def _resolve_attribute_owner(self) -> Any:
         attribute_owner = self._binding_owner()
@@ -381,10 +386,11 @@ class BoundGlueAttribute:
     def _binding_owner(self) -> Any:
         return self.provider if self.provider is not None else self.owner
 
-    def _validate_value_result(self, value: Any) -> None:
-        if self.definition.kind != GlueAttributeKind.VALUE:
-            return
-
+    def _wire_form(self, value: Any) -> Any:
+        """
+        A value attribute's value as it is signed and sent: itself when the wire
+        encoder can already write it, otherwise as its serializer dumps it.
+        """
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 
         if self._contains_type(value, BaseGlue, set()):
@@ -396,13 +402,17 @@ class BoundGlueAttribute:
         try:
             json.dumps(value, cls=GlueResponseJSONEncoder)
         except TypeError as error:
-            owner_type = type(self._binding_owner())
-            value_type = type(value)
-            raise GlueInvalidAttributeError(
-                attribute=self.definition.path,
-                owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
-                value_type=f'{value_type.__module__}.{value_type.__qualname__}',
-            ) from error
+            try:
+                return self._serializer().dump(value)
+            except GlueSerializerError:
+                owner_type = type(self._binding_owner())
+                value_type = type(value)
+                raise GlueInvalidAttributeError(
+                    attribute=self.definition.path,
+                    owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
+                    value_type=f'{value_type.__module__}.{value_type.__qualname__}',
+                ) from error
+        return value
 
     @classmethod
     def _contains_type(

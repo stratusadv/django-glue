@@ -89,6 +89,7 @@ class FormSetGlue(BaseCollectionGlue):
         initial: Iterable[Mapping[str, Any]] = (),
         instances: Iterable[Model | forms.BaseForm] = (),
         new_row_defaults: Mapping[str, Any] | None = None,
+        form_kwargs: Mapping[str, Any] | None = None,
         name: str | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         min_num: int | None = None,
@@ -112,12 +113,22 @@ class FormSetGlue(BaseCollectionGlue):
         self.max_num = cls.max_num if max_num is None else max_num
         self.can_delete = cls.can_delete if can_delete is None else can_delete
         self.new_row_defaults = dict(new_row_defaults or {})
+        self.form_kwargs = dict(form_kwargs or {})
+        try:
+            GluePolicyTokenSerializer().dumps(self.form_kwargs)
+        except TypeError as error:
+            msg = (
+                f"FormSetGlue '{name}' form_kwargs are signed into its token, so they must be "
+                f'plain values: pass a related record as its primary key. {error}'
+            )
+            raise TypeError(msg) from error
         self._live_children: dict[str, str] = {}
         self._removed_pks: list[Any] = []
         # None on a formset rebuilt from a token issued before rows were bound.
         self._row_bindings: dict[str, str] | None = {}
         self._reconstructed = _reconstructed
 
+        row_kwargs = self.get_form_kwargs()
         initial_forms: list[forms.BaseForm] = []
         for instance in instances:
             if isinstance(instance, BaseForm):
@@ -128,7 +139,7 @@ class FormSetGlue(BaseCollectionGlue):
                 initial_forms.append(instance)
             else:
                 self._validate_initial_model_instance(instance)
-                initial_forms.append(self.form_class(instance=instance))
+                initial_forms.append(self.form_class(instance=instance, **row_kwargs))
 
         for row_initial in initial:
             if not isinstance(row_initial, Mapping):
@@ -138,13 +149,13 @@ class FormSetGlue(BaseCollectionGlue):
                 )
                 raise TypeError(msg)
             initial_forms.append(
-                self.form_class(initial={**row_initial, **self.new_row_defaults}),
+                self.form_class(initial={**row_initial, **self.new_row_defaults}, **row_kwargs),
             )
 
         # A formset rebuilt from its token already has its rows signed there.
         if not _reconstructed:
             initial_forms.extend(
-                self.form_class(initial=dict(self.new_row_defaults))
+                self.form_class(initial=dict(self.new_row_defaults), **row_kwargs)
                 for _ in range(cls.extra if extra is None else extra)
             )
 
@@ -221,7 +232,18 @@ class FormSetGlue(BaseCollectionGlue):
             'max_num': self.max_num,
             'can_delete': self.can_delete,
             'new_row_defaults': self.new_row_defaults,
+            'form_kwargs': self.form_kwargs,
         }
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """
+        The arguments every row form this formset builds is constructed with:
+        ``form_kwargs`` unless a subclass adds to them. An override may add
+        values derived from ``form_kwargs`` once per request, such as rows every
+        form looks its choices up in, and must keep ``form_kwargs`` itself: a
+        row rebuilt on its own is constructed with only the signed ones.
+        """
+        return dict(self.form_kwargs)
 
     def get_keyed_items(self) -> list[tuple[str, BaseGlue]]:
         return list(self._forms)
@@ -319,7 +341,7 @@ class FormSetGlue(BaseCollectionGlue):
             )
 
         return self._add_form(
-            self.form_class(initial={**initial, **self.new_row_defaults}),
+            self.form_class(initial={**initial, **self.new_row_defaults}, **self.get_form_kwargs()),
             key,
         )
 
@@ -396,17 +418,24 @@ class FormSetGlue(BaseCollectionGlue):
         return {'valid': True}
 
     def _build_form_glue(self, form: forms.BaseForm, key: str) -> FormGlue:
-        return FormGlue(form, name=f'{self.name}.{key}', access=self.access)
+        return FormGlue(
+            form,
+            name=f'{self.name}.{key}',
+            access=self.access,
+            form_kwargs=self.form_kwargs,
+            _form_build_kwargs=self.get_form_kwargs(),
+        )
 
     def _load_client_state(self, state: dict[str, Any]) -> None:
         if 'forms' not in state:
             return
 
         form_state_entries = state.get('forms') or {}
+        row_kwargs = self.get_form_kwargs()
 
         self._forms = []
         for key, form_state in form_state_entries.items():
-            form_glue = self._build_form_glue(self.form_class(initial={}), key)
+            form_glue = self._build_form_glue(self.form_class(initial={}, **row_kwargs), key)
             form_glue._load_client_state(form_state)
             self._forms.append((key, form_glue))
 
@@ -531,11 +560,13 @@ class FormSetGlue(BaseCollectionGlue):
             loaded = model._default_manager.prefetch_related(*many_to_many).in_bulk(target_pks)
             instances = {str(pk): instance for pk, instance in loaded.items()}
 
+        row_kwargs = self.get_form_kwargs()
         for key, child_context in child_contexts.items():
             child_policy = child_context.target_glue_policy
             form = FormGlue._reconstruct_from_policy(
                 child_policy,
                 instance=instances.get(str(child_policy.identity.get('target_pk'))),
+                form_kwargs=row_kwargs,
             )
             form._authorize_reconstruction(child_context)
             form._hydrate(child_policy, child_context.target_glue_updates)
@@ -559,6 +590,7 @@ class FormSetGlue(BaseCollectionGlue):
             max_num=policy.identity['max_num'],
             can_delete=policy.identity['can_delete'],
             new_row_defaults=policy.identity.get('new_row_defaults'),
+            form_kwargs=policy.identity.get('form_kwargs'),
             _reconstructed=True,
         )
 

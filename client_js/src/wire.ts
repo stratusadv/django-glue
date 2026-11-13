@@ -54,7 +54,7 @@ export interface GluePolicyPayload {
     created_at: number
 }
 
-// A field's choice. _field_schema() in glue/objects/django/field_adapter.py
+// A field's choice. field_schema() in glue/objects/django/fields/description.py
 // sends value and label; GlueRelatedModelChoices.serialize_item() in
 // glue/options/django/choices.py adds obj and has_html_label.
 export interface GlueChoice {
@@ -64,13 +64,16 @@ export interface GlueChoice {
     has_html_label?: boolean
 }
 
-// One entry of static_data.fields. A value attribute without an adapter sends
-// only value_path and editable (BaseGlue.get_static_data() in glue/base.py);
-// the field adapters' schema() in glue/objects/django/field_adapter.py sends
-// the rest.
+// One entry of static_data.fields. A value attribute without a description
+// sends only value_path and editable (BaseGlue.get_static_data() in
+// glue/base.py); the field descriptions' schema() in
+// glue/objects/django/fields/description.py sends the rest.
 export interface GlueFieldDescriptor {
     value_path: string
     editable: boolean
+    // The fields of a value that is a form held as state, by name:
+    // FormStateDescription.schema() in glue/objects/django/form/state.py.
+    fields?: Record<string, Omit<GlueFieldDescriptor, 'value_path' | 'fields'>>
     // The server never sends this field's value back (ADR 036).
     write_only?: boolean
     namespace?: 'field'
@@ -111,17 +114,19 @@ export interface GlueStaticData {
     event_ids?: Record<string, string>
 }
 
-// One entry of computed_data.fields: the field adapters' computed_data() in
-// glue/objects/django/field_adapter.py.
+// One entry of computed_data.fields: the field descriptions' computed_data()
+// in glue/objects/django/fields/description.py.
 export interface GlueFieldComputed {
     errors: string[]
+    // The errors of each field of a form held as state, by name.
+    field_errors?: Record<string, string[]>
     selected_choice?: GlueChoice
     selected_choices?: GlueChoice[]
     choices_cache_key?: string
 }
 
 // BaseGlue.get_computed_data() in glue/base.py: derived values by path, and
-// adapter output under `fields`. An omitted key means the previous value stands.
+// description output under `fields`. An omitted key means the previous value stands.
 export interface GlueComputedData {
     fields?: Record<string, GlueFieldComputed>
     [path: string]: unknown

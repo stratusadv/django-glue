@@ -1,10 +1,13 @@
+import type GlueAddressRecord from "../../runtime/addressRecord"
 import type {GlueChoice} from "../../wire"
 import type {GlueFieldOwner} from "./base"
 import ChoiceFieldGlue from "./choice"
 
 // A relation's owner serves its choices through a `foreign_key_choices`
-// callable, materialized on the proxy when the server declares it.
+// callable, materialized on the proxy when the server declares it, and its
+// record's policy names the model or form the choices belong to.
 interface GlueRelationFieldOwner extends GlueFieldOwner {
+    _record: GlueAddressRecord
     foreign_key_choices?(kwargs: {field_name: string, search?: string}): Promise<{results?: GlueChoice[]} | null | undefined>
 }
 

@@ -1,6 +1,6 @@
 # ADR 040: Glue's Default Save Is Opt-In
 
-Status: Proposed
+Status: Accepted
 
 Date: 2026-11-12
 

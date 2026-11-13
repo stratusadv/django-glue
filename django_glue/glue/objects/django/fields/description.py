@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from django.forms import ModelMultipleChoiceField
 
-from django_glue.glue.attributes.adapter import GlueAttributeAdapter
+from django_glue.glue.attributes.description import GlueFieldDescription
 from django_glue.glue.options.django import GlueRelatedModelChoices
-from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django import forms
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from django_glue.glue.objects.django.model.object import ModelGlue
 
 
-def _field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
+def field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
     label = str(
         getattr(field, 'label', None)
         or getattr(field, 'verbose_name', '')
@@ -53,13 +52,13 @@ def _field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
 
 
 @dataclass(frozen=True, slots=True)
-class FormFieldAdapter(GlueAttributeAdapter):
+class FormFieldDescription(GlueFieldDescription):
     owner: FormGlue
     name: str
     field: forms.Field
 
     def schema(self) -> dict[str, Any]:
-        schema = _field_schema(
+        schema = field_schema(
             self.field,
             editable=self.name in self.owner.editable,
         )
@@ -85,17 +84,11 @@ class FormFieldAdapter(GlueAttributeAdapter):
         })
         return schema
 
-    def coerce(self, value: Any) -> Any:
-        return glue_serializer_registry.coerce(value, self.field)
-
-    def decode(self, value: Any) -> Any:
-        return glue_serializer_registry.decode(value, self.field)
-
     def computed_data(self) -> dict[str, Any]:
         """
         Complete current state-dependent output (state-model.md §10 `$fields`):
         the current selection, the choices cache key, and the field's validation
-        errors. Emitted only when the adapter re-derived this request.
+        errors. Emitted only when the description re-derived this request.
         """
         output = {'errors': self.owner._field_errors.get(self.name, [])}
         if not hasattr(self.field, 'queryset'):
@@ -133,13 +126,13 @@ class FormFieldAdapter(GlueAttributeAdapter):
 
 
 @dataclass(frozen=True, slots=True)
-class ModelFieldAdapter(GlueAttributeAdapter):
+class ModelFieldDescription(GlueFieldDescription):
     owner: ModelGlue
     name: str
     field: models.Field
 
     def schema(self) -> dict[str, Any]:
-        schema = _field_schema(
+        schema = field_schema(
             self.field,
             editable=self.name in self.owner.editable,
         )
@@ -171,17 +164,12 @@ class ModelFieldAdapter(GlueAttributeAdapter):
         })
         return schema
 
-    def coerce(self, value: Any) -> Any:
-        return glue_serializer_registry.coerce(value, self.field)
-
-    def decode(self, value: Any) -> Any:
-        return glue_serializer_registry.decode(value, self.field)
-
     def computed_data(self) -> dict[str, Any]:
-        """Complete current state-dependent output (state-model.md §10
-        `$fields`): the current selection, the choices cache key, and the
-        field's validation errors. Emitted only when the adapter re-derived
-        this request."""
+        """
+        Complete current state-dependent output (state-model.md §10 `$fields`):
+        the current selection, the choices cache key, and the field's validation
+        errors. Emitted only when the description re-derived this request.
+        """
         output = {'errors': self.owner._field_errors.get(self.name, [])}
         field = self.field
         related_model = getattr(field, 'related_model', None)

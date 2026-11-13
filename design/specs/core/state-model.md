@@ -1276,7 +1276,7 @@ differs, and stating it prevents a project from building on an internal seam:
 
 | Seam                                                                    | Status                      | Extended by                                                                     |
 | ----------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------- |
-| Serializer registry                                                     | **public**            | registering a handler for a project value type                                  |
+| Serializer registry                                                     | **public**            | registering a serializer class for a project value type (ADR 042)               |
 | Glue class registry                                                     | **public**            | registering a custom`BaseGlue` family so its objects reconstruct from a token |
 | `is_authorized()` (§3)                                                   | **public**            | overriding on any`BaseGlue` subclass                                          |
 | Queryset unpickler allowlist                                            | **public**, versioned | registering custom lookups or expressions                                       |
@@ -1292,7 +1292,7 @@ lets django-spire's contributions live outside this repository.
 
 `BaseGlueAttribute` subclasses have no successor and no shim. A project that
 subclassed it was extending an internal seam; the replacement for the cases that
-motivated it is a serializer handler (custom value representation), a declared
+motivated it is a serializer (custom value representation), a declared
 attribute (custom exposure), or a custom family (custom lifecycle).
 
 ### 8. Collections get identity and keys

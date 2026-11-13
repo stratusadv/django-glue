@@ -17,9 +17,9 @@ from django_glue.glue.objects.django.computed_attributes import (
     ComputedAttribute,
     GlueComputedAttributesMixin,
 )
+from django_glue.glue.objects.django.fields import ModelFieldDescription
 from django_glue.glue.objects.django.form.mixin import ModelGlueFormConfigMixin
 from django_glue.glue.objects.django.form.object import FormGlue
-from django_glue.glue.objects.django.field_adapter import ModelFieldAdapter
 from django_glue.glue.objects.django.model_fields import ModelFieldResolutionMixin
 from django_glue.glue.objects.django.relation import OwningRelation
 from django_glue.glue.options.django import (
@@ -177,6 +177,7 @@ class ModelGlue(
                     ),
                     required_access=GlueAccess.CHANGE,
                     editable=True,
+                    value_type=self._get_model_field(field_name),
                 )
             else:
                 declarations[field_name] = Glue.property(
@@ -215,9 +216,9 @@ class ModelGlue(
             (self, declarations),
         )
 
-    def get_attribute_adapters(self) -> Mapping[str, ModelFieldAdapter]:
+    def get_field_descriptions(self) -> Mapping[str, ModelFieldDescription]:
         return {
-            field_name: ModelFieldAdapter(
+            field_name: ModelFieldDescription(
                 owner=self,
                 name=field_name,
                 field=(

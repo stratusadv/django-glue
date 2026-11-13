@@ -1,9 +1,16 @@
-import type GlueAddressRecord from "../../runtime/addressRecord"
 import type {GlueFieldComputed, GlueFieldDescriptor} from "../../wire"
+
+// Where a field reads and writes its value and reads its computed output: an
+// address record, or one object-valued attribute of one (a form held as state).
+interface GlueFieldRecord {
+    getValue(path: string): unknown
+    setValue(path: string, value: unknown): void
+    getFieldComputed(path: string): Partial<GlueFieldComputed>
+}
 
 // What a field needs of the proxy that owns it.
 interface GlueFieldOwner {
-    _record: GlueAddressRecord
+    _record: GlueFieldRecord
 }
 
 // A field's server metadata: its static descriptor merged with its computed
@@ -115,5 +122,5 @@ class FieldGlue {
     }
 }
 
-export type {GlueFieldMetadata, GlueFieldOptions, GlueFieldOwner}
+export type {GlueFieldMetadata, GlueFieldOptions, GlueFieldOwner, GlueFieldRecord}
 export default FieldGlue

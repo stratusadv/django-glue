@@ -216,6 +216,36 @@ stays fixed.
 `await formset.append(initial)` accepts initial values only for fields the form
 lets a user edit. Any other key is rejected.
 
+### Rows that need constructor arguments
+
+A row form that needs to know something to build its fields, such as the
+company whose accounts it may choose from, takes it as a constructor argument.
+Pass it in `form_kwargs`, as with a Django formset:
+
+```python
+class JournalLineForm(forms.ModelForm):
+    class Meta:
+        model = JournalLine
+        fields = ('account', 'value')
+
+    def __init__(self, *args, company_id: int, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields['account'].queryset = Account.objects.filter(company_id=company_id)
+
+
+JournalLineFormSet(access=Glue.Access.ADD, form_kwargs={'company_id': company.pk})
+```
+
+Every row is built with them, including rows added in the browser and rows
+rebuilt on a later request. They are signed into the token, so pass plain values,
+and a related record as its key.
+
+To give every row something the formset loads once per request, such as the rows
+each form looks its choice up in, override `get_form_kwargs()` and add to what it
+returns. A row rebuilt on its own, for a call of its own such as loading its
+choices, gets only `form_kwargs`, so its form must also work without the added
+values (ADR 041).
+
 ### Changing how rows are written
 
 Override `save_forms` or `delete_removed` on a `Glue.FormSet` subclass to change

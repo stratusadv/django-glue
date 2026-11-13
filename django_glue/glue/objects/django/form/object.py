@@ -10,7 +10,7 @@ from django.forms.models import model_to_dict
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import DeclaredAttribute
 from django_glue.glue.base import BaseGlue
-from django_glue.glue.objects.django.field_adapter import FormFieldAdapter
+from django_glue.glue.objects.django.fields import FormFieldDescription
 from django_glue.glue.options.django import (
     GlueRelatedModelChoices,
     RelatedModelChoicesResult,
@@ -74,11 +74,19 @@ class FormGlue(BaseGlue):
         name: str | None = None,
         access: GlueAccess = GlueAccess.CHANGE,
         editable: Sequence[str] | None = None,
+        form_kwargs: Mapping[str, Any] | None = None,
+        _form_build_kwargs: Mapping[str, Any] | None = None,
     ) -> None:
         # Checked first, so a form that opts in wrongly is refused when it is glued.
         offers_default_save(type(form))
         super().__init__(name=name, access=access)
         self.form = form
+        # The arguments the form was built with beyond data and initial, signed so a
+        # rebuilt form is built with them too (ADR 041).
+        self.form_kwargs = dict(form_kwargs or {})
+        # Every argument the form was built with, values a formset derived included,
+        # so binding the form builds it the same way. Only form_kwargs are signed.
+        self._form_build_kwargs = dict(self.form_kwargs if _form_build_kwargs is None else _form_build_kwargs)
         # A call replaces self.form with a bound form, whose initial Django
         # fills from its instance. The identity signs the initial this form
         # was given, so a token renewed by a call names the same form.
@@ -136,6 +144,7 @@ class FormGlue(BaseGlue):
             'target_pk': getattr(getattr(self.form, 'instance', None), 'pk', None),
             'initial': self._prepared_initial,
             'editable': self.editable,
+            'form_kwargs': self.form_kwargs,
         }
 
     def _normalize_editable(
@@ -175,7 +184,7 @@ class FormGlue(BaseGlue):
         from django_glue import Glue  # noqa: PLC0415
 
         declarations = {}
-        for name in self.form.fields:
+        for name, field in self.form.fields.items():
             if name in self.editable:
                 declarations[name] = Glue.attr(
                     property(
@@ -187,6 +196,7 @@ class FormGlue(BaseGlue):
                     ),
                     required_access=GlueAccess.CHANGE,
                     editable=True,
+                    value_type=field,
                 )
             else:
                 declarations[name] = Glue.property(
@@ -196,9 +206,9 @@ class FormGlue(BaseGlue):
             (self, declarations),
         )
 
-    def get_attribute_adapters(self) -> Mapping[str, FormFieldAdapter]:
+    def get_field_descriptions(self) -> Mapping[str, FormFieldDescription]:
         return {
-            name: FormFieldAdapter(
+            name: FormFieldDescription(
                 owner=self,
                 name=name,
                 field=field,
@@ -267,7 +277,7 @@ class FormGlue(BaseGlue):
             self._field_errors = {name: list(errors) for name, errors in form_errors.items()}
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
-        # Field adapters read _field_errors. A provider callable (a
+        # Field descriptions read _field_errors. A provider callable (a
         # save_model_obj-style method) validates the form itself and never
         # touches _field_errors, so re-sync from the form before deriving
         # downward output. The sync reflects only a validation that already
@@ -281,14 +291,20 @@ class FormGlue(BaseGlue):
         policy: GluePolicy,
         *,
         instance: Model | None = None,
+        form_kwargs: Mapping[str, Any] | None = None,
     ) -> FormGlue:
         """
         ``instance`` is the signed ``target_pk``'s record when the caller has
         already loaded it, as a formset does for all its rows in one query.
+        ``form_kwargs`` are the arguments to build the form with when the caller
+        derives them, as a formset's ``get_form_kwargs()`` does; otherwise the
+        signed ones are used.
         """
         form_class = get_attr_from_path_string(policy.identity['form_class_path'])
         initial = policy.identity.get('initial', {})
         target_pk = policy.identity.get('target_pk')
+        signed_form_kwargs = policy.identity.get('form_kwargs', {})
+        kwargs = signed_form_kwargs if form_kwargs is None else form_kwargs
 
         if issubclass(form_class, forms.ModelForm):
             model_class = form_class._meta.model
@@ -303,9 +319,9 @@ class FormGlue(BaseGlue):
                         form_class._meta.exclude,
                     )
                     initial = {**model_initial, **initial}
-                    form = form_class(instance=instance, initial=initial)
+                    form = form_class(instance=instance, initial=initial, **kwargs)
                 except model_class.DoesNotExist:
-                    form = form_class(initial=initial)
+                    form = form_class(initial=initial, **kwargs)
             else:
                 # No target_pk means this form was never saved (e.g. built
                 # via QuerySetGlue.new()/ModelGlue on an unsaved instance).
@@ -318,20 +334,26 @@ class FormGlue(BaseGlue):
                 # instance QuerySetGlue.new() would have built, so
                 # self.instance stays consistent across every place a form
                 # for this same not-yet-saved row gets reconstructed.
-                form = form_class(instance=cls._unsaved_instance_from_initial(model_class, initial), initial=initial)
+                form = form_class(
+                    instance=cls._unsaved_instance_from_initial(model_class, initial),
+                    initial=initial,
+                    **kwargs,
+                )
                 # A ModelForm adds every field of its instance to initial, and
                 # initial is part of the identity the next token signs. Keep
                 # the signed values, so a rebuilt form signs the identity it
                 # was rebuilt from and its formset still recognizes the row.
                 form.initial = dict(initial)
         else:
-            form = form_class(initial=initial)
+            form = form_class(initial=initial, **kwargs)
 
         return cls(
             form,
             name=policy.name,
             access=policy.access,
             editable=policy.identity['editable'],
+            form_kwargs=signed_form_kwargs,
+            _form_build_kwargs=kwargs,
         )
 
     @staticmethod
@@ -441,4 +463,4 @@ class FormGlue(BaseGlue):
             # Validation writes the cleaned values onto the instance, so a second
             # bind would read them as its initial and report nothing changed.
             kwargs['initial'] = self.form.initial
-        return form_class(**kwargs)
+        return form_class(**kwargs, **self._form_build_kwargs)

@@ -1,5 +1,8 @@
 import {createFieldGlue} from "../proxies/fields"
+import type {FieldGlue} from "../proxies/fields"
+import type {GlueFieldRecord} from "../proxies/fields/base"
 import type GlueAddressRecord from "./addressRecord"
+import {isPlainObject} from "./state"
 
 // A proxy's fields, children and callables are defined on it by path at
 // runtime, so the materializer reads and writes it as a bag of members.
@@ -28,6 +31,22 @@ function definePath(root: object, path: string, descriptor: PropertyDescriptor):
         ...descriptor,
         configurable: true,
     })
+}
+
+// The record of the fields inside one object-valued attribute (a form held as
+// state): each reads and writes its own key of that value, and reads its
+// errors from the attribute's computed output.
+function memberRecord(record: GlueAddressRecord, valuePath: string, fieldPath: string): GlueFieldRecord {
+    return {
+        getValue: name => (record.getValue(valuePath) as GlueMembers | null | undefined)?.[name],
+        setValue: (name, value) => {
+            const members = record.getValue(valuePath) as GlueMembers | null | undefined
+            if (members) members[name] = value
+        },
+        getFieldComputed: name => ({
+            errors: record.getFieldComputed(fieldPath).field_errors?.[name] || [],
+        }),
+    }
 }
 
 class GlueAttributeMaterializer {
@@ -63,6 +82,7 @@ class GlueAttributeMaterializer {
         // Read back through the proxy, which is reactive: writes to the plain
         // object just assigned would not be tracked.
         const proxyFields = proxy._fields
+        const fieldPaths = new Set(Object.keys(fields))
 
         Object.entries(fields).forEach(([fieldPath, staticData]) => {
             const valuePath = staticData.value_path || fieldPath
@@ -81,10 +101,38 @@ class GlueAttributeMaterializer {
             })
             proxyFields[fieldPath] = field
 
+            // The value's own fields are reached beside it, as
+            // `owner.attribute.$fields.<name>`, the way a form's are.
+            let memberFields: Record<string, FieldGlue> | null = null
+            if (staticData.fields) {
+                const memberOwner = {_record: memberRecord(record, valuePath, fieldPath)}
+                memberFields = {}
+                for (const [memberName, memberStaticData] of Object.entries(staticData.fields)) {
+                    const memberPath = `${fieldPath}.${memberName}`
+                    fieldPaths.add(memberPath)
+                    proxyFields[memberPath] = createFieldGlue({
+                        owner: memberOwner,
+                        name: memberName,
+                        stateKey: memberName,
+                        metadata: memberStaticData,
+                        existingField: proxyFields[memberPath],
+                    })
+                    memberFields[memberName] = proxyFields[memberPath]
+                }
+            }
+
             if (!childPaths.has(fieldPath)) {
                 definePath(proxy, fieldPath, {
                     get() {
-                        return record.getValue(valuePath)
+                        const value = record.getValue(valuePath)
+                        if (memberFields && isPlainObject(value)) {
+                            Object.defineProperty(value, '$fields', {
+                                value: memberFields,
+                                enumerable: false,
+                                configurable: true,
+                            })
+                        }
+                        return value
                     },
                     ...(staticData.editable ? {
                         set(value: {__glue__isFieldProxy?: boolean, value?: unknown} | null | undefined) {
@@ -97,7 +145,7 @@ class GlueAttributeMaterializer {
         })
 
         Object.keys(proxyFields).forEach(path => {
-            if (!Object.prototype.hasOwnProperty.call(fields, path)) {
+            if (!fieldPaths.has(path)) {
                 delete proxyFields[path]
             }
         })

@@ -381,7 +381,7 @@
   }
   var http_default = GlueHttp;
 
-  // node_modules/alpinejs/dist/module.esm.js
+  // ../django-glue/node_modules/alpinejs/dist/module.esm.js
   var flushPending = false;
   var flushing = false;
   var queue = [];
@@ -3644,7 +3644,7 @@ ${expression ? 'Expression: "' + expression + `"
   var src_default = alpine_default;
   var module_default = src_default;
 
-  // node_modules/@alpinejs/morph/dist/module.esm.js
+  // ../django-glue/node_modules/@alpinejs/morph/dist/module.esm.js
   function morph(from, toHtml, options) {
     monkeyPatchDomSetAttributeToAllowAtSymbols();
     let context = createMorphContext(options);
@@ -5661,6 +5661,19 @@ ${expression ? 'Expression: "' + expression + `"
       configurable: true
     });
   }
+  function memberRecord(record, valuePath, fieldPath) {
+    return {
+      getValue: (name) => record.getValue(valuePath)?.[name],
+      setValue: (name, value) => {
+        const members = record.getValue(valuePath);
+        if (members)
+          members[name] = value;
+      },
+      getFieldComputed: (name) => ({
+        errors: record.getFieldComputed(fieldPath).field_errors?.[name] || []
+      })
+    };
+  }
 
   class GlueAttributeMaterializer {
     constructor() {
@@ -5693,6 +5706,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.pathsByRecord.set(record, paths);
       proxy._fields ||= {};
       const proxyFields = proxy._fields;
+      const fieldPaths = new Set(Object.keys(fields));
       Object.entries(fields).forEach(([fieldPath, staticData]) => {
         const valuePath = staticData.value_path || fieldPath;
         const fieldName = fieldPath.split(".").at(-1);
@@ -5709,10 +5723,35 @@ ${expression ? 'Expression: "' + expression + `"
           existingField: current
         });
         proxyFields[fieldPath] = field;
+        let memberFields = null;
+        if (staticData.fields) {
+          const memberOwner = { _record: memberRecord(record, valuePath, fieldPath) };
+          memberFields = {};
+          for (const [memberName, memberStaticData] of Object.entries(staticData.fields)) {
+            const memberPath = `${fieldPath}.${memberName}`;
+            fieldPaths.add(memberPath);
+            proxyFields[memberPath] = createFieldGlue({
+              owner: memberOwner,
+              name: memberName,
+              stateKey: memberName,
+              metadata: memberStaticData,
+              existingField: proxyFields[memberPath]
+            });
+            memberFields[memberName] = proxyFields[memberPath];
+          }
+        }
         if (!childPaths.has(fieldPath)) {
           definePath(proxy, fieldPath, {
             get() {
-              return record.getValue(valuePath);
+              const value = record.getValue(valuePath);
+              if (memberFields && isPlainObject2(value)) {
+                Object.defineProperty(value, "$fields", {
+                  value: memberFields,
+                  enumerable: false,
+                  configurable: true
+                });
+              }
+              return value;
             },
             ...staticData.editable ? {
               set(value) {
@@ -5724,7 +5763,7 @@ ${expression ? 'Expression: "' + expression + `"
         }
       });
       Object.keys(proxyFields).forEach((path) => {
-        if (!Object.prototype.hasOwnProperty.call(fields, path)) {
+        if (!fieldPaths.has(path)) {
           delete proxyFields[path];
         }
       });

@@ -9,9 +9,11 @@ from typing import TYPE_CHECKING, Any, Callable
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.definition import GlueValueRole
 from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
+from django_glue.serialization import glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
+    from django_glue.serialization import GlueSerializer
 
 _MISSING = object()
 _SESSION_VALUE_ONLY = (
@@ -30,6 +32,7 @@ class DeclaredAttributeOptions:
     skip_rerender: bool = False
     is_parameter: bool = False
     value_role: GlueValueRole | None = None
+    value_type: Any | None = None
     is_namespace: bool = False
     provider_type: type[Any] | None = None
     expected_type: type[Any] | None = None
@@ -76,6 +79,7 @@ class DeclaredAttribute:
         default_factory: Callable[[], Any] | object = _MISSING,
         glue_factory: Callable[..., Any] | None = None,
         value_adapters: list[GlueValueAdapter] | None = None,
+        value_type: Any | None = None,
     ) -> None:
         if value is not _MISSING and default is not _MISSING:
             raise TypeError('DeclaredAttribute received both value and default.')
@@ -92,6 +96,10 @@ class DeclaredAttribute:
         self.default_factory = default_factory
         self.glue_factory = glue_factory
         self.value_adapters = value_adapters if value_adapters is not None else DEFAULT_VALUE_ADAPTERS
+        # What a type hint says for a class attribute: a declaration built at
+        # runtime has no hint, so it names its type here.
+        self._value_type = value_type
+        self._serializers: dict[type[Any], GlueSerializer] = {}
         self.name: str | None = None
         self.storage_name: str | None = None
         self.target: Any = None
@@ -119,6 +127,7 @@ class DeclaredAttribute:
             skip_rerender=self._skip_rerender,
             is_parameter=self._parameter,
             value_role=self._resolve_value_role(),
+            value_type=self._value_type,
         )
 
     def _store_in_session(self) -> None:
@@ -225,14 +234,38 @@ class DeclaredAttribute:
         if self.storage_name in instance.__dict__:
             return instance.__dict__[self.storage_name]
         if self.default_factory is not _MISSING:
-            value = self._prepare_default(self.default_factory())
+            value = self._adapt_value(self._prepare_default(self.default_factory()), instance)
             instance.__dict__[self._get_storage_name()] = value
             return value
         if self.default is not _MISSING:
-            value = self._prepare_default(self._clone_default())
+            value = self._adapt_value(self._prepare_default(self._clone_default()), instance)
             instance.__dict__[self._get_storage_name()] = value
             return value
-        return None
+        value = self._serializer(type(instance)).default()
+        if value is None:
+            return None
+        value = self._adapt_value(self._prepare_default(value), instance)
+        instance.__dict__[self._get_storage_name()] = value
+        return value
+
+    def _serializer(self, owner_type: type[Any]) -> GlueSerializer:
+        """This declaration's serializer on one owner class, found once per class."""
+        try:
+            return self._serializers[owner_type]
+        except KeyError:
+            pass
+
+        from django_glue.glue.attributes.collector import GlueAttributeCollector  # noqa: PLC0415
+
+        serializer = self._serializers[owner_type] = next(
+            (
+                definition.serializer
+                for definition in GlueAttributeCollector.collect(owner_type)
+                if definition.path == self.name and definition.serializer is not None
+            ),
+            glue_serializer_registry.resolve(None),
+        )
+        return serializer
 
     def __set__(self, instance: Any, value: Any) -> None:
         if isinstance(self.target, property) and self.target.fset is not None:

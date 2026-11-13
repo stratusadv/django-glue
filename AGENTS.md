@@ -36,8 +36,9 @@ django-glue/
 │   │   ├── policy.py               # GluePolicy: signed token, state_snapshot, children
 │   │   ├── address.py              # Address derivation
 │   │   ├── context.py              # GlueContextManager (page load)
-│   │   ├── attributes/             # DeclaredAttribute, definitions, collector, adapters
-│   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue
+│   │   ├── attributes/             # DeclaredAttribute, definitions, collector, field descriptions
+│   │   ├── objects/django/         # ModelGlue, QuerySetGlue, FormGlue, FormSetGlue; fields/ (field
+│   │   │                           # serializers and descriptions), form/state.py (a form as state)
 │   │   ├── function.py             # FunctionGlue
 │   │   ├── components/             # Component, tag, lookup (discovery), registry, naming, root, session
 │   │   └── operation.py            # GlueOperation authorization records
@@ -49,7 +50,7 @@ django-glue/
 │   ├── access.py                   # GlueAccess (VIEW/ADD/CHANGE/DELETE)
 │   ├── response.py                 # GlueResponse, GlueTemplateResponse, render helpers
 │   ├── exceptions.py               # GlueError family + closed error-code set
-│   ├── serialization.py            # Serializer registry for field values
+│   ├── serialization.py            # GlueSerializer and its registry: how a declaration's values cross the wire
 │   ├── encoders.py                 # JSON encoder for wire values
 │   ├── message.py                  # GlueMessage (effects channel)
 │   ├── settings.py / conf.py       # DJANGO_GLUE_* settings + loader

@@ -14,6 +14,7 @@ from django.http.response import HttpResponseBase
 from django_glue.access import GlueAccess
 from django_glue.conf import settings as glue_settings
 from django_glue.constants import DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY
+from django_glue.serialization import GlueSerializerError
 from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.exceptions import (
     GlueAccessError,
@@ -34,7 +35,6 @@ from django_glue.glue.event import GlueEvent
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
-from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         BoundGlueAttribute,
         GlueAttributeDefinition,
     )
-    from django_glue.glue.attributes.adapter import GlueAttributeAdapter
+    from django_glue.glue.attributes.description import GlueFieldDescription
     from django_glue.glue.children import BoundGlueChild
     from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
@@ -151,7 +151,7 @@ class BaseGlue(ABC):
         extra_definitions, extra_bindings = GlueAttributeCollector.collect_extra_attributes(
             self.get_extra_attributes()
         )
-        adapters = self.get_attribute_adapters()
+        descriptions = self.get_field_descriptions()
         definitions = (
             GlueAttributeCollector.collect(type(self))
             + provider_definitions
@@ -159,12 +159,29 @@ class BaseGlue(ABC):
         )
         return (
             tuple(
-                replace(definition, adapter=adapters.get(definition.path))
+                replace(
+                    definition,
+                    description=descriptions.get(definition.path)
+                    or self._describe_by_serializer(definition),
+                )
                 if definition.kind == GlueAttributeKind.VALUE
                 else definition
                 for definition in definitions
             ),
             provider_bindings | extra_bindings,
+        )
+
+    def _describe_by_serializer(
+        self,
+        definition: GlueAttributeDefinition,
+    ) -> GlueFieldDescription | None:
+        """The description a value attribute's own serializer gives of it, if it gives one."""
+        if definition.serializer is None:
+            return None
+        path = definition.path
+        return definition.serializer.description(
+            read=lambda: self._bound_attributes[path].get(),
+            editable=definition.value_role is GlueValueRole.EDITABLE_STATE,
         )
 
     @cached_property
@@ -192,7 +209,7 @@ class BaseGlue(ABC):
     ) -> Iterable[tuple[Any, Mapping[str, Any]]]:
         return ()
 
-    def get_attribute_adapters(self) -> Mapping[str, GlueAttributeAdapter]:
+    def get_field_descriptions(self) -> Mapping[str, GlueFieldDescription]:
         return {}
 
     def _bind_children(
@@ -338,7 +355,7 @@ class BaseGlue(ABC):
 
     def _get_attribute_state(self, attribute: BoundGlueAttribute) -> Any:
         return {
-            'value': attribute.get(),
+            'value': attribute.wire_value(),
             **attribute.computed_data(),
         }
 
@@ -357,13 +374,13 @@ class BaseGlue(ABC):
         for path, attribute in self._bound_attributes.items():
             definition = attribute.definition
             if definition.kind is GlueAttributeKind.VALUE:
-                if definition.adapter is None:
+                if definition.description is None:
                     fields[path] = {
                         'value_path': path,
                         'editable': definition.value_role is GlueValueRole.EDITABLE_STATE,
                     }
                 else:
-                    fields[path] = attribute.schema()
+                    fields[path] = {'value_path': path, **attribute.schema()}
             elif definition.kind is GlueAttributeKind.CHILD:
                 children[path] = {
                     'kind': definition.expected_type.namespace,
@@ -400,7 +417,7 @@ class BaseGlue(ABC):
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
         """Complete current down-only output (state-model.md §5, §10):
-        re-derived values at top level, and re-derived adapter output under
+        re-derived values at top level, and re-derived description output under
         ``fields``.
 
         Only output re-derived this request is included — "an adapter that
@@ -417,12 +434,12 @@ class BaseGlue(ABC):
                 continue
             if definition.value_role is GlueValueRole.DERIVED_OUTPUT:
                 if include_all or path in self._derived_paths:
-                    computed[path] = attribute.get()
-            elif definition.adapter is not None:
+                    computed[path] = attribute.wire_value()
+            elif definition.description is not None:
                 if include_all or path in self._derived_paths:
-                    adapter_output = attribute.computed_data()
-                    if adapter_output:
-                        fields_output[path] = adapter_output
+                    description_output = attribute.computed_data()
+                    if description_output:
+                        fields_output[path] = description_output
         if fields_output:
             computed['fields'] = fields_output
         return computed
@@ -503,7 +520,7 @@ class BaseGlue(ABC):
                 definition.kind is GlueAttributeKind.VALUE
                 and definition.value_role is GlueValueRole.RECONSTRUCTOR
             ):
-                retained[path] = attribute.get()
+                retained[path] = attribute.wire_value()
 
         return retained
 
@@ -915,10 +932,7 @@ class BaseGlue(ABC):
                     resolved[name] = supplied[name]
                     continue
                 try:
-                    resolved[name] = glue_serializer_registry.coerce(
-                        supplied[name],
-                        definition.argument_types[name],
-                    )
+                    resolved[name] = definition.argument_types[name].load(supplied[name])
                 except GlueSerializerError as error:
                     raise GlueRequestError(
                         code=GlueRequestErrorCode.INVALID_KWARGS,

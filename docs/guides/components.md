@@ -179,6 +179,63 @@ This applies to every Glue callable, not only to components. A `Glue.function`
 target is the exception: it receives its arguments as one `kwargs` mapping,
 so its own annotations are not checked.
 
+## A form as state
+
+When a component renders from a few form-shaped values, such as a list's
+filters, declare them as an editable attribute typed as a Django form. The
+attribute holds the form, bound to its values, and the values are the
+component's own state: signed in its token, sent back by a refresh, and there
+on every render.
+
+```python
+class AccountFilterForm(forms.Form):
+    search = forms.CharField(required=False)
+    account_types = forms.MultipleChoiceField(choices=AccountTypeChoices.choices, required=False)
+    sort = forms.ChoiceField(choices=AccountSortChoices.choices, initial=AccountSortChoices.TYPE)
+
+
+class AccountListComponent(Component):
+    template = 'chart_of_accounts/component/account_list.html'
+
+    filters: AccountFilterForm = Glue.attr(editable=True)
+
+    def get_queryset(self) -> AccountQuerySet:
+        accounts = Account.objects.by_company(self.request.company)
+        if not self.filters.is_valid():
+            return accounts
+        return accounts.search(self.filters.cleaned_data['search'])
+```
+
+In the template, each field's value is `component.filters.<name>`, and its
+label, choices and errors are `component.filters.$fields.<name>`, as a glued
+form's are:
+
+```django
+<input type="search" x-model="component.filters.search" @input.debounce="component.$refresh()">
+<span x-text="component.filters.$fields.sort.label"></span>
+```
+
+- **The form is bound from the first render.** With no default declared, the
+  attribute starts as the form class called with no arguments. That form, one
+  a `default_factory` returns, and one assigned in a call
+  (`self.filters = AccountFilterForm()` resets it) are each bound to their own
+  initial values, so `is_valid()` answers before the browser has sent anything.
+- **Validate where you read.** Glue never validates the form for you. A field
+  shows its errors after your code has called `is_valid()`.
+- **The whole form travels together.** Changing one field sends all of its
+  values, and all of them are signed in the component's token. Keep it to a
+  few fields.
+- **Import the form at runtime.** A form imported only under
+  `if TYPE_CHECKING:` cannot type the attribute, which is then `None`.
+- **Some fields cannot be state.** A form with a file field, a password field
+  that does not render its value, or a field over a queryset
+  (`ModelChoiceField`) raises `TypeError` the first time the component is
+  used. A model form works when it has no instance, and offers no save.
+
+Use a [child form](#save-several-forms-in-one-call) instead when a call
+consumes the values, or the form edits a record, has rows, or has callables or
+events of its own.
+
 ## Lists: render rows as partials unless a row is live
 
 **Render each row of a list as a template partial of the component that owns the

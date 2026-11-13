@@ -16,6 +16,7 @@ from django_glue.glue.attributes.definition import (
 from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
+    from django_glue.serialization import GlueSerializer
     from django_glue.glue.attributes.declared import DeclaredAttributeOptions
 
 
@@ -159,6 +160,8 @@ class GlueAttributeCollector:
         value_type: Any | None = None,
     ) -> tuple[GlueAttributeDefinition, ...]:
         path = path if path is not None else source_name
+        if options.value_type is not None:
+            value_type = options.value_type
         if options.is_namespace:
             return GlueAttributeCollector._compile_namespace(
                 path=path,
@@ -199,6 +202,13 @@ class GlueAttributeCollector:
             if kind == GlueAttributeKind.CALLABLE
             else (None, False)
         )
+        serializer = None
+        if kind == GlueAttributeKind.VALUE and value_type is not None:
+            try:
+                serializer = glue_serializer_registry.resolve(value_type)
+            except GlueSerializerError as error:
+                msg = f'Value attribute {path!r} cannot hold its declared type: {error}'
+                raise TypeError(msg) from error
         return (
             GlueAttributeDefinition(
                 path=path,
@@ -206,7 +216,7 @@ class GlueAttributeCollector:
                 kind=kind,
                 required_access=options.required_access,
                 value_role=options.value_role,
-                value_type=value_type if kind == GlueAttributeKind.VALUE else None,
+                serializer=serializer,
                 is_parameter=options.is_parameter,
                 allowed_arguments=allowed_arguments,
                 injected_arguments=injected_arguments,
@@ -222,7 +232,7 @@ class GlueAttributeCollector:
     def _compile_callable_arguments(
         declaration: Any | None,
         path: str,
-    ) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, Any]]:
+    ) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, GlueSerializer]]:
         target = getattr(declaration, 'target', declaration)
         if target is None or not callable(target):
             msg = f'Callable attribute {path!r} requires a callable target.'
@@ -275,12 +285,12 @@ class GlueAttributeCollector:
         path: str,
         name: str,
         annotation: Any,
-    ) -> Any:
+    ) -> GlueSerializer:
         """
-        One client-supplied argument's annotation, resolved on its own so an
-        injected argument's type-checking-only import cannot block it, and
-        evaluated rather than read through get_type_hints so Annotated metadata
-        survives (ADR 038).
+        The serializer of one client-supplied argument. Its annotation is
+        resolved on its own so an injected argument's type-checking-only import
+        cannot block it, and evaluated rather than read through get_type_hints
+        so Annotated metadata survives (ADR 038).
         """
         if isinstance(annotation, str):
             try:
@@ -292,11 +302,12 @@ class GlueAttributeCollector:
                 )
                 raise TypeError(msg) from error
         try:
-            glue_serializer_registry.prepare(annotation)
+            serializer = glue_serializer_registry.resolve(annotation)
+            serializer.check()
         except GlueSerializerError as error:
             msg = f'Callable attribute {path!r} cannot serialize argument {name!r}: {error}'
             raise TypeError(msg) from error
-        return annotation
+        return serializer
 
     @staticmethod
     def _is_request_annotation(annotation: Any) -> bool:

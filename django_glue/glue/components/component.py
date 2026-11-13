@@ -12,6 +12,7 @@ from django.views.decorators.http import require_safe
 from pydantic import ValidationError
 
 from django_glue.access import GlueAccess
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 from django_glue.exceptions import (
     GlueAccessError,
     GlueAuthorizationError,
@@ -36,13 +37,13 @@ from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 from django_glue.response import GlueResponse, GlueTemplateResponse
-from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from django.http import HttpRequest
 
+    from django_glue.serialization import GlueSerializer
     from django_glue.glue.children import BoundGlueChild
 
 
@@ -63,6 +64,17 @@ def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
     return {
         key: declaration.model_class if isinstance(declaration, ModelParameter) else annotations[key]
         for key, declaration in component_class._declared_parameters().items()
+    }
+
+
+@cache
+def _parameter_serializers(component_class: type[Component]) -> dict[str, GlueSerializer]:
+    """The serializer of each parameter that is a value; a model parameter signs its own key."""
+    annotations = _parameter_types(component_class)
+    return {
+        key: glue_serializer_registry.resolve(annotations[key])
+        for key, declaration in component_class._declared_parameters().items()
+        if not isinstance(declaration, ModelParameter)
     }
 
 
@@ -224,7 +236,7 @@ class Component(BaseGlue):
             msg = f'{type(self).__name__} must declare a template path.'
             raise ValueError(msg)
 
-        parameter_types = _parameter_types(type(self))
+        serializers = _parameter_serializers(type(self))
         for key, declaration in declared.items():
             if key in parameters:
                 value = parameters[key]
@@ -239,7 +251,7 @@ class Component(BaseGlue):
                 setattr(self, key, value)
                 continue
             try:
-                setattr(self, key, glue_serializer_registry.coerce(value, parameter_types[key]))
+                setattr(self, key, serializers[key].load(value))
             except GlueSerializerError as error:
                 raise GlueComponentParameterError(
                     f'Invalid parameter {key!r} on {type(self).__name__}.'
@@ -247,7 +259,7 @@ class Component(BaseGlue):
 
     def _get_retained_state(self) -> dict[str, Any]:
         return {
-            path: attribute.get()
+            path: attribute.wire_value()
             for path, attribute in self._bound_attributes.items()
             if attribute.definition.kind is GlueAttributeKind.VALUE
             and (
@@ -266,12 +278,12 @@ class Component(BaseGlue):
 
     @property
     def identity(self) -> dict[str, Any]:
-        parameter_types = _parameter_types(type(self))
+        serializers = _parameter_serializers(type(self))
         parameters = {
             key: (
                 declaration.signed_value(self)
                 if isinstance(declaration, ModelParameter)
-                else glue_serializer_registry.encode(getattr(self, key), parameter_types[key])
+                else serializers[key].dump(getattr(self, key))
             )
             for key, declaration in self._declared_parameters().items()
         }
@@ -313,7 +325,7 @@ class Component(BaseGlue):
             attribute = component._bound_attributes.get(key)
             if attribute is not None and attribute.definition.value_role is GlueValueRole.RECONSTRUCTOR:
                 annotation = get_type_hints(component_class).get(key)
-                setattr(component, key, glue_serializer_registry.decode(value, annotation))
+                setattr(component, key, glue_serializer_registry.resolve(annotation).restore(value))
         return component
 
     @classmethod
