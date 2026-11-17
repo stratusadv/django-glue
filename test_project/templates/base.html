@@ -217,7 +217,9 @@
         {% block extra_css %}{% endblock %}
     </style>
 
+    <script>performance.mark('glue-boot-start')</script>
     {% django_glue_init %}
+    <script>performance.measure('glue-boot', 'glue-boot-start')</script>
     <script>
         Glue.onMessage(({messages}) => {
             messages.forEach(message => {

@@ -1,52 +1,325 @@
 {% extends "base.html" %}
 
 {% block content %}
-    {% for glue_type, result in glue_types_results.items %}
-        <div x-data="{
-            glue_objects: {},
-            counts_times: {},
-            unique_names: [{% for unique_name in unique_names %}'{{ unique_name }}',{% endfor %}],
-            counts: [{% for count in counts %}{{ count }},{% endfor %}],
-            init() {
-                this.counts.forEach((count) => {
-                    const start = performance.now()
-                    this.unique_names.slice(0, count).forEach((unique_name) => {
-                        this.glue_objects[unique_name] = Glue['{{ glue_type }}'][unique_name]
-                    })
-                    this.counts_times[count] = ((performance.now() - start) / 1000).toFixed(4)
-                })
-            }
-        }" class="row justify-content-center mb-4">
-            <div class="col-lg-8">
-                <div class="card card-gorilla">
-                    <div class="card-header bg-gorilla-green text-white">
-                        <h5 class="mb-0">Glue {{ glue_type }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <table class="table table-hover">
-                            <thead>
-                            <tr>
-                                <td> Count</td>
-                                <td class="text-end">Django View</td>
-                                <td class="text-end">Client JS</td>
-                                <td class="text-end">Total Overhead</td>
-                            </tr>
-
-                            </thead>
-                            <tbody>
-                            {% for count, time_seconds in result.items %}
-                                <tr>
-                                    <td>{{ count }}</td>
-                                    <td class="text-end"> {{ time_seconds }}</td>
-                                    <td class="text-end" x-text="counts_times[{{ count }}]"></td>
-                                    <td class="text-end" x-text="(Number(counts_times[{{ count }}]) + Number({{ time_seconds }})).toFixed(4)"></td>
-                                </tr>
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            {% if debug %}
+                <div class="alert alert-warning" data-role="debug-warning">
+                    <code>DEBUG</code> is on, so Django keeps every query in memory and the times run high.
+                    Compare numbers taken with the same setting.
+                </div>
+            {% endif %}
+            <div class="card card-gorilla">
+                <div class="card-body">
+                    <p class="text-muted mb-0">
+                        Each scenario runs in this request, against the {{ specimen_count }} specimens in the database
+                        (<a href="{% url 'lab:performance:volume' %}">seed more on the volume page</a>). A run is warmed
+                        up once, then repeated: the time is the median, and the queries and bytes are the last run's.
+                        Load this page on two branches to compare them.
+                    </p>
                 </div>
             </div>
         </div>
-    {% endfor %}
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.PAGE_LOAD }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Page load</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Registers N models, querysets or forms on one page and encodes them as
+                        <code>{% templatetag openblock %} django_glue_init {% templatetag closeblock %}</code> does.
+                        Registering is cheap; building each object's entry is where the time goes.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.PAGE_LOAD }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Objects (N)</label>
+                            <input type="number" name="count" class="form-control form-control-sm" value="{{ count }}" min="1" max="1000">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if page_load %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Kind' %}
+                            <tbody>
+                            {% for kind, measurement in page_load %}
+                                {% include 'lab/performance/measurement/row.html' with label=kind %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.BATCH }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">One batch</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Answers <code>query_with_params()</code> for the first batch of specimens through the call
+                        endpoint, as the volume page's table does. Compare the computed data, which carries the values,
+                        with what the rest of the response costs.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.BATCH }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Batch size</label>
+                            <input type="number" name="batch_size" class="form-control form-control-sm" value="{{ batch_size }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if batch %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Rows' %}
+                            <tbody>
+                            {% include 'lab/performance/measurement/row.html' with label=batch_size measurement=batch %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.RELATED_BATCH }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">One batch with relations</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        The same batch with each specimen's collector, a foreign key with searchable choices, and its
+                        habitats, a many-to-many. The query count should not grow with the batch size.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.RELATED_BATCH }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Batch size</label>
+                            <input type="number" name="batch_size" class="form-control form-control-sm" value="{{ batch_size }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if related_batch %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Rows' %}
+                            <tbody>
+                            {% include 'lab/performance/measurement/row.html' with label=batch_size measurement=related_batch %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.SCROLL }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Infinite scroll</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Seeks batch after batch with each successor token, as <code>loadMore()</code> does. The token
+                        is sent with every request, so its size should stay flat however far the scroll goes.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.SCROLL }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Batch size</label>
+                            <input type="number" name="batch_size" class="form-control form-control-sm" value="{{ batch_size }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Batches</label>
+                            <input type="number" name="batches" class="form-control form-control-sm" value="{{ batches }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if scroll %}
+                        <table class="table table-hover mb-0">
+                            <thead>
+                            <tr>
+                                <td>Batch</td>
+                                <td class="text-end">Time</td>
+                                <td class="text-end">Token sent</td>
+                                <td class="text-end">Response</td>
+                                <td class="text-end">Error</td>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {% for step in scroll %}
+                                {% if forloop.first or forloop.last or step.batch|divisibleby:10 %}
+                                    <tr {% if step.error %}class="table-danger"{% endif %}>
+                                        <td>{{ step.batch }}</td>
+                                        <td class="text-end">{{ step.milliseconds }} ms</td>
+                                        <td class="text-end">{{ step.token_bytes|filesizeformat }}</td>
+                                        <td class="text-end">{{ step.response_bytes|filesizeformat }}</td>
+                                        <td class="text-end">{{ step.error }}</td>
+                                    </tr>
+                                {% endif %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.COMPONENT_PAGE }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Components on a page</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Renders a deck component with N card children, as a page's
+                        <code>{% templatetag openblock %} glue_component {% templatetag closeblock %}</code> tag does,
+                        plus the init script. Entries counts every copy sent: each component's entry rides both
+                        stamped into its root and in the init script, so expect twice the component count.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.COMPONENT_PAGE }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Cards (N)</label>
+                            <input type="number" name="cards" class="form-control form-control-sm" value="{{ cards }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if component_page %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Components' %}
+                            <tbody>
+                            {% include 'lab/performance/measurement/row.html' with label=cards|add:1 measurement=component_page %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.COMPONENT_TREE }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Nested components</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Renders a tree of components, each with F children, one row per depth. If the cost per
+                        component holds steady down the table, nesting costs nothing extra; if it climbs, each level
+                        re-pays for the levels beneath it.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.COMPONENT_TREE }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Depth</label>
+                            <input type="number" name="depth" class="form-control form-control-sm" value="{{ depth }}" min="1" max="5">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Fanout (F)</label>
+                            <input type="number" name="fanout" class="form-control form-control-sm" value="{{ fanout }}" min="1" max="4">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if component_tree %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Components' %}
+                            <tbody>
+                            {% for components, measurement in component_tree %}
+                                {% include 'lab/performance/measurement/row.html' with label=components %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-scenario="{{ scenarios.COMPONENT_CALL }}">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Component calls</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Calls each of a deck's callables with its N cards mounted, as the browser sends them.
+                        <code>touch</code> re-renders the deck and keeps every card; <code>grow</code> spawns a card;
+                        <code>shrink</code> drops one; <code>open_card</code> returns a new component. A call's cost
+                        should not grow with the cards it keeps.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end mb-3">
+                        <input type="hidden" name="scenario" value="{{ scenarios.COMPONENT_CALL }}">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Cards mounted (N)</label>
+                            <input type="number" name="cards" class="form-control form-control-sm" value="{{ cards }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Repeats</label>
+                            <input type="number" name="repeats" class="form-control form-control-sm" value="{{ repeats }}" min="1" max="20">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Run</button>
+                        </div>
+                    </form>
+                    {% if component_call %}
+                        <table class="table table-hover mb-0">
+                            {% include 'lab/performance/measurement/head.html' with label='Call' %}
+                            <tbody>
+                            {% for call, measurement in component_call %}
+                                {% include 'lab/performance/measurement/row.html' with label=call %}
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}

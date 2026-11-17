@@ -1,0 +1,332 @@
+{{ metrics|json_script:"glue-metric-names" }}
+<style>
+    #glue-metrics-toggle {
+        position: fixed;
+        bottom: 1rem;
+        left: 1rem;
+        z-index: 1060;
+        font: 600 0.8rem/1 system-ui, sans-serif;
+        padding: 0.5rem 0.75rem;
+        border-radius: 1rem;
+        border: 2px solid #395232;
+        background: #c9ffb1;
+        color: #395232;
+        cursor: pointer;
+    }
+
+    #glue-metrics-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1059;
+        max-height: 60vh;
+        overflow: auto;
+        padding: 0.75rem 1rem 3.5rem;
+        background: #fff;
+        border-top: 3px solid #395232;
+        font: 0.8rem/1.3 system-ui, sans-serif;
+        box-shadow: 0 -0.25rem 1rem rgba(0, 0, 0, 0.15);
+    }
+
+    #glue-metrics-panel[hidden] {
+        display: none;
+    }
+
+    #glue-metrics-panel h6 {
+        margin: 0.75rem 0 0.25rem;
+        font: 600 0.85rem system-ui, sans-serif;
+    }
+
+    #glue-metrics-panel table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #glue-metrics-panel th,
+    #glue-metrics-panel td {
+        padding: 0.2rem 0.5rem;
+        border-bottom: 1px solid #eee;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    #glue-metrics-panel th:first-child,
+    #glue-metrics-panel td:first-child {
+        text-align: left;
+        white-space: normal;
+    }
+
+    #glue-metrics-panel .glue-metrics-error {
+        background: #f8d7da;
+    }
+
+    #glue-metrics-panel .glue-metrics-note {
+        color: #6c757d;
+    }
+</style>
+<script>
+(() => {
+    // Glue metrics panel (test project, DEBUG only). Server numbers arrive in
+    // each response's Server-Timing header; client numbers come from the
+    // browser's performance APIs and a wrapper around window.fetch.
+    const METRIC = JSON.parse(document.getElementById('glue-metric-names').textContent)
+    const GLUE_PATH = '/__dg__/'
+    const SETTLE_MS = 300
+    const IDLE_MS = 1000
+    const MAX_ROWS = 200
+    const OPEN_KEY = 'glue-metrics-open'
+
+    const calls = []
+    const actions = []
+    const longTasks = []
+    let longTasksReported = false
+    let current = null
+
+    function serverMetrics(entry) {
+        const metrics = {}
+        for (const timing of entry.serverTiming || []) {
+            metrics[timing.name] = {value: timing.duration, text: timing.description}
+        }
+        return metrics
+    }
+
+    function blockedDuring(start, end) {
+        return longTasks
+            .filter((task) => task.startTime < end && task.startTime + task.duration > start)
+            .reduce((total, task) => total + task.duration, 0)
+    }
+
+    // --- Actions: a user event and the Glue calls it sets off, until they settle.
+
+    function describe(event) {
+        if (event.type === 'scroll') return 'scroll'
+        const element = event.target instanceof Element
+            ? event.target.closest('button, a, input, select, textarea, [title], [aria-label]') || event.target
+            : null
+        if (!element) return event.type
+        const name = element.getAttribute('title')
+            || element.getAttribute('aria-label')
+            || element.getAttribute('name')
+            || element.getAttribute('placeholder')
+            || element.textContent.trim().replace(/\s+/g, ' ')
+            || element.tagName.toLowerCase()
+        return `${event.type}: ${name.slice(0, 50)}`
+    }
+
+    function close(action) {
+        action.closed = true
+        if (current === action) current = null
+    }
+
+    function startAction(label, start, idleMs = IDLE_MS) {
+        const action = {label, start, pending: 0, peak: 0, calls: 0, end: start, closed: false, timer: null}
+        // An event that sets off no Glue call stops collecting, so a later call starts its own action.
+        action.timer = setTimeout(() => {
+            if (action.calls === 0) close(action)
+        }, idleMs)
+        current = action
+    }
+
+    function settle(action) {
+        clearTimeout(action.timer)
+        action.timer = setTimeout(() => {
+            if (action.pending > 0) return
+            close(action)
+            action.blocked = blockedDuring(action.start, action.end)
+            actions.unshift(action)
+            actions.length = Math.min(actions.length, MAX_ROWS)
+            render()
+        }, SETTLE_MS)
+    }
+
+    // Calls made while the page starts up (x-init and the like) belong to the load.
+    startAction('page load', 0, 3000)
+
+    // Scroll does not bubble, but a capturing listener on the document still hears it.
+    for (const type of ['click', 'input', 'change', 'submit', 'keydown', 'scroll']) {
+        document.addEventListener(type, (event) => {
+            if (event.target instanceof Element && event.target.closest('#glue-metrics-panel, #glue-metrics-toggle')) return
+            if (type === 'keydown' && event.key !== 'Enter') return
+            // A new event joins the action still in flight rather than splitting it.
+            if (current && current.pending > 0) return
+            startAction(describe(event), performance.now())
+        }, true)
+    }
+
+    const nativeFetch = window.fetch
+    window.fetch = function (...args) {
+        const url = String(args[0] instanceof Request ? args[0].url : args[0])
+        if (!url.includes(GLUE_PATH)) return nativeFetch.apply(this, args)
+
+        if (!current || current.closed) startAction('unprompted', performance.now())
+        const action = current
+        action.pending += 1
+        action.calls += 1
+        action.peak = Math.max(action.peak, action.pending)
+        return nativeFetch.apply(this, args).finally(() => {
+            action.pending -= 1
+            action.end = performance.now()
+            settle(action)
+        })
+    }
+
+    // --- Observers: long tasks, and each Glue request once it completes.
+
+    try {
+        new PerformanceObserver((list) => longTasks.push(...list.getEntries()))
+            .observe({type: 'longtask', buffered: true})
+        longTasksReported = true
+    } catch {
+        // Long tasks are reported by Chromium only.
+    }
+
+    new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+            const server = serverMetrics(entry)
+            if (!(METRIC.ENTRIES in server) && !entry.name.includes(GLUE_PATH)) continue
+            calls.unshift({entry, server})
+        }
+        calls.length = Math.min(calls.length, MAX_ROWS)
+        render()
+    }).observe({type: 'resource', buffered: true})
+
+    // --- Rendering.
+
+    function kb(bytes) {
+        return bytes === undefined ? '' : `${(bytes / 1024).toFixed(1)} KB`
+    }
+
+    function ms(value) {
+        return value === undefined ? '' : `${value.toFixed(1)} ms`
+    }
+
+    function row(cells, className = '') {
+        const tr = document.createElement('tr')
+        if (className) tr.className = className
+        for (const text of cells) {
+            const td = document.createElement('td')
+            td.textContent = text ?? ''
+            tr.append(td)
+        }
+        return tr
+    }
+
+    function table(headings, rows) {
+        const element = document.createElement('table')
+        const head = element.createTHead().insertRow()
+        for (const heading of headings) {
+            const th = document.createElement('th')
+            th.textContent = heading
+            head.append(th)
+        }
+        const body = element.createTBody()
+        body.append(...rows)
+        return element
+    }
+
+    function section(title, content, note = '') {
+        const wrapper = document.createElement('div')
+        const heading = document.createElement('h6')
+        heading.textContent = title
+        wrapper.append(heading)
+        if (note) {
+            const text = document.createElement('div')
+            text.className = 'glue-metrics-note'
+            text.textContent = note
+            wrapper.append(text)
+        }
+        wrapper.append(content)
+        return wrapper
+    }
+
+    function pageSection() {
+        const navigation = performance.getEntriesByType('navigation')[0]
+        const server = navigation ? serverMetrics(navigation) : {}
+        const boot = performance.getEntriesByName('glue-boot', 'measure')[0]
+        return section('Page', table(
+            ['Path', 'Server', 'Queries', 'Response end', 'DOM ready', 'Glue boot', 'Entries', 'Glue bytes', 'Tokens', 'Static', 'Computed'],
+            [row([
+                location.pathname,
+                ms(server[METRIC.SERVER]?.value),
+                server[METRIC.QUERIES]?.value,
+                ms(navigation?.responseEnd),
+                ms(navigation?.domContentLoadedEventEnd),
+                ms(boot?.duration),
+                server[METRIC.ENTRIES]?.value,
+                kb(server[METRIC.BYTES]?.value),
+                kb(server[METRIC.TOKENS]?.value),
+                kb(server[METRIC.STATIC]?.value),
+                kb(server[METRIC.COMPUTED]?.value),
+            ])],
+        ), 'Glue boot is the time to load the bundle and build the GlueClient.')
+    }
+
+    function actionsSection() {
+        return section('Actions', table(
+            ['Action', 'Glue calls', 'Shape', 'Until settled', 'Main thread blocked'],
+            actions.map((action) => row([
+                action.label,
+                action.calls,
+                action.calls === 1 ? 'one call' : action.peak === 1 ? 'one after another' : `up to ${action.peak} at once`,
+                ms(action.end - action.start),
+                longTasksReported ? ms(action.blocked) : 'not reported',
+            ])),
+        ), 'From the user event to the last Glue response. Blocked time sums long tasks (over 50 ms) in that window.')
+    }
+
+    function callsSection() {
+        return section('Glue calls', table(
+            ['Called', 'Client total', 'Server', 'Network & wait', 'Queries', 'Entries', 'Bytes', 'Tokens', 'Static', 'Computed', 'Errors'],
+            calls.map(({entry, server}) => row([
+                server[METRIC.CALLS]?.text || new URL(entry.name).pathname,
+                ms(entry.duration),
+                ms(server[METRIC.SERVER]?.value),
+                server[METRIC.SERVER] ? ms(entry.duration - server[METRIC.SERVER].value) : '',
+                server[METRIC.QUERIES]?.value,
+                server[METRIC.ENTRIES]?.value,
+                kb(server[METRIC.BYTES]?.value),
+                kb(server[METRIC.TOKENS]?.value),
+                kb(server[METRIC.STATIC]?.value),
+                kb(server[METRIC.COMPUTED]?.value),
+                server[METRIC.ERRORS]?.text,
+            ], server[METRIC.ERRORS] ? 'glue-metrics-error' : '')),
+        ), 'Newest first. Server time is measured around the whole Django request.')
+    }
+
+    let panel = null
+    let toggle = null
+
+    function render() {
+        if (!panel) return
+        toggle.textContent = `Glue · ${calls.length} calls`
+        if (panel.hidden) return
+        panel.replaceChildren(pageSection(), actionsSection(), callsSection())
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        panel = document.createElement('div')
+        panel.id = 'glue-metrics-panel'
+        panel.hidden = true
+        try {
+            panel.hidden = localStorage.getItem(OPEN_KEY) !== 'true'
+        } catch {
+            // Storage can be blocked; the panel then starts closed.
+        }
+        toggle = document.createElement('button')
+        toggle.id = 'glue-metrics-toggle'
+        toggle.type = 'button'
+        toggle.addEventListener('click', () => {
+            panel.hidden = !panel.hidden
+            try {
+                localStorage.setItem(OPEN_KEY, String(!panel.hidden))
+            } catch {
+                // Not remembered, but the toggle still works for this page.
+            }
+            render()
+        })
+        document.body.append(panel, toggle)
+        render()
+    })
+})()
+</script>

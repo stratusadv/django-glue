@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.urls import reverse
 
-from test_project.lab.models import SPECIES, Specimen
+from test_project.lab.models import COLLECTORS, HABITATS, SPECIES, Collector, Habitat, Specimen
 
 
 class SpecimenSeedTestCase(TestCase):
@@ -20,6 +20,16 @@ class SpecimenSeedTestCase(TestCase):
 
         self.assertEqual(Specimen.objects.count(), 20)
         self.assertEqual(Specimen.objects.last().catalogue_number, 20)
+
+    def test_seed_gives_every_specimen_a_collector_and_two_habitats(self):
+        Specimen.seed(10)
+        Specimen.seed(10)
+
+        self.assertEqual(Collector.objects.count(), len(COLLECTORS))
+        self.assertEqual(Habitat.objects.count(), len(HABITATS))
+        self.assertFalse(Specimen.objects.filter(collector=None).exists())
+        for specimen in Specimen.objects.prefetch_related('habitats'):
+            self.assertEqual(len(specimen.habitats.all()), 2)
 
 
 class VolumeViewTestCase(TestCase):
