@@ -16,6 +16,7 @@ from django.test.utils import CaptureQueriesContext
 from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
+    GluePolicyTooLargeError,
     GlueQuerySetCursorValidationError,
     GlueQuerySetFilterValidationError,
     GlueQuerySetOrderValidationError,
@@ -797,6 +798,32 @@ class QuerySetRowClassScanTestCase(TestCase):
 
         self.assertEqual(len(entries), 7)
         self.assertEqual(scan.call_count, 0)
+
+
+class QuerySetTokenLimitTestCase(TestCase):
+    def setUp(self):
+        for index in range(6):
+            Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index, weight=100.0, height=1.5)
+
+    def test_a_batch_that_would_outgrow_the_token_is_refused_and_the_window_still_works(self):
+        glue_object = build_glue(batch_size=2)
+        entry, _introduced, loaded = request_entry(
+            QuerySetGlue, glue_object.policy, glue_object.request, attribute='query_with_params',
+        )
+
+        # Room for the loaded window, but not for the two rows the next batch adds to it.
+        with override_settings(DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES=len(loaded.token) + 40):
+            with self.assertRaises(GluePolicyTooLargeError):
+                request_entry(
+                    QuerySetGlue, loaded, glue_object.request, attribute='query_with_params',
+                    kwargs={'seek_key': entry['result']['seek_key']},
+                )
+
+            counted, _introduced, _policy = request_entry(
+                QuerySetGlue, loaded, glue_object.request, attribute='count',
+            )
+
+        self.assertEqual(counted['result'], 6)
 
 
 class QuerySetToManyValueQueryCountTestCase(TestCase):

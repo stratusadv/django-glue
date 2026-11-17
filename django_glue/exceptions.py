@@ -424,6 +424,30 @@ class GlueExpiredPolicyError(GlueError):
         return {'proxy': self.unique_name}
 
 
+class GluePolicyTooLargeError(GlueError):
+    """Raised instead of issuing a policy token larger than the server accepts back."""
+
+    code = 'policy_too_large'
+    status = 422
+
+    def __init__(self, unique_name: str, token_bytes: int, max_token_bytes: int) -> None:
+        self.unique_name = unique_name
+        self.token_bytes = token_bytes
+        self.max_token_bytes = max_token_bytes
+        super().__init__(
+            f"Policy for proxy '{unique_name}' would be {token_bytes} bytes, over the "
+            f'{max_token_bytes}-byte DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES limit. A queryset '
+            'reaches it by loading too many rows into one window; page long lists instead.'
+        )
+
+    def details(self) -> dict:
+        return {
+            'proxy': self.unique_name,
+            'token_bytes': self.token_bytes,
+            'max_token_bytes': self.max_token_bytes,
+        }
+
+
 class GlueCalledNonCallableAttributeError(GlueError):
     code = 'called_non_callable_attribute'
     status = 404

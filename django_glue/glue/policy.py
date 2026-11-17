@@ -112,6 +112,13 @@ class GluePolicy(BaseModel):
             'created_at': timezone.now().timestamp(),
         })
         instance.token = instance.to_token()
+        # A token from_token() refuses would fail on its next request with no
+        # sign of why, so the request that grows it past the limit fails instead.
+        token_bytes = len(instance.token.encode())
+        max_token_bytes = glue_settings.DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES
+        if token_bytes > max_token_bytes:
+            from django_glue.exceptions import GluePolicyTooLargeError  # noqa: PLC0415
+            raise GluePolicyTooLargeError(instance.name, token_bytes, max_token_bytes)
         return instance
 
     def to_token(self) -> str:
