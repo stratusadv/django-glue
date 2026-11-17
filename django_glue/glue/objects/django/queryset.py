@@ -423,7 +423,7 @@ class QuerySetGlue(
         filter: dict[str, Any] | None = None,  # noqa: A002
         order_by: str | list[str] | None = None,
     ) -> models.QuerySet:
-        queryset = self.queryset
+        queryset = self.queryset.prefetch_related(*self._to_many_value_prefetches())
 
         for key in (filter or {}):
             if not isinstance(key, str) or not any(

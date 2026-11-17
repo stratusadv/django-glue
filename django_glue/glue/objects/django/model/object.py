@@ -310,12 +310,7 @@ class ModelGlue(
         if self._relation_is_to_many(relation_name):
             if self.instance.pk is None:
                 return ()
-            return tuple(
-                getattr(self.instance, relation_name).values_list(
-                    'pk',
-                    flat=True,
-                )
-            )
+            return self._to_many_member_pks(self.instance, relation_name)
         field = self._get_model_field(field_name)
         return getattr(self.instance, field.attname)
 
