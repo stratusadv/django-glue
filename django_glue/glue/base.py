@@ -31,7 +31,7 @@ from django_glue.glue.attributes.attribute import GlueAttributeKind, GlueValueRo
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.children import GlueChildBinder
 from django_glue.glue.context import GlueObjectEntry
-from django_glue.glue.event import GlueEvent
+from django_glue.glue.event import declared_events
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
@@ -401,8 +401,7 @@ class BaseGlue(ABC):
         declarations = [
             (name, declaration)
             for provider in (self, *self.get_attribute_providers())
-            for name, declaration in inspect.getmembers_static(type(provider))
-            if isinstance(declaration, GlueEvent)
+            for name, declaration in declared_events(type(provider))
         ]
         names = [name for name, _declaration in declarations]
         if len(names) != len(set(names)):
