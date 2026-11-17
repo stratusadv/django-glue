@@ -61,6 +61,7 @@ class GlueAddressRegistry {
                 policyToken: entry.policy_token,
                 staticData: entry.static_data,
                 computedData: entry.computed_data,
+                answers: entry.answers,
             })
             this.records.set(entry.address, record)
             record.attachProxy(this._createProxy(record))

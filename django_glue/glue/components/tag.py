@@ -93,6 +93,11 @@ class GlueComponentNode(Node):
             ),
             **{key: expression.resolve(context) for key, expression in self.parameters.items()},
         )
+        if component._defer_render:
+            raise GlueComponentParameterError(
+                f"{{% glue_component '{tag_name}' %}} renders its component, so it cannot take "
+                'defer_render, which only defers the render of a component a callable returns.'
+            )
         if parent is not None:
             # The address carries a hash of what this stamp passes the child, so
             # a child stamped with new parameters or access is a new child and is

@@ -219,37 +219,50 @@ class BaseGlueProxy implements GlueRecordProxy {
             capture.updates = {}
             return {record, capture}
         })
-        const controller = companions.length ? null : new AbortController()
-        this._record.inFlightController = controller
-        let response
-        try {
-            response = await this._http.sendAttributeRequest({
-                address: this._record.address,
-                policyToken: this._record.policyToken,
-                updates: requestCapture.updates,
-                attribute,
-                kwargs,
-                companions,
-                signal: controller?.signal ?? null,
-                batch,
-                ...this._requestFields(attribute),
-            })
-        } catch (error) {
-            if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
-                return {result: undefined, response: null, discarded: true}
+        // A call with no arguments and nothing to send may have been answered
+        // when the object was introduced (ADR 043); it then needs no request.
+        const answer = attribute !== null
+            && !Object.keys(kwargs).length
+            && !Object.keys(requestCapture.updates).length
+            && !companions.length
+            ? this._record.takeAnswer(attribute)
+            : undefined
+        let data: GlueAttributeCallResponse | null
+        if (answer) {
+            data = {objects: [answer]}
+        } else {
+            const controller = companions.length ? null : new AbortController()
+            this._record.inFlightController = controller
+            try {
+                const response = await this._http.sendAttributeRequest({
+                    address: this._record.address,
+                    policyToken: this._record.policyToken,
+                    updates: requestCapture.updates,
+                    attribute,
+                    kwargs,
+                    companions,
+                    signal: controller?.signal ?? null,
+                    batch,
+                    ...this._requestFields(attribute),
+                })
+                data = response.data
+            } catch (error) {
+                if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+                    return {result: undefined, response: null, discarded: true}
+                }
+                throw error
+            } finally {
+                if (this._record.inFlightController === controller) this._record.inFlightController = null
             }
-            throw error
-        } finally {
-            if (this._record.inFlightController === controller) this._record.inFlightController = null
         }
         if (
             this._record.disposed ||
             this._registry.getRecord(this._record.address) !== this._record ||
             requestCapture.generation !== this._record.generation
         ) {
-            return {result: undefined, response: response.data, discarded: true}
+            return {result: undefined, response: data, discarded: true}
         }
-        const objects = response.data?.objects
+        const objects = data?.objects
         if (!Array.isArray(objects)) {
             throw new GlueProxyError('Glue response is missing the objects envelope.')
         }
@@ -302,7 +315,7 @@ class BaseGlueProxy implements GlueRecordProxy {
         }
         target.result = result
         this._processEffects(target)
-        return {result, response: response.data}
+        return {result, response: data}
     }
 
     // Fields this proxy's request entries carry beyond its address, token,

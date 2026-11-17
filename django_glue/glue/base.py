@@ -861,8 +861,7 @@ class BaseGlue(ABC):
                 }
             ):
                 self._introduce_result(result)
-                introduced.append(result.entry.model_dump())
-                introduced.extend(result._serialized_child_entries())
+                introduced.extend(result._result_entries())
             result = result.address
         else:
             GlueResponse._reject_glue_objects(result)
@@ -877,6 +876,10 @@ class BaseGlue(ABC):
         result._address = address.transient(self.address)
         result.cap_access(self.access)
         result.introduce(self.request)
+
+    def _result_entries(self) -> list[dict[str, Any]]:
+        """What a call that returns this object sends: its entry, then its children's."""
+        return [self.entry.model_dump(), *self._serialized_child_entries()]
 
     def _effects_payload(
         self,

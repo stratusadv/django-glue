@@ -381,7 +381,7 @@
   }
   var http_default = GlueHttp;
 
-  // ../django-glue/node_modules/alpinejs/dist/module.esm.js
+  // node_modules/alpinejs/dist/module.esm.js
   var flushPending = false;
   var flushing = false;
   var queue = [];
@@ -3644,7 +3644,7 @@ ${expression ? 'Expression: "' + expression + `"
   var src_default = alpine_default;
   var module_default = src_default;
 
-  // ../django-glue/node_modules/@alpinejs/morph/dist/module.esm.js
+  // node_modules/@alpinejs/morph/dist/module.esm.js
   function morph(from, toHtml, options) {
     monkeyPatchDomSetAttributeToAllowAtSymbols();
     let context = createMorphContext(options);
@@ -4399,34 +4399,40 @@ ${expression ? 'Expression: "' + expression + `"
         capture.updates = {};
         return { record, capture };
       });
-      const controller = companions.length ? null : new AbortController;
-      this._record.inFlightController = controller;
-      let response;
-      try {
-        response = await this._http.sendAttributeRequest({
-          address: this._record.address,
-          policyToken: this._record.policyToken,
-          updates: requestCapture.updates,
-          attribute,
-          kwargs,
-          companions,
-          signal: controller?.signal ?? null,
-          batch,
-          ...this._requestFields(attribute)
-        });
-      } catch (error2) {
-        if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
-          return { result: undefined, response: null, discarded: true };
+      const answer = attribute !== null && !Object.keys(kwargs).length && !Object.keys(requestCapture.updates).length && !companions.length ? this._record.takeAnswer(attribute) : undefined;
+      let data;
+      if (answer) {
+        data = { objects: [answer] };
+      } else {
+        const controller = companions.length ? null : new AbortController;
+        this._record.inFlightController = controller;
+        try {
+          const response = await this._http.sendAttributeRequest({
+            address: this._record.address,
+            policyToken: this._record.policyToken,
+            updates: requestCapture.updates,
+            attribute,
+            kwargs,
+            companions,
+            signal: controller?.signal ?? null,
+            batch,
+            ...this._requestFields(attribute)
+          });
+          data = response.data;
+        } catch (error2) {
+          if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+            return { result: undefined, response: null, discarded: true };
+          }
+          throw error2;
+        } finally {
+          if (this._record.inFlightController === controller)
+            this._record.inFlightController = null;
         }
-        throw error2;
-      } finally {
-        if (this._record.inFlightController === controller)
-          this._record.inFlightController = null;
       }
       if (this._record.disposed || this._registry.getRecord(this._record.address) !== this._record || requestCapture.generation !== this._record.generation) {
-        return { result: undefined, response: response.data, discarded: true };
+        return { result: undefined, response: data, discarded: true };
       }
-      const objects = response.data?.objects;
+      const objects = data?.objects;
       if (!Array.isArray(objects)) {
         throw new GlueProxyError("Glue response is missing the objects envelope.");
       }
@@ -4462,7 +4468,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       target.result = result;
       this._processEffects(target);
-      return { result, response: response.data };
+      return { result, response: data };
     }
     _requestFields(attribute) {
       return {};
@@ -5115,7 +5121,7 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/runtime/addressRecord.ts
   class GlueAddressRecord {
-    constructor({ address, policyToken, staticData = {}, computedData = {} }) {
+    constructor({ address, policyToken, staticData = {}, computedData = {}, answers = {} }) {
       this.address = address;
       this.policyToken = policyToken;
       this.policy = policy_default.fromSignedPolicyToken(policyToken);
@@ -5138,8 +5144,15 @@ ${expression ? 'Expression: "' + expression + `"
       this._suppressMutations = false;
       this.reactiveValues = reactive3({});
       this._replaceReactive(this.canonical);
+      this.answers = new Map(Object.entries(answers));
+    }
+    takeAnswer(attribute) {
+      const answer = this.answers.get(attribute);
+      this.answers.delete(attribute);
+      return answer;
     }
     dispose() {
+      this.answers.clear();
       this.disposed = true;
       this.generation += 1;
       this._queue = Promise.resolve();
@@ -5187,6 +5200,7 @@ ${expression ? 'Expression: "' + expression + `"
       return queued;
     }
     introduce(entry) {
+      this.answers = new Map(Object.entries(entry.answers || {}));
       const wasStale = this.stale;
       this._applyPolicyToken(entry.policy_token);
       this.staticData = cloneValue(entry.static_data || {});
@@ -5201,6 +5215,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.proxy?._refreshMaterializedInterface();
     }
     reconcile(entry, requestCapture) {
+      this.answers.clear();
       if (requestCapture?.generation !== undefined && requestCapture.generation !== this.generation)
         return;
       if (entry.policy_token !== undefined)
@@ -5864,7 +5879,8 @@ ${expression ? 'Expression: "' + expression + `"
           address: entry.address,
           policyToken: entry.policy_token,
           staticData: entry.static_data,
-          computedData: entry.computed_data
+          computedData: entry.computed_data,
+          answers: entry.answers
         });
         this.records.set(entry.address, record);
         record.attachProxy(this._createProxy(record));

@@ -136,6 +136,7 @@ class Component(BaseGlue):
             cls.__signature__ = inspect.Signature([
                 inspect.Parameter('name', keyword, default=None, annotation=str | None),
                 inspect.Parameter('access', keyword, default=GlueAccess.VIEW, annotation=GlueAccess),
+                inspect.Parameter('defer_render', keyword, default=False, annotation=bool),
                 *(
                     inspect.Parameter(
                         key,
@@ -201,6 +202,7 @@ class Component(BaseGlue):
         *,
         name: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
+        defer_render: bool = False,
         **parameters: Any,
     ) -> None:
         declared = self._declared_parameters()
@@ -230,6 +232,8 @@ class Component(BaseGlue):
         self._ancestors: tuple[str, ...] = ()
         self._mounted_children: frozenset[str] = frozenset()
         self._access_ceiling: GlueAccess | None = None
+        # Only the response that introduces a returned component reads it, so it is not signed.
+        self._defer_render = defer_render
         self.context_data: dict[str, Any] = {}
 
         if not self.template:
@@ -457,6 +461,12 @@ class Component(BaseGlue):
         there is none. A denial at introduction responds 403, or with the
         response a view decorator on ``is_authorized()`` answered it with.
         """
+        if parameters.get('defer_render'):
+            raise GlueComponentParameterError(
+                f'{cls.__name__}.as_view() renders its component, so it cannot take '
+                'defer_render, which only defers the render of a component a callable returns.'
+            )
+
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
             component = cls(access=access, **{**parameters, **url_parameters})
@@ -723,6 +733,32 @@ class Component(BaseGlue):
         if isinstance(result, Component):
             result._ancestors = self.lineage
         super()._introduce_result(result)
+
+    def _result_entries(self) -> list[dict[str, Any]]:
+        """
+        A returned component arrives rendered (ADR 043): its entry carries the
+        answer its first render() would get, so the client shows it without a
+        second request. The render is the one a render() call runs, on a fresh
+        instance from the token. A render Glue refuses, or one deferred with
+        ``defer_render=True``, is left to that call.
+        """
+        entries = super()._result_entries()
+        if self._defer_render:
+            return entries
+
+        render_context = AttributeCallRequestContext(
+            request=self.request,
+            target_glue_policy=self.policy,
+            target_attribute_name='render',
+        )
+        try:
+            fresh = type(self).from_attribute_call_resolver_context(render_context)
+            render_entry, render_introduced = fresh.process_attribute_call(render_context)
+        except GlueError:
+            return entries
+
+        entries[0]['answers'] = {'render': render_entry}
+        return [*entries, *render_introduced]
 
     def _rerendered(
         self,

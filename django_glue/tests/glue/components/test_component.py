@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 from functools import cached_property
 from html import unescape
 from typing import TYPE_CHECKING, Any
@@ -16,6 +17,7 @@ from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
     GlueAuthorizationError,
+    GlueComponentParameterError,
     GlueComponentRegistrationError,
     GlueRequestError,
     GlueRequestErrorCode,
@@ -419,6 +421,91 @@ def test_returned_component_introduces_its_owned_children(mock_request) -> None:
     assert child_address in {item['address'] for item in introduced}
 
 
+class DeferringProducerComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.attr
+    def spawn(self) -> MountedResultComponent:
+        return MountedResultComponent(defer_render=True)
+
+
+class RenderDeniedComponent(Component):
+    template = 'glue_template_test.html'
+
+    def is_authorized(self, request: Any, operation: GlueOperation) -> bool:
+        return operation.attribute != 'render'
+
+
+class RenderDeniedProducerComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.attr
+    def spawn(self) -> RenderDeniedComponent:
+        return RenderDeniedComponent()
+
+
+def _spawned_entry(mock_request: HttpRequest, producer_class: type[Component]) -> dict[str, Any]:
+    producer = Glue.object(mock_request, producer_class())
+    context = call_context(producer, 'spawn')
+    reconstructed = producer_class.from_attribute_call_resolver_context(context)
+    entry, introduced = reconstructed.process_attribute_call(context)
+    return next(item for item in introduced if item['address'] == entry['result'])
+
+
+def test_a_returned_component_arrives_with_its_render_calls_answer(mock_request) -> None:
+    result_entry = _spawned_entry(mock_request, ResultProducerComponent)
+
+    render_context = call_context(
+        Glue.object(mock_request, MountedResultComponent()),
+        'render',
+    ).model_copy(update={'target_glue_policy': GluePolicy.from_token(result_entry['policy_token'])})
+    rendered = MountedResultComponent.from_attribute_call_resolver_context(render_context)
+    render_entry, _introduced = rendered.process_attribute_call(render_context)
+
+    answered = result_entry['answers']['render']
+
+    # Each render signs its stamp anew, so two renders differ only in when their tokens were issued.
+    def stamped_policy(html: str) -> dict[str, Any]:
+        stamp = json.loads(unescape(re.search(r'data-glue-objects="([^"]*)"', html).group(1)))
+        policy = GluePolicy.from_token(stamp[0]['policy_token'])
+        return policy.model_dump(exclude={'created_at', 'token'})
+
+    def without_tokens(html: str) -> str:
+        return re.sub(r'policy_token&quot;: &quot;[^&]*&quot;', '', html)
+
+    assert list(result_entry['answers']) == ['render']
+    assert {**answered, 'html': None} == {**render_entry, 'html': None}
+    assert without_tokens(answered['html']) == without_tokens(render_entry['html'])
+    assert stamped_policy(answered['html']) == stamped_policy(render_entry['html'])
+
+
+def test_a_component_returned_with_defer_render_arrives_without_its_render(mock_request) -> None:
+    result_entry = _spawned_entry(mock_request, DeferringProducerComponent)
+
+    assert 'answers' not in result_entry
+
+
+def test_a_returned_component_whose_render_is_refused_leaves_it_to_render(mock_request) -> None:
+    result_entry = _spawned_entry(mock_request, RenderDeniedProducerComponent)
+
+    assert 'answers' not in result_entry
+
+
+def test_the_component_tag_refuses_defer_render(mock_request) -> None:
+    template = Template(
+        '{% load django_glue %}'
+        "{% glue_component 'gorilla/counter_card' start=1 defer_render=True %}"
+    )
+
+    with pytest.raises(GlueComponentParameterError, match='defer_render'):
+        template.render(Context({'request': mock_request}))
+
+
+def test_a_component_view_refuses_defer_render() -> None:
+    with pytest.raises(GlueComponentParameterError, match='defer_render'):
+        MountedResultComponent.as_view(defer_render=True)
+
+
 class WeekComponent(Component):
     template = 'glue_component_greeting_test.html'
 
@@ -640,8 +727,9 @@ def test_component_constructor_signature_is_generated_from_declarations() -> Non
 
     parameters = inspect.signature(SignatureComponent).parameters
 
-    assert list(parameters) == ['name', 'access', 'count', 'note', 'tags']
+    assert list(parameters) == ['name', 'access', 'defer_render', 'count', 'note', 'tags']
     assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
+    assert parameters['defer_render'].default is False
     assert parameters['count'].default is inspect.Parameter.empty
     assert parameters['count'].annotation is int
     assert parameters['note'].default == ''

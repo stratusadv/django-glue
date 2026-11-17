@@ -163,12 +163,17 @@ export interface GlueEffects {
 }
 
 // An entry that introduces an object, on page load or beside the call that
-// produced it: GlueObjectEntry in django_glue/glue/context.py.
+// produced it: GlueObjectEntry in django_glue/glue/context.py. An object a
+// call returned may arrive with `answers`: the entry each named call, made
+// without arguments, would have been answered with, such as a returned
+// component's render (Component._result_entries() in
+// glue/components/component.py, ADR 043).
 export interface GlueObjectEntry {
     address: string
     policy_token: string
     static_data: GlueStaticData
     computed_data: GlueComputedData
+    answers?: Record<string, GlueAddressedEntry>
 }
 
 // The entry answering a requested address: BaseGlue._refresh_entry() and the

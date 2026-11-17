@@ -871,6 +871,21 @@ class EntryModal(Glue.Component):
 The host disposes the modal when it closes. Disposal also removes its owned
 children and listeners.
 
+The returned component arrives rendered (ADR 043): the response that returns it
+also carries its HTML, so the host's first `render()` or `renderInnerHtml()`
+shows it without another request. A later render, or one with arguments, is a
+request as usual. When the caller will not show the component straight away,
+construct it with `defer_render=True` and it is rendered when the client asks:
+
+```python
+@Glue.attr
+def entry_picker(self) -> EntryPickerComponent:
+    return EntryPickerComponent(day=self.day, defer_render=True)
+```
+
+`defer_render` applies only to a component a callable returns. The template tag
+and `as_view()` render their component themselves, and refuse it.
+
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound
 parameter syntax.
