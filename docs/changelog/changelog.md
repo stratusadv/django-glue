@@ -43,6 +43,10 @@
   arrives as it does in a response, and every value that rendered before is
   written exactly as before.
 
+- A model file field's value no longer includes `path`, the file's location on
+  the server's disk. The browser receives `name` and `url`; nothing in Glue
+  read `path`.
+
 - The server refuses to issue a policy token larger than
   `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` and fails that request with
   `policy_too_large`. It used to issue it, and the next request failed with

@@ -56,12 +56,13 @@ class SerializeFileTestCase(TestCase):
 
         self.assertEqual(result['url'], '/media/test.txt')
 
-    def test_serialize_field_file_includes_path_when_available(self):
+    def test_serialize_field_file_does_not_include_path(self):
+        """The file's location on the server's disk is not sent to the browser."""
         file = MockFieldFile(path='/var/media/test.txt')
 
         result = _serialize_field_file(file)
 
-        self.assertEqual(result['path'], '/var/media/test.txt')
+        self.assertNotIn('path', result)
 
     def test_serialize_field_file_omits_url_on_value_error(self):
         """url raises ValueError when no file is associated."""
@@ -71,19 +72,6 @@ class SerializeFileTestCase(TestCase):
 
         self.assertNotIn('url', result)
         self.assertEqual(result['name'], 'test.txt')
-
-    def test_serialize_field_file_omits_path_on_not_implemented_error(self):
-        """path raises NotImplementedError for remote storage backends."""
-        file = MockFieldFile(
-            url='https://s3.example.com/test.txt',
-            path=NotImplementedError(),
-        )
-
-        result = _serialize_field_file(file)
-
-        self.assertNotIn('path', result)
-        self.assertEqual(result['name'], 'test.txt')
-        self.assertEqual(result['url'], 'https://s3.example.com/test.txt')
 
     def test_serialize_field_file_does_not_include_size(self):
         """Size is intentionally omitted for performance with remote storage."""

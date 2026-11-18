@@ -1255,7 +1255,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         file_value = state['profile_photo']['value']
         self.assertTrue(file_value['name'].startswith('gorilla_photos/profile-photo'))
         self.assertTrue(file_value['url'].startswith('/media/gorilla_photos/profile-photo'))
-        self.assertIn('path', file_value)  # Local storage supports path
+        self.assertNotIn('path', file_value)
         self.assertNotIn('size', file_value)  # Size is omitted for performance
 
     def test_model_adapter_reconstructs_model_reconstruct_from_policy(self):
