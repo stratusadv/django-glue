@@ -1,5 +1,48 @@
 # Changelog for Django Glue
 
+## v1.4.1
+
+### Changes
+
+- A callable that returns a component, such as a modal, sends that component
+  rendered in its own response (ADR 043), so the browser shows it without a
+  second `render` request. Opening showcase's customer Edit modal drops from 2
+  requests to 1, and from 111 ms to 57 ms at a 50 ms round trip. Pass
+  `defer_render=True` to the component's constructor to keep the separate
+  request; the template tag and `as_view()` refuse it.
+
+- A call whose events re-render other mounted components answers them in its
+  own response (ADR 044), instead of a `$receive` request after it. Saving
+  showcase's customer Edit modal, which re-renders its list, drops from 2
+  requests to 1, and from 255 ms to 139 ms at 100 ms a request. A receiver
+  with a file to upload, or one that changed while the call was in flight,
+  still gets its own `$receive`.
+
+- Each class is scanned for its declared events once, not on every render. A
+  queryset batch of 25 rows drops from 39 ms to 8.5 ms, and a page of 100
+  querysets from 77 ms to 15 ms.
+
+- A query that changes a queryset's window serializes its rows once, not twice.
+  A batch of 25 rows with a many-to-many field drops from 51 queries to 26.
+
+- A queryset batch prefetches its rows' many-to-many and reverse foreign key
+  values, instead of one query per row and relation. A batch of 25 rows with a
+  many-to-many field drops from 26 queries to 2.
+
+- A browser test that waits for a `render` request after opening a returned
+  component, or for a `$receive` request after a save, now times out, because
+  neither request is sent. Wait for what the page shows instead, or for the
+  response of the call itself, such as `save`.
+
+### Fixes
+
+- The server refuses to issue a policy token larger than
+  `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` and fails that request with
+  `policy_too_large`. It used to issue it, and the next request failed with
+  `proxy_policy_invalid`. Infinite scroll in 25-row batches hit this at batch
+  95; the rows already loaded keep working. See the queryset guide for paging
+  long lists.
+
 ## v1.4.0
 
 ### Features
