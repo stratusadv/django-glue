@@ -1155,7 +1155,9 @@ authorization. This holds for a component's declared `Glue.listener` too
 (ADR 024): the client delivers the event as a `$receive` call on the listening
 component's own policy, the relayed detail is untrusted input, and only the
 source token that accompanies it is verified, as a descendant of the listener
-emitting an event its class declares.
+emitting an event its class declares. When the call that emitted the event named
+the listener as a receiver, the server builds that `$receive` itself from what
+the call emitted (ADR 044); the detail is still treated as untrusted.
 
 An event is a best-effort notification about one successfully produced
 response, not durable messaging or an exactly-once domain guarantee. Events
@@ -2243,6 +2245,36 @@ generation is neither policy state nor a server security control; it prevents
 late responses from a disposed client incarnation from patching a newly
 introduced object at the same address. Client disposal does not invalidate a
 signed token on the server.
+
+#### Receivers
+
+A request entry for a call on an object that declares events also carries an
+optional `receivers` list
+([ADR 044](../../decisions/044-a-call-answers-the-receivers-of-its-events.md)):
+the mounted objects whose static data reacts to an event the object declares,
+each with its address, token, unsaved changes, `mounted` list and child
+submissions. It is untrusted. After the call succeeds, the server builds the
+deliveries from the events the call emitted and the token it issued, asks each
+receiver's class which of them it reacts to, and resolves each one that reacts
+as a requested `$receive` entry, in a savepoint of its own. Its entry, and the
+objects its render introduced, follow the call's in the response; a receiver
+that reacts to nothing is not answered. A receiver's address may not repeat an
+address the request names.
+
+```json
+{
+  "objects": [
+    {
+      "address": "customer_form_modal#4c1e[\"t9a03f\"]",
+      "policy_token": "...",
+      "call": {"attribute": "save", "kwargs": {"data": {}}},
+      "receivers": [
+        {"address": "customer_detail_card#77b2", "policy_token": "...", "updates": {}}
+      ]
+    }
+  ]
+}
+```
 
 #### Callable capability and server injection
 

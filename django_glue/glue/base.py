@@ -249,6 +249,22 @@ class BaseGlue(ABC):
         _ = policy
         return (cls,)
 
+    @classmethod
+    def reacting_events(
+        cls,
+        policy: GluePolicy,
+        source_policy: GluePolicy,
+        identities: Iterable[str],
+    ) -> list[str]:
+        """
+        The events among ``identities``, emitted by the object signed as
+        ``source_policy``, that an object rebuilt from ``policy`` reacts to,
+        without rebuilding it (ADR 044). An object that reacts to none answers
+        an empty list; a class that reacts to events says which.
+        """
+        _ = policy, source_policy, identities
+        return []
+
     def is_authorized(
         self,
         request: HttpRequest,

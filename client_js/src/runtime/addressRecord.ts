@@ -71,6 +71,8 @@ class GlueAddressRecord {
     displacedChildren: string[] | null
     proxy: GlueRecordProxy | null
     _queue: Promise<unknown>
+    // Calls queued or running on this record.
+    queued: number
     inFlightController: AbortController | null
     _suppressMutations: boolean
     reactiveValues: GlueValues
@@ -103,6 +105,7 @@ class GlueAddressRecord {
         this.displacedChildren = null
         this.proxy = null
         this._queue = Promise.resolve()
+        this.queued = 0
         this.inFlightController = null
         this._suppressMutations = false
         this.reactiveValues = reactive({})
@@ -169,8 +172,9 @@ class GlueAddressRecord {
     }
 
     enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        this.queued += 1
         const queued = this._queue.then(operation, operation)
-        this._queue = queued.catch(() => undefined)
+        this._queue = queued.catch(() => undefined).finally(() => { this.queued -= 1 })
         return queued
     }
 

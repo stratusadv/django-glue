@@ -1036,8 +1036,11 @@ carries an event, the client
 calls the built-in `$receive` callable on each mounted component whose
 `static_data.rerender_on` names the event's identity, and on each mounted
 ancestor whose `static_data.listeners` does, passing the event, its detail, and
-the source's current token. All of one response's deliveries travel in one
-request. The server verifies that the source token is genuine and that its
+the source's current token. A call names, as its `receivers`, the mounted
+objects that would react to an event its object declares, and the server
+answers them in the call's own response from the events the call emitted
+([ADR 044](../../decisions/044-a-call-answers-the-receivers-of-its-events.md));
+the deliveries left over travel in one request. The server verifies that the source token is genuine and that its
 class, or an attribute provider's class its identity names, declares the event,
 runs the matching listeners only when the source
 names the receiving component among its ancestors, and re-renders the

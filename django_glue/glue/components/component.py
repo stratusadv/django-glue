@@ -30,7 +30,7 @@ from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_regis
 from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.components.session import ComponentSession
 from django_glue.glue.context import GlueContextManager
-from django_glue.glue.event import GlueEvent, declared_event_identities
+from django_glue.glue.event import RECEIVE_ATTRIBUTE, GlueEvent, declared_event_identities
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
 from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
@@ -55,7 +55,6 @@ class _DefaultFactory:
 VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 # The addresses of the children a re-render keeps rather than re-stamps (ADR 025).
 MOUNTED_CHILDREN_CONTEXT_KEY = '_django_glue_mounted_children'
-RECEIVE_ATTRIBUTE = '$receive'
 
 
 @cache
@@ -335,6 +334,20 @@ class Component(BaseGlue):
     @classmethod
     def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
         return (component_registry.from_identifier(policy.identity['component_id']),)
+
+    @classmethod
+    def reacting_events(
+        cls,
+        policy: GluePolicy,
+        source_policy: GluePolicy,
+        identities: Iterable[str],
+    ) -> list[str]:
+        """Its ``rerender_on`` events, and its listeners' when a descendant emits them."""
+        reactions = _reactions(component_registry.from_identifier(policy.identity['component_id']))
+        reacting = set(reactions.get('rerender_on', ()))
+        if policy.address in source_policy.identity.get('ancestors', ()):
+            reacting.update(reactions.get('listeners', ()))
+        return [identity for identity in identities if identity in reacting]
 
     def get_static_data(self) -> dict[str, Any]:
         """

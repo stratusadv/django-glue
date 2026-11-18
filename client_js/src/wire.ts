@@ -249,6 +249,18 @@ export interface GlueRequestEntry {
     reintroduce?: string[]
     mounted?: string[]
     child_submissions?: Record<string, GlueChildSubmission>
+    receivers?: GlueReceiverEntry[]
+}
+
+// A mounted object that reacts to an event the requested object declares: the
+// server delivers the events the call emits to it in the same response
+// (ReceiverEntry in django_glue/resolver/attribute_call/context.py, ADR 044).
+export interface GlueReceiverEntry {
+    address: string
+    policy_token: string
+    updates: Record<string, unknown>
+    mounted?: string[]
+    child_submissions?: Record<string, GlueChildSubmission>
 }
 
 // What Glue.view() receives: GlueViewResponseMiddleware in

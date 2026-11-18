@@ -15,6 +15,21 @@ class AttributeCall(BaseModel):
     kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
+class ReceiverEntry(BaseModel):
+    """
+    A mounted object a request entry names as reacting to an event the entry's
+    object declares (ADR 044). It is untrusted: the server answers it only for
+    an event the call emitted that the receiver's class reacts to, through the
+    same checks as a requested entry.
+    """
+
+    address: str
+    policy_token: str
+    updates: dict[str, Any] = Field(default_factory=dict)
+    mounted: list[str] = Field(default_factory=list)
+    child_submissions: dict[str, Any] = Field(default_factory=dict)
+
+
 class AddressedObjectEntry(BaseModel):
     """One addressed object in the ``objects`` request envelope
     (state-model.md §10).
@@ -30,7 +45,11 @@ class AddressedObjectEntry(BaseModel):
 
     ``child_submissions`` carries, by slot path, the signed token and unsaved
     changes of each child a component declares with ``Glue.child``. It is
-    untrusted, and is only read when the call reads that child."""
+    untrusted, and is only read when the call reads that child.
+
+    ``receivers`` names the mounted objects that would react to an event the
+    entry's object declares; the events its call emits reach them in the same
+    response (ADR 044)."""
 
     address: str
     policy_token: str
@@ -39,6 +58,7 @@ class AddressedObjectEntry(BaseModel):
     reintroduce: list[str] = Field(default_factory=list)
     mounted: list[str] = Field(default_factory=list)
     child_submissions: dict[str, Any] = Field(default_factory=dict)
+    receivers: list[ReceiverEntry] = Field(default_factory=list)
 
 
 class AttributeCallRequestContext(BaseModel):
@@ -131,7 +151,11 @@ class AttributeCallContextFactory:
                 ) from error
             entries.append(entry)
 
-        addresses = [entry.address for entry in entries]
+        addresses = [
+            address
+            for entry in entries
+            for address in (entry.address, *(receiver.address for receiver in entry.receivers))
+        ]
         if len(addresses) != len(set(addresses)):
             raise GlueRequestError(
                 code=GlueRequestErrorCode.DUPLICATE_ADDRESSES,

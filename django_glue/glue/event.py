@@ -34,6 +34,9 @@ DOM_EVENT_NAMES = frozenset({
     'messageerror', 'online', 'offline', 'storage', 'visibilitychange',
 })
 
+# The call that delivers events to the objects reacting to them (ADR 024, ADR 044).
+RECEIVE_ATTRIBUTE = '$receive'
+
 
 def is_reserved_event_name(name: str) -> bool:
     return name in DOM_EVENT_NAMES or name.startswith('$')
