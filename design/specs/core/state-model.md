@@ -1633,6 +1633,15 @@ Its authenticated continuation remains signed. A `ModelForm` normally obtains
 this boundary from its configured form-field queryset; the explicit mapping is
 available for direct model editing and deliberate overrides.
 
+A save enforces the boundary, not only the choices it offers. `ModelGlue.save()`
+refuses a relation the draft changes to a row outside its choice source with
+the field error a Django form's relation field gives. A many-to-many without a
+configured source is checked against the related rows its `limit_choices_to`
+admits; a foreign key without one is left to `full_clean()`, which checks it
+the same way. Only a change is checked: an unchanged value never enters the
+draft and a many-to-many keeps the members it has, so a row that already points
+outside a narrower source still saves.
+
 **The omitted case is closed by construction rather than by an allowlist.** An
 exposed, editable relation with no entry in `choices` gets an implicit source
 with three properties:

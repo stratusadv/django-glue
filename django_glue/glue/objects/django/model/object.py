@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping, Seq
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.db.models import QuerySet
+from django.forms import ModelChoiceField
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
@@ -40,6 +41,8 @@ if TYPE_CHECKING:
 
 ALL_FIELDS: Literal['__all__'] = '__all__'
 DRAFTED_PATHS_KEY = '$draft'
+# The message a Django form's relation field gives a value outside its queryset.
+INVALID_RELATION_CHOICE = ModelChoiceField.default_error_messages['invalid_choice']
 
 class ModelGlue(
     GlueComputedAttributesMixin,
@@ -541,6 +544,7 @@ class ModelGlue(
                 if relation is not None:
                     owner = relation.owner()
                     relation.assign_owner(owner, self.instance)
+                self._validate_relation_choices()
                 self.instance.full_clean()
                 self.instance.save()
                 self._apply_m2m_state(self._editable_draft)
@@ -568,6 +572,43 @@ class ModelGlue(
                 'success': False,
                 'errors': self._field_errors
             }
+
+    def _validate_relation_choices(self) -> None:
+        """
+        Refuse a relation the draft points at a row outside its choice source
+        (state-model.md §9): the configured choices, or for a many-to-many
+        without them, the related rows its limit_choices_to admits. Only a
+        change is checked. An unchanged value never enters the draft, and a
+        many-to-many keeps the members it has, so a row that already points
+        outside its choices still saves. A foreign key without choices is
+        left to full_clean(), which checks it the same way.
+        """
+        errors = {}
+        for field_name, value in self._editable_draft.items():
+            field = self._get_model_field(field_name)
+            if not getattr(field, 'is_relation', False):
+                continue
+            allowed = self.choices.get(field.name, self.choices.get(field.attname))
+            if getattr(field, 'many_to_many', False):
+                stored = (
+                    () if self.instance.pk is None
+                    else self._to_many_member_pks(self.instance, field.name)
+                )
+                added = {self._pk_from_related_value(item) for item in value or []} - set(stored)
+                if allowed is None:
+                    allowed = field.related_model._default_manager.complex_filter(
+                        field.get_limit_choices_to()
+                    )
+                if added and allowed.filter(pk__in=added).count() != len(added):
+                    errors[field.name] = [INVALID_RELATION_CHOICE]
+            elif (
+                value is not None
+                and allowed is not None
+                and not allowed.filter(pk=value).exists()
+            ):
+                errors[field.name] = [INVALID_RELATION_CHOICE]
+        if errors:
+            raise ValidationError(errors)
 
     def _apply_m2m_state(self, state: dict[str, Any]) -> None:
         """Apply M2M field values after the instance has been saved."""

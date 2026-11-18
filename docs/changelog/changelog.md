@@ -59,6 +59,15 @@
   returns `format_html(...)`, `render_to_string(...)` or a `TemplateResponse`,
   which work as before; template syntax in a plain string now shows as text.
 
+- A model's save refuses a relation changed to a row outside its `choices`.
+  `choices` only narrowed what the page offered, so a client could send any
+  primary key for a foreign key or many-to-many and save it, such as another
+  tenant's project. The save now fails with the relation's field error, as a
+  Django form's does. A many-to-many without `choices` is checked against the
+  related rows its `limit_choices_to` admits, so a member that does not exist
+  is a field error instead of a server error. An unchanged relation is not
+  checked, so a row that already points outside its `choices` still saves.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON
