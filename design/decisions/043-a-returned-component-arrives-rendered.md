@@ -78,6 +78,13 @@ of its owner's existing children introduces nothing, so nothing is rendered.
   `defer_render=True`.
 - `defer_render` is a constructor keyword, beside `name` and `access`: a
   parameter declared with any of those names would never reach the component.
+- Opening a returned component no longer sends a `render` request. A browser
+  test that waits for that request after the click now times out: showcase's
+  inventory wizard harness waited for one. Such a test waits for what the user
+  sees instead, such as the modal's title. A test that presses a key the moment
+  a modal appears can now find it still opening, where the second request used
+  to give it time: Profitly's chart of accounts test pressed Escape before
+  Bootstrap had moved focus into the modal, and waits for that focus now.
 
 ## Rejected Alternatives
 

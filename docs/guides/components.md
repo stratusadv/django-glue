@@ -886,6 +886,12 @@ def entry_picker(self) -> EntryPickerComponent:
 `defer_render` applies only to a component a callable returns. The template tag
 and `as_view()` render their component themselves, and refuse it.
 
+Opening a returned component therefore sends no `render` request. A browser
+test that waits for one after the click times out; wait for what the user sees
+instead, such as the modal's title. The modal also appears sooner, so a test
+that presses a key as it appears should first wait for the modal to finish
+opening, for example for focus to move into it.
+
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound
 parameter syntax.
