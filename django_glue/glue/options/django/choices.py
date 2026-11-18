@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
 from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError
 from django.db.models import Model, Q, QuerySet
-from django.template import Context, Template
 from django.template.response import TemplateResponse
+from django.utils.html import conditional_escape
 from django.utils.module_loading import import_string
 
 if TYPE_CHECKING:
@@ -169,7 +169,9 @@ class GlueRelatedModelChoices:
             result.render()
             return result.content.decode(result.charset or 'utf-8')
         if isinstance(result, str):
-            return Template(result).render(Context())
+            # A string is text, not template source: it is built from row data,
+            # which compiling would run as markup and tags. Safe strings pass.
+            return conditional_escape(result)
         msg = (
             f'Glue.choices label_formatter {self.options.label_formatter!r} must return '
             f'a string or a TemplateResponse, got {type(result).__name__}.'

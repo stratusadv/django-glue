@@ -51,6 +51,14 @@
   `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES`, `('password',)` by default;
   naming a field in `fields` still exposes it.
 
+- A `Glue.choices()` label formatter's string result is escaped as text. It was
+  compiled as a Django template and sent as HTML, so a formatter such as
+  `f'{skill.name} (…)'` ran any markup or template tags a user had saved in the
+  row: script in the browser of everyone who opened the choices, and tags such
+  as `{% include %}` on the server. A formatter that returns markup on purpose
+  returns `format_html(...)`, `render_to_string(...)` or a `TemplateResponse`,
+  which work as before; template syntax in a plain string now shows as text.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON

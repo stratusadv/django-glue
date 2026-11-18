@@ -1669,7 +1669,10 @@ search. Each choice's `obj` carries `pk`, `__str__`, and the configured
 
 `Glue.choices(..., label_formatter=...)` renders each choice's `label`
 server-side from a function taking `(instance)` or `(request, instance)` and
-returning a string (rendered as a Django template) or a `TemplateResponse`. The
+returning text, which is escaped, a safe string such as a `format_html()` or
+`render_to_string()` result, which passes as markup, or a `TemplateResponse`.
+A returned string is never compiled as a template: it is usually built from row
+data, and compiling it would run that data as markup and template tags. The
 formatter is accepted as a callable or dotted path but always stored as its
 dotted path, so only a string travels inside the signed choice query and the
 allowlisting unpickler never admits a function reference; a callable that
