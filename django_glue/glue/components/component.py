@@ -233,6 +233,8 @@ class Component(BaseGlue):
         self._access_ceiling: GlueAccess | None = None
         # Only the response that introduces a returned component reads it, so it is not signed.
         self._defer_render = defer_render
+        # as_view() sets it before introducing the component; it is not signed (ADR 045).
+        self._served_as_view = False
         self.context_data: dict[str, Any] = {}
 
         if not self.template:
@@ -273,6 +275,15 @@ class Component(BaseGlue):
                 )
             )
         }
+
+    @property
+    def served_as_view(self) -> bool:
+        """
+        Whether as_view() is serving this component on this request, from
+        __post_init__() on. A component a tag or a callable introduces, or one
+        rebuilt from its token for a later call, is not (ADR 045).
+        """
+        return self._served_as_view
 
     @property
     def lineage(self) -> tuple[str, ...]:
@@ -483,6 +494,7 @@ class Component(BaseGlue):
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
             component = cls(access=access, **{**parameters, **url_parameters})
+            component._served_as_view = True
             page_template = view_template if view_template is not None else component.view_template
             try:
                 GlueContextManager(request).add_glue(component)
