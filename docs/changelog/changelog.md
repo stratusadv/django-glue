@@ -36,6 +36,14 @@
 
 ### Fixes
 
+- A policy token no longer carries the session key. It carried the key as
+  `session_id`, and with Django's database sessions that is the session cookie
+  itself, so any script on the page could read a login that `HttpOnly` keeps
+  out of `document.cookie`. A token now carries `session_hash`, a one-way
+  HMAC of the key, which binds it to the session as before. A refused token's
+  error no longer lists session keys or user ids. A page left open across the
+  upgrade has its next call refused once, as after a login.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON

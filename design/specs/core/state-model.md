@@ -1761,7 +1761,7 @@ Conceptual decoded policy-token payload:
 ```json
 {
   "protocol_version": 1,
-  "subject": { "session_id": "9a73f51d8c2e4b29", "user_id": 184 },
+  "subject": { "session_hash": "4c1f0e9b27a85d36e0b9c4a1f7d2e853", "user_id": 184 },
   "origin": "/time-tracker/dashboard/",
   "target": {
     "namespace": "time_tracker",

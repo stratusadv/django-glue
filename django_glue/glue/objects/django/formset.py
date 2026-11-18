@@ -525,7 +525,7 @@ class FormSetGlue(BaseCollectionGlue):
                 or child_policy.namespace != 'form'
                 or child_policy.name != f'{self.name}.{key}'
                 or child_policy.identity.get('form_class_path') != self.identity['form_class_path']
-                or child_policy.session_id != call_context.target_glue_policy.session_id
+                or child_policy.session_hash != call_context.target_glue_policy.session_hash
                 or child_policy.request_user_id != call_context.target_glue_policy.request_user_id
                 or (
                     self._row_bindings is not None

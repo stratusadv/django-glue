@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 from django.conf import settings
 from django.core import signing
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from django_glue.access import GlueAccess
@@ -54,7 +55,7 @@ class GlueCapability(BaseModel):
 class GluePolicy(BaseModel):
     """Signed client-held policy for a glued backend object."""
 
-    session_id: str
+    session_hash: str
     request_user_id: Any
     origin: str
     name: str
@@ -70,6 +71,20 @@ class GluePolicy(BaseModel):
     token: str = ''
 
     TOKEN_SALT: ClassVar[str] = 'django_glue.glue.policy.GluePolicy'
+    SESSION_HASH_SALT: ClassVar[str] = 'django_glue.glue.policy.GluePolicy.session_hash'
+
+    @classmethod
+    def session_hash_for(cls, request: HttpRequest) -> str:
+        """
+        A one-way hash of the request's session key, as long as the key. A
+        token is readable by any script on the page, and the session key itself
+        is the session cookie.
+        """
+        return salted_hmac(
+            cls.SESSION_HASH_SALT,
+            request.session.session_key or '',
+            algorithm='sha256',
+        ).hexdigest()[:32]
 
     @classmethod
     def from_glue_object(
@@ -87,7 +102,7 @@ class GluePolicy(BaseModel):
         ]
 
         return cls.new_signed_policy({
-            'session_id': glue_object.request.session.session_key,
+            'session_hash': cls.session_hash_for(glue_object.request),
             'request_user_id': getattr(getattr(glue_object.request, 'user', None), 'id', None),
             # A call's objects keep the origin of the entry that introduced them (ADR 035).
             'origin': glue_object.request.__dict__.get(
@@ -166,21 +181,12 @@ class GluePolicy(BaseModel):
         """Reject a policy issued to another session or user than ``request``'s."""
         from django_glue.exceptions import GlueInvalidSessionError, GlueInvalidUserError  # noqa: PLC0415
 
-        current_session_id = request.session.session_key
-        if self.session_id != current_session_id:
-            raise GlueInvalidSessionError(
-                self.name,
-                policy_session_id=self.session_id,
-                current_session_id=current_session_id,
-            )
+        if not constant_time_compare(self.session_hash, self.session_hash_for(request)):
+            raise GlueInvalidSessionError(self.name)
 
         current_user_id = getattr(getattr(request, 'user', None), 'id', None)
         if self.request_user_id != current_user_id:
-            raise GlueInvalidUserError(
-                self.name,
-                policy_user_id=self.request_user_id,
-                current_user_id=current_user_id,
-            )
+            raise GlueInvalidUserError(self.name)
 
     @model_validator(mode='after')
     def validate_not_expired(self) -> Self:

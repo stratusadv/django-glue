@@ -40,7 +40,7 @@ export interface GlueIdentity {
 // The payload a policy token decodes to: GluePolicy.model_dump(exclude={'token'})
 // in django_glue/glue/policy.py. The client reads it and never verifies it.
 export interface GluePolicyPayload {
-    session_id: string
+    session_hash: string
     request_user_id: unknown
     name: string
     namespace: string

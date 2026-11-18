@@ -15,7 +15,8 @@ documented.
 
 Three properties frame the choice. First, a policy token is not an
 independent bearer credential: every request cross-checks the token's signed
-`session_id` against the request's session and re-runs current application
+`session_hash`, a one-way HMAC of the session key, against the request's
+session and re-runs current application
 authorization per request and, for relations, per instance. The lifetime
 therefore is not a primary security control; it bounds the replay/staleness
 window of an already-issued token — the residual property the state model
