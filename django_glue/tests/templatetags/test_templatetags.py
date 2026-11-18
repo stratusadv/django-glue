@@ -1,6 +1,9 @@
 """
 Tests for Django Glue template tags.
 """
+import tempfile
+
+from django.core.files.base import ContentFile
 from django.test import TestCase, RequestFactory, override_settings
 from django.template import Template, Context
 from django.urls import include, path
@@ -113,6 +116,22 @@ class DjangoGlueInitTagTestCase(TestCase):
         rendered = template.render(context)
         self.assertIn('objects', rendered)
         self.assertEqual(self.registered_policy().name, 'gorilla')
+
+    def test_tag_writes_a_viewed_model_file_field_as_glue_responses_do(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.gorilla.profile_photo.save('photo.png', ContentFile(b'png'), save=True)
+            Glue.model(
+                request=self.request,
+                unique_name='gorilla',
+                target=self.gorilla,
+                access=GlueAccess.VIEW,
+                fields=['name', 'profile_photo'],
+            )
+
+            template = Template('{% load django_glue %}{% django_glue_init %}')
+            rendered = template.render(Context({'request': self.request}))
+
+        self.assertIn('"url": "/media/gorilla_photos/photo', rendered)
 
     def test_tag_with_no_objects_registered(self):
         """Tag should work when no glue objects are registered."""

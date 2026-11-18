@@ -36,6 +36,13 @@
 
 ### Fixes
 
+- A page renders when it glues a model at `VIEW` access with a file in a
+  `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
+  with Django's encoder, which cannot write a file, and failed with "not JSON
+  serializable". It now uses the encoder every Glue response uses, so the file
+  arrives as it does in a response, and every value that rendered before is
+  written exactly as before.
+
 - The server refuses to issue a policy token larger than
   `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` and fails that request with
   `policy_too_large`. It used to issue it, and the next request failed with
