@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 from django.db.models import Prefetch, QuerySet
 
 from django_glue.access import GlueAccess
+from django_glue.conf import settings as glue_settings
 from django_glue.glue.objects.django.relation import OwningRelation
 from django_glue.glue.queryset_unpickler import (
     _queryset_class_path,
@@ -498,7 +499,13 @@ class ModelFieldResolutionMixin:
     def _included_fields(self) -> list[str]:
         all_names = self._all_available_field_names
         if self.fields == '__all__' or not self.fields:
-            names = self._default_field_names + self._many_to_many_field_names
+            # A field such as a password hash is sent only when it is named.
+            default_excluded = glue_settings.DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES
+            names = tuple(
+                name
+                for name in self._default_field_names + self._many_to_many_field_names
+                if name not in default_excluded
+            )
         else:
             names = self.fields
         excluded = set(all_names) if self.exclude == '__all__' else set(self.exclude)

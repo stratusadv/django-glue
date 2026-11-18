@@ -9,6 +9,7 @@ Set `DJANGO_GLUE_*` values in Django settings. The defaults live in
 | `DJANGO_GLUE_REQUEST_TIMEOUT_SECONDS` | `30` | Browser request timeout |
 | `DJANGO_GLUE_QUERYSET_BATCH_SIZE` | `100` | Default rows returned per queryset query |
 | `DJANGO_GLUE_MAX_UPDATES` | `200` | Editable paths in one addressed request |
+| `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES` | `('password',)` | Model fields `fields='__all__'` leaves out; naming one in `fields` still exposes it |
 | `DJANGO_GLUE_MAX_UPDATES_ENCODED_BYTES` | `65536` | Encoded update payload size |
 | `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` | `131072` | Token size before signature verification; Glue refuses to issue a larger one |
 | `DJANGO_GLUE_MAX_POLICY_DECODED_BYTES` | `131072` | Decoded token size before parsing |

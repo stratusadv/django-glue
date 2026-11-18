@@ -1602,6 +1602,12 @@ projection now makes easy to prevent. Documentation must state that the default
 is derived rather than closed, so that a project handling sensitive rows knows to
 supply `editable=` deliberately.
 
+The read side has one closed default: `fields='__all__'` leaves out the fields
+named in `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES` (`('password',)`).
+Every exposed, filterable and editable path is derived from the selected
+fields, so such a field is neither sent, queried nor written unless `fields`
+names it.
+
 `related_field_config` is removed. Its projection concern belongs to `fields`,
 while its unrelated choice-query concern becomes a separate mapping:
 

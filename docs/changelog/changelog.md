@@ -44,6 +44,13 @@
   error no longer lists session keys or user ids. A page left open across the
   upgrade has its next call refused once, as after a login.
 
+- `fields='__all__'` no longer exposes a model's `password` field. On a user
+  model it sent every row's password hash to the browser, let a client filter
+  by it with `startswith` to recover it a prefix at a time, and made it
+  editable at `CHANGE`. The field names `__all__` leaves out are the new setting
+  `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES`, `('password',)` by default;
+  naming a field in `fields` still exposes it.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON
