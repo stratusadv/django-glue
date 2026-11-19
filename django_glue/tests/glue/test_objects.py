@@ -763,7 +763,7 @@ class GluePolicyTestCase(TestCase):
 
     def test_policy_token_restores_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({
-            'session_id': 'test-session',
+            'session_hash': 'test-session',
             'request_user_id': None,
             'origin': '/',
             'name': 'gorilla',
@@ -784,7 +784,7 @@ class GluePolicyTestCase(TestCase):
 
     def test_policy_token_serializes_datetime_identity(self):
         policy = GluePolicy.new_signed_policy({
-            'session_id': 'test-session',
+            'session_hash': 'test-session',
             'request_user_id': None,
             'origin': '/',
             'name': 'agreement_form',
@@ -2193,7 +2193,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         glue_object = FormGlue(form, **glue_context(name='contact'))
         bound = glue_object.attributes['name']
 
-        self.assertEqual(bound.attribute.required_access, GlueAccess.CHANGE)
+        self.assertEqual(bound.attribute.required_access, GlueAccess.required_save_access)
         schema = bound.schema()
         self.assertEqual(schema['type'], 'CharField')
         self.assertEqual(schema['max_length'], 100)

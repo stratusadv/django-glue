@@ -18,7 +18,7 @@ from django_glue.glue.policy import GluePolicy
 class GluePolicyTokenTestCase(TestCase):
     def policy(self, **overrides) -> GluePolicy:
         return GluePolicy.new_signed_policy({
-            'session_id': 'session-1',
+            'session_hash': 'session-1',
             'request_user_id': None,
             'origin': '/',
             'name': 'project_form',

@@ -4,6 +4,7 @@ import json
 import os
 
 import django
+from django.core import signing
 from django.test import RequestFactory, TestCase
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_project.settings')
@@ -11,7 +12,7 @@ django.setup()
 
 from django_glue.access import GlueAccess
 from django_glue.glue import ModelGlue, FunctionGlue
-from django_glue.glue.policy import GluePolicy
+from django_glue.glue.policy import GluePolicy, GluePolicyTokenSerializer
 from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver
 from django_glue.tests.conftest import MockSession
 from test_project.gorilla.models import Gorilla
@@ -439,6 +440,41 @@ class GlueInvalidSessionErrorTestCase(TestCase):
         self.assertEqual(data['error']['code'], 'proxy_invalid_session')
         self.assertIn('gorilla', data['error']['message'])
         self.assertIn('session', data['error']['message'].lower())
+
+    def test_session_mismatch_does_not_reveal_either_session_key(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        glue_object.request = self.request_context('matching-session')
+        request = self.session_request(
+            glue_object,
+            MockSession(session_key='different-session'),
+        )
+
+        response = glue_attribute_call_view(request)
+
+        self.assertNotIn(b'matching-session', response.content)
+        self.assertNotIn(b'different-session', response.content)
+
+    def test_token_does_not_carry_the_session_key(self):
+        glue_object = ModelGlue(
+            self.gorilla,
+            name='gorilla',
+            access=GlueAccess.CHANGE,
+            fields=['name'],
+        )
+        glue_object.request = self.request_context('secret-session-key')
+
+        payload = signing.loads(
+            glue_object.policy.token,
+            salt=GluePolicy.TOKEN_SALT,
+            serializer=GluePolicyTokenSerializer,
+        )
+
+        self.assertNotIn('secret-session-key', json.dumps(payload))
 
     def test_matching_session_allows_request(self):
         """Requests with matching session_id proceed normally."""

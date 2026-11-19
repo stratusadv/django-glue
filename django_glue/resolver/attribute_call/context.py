@@ -5,6 +5,7 @@ from django.http import HttpRequest
 from django.urls import ResolverMatch
 from pydantic import BaseModel, Field, ValidationError
 
+from django_glue.conf import settings as glue_settings
 from django_glue.exceptions import GlueRequestError, GlueRequestErrorCode
 from django_glue.glue import policy
 from django_glue.glue.operation import GlueOperationKind
@@ -125,7 +126,8 @@ class AttributeCallContextFactory:
 
         try:
             parsed = json.loads(self.request.POST.get('objects', ''))
-        except (TypeError, ValueError) as error:
+        # RecursionError: a deeply nested body is malformed input, not a server error.
+        except (TypeError, ValueError, RecursionError) as error:
             raise GlueRequestError(
                 code=GlueRequestErrorCode.INVALID_JSON,
                 message='objects is not valid JSON.',
@@ -156,6 +158,14 @@ class AttributeCallContextFactory:
             for entry in entries
             for address in (entry.address, *(receiver.address for receiver in entry.receivers))
         ]
+        # Each address is an object to rebuild, authorize and answer.
+        limit = glue_settings.DJANGO_GLUE_MAX_REQUEST_ADDRESSES
+        if len(addresses) > limit:
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.TOO_MANY_ADDRESSES,
+                message='Too many objects in one request.',
+                details={'field': 'objects', 'limit': limit},
+            )
         if len(addresses) != len(set(addresses)):
             raise GlueRequestError(
                 code=GlueRequestErrorCode.DUPLICATE_ADDRESSES,

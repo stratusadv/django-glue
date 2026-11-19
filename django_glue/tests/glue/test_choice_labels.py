@@ -3,6 +3,7 @@ from __future__ import annotations
 from django import forms
 from django.template.response import TemplateResponse
 from django.test import TestCase
+from django.utils.html import format_html
 
 from django_glue import Glue
 from django_glue.glue import FormGlue
@@ -17,6 +18,10 @@ def skill_label_formatter(skill: Skill) -> str:
 
 def skill_label_template_string(skill: Skill) -> str:
     return 'pre {% if 1 %}mid{% endif %} post'
+
+
+def skill_label_format_html(skill: Skill) -> str:
+    return format_html('<b>{}</b>', skill.name)
 
 
 def skill_label_formatter_html(request, skill: Skill) -> TemplateResponse:
@@ -62,7 +67,7 @@ class ChoiceLabelFormatterTestCase(TestCase):
         self.assertEqual(result['results'][0]['label'], 'Grappling (difficulty 3)')
         self.assertEqual(result['results'][0]['obj']['__str__'], 'Grappling')
 
-    def test_string_result_is_rendered_as_template(self):
+    def test_string_result_is_not_compiled_as_a_template(self):
         Skill.objects.create(name='Grappling')
         glue_object = skill_form_glue(Glue.choices(
             Skill.objects.all(),
@@ -71,7 +76,32 @@ class ChoiceLabelFormatterTestCase(TestCase):
 
         result = glue_object.foreign_key_choices(field_name='skill')
 
-        self.assertEqual(result['results'][0]['label'], 'pre mid post')
+        self.assertEqual(result['results'][0]['label'], 'pre {% if 1 %}mid{% endif %} post')
+
+    def test_row_data_in_a_string_result_is_escaped(self):
+        Skill.objects.create(name='<img src=x onerror=alert(1)> {% now "Y" %}', difficulty=1)
+        glue_object = skill_form_glue(Glue.choices(
+            Skill.objects.all(),
+            label_formatter=skill_label_formatter,
+        ))
+
+        label = glue_object.foreign_key_choices(field_name='skill')['results'][0]['label']
+
+        self.assertEqual(
+            label,
+            '&lt;img src=x onerror=alert(1)&gt; {% now &quot;Y&quot; %} (difficulty 1)',
+        )
+
+    def test_format_html_result_keeps_its_markup(self):
+        Skill.objects.create(name='<i>Grappling</i>')
+        glue_object = skill_form_glue(Glue.choices(
+            Skill.objects.all(),
+            label_formatter=skill_label_format_html,
+        ))
+
+        label = glue_object.foreign_key_choices(field_name='skill')['results'][0]['label']
+
+        self.assertEqual(label, '<b>&lt;i&gt;Grappling&lt;/i&gt;</b>')
 
     def test_request_taking_formatter_renders_template_response(self):
         Skill.objects.create(name='Grappling')

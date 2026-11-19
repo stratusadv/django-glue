@@ -71,6 +71,65 @@
 
 ### Fixes
 
+- A policy token no longer carries the session key. It carried the key as
+  `session_id`, and with Django's database sessions that is the session cookie
+  itself, so any script on the page could read a login that `HttpOnly` keeps
+  out of `document.cookie`. A token now carries `session_hash`, a one-way
+  HMAC of the key, which binds it to the session as before. A refused token's
+  error no longer lists session keys or user ids. A page left open across the
+  upgrade has its next call refused once, as after a login.
+
+- `fields='__all__'` no longer exposes a model's `password` field. On a user
+  model it sent every row's password hash to the browser, let a client filter
+  by it with `startswith` to recover it a prefix at a time, and made it
+  editable at `CHANGE`. The field names `__all__` leaves out are the new setting
+  `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES`, `('password',)` by default;
+  naming a field in `fields` still exposes it.
+
+- A `Glue.choices()` label formatter's string result is escaped as text. It was
+  compiled as a Django template and sent as HTML, so a formatter such as
+  `f'{skill.name} (…)'` ran any markup or template tags a user had saved in the
+  row: script in the browser of everyone who opened the choices, and tags such
+  as `{% include %}` on the server. A formatter that returns markup on purpose
+  returns `format_html(...)`, `render_to_string(...)` or a `TemplateResponse`,
+  which work as before; template syntax in a plain string now shows as text.
+
+- A model's save refuses a relation changed to a row outside its `choices`.
+  `choices` only narrowed what the page offered, so a client could send any
+  primary key for a foreign key or many-to-many and save it, such as another
+  tenant's project. The save now fails with the relation's field error, as a
+  Django form's does. A many-to-many without `choices` is checked against the
+  related rows its `limit_choices_to` admits, so a member that does not exist
+  is a field error instead of a server error. An unchanged relation is not
+  checked, so a row that already points outside its `choices` still saves.
+
+- An update needs the access its value requires, as a call does. A value
+  declared `Glue.attr(..., editable=True, required_access=...)` could be set
+  through a token below that access, because only `is_authorized()` saw the
+  required access. A model's or form's fields now require
+  `GlueAccess.required_save_access`: `ADD` while there is no saved row, `CHANGE`
+  once there is.
+- A top-level `ADD` model settles to `VIEW` after its first save, as
+  state-model.md §9 says, and an `ADD` model of a saved row has no editable
+  fields. Its successor kept `ADD` and its editable fields, so an update sent
+  with any `VIEW` method that saves the instance was written to the new row.
+- A form binds uploads only to its editable fields. It bound every file in
+  the request, so a user who could save the form could replace a file field
+  the page left out of `editable`, such as a photo it only displayed, by adding
+  a file named after that field to the save request.
+- A call request addresses at most `DJANGO_GLUE_MAX_REQUEST_ADDRESSES` objects,
+  500 by default, counting its entries and their receivers. Only Django's
+  request size bounded it, so one 1.3 MB request could ask the server to
+  rebuild and answer 1000 objects. A request over the limit fails with
+  `too_many_addresses` before any object is rebuilt.
+- A model's save checks each upload the way a Django form's field would. An
+  editable `ImageField` stored whatever bytes it was sent under an image's
+  name, because a model's `full_clean()` checks the extension, not the
+  content; a file that is not an image now fails with the field's error.
+- A deeply nested request body fails with `invalid_json`. Python's JSON
+  parser raised `RecursionError`, which failed the request with a server
+  error.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON
