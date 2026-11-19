@@ -557,6 +557,7 @@ class ModelGlue(
                     owner = relation.owner()
                     relation.assign_owner(owner, self.instance)
                 self._validate_relation_choices()
+                self._validate_uploaded_files()
                 self.instance.full_clean()
                 self.instance.save()
                 self._apply_m2m_state(self._editable_draft)
@@ -627,6 +628,27 @@ class ModelGlue(
                 and not allowed.filter(pk=value).exists()
             ):
                 errors[field.name] = [INVALID_RELATION_CHOICE]
+        if errors:
+            raise ValidationError(errors)
+
+    def _validate_uploaded_files(self) -> None:
+        """
+        Check each upload the way a Django form's field would. A model's
+        full_clean() checks an image's extension, not its content, so bytes
+        that are not an image would be stored under an image's name.
+        """
+        errors = {}
+        for field_name in self.editable:
+            field = self._get_model_field(field_name)
+            if getattr(field, 'get_internal_type', lambda: '')() not in {'FileField', 'ImageField'}:
+                continue
+            upload = self._get_file_from_request(field_name)
+            if upload is None:
+                continue
+            try:
+                field.formfield().clean(upload)
+            except ValidationError as error:
+                errors[field_name] = error.messages
         if errors:
             raise ValidationError(errors)
 

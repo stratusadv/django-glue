@@ -112,6 +112,10 @@
   request size bounded it, so one 1.3 MB request could ask the server to
   rebuild and answer 1000 objects. A request over the limit fails with
   `too_many_addresses` before any object is rebuilt.
+- A model's save checks each upload the way a Django form's field would. An
+  editable `ImageField` stored whatever bytes it was sent under an image's
+  name, because a model's `full_clean()` checks the extension, not the
+  content; a file that is not an image now fails with the field's error.
 - A deeply nested request body fails with `invalid_json`. Python's JSON
   parser raised `RecursionError`, which failed the request with a server
   error.
