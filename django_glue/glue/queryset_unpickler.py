@@ -21,7 +21,11 @@ class QuerySetUnpickler(pickle.Unpickler):
     types a serialized ``Query`` can legitimately contain, and raises on
     anything else (state-model.md §6). This is defence in depth behind the
     policy signature: the signature is what makes the payload trustworthy, and
-    the allowlist is what limits the damage when the signature is not.
+    the allowlist keeps a forged one from running Python. It does not limit
+    the SQL a forged query runs: the ORM namespace admits ``RawSQL`` and
+    ``Func`` templates, and a forged policy already reads and writes every
+    model through ordinary Glue objects, so the line it holds when the
+    ``SECRET_KEY`` leaks is code execution.
 
     Allowed by default:
 

@@ -2429,7 +2429,11 @@ subclass whose `find_class` admits only the ORM, expression, field and standard
 value types a serialized `Query` can legitimately contain, and raises on
 anything else. This is defence in depth behind the signature, not a replacement
 for it — the signature is what makes the payload trustworthy, and the allowlist
-is what limits the damage when the signature is not. Livewire added its
+is what keeps a forged payload from running Python when the signature is not.
+It does not limit the SQL a forged query runs, since Django's ORM namespace
+includes `RawSQL` and `Func` templates, and it need not: a forged policy already
+reads and writes every model through ordinary Glue objects, so the line it holds
+after a `SECRET_KEY` disclosure is code execution, not data. Livewire added its
 `SecurityPolicy` class deny-list *behind* an already-verified checksum after a
 published gadget-chain disclosure; the same reasoning applies here, and an
 allowlist is the stronger form of it. The allowlist is a published, versioned
