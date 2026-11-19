@@ -78,6 +78,10 @@
   state-model.md §9 says, and an `ADD` model of a saved row has no editable
   fields. Its successor kept `ADD` and its editable fields, so an update sent
   with any `VIEW` method that saves the instance was written to the new row.
+- A form binds uploads only to its editable fields. It bound every file in
+  the request, so a user who could save the form could replace a file field
+  the page left out of `editable`, such as a photo it only displayed, by adding
+  a file named after that field to the save request.
 
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
