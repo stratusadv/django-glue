@@ -379,7 +379,7 @@ The built-in families narrow it where the adapter genuinely knows better:
 | Family                             | Default`is_authorized()`                                                                                                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Custom objects and components      | permissive; the application overrides                                                                                                 |
-| `ModelGlue`                      | permissive, but reconstruction refetches through the scope that introduced the row rather than the unrestricted default manager (§4) |
+| `ModelGlue`                      | permissive; a row rebuilt from its token is refetched by primary key, not through the queryset that introduced it, so the token is the row's grant for its lifetime (ADR 013): a row that leaves its queryset stays reachable through a token already issued until it expires |
 | `FormGlue` / `ModelForm`       | permissive; inherits the model rule for its bound instance                                                                            |
 | `QuerySetGlue`                   | permissive; the signed authenticated continuation*is* the scope, and a client query can only narrow it                              |
 | `FormSetGlue` / `SequenceGlue` | permissive; delegates to each keyed child                                                                                             |

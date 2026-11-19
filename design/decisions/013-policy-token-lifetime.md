@@ -16,8 +16,11 @@ documented.
 Three properties frame the choice. First, a policy token is not an
 independent bearer credential: every request cross-checks the token's signed
 `session_hash`, a one-way HMAC of the session key, against the request's
-session and re-runs current application
-authorization per request and, for relations, per instance. The lifetime
+session, and re-runs a component's `is_authorized()` and any
+`process_glue_call` hook (ADR 035) per request. A `Glue.model()`,
+`Glue.form()`, `Glue.queryset()` or `Glue.formset()` object, whose
+`is_authorized()` is permissive, is otherwise authorized when it is issued, so
+its token keeps what it granted until it expires. The lifetime
 therefore is not a primary security control; it bounds the replay/staleness
 window of an already-issued token — the residual property the state model
 deliberately accepts (a relation policy issued while the user had access
