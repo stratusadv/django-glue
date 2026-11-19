@@ -394,12 +394,14 @@ class Glue:
         access: GlueAccess = GlueAccess.CHANGE,
         *,
         editable: abc.Sequence[str] | None = None,
+        form_kwargs: Mapping[str, Any] | None = None,
     ) -> FormGlue:
         glue_object = FormGlue(
             form=target,
             name=unique_name,
             access=access,
             editable=editable,
+            form_kwargs=form_kwargs,
         )
         return Glue._add_to_context(
             request,
