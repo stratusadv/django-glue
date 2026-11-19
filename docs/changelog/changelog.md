@@ -2,6 +2,25 @@
 
 ## v1.4.1
 
+### Features
+
+- `Component.served_as_view` tells `__post_init__` whether `as_view()` is
+  serving the component (ADR 045), so a component adds context only its page
+  needs, such as a title and breadcrumbs, without that context reaching every
+  `{% glue_component %}` embedding:
+
+  ```python
+  def __post_init__(self, request):
+      super().__post_init__(request)
+
+      if self.served_as_view:
+          self.context_data.update(build_page_navigation(request))
+  ```
+
+  It is `False` when a tag or a callable introduces the component, and after
+  it is rebuilt from its token for a later action. See
+  [adding page context](../guides/components.md#add-page-context-only-when-the-component-is-the-page).
+
 ### Changes
 
 - A callable that returns a component, such as a modal, sends that component

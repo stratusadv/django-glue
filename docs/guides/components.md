@@ -782,6 +782,37 @@ When parameters, access, or the page's own context depend on the request,
 derive them in [`__post_init__`](#set-a-component-up-in-__post_init__). There is
 no separate view to write.
 
+### Add page context only when the component is the page
+
+The same component can be a URL view on one page and embedded with
+`{% glue_component %}` on another. `self.served_as_view` tells `__post_init__`
+which: it is `True` when `as_view()` is serving the component, with or without a
+view template, and `False` when a tag or another component's callable
+introduces it. Add context that only the page around a component view needs,
+such as its title and breadcrumbs, under that check, so it does not reach every
+embedding:
+
+```python
+class RegistrationListComponent(ModelCrudScrollComponent):
+    template = 'sales_tax/component/registration_list.html'
+    view_template = 'sales_tax/page/sales_tax_page.html'
+
+    def __post_init__(self, request):
+        super().__post_init__(request)
+
+        if self.served_as_view:
+            self.context_data.update(build_page_navigation(request))
+```
+
+```python
+path('', RegistrationListComponent.as_view(), name='sales_tax')
+```
+
+Read it in `__post_init__` only. It is not signed, so a component rebuilt from
+its token for a later action reports `False`, like `context_data`, which is
+gone by then too. A component template that branched on it would change on its
+first re-render.
+
 The view template places the rendered component with the no-argument tag:
 
 ```django
