@@ -178,7 +178,8 @@ class ModelGlue(
                             value,
                         ),
                     ),
-                    required_access=GlueAccess.CHANGE,
+                    # ADD while the draft is unsaved, CHANGE once the row exists.
+                    required_access=GlueAccess.required_save_access,
                     editable=True,
                     value_type=self._get_model_field(field_name),
                 )
@@ -375,6 +376,17 @@ class ModelGlue(
         self._validate()
         return super().get_state()
 
+    def _normalize_editable(
+        self,
+        editable: Sequence[str] | None,
+        access: GlueAccess,
+    ) -> tuple[str, ...]:
+        """ADD admits a draft's values only while it is unsaved (state-model.md §9)."""
+        selected = super()._normalize_editable(editable, access)
+        if self.instance.pk is not None and not access.has_access(GlueAccess.CHANGE):
+            return ()
+        return selected
+
     def _validate(self) -> None:
         if (
             not self._editable_draft
@@ -555,8 +567,16 @@ class ModelGlue(
             # this re-signs the successor response at the settled access, so the
             # client's next request carries the persisted-row permission
             # (state-model.md ADR 010).
+            settled_from = self.access
             if self._row_access is not None:
                 self.access = self._row_access
+            elif self.access == GlueAccess.ADD:
+                # A top-level draft's create permission is spent once it is
+                # saved, so its successor is VIEW (state-model.md §9).
+                self.access = GlueAccess.VIEW
+            if self.access != settled_from:
+                self.editable = self._normalize_editable(self._editable_declaration, self.access)
+                self._invalidate_attributes()
             self._field_errors = {}
             self._derived_paths.update(self._included_fields)
             return {  # noqa: TRY300

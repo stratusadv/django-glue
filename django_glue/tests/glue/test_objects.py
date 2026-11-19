@@ -2193,7 +2193,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         glue_object = FormGlue(form, **glue_context(name='contact'))
         bound = glue_object.attributes['name']
 
-        self.assertEqual(bound.attribute.required_access, GlueAccess.CHANGE)
+        self.assertEqual(bound.attribute.required_access, GlueAccess.required_save_access)
         schema = bound.schema()
         self.assertEqual(schema['type'], 'CharField')
         self.assertEqual(schema['max_length'], 100)

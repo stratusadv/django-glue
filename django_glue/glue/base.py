@@ -680,12 +680,20 @@ class BaseGlue(ABC):
         client ``updates`` over it (state-model.md §5)."""
         updates = self._admit_updates(policy, raw_updates)
         for path in updates:
+            required_access = self._resolve_required_access(
+                self._bound_attributes[path].attribute.required_access,
+            )
+            # The signed access gates an update as it gates a call.
+            if not policy.access.has_access(required_access):
+                raise GlueAccessError(
+                    attribute=path,
+                    required_access=required_access.value,
+                    current_access=policy.access.value,
+                )
             self._require_authorization(GlueOperation(
                 kind=GlueOperationKind.UPDATE,
                 attribute=path,
-                required_access=self._resolve_required_access(
-                    self._bound_attributes[path].attribute.required_access,
-                ),
+                required_access=required_access,
             ))
         retained_draft = {
             path: value

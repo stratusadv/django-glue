@@ -68,6 +68,17 @@
   is a field error instead of a server error. An unchanged relation is not
   checked, so a row that already points outside its `choices` still saves.
 
+- An update needs the access its value requires, as a call does. A value
+  declared `Glue.attr(..., editable=True, required_access=...)` could be set
+  through a token below that access, because only `is_authorized()` saw the
+  required access. A model's or form's fields now require
+  `GlueAccess.required_save_access`: `ADD` while there is no saved row, `CHANGE`
+  once there is.
+- A top-level `ADD` model settles to `VIEW` after its first save, as
+  state-model.md §9 says, and an `ADD` model of a saved row has no editable
+  fields. Its successor kept `ADD` and its editable fields, so an update sent
+  with any `VIEW` method that saves the instance was written to the new row.
+
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
   with Django's encoder, which cannot write a file, and failed with "not JSON
