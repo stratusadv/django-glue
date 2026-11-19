@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from django.contrib.auth import get_permission_codename
+
+if TYPE_CHECKING:
+    from django.contrib.auth.base_user import AbstractBaseUser
+    from django.contrib.auth.models import AnonymousUser
+    from django.db.models import Model
 
 
 class GlueAccess(StrEnum):
@@ -31,3 +38,26 @@ class GlueAccess(StrEnum):
         if instance is None or instance.pk is None:
             return GlueAccess.ADD
         return GlueAccess.CHANGE
+
+
+def get_model_access(
+    user: AbstractBaseUser | AnonymousUser,
+    model: type[Model],
+) -> GlueAccess | None:
+    """
+    Return the highest access whose model permission ``user`` holds together
+    with the permission of every level below it, or ``None`` without the view
+    permission. Each level grants the ones below it, so a permission held
+    without those below it, such as ``delete`` without ``change``, grants
+    nothing above the last level held in full.
+    """
+    opts = model._meta
+    access = None
+
+    for level in GlueAccess:
+        if not user.has_perm(f'{opts.app_label}.{get_permission_codename(level.value, opts)}'):
+            break
+
+        access = level
+
+    return access

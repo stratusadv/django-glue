@@ -743,6 +743,49 @@ value the tag passes this way must be JSON-serializable.
 `as_page()` are removed; a class that still defines one of the first two raises
 an error naming its replacement.
 
+### Take the access from the user's model permissions
+
+**Mix in `Glue.ModelAccessMixin` and name the model, and the component's
+access follows the user's permissions on it** (ADR 046):
+
+```python
+class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
+    template = 'roles/list.html'
+
+    def get_access_model(self):
+        return Role
+```
+
+The user's access is the highest level whose permission they hold along with
+every level below it: `view_role` gives `VIEW`, adding `add_role` gives `ADD`,
+and so on up to `DELETE`. A permission without the ones below it adds nothing,
+so `view_role` and `delete_role` alone give `VIEW`. A user without `view_role`
+is refused, and the page responds 403.
+
+The mixin sets the access in its `__post_init__`, so a component can still
+decide for itself. Assign `self.access` after calling `super()`:
+
+```python
+class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
+    ...
+
+    def __post_init__(self, request):
+        super().__post_init__(request)
+
+        if request.user.is_staff:
+            self.access = Glue.Access.DELETE
+```
+
+To read another model's permissions, such as a parent app's, return that model
+from `get_access_model()`. Outside a component, `get_model_access(user, model)`
+from `django_glue` returns the same level, or `None` without the view
+permission.
+
+Like any access a component assigns, it is decided when the component first
+appears, and a permission revoked while the page is open takes effect on the
+next page load. To check permission on every call, override `is_authorized()`,
+as in [guarding a component with a view decorator](#guard-a-component-with-a-view-decorator).
+
 ## Use a component as a URL view
 
 Register a component directly in Django's URL patterns with `as_view()`:
