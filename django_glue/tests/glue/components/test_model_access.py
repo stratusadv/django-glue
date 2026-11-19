@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
-from django.core.exceptions import PermissionDenied
 
 from django_glue import Glue, get_model_access
 from django_glue.glue.policy import GluePolicy
@@ -44,7 +43,7 @@ def _user_with(*codenames: str, model: type[Model] = Gorilla, **fields: Any) -> 
 class GorillaAccessComponent(Glue.ModelAccessMixin, Glue.Component):
     template = 'glue_template_test.html'
 
-    def get_access_model(self) -> type[Model]:
+    def get_permission_model(self) -> type[Model]:
         return Gorilla
 
 
@@ -56,12 +55,37 @@ class RaisedAccessComponent(GorillaAccessComponent):
 
 
 class FightAccessComponent(GorillaAccessComponent):
-    def get_access_model(self) -> type[Model]:
+    def get_permission_model(self) -> type[Model]:
         return Fight
 
 
 class MissingModelComponent(Glue.ModelAccessMixin, Glue.Component):
     template = 'glue_template_test.html'
+
+
+class FightComponent(Glue.Component):
+    template = 'glue_template_test.html'
+
+    def get_permission_model(self) -> type[Model]:
+        return Fight
+
+
+class MixedInFightComponent(Glue.ModelAccessMixin, FightComponent):
+    pass
+
+
+class AttributeGorillaComponent(Glue.ModelAccessMixin, Glue.Component):
+    template = 'glue_template_test.html'
+    permission_model = Gorilla
+
+
+class AttributeOverMethodComponent(Glue.ModelAccessMixin, FightComponent):
+    permission_model = Gorilla
+
+
+class MethodOverAttributeComponent(AttributeGorillaComponent):
+    def get_permission_model(self) -> type[Model]:
+        return Fight
 
 
 class ViewOnlyProducerComponent(Glue.Component):
@@ -106,11 +130,24 @@ def test_mixin_signs_the_access_the_user_holds_on_the_model(mock_request: HttpRe
     assert component.policy.access is Glue.Access.CHANGE
 
 
-def test_mixin_refuses_a_user_without_the_view_permission(mock_request: HttpRequest) -> None:
+def test_mixin_keeps_the_given_access_without_the_view_permission(
+    mock_request: HttpRequest,
+) -> None:
     mock_request.user = _user_with('change_gorilla')
 
-    with pytest.raises(PermissionDenied):
-        Glue.object(mock_request, GorillaAccessComponent())
+    component = Glue.object(mock_request, GorillaAccessComponent(access=Glue.Access.CHANGE))
+
+    assert component.policy.access is Glue.Access.CHANGE
+
+
+def test_subclass_access_is_signed_for_a_user_without_the_view_permission(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = AnonymousUser()
+
+    component = Glue.object(mock_request, RaisedAccessComponent())
+
+    assert component.policy.access is Glue.Access.DELETE
 
 
 def test_mixin_reads_the_permissions_of_the_model_a_subclass_names(
@@ -133,12 +170,50 @@ def test_access_a_subclass_assigns_after_the_mixin_is_the_access_signed(
     assert component.policy.access is Glue.Access.DELETE
 
 
-def test_mixin_without_get_access_model_names_the_missing_method(
+def test_mixin_listed_first_uses_the_model_its_base_component_names(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_fight', model=Fight)
+
+    component = Glue.object(mock_request, MixedInFightComponent())
+
+    assert component.policy.access is Glue.Access.VIEW
+
+
+def test_mixin_reads_a_permission_model_attribute(mock_request: HttpRequest) -> None:
+    mock_request.user = _user_with('view_gorilla', 'add_gorilla')
+
+    component = Glue.object(mock_request, AttributeGorillaComponent())
+
+    assert component.policy.access is Glue.Access.ADD
+
+
+def test_a_subclass_attribute_overrides_its_base_components_method(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_gorilla', 'add_gorilla')
+
+    component = Glue.object(mock_request, AttributeOverMethodComponent())
+
+    assert component.policy.access is Glue.Access.ADD
+
+
+def test_a_subclass_method_overrides_its_base_components_attribute(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_fight', 'add_fight', 'change_fight', model=Fight)
+
+    component = Glue.object(mock_request, MethodOverAttributeComponent())
+
+    assert component.policy.access is Glue.Access.CHANGE
+
+
+def test_mixin_without_a_permission_model_names_both_ways_to_give_one(
     mock_request: HttpRequest,
 ) -> None:
     mock_request.user = _user_with('view_gorilla')
 
-    with pytest.raises(NotImplementedError, match='MissingModelComponent must implement'):
+    with pytest.raises(NotImplementedError, match='must set permission_model or implement'):
         Glue.object(mock_request, MissingModelComponent())
 
 
@@ -155,11 +230,3 @@ def test_a_returned_component_is_capped_at_the_access_of_its_producer(
     spawned = next(item for item in introduced if item['address'] == entry['result'])
 
     assert GluePolicy.from_token(spawned['policy_token']).access is Glue.Access.VIEW
-
-
-def test_component_view_is_denied_without_the_view_permission(mock_request: HttpRequest) -> None:
-    mock_request.user = _user_with('change_gorilla')
-
-    # Django's request handler answers PermissionDenied with a 403.
-    with pytest.raises(PermissionDenied):
-        GorillaAccessComponent.as_view()(mock_request)

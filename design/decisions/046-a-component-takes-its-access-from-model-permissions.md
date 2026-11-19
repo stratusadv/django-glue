@@ -1,6 +1,8 @@
 # ADR 046: A Component Takes Its Access From Model Permissions
 
-Status: Accepted
+Status: Accepted; partly superseded by
+[ADR 047](047-model-access-keeps-the-access-without-the-view-permission.md),
+under which the mixin no longer refuses a user without the view permission
 
 Date: 2026-11-19
 

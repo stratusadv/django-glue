@@ -28,12 +28,13 @@
   [rows that need constructor arguments](../guides/form_glue.md#rows-that-need-constructor-arguments).
 
 - `Glue.ModelAccessMixin` gives a component the access the user's permissions
-  on a model allow (ADR 046). The component names the model with
-  `get_access_model()`; a user without its view permission is refused, and a
-  component that assigns `self.access` after `super().__post_init__(request)`
-  overrides the derived level. `get_model_access(user, model)` returns the same
-  level outside a component: the highest one whose permission the user holds
-  along with every level below it. See
+  on a model allow (ADR 046, ADR 047). The component names the model with a
+  `permission_model` attribute or a `get_permission_model()` method; without
+  the view permission the access stays as it was, and a component that assigns
+  `self.access` after `super().__post_init__(request)` overrides the derived
+  level. `get_model_access(user, model)` returns the same level outside a
+  component: the highest one whose permission the user holds along with every
+  level below it. See
   [taking the access from model permissions](../guides/components.md#take-the-access-from-the-users-model-permissions).
 
 ### Changes

@@ -746,21 +746,30 @@ an error naming its replacement.
 ### Take the access from the user's model permissions
 
 **Mix in `Glue.ModelAccessMixin` and name the model, and the component's
-access follows the user's permissions on it** (ADR 046):
+access follows the user's permissions on it** (ADR 046, ADR 047):
 
 ```python
 class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
     template = 'roles/list.html'
+    permission_model = Role
+```
 
-    def get_access_model(self):
-        return Role
+When the model is known only once the component exists, such as the model of
+a row it was given, define `get_permission_model()` instead:
+
+```python
+class RowDeleteComponent(Glue.ModelAccessMixin, Glue.Component):
+    def get_permission_model(self):
+        return type(self.row)
 ```
 
 The user's access is the highest level whose permission they hold along with
 every level below it: `view_role` gives `VIEW`, adding `add_role` gives `ADD`,
 and so on up to `DELETE`. A permission without the ones below it adds nothing,
-so `view_role` and `delete_role` alone give `VIEW`. A user without `view_role`
-is refused, and the page responds 403.
+so `view_role` and `delete_role` alone give `VIEW`. Without `view_role` the
+mixin leaves the access as it was. It does not decide who may open the page:
+guard that as any page is guarded, such as with `permission_required` on its
+URL.
 
 The mixin sets the access in its `__post_init__`, so a component can still
 decide for itself. Assign `self.access` after calling `super()`:
@@ -776,8 +785,10 @@ class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
             self.access = Glue.Access.DELETE
 ```
 
-To read another model's permissions, such as a parent app's, return that model
-from `get_access_model()`. Outside a component, `get_model_access(user, model)`
+To read another model's permissions, such as a parent app's, name that model.
+A subclass overrides the model its base names either way: the attribute or the
+method declared nearest the component's own class wins. Outside a component,
+`get_model_access(user, model)`
 from `django_glue` returns the same level, or `None` without the view
 permission.
 
