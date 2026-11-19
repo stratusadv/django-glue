@@ -21,6 +21,12 @@
   it is rebuilt from its token for a later action. See
   [adding page context](../guides/components.md#add-page-context-only-when-the-component-is-the-page).
 
+- `Glue.form()` takes `form_kwargs`, as `Glue.formset()` does (ADR 041): the
+  arguments the form was built with, signed so the form Glue rebuilds for each
+  call is built with them too. A form can then carry what it acts on but does
+  not edit, such as the invite a registration form accepts. See
+  [rows that need constructor arguments](../guides/form_glue.md#rows-that-need-constructor-arguments).
+
 ### Changes
 
 - A callable that returns a component, such as a modal, sends that component

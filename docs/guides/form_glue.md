@@ -246,6 +246,21 @@ returns. A row rebuilt on its own, for a call of its own such as loading its
 choices, gets only `form_kwargs`, so its form must also work without the added
 values (ADR 041).
 
+A single form takes them the same way. Build the form with them and pass them
+to `Glue.form()` too, so the form Glue rebuilds for each call gets the same
+values. Because they are signed, they also pin a record the form acts on but
+does not edit, such as the invite a registration form accepts:
+
+```python
+Glue.form(
+    request,
+    'invite_register',
+    target=InviteAccountForm(invite_pk=invite.pk),
+    access=Glue.Access.ADD,
+    form_kwargs={'invite_pk': invite.pk},
+)
+```
+
 ### Changing how rows are written
 
 Override `save_forms` or `delete_removed` on a `Glue.FormSet` subclass to change
