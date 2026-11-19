@@ -35,6 +35,7 @@ class GlueRequestErrorCode(StrEnum):
     # Path/body mismatch errors
     ADDRESS_MISMATCH = 'address_mismatch'
     DUPLICATE_ADDRESSES = 'duplicate_addresses'
+    TOO_MANY_ADDRESSES = 'too_many_addresses'
     MISSING_PATH_PARAMETERS = 'missing_path_parameters'
 
     # Pydantic validation

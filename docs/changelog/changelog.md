@@ -107,6 +107,14 @@
   the request, so a user who could save the form could replace a file field
   the page left out of `editable`, such as a photo it only displayed, by adding
   a file named after that field to the save request.
+- A call request addresses at most `DJANGO_GLUE_MAX_REQUEST_ADDRESSES` objects,
+  500 by default, counting its entries and their receivers. Only Django's
+  request size bounded it, so one 1.3 MB request could ask the server to
+  rebuild and answer 1000 objects. A request over the limit fails with
+  `too_many_addresses` before any object is rebuilt.
+- A deeply nested request body fails with `invalid_json`. Python's JSON
+  parser raised `RecursionError`, which failed the request with a server
+  error.
 
 - A page renders when it glues a model at `VIEW` access with a file in a
   `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
