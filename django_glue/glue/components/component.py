@@ -30,7 +30,7 @@ from django_glue.glue.components.registry import CAMEL_BOUNDARY, component_regis
 from django_glue.glue.components.root import inject_component_root
 from django_glue.glue.components.session import ComponentSession
 from django_glue.glue.context import GlueContextManager
-from django_glue.glue.event import GlueEvent, declared_event_identities
+from django_glue.glue.event import RECEIVE_ATTRIBUTE, GlueEvent, declared_event_identities
 from django_glue.glue.listener import GlueListener, ReceivedEvent, require_declared_events
 from django_glue.glue.model_parameter import ModelParameter
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
@@ -55,7 +55,6 @@ class _DefaultFactory:
 VIEW_COMPONENT_CONTEXT_KEY = '_django_glue_view_component'
 # The addresses of the children a re-render keeps rather than re-stamps (ADR 025).
 MOUNTED_CHILDREN_CONTEXT_KEY = '_django_glue_mounted_children'
-RECEIVE_ATTRIBUTE = '$receive'
 
 
 @cache
@@ -136,6 +135,7 @@ class Component(BaseGlue):
             cls.__signature__ = inspect.Signature([
                 inspect.Parameter('name', keyword, default=None, annotation=str | None),
                 inspect.Parameter('access', keyword, default=GlueAccess.VIEW, annotation=GlueAccess),
+                inspect.Parameter('defer_render', keyword, default=False, annotation=bool),
                 *(
                     inspect.Parameter(
                         key,
@@ -201,6 +201,7 @@ class Component(BaseGlue):
         *,
         name: str | None = None,
         access: GlueAccess = GlueAccess.VIEW,
+        defer_render: bool = False,
         **parameters: Any,
     ) -> None:
         declared = self._declared_parameters()
@@ -230,6 +231,10 @@ class Component(BaseGlue):
         self._ancestors: tuple[str, ...] = ()
         self._mounted_children: frozenset[str] = frozenset()
         self._access_ceiling: GlueAccess | None = None
+        # Only the response that introduces a returned component reads it, so it is not signed.
+        self._defer_render = defer_render
+        # as_view() sets it before introducing the component; it is not signed (ADR 045).
+        self._served_as_view = False
         self.context_data: dict[str, Any] = {}
 
         if not self.template:
@@ -270,6 +275,15 @@ class Component(BaseGlue):
                 )
             )
         }
+
+    @property
+    def served_as_view(self) -> bool:
+        """
+        Whether as_view() is serving this component on this request, from
+        __post_init__() on. A component a tag or a callable introduces, or one
+        rebuilt from its token for a later call, is not (ADR 045).
+        """
+        return self._served_as_view
 
     @property
     def lineage(self) -> tuple[str, ...]:
@@ -331,6 +345,20 @@ class Component(BaseGlue):
     @classmethod
     def event_declaring_classes(cls, policy: GluePolicy) -> tuple[type, ...]:
         return (component_registry.from_identifier(policy.identity['component_id']),)
+
+    @classmethod
+    def reacting_events(
+        cls,
+        policy: GluePolicy,
+        source_policy: GluePolicy,
+        identities: Iterable[str],
+    ) -> list[str]:
+        """Its ``rerender_on`` events, and its listeners' when a descendant emits them."""
+        reactions = _reactions(component_registry.from_identifier(policy.identity['component_id']))
+        reacting = set(reactions.get('rerender_on', ()))
+        if policy.address in source_policy.identity.get('ancestors', ()):
+            reacting.update(reactions.get('listeners', ()))
+        return [identity for identity in identities if identity in reacting]
 
     def get_static_data(self) -> dict[str, Any]:
         """
@@ -457,9 +485,16 @@ class Component(BaseGlue):
         there is none. A denial at introduction responds 403, or with the
         response a view decorator on ``is_authorized()`` answered it with.
         """
+        if parameters.get('defer_render'):
+            raise GlueComponentParameterError(
+                f'{cls.__name__}.as_view() renders its component, so it cannot take '
+                'defer_render, which only defers the render of a component a callable returns.'
+            )
+
         @require_safe
         def view(request: HttpRequest, **url_parameters: Any) -> HttpResponse:
             component = cls(access=access, **{**parameters, **url_parameters})
+            component._served_as_view = True
             page_template = view_template if view_template is not None else component.view_template
             try:
                 GlueContextManager(request).add_glue(component)
@@ -723,6 +758,32 @@ class Component(BaseGlue):
         if isinstance(result, Component):
             result._ancestors = self.lineage
         super()._introduce_result(result)
+
+    def _result_entries(self) -> list[dict[str, Any]]:
+        """
+        A returned component arrives rendered (ADR 043): its entry carries the
+        answer its first render() would get, so the client shows it without a
+        second request. The render is the one a render() call runs, on a fresh
+        instance from the token. A render Glue refuses, or one deferred with
+        ``defer_render=True``, is left to that call.
+        """
+        entries = super()._result_entries()
+        if self._defer_render:
+            return entries
+
+        render_context = AttributeCallRequestContext(
+            request=self.request,
+            target_glue_policy=self.policy,
+            target_attribute_name='render',
+        )
+        try:
+            fresh = type(self).from_attribute_call_resolver_context(render_context)
+            render_entry, render_introduced = fresh.process_attribute_call(render_context)
+        except GlueError:
+            return entries
+
+        entries[0]['answers'] = {'render': render_entry}
+        return [*entries, *render_introduced]
 
     def _rerendered(
         self,

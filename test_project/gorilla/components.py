@@ -26,6 +26,28 @@ class CounterCardComponent(Glue.Component):
         return self.count
 
 
+class PageTitleCardComponent(Glue.Component):
+    """Adds its page's title only when a component view serves it (ADR 045)."""
+
+    template = 'gorilla/component/page_title_card.html'
+
+    served: bool = Glue.attr(False)
+
+    def __post_init__(self, request: HttpRequest) -> None:
+        self.served = self.served_as_view
+
+        if self.served_as_view:
+            self.context_data['page_title'] = 'Page Title Card'
+
+
+class PageTitleCardProducerComponent(Glue.Component):
+    template = 'gorilla/component/page_title_card.html'
+
+    @Glue.attr
+    def open_card(self) -> PageTitleCardComponent:
+        return PageTitleCardComponent()
+
+
 class RequestCounterCardComponent(CounterCardComponent):
     start: int = Glue.attr(0, parameter=True)
 

@@ -1,16 +1,96 @@
 {% extends "base.html" %}
+{% load django_glue %}
 
 {% block content %}
-        <div class="row justify-content-center mb-4">
-            <div class="col-lg-8">
-                <div class="card card-gorilla">
-                    <div class="card-header bg-gorilla-green text-white">
-                        <h5 class="mb-0">Some namespace of Stress Test</h5>
-                    </div>
-                    <div class="card-body">
-                        Stress Testing goes Here
-                    </div>
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla">
+                <div class="card-body">
+                    <p class="text-muted">
+                        Every component below is live. Open the <strong>Glue</strong> panel at the bottom left and
+                        interact: each action shows its round trips, the time until the page settles, and the main
+                        thread time it blocked. Raise the sizes to find where it stops scaling.
+                    </p>
+                    <form method="get" class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Cards</label>
+                            <input type="number" name="cards" class="form-control form-control-sm" value="{{ cards }}" min="1" max="500">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Tallies listening</label>
+                            <input type="number" name="tallies" class="form-control form-control-sm" value="{{ tallies }}" min="1" max="100">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Tree depth</label>
+                            <input type="number" name="depth" class="form-control form-control-sm" value="{{ depth }}" min="1" max="5">
+                        </div>
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small">Tree fanout</label>
+                            <input type="number" name="fanout" class="form-control form-control-sm" value="{{ fanout }}" min="1" max="4">
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-sm btn-gorilla">Reload with these sizes</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-role="stress-deck">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Deck: spawning, dropping and keeping children</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">
+                        <strong>Touch</strong> re-renders the deck and keeps its cards. <strong>Grow</strong> and
+                        <strong>Shrink</strong> spawn and drop a card. <strong>+1</strong> on a card raises its
+                        <code>counted</code> event: the deck hears it through a <code>Glue.listener</code>, which only
+                        hears descendants, and re-renders keeping its cards; every tally below hears it too.
+                    </p>
+                    {% glue_component 'lab/deck' size=cards %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-role="stress-tallies">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Tallies: components woken by a card's event</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">
+                        Each tally lists <code>counted</code> in <code>rerender_on</code>, which hears the event from
+                        anywhere on the page, and shows when it last rendered. All the components one response wakes,
+                        the deck included, re-render in a single follow-up request, so a card's +1 should be two calls
+                        however many tallies there are.
+                    </p>
+                    {% for key in tally_keys %}
+                        {% glue_component 'lab/tally' key=key %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-lg-10">
+            <div class="card card-gorilla" data-role="stress-tree">
+                <div class="card-header bg-gorilla-green text-white">
+                    <h5 class="mb-0">Tree: nested components</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">
+                        <strong>touch</strong> on a node re-renders that node and keeps its subtree. Compare the root
+                        with a leaf.
+                    </p>
+                    {% glue_component 'lab/tree' depth=depth fanout=fanout %}
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}

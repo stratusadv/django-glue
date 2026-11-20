@@ -19,9 +19,6 @@ def _serialize_field_file(file: FieldFile) -> dict | None:
     with suppress(ValueError):
         result['url'] = file.url
 
-    with suppress(ValueError, NotImplementedError):
-        result['path'] = file.path
-
     return result
 
 

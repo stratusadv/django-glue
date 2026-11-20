@@ -71,15 +71,21 @@ class GlueAddressRecord {
     displacedChildren: string[] | null
     proxy: GlueRecordProxy | null
     _queue: Promise<unknown>
+    // Calls queued or running on this record.
+    queued: number
     inFlightController: AbortController | null
     _suppressMutations: boolean
     reactiveValues: GlueValues
+    // Calls answered before they are made (ADR 043), by attribute. An answer
+    // holds only until the record next changes.
+    answers: Map<string, GlueAddressedEntry>
 
-    constructor({address, policyToken, staticData = {}, computedData = {}}: {
+    constructor({address, policyToken, staticData = {}, computedData = {}, answers = {}}: {
         address: string
         policyToken: string
         staticData?: GlueStaticData
         computedData?: GlueComputedData
+        answers?: Record<string, GlueAddressedEntry>
     }) {
         this.address = address
         this.policyToken = policyToken
@@ -99,13 +105,23 @@ class GlueAddressRecord {
         this.displacedChildren = null
         this.proxy = null
         this._queue = Promise.resolve()
+        this.queued = 0
         this.inFlightController = null
         this._suppressMutations = false
         this.reactiveValues = reactive({})
         this._replaceReactive(this.canonical)
+        this.answers = new Map(Object.entries(answers))
+    }
+
+    // The answer to a call made now without arguments, at most once.
+    takeAnswer(attribute: string): GlueAddressedEntry | undefined {
+        const answer = this.answers.get(attribute)
+        this.answers.delete(attribute)
+        return answer
     }
 
     dispose(): void {
+        this.answers.clear()
         this.disposed = true
         this.generation += 1
         this._queue = Promise.resolve()
@@ -156,12 +172,14 @@ class GlueAddressRecord {
     }
 
     enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        this.queued += 1
         const queued = this._queue.then(operation, operation)
-        this._queue = queued.catch(() => undefined)
+        this._queue = queued.catch(() => undefined).finally(() => { this.queued -= 1 })
         return queued
     }
 
     introduce(entry: GlueObjectEntry): void {
+        this.answers = new Map(Object.entries(entry.answers || {}))
         const wasStale = this.stale
         this._applyPolicyToken(entry.policy_token)
         this.staticData = cloneValue(entry.static_data || {})
@@ -176,6 +194,7 @@ class GlueAddressRecord {
     }
 
     reconcile(entry: GlueReconcileEntry, requestCapture: GlueRequestCapture): void {
+        this.answers.clear()
         if (
             requestCapture?.generation !== undefined &&
             requestCapture.generation !== this.generation

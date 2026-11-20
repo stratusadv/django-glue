@@ -1,6 +1,6 @@
 from django_glue.shortcuts.glue import Glue
 from django_glue.shortcuts.urls import django_glue_urls
-from django_glue.access import GlueAccess
+from django_glue.access import GlueAccess, get_model_access
 from django_glue.exceptions import GlueModelParameterMismatchWarning
 from django_glue.response import GlueResponse
 from django_glue.glue.attributes import GlueAttributeDeclaration
@@ -26,5 +26,6 @@ __all__ = [
     'GlueSerializerError',
     'GlueSerializerRegistry',
     'django_glue_urls',
+    'get_model_access',
     'glue_serializer_registry',
 ]

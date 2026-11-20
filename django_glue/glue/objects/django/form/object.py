@@ -6,6 +6,7 @@ from django import forms
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.forms.models import model_to_dict
+from django.utils.datastructures import MultiValueDict
 
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes import GlueAttributeDeclaration
@@ -194,7 +195,8 @@ class FormGlue(BaseGlue):
                             value,
                         ),
                     ),
-                    required_access=GlueAccess.CHANGE,
+                    # ADD for a form of no saved row, CHANGE for one that edits a row.
+                    required_access=GlueAccess.required_save_access,
                     editable=True,
                     value_type=field,
                 )
@@ -453,9 +455,18 @@ class FormGlue(BaseGlue):
             field_name: self._editable_draft.get(field_name, self.form[field_name].value())
             for field_name in self.form.fields
         }
+        # Uploads bind only to editable fields, as values do: a request's files
+        # are not narrowed to the fields the page lets the user change.
+        files = None
+        if self.request:
+            files = MultiValueDict({
+                name: self.request.FILES.getlist(name)
+                for name in self.editable
+                if name in self.request.FILES
+            })
         kwargs = {
             'data': data,
-            'files': self.request.FILES if self.request else None,
+            'files': files,
         }
         has_instance = getattr(self.form, 'instance', None) is not None
         if isinstance(self.form, forms.ModelForm) and has_instance:

@@ -1,5 +1,158 @@
 # Changelog for Django Glue
 
+## v1.5.0
+
+### Features
+
+- `Component.served_as_view` tells `__post_init__` whether `as_view()` is
+  serving the component (ADR 045), so a component adds context only its page
+  needs, such as a title and breadcrumbs, without that context reaching every
+  `{% glue_component %}` embedding:
+
+  ```python
+  def __post_init__(self, request):
+      super().__post_init__(request)
+
+      if self.served_as_view:
+          self.context_data.update(build_page_navigation(request))
+  ```
+
+  It is `False` when a tag or a callable introduces the component, and after
+  it is rebuilt from its token for a later action. See
+  [adding page context](../guides/components.md#add-page-context-only-when-the-component-is-the-page).
+
+- `Glue.form()` takes `form_kwargs`, as `Glue.formset()` does (ADR 041): the
+  arguments the form was built with, signed so the form Glue rebuilds for each
+  call is built with them too. A form can then carry what it acts on but does
+  not edit, such as the invite a registration form accepts. See
+  [rows that need constructor arguments](../guides/form_glue.md#rows-that-need-constructor-arguments).
+
+- `Glue.ModelAccessMixin` gives a component the access the user's permissions
+  on a model allow (ADR 046, ADR 047). The component names the model with a
+  `permission_model` attribute or a `get_permission_model()` method; without
+  the view permission the access stays as it was, and a component that assigns
+  `self.access` after `super().__post_init__(request)` overrides the derived
+  level. `get_model_access(user, model)` returns the same level outside a
+  component: the highest one whose permission the user holds along with every
+  level below it. See
+  [taking the access from model permissions](../guides/components.md#take-the-access-from-the-users-model-permissions).
+
+### Changes
+
+- A callable that returns a component, such as a modal, sends that component
+  rendered in its own response (ADR 043), so the browser shows it without a
+  second `render` request. Opening showcase's customer Edit modal drops from 2
+  requests to 1, and from 111 ms to 57 ms at a 50 ms round trip. Pass
+  `defer_render=True` to the component's constructor to keep the separate
+  request; the template tag and `as_view()` refuse it.
+
+- A call whose events re-render other mounted components answers them in its
+  own response (ADR 044), instead of a `$receive` request after it. Saving
+  showcase's customer Edit modal, which re-renders its list, drops from 2
+  requests to 1, and from 255 ms to 139 ms at 100 ms a request. A receiver
+  with a file to upload, or one that changed while the call was in flight,
+  still gets its own `$receive`.
+
+- Each class is scanned for its declared events once, not on every render. A
+  queryset batch of 25 rows drops from 39 ms to 8.5 ms, and a page of 100
+  querysets from 77 ms to 15 ms.
+
+- A query that changes a queryset's window serializes its rows once, not twice.
+  A batch of 25 rows with a many-to-many field drops from 51 queries to 26.
+
+- A queryset batch prefetches its rows' many-to-many and reverse foreign key
+  values, instead of one query per row and relation. A batch of 25 rows with a
+  many-to-many field drops from 26 queries to 2.
+
+- A browser test that waits for a `render` request after opening a returned
+  component, or for a `$receive` request after a save, now times out, because
+  neither request is sent. Wait for what the page shows instead, or for the
+  response of the call itself, such as `save`.
+
+### Fixes
+
+- A policy token no longer carries the session key. It carried the key as
+  `session_id`, and with Django's database sessions that is the session cookie
+  itself, so any script on the page could read a login that `HttpOnly` keeps
+  out of `document.cookie`. A token now carries `session_hash`, a one-way
+  HMAC of the key, which binds it to the session as before. A refused token's
+  error no longer lists session keys or user ids. A page left open across the
+  upgrade has its next call refused once, as after a login.
+
+- `fields='__all__'` no longer exposes a model's `password` field. On a user
+  model it sent every row's password hash to the browser, let a client filter
+  by it with `startswith` to recover it a prefix at a time, and made it
+  editable at `CHANGE`. The field names `__all__` leaves out are the new setting
+  `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES`, `('password',)` by default;
+  naming a field in `fields` still exposes it.
+
+- A `Glue.choices()` label formatter's string result is escaped as text. It was
+  compiled as a Django template and sent as HTML, so a formatter such as
+  `f'{skill.name} (…)'` ran any markup or template tags a user had saved in the
+  row: script in the browser of everyone who opened the choices, and tags such
+  as `{% include %}` on the server. A formatter that returns markup on purpose
+  returns `format_html(...)`, `render_to_string(...)` or a `TemplateResponse`,
+  which work as before; template syntax in a plain string now shows as text.
+
+- A model's save refuses a relation changed to a row outside its `choices`.
+  `choices` only narrowed what the page offered, so a client could send any
+  primary key for a foreign key or many-to-many and save it, such as another
+  tenant's project. The save now fails with the relation's field error, as a
+  Django form's does. A many-to-many without `choices` is checked against the
+  related rows its `limit_choices_to` admits, so a member that does not exist
+  is a field error instead of a server error. An unchanged relation is not
+  checked, so a row that already points outside its `choices` still saves.
+
+- An update needs the access its value requires, as a call does. A value
+  declared `Glue.attr(..., editable=True, required_access=...)` could be set
+  through a token below that access, because only `is_authorized()` saw the
+  required access. A model's or form's fields now require
+  `GlueAccess.required_save_access`: `ADD` while there is no saved row, `CHANGE`
+  once there is.
+
+- A top-level `ADD` model settles to `VIEW` after its first save, as
+  state-model.md §9 says, and an `ADD` model of a saved row has no editable
+  fields. Its successor kept `ADD` and its editable fields, so an update sent
+  with any `VIEW` method that saves the instance was written to the new row.
+
+- A form binds uploads only to its editable fields. It bound every file in
+  the request, so a user who could save the form could replace a file field
+  the page left out of `editable`, such as a photo it only displayed, by adding
+  a file named after that field to the save request.
+
+- A call request addresses at most `DJANGO_GLUE_MAX_REQUEST_ADDRESSES` objects,
+  500 by default, counting its entries and their receivers. Only Django's
+  request size bounded it, so one 1.3 MB request could ask the server to
+  rebuild and answer 1000 objects. A request over the limit fails with
+  `too_many_addresses` before any object is rebuilt.
+
+- A model's save checks each upload the way a Django form's field would. An
+  editable `ImageField` stored whatever bytes it was sent under an image's
+  name, because a model's `full_clean()` checks the extension, not the
+  content; a file that is not an image now fails with the field's error.
+
+- A deeply nested request body fails with `invalid_json`. Python's JSON
+  parser raised `RecursionError`, which failed the request with a server
+  error.
+
+- A page renders when it glues a model at `VIEW` access with a file in a
+  `FileField` or `ImageField`. `{% django_glue_init %}` wrote the page's objects
+  with Django's encoder, which cannot write a file, and failed with "not JSON
+  serializable". It now uses the encoder every Glue response uses, so the file
+  arrives as it does in a response, and every value that rendered before is
+  written exactly as before.
+
+- A model file field's value no longer includes `path`, the file's location on
+  the server's disk. The browser receives `name` and `url`; nothing in Glue
+  read `path`.
+
+- The server refuses to issue a policy token larger than
+  `DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES` and fails that request with
+  `policy_too_large`. It used to issue it, and the next request failed with
+  `proxy_policy_invalid`. Infinite scroll in 25-row batches hit this at batch
+  95; the rows already loaded keep working. See the queryset guide for paging
+  long lists.
+
 ## v1.4.0
 
 ### Features

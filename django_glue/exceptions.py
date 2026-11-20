@@ -35,6 +35,7 @@ class GlueRequestErrorCode(StrEnum):
     # Path/body mismatch errors
     ADDRESS_MISMATCH = 'address_mismatch'
     DUPLICATE_ADDRESSES = 'duplicate_addresses'
+    TOO_MANY_ADDRESSES = 'too_many_addresses'
     MISSING_PATH_PARAMETERS = 'missing_path_parameters'
 
     # Pydantic validation
@@ -355,31 +356,22 @@ class GlueInvalidPolicyError(GlueError):
 
 
 class GlueInvalidSessionError(GlueError):
-    """Raised when the policy's session_id doesn't match the current request session."""
+    """
+    Raised when a policy was issued to another session. The details name only
+    the proxy: a session key in them would hand the page the session cookie.
+    """
 
     code = 'proxy_invalid_session'
     status = 403
 
-    def __init__(
-        self,
-        unique_name: str,
-        *,
-        policy_session_id: str | None = None,
-        current_session_id: str | None = None,
-    ) -> None:
+    def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
-        self.policy_session_id = policy_session_id
-        self.current_session_id = current_session_id
         super().__init__(
             f"Policy for proxy '{unique_name}' is not valid for the current session."
         )
 
     def details(self) -> dict:
-        return {
-            'proxy': self.unique_name,
-            'policy_session_id': self.policy_session_id,
-            'current_session_id': self.current_session_id,
-        }
+        return {'proxy': self.unique_name}
 
 
 class GlueInvalidUserError(GlueError):
@@ -388,26 +380,14 @@ class GlueInvalidUserError(GlueError):
     code = 'proxy_invalid_user'
     status = 403
 
-    def __init__(
-        self,
-        unique_name: str,
-        *,
-        policy_user_id: Any = None,
-        current_user_id: Any = None,
-    ) -> None:
+    def __init__(self, unique_name: str) -> None:
         self.unique_name = unique_name
-        self.policy_user_id = policy_user_id
-        self.current_user_id = current_user_id
         super().__init__(
             f"Policy for proxy '{unique_name}' is not valid for the current user."
         )
 
     def details(self) -> dict:
-        return {
-            'proxy': self.unique_name,
-            'policy_user_id': self.policy_user_id,
-            'current_user_id': self.current_user_id,
-        }
+        return {'proxy': self.unique_name}
 
 
 class GlueExpiredPolicyError(GlueError):
@@ -422,6 +402,30 @@ class GlueExpiredPolicyError(GlueError):
 
     def details(self) -> dict:
         return {'proxy': self.unique_name}
+
+
+class GluePolicyTooLargeError(GlueError):
+    """Raised instead of issuing a policy token larger than the server accepts back."""
+
+    code = 'policy_too_large'
+    status = 422
+
+    def __init__(self, unique_name: str, token_bytes: int, max_token_bytes: int) -> None:
+        self.unique_name = unique_name
+        self.token_bytes = token_bytes
+        self.max_token_bytes = max_token_bytes
+        super().__init__(
+            f"Policy for proxy '{unique_name}' would be {token_bytes} bytes, over the "
+            f'{max_token_bytes}-byte DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES limit. A queryset '
+            'reaches it by loading too many rows into one window; page long lists instead.'
+        )
+
+    def details(self) -> dict:
+        return {
+            'proxy': self.unique_name,
+            'token_bytes': self.token_bytes,
+            'max_token_bytes': self.max_token_bytes,
+        }
 
 
 class GlueCalledNonCallableAttributeError(GlueError):

@@ -33,6 +33,33 @@ The server intersects the current declaration, signed capability, and current
 authorization at introduction, reconstruction, and invocation. Denying one
 address in a batch leaves other addresses able to advance.
 
+## When access changes during a session
+
+A token keeps what it granted until it expires. A `Glue.model()`,
+`Glue.form()`, `Glue.queryset()` or `Glue.formset()` object is authorized when
+the page that issues it loads, so on a page already open:
+
+- **A row that leaves its queryset stays reachable.** A task reassigned away
+  from "my tasks" can still be edited or deleted through the row token the
+  page holds. New queries and `get(pk)` go through the queryset and no longer
+  return it.
+- **A revoked permission does not reach the page.** A user who loses
+  `change_task` can still save through objects issued before the change.
+
+Both last at most `DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS`, 24 hours by
+default. Logging out, logging in again and changing the password end every
+token the session holds at once.
+
+Where revocation must take effect immediately:
+
+- **Make the object a component** and check current permissions and ownership
+  in its `is_authorized()`, which runs on every call.
+- **Add a `process_glue_call` hook** that rechecks the user's permissions on
+  every call. It covers every Glue object, and a row's address carries its key,
+  as in `list[42]`, when the rule needs the row.
+- **Shorten the token lifetime** for the whole project with
+  `DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS`.
+
 ## Guarding calls with middleware
 
 A URL guard, such as a view decorator or a middleware's `process_view`, runs

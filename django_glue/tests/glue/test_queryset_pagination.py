@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import base64
+import inspect
 import json
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import patch
 
+from django.db import connection
 from django.db.models.functions import Length
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from django_glue import Glue
 from django_glue.access import GlueAccess
 from django_glue.exceptions import (
+    GluePolicyTooLargeError,
     GlueQuerySetCursorValidationError,
     GlueQuerySetFilterValidationError,
     GlueQuerySetOrderValidationError,
@@ -21,6 +26,7 @@ from django_glue.glue.objects.django.queryset import QuerySetGlue
 from django_glue.glue.policy import GluePolicy
 from django_glue.glue.objects.django.model.object import ModelGlue
 from django_glue.tests.glue.addressed_rows import addressed_row_entries
+from django_glue.tests.glue.test_refresh import request_entry
 from test_project.fight.models import Fight
 from test_project.gorilla.models import Gorilla, Skill
 
@@ -776,3 +782,85 @@ class ProjectedQueryCapabilityTestCase(TestCase):
         self.assertEqual(len(result['items']), 1)
         with self.assertRaises(GlueQuerySetFilterValidationError):
             glue_object.query_with_params(filter={'name__icontains': 'Al'})
+
+
+class QuerySetRowClassScanTestCase(TestCase):
+    def setUp(self):
+        for index in range(7):
+            Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index, weight=100.0, height=1.5)
+
+    def test_row_entries_scan_their_classes_once_not_once_per_row(self):
+        glue_object = build_glue()
+        addressed_row_entries(glue_object, glue_object.query_with_params())
+
+        with patch('inspect.getmembers_static', wraps=inspect.getmembers_static) as scan:
+            entries = addressed_row_entries(glue_object, glue_object.query_with_params())
+
+        self.assertEqual(len(entries), 7)
+        self.assertEqual(scan.call_count, 0)
+
+
+class QuerySetTokenLimitTestCase(TestCase):
+    def setUp(self):
+        for index in range(6):
+            Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index, weight=100.0, height=1.5)
+
+    def test_a_batch_that_would_outgrow_the_token_is_refused_and_the_window_still_works(self):
+        glue_object = build_glue(batch_size=2)
+        entry, _introduced, loaded = request_entry(
+            QuerySetGlue, glue_object.policy, glue_object.request, attribute='query_with_params',
+        )
+
+        # Room for the loaded window, but not for the two rows the next batch adds to it.
+        with override_settings(DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES=len(loaded.token) + 40):
+            with self.assertRaises(GluePolicyTooLargeError):
+                request_entry(
+                    QuerySetGlue, loaded, glue_object.request, attribute='query_with_params',
+                    kwargs={'seek_key': entry['result']['seek_key']},
+                )
+
+            counted, _introduced, _policy = request_entry(
+                QuerySetGlue, loaded, glue_object.request, attribute='count',
+            )
+
+        self.assertEqual(counted['result'], 6)
+
+
+class QuerySetToManyValueQueryCountTestCase(TestCase):
+    def setUp(self):
+        skills = [Skill.objects.create(name=f'Skill {index}') for index in range(3)]
+        self.gorillas = []
+        for index in range(6):
+            gorilla = Gorilla.objects.create(name=f'Gorilla {index:02d}', age=index)
+            gorilla.skills.set(skills[:index % 3 + 1])
+            self.gorillas.append(gorilla)
+        rival = self.gorillas[0]
+        for gorilla in self.gorillas:
+            Fight.objects.create(name='Bout', red_corner=gorilla, blue_corner=rival, winner=gorilla)
+
+    def _query(self, batch_size):
+        glue_object = build_glue(fields=['id', 'name', 'skills', 'fights_won'], batch_size=batch_size)
+        with CaptureQueriesContext(connection) as queries:
+            _entry, introduced, _policy = request_entry(
+                QuerySetGlue, glue_object.policy, glue_object.request, attribute='query_with_params',
+            )
+        return len(queries), introduced
+
+    def test_a_batch_queries_the_same_however_many_rows_it_has(self):
+        two_rows, _introduced = self._query(batch_size=2)
+        six_rows, introduced = self._query(batch_size=6)
+
+        self.assertEqual(six_rows, two_rows)
+        values = {
+            entry['computed_data']['values']['id']: entry['computed_data']['values']
+            for entry in introduced
+        }
+        for gorilla in self.gorillas:
+            self.assertEqual(
+                sorted(values[gorilla.pk]['skills']),
+                sorted(gorilla.skills.values_list('pk', flat=True)),
+            )
+            self.assertEqual(
+                sorted(values[gorilla.pk]['fights_won']),
+                sorted(gorilla.fights_won.values_list('pk', flat=True)),
+            )

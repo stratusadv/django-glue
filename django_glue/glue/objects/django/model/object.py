@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Mapping, Seq
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist, ValidationError
 from django.db import transaction
 from django.db.models import QuerySet
+from django.forms import ModelChoiceField
 
 from django_glue.access import GlueAccess
 from django_glue.encoders import GlueResponseJSONEncoder
@@ -40,6 +41,8 @@ if TYPE_CHECKING:
 
 ALL_FIELDS: Literal['__all__'] = '__all__'
 DRAFTED_PATHS_KEY = '$draft'
+# The message a Django form's relation field gives a value outside its queryset.
+INVALID_RELATION_CHOICE = ModelChoiceField.default_error_messages['invalid_choice']
 
 class ModelGlue(
     GlueComputedAttributesMixin,
@@ -175,7 +178,8 @@ class ModelGlue(
                             value,
                         ),
                     ),
-                    required_access=GlueAccess.CHANGE,
+                    # ADD while the draft is unsaved, CHANGE once the row exists.
+                    required_access=GlueAccess.required_save_access,
                     editable=True,
                     value_type=self._get_model_field(field_name),
                 )
@@ -310,12 +314,7 @@ class ModelGlue(
         if self._relation_is_to_many(relation_name):
             if self.instance.pk is None:
                 return ()
-            return tuple(
-                getattr(self.instance, relation_name).values_list(
-                    'pk',
-                    flat=True,
-                )
-            )
+            return self._to_many_member_pks(self.instance, relation_name)
         field = self._get_model_field(field_name)
         return getattr(self.instance, field.attname)
 
@@ -376,6 +375,17 @@ class ModelGlue(
         self.hydrate_computed_attributes(self.instance)
         self._validate()
         return super().get_state()
+
+    def _normalize_editable(
+        self,
+        editable: Sequence[str] | None,
+        access: GlueAccess,
+    ) -> tuple[str, ...]:
+        """ADD admits a draft's values only while it is unsaved (state-model.md §9)."""
+        selected = super()._normalize_editable(editable, access)
+        if self.instance.pk is not None and not access.has_access(GlueAccess.CHANGE):
+            return ()
+        return selected
 
     def _validate(self) -> None:
         if (
@@ -546,6 +556,8 @@ class ModelGlue(
                 if relation is not None:
                     owner = relation.owner()
                     relation.assign_owner(owner, self.instance)
+                self._validate_relation_choices()
+                self._validate_uploaded_files()
                 self.instance.full_clean()
                 self.instance.save()
                 self._apply_m2m_state(self._editable_draft)
@@ -556,8 +568,16 @@ class ModelGlue(
             # this re-signs the successor response at the settled access, so the
             # client's next request carries the persisted-row permission
             # (state-model.md ADR 010).
+            settled_from = self.access
             if self._row_access is not None:
                 self.access = self._row_access
+            elif self.access == GlueAccess.ADD:
+                # A top-level draft's create permission is spent once it is
+                # saved, so its successor is VIEW (state-model.md §9).
+                self.access = GlueAccess.VIEW
+            if self.access != settled_from:
+                self.editable = self._normalize_editable(self._editable_declaration, self.access)
+                self._invalidate_attributes()
             self._field_errors = {}
             self._derived_paths.update(self._included_fields)
             return {  # noqa: TRY300
@@ -573,6 +593,64 @@ class ModelGlue(
                 'success': False,
                 'errors': self._field_errors
             }
+
+    def _validate_relation_choices(self) -> None:
+        """
+        Refuse a relation the draft points at a row outside its choice source
+        (state-model.md §9): the configured choices, or for a many-to-many
+        without them, the related rows its limit_choices_to admits. Only a
+        change is checked. An unchanged value never enters the draft, and a
+        many-to-many keeps the members it has, so a row that already points
+        outside its choices still saves. A foreign key without choices is
+        left to full_clean(), which checks it the same way.
+        """
+        errors = {}
+        for field_name, value in self._editable_draft.items():
+            field = self._get_model_field(field_name)
+            if not getattr(field, 'is_relation', False):
+                continue
+            allowed = self.choices.get(field.name, self.choices.get(field.attname))
+            if getattr(field, 'many_to_many', False):
+                stored = (
+                    () if self.instance.pk is None
+                    else self._to_many_member_pks(self.instance, field.name)
+                )
+                added = {self._pk_from_related_value(item) for item in value or []} - set(stored)
+                if allowed is None:
+                    allowed = field.related_model._default_manager.complex_filter(
+                        field.get_limit_choices_to()
+                    )
+                if added and allowed.filter(pk__in=added).count() != len(added):
+                    errors[field.name] = [INVALID_RELATION_CHOICE]
+            elif (
+                value is not None
+                and allowed is not None
+                and not allowed.filter(pk=value).exists()
+            ):
+                errors[field.name] = [INVALID_RELATION_CHOICE]
+        if errors:
+            raise ValidationError(errors)
+
+    def _validate_uploaded_files(self) -> None:
+        """
+        Check each upload the way a Django form's field would. A model's
+        full_clean() checks an image's extension, not its content, so bytes
+        that are not an image would be stored under an image's name.
+        """
+        errors = {}
+        for field_name in self.editable:
+            field = self._get_model_field(field_name)
+            if getattr(field, 'get_internal_type', lambda: '')() not in {'FileField', 'ImageField'}:
+                continue
+            upload = self._get_file_from_request(field_name)
+            if upload is None:
+                continue
+            try:
+                field.formfield().clean(upload)
+            except ValidationError as error:
+                errors[field_name] = error.messages
+        if errors:
+            raise ValidationError(errors)
 
     def _apply_m2m_state(self, state: dict[str, Any]) -> None:
         """Apply M2M field values after the instance has been saved."""

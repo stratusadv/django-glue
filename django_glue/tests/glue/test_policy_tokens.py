@@ -7,14 +7,18 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from django_glue.access import GlueAccess
-from django_glue.exceptions import GlueExpiredPolicyError, GlueInvalidPolicyError
+from django_glue.exceptions import (
+    GlueExpiredPolicyError,
+    GlueInvalidPolicyError,
+    GluePolicyTooLargeError,
+)
 from django_glue.glue.policy import GluePolicy
 
 
 class GluePolicyTokenTestCase(TestCase):
     def policy(self, **overrides) -> GluePolicy:
         return GluePolicy.new_signed_policy({
-            'session_id': 'session-1',
+            'session_hash': 'session-1',
             'request_user_id': None,
             'origin': '/',
             'name': 'project_form',
@@ -65,6 +69,20 @@ class GluePolicyTokenTestCase(TestCase):
         ):
             GluePolicy.from_token(token)
         parse.assert_not_called()
+
+    def test_a_token_too_large_to_be_accepted_back_is_never_issued(self):
+        max_token_bytes = len(self.policy().token) - 10
+
+        with (
+            override_settings(DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES=max_token_bytes),
+            self.assertRaises(GluePolicyTooLargeError) as context,
+        ):
+            self.policy()
+
+        details = context.exception.details()
+        self.assertEqual(details['proxy'], 'project_form')
+        self.assertEqual(details['max_token_bytes'], max_token_bytes)
+        self.assertGreater(details['token_bytes'], max_token_bytes)
 
     @override_settings(DJANGO_GLUE_PROXY_POLICY_MAX_AGE_SECONDS=60)
     def test_expired_token_is_rejected(self):

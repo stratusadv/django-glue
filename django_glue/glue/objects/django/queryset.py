@@ -423,7 +423,7 @@ class QuerySetGlue(
         filter: dict[str, Any] | None = None,  # noqa: A002
         order_by: str | list[str] | None = None,
     ) -> models.QuerySet:
-        queryset = self.queryset
+        queryset = self.queryset.prefetch_related(*self._to_many_value_prefetches())
 
         for key in (filter or {}):
             if not isinstance(key, str) or not any(
@@ -634,13 +634,10 @@ class QuerySetGlue(
         """Rows answering a query this request participate, so their entries
         ride even when the window's address map is unchanged (state-model.md
         §10 slot table, row 3)."""
-        entries = super()._introduced_entries(policy, reintroduce)
         if self._window_change is None:
-            return entries
-        sent = {entry['address'] for entry in entries}
-        return entries + [
-            entry for entry in self._serialized_child_entries() if entry['address'] not in sent
-        ]
+            return super()._introduced_entries(policy, reintroduce)
+        # Every child rides, which covers any the base would introduce.
+        return self._serialized_child_entries()
 
     def _rebuild_item(self, key: str) -> BaseGlue | None:
         instance = self.queryset.filter(pk=key).first()

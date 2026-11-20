@@ -19,6 +19,12 @@ selection. `editable` narrows which exposed fields may be updated from the
 browser. Access also limits writes; exposing a field does not grant permission
 to edit it.
 
+`fields='__all__'` leaves out fields named in
+`DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES`, which is `('password',)` by
+default, so a user's password hash is never sent, filtered or edited unless a
+page names it in `fields`. Add a project's own secrets, such as API tokens, to
+that setting.
+
 ```javascript
 const task = Glue.model.task
 console.log(task.title)

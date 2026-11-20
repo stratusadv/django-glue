@@ -150,6 +150,19 @@ class FormSetFormKwargsTestCase(TestCase):
 
         assert formset.policy.identity['form_kwargs'] == {'max_age': 10}
 
+    def test_a_form_glued_with_the_shortcut_is_rebuilt_with_its_signed_kwargs(self) -> None:
+        glue_object = with_request(Glue.form(
+            target=CappedAgeForm(max_age=7),
+            unique_name='gorilla',
+            access=Glue.Access.ADD,
+            form_kwargs={'max_age': 7},
+        ))
+
+        rebuilt = FormGlue._reconstruct_from_policy(glue_object.policy)
+
+        assert glue_object.policy.identity['form_kwargs'] == {'max_age': 7}
+        assert rebuilt.form.max_age == 7
+
     def test_kwargs_that_cannot_be_signed_are_refused(self) -> None:
         gorilla = Gorilla.objects.create(name='Koko')
 

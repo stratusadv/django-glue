@@ -763,7 +763,7 @@ class GluePolicyTestCase(TestCase):
 
     def test_policy_token_restores_without_preserving_proxy_policy_shape(self):
         policy = GluePolicy.new_signed_policy({
-            'session_id': 'test-session',
+            'session_hash': 'test-session',
             'request_user_id': None,
             'origin': '/',
             'name': 'gorilla',
@@ -784,7 +784,7 @@ class GluePolicyTestCase(TestCase):
 
     def test_policy_token_serializes_datetime_identity(self):
         policy = GluePolicy.new_signed_policy({
-            'session_id': 'test-session',
+            'session_hash': 'test-session',
             'request_user_id': None,
             'origin': '/',
             'name': 'agreement_form',
@@ -1255,7 +1255,7 @@ class DjangoModelGlueObjectTestCase(TestCase):
         file_value = state['profile_photo']['value']
         self.assertTrue(file_value['name'].startswith('gorilla_photos/profile-photo'))
         self.assertTrue(file_value['url'].startswith('/media/gorilla_photos/profile-photo'))
-        self.assertIn('path', file_value)  # Local storage supports path
+        self.assertNotIn('path', file_value)
         self.assertNotIn('size', file_value)  # Size is omitted for performance
 
     def test_model_adapter_reconstructs_model_reconstruct_from_policy(self):
@@ -2193,7 +2193,7 @@ class DjangoFormGlueObjectTestCase(TestCase):
         glue_object = FormGlue(form, **glue_context(name='contact'))
         bound = glue_object.attributes['name']
 
-        self.assertEqual(bound.attribute.required_access, GlueAccess.CHANGE)
+        self.assertEqual(bound.attribute.required_access, GlueAccess.required_save_access)
         schema = bound.schema()
         self.assertEqual(schema['type'], 'CharField')
         self.assertEqual(schema['max_length'], 100)

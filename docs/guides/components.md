@@ -743,6 +743,60 @@ value the tag passes this way must be JSON-serializable.
 `as_page()` are removed; a class that still defines one of the first two raises
 an error naming its replacement.
 
+### Take the access from the user's model permissions
+
+**Mix in `Glue.ModelAccessMixin` and name the model, and the component's
+access follows the user's permissions on it** (ADR 046, ADR 047):
+
+```python
+class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
+    template = 'roles/list.html'
+    permission_model = Role
+```
+
+When the model is known only once the component exists, such as the model of
+a row it was given, define `get_permission_model()` instead:
+
+```python
+class RowDeleteComponent(Glue.ModelAccessMixin, Glue.Component):
+    def get_permission_model(self):
+        return type(self.row)
+```
+
+The user's access is the highest level whose permission they hold along with
+every level below it: `view_role` gives `VIEW`, adding `add_role` gives `ADD`,
+and so on up to `DELETE`. A permission without the ones below it adds nothing,
+so `view_role` and `delete_role` alone give `VIEW`. Without `view_role` the
+mixin leaves the access as it was. It does not decide who may open the page:
+guard that as any page is guarded, such as with `permission_required` on its
+URL.
+
+The mixin sets the access in its `__post_init__`, so a component can still
+decide for itself. Assign `self.access` after calling `super()`:
+
+```python
+class RoleListComponent(Glue.ModelAccessMixin, Glue.Component):
+    ...
+
+    def __post_init__(self, request):
+        super().__post_init__(request)
+
+        if request.user.is_staff:
+            self.access = Glue.Access.DELETE
+```
+
+To read another model's permissions, such as a parent app's, name that model.
+A subclass overrides the model its base names either way: the attribute or the
+method declared nearest the component's own class wins. Outside a component,
+`get_model_access(user, model)`
+from `django_glue` returns the same level, or `None` without the view
+permission.
+
+Like any access a component assigns, it is decided when the component first
+appears, and a permission revoked while the page is open takes effect on the
+next page load. To check permission on every call, override `is_authorized()`,
+as in [guarding a component with a view decorator](#guard-a-component-with-a-view-decorator).
+
 ## Use a component as a URL view
 
 Register a component directly in Django's URL patterns with `as_view()`:
@@ -781,6 +835,37 @@ and an unknown or missing parameter raises the component's normal error.
 When parameters, access, or the page's own context depend on the request,
 derive them in [`__post_init__`](#set-a-component-up-in-__post_init__). There is
 no separate view to write.
+
+### Add page context only when the component is the page
+
+The same component can be a URL view on one page and embedded with
+`{% glue_component %}` on another. `self.served_as_view` tells `__post_init__`
+which: it is `True` when `as_view()` is serving the component, with or without a
+view template, and `False` when a tag or another component's callable
+introduces it. Add context that only the page around a component view needs,
+such as its title and breadcrumbs, under that check, so it does not reach every
+embedding:
+
+```python
+class RegistrationListComponent(ModelCrudScrollComponent):
+    template = 'sales_tax/component/registration_list.html'
+    view_template = 'sales_tax/page/sales_tax_page.html'
+
+    def __post_init__(self, request):
+        super().__post_init__(request)
+
+        if self.served_as_view:
+            self.context_data.update(build_page_navigation(request))
+```
+
+```python
+path('', RegistrationListComponent.as_view(), name='sales_tax')
+```
+
+Read it in `__post_init__` only. It is not signed, so a component rebuilt from
+its token for a later action reports `False`, like `context_data`, which is
+gone by then too. A component template that branched on it would change on its
+first re-render.
 
 The view template places the rendered component with the no-argument tag:
 
@@ -870,6 +955,27 @@ class EntryModal(Glue.Component):
 
 The host disposes the modal when it closes. Disposal also removes its owned
 children and listeners.
+
+The returned component arrives rendered (ADR 043): the response that returns it
+also carries its HTML, so the host's first `render()` or `renderInnerHtml()`
+shows it without another request. A later render, or one with arguments, is a
+request as usual. When the caller will not show the component straight away,
+construct it with `defer_render=True` and it is rendered when the client asks:
+
+```python
+@Glue.attr
+def entry_picker(self) -> EntryPickerComponent:
+    return EntryPickerComponent(day=self.day, defer_render=True)
+```
+
+`defer_render` applies only to a component a callable returns. The template tag
+and `as_view()` render their component themselves, and refuse it.
+
+Opening a returned component therefore sends no `render` request. A browser
+test that waits for one after the click times out; wait for what the user sees
+instead, such as the modal's title. The modal also appears sooner, so a test
+that presses a key as it appears should first wait for the modal to finish
+opening, for example for focus to move into it.
 
 See [declared events](advanced/event_listeners.md) for `$on()` and DOM event
 delivery. The template tag has no special event-handler or Alpine-bound

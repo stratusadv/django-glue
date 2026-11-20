@@ -5,7 +5,7 @@ function policyData(overrides = {}) {
     const name = overrides.name || 'gorilla'
     const namespace = overrides.namespace || 'model'
     return {
-        session_id: 'session-1',
+        session_hash: 'session-1',
         request_user_id: 1,
         name,
         namespace,

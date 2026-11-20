@@ -1,10 +1,12 @@
 import re
-from typing import cast, TYPE_CHECKING
+from typing import Any, cast, TYPE_CHECKING
 
 from django import template
 from django.urls import get_resolver
+from django.utils.html import json_script
 from django.utils.safestring import mark_safe
 
+from django_glue.encoders import GlueResponseJSONEncoder
 from django_glue.glue.components.tag import register_component_tags
 from django_glue.glue.context import GlueContextManager
 
@@ -127,6 +129,12 @@ def glue_field_metadata_path(value: str) -> str:
 
     owner, field_name = value.rsplit('.', 1)
     return f'{owner}.$fields.{field_name}'
+
+
+@register.filter
+def glue_json_script(value: Any, element_id: str) -> str:
+    """Writes the page's Glue context with the encoder every Glue response uses."""
+    return json_script(value, element_id, encoder=GlueResponseJSONEncoder)
 
 
 @register.inclusion_tag('django_glue/django_glue.html', takes_context=True)

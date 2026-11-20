@@ -1,4 +1,4 @@
-__VERSION__ = '1.4.0'
+__VERSION__ = '1.5.0'
 
 # Context
 DJANGO_GLUE_CONTEXT_KEY = 'DJANGO_GLUE_CONTEXT'

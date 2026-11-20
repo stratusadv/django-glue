@@ -1,0 +1,11 @@
+{% load django_glue %}
+<div class="border-start ps-2 my-1" data-role="tree">
+    <span class="small">
+        depth {{ component.depth }}, touched {{ component.touches }}
+        <button type="button" class="btn btn-link btn-sm p-0 ms-1" title="Touch tree at depth {{ component.depth }}"
+                @click="component.touch()">touch</button>
+    </span>
+    {% for branch in component.branches %}
+        {% glue_component 'lab/tree' depth=component.depth|add:-1 fanout=component.fanout key=branch %}
+    {% endfor %}
+</div>

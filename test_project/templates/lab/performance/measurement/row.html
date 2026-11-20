@@ -1,0 +1,10 @@
+<tr>
+    <td>{{ label }}</td>
+    <td class="text-end">{{ measurement.milliseconds }} ms</td>
+    <td class="text-end">{{ measurement.queries }}</td>
+    <td class="text-end">{{ measurement.entries }}</td>
+    <td class="text-end">{{ measurement.payload.total|filesizeformat }}</td>
+    <td class="text-end">{{ measurement.payload.tokens|filesizeformat }}</td>
+    <td class="text-end">{{ measurement.payload.static|filesizeformat }}</td>
+    <td class="text-end">{{ measurement.payload.computed|filesizeformat }}</td>
+</tr>

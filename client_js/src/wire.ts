@@ -40,7 +40,7 @@ export interface GlueIdentity {
 // The payload a policy token decodes to: GluePolicy.model_dump(exclude={'token'})
 // in django_glue/glue/policy.py. The client reads it and never verifies it.
 export interface GluePolicyPayload {
-    session_id: string
+    session_hash: string
     request_user_id: unknown
     name: string
     namespace: string
@@ -163,12 +163,17 @@ export interface GlueEffects {
 }
 
 // An entry that introduces an object, on page load or beside the call that
-// produced it: GlueObjectEntry in django_glue/glue/context.py.
+// produced it: GlueObjectEntry in django_glue/glue/context.py. An object a
+// call returned may arrive with `answers`: the entry each named call, made
+// without arguments, would have been answered with, such as a returned
+// component's render (Component._result_entries() in
+// glue/components/component.py, ADR 043).
 export interface GlueObjectEntry {
     address: string
     policy_token: string
     static_data: GlueStaticData
     computed_data: GlueComputedData
+    answers?: Record<string, GlueAddressedEntry>
 }
 
 // The entry answering a requested address: BaseGlue._refresh_entry() and the
@@ -242,6 +247,18 @@ export interface GlueRequestEntry {
     updates: Record<string, unknown>
     call?: GlueAttributeCall
     reintroduce?: string[]
+    mounted?: string[]
+    child_submissions?: Record<string, GlueChildSubmission>
+    receivers?: GlueReceiverEntry[]
+}
+
+// A mounted object that reacts to an event the requested object declares: the
+// server delivers the events the call emits to it in the same response
+// (ReceiverEntry in django_glue/resolver/attribute_call/context.py, ADR 044).
+export interface GlueReceiverEntry {
+    address: string
+    policy_token: string
+    updates: Record<string, unknown>
     mounted?: string[]
     child_submissions?: Record<string, GlueChildSubmission>
 }

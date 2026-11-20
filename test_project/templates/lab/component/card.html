@@ -1,0 +1,6 @@
+<span class="badge text-bg-light border me-1 mb-1" data-role="card">
+    #{{ component.start }}
+    <span class="text-muted" x-text="component.count"></span>
+    <button type="button" class="btn btn-link btn-sm p-0 ms-1" title="Increment card {{ component.start }}"
+            @click="component.increment()">+1</button>
+</span>

@@ -31,7 +31,7 @@ from django_glue.glue.attributes.attribute import GlueAttributeKind, GlueValueRo
 from django_glue.glue.attributes.registry import GlueAttributeRegistry
 from django_glue.glue.children import GlueChildBinder
 from django_glue.glue.context import GlueObjectEntry
-from django_glue.glue.event import GlueEvent
+from django_glue.glue.event import declared_events
 from django_glue.glue.operation import GlueOperation, GlueOperationKind
 from django_glue.glue.policy import GluePolicy
 from django_glue.response import GlueResponse
@@ -249,6 +249,22 @@ class BaseGlue(ABC):
         _ = policy
         return (cls,)
 
+    @classmethod
+    def reacting_events(
+        cls,
+        policy: GluePolicy,
+        source_policy: GluePolicy,
+        identities: Iterable[str],
+    ) -> list[str]:
+        """
+        The events among ``identities``, emitted by the object signed as
+        ``source_policy``, that an object rebuilt from ``policy`` reacts to,
+        without rebuilding it (ADR 044). An object that reacts to none answers
+        an empty list; a class that reacts to events says which.
+        """
+        _ = policy, source_policy, identities
+        return []
+
     def is_authorized(
         self,
         request: HttpRequest,
@@ -401,8 +417,7 @@ class BaseGlue(ABC):
         declarations = [
             (name, declaration)
             for provider in (self, *self.get_attribute_providers())
-            for name, declaration in inspect.getmembers_static(type(provider))
-            if isinstance(declaration, GlueEvent)
+            for name, declaration in declared_events(type(provider))
         ]
         names = [name for name, _declaration in declarations]
         if len(names) != len(set(names)):
@@ -665,12 +680,20 @@ class BaseGlue(ABC):
         client ``updates`` over it (state-model.md §5)."""
         updates = self._admit_updates(policy, raw_updates)
         for path in updates:
+            required_access = self._resolve_required_access(
+                self._bound_attributes[path].attribute.required_access,
+            )
+            # The signed access gates an update as it gates a call.
+            if not policy.access.has_access(required_access):
+                raise GlueAccessError(
+                    attribute=path,
+                    required_access=required_access.value,
+                    current_access=policy.access.value,
+                )
             self._require_authorization(GlueOperation(
                 kind=GlueOperationKind.UPDATE,
                 attribute=path,
-                required_access=self._resolve_required_access(
-                    self._bound_attributes[path].attribute.required_access,
-                ),
+                required_access=required_access,
             ))
         retained_draft = {
             path: value
@@ -862,8 +885,7 @@ class BaseGlue(ABC):
                 }
             ):
                 self._introduce_result(result)
-                introduced.append(result.entry.model_dump())
-                introduced.extend(result._serialized_child_entries())
+                introduced.extend(result._result_entries())
             result = result.address
         else:
             GlueResponse._reject_glue_objects(result)
@@ -878,6 +900,10 @@ class BaseGlue(ABC):
         result._address = address.transient(self.address)
         result.cap_access(self.access)
         result.introduce(self.request)
+
+    def _result_entries(self) -> list[dict[str, Any]]:
+        """What a call that returns this object sends: its entry, then its children's."""
+        return [self.entry.model_dump(), *self._serialized_child_entries()]
 
     def _effects_payload(
         self,

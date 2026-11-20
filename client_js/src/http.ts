@@ -5,6 +5,7 @@ import type {
     GlueAttributeCallResponse,
     GlueChildSubmission,
     GlueErrorData,
+    GlueReceiverEntry,
     GlueRequestEntry,
     GlueResponseEntry,
 } from "./wire"
@@ -45,9 +46,14 @@ interface GlueAttributeRequest {
     companions?: GlueCompanion[]
     mounted?: string[]
     childSubmissions?: Record<string, GlueChildSubmission> | null
+    receivers?: GlueReceiverRequest[]
     signal?: AbortSignal | null
     batch?: GlueRequestBatch | null
 }
+
+// A receiver the request names (ADR 044). One with files to upload is left
+// out: its caller then delivers to it with a request of its own.
+type GlueReceiverRequest = Pick<GlueAttributeRequest, 'address' | 'policyToken' | 'updates' | 'mounted' | 'childSubmissions'>
 
 type GlueAttributeResponse = GlueHttpResponse<GlueAttributeCallResponse>
 
@@ -170,6 +176,7 @@ class GlueHttp {
         companions = [],
         mounted = [],
         childSubmissions = null,
+        receivers = [],
         signal = null,
         batch = null,
     }: GlueAttributeRequest): Promise<GlueAttributeResponse> {
@@ -186,6 +193,21 @@ class GlueHttp {
         if (childSubmissions) {
             entry.child_submissions = serializeValue(childSubmissions) as Record<string, GlueChildSubmission>
         }
+        const receiverEntries = receivers.flatMap((receiver): GlueReceiverEntry[] => {
+            const extracted = this._extractFiles(serializeValue(receiver.updates || {}) as Record<string, unknown>)
+            if (Object.keys(extracted.files).length) return []
+            const receiverEntry: GlueReceiverEntry = {
+                address: receiver.address,
+                policy_token: receiver.policyToken,
+                updates: extracted.data,
+            }
+            if (receiver.mounted?.length) receiverEntry.mounted = receiver.mounted
+            if (receiver.childSubmissions) {
+                receiverEntry.child_submissions = serializeValue(receiver.childSubmissions) as Record<string, GlueChildSubmission>
+            }
+            return [receiverEntry]
+        })
+        if (receiverEntries.length) entry.receivers = receiverEntries
         const entries = [entry, ...companions.map(companion => ({
             address: companion.address,
             policy_token: companion.policyToken,
@@ -360,6 +382,13 @@ class GlueRequestBatch {
     }
 }
 
-export type {GlueAttributeRequest, GlueAttributeResponse, GlueCompanion, GlueHttpResponse, GlueRequestOptions}
+export type {
+    GlueAttributeRequest,
+    GlueAttributeResponse,
+    GlueCompanion,
+    GlueHttpResponse,
+    GlueReceiverRequest,
+    GlueRequestOptions,
+}
 export {GlueRequestBatch}
 export default GlueHttp

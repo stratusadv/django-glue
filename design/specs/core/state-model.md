@@ -379,7 +379,7 @@ The built-in families narrow it where the adapter genuinely knows better:
 | Family                             | Default`is_authorized()`                                                                                                                |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Custom objects and components      | permissive; the application overrides                                                                                                 |
-| `ModelGlue`                      | permissive, but reconstruction refetches through the scope that introduced the row rather than the unrestricted default manager (§4) |
+| `ModelGlue`                      | permissive; a row rebuilt from its token is refetched by primary key, not through the queryset that introduced it, so the token is the row's grant for its lifetime (ADR 013): a row that leaves its queryset stays reachable through a token already issued until it expires |
 | `FormGlue` / `ModelForm`       | permissive; inherits the model rule for its bound instance                                                                            |
 | `QuerySetGlue`                   | permissive; the signed authenticated continuation*is* the scope, and a client query can only narrow it                              |
 | `FormSetGlue` / `SequenceGlue` | permissive; delegates to each keyed child                                                                                             |
@@ -1155,7 +1155,9 @@ authorization. This holds for a component's declared `Glue.listener` too
 (ADR 024): the client delivers the event as a `$receive` call on the listening
 component's own policy, the relayed detail is untrusted input, and only the
 source token that accompanies it is verified, as a descendant of the listener
-emitting an event its class declares.
+emitting an event its class declares. When the call that emitted the event named
+the listener as a receiver, the server builds that `$receive` itself from what
+the call emitted (ADR 044); the detail is still treated as untrusted.
 
 An event is a best-effort notification about one successfully produced
 response, not durable messaging or an exactly-once domain guarantee. Events
@@ -1600,6 +1602,12 @@ projection now makes easy to prevent. Documentation must state that the default
 is derived rather than closed, so that a project handling sensitive rows knows to
 supply `editable=` deliberately.
 
+The read side has one closed default: `fields='__all__'` leaves out the fields
+named in `DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES` (`('password',)`).
+Every exposed, filterable and editable path is derived from the selected
+fields, so such a field is neither sent, queried nor written unless `fields`
+names it.
+
 `related_field_config` is removed. Its projection concern belongs to `fields`,
 while its unrelated choice-query concern becomes a separate mapping:
 
@@ -1624,6 +1632,15 @@ Each choice source must name an exposed relation and query its related model.
 Its authenticated continuation remains signed. A `ModelForm` normally obtains
 this boundary from its configured form-field queryset; the explicit mapping is
 available for direct model editing and deliberate overrides.
+
+A save enforces the boundary, not only the choices it offers. `ModelGlue.save()`
+refuses a relation the draft changes to a row outside its choice source with
+the field error a Django form's relation field gives. A many-to-many without a
+configured source is checked against the related rows its `limit_choices_to`
+admits; a foreign key without one is left to `full_clean()`, which checks it
+the same way. Only a change is checked: an unchanged value never enters the
+draft and a many-to-many keeps the members it has, so a row that already points
+outside a narrower source still saves.
 
 **The omitted case is closed by construction rather than by an allowlist.** An
 exposed, editable relation with no entry in `choices` gets an implicit source
@@ -1661,7 +1678,10 @@ search. Each choice's `obj` carries `pk`, `__str__`, and the configured
 
 `Glue.choices(..., label_formatter=...)` renders each choice's `label`
 server-side from a function taking `(instance)` or `(request, instance)` and
-returning a string (rendered as a Django template) or a `TemplateResponse`. The
+returning text, which is escaped, a safe string such as a `format_html()` or
+`render_to_string()` result, which passes as markup, or a `TemplateResponse`.
+A returned string is never compiled as a template: it is usually built from row
+data, and compiling it would run that data as markup and template tags. The
 formatter is accepted as a callable or dotted path but always stored as its
 dotted path, so only a string travels inside the signed choice query and the
 allowlisting unpickler never admits a function reference; a callable that
@@ -1759,7 +1779,7 @@ Conceptual decoded policy-token payload:
 ```json
 {
   "protocol_version": 1,
-  "subject": { "session_id": "9a73f51d8c2e4b29", "user_id": 184 },
+  "subject": { "session_hash": "4c1f0e9b27a85d36e0b9c4a1f7d2e853", "user_id": 184 },
   "origin": "/time-tracker/dashboard/",
   "target": {
     "namespace": "time_tracker",
@@ -2244,6 +2264,36 @@ late responses from a disposed client incarnation from patching a newly
 introduced object at the same address. Client disposal does not invalidate a
 signed token on the server.
 
+#### Receivers
+
+A request entry for a call on an object that declares events also carries an
+optional `receivers` list
+([ADR 044](../../decisions/044-a-call-answers-the-receivers-of-its-events.md)):
+the mounted objects whose static data reacts to an event the object declares,
+each with its address, token, unsaved changes, `mounted` list and child
+submissions. It is untrusted. After the call succeeds, the server builds the
+deliveries from the events the call emitted and the token it issued, asks each
+receiver's class which of them it reacts to, and resolves each one that reacts
+as a requested `$receive` entry, in a savepoint of its own. Its entry, and the
+objects its render introduced, follow the call's in the response; a receiver
+that reacts to nothing is not answered. A receiver's address may not repeat an
+address the request names.
+
+```json
+{
+  "objects": [
+    {
+      "address": "customer_form_modal#4c1e[\"t9a03f\"]",
+      "policy_token": "...",
+      "call": {"attribute": "save", "kwargs": {"data": {}}},
+      "receivers": [
+        {"address": "customer_detail_card#77b2", "policy_token": "...", "updates": {}}
+      ]
+    }
+  ]
+}
+```
+
 #### Callable capability and server injection
 
 Callable capability is positive and per callable. Each callable in the signed
@@ -2379,7 +2429,11 @@ subclass whose `find_class` admits only the ORM, expression, field and standard
 value types a serialized `Query` can legitimately contain, and raises on
 anything else. This is defence in depth behind the signature, not a replacement
 for it — the signature is what makes the payload trustworthy, and the allowlist
-is what limits the damage when the signature is not. Livewire added its
+is what keeps a forged payload from running Python when the signature is not.
+It does not limit the SQL a forged query runs, since Django's ORM namespace
+includes `RawSQL` and `Func` templates, and it need not: a forged policy already
+reads and writes every model through ordinary Glue objects, so the line it holds
+after a `SECRET_KEY` disclosure is code execution, not data. Livewire added its
 `SecurityPolicy` class deny-list *behind* an already-verified checksum after a
 published gadget-chain disclosure; the same reasoning applies here, and an
 allowlist is the stronger form of it. The allowlist is a published, versioned

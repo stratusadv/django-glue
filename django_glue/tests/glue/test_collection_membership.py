@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from django.test import TestCase
 
 from django_glue.access import GlueAccess
@@ -40,6 +42,24 @@ class QuerySetMembershipTestCase(TestCase):
 
         self.assertEqual(successor.children, self.policy.children)
         self.assertEqual(introduced, [])
+
+    def test_a_query_serializes_its_rows_once(self):
+        with patch.object(
+            QuerySetGlue,
+            '_serialized_child_entries',
+            autospec=True,
+            side_effect=QuerySetGlue._serialized_child_entries,
+        ) as serialize:
+            _entry, introduced, _successor = request_entry(
+                QuerySetGlue,
+                self.policy,
+                self.request,
+                attribute='query_with_params',
+                kwargs={'order_by': ['-name']},
+            )
+
+        self.assertEqual(serialize.call_count, 1)
+        self.assertEqual(len(introduced), 3)
 
     def test_continuing_the_cursor_keeps_the_earlier_rows(self):
         first, _introduced, _policy = request_entry(

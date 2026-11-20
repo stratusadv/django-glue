@@ -232,16 +232,19 @@ def test_parent_listener_rerenders_when_a_stamped_child_emits(
     summary = page.get_by_test_id('tally-summary')
     expect(summary).to_have_text('Last counted 0, 0 counts')
 
-    receives = []
+    calls = []
     page.on(
         'request',
-        lambda request: receives.append(request) if '$receive' in (request.post_data or '') else None,
+        lambda request: calls.append(request.post_data or '') if '/__dg__/' in request.url else None,
     )
     card = page.get_by_test_id('counter-card').nth(1)
     card.get_by_role('button', name='Increment').click()
 
     expect(summary).to_have_text('Last counted 5, 1 counts')
-    assert len(receives) == 1
+    # The tally is named with the card's call and answered in its response (ADR 044).
+    assert len(calls) == 1
+    assert '"receivers"' in calls[0]
+    assert '$receive' not in calls[0]
     # The tally's re-render keeps the mounted card, so its count survives (ADR 025).
     expect(card.get_by_test_id('counter-value')).to_have_text('6')
 

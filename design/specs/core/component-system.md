@@ -1036,8 +1036,11 @@ carries an event, the client
 calls the built-in `$receive` callable on each mounted component whose
 `static_data.rerender_on` names the event's identity, and on each mounted
 ancestor whose `static_data.listeners` does, passing the event, its detail, and
-the source's current token. All of one response's deliveries travel in one
-request. The server verifies that the source token is genuine and that its
+the source's current token. A call names, as its `receivers`, the mounted
+objects that would react to an event its object declares, and the server
+answers them in the call's own response from the events the call emitted
+([ADR 044](../../decisions/044-a-call-answers-the-receivers-of-its-events.md));
+the deliveries left over travel in one request. The server verifies that the source token is genuine and that its
 class, or an attribute provider's class its identity names, declares the event,
 runs the matching listeners only when the source
 names the receiving component among its ancestors, and re-renders the
@@ -1226,8 +1229,13 @@ client registry rather than in the owner's signed `children` map — see
 [`state-model.md`](state-model.md) §10 — so disposing it when a modal closes
 leaves nothing dangling, and repeated calls do not accumulate in the owner's
 token. A returned component additionally produces the standard HTML
-envelope and receives automatic disposal when its root is removed. Components
-are therefore the convenient rendered case, not a transport requirement.
+envelope and receives automatic disposal when its root is removed. It arrives
+rendered: its introduced entry carries, under `answers`, the entry its first
+argument-free `render()` would be answered with, so the client shows it without
+a second request, unless it was constructed with `defer_render=True`
+([ADR 043](../../decisions/043-a-returned-component-arrives-rendered.md)).
+Components are therefore the convenient rendered case, not a transport
+requirement.
 
 Glue never turns a raw Django model, form, formset, or queryset into a live
 Glue object merely by inspecting its runtime type. Type recognition cannot

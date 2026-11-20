@@ -6,9 +6,10 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 
 from django_glue.access import GlueAccess
+from django_glue.conf import settings as glue_settings
 from django_glue.glue.objects.django.relation import OwningRelation
 from django_glue.glue.queryset_unpickler import (
     _queryset_class_path,
@@ -24,6 +25,10 @@ if TYPE_CHECKING:
 
     from django_glue.glue.objects.django.model.object import ModelGlue
     from django_glue.glue.objects.django.queryset import QuerySetGlue
+
+
+# The instance attribute a batch prefetches a to-many value's members into.
+_PREFETCHED_MEMBERS = '_glue_prefetched_{}'
 
 
 class ModelFieldResolutionMixin:
@@ -319,6 +324,40 @@ class ModelFieldResolutionMixin:
             or getattr(field, 'one_to_many', False)
         )
 
+    @cached_property
+    def _to_many_value_relation_names(self) -> tuple[str, ...]:
+        """The to-many relations whose members' pks are a value of each row."""
+        return tuple(dict.fromkeys(
+            name.removesuffix('_ids')
+            for name in self._included_fields
+            if self._relation_is_to_many(name)
+        ))
+
+    def _to_many_value_prefetches(self) -> list[Prefetch]:
+        """
+        Loads the members' pks of every to-many value for a whole batch, one
+        query per relation, where reading each row's members is a query per row.
+        """
+        prefetches = []
+        for relation_name in self._to_many_value_relation_names:
+            relation = self._get_model_field(relation_name)
+            # A reverse foreign key matches members to their owner by its column.
+            columns = ['pk', relation.field.attname] if relation.one_to_many else ['pk']
+            prefetches.append(Prefetch(
+                relation_name,
+                queryset=relation.related_model._default_manager.only(*columns),
+                to_attr=_PREFETCHED_MEMBERS.format(relation_name),
+            ))
+        return prefetches
+
+    @staticmethod
+    def _to_many_member_pks(instance: models.Model, relation_name: str) -> tuple[Any, ...]:
+        """A to-many value: from the batch's prefetch when there is one, else its own query."""
+        prefetched = getattr(instance, _PREFETCHED_MEMBERS.format(relation_name), None)
+        if prefetched is not None:
+            return tuple(member.pk for member in prefetched)
+        return tuple(getattr(instance, relation_name).values_list('pk', flat=True))
+
     def _related_queryset(self, instance: models.Model, relation_name: str) -> QuerySet:
         """The members of a saved instance's to-many relation. A reverse
         foreign key filters on the owner's pk: its related manager filters on
@@ -460,7 +499,13 @@ class ModelFieldResolutionMixin:
     def _included_fields(self) -> list[str]:
         all_names = self._all_available_field_names
         if self.fields == '__all__' or not self.fields:
-            names = self._default_field_names + self._many_to_many_field_names
+            # A field such as a password hash is sent only when it is named.
+            default_excluded = glue_settings.DJANGO_GLUE_DEFAULT_EXCLUDED_MODEL_FIELD_NAMES
+            names = tuple(
+                name
+                for name in self._default_field_names + self._many_to_many_field_names
+                if name not in default_excluded
+            )
         else:
             names = self.fields
         excluded = set(all_names) if self.exclude == '__all__' else set(self.exclude)

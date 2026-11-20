@@ -234,6 +234,7 @@
       companions = [],
       mounted = [],
       childSubmissions = null,
+      receivers = [],
       signal = null,
       batch = null
     }) {
@@ -252,6 +253,24 @@
       if (childSubmissions) {
         entry.child_submissions = serializeValue(childSubmissions);
       }
+      const receiverEntries = receivers.flatMap((receiver) => {
+        const extracted = this._extractFiles(serializeValue(receiver.updates || {}));
+        if (Object.keys(extracted.files).length)
+          return [];
+        const receiverEntry = {
+          address: receiver.address,
+          policy_token: receiver.policyToken,
+          updates: extracted.data
+        };
+        if (receiver.mounted?.length)
+          receiverEntry.mounted = receiver.mounted;
+        if (receiver.childSubmissions) {
+          receiverEntry.child_submissions = serializeValue(receiver.childSubmissions);
+        }
+        return [receiverEntry];
+      });
+      if (receiverEntries.length)
+        entry.receivers = receiverEntries;
       const entries = [entry, ...companions.map((companion) => ({
         address: companion.address,
         policy_token: companion.policyToken,
@@ -381,7 +400,7 @@
   }
   var http_default = GlueHttp;
 
-  // ../django-glue/node_modules/alpinejs/dist/module.esm.js
+  // node_modules/alpinejs/dist/module.esm.js
   var flushPending = false;
   var flushing = false;
   var queue = [];
@@ -3644,7 +3663,7 @@ ${expression ? 'Expression: "' + expression + `"
   var src_default = alpine_default;
   var module_default = src_default;
 
-  // ../django-glue/node_modules/@alpinejs/morph/dist/module.esm.js
+  // node_modules/@alpinejs/morph/dist/module.esm.js
   function morph(from, toHtml, options) {
     monkeyPatchDomSetAttributeToAllowAtSymbols();
     let context = createMorphContext(options);
@@ -4306,6 +4325,7 @@ ${expression ? 'Expression: "' + expression + `"
       this._eventListeners = new Map;
       this._onMessage = null;
       this._onError = null;
+      this._receiverAnswers = null;
       Object.defineProperty(this, "_owner", {
         value: owner,
         writable: true,
@@ -4390,46 +4410,66 @@ ${expression ? 'Expression: "' + expression + `"
         return await this._singleCall(attribute, kwargs, options);
       }
     }
-    async _singleCall(attribute, kwargs, { submit = true, companions = [], batch = null } = {}) {
-      const requestCapture = this._record.captureRequest();
-      if (!submit)
+    async _singleCall(attribute, kwargs, { submit = true, companions = [], batch = null, answered = null } = {}) {
+      const requestCapture = answered?.capture ?? this._record.captureRequest();
+      if (!submit && !answered)
         requestCapture.updates = {};
       const companionCaptures = companions.map((record) => {
         const capture = record.captureRequest();
         capture.updates = {};
         return { record, capture };
       });
-      const controller = companions.length ? null : new AbortController;
-      this._record.inFlightController = controller;
-      let response;
-      try {
-        response = await this._http.sendAttributeRequest({
-          address: this._record.address,
-          policyToken: this._record.policyToken,
-          updates: requestCapture.updates,
-          attribute,
-          kwargs,
-          companions,
-          signal: controller?.signal ?? null,
-          batch,
-          ...this._requestFields(attribute)
-        });
-      } catch (error2) {
-        if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
-          return { result: undefined, response: null, discarded: true };
+      const answer = !answered && attribute !== null && !Object.keys(kwargs).length && !Object.keys(requestCapture.updates).length && !companions.length ? this._record.takeAnswer(attribute) : undefined;
+      const receivers = answered || answer || attribute === null || batch ? [] : this._eventReceivers(companions);
+      let data;
+      if (answered) {
+        data = answered.data;
+      } else if (answer) {
+        data = { objects: [answer] };
+      } else {
+        const controller = companions.length ? null : new AbortController;
+        this._record.inFlightController = controller;
+        try {
+          const response = await this._http.sendAttributeRequest({
+            address: this._record.address,
+            policyToken: this._record.policyToken,
+            updates: requestCapture.updates,
+            attribute,
+            kwargs,
+            companions,
+            signal: controller?.signal ?? null,
+            batch,
+            receivers: receivers.map((receiver) => receiver.request),
+            ...this._requestFields(attribute)
+          });
+          data = response.data;
+        } catch (error2) {
+          if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+            return { result: undefined, response: null, discarded: true };
+          }
+          throw error2;
+        } finally {
+          if (this._record.inFlightController === controller)
+            this._record.inFlightController = null;
         }
-        throw error2;
-      } finally {
-        if (this._record.inFlightController === controller)
-          this._record.inFlightController = null;
       }
       if (this._record.disposed || this._registry.getRecord(this._record.address) !== this._record || requestCapture.generation !== this._record.generation) {
-        return { result: undefined, response: response.data, discarded: true };
+        return { result: undefined, response: data, discarded: true };
       }
-      const objects = response.data?.objects;
-      if (!Array.isArray(objects)) {
+      if (!Array.isArray(data?.objects)) {
         throw new GlueProxyError("Glue response is missing the objects envelope.");
       }
+      const receiverAddresses = new Set(receivers.map((receiver) => receiver.proxy._record.address));
+      const objects = [];
+      const receiverRuns = new Map;
+      let run = objects;
+      data.objects.forEach((entry) => {
+        if (receiverAddresses.has(entry?.address)) {
+          run = [];
+          receiverRuns.set(entry.address, run);
+        }
+        run.push(entry);
+      });
       const target = objects.find((entry) => entry?.address === this._record.address);
       if (!target) {
         throw new GlueProxyError(`Glue response has no entry for address "${this._record.address}".`);
@@ -4453,7 +4493,17 @@ ${expression ? 'Expression: "' + expression + `"
       this._client._dispatcher.reconcile(this._record.address, target, requestCapture);
       const rawResult = target.result;
       const result = target.html === undefined ? this._convertResult(rawResult, attribute) : htmlResultFromResponse(target, this._client);
-      await this._applyResponse(target, result);
+      this._receiverAnswers = new Map(receivers.flatMap(({ proxy, capture, policyToken }) => {
+        const receiverObjects = receiverRuns.get(proxy._record.address);
+        if (!receiverObjects || "error" in receiverObjects[0])
+          return [];
+        return [[proxy._record.address, { data: { objects: receiverObjects }, capture, policyToken }]];
+      }));
+      try {
+        await this._applyResponse(target, result);
+      } finally {
+        this._receiverAnswers = null;
+      }
       if (typeof rawResult === "string" && this._glueResult(attribute)) {
         const childRecord = this._registry.getRecord(rawResult);
         if (childRecord && !childRecord.owner) {
@@ -4462,7 +4512,7 @@ ${expression ? 'Expression: "' + expression + `"
       }
       target.result = result;
       this._processEffects(target);
-      return { result, response: response.data };
+      return { result, response: data };
     }
     _requestFields(attribute) {
       return {};
@@ -4485,13 +4535,46 @@ ${expression ? 'Expression: "' + expression + `"
       }));
       if (!events.length)
         return [];
+      const deliveries = this._reactingReceivers(events).map(([proxy, reactions]) => {
+        const answer = this._receiverAnswers?.get(proxy._record.address);
+        const current = answer && proxy._record.policyToken === answer.policyToken && !proxy._record.queued;
+        return { proxy, reactions, answer: current ? answer : null };
+      });
+      const requested = deliveries.filter((delivery) => !delivery.answer).length;
+      const batch = requested ? new GlueRequestBatch(this._http, requested) : null;
+      return deliveries.map(({ proxy, reactions, answer }) => proxy._callAttribute("$receive", { events: reactions }, answer ? { answered: answer } : { batch }));
+    }
+    _reactingReceivers(events) {
       const ancestors = new Set(this._record.policy.identity?.ancestors || []);
-      const mounted = [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => isEventReceiver(proxy) && proxy !== this && Boolean(proxy.$el));
-      const deliveries = mounted.map((proxy) => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))]).filter(([, reactions]) => reactions.length);
-      if (!deliveries.length)
+      return [...this._registry.records.values()].map((record) => record.proxy).filter((proxy) => isEventReceiver(proxy) && proxy !== this && Boolean(proxy.$el)).map((proxy) => [
+        proxy,
+        proxy._reactionsTo(events, ancestors.has(proxy._record.address))
+      ]).filter(([, reactions]) => reactions.length);
+    }
+    _eventReceivers(companions) {
+      const declared = Object.values(this._record.staticData?.event_ids || {});
+      if (!declared.length)
         return [];
-      const batch = new GlueRequestBatch(this._http, deliveries.length);
-      return deliveries.map(([proxy, reactions]) => proxy._callAttribute("$receive", { events: reactions }, { batch }));
+      const companionAddresses = new Set(companions.map((record) => record.address));
+      const events = declared.map((event) => ({
+        event,
+        source_token: this._record.policyToken,
+        detail: {}
+      }));
+      return this._reactingReceivers(events).filter(([proxy]) => !companionAddresses.has(proxy._record.address) && !proxy._record.queued).map(([proxy]) => {
+        const capture = proxy._record.captureRequest();
+        return {
+          proxy,
+          capture,
+          policyToken: proxy._record.policyToken,
+          request: {
+            address: proxy._record.address,
+            policyToken: proxy._record.policyToken,
+            updates: capture.updates,
+            ...proxy._requestFields("$receive")
+          }
+        };
+      });
     }
     async _reintroduceWithOwner() {
       const owner = this._record.owner;
@@ -5115,7 +5198,7 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/runtime/addressRecord.ts
   class GlueAddressRecord {
-    constructor({ address, policyToken, staticData = {}, computedData = {} }) {
+    constructor({ address, policyToken, staticData = {}, computedData = {}, answers = {} }) {
       this.address = address;
       this.policyToken = policyToken;
       this.policy = policy_default.fromSignedPolicyToken(policyToken);
@@ -5134,12 +5217,20 @@ ${expression ? 'Expression: "' + expression + `"
       this.displacedChildren = null;
       this.proxy = null;
       this._queue = Promise.resolve();
+      this.queued = 0;
       this.inFlightController = null;
       this._suppressMutations = false;
       this.reactiveValues = reactive3({});
       this._replaceReactive(this.canonical);
+      this.answers = new Map(Object.entries(answers));
+    }
+    takeAnswer(attribute) {
+      const answer = this.answers.get(attribute);
+      this.answers.delete(attribute);
+      return answer;
     }
     dispose() {
+      this.answers.clear();
       this.disposed = true;
       this.generation += 1;
       this._queue = Promise.resolve();
@@ -5180,13 +5271,17 @@ ${expression ? 'Expression: "' + expression + `"
       };
     }
     enqueue(operation) {
+      this.queued += 1;
       const queued = this._queue.then(operation, operation);
       this._queue = queued.catch(() => {
         return;
+      }).finally(() => {
+        this.queued -= 1;
       });
       return queued;
     }
     introduce(entry) {
+      this.answers = new Map(Object.entries(entry.answers || {}));
       const wasStale = this.stale;
       this._applyPolicyToken(entry.policy_token);
       this.staticData = cloneValue(entry.static_data || {});
@@ -5201,6 +5296,7 @@ ${expression ? 'Expression: "' + expression + `"
       this.proxy?._refreshMaterializedInterface();
     }
     reconcile(entry, requestCapture) {
+      this.answers.clear();
       if (requestCapture?.generation !== undefined && requestCapture.generation !== this.generation)
         return;
       if (entry.policy_token !== undefined)
@@ -5864,7 +5960,8 @@ ${expression ? 'Expression: "' + expression + `"
           address: entry.address,
           policyToken: entry.policy_token,
           staticData: entry.static_data,
-          computedData: entry.computed_data
+          computedData: entry.computed_data,
+          answers: entry.answers
         });
         this.records.set(entry.address, record);
         record.attachProxy(this._createProxy(record));

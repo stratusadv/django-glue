@@ -10,11 +10,15 @@ from django.contrib.auth import get_user_model
 from django.template import Context, Template
 from django.urls import reverse
 
+from django_glue import Glue
 from django_glue.exceptions import GlueComponentKeyError
 from django_glue.glue.policy import GluePolicy
+from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.gorilla.components import (
     CounterCardComponent,
     LaidOutCounterCardComponent,
+    PageTitleCardComponent,
+    PageTitleCardProducerComponent,
 )
 
 if TYPE_CHECKING:
@@ -126,6 +130,49 @@ def test_a_url_capture_overrides_the_same_as_view_parameter(mock_request) -> Non
     response = CounterCardComponent.as_view(start=1)(mock_request, start=13)
 
     assert _root_policy(response.content.decode()).identity['parameters']['start'] == 13
+
+
+def test_a_component_view_is_served_as_view_from_post_init(mock_request) -> None:
+    response = PageTitleCardComponent.as_view()(mock_request)
+
+    assert _root_policy(response.content.decode()).state_snapshot['served'] is True
+
+
+def test_a_component_view_with_a_page_is_served_as_view_and_adds_page_context(mock_request) -> None:
+    view = PageTitleCardComponent.as_view(view_template='gorilla/page/page_title_card_page.html')
+
+    html = view(mock_request).content.decode()
+
+    assert _root_policy(html).state_snapshot['served'] is True
+    assert '<h1 data-testid="page-title">Page Title Card</h1>' in html
+
+
+def test_a_component_the_tag_introduces_is_not_served_as_view(mock_request) -> None:
+    template = Template("{% load django_glue %}{% glue_component 'gorilla/page_title_card' %}")
+
+    html = template.render(Context({'request': mock_request}))
+
+    assert _root_policy(html).state_snapshot['served'] is False
+    assert 'Page Title Card' not in html
+
+
+def test_a_component_a_callable_returns_is_not_served_as_view(mock_request) -> None:
+    producer = Glue.object(mock_request, PageTitleCardProducerComponent())
+    context = call_context(producer, 'open_card')
+    reconstructed = PageTitleCardProducerComponent.from_attribute_call_resolver_context(context)
+
+    entry, introduced = reconstructed.process_attribute_call(context)
+
+    result_entry = next(item for item in introduced if item['address'] == entry['result'])
+    assert GluePolicy.from_token(result_entry['policy_token']).state_snapshot['served'] is False
+
+
+def test_a_component_rebuilt_from_its_token_is_not_served_as_view(mock_request) -> None:
+    policy = _root_policy(PageTitleCardComponent.as_view()(mock_request).content.decode())
+
+    rebuilt = PageTitleCardComponent._reconstruct_from_policy(policy)
+
+    assert rebuilt.served_as_view is False
 
 
 def _root_policy(html: str) -> GluePolicy:

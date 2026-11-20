@@ -4,10 +4,10 @@ import type {GlueOwnerReference} from "../errors"
 import {htmlResultFromResponse} from "../htmlRenderer"
 import type GlueHttp from "../http"
 import {GlueRequestBatch} from "../http"
-import type {GlueAttributeRequest} from "../http"
+import type {GlueAttributeRequest, GlueReceiverRequest} from "../http"
 import type GluePolicy from "../policy"
 import type GlueAddressRecord from "../runtime/addressRecord"
-import type {GlueRecordProxy} from "../runtime/addressRecord"
+import type {GlueRecordProxy, GlueRequestCapture} from "../runtime/addressRecord"
 import type GlueAddressRegistry from "../runtime/addressRegistry"
 import type {GlueProxyOptions} from "../runtime/addressRegistry"
 import type {
@@ -18,12 +18,32 @@ import type {
     GlueErrorEntry,
     GlueMessage,
     GlueObjectEntry,
+    GlueResponseEntry,
 } from "../wire"
 
 interface GlueCallOptions {
     submit?: boolean
     companions?: GlueAddressRecord[]
     batch?: GlueRequestBatch | null
+    // The response another call's request already brought for this one.
+    answered?: GlueReceiverAnswer | null
+}
+
+// A receiver named in another call's request (ADR 044): what it sent, and the
+// state it was in when it was sent.
+interface GlueReceiverCall {
+    proxy: GlueEventReceiver
+    capture: GlueRequestCapture
+    policyToken: string
+    request: GlueReceiverRequest
+}
+
+// A receiver's `$receive` answered in another call's response, with the state
+// it was sent in.
+interface GlueReceiverAnswer {
+    data: GlueAttributeCallResponse
+    capture: GlueRequestCapture
+    policyToken: string
 }
 
 // What a proxy adds to its request entries beyond address, token, updates
@@ -88,6 +108,8 @@ class BaseGlueProxy implements GlueRecordProxy {
     _eventListeners: Map<string, Set<GlueEventListener>>
     _onMessage: GlueMessageHandler | null
     _onError: GlueErrorHandler | null
+    // While a response is applied, its receivers' answers by address (ADR 044).
+    _receiverAnswers: Map<string, GlueReceiverAnswer> | null
 
     constructor({http, record, registry, client, owner = null}: GlueProxyOptions & {owner?: GlueRecordProxy | null}) {
         Object.defineProperties(this, {
@@ -99,6 +121,7 @@ class BaseGlueProxy implements GlueRecordProxy {
         this._eventListeners = new Map()
         this._onMessage = null
         this._onError = null
+        this._receiverAnswers = null
 
         Object.defineProperty(this, '_owner', {
             value: owner,
@@ -210,49 +233,84 @@ class BaseGlueProxy implements GlueRecordProxy {
     async _singleCall(
         attribute: string | null,
         kwargs: Record<string, unknown>,
-        {submit = true, companions = [], batch = null}: GlueCallOptions = {},
+        {submit = true, companions = [], batch = null, answered = null}: GlueCallOptions = {},
     ): Promise<GlueCallOutcome> {
-        const requestCapture = this._record.captureRequest()
-        if (!submit) requestCapture.updates = {}
+        const requestCapture = answered?.capture ?? this._record.captureRequest()
+        if (!submit && !answered) requestCapture.updates = {}
         const companionCaptures = companions.map(record => {
             const capture = record.captureRequest()
             capture.updates = {}
             return {record, capture}
         })
-        const controller = companions.length ? null : new AbortController()
-        this._record.inFlightController = controller
-        let response
-        try {
-            response = await this._http.sendAttributeRequest({
-                address: this._record.address,
-                policyToken: this._record.policyToken,
-                updates: requestCapture.updates,
-                attribute,
-                kwargs,
-                companions,
-                signal: controller?.signal ?? null,
-                batch,
-                ...this._requestFields(attribute),
-            })
-        } catch (error) {
-            if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
-                return {result: undefined, response: null, discarded: true}
+        // A call with no arguments and nothing to send may have been answered
+        // when the object was introduced (ADR 043); it then needs no request.
+        const answer = !answered
+            && attribute !== null
+            && !Object.keys(kwargs).length
+            && !Object.keys(requestCapture.updates).length
+            && !companions.length
+            ? this._record.takeAnswer(attribute)
+            : undefined
+        // The objects that would react to an event this object declares go
+        // with its call, and are answered in its response (ADR 044). A call in
+        // a batch is itself a delivery; its own events go as before.
+        const receivers = answered || answer || attribute === null || batch
+            ? []
+            : this._eventReceivers(companions)
+        let data: GlueAttributeCallResponse | null
+        if (answered) {
+            data = answered.data
+        } else if (answer) {
+            data = {objects: [answer]}
+        } else {
+            const controller = companions.length ? null : new AbortController()
+            this._record.inFlightController = controller
+            try {
+                const response = await this._http.sendAttributeRequest({
+                    address: this._record.address,
+                    policyToken: this._record.policyToken,
+                    updates: requestCapture.updates,
+                    attribute,
+                    kwargs,
+                    companions,
+                    signal: controller?.signal ?? null,
+                    batch,
+                    receivers: receivers.map(receiver => receiver.request),
+                    ...this._requestFields(attribute),
+                })
+                data = response.data
+            } catch (error) {
+                if (controller?.signal.aborted && requestCapture.generation !== this._record.generation) {
+                    return {result: undefined, response: null, discarded: true}
+                }
+                throw error
+            } finally {
+                if (this._record.inFlightController === controller) this._record.inFlightController = null
             }
-            throw error
-        } finally {
-            if (this._record.inFlightController === controller) this._record.inFlightController = null
         }
         if (
             this._record.disposed ||
             this._registry.getRecord(this._record.address) !== this._record ||
             requestCapture.generation !== this._record.generation
         ) {
-            return {result: undefined, response: response.data, discarded: true}
+            return {result: undefined, response: data, discarded: true}
         }
-        const objects = response.data?.objects
-        if (!Array.isArray(objects)) {
+        if (!Array.isArray(data?.objects)) {
             throw new GlueProxyError('Glue response is missing the objects envelope.')
         }
+        // An answered receiver's entry comes after this call's, followed by
+        // the objects its render introduced.
+        const receiverAddresses = new Set(receivers.map(receiver => receiver.proxy._record.address))
+        const objects: GlueResponseEntry[] = []
+        const receiverRuns = new Map<string, GlueResponseEntry[]>()
+        let run = objects
+        data.objects.forEach(entry => {
+            if (receiverAddresses.has(entry?.address)) {
+                run = []
+                receiverRuns.set(entry.address, run)
+            }
+            run.push(entry)
+        })
         // The entry answering a requested address is never a bare introduction.
         const target = objects.find(entry => entry?.address === this._record.address) as
             GlueAddressedEntry | GlueErrorEntry | undefined
@@ -293,7 +351,16 @@ class BaseGlueProxy implements GlueRecordProxy {
         const result = target.html === undefined
             ? this._convertResult(rawResult, attribute)
             : htmlResultFromResponse(target, this._client)
-        await this._applyResponse(target, result)
+        this._receiverAnswers = new Map(receivers.flatMap(({proxy, capture, policyToken}) => {
+            const receiverObjects = receiverRuns.get(proxy._record.address)
+            if (!receiverObjects || 'error' in receiverObjects[0]) return []
+            return [[proxy._record.address, {data: {objects: receiverObjects}, capture, policyToken}]]
+        }))
+        try {
+            await this._applyResponse(target, result)
+        } finally {
+            this._receiverAnswers = null
+        }
         if (typeof rawResult === 'string' && this._glueResult(attribute)) {
             const childRecord = this._registry.getRecord(rawResult)
             if (childRecord && !childRecord.owner) {
@@ -302,7 +369,7 @@ class BaseGlueProxy implements GlueRecordProxy {
         }
         target.result = result
         this._processEffects(target)
-        return {result, response: response.data}
+        return {result, response: data}
     }
 
     // Fields this proxy's request entries carry beyond its address, token,
@@ -331,7 +398,8 @@ class BaseGlueProxy implements GlueRecordProxy {
     // events (ADR 024, ADR 025, ADR 039): any mounted component that
     // re-renders on one, anywhere on the page, whatever kind of object emitted
     // it, and any mounted ancestor with a listener for one. Only a component
-    // has ancestors. The calls travel in one request. Returns their promises.
+    // has ancestors. Those the response already answered take that answer, and
+    // the rest travel in one request. Returns their promises.
     _deliverEvents(target: {effects?: {events?: GlueEmittedEvent[]}}): Promise<unknown>[] {
         const eventIds = this._record.staticData?.event_ids || {}
         const events = (target.effects?.events || [])
@@ -343,21 +411,65 @@ class BaseGlueProxy implements GlueRecordProxy {
             }))
         if (!events.length) return []
 
+        // A receiver this call's response answered takes that answer, unless a
+        // call has changed it since; the rest are delivered in one request.
+        const deliveries = this._reactingReceivers(events).map(([proxy, reactions]) => {
+            const answer = this._receiverAnswers?.get(proxy._record.address)
+            const current = answer && proxy._record.policyToken === answer.policyToken && !proxy._record.queued
+            return {proxy, reactions, answer: current ? answer : null}
+        })
+        const requested = deliveries.filter(delivery => !delivery.answer).length
+        const batch = requested ? new GlueRequestBatch(this._http, requested) : null
+        return deliveries.map(({proxy, reactions, answer}) => (
+            proxy._callAttribute('$receive', {events: reactions}, answer ? {answered: answer} : {batch})
+        ))
+    }
+
+    // Each mounted object that reacts to one of `events`, with the ones it
+    // reacts to: a component that re-renders on one, anywhere on the page, or a
+    // mounted ancestor with a listener for one.
+    _reactingReceivers(events: GlueReceivedEvent[]): [GlueEventReceiver, GlueReceivedEvent[]][] {
         const ancestors = new Set(this._record.policy.identity?.ancestors || [])
-        const mounted = [...this._registry.records.values()]
+        return [...this._registry.records.values()]
             .map(record => record.proxy)
             .filter((proxy): proxy is GlueEventReceiver => (
                 isEventReceiver(proxy) && proxy !== (this as unknown) && Boolean(proxy.$el)
             ))
-        const deliveries = mounted
-            .map((proxy): [GlueEventReceiver, GlueReceivedEvent[]] => [proxy, proxy._reactionsTo(events, ancestors.has(proxy._record.address))])
+            .map((proxy): [GlueEventReceiver, GlueReceivedEvent[]] => [
+                proxy,
+                proxy._reactionsTo(events, ancestors.has(proxy._record.address)),
+            ])
             .filter(([, reactions]) => reactions.length)
-        if (!deliveries.length) return []
+    }
 
-        const batch = new GlueRequestBatch(this._http, deliveries.length)
-        return deliveries.map(([proxy, reactions]) => (
-            proxy._callAttribute('$receive', {events: reactions}, {batch})
-        ))
+    // The objects that would react to an event this object declares, with what
+    // each sends to be answered in this call's response (ADR 044). One with a
+    // call queued or running is left out: an answer could predate that call's.
+    _eventReceivers(companions: GlueAddressRecord[]): GlueReceiverCall[] {
+        const declared = Object.values(this._record.staticData?.event_ids || {})
+        if (!declared.length) return []
+        const companionAddresses = new Set(companions.map(record => record.address))
+        const events = declared.map((event): GlueReceivedEvent => ({
+            event,
+            source_token: this._record.policyToken,
+            detail: {},
+        }))
+        return this._reactingReceivers(events)
+            .filter(([proxy]) => !companionAddresses.has(proxy._record.address) && !proxy._record.queued)
+            .map(([proxy]) => {
+                const capture = proxy._record.captureRequest()
+                return {
+                    proxy,
+                    capture,
+                    policyToken: proxy._record.policyToken,
+                    request: {
+                        address: proxy._record.address,
+                        policyToken: proxy._record.policyToken,
+                        updates: capture.updates,
+                        ...proxy._requestFields('$receive'),
+                    },
+                }
+            })
     }
 
     async _reintroduceWithOwner(): Promise<boolean> {

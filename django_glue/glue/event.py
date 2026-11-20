@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 
-from functools import partial
+from functools import cache, partial
 from typing import Any
 
 from django_glue.encoders import GlueResponseJSONEncoder
@@ -33,6 +33,9 @@ DOM_EVENT_NAMES = frozenset({
     'hashchange', 'popstate', 'pageshow', 'pagehide', 'message',
     'messageerror', 'online', 'offline', 'storage', 'visibilitychange',
 })
+
+# The call that delivers events to the objects reacting to them (ADR 024, ADR 044).
+RECEIVE_ATTRIBUTE = '$receive'
 
 
 def is_reserved_event_name(name: str) -> bool:
@@ -76,11 +79,20 @@ class GlueEvent:
         emit_event(instance, self.name, detail)
 
 
+@cache
+def declared_events(owner: type) -> tuple[tuple[str, GlueEvent], ...]:
+    """Each event the class declares or inherits, with its name; scanned once per class."""
+    return tuple(
+        (name, declaration)
+        for name, declaration in inspect.getmembers_static(owner)
+        if isinstance(declaration, GlueEvent)
+    )
+
+
 def declared_event_identities(*owners: type) -> dict[str, str]:
     """Each event the classes declare or inherit, by name, mapped to its identity (ADR 024)."""
     return {
         name: declaration.identity
         for owner in owners
-        for name, declaration in inspect.getmembers_static(owner)
-        if isinstance(declaration, GlueEvent)
+        for name, declaration in declared_events(owner)
     }

@@ -1,9 +1,9 @@
-{% load static %}
+{% load static django_glue %}
 {% csrf_token %}
 
 <script src="{% static 'django_glue/js/django_glue.js' %}?v={{ DJANGO_GLUE_ASSET_VERSION }}"></script>
 
-{{ DJANGO_GLUE_CONTEXT|json_script:DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}
+{{ DJANGO_GLUE_CONTEXT|glue_json_script:DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}
 
 <script>
     const context = parseJsonScriptById('{{ DJANGO_GLUE_CONTEXT_SCRIPT_NAME }}')

@@ -35,6 +35,17 @@ fetches a batch, `loadMore()` follows the signed continuation, and `count()`
 queries a total separately. `all({withTotal: true})` includes a total in its
 first result. `refresh()` or `$refresh()` re-runs the relevant query.
 
+## How many rows one queryset can load
+
+The queryset's signed token lists every row it has loaded, so each
+`loadMore()` makes it larger. Glue never issues a token larger than
+`DJANGO_GLUE_MAX_POLICY_TOKEN_BYTES`: a `loadMore()` that would do so fails
+with `policy_too_large`, and the rows already loaded keep working. With short
+integer keys that is a little over 2,000 rows; long keys, a long queryset name
+or projected relations reach it sooner. A list that can grow past that should
+page instead of scrolling one queryset without end, for example with a
+component that loads each batch by offset.
+
 ## Query permissions
 
 By default, client filters and ordering can use exposed concrete fields and

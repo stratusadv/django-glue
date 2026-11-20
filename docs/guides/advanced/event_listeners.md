@@ -113,7 +113,11 @@ component's render has arrived, so the page changes once.
 - **`rerender_on` hears the event from anywhere on the page.** Any mounted
   component that lists the event re-renders, whether it is the source's parent,
   an ancestor further up, or a sibling such as a summary panel next to the
-  rows. All the components one response wakes re-render in a single request.
+  rows. A call to an object that declares events names the mounted components
+  that react to one, and the server re-renders those its call wakes in the
+  call's own response, so a save and the list it updates take one request
+  (ADR 044). A browser test should wait for the re-rendered component, not for
+  a `$receive` request, which no longer follows the call.
 - **The source can be any Glue object.** A form, model or queryset that declares
   an event reaches `rerender_on` too, so a summary can re-render when a form
   saves:
