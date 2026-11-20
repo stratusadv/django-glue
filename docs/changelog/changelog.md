@@ -109,23 +109,28 @@
   required access. A model's or form's fields now require
   `GlueAccess.required_save_access`: `ADD` while there is no saved row, `CHANGE`
   once there is.
+
 - A top-level `ADD` model settles to `VIEW` after its first save, as
   state-model.md §9 says, and an `ADD` model of a saved row has no editable
   fields. Its successor kept `ADD` and its editable fields, so an update sent
   with any `VIEW` method that saves the instance was written to the new row.
+
 - A form binds uploads only to its editable fields. It bound every file in
   the request, so a user who could save the form could replace a file field
   the page left out of `editable`, such as a photo it only displayed, by adding
   a file named after that field to the save request.
+
 - A call request addresses at most `DJANGO_GLUE_MAX_REQUEST_ADDRESSES` objects,
   500 by default, counting its entries and their receivers. Only Django's
   request size bounded it, so one 1.3 MB request could ask the server to
   rebuild and answer 1000 objects. A request over the limit fails with
   `too_many_addresses` before any object is rebuilt.
+
 - A model's save checks each upload the way a Django form's field would. An
   editable `ImageField` stored whatever bytes it was sent under an image's
   name, because a model's `full_clean()` checks the extension, not the
   content; a file that is not an image now fails with the field's error.
+
 - A deeply nested request body fails with `invalid_json`. Python's JSON
   parser raised `RecursionError`, which failed the request with a server
   error.
