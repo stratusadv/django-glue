@@ -827,8 +827,7 @@ class RoleFormComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
 ```
 
 A page load the guard refuses redirects to log in, as Django's
-`permission_required` does. Set `raise_exception = True` to answer with a 403
-instead. A refused call is a 403 either way. A component that grants more than
+`permission_required` does. A refused call is a 403. A component that grants more than
 the user's permissions, such as to the owner of a row, uses
 `Glue.ModelAccessMixin` and guards itself.
 

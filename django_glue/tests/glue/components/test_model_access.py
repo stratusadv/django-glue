@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
-from django.core.exceptions import PermissionDenied
 
 from django_glue import Glue, get_model_access
 from django_glue.exceptions import GlueAuthorizationError
@@ -93,10 +92,6 @@ class MethodOverAttributeComponent(AttributeGorillaComponent):
 class RequiredGorillaComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
     template = 'glue_template_test.html'
     permission_model = Gorilla
-
-
-class ForbiddingGorillaComponent(RequiredGorillaComponent):
-    raise_exception = True
 
 
 class AddRequiredGorillaComponent(RequiredGorillaComponent):
@@ -272,15 +267,6 @@ def test_required_mixin_serves_the_page_with_the_access_the_user_holds(
     assert component.policy.access is Glue.Access.ADD
 
 
-def test_required_mixin_forbids_instead_of_redirecting_when_raise_exception_is_set(
-    mock_request: HttpRequest,
-) -> None:
-    mock_request.user = AnonymousUser()
-
-    with pytest.raises(PermissionDenied):
-        ForbiddingGorillaComponent.as_view()(mock_request)
-
-
 def test_required_mixin_refuses_a_user_below_the_required_access(
     mock_request: HttpRequest,
 ) -> None:
@@ -310,7 +296,7 @@ def test_required_mixin_refuses_an_introduction_as_a_glue_error(
     mock_request.user = AnonymousUser()
 
     with pytest.raises(GlueAuthorizationError):
-        Glue.object(mock_request, ForbiddingGorillaComponent())
+        Glue.object(mock_request, RequiredGorillaComponent())
 
 
 def test_required_mixin_reads_the_model_its_base_component_names(

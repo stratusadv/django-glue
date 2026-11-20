@@ -9,7 +9,7 @@
   `is_authorized()` turns away a user whose access does not reach
   `get_required_access()`, `VIEW` by default, on the page load and on every
   call. A refused page load redirects to log in, as `permission_required`
-  does, or is a 403 with `raise_exception = True`; the URL needs no decorator.
+  does, so the URL needs no decorator.
 
   ```python
   class RoleListComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
