@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
+from django.core.exceptions import PermissionDenied
 
 from django_glue import Glue, get_model_access
+from django_glue.exceptions import GlueAuthorizationError
 from django_glue.glue.policy import GluePolicy
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.fight.models import Fight
@@ -86,6 +88,36 @@ class AttributeOverMethodComponent(Glue.ModelAccessMixin, FightComponent):
 class MethodOverAttributeComponent(AttributeGorillaComponent):
     def get_permission_model(self) -> type[Model]:
         return Fight
+
+
+class RequiredGorillaComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
+    template = 'glue_template_test.html'
+    permission_model = Gorilla
+
+
+class ForbiddingGorillaComponent(RequiredGorillaComponent):
+    raise_exception = True
+
+
+class AddRequiredGorillaComponent(RequiredGorillaComponent):
+    def get_required_access(self) -> Glue.Access:
+        return Glue.Access.ADD
+
+
+class RequiredFightComponent(Glue.ModelAccessRequiredMixin, FightComponent):
+    pass
+
+
+class AddRequiringComponent(Glue.Component):
+    template = 'glue_template_test.html'
+    permission_model = Gorilla
+
+    def get_required_access(self) -> Glue.Access:
+        return Glue.Access.ADD
+
+
+class MixedInAddRequiringComponent(Glue.ModelAccessRequiredMixin, AddRequiringComponent):
+    pass
 
 
 class ViewOnlyProducerComponent(Glue.Component):
@@ -215,6 +247,83 @@ def test_mixin_without_a_permission_model_names_both_ways_to_give_one(
 
     with pytest.raises(NotImplementedError, match='must set permission_model or implement'):
         Glue.object(mock_request, MissingModelComponent())
+
+
+def test_required_mixin_redirects_a_user_without_the_view_permission_to_log_in(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('add_gorilla')
+
+    response = RequiredGorillaComponent.as_view()(mock_request)
+
+    assert response.status_code == 302
+    assert response['Location'] == '/accounts/login/?next=/'
+
+
+def test_required_mixin_serves_the_page_with_the_access_the_user_holds(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_gorilla', 'add_gorilla')
+
+    response = RequiredGorillaComponent.as_view()(mock_request)
+    component = Glue.object(mock_request, RequiredGorillaComponent())
+
+    assert response.status_code == 200
+    assert component.policy.access is Glue.Access.ADD
+
+
+def test_required_mixin_forbids_instead_of_redirecting_when_raise_exception_is_set(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = AnonymousUser()
+
+    with pytest.raises(PermissionDenied):
+        ForbiddingGorillaComponent.as_view()(mock_request)
+
+
+def test_required_mixin_refuses_a_user_below_the_required_access(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_gorilla')
+    below = AddRequiredGorillaComponent.as_view()(mock_request)
+
+    mock_request.user = _user_with('view_gorilla', 'add_gorilla')
+    reaching = AddRequiredGorillaComponent.as_view()(mock_request)
+
+    assert below.status_code == 302
+    assert reaching.status_code == 200
+
+
+def test_required_mixin_listed_first_uses_the_required_access_its_base_component_names(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_gorilla')
+
+    response = MixedInAddRequiringComponent.as_view()(mock_request)
+
+    assert response.status_code == 302
+
+
+def test_required_mixin_refuses_an_introduction_as_a_glue_error(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = AnonymousUser()
+
+    with pytest.raises(GlueAuthorizationError):
+        Glue.object(mock_request, ForbiddingGorillaComponent())
+
+
+def test_required_mixin_reads_the_model_its_base_component_names(
+    mock_request: HttpRequest,
+) -> None:
+    mock_request.user = _user_with('view_gorilla')
+    without_fight = RequiredFightComponent.as_view()(mock_request)
+
+    mock_request.user = _user_with('view_fight', model=Fight)
+    with_fight = RequiredFightComponent.as_view()(mock_request)
+
+    assert without_fight.status_code == 302
+    assert with_fight.status_code == 200
 
 
 def test_a_returned_component_is_capped_at_the_access_of_its_producer(

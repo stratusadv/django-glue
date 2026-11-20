@@ -17,7 +17,7 @@ from django_glue.glue.attributes.attribute import (
 )
 from django_glue.glue.attributes.declaration import GlueAttributeDeclarationOptions
 from django_glue.glue.attributes.namespace import GlueNamespace
-from django_glue.glue.components import Component, ModelAccessMixin
+from django_glue.glue.components import Component, ModelAccessMixin, ModelAccessRequiredMixin
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
 from django_glue.glue.function import FunctionGlue
@@ -232,6 +232,7 @@ class Glue:
     Access = GlueAccess
     Component = Component
     ModelAccessMixin = ModelAccessMixin
+    ModelAccessRequiredMixin = ModelAccessRequiredMixin
     Form = FormGlue
     FormSet = FormSetGlue
     Model = ModelGlue

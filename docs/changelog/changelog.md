@@ -1,5 +1,21 @@
 # Changelog for Django Glue
 
+## v1.6.0
+
+### Features
+
+- `Glue.ModelAccessRequiredMixin` is `Glue.ModelAccessMixin` with a guard
+  (ADR 048): it sets the access from the user's model permissions, and its
+  `is_authorized()` turns away a user whose access does not reach
+  `get_required_access()`, `VIEW` by default, on the page load and on every
+  call. A refused page load redirects to log in, as `permission_required`
+  does, or is a 403 with `raise_exception = True`; the URL needs no decorator.
+
+  ```python
+  class RoleListComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
+      permission_model = Role
+  ```
+
 ## v1.5.0
 
 ### Features

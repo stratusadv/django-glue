@@ -768,8 +768,8 @@ every level below it: `view_role` gives `VIEW`, adding `add_role` gives `ADD`,
 and so on up to `DELETE`. A permission without the ones below it adds nothing,
 so `view_role` and `delete_role` alone give `VIEW`. Without `view_role` the
 mixin leaves the access as it was. It does not decide who may open the page:
-guard that as any page is guarded, such as with `permission_required` on its
-URL.
+guard that with `Glue.ModelAccessRequiredMixin`, below, or as any page is
+guarded.
 
 The mixin sets the access in its `__post_init__`, so a component can still
 decide for itself. Assign `self.access` after calling `super()`:
@@ -795,7 +795,42 @@ permission.
 Like any access a component assigns, it is decided when the component first
 appears, and a permission revoked while the page is open takes effect on the
 next page load. To check permission on every call, override `is_authorized()`,
-as in [guarding a component with a view decorator](#guard-a-component-with-a-view-decorator).
+as in [guarding a component with a view decorator](#guard-a-component-with-a-view-decorator),
+or use the mixin below.
+
+### Turn away a user without the model permission
+
+**`Glue.ModelAccessRequiredMixin` is `Glue.ModelAccessMixin` with a guard:**
+it sets the access the same way, and turns away a user whose access on the
+model does not reach `get_required_access()`, `VIEW` by default (ADR 048).
+Glue asks it on the page load and on every call, so the same rule covers a
+component a list opens in a modal, and the URL needs no decorator:
+
+```python
+class RoleListComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
+    template = 'roles/list.html'
+    permission_model = Role
+
+
+urlpatterns = [
+    path('roles/', RoleListComponent.as_view(), name='list'),
+]
+```
+
+A component that needs more than `VIEW` returns that level. A form that
+creates and edits rows needs `ADD` for one and `CHANGE` for the other:
+
+```python
+class RoleFormComponent(Glue.ModelAccessRequiredMixin, Glue.Component):
+    def get_required_access(self):
+        return Glue.Access.ADD if self.role_id is None else Glue.Access.CHANGE
+```
+
+A page load the guard refuses redirects to log in, as Django's
+`permission_required` does. Set `raise_exception = True` to answer with a 403
+instead. A refused call is a 403 either way. A component that grants more than
+the user's permissions, such as to the owner of a row, uses
+`Glue.ModelAccessMixin` and guards itself.
 
 ## Use a component as a URL view
 
