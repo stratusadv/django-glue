@@ -66,8 +66,8 @@ class ModelAccessRequiredMixin(ModelAccessMixin):
     appears and on every later call, so the one rule guards both.
 
     A user turned away from a page that ``as_view()`` serves is redirected to
-    log in, as Django's ``permission_required`` decorator does, or refused with
-    a 403 when ``raise_exception`` is set. A refused call is a 403 either way.
+    log in, as Django's ``permission_required`` decorator does. A refused call
+    is a 403.
 
     The mixin does not define ``get_required_access()``, for the reason it
     does not define ``get_permission_model()``: listed before the component
@@ -79,8 +79,6 @@ class ModelAccessRequiredMixin(ModelAccessMixin):
     assigns, or mixes in :class:`ModelAccessMixin` instead.
     """
 
-    raise_exception: ClassVar[bool] = False
-
     def is_authorized(self, request: HttpRequest, operation: GlueOperation) -> bool | HttpResponse:
         _ = operation
         access = get_model_access(request.user, _get_permission_model(self))
@@ -89,9 +87,6 @@ class ModelAccessRequiredMixin(ModelAccessMixin):
 
         if access is not None and access.has_access(required_access):
             return True
-
-        if self.raise_exception:
-            return False
 
         # Imported here: auth's views load its models, which glue is imported before.
         from django.contrib.auth.views import redirect_to_login  # noqa: PLC0415

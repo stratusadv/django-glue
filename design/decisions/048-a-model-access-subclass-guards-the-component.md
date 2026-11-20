@@ -43,9 +43,8 @@ class, so a default of its own would hide a base component's.
 
 **A refused page load redirects to log in, as Django's `permission_required`
 decorator does.** `is_authorized()` answers with `redirect_to_login()`, which
-`as_view()` returns in place of a 403 (ADR 033). `raise_exception = True`
-answers `False` instead, a 403. A refused call is a 403 either way, since a
-call's response is Glue's own.
+`as_view()` returns in place of a 403 (ADR 033). A refused call is a 403,
+since a call's response is Glue's own.
 
 `ModelAccessMixin` is unchanged and still never refuses. A component that
 grants access its own way, such as to the owner of a row, mixes that in, or
@@ -66,7 +65,10 @@ overrides `is_authorized()` alongside the access it assigns.
 - **A separate guard mixin beside `ModelAccessMixin`.** A component that wants
   the guard always wants the derived access too, so it would list two mixins
   that must name the same model; the subclass shares the model lookup.
-- **Answering a refused page load with a 403 by default.** The applications
-  that use the mixin guard their pages with `permission_required`, which
-  redirects; the default keeps their behaviour, and `raise_exception` is the
-  same switch Django's own decorator and mixin offer.
+- **Answering a refused page load with a 403.** The applications that use
+  the mixin guard their pages with `permission_required`, which redirects;
+  the mixin keeps their behaviour.
+- **A `raise_exception` switch to answer a refused page load with a 403**, as
+  Django's own decorator and mixin offer. No application serves a guarded
+  page that wants a 403, and the switch changes nothing for a call, so a
+  component that needs it overrides `is_authorized()`.
