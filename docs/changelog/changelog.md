@@ -114,6 +114,13 @@
 
 ### Fixed
 
+- Glue evaluates only the annotations it uses: those of a component's
+  parameters and of each object's Glue attributes. It evaluated every
+  annotation on the class and its bases, so a `ClassVar` typed with a name
+  imported only under `TYPE_CHECKING` stopped the class from being defined,
+  and on any other Glue object one such annotation silently cost every Glue
+  attribute its type. An attribute or parameter whose own annotation can't be
+  resolved raises `GlueAnnotationError`, naming it.
 - Rows a component's call adds to its child formset, with `append()`, reach
   the browser. They were signed and answered under a default name instead of
   the formset's keyed address (`skills[hook]`), so the browser couldn't find

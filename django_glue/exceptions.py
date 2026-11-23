@@ -52,6 +52,12 @@ class GlueError(Exception):
         return {}
 
 
+class GlueAnnotationError(GlueError):
+    """A Glue attribute's or parameter's type annotation names something its module can't resolve."""
+
+    code = 'invalid_annotation'
+
+
 class GlueComponentRegistrationError(GlueError):
     code = 'component_not_registered'
     status = 400

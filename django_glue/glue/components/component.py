@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import warnings
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
@@ -21,6 +21,7 @@ from django_glue.exceptions import (
     GlueRequestError,
     GlueRequestErrorCode,
 )
+from django_glue.glue.annotations import resolve_annotations
 from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.attributes.attribute import GlueAttributeKind, GlueValueRole
 from django_glue.glue.attributes.declaration import _MISSING
@@ -59,7 +60,7 @@ MOUNTED_CHILDREN_CONTEXT_KEY = '_django_glue_mounted_children'
 
 @cache
 def _parameter_types(component_class: type[Component]) -> dict[str, Any]:
-    annotations = get_type_hints(component_class)
+    annotations = resolve_annotations(component_class, component_class._declared_parameters())
     return {
         key: declaration.model_class if isinstance(declaration, ModelParameter) else annotations[key]
         for key, declaration in component_class._declared_parameters().items()
@@ -119,8 +120,10 @@ class Component(BaseGlue):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        annotations = get_type_hints(cls)
         declared = cls._declared_parameters()
+        # Only the parameters' annotations: any other, such as a ClassVar typed with a
+        # TYPE_CHECKING import, is never evaluated.
+        annotations = resolve_annotations(cls, declared)
         for key, declaration in declared.items():
             if isinstance(declaration, ModelParameter):
                 declaration.validate_declaration()
@@ -338,7 +341,7 @@ class Component(BaseGlue):
         for key, value in policy.state_snapshot.items():
             bound = component._bound_attributes.get(key)
             if bound is not None and bound.attribute.value_role is GlueValueRole.RECONSTRUCTOR:
-                annotation = get_type_hints(component_class).get(key)
+                annotation = resolve_annotations(component_class, [key]).get(key)
                 setattr(component, key, glue_serializer_registry.resolve(annotation).restore(value))
         return component
 
