@@ -857,23 +857,20 @@ def test_component_requires_template_path() -> None:
         MissingTemplateComponent()
 
 
-def test_context_data_set_in_post_init_joins_the_first_render_only(mock_request) -> None:
+def test_the_components_own_template_never_sees_context_data(mock_request) -> None:
+    # Its first render shows what the render after a call does: that one is built from the
+    # token, which doesn't carry context_data. A view template around it gets it (test_view).
     class PageContextComponent(Component):
         template = 'glue_template_test.html'
 
         def __post_init__(self, request) -> None:
             self.context_data['greeting'] = 'From the page context'
-            self.context_data['component'] = 'never replaces the component'
 
     component = Glue.object(mock_request, PageContextComponent())
-    context = call_context(component, 'render')
-    rebuilt = PageContextComponent.from_attribute_call_resolver_context(context)
+    rebuilt = PageContextComponent.from_attribute_call_resolver_context(call_context(component, 'render'))
 
-    assert component._template_context() == {
-        'greeting': 'From the page context',
-        'component': component,
-    }
-    assert 'From the page context' in component.render().html
+    assert component.context_data == {'greeting': 'From the page context'}
+    assert 'From the page context' not in component.render().html
     assert rebuilt.context_data == {}
     assert 'From the page context' not in rebuilt.render().html
 

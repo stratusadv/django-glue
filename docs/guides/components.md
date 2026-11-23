@@ -240,6 +240,48 @@ Use a [child form](#save-several-forms-in-one-call) instead when a call
 consumes the values, or the form edits a record, has rows, or has callables or
 events of its own.
 
+## A form field as state
+
+When the state is one value the browser draws a control for, such as a list's
+sort, declare it with `Glue.ComponentField` and a Django form field instead of writing a
+one-field form. The field's `initial` is the value's default, and the value is
+editable unless the field is `disabled`:
+
+```python
+class CustomerListComponent(Component):
+    template = 'customer/component/customer_list.html'
+
+    sort = Glue.ComponentField(forms.TypedChoiceField(
+        choices=SortChoices.choices,
+        coerce=SortChoices,
+        initial=SortChoices.NAME,
+    ))
+
+    def get_queryset(self) -> QuerySet:
+        return Customer.objects.order_by(*ORDERS[self.sort])
+```
+
+The attribute holds the field's cleaned value, here a `SortChoices`, and its
+label, choices and `required` are `component.$fields.sort`, so a Spire field
+include binds it with `glue_field='component.sort'`:
+
+```django
+<select x-model="component.sort" @change="component.$refresh()">
+    <template x-for="choice in component.$fields.sort.choices" :key="choice.value">
+        <option :value="choice.value" x-text="choice.label"></option>
+    </template>
+</select>
+```
+
+- **The value is always clean.** A value from the browser or the token, a
+  default and a value you assign are each cleaned by the field. One the field
+  refuses is refused as an update, and no error is shown: a control drawn from
+  the field sends only what it accepts. A value a user may type wrong belongs
+  in a form as state, whose errors are shown.
+- **Some fields cannot be state.** A field over a queryset (`ModelChoiceField`),
+  a file field and a password field that does not render its value raise
+  `TypeError` when the class is defined.
+
 ## Lists: render rows as partials unless a row is live
 
 **Render each row of a list as a template partial of the component that owns the
@@ -607,6 +649,12 @@ the button calls `component.send_invoice()` with no arguments.
   browser no `save()` of its own unless its model form's `Meta` sets
   `glue_default_save = True` ([forms](form_glue.md#saving-from-the-browser)),
   so a child that only feeds the call needs nothing more.
+- **A call can change a formset's rows.** `self.lines_form.pop(key)` and
+  `self.lines_form.append(key, initial)` inside the call remove and add rows,
+  and the response brings the added rows to the browser, as when the user adds
+  them. A formset whose rows follow another choice, such as the open invoices
+  of a chosen customer, is refilled this way. `pop()` needs the formset's
+  `can_delete`.
 
 In a test that calls the component without a browser, nothing is submitted, so
 each read of a child builds a new one. Submit the children with the call, or
@@ -695,7 +743,9 @@ follow:
   `{{ component.entry_count }}`, a `@Glue.property`, or a `cached_property`.
   The template's only context variable on a re-render is `component`.
 - `context_data` is for the page around the component and exists for the first
-  render only. A callable that changes it raises an error.
+  render only. The component's own template never sees it, not even on that
+  first render, so a value it needs shows up missing at once rather than after
+  the first call. A callable that changes it raises an error.
 
 ```python
 class WeekComponent(Glue.Component):

@@ -16,6 +16,121 @@
       permission_model = Role
   ```
 
+- A component sees each child the user changed on every path (ADR 049), so a
+  filter can be a child form whose fields are narrowed to the request, such as
+  a `ModelChoiceField` of the user's company's accounts, searched on the server
+  by `foreign_key_choices`:
+
+  ```python
+  @Glue.child
+  def filters(self) -> Glue.Form:
+      return Glue.form(
+          target=JournalEntryFilterForm(initial={'company_id': self.request.company.pk}),
+          access=Glue.Access.CHANGE,
+      )
+  ```
+
+  The form narrows the field from `self.initial['company_id']` in its
+  `__init__`. Glue signs a form's `initial` and builds it with it on every
+  path, so the browser can't change it.
+
+- A child is declared and read as its Django value (ADR 050). A `@Glue.child`
+  method may return a Django form, which Glue wraps in a `FormGlue` under the
+  child's name. `@Glue.child` takes that Glue object's options, `access` and
+  `editable`, and with no `access` a bare child has its owner's:
+
+  ```python
+  @Glue.child(access=Glue.Access.CHANGE)
+  def filters(self) -> JournalEntryFilterForm:
+      return JournalEntryFilterForm(company=self.request.company)
+  ```
+
+  An option the annotation's Glue object doesn't take, and an annotation that
+  names neither a Glue object nor a type one is registered for, are refused
+  when the class is defined. Returning a Glue object, such as `Glue.form(...)`,
+  still works, but not under a decorator with options.
+- A `Glue.SessionAttr` of any type its declaration's serializer handles is kept
+  in the session: a dataclass, an enum, a date or a pydantic model is stored
+  as plain data, so it survives Django's JSON session serializer, and is read
+  back as itself. A value stored in a shape the declaration no longer reads,
+  such as after its type changed, reads as the default.
+- `Glue.ComponentField(field)` declares a component value a Django form field holds
+  (ADR 051). One editable value with a label and choices needs no form class,
+  and the field says all of it: its `initial` is the default (called when it
+  is a callable), it is editable unless `disabled`, and a required field with
+  no `initial` is refused:
+
+  ```python
+  sort = Glue.ComponentField(forms.TypedChoiceField(
+      choices=SortChoices.choices, coerce=SortChoices, initial=SortChoices.NAME,
+  ))
+  ```
+
+  The attribute holds what `field.clean()` returns, here a `SortChoices`, and
+  the browser and the token hold what `field.prepare_value()` makes of it. A
+  value from the browser or the token is cleaned again, and one the field
+  refuses is refused as an update. The browser reads the field's label,
+  choices and `required` at `component.$fields.sort`, so a Spire field include
+  binds `glue_field='component.sort'`. A field over a queryset, a file field
+  and a password field that does not render its value raise `TypeError` when
+  the class is defined.
+
+### Changes
+
+- `FormFieldSerializer` is the serializer of a field inside a form, and is
+  resolved from its `BoundField`. A bare form field resolves to
+  `FieldAttributeSerializer`, which cleans its values (ADR 051). A form's own
+  fields still hold raw values until the form cleans them.
+
+- A component's own template no longer sees `context_data`, on its first render
+  either. Only the view template around a component a URL view serves does, for
+  its page title, breadcrumbs and the like. The component's template is drawn
+  again after calls from the token, which never carried `context_data`, so a
+  value it read from there vanished on the first render after a call. Now it is
+  missing at once. Move such a value onto the component, as an attribute, a
+  `@Glue.property` or a `cached_property`, and read it as
+  `{{ component.<name> }}`.
+
+- Reading a form child returns the Django form, however the child was
+  declared, where it returned the `FormGlue` (ADR 050). The form is bound to
+  the submitted values or, with nothing submitted, to its initial values, and
+  Django validates it only when asked, so `errors`, `has_changed()` and the
+  form's own attributes work as on any form. Its errors reach the browser as a
+  `validate()` call's do. Code that called `validate()` or read `bound_form` on
+  a child calls `is_valid()` and reads the form instead; `is_valid()` and
+  `cleaned_data` read as before. A `FormGlue` built with `Glue.form(request,
+  ...)` in a view is unchanged.
+
+- The re-render after a call reads each child as the call left it, where it
+  read the child's initializer. A call that wants a child cleared afterwards
+  clears it (ADR 049).
+- `$refresh()` sends each declared `Glue.child` the user may change, as a call
+  does, and the component reads them when it reads the child. A refresh that
+  reads a child whose token is malformed, from another slot or `VIEW`-only is
+  refused with `INVALID_CHILD_SUBMISSION`, as a call is (ADR 049).
+- A component's reads of a child that was not submitted build it once per
+  request and return the same object, where each read ran its initializer
+  again (ADR 049).
+
+### Fixed
+
+- Rows a component's call adds to its child formset, with `append()`, reach
+  the browser. They were signed and answered under a default name instead of
+  the formset's keyed address (`skills[hook]`), so the browser couldn't find
+  them, and the next call failed with `Formset row "…" is unavailable`. A row
+  now takes its keyed address as it joins a formset that has one.
+- A glued form is validated with the `initial` it was built with. Binding the
+  user's values dropped it for every form but a model form editing a record,
+  so a disabled field validated its class's default instead of the value it
+  was given, `has_changed()` reported unchanged fields as changed, and an
+  `__init__` that read `self.initial` found it empty. A form that reads its
+  `initial` in `__init__`, or has a disabled field, now validates as it was
+  shown.
+- A searchable relation field sent a value its model field can't read, such
+  as text for an integer key, shows no selected choice and is refused as an
+  invalid choice when the form validates. Describing its selection raised a
+  `ValueError`, failing the whole response.
+
 ## v1.5.0
 
 ### Features

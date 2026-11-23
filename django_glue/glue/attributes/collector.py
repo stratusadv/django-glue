@@ -104,7 +104,12 @@ class GlueAttributeCollector:
         declaration: Any,
         path: str,
     ) -> GlueAttribute:
-        if attribute.path != path or attribute.kind == GlueAttributeKind.NAMESPACE:
+        # A declaration that says how Glue reads it keeps that getter.
+        if (
+            attribute.path != path
+            or attribute.kind == GlueAttributeKind.NAMESPACE
+            or attribute.getter is not None
+        ):
             return attribute
         has_descriptor = (
             getattr(declaration, 'target', None) is not None
@@ -180,6 +185,7 @@ class GlueAttributeCollector:
                     expected_type=options.expected_type,
                     is_nullable=options.is_nullable,
                     is_declared_child=options.is_declared_child,
+                    getter=options.getter,
                 ),
             )
         kind = (

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from django_glue.access import GlueAccess
 from django_glue.glue.attributes.attribute import GlueValueRole
 from django_glue.glue.attributes.value_adapters import DEFAULT_VALUE_ADAPTERS, GlueValueAdapter
-from django_glue.serialization import glue_serializer_registry
+from django_glue.serialization import GlueSerializerError, glue_serializer_registry
 
 if TYPE_CHECKING:
     from django_glue.glue.base import BaseGlue
@@ -38,6 +38,8 @@ class GlueAttributeDeclarationOptions:
     expected_type: type[Any] | None = None
     is_nullable: bool = False
     is_declared_child: bool = False
+    # How Glue reads a child slot, given its owner, where that differs from reading the attribute.
+    getter: Callable[[Any], Any] | None = None
 
 
 class GlueAttributeDeclaration:
@@ -99,6 +101,13 @@ class GlueAttributeDeclaration:
         # What a type hint says for a class attribute: a declaration built at
         # runtime has no hint, so it names its type here.
         self._value_type = value_type
+        if value_type is not None:
+            # A type named here is refused when its class is defined, not when it is first used.
+            try:
+                glue_serializer_registry.resolve(value_type)
+            except GlueSerializerError as error:
+                msg = f'Glue.attr cannot hold its value_type: {error}'
+                raise TypeError(msg) from error
         self._serializers: dict[type[Any], GlueSerializer] = {}
         self.name: str | None = None
         self.storage_name: str | None = None
@@ -158,6 +167,7 @@ class GlueAttributeDeclaration:
         from django_glue.glue.components.session import SessionValue
 
         self.target = SessionValue(
+            serializer=self._serializer,
             default=None if self.default is _MISSING else self.default,
             default_factory=None if self.default_factory is _MISSING else self.default_factory,
         )

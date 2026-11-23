@@ -421,14 +421,12 @@ class Component(BaseGlue):
         with. A changed level is capped at the level of the component whose
         callable returned this one, then authorized again.
 
-        Values added to ``self.context_data`` here join the template context
-        of this first render and of the view template around it. They are
-        not kept for later renders, so what the component's own template
-        shows must come from the component.
+        Values added to ``self.context_data`` here join the context of the
+        view template around a component ``as_view()`` serves, such as its
+        page title and breadcrumbs. The component's own template never sees
+        them: it is drawn again after calls, from the token, so what it shows
+        comes from the component, its attributes and properties.
         """
-
-    def _template_context(self) -> dict[str, Any]:
-        return {**self.context_data, 'component': self}
 
     def _run_call(
         self,
@@ -446,7 +444,6 @@ class Component(BaseGlue):
         reaches the browser.
         """
         context_data = dict(self.context_data)
-        self.__dict__['_call_context'] = call_context
         entry, introduced = super()._run_call(call_context, invoke, render_as_html=render_as_html)
 
         if self.context_data != context_data:
@@ -457,13 +454,20 @@ class Component(BaseGlue):
             )
             raise RuntimeError(message)
 
+        return entry, self._with_submitted_entries(introduced)
+
+    def _with_submitted_entries(self, introduced: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        The entries of the children a request introduced, after those of every
+        child it read with the user's changes applied, each address once.
+        """
         submitted = [
             child_entry
             for child in self.__dict__.get('_submitted_children', {}).values()
             for child_entry in child._submission_entries()
         ]
         addresses = {child_entry['address'] for child_entry in submitted}
-        return entry, [
+        return [
             *submitted,
             *(child_entry for child_entry in introduced if child_entry['address'] not in addresses),
         ]
@@ -503,7 +507,8 @@ class Component(BaseGlue):
                         request,
                         page_template,
                         {
-                            **component._template_context(),
+                            **component.context_data,
+                            'component': component,
                             VIEW_COMPONENT_CONTEXT_KEY: component,
                         },
                     )
@@ -531,11 +536,17 @@ class Component(BaseGlue):
         derived values (cached properties and the like) were computed before
         the call. That render's output is the authoritative HTML and computed
         data; the call's own result and effects stand.
+
+        A refresh reads the children the browser submitted with it as a call
+        does, and answers with each one it read (ADR 049).
         """
+        self.__dict__['_call_context'] = call_context
         if call_context.target_attribute_name == RECEIVE_ATTRIBUTE:
             return self._receive(call_context)
 
         entry, introduced = super().process_attribute_call(call_context)
+        if call_context.target_attribute_name is None:
+            introduced = self._with_submitted_entries(introduced)
         if 'html' in entry:
             return entry, introduced
 
@@ -558,15 +569,20 @@ class Component(BaseGlue):
         reintroduce: Iterable[str] = (),
     ) -> tuple[BoundGlueChild, ...]:
         """
-        Binding a slot runs its initializer for a new child. A submitted child
-        is an existing one, already bound, so submissions are set aside here.
+        Binding a slot runs its initializer for a new child, which the binder
+        introduces itself. A submitted child is an existing one, already bound,
+        and the child the component's own reads built is never introduced, so
+        both are set aside here (ADR 049).
         """
         call_context = self.__dict__.pop('_call_context', None)
+        initialized = self.__dict__.pop('_initialized_children', None)
         try:
             return super()._bind_children(live_children=live_children, reintroduce=reintroduce)
         finally:
             if call_context is not None:
                 self.__dict__['_call_context'] = call_context
+            if initialized is not None:
+                self.__dict__['_initialized_children'] = initialized
 
     def _submitted_child(self, path: str) -> BaseGlue | None:
         """
@@ -795,11 +811,21 @@ class Component(BaseGlue):
 
         The render keeps the children the requesting entry reports mounted
         (ADR 025): this is the component re-rendering itself in place.
+
+        It is given the call's child submissions, with each child the call read
+        replaced by its successor, so it reads every child as the call left it
+        (ADR 049). A child the call read has already answered, so the render's
+        rebuilt copy of it does not answer again.
         """
+        read_children = self.__dict__.get('_submitted_children', {})
         render_context = AttributeCallRequestContext(
             request=call_context.request,
             target_glue_policy=self.policy,
             target_attribute_name='render',
+            child_submissions={
+                **call_context.child_submissions,
+                **{path: child._successor_submission() for path, child in read_children.items()},
+            },
         )
         fresh = type(self).from_attribute_call_resolver_context(render_context)
         fresh._mounted_children = frozenset(call_context.mounted)
@@ -810,7 +836,15 @@ class Component(BaseGlue):
         for key in ('policy_token', 'static_data', 'computed_data'):
             if key in render_entry:
                 entry[key] = render_entry[key]
-        return entry, [*introduced, *render_introduced]
+        answered = {child_entry['address'] for child_entry in introduced}
+        return entry, [
+            *introduced,
+            *(
+                child_entry
+                for child_entry in render_introduced
+                if child_entry['address'] not in answered
+            ),
+        ]
 
     @GlueAttributeDeclaration(required_access=GlueAccess.VIEW)
     def render(self) -> GlueResponse:
@@ -822,8 +856,10 @@ class Component(BaseGlue):
         response = GlueTemplateResponse(
             request=request,
             template=self.template,
+            # The component and nothing from context_data: this template is drawn again after
+            # calls, from the token, so what it shows must come from the component.
             context={
-                **self._template_context(),
+                'component': self,
                 MOUNTED_CHILDREN_CONTEXT_KEY: self._mounted_children,
             },
         )

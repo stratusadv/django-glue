@@ -13,6 +13,7 @@ from django_glue.exceptions import (
     GlueRequestError,
     GlueRequestErrorCode,
 )
+from django_glue.glue import address
 from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.collection import BaseCollectionGlue
 from django_glue.glue.objects.django.form.object import (
@@ -180,6 +181,12 @@ class FormSetGlue(BaseCollectionGlue):
             raise GlueFormSetMaxNumExceededError(count, self.max_num)
 
         form_glue = self._build_form_glue(form, key)
+        # A row added once the formset has its address (in its own call, or in a call of the
+        # owner that read it) takes its keyed address now, so its entry and token name the
+        # slot the formset's children map binds it at. Rows seeded before then take it when
+        # the formset is first bound.
+        if self._address is not None:
+            form_glue._address = address.item(self._address, key)
         self._forms.append((key, form_glue))
 
         return form_glue
@@ -479,6 +486,12 @@ class FormSetGlue(BaseCollectionGlue):
             *super()._submission_entries(),
             *(form.entry.model_dump() for _, form in self._forms),
         ]
+
+    def _successor_submission(self) -> dict[str, Any]:
+        return {
+            **super()._successor_submission(),
+            'forms': {key: form._successor_submission() for key, form in self._forms},
+        }
 
     def _run_call(
         self,

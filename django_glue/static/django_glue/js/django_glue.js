@@ -5020,6 +5020,9 @@ ${expression ? 'Expression: "' + expression + `"
 
   // client_js/src/proxies/component.ts
   class GlueComponentProxy extends htmlRenderer_default(base_default) {
+    get $fields() {
+      return this._valueAttributes || {};
+    }
     get $el() {
       if (this._record.disposed || typeof document === "undefined")
         return null;
@@ -5035,8 +5038,6 @@ ${expression ? 'Expression: "' + expression + `"
       if (root) {
         fields.mounted = [...root.querySelectorAll("[data-glue-address]")].map((element) => element.getAttribute("data-glue-address"));
       }
-      if (attribute === null)
-        return fields;
       const slots = this._record.staticData?.children || {};
       const submissions = {};
       Object.entries(slots).forEach(([path, slot]) => {

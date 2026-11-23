@@ -2,11 +2,11 @@ import inspect
 import warnings
 from collections import abc
 from dataclasses import replace
-from functools import update_wrapper
+from functools import partial, update_wrapper
 from typing import Any, Callable, Iterable, Literal, Mapping, TypeVar, Union
 
 from django.db import models
-from django.forms import BaseForm, ModelForm
+from django.forms import BaseForm, Field, ModelForm
 from django.http import HttpRequest
 
 from django_glue.access import GlueAccess
@@ -14,9 +14,12 @@ from django_glue.glue.attributes import GlueAttributeDeclaration
 from django_glue.glue.attributes.attribute import (
     GlueValueRole,
     _resolve_glue_result_annotation,
+    _resolve_result_annotation,
 )
 from django_glue.glue.attributes.declaration import GlueAttributeDeclarationOptions
 from django_glue.glue.attributes.namespace import GlueNamespace
+from django_glue.glue.base import BaseGlue
+from django_glue.glue.children import glue_child_type_registry
 from django_glue.glue.components import Component, ModelAccessMixin, ModelAccessRequiredMixin
 from django_glue.glue.event import GlueEvent, emit_event, is_reserved_event_name
 from django_glue.glue.context import GlueContextManager, TGlue
@@ -78,42 +81,136 @@ class _GluePropertyDescriptor:
 
 class _GlueChildDescriptor(_GluePropertyDescriptor):
     """
-    A Glue object its owner declares as a child. The decorated method
-    initializes it, and its return annotation names the Glue object:
+    A child its owner declares: an island with its own token and access. The
+    decorated method initializes it, and its return annotation names what it
+    returns: a Django type a Glue object is registered for, such as a form
+    class, or a Glue object.
 
-        @Glue.child
-        def header(self) -> Glue.Form:
-            return Glue.form(target=InvoiceHeaderForm(), access=self.access)
+    See ``Glue.child`` for declaring and reading one.
+    """
 
-    On a Glue.Component, a child the user may change is submitted with every
-    call the component makes. Reading it during that call returns it with the
-    user's unsaved changes applied, so one call can validate and save several
-    children together:
+    def __init__(self, func: Callable, /, **options: Any) -> None:
+        super().__init__(func)
+        expected_type = self.__glue_options__.expected_type
+        is_nullable = self.__glue_options__.is_nullable
+        if expected_type is None:
+            value_type, is_nullable = _resolve_result_annotation(func)
+            child_type = glue_child_type_registry.for_value_type(value_type)
+            if child_type is None:
+                msg = (
+                    f'Glue.child {func.__qualname__}() needs a return annotation naming a Django '
+                    'type a Glue object is registered for, such as a form class, or a Glue object, '
+                    'such as -> Glue.Form.'
+                )
+                raise TypeError(msg)
+            expected_type = child_type.glue_class
+        else:
+            child_type = glue_child_type_registry.for_glue_class(expected_type)
+
+        if options:
+            if child_type is None:
+                msg = (
+                    f'Glue.child {func.__qualname__}() returns a {expected_type.__qualname__}, '
+                    'which takes no options from @Glue.child.'
+                )
+                raise TypeError(msg)
+            child_type.check_options(options, child=func.__qualname__)
+
+        self._options = options
+        self.__glue_options__ = replace(
+            self.__glue_options__,
+            expected_type=expected_type,
+            is_nullable=is_nullable,
+            is_declared_child=True,
+            getter=self._glue_object,
+        )
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        glue_object = self._glue_object(instance)
+        if glue_object is None:
+            return None
+        child_type = glue_child_type_registry.for_glue_class(type(glue_object))
+        return glue_object if child_type is None else child_type.read(glue_object)
+
+    def _glue_object(self, instance: Any) -> BaseGlue | None:
+        """The child's Glue object, which Glue reads where application code reads the child's value."""
+        if not isinstance(instance, Component):
+            return self._initialize(instance)
+        submitted = instance._submitted_child(self._name)
+        if submitted is not None:
+            return submitted
+        # Built by its initializer once per request: a component lives for one request (ADR 049).
+        initialized = instance.__dict__.setdefault('_initialized_children', {})
+        if self._name not in initialized:
+            initialized[self._name] = self._initialize(instance)
+        return initialized[self._name]
+
+    def _initialize(self, instance: Any) -> BaseGlue | None:
+        """
+        The Glue object the decorated method creates: the one it returns, or the
+        Django value it returns wrapped in its registered Glue object, with the
+        decorator's options and, by default, its owner's access (ADR 050).
+        """
+        value = self._func(instance)
+        if value is None:
+            return None
+        if isinstance(value, BaseGlue):
+            if self._options:
+                msg = (
+                    f'Glue.child {self._func.__qualname__}() returned a Glue object under '
+                    'options of its own: a setting has one place. Give the options to the Glue '
+                    'object, or return the Django value it wraps.'
+                )
+                raise TypeError(msg)
+            return value
+
+        child_type = glue_child_type_registry.for_value_type(type(value))
+        if child_type is None:
+            msg = (
+                f'Glue.child {self._func.__qualname__}() returned a {type(value).__qualname__}, '
+                'which no Glue object is registered for. Return a Glue object or a Django value '
+                'a Glue object wraps, such as a form.'
+            )
+            raise TypeError(msg)
+        return child_type.wrap(value, name=self._name, **{'access': instance.access, **self._options})
+
+
+def _child(func: Callable | None = None, /, **options: Any) -> Any:
+    """
+    Declares a child: an island with its own signed token, access and calls.
+    Written bare or with the options of the Glue object its return annotation
+    is registered with. A method that returns a Django form is wrapped in a
+    ``FormGlue`` under the child's name, which takes ``access`` and
+    ``editable``; with no ``access`` it has its owner's (ADR 050):
+
+        @Glue.child(access=Glue.Access.CHANGE)
+        def filters(self) -> JournalEntryFilterForm:
+            return JournalEntryFilterForm(company=self.request.company)
+
+    A method may instead return a Glue object, such as ``Glue.form(...)``,
+    which keeps its own options and access; it is then declared with no
+    options of its own.
+
+    Reading a form child returns the Django form, however it was declared:
+    bound to the values the browser submitted or, with nothing submitted, to
+    its initial values, and validated only when asked. Its errors reach the
+    browser as a ``validate()`` call's do. On a ``Glue.Component``, a child
+    the user may change is submitted with every call, refresh and re-render,
+    so one call can validate several children together:
 
         @Glue.attr(required_access=Glue.Access.ADD)
         def send(self) -> None:
-            if self.header.validate()['valid']:
+            if self.header.is_valid():
                 ...
 
     A child with VIEW access is never submitted.
     """
+    if func is None:
+        return partial(_GlueChildDescriptor, **options)
+    return _GlueChildDescriptor(func, **options)
 
-    def __init__(self, func: Callable) -> None:
-        super().__init__(func)
-        if self.__glue_options__.expected_type is None:
-            msg = (
-                f'Glue.child {func.__qualname__}() needs a return annotation naming the Glue '
-                'object it initializes, such as -> Glue.Form.'
-            )
-            raise TypeError(msg)
-        self.__glue_options__ = replace(self.__glue_options__, is_declared_child=True)
-
-    def __get__(self, instance, owner=None):
-        if isinstance(instance, Component):
-            submitted = instance._submitted_child(self._name)
-            if submitted is not None:
-                return submitted
-        return super().__get__(instance, owner)
 
 def _attr(*args: Any, **kwargs: Any) -> Any:
     return GlueAttributeDeclaration(*args, **kwargs)
@@ -204,6 +301,51 @@ def _session_attr(*args: Any, **kwargs: Any) -> GlueAttributeDeclaration:
     return GlueAttributeDeclaration(*args, **kwargs)
 
 
+class _ComponentFieldDeclaration(GlueAttributeDeclaration):
+    """A ``Glue.ComponentField`` declaration, which only a component may hold."""
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        super().__set_name__(owner, name)
+        if not (isinstance(owner, type) and issubclass(owner, Component)):
+            msg = (
+                f"Glue.ComponentField on {owner.__name__}.{name} declares a Glue.Component's "
+                f'value; {owner.__name__!r} is not a Component.'
+            )
+            raise TypeError(msg)
+
+
+def _component_field(field: Field) -> Any:
+    """
+    A component value a Django form field holds (ADR 051). The field says all of it: its
+    ``initial`` is the value's default, called when it is a callable; it is editable unless
+    it is ``disabled``; and it cleans what the browser sends and describes the value to it.
+    It returns ``Any``, as ``Glue.attr`` does, so the attribute can be hinted with the type
+    the field cleans to; the field, not the hint, checks and converts the value:
+
+        class CustomerListComponent(Glue.Component):
+            sort: NameSortChoices = Glue.ComponentField(forms.TypedChoiceField(
+                choices=NameSortChoices.choices,
+                coerce=NameSortChoices,
+                initial=NameSortChoices.NAME,
+            ))
+
+    A required field with no ``initial`` is refused: the value would start as one the field
+    refuses.
+    """
+    if not isinstance(field, Field):
+        msg = f'Glue.ComponentField() takes a Django form field, not {type(field).__name__}.'
+        raise TypeError(msg)
+    if field.required and field.initial is None:
+        msg = (
+            f'Glue.ComponentField({type(field).__name__}) is required, so it needs an initial to '
+            'start from; or make it required=False.'
+        )
+        raise TypeError(msg)
+
+    starting = {'default_factory': field.initial} if callable(field.initial) else {'default': field.initial}
+    return _ComponentFieldDeclaration(editable=not field.disabled, value_type=field, **starting)
+
+
 def _event(obj: Any | None = None, name: str | None = None, payload: dict[str, Any] | None = None) -> GlueEvent | None:
     """
     ``Glue.event()`` with no arguments returns a ``GlueEvent`` descriptor for
@@ -244,13 +386,14 @@ class Glue:
     attr = _attr
     ComponentParameter = _component_parameter
     SessionAttr = _session_attr
+    ComponentField = _component_field
     event = _event
     listener = staticmethod(listener)
     ReceivedEvent = ReceivedEvent
     html_attr = _html_attr
     namespace = GlueNamespace
     property = _GluePropertyDescriptor
-    child = _GlueChildDescriptor
+    child = _child
     Response = GlueResponse
     RedirectResponse = GlueRedirectResponse
 
