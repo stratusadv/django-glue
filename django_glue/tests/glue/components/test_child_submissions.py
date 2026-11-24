@@ -50,13 +50,13 @@ class BoutCardComponent(Component):
     @Glue.attr(required_access=Glue.Access.CHANGE, skip_rerender=True)
     def send(self) -> dict[str, Any]:
         contact_form = self.contact
-        contact = contact_form.validate()
+        contact_valid = contact_form.is_valid()
         skills = self.skills.validate()
 
         return {
-            'contact_valid': contact['valid'],
+            'contact_valid': contact_valid,
             'skills_valid': skills['valid'],
-            'name': contact_form.bound_form.cleaned_data.get('name'),
+            'name': contact_form.cleaned_data.get('name'),
             'skill_names': [form.bound_form.cleaned_data.get('name') for form in skills['form_list']],
         }
 
@@ -69,11 +69,16 @@ class BoutCardComponent(Component):
 
     @Glue.attr(required_access=Glue.Access.CHANGE, skip_rerender=True)
     def read_terms(self) -> bool:
-        return self.terms.validate()['valid']
+        return self.terms.is_valid()
 
     @Glue.attr(required_access=Glue.Access.CHANGE, skip_rerender=True)
     def ping(self) -> str:
         return 'pong'
+
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def add_combination(self) -> None:
+        for name in ('Hook', 'Uppercut'):
+            self.skills.append(f'added-{name.lower()}', {'name': name})
 
 
 @pytest.fixture
@@ -192,6 +197,19 @@ def test_a_read_formset_answers_with_its_rows(card) -> None:
     assert card.policy.children['skills'] in addresses
     assert set(skills_policy.children.values()) <= set(addresses)
     assert len(addresses) == len(set(addresses))
+
+
+def test_rows_a_call_adds_to_a_child_formset_answer_at_the_formsets_keyed_addresses(card) -> None:
+    _, introduced = call(card, 'add_combination', child_submissions(card, contact=VALID_CONTACT))
+
+    entries = {item['address']: item for item in introduced}
+    skills = entries[card.policy.children['skills']]
+    rows = GluePolicy.from_token(skills['policy_token']).children
+    assert set(rows) == {'0', 'added-hook', 'added-uppercut'}
+    # Each row answers at the address the formset's children map binds it at, signed for it.
+    assert rows['added-hook'] == f'{card.policy.children["skills"]}[added-hook]'
+    for address in rows.values():
+        assert GluePolicy.from_token(entries[address]['policy_token']).address == address
 
 
 def test_a_call_that_reads_no_child_is_unaffected_by_a_bad_submission(card) -> None:

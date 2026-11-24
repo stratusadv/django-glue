@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import datetime as dt
 import json
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -101,6 +104,30 @@ class SessionAttrComponent(Component):
     @Glue.attr(skip_rerender=True)
     def read_quietly(self) -> int:
         return self.step
+
+
+class Pace(StrEnum):
+    SLOW = 'slow'
+    FAST = 'fast'
+
+
+@dataclass(frozen=True)
+class Draft:
+    title: str
+    due: dt.date
+    pace: Pace
+
+
+class SessionTypedComponent(Component):
+    template = 'glue_template_test.html'
+
+    draft: Draft | None = Glue.SessionAttr(None)
+    pace: Pace = Glue.SessionAttr(Pace.SLOW)
+
+    @Glue.attr
+    def start(self) -> None:
+        self.draft = Draft('Spring cleanup', dt.date(2026, 3, 1), Pace.FAST)
+        self.pace = Pace.FAST
 
 
 class SessionSecretComponent(Component):
@@ -492,6 +519,48 @@ def test_session_writes_survive_a_save_and_reload(
     assert second_request.session is not mock_request.session
     assert fresh.step == 1
     assert fresh.session['note'] == ['kept']
+
+
+def test_a_typed_session_attr_is_stored_as_plain_data_and_read_back_as_itself(
+    mock_request: HttpRequest, request_factory: RequestFactory
+) -> None:
+    call_entry(Glue.object(mock_request, SessionTypedComponent()), 'start')
+
+    assert dict(stored(mock_request, SessionTypedComponent)) == {
+        'draft': {'title': 'Spring cleanup', 'due': '2026-03-01', 'pace': 'fast'},
+        'pace': 'fast',
+    }
+
+    # Saved and reloaded through Django's JSON session serializer.
+    mock_request.session.save()
+    second_request = request_factory.get('/')
+    second_request.session = SessionStore(session_key=mock_request.session.session_key)
+    fresh = Glue.object(second_request, SessionTypedComponent())
+
+    assert fresh.draft == Draft('Spring cleanup', dt.date(2026, 3, 1), Pace.FAST)
+    assert fresh.pace is Pace.FAST
+
+
+def test_a_typed_session_attr_reaches_the_client_as_plain_data(mock_request: HttpRequest) -> None:
+    component = Glue.object(mock_request, SessionTypedComponent())
+
+    entry = call_entry(component, 'start')
+
+    assert entry['computed_data'] == {'values': {
+        'draft': {'title': 'Spring cleanup', 'due': '2026-03-01', 'pace': 'fast'},
+        'pace': 'fast',
+    }}
+
+
+def test_a_session_attr_stored_in_a_shape_it_no_longer_reads_is_its_default(mock_request: HttpRequest) -> None:
+    stored(mock_request, SessionTypedComponent).update({'draft': {'title': 'Old shape'}, 'pace': 'walking'})
+    mock_request.session.modified = False
+
+    component = Glue.object(mock_request, SessionTypedComponent())
+
+    assert component.draft is None
+    assert component.pace is Pace.SLOW
+    assert mock_request.session.modified is False
 
 
 def test_deleting_a_session_attr_restores_its_default(mock_request: HttpRequest) -> None:

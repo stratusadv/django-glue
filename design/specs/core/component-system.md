@@ -190,6 +190,44 @@ class TimeEntryDay(Glue.Component):
         return sum(entry.allocated_hours for entry in self._entries)
 ```
 
+#### A form field types a value attribute
+
+A value attribute's type is its type hint, or the `value_type` it is declared
+with, which overrides the hint. A Django form field is such a type (ADR 051):
+the field validates and converts the value, and describes it to the browser,
+as it would inside a form.
+
+```python
+class CustomerListComponent(Glue.Component):
+    sort = Glue.ComponentField(forms.TypedChoiceField(
+        choices=SortChoices.choices,
+        coerce=SortChoices,
+        initial=SortChoices.NAME,
+    ))
+```
+
+- `Glue.ComponentField(field)` declares it, and the field says all of it: its `initial`
+  is the default, called when it is a callable, and the value is editable
+  unless the field is `disabled`. A required field with no `initial` is
+  refused, since the value would start as one the field refuses.
+- The attribute holds what `field.clean()` returns. The browser and the token
+  hold what `field.prepare_value()` makes of it, and a value loaded from either
+  is cleaned again. The default is held cleaned too.
+- A value the field refuses is refused as an update, as a type hint's
+  validation refuses one. The attribute reports no errors of its own: a value
+  a user may get wrong belongs in a form held as state, whose errors are shown.
+- The attribute's presentation is the field's description, `field_schema()`
+  with its widget. The component proxy's `$fields` holds every value
+  attribute's presentation, so `component.$fields.sort` is it, and Spire's
+  field includes bind `glue_field='component.sort'`.
+- A field over a queryset, a file field and a password field whose widget does
+  not render its value are refused when the class is defined.
+- A field inside a form is declared by its `BoundField` and keeps
+  `FormFieldSerializer`, which holds the value raw until the form cleans it.
+  A bare field resolves to `FieldAttributeSerializer`.
+
+A form held as state stays for a group of fields validated together.
+
 #### The parameter contract
 
 Parameters are the only way in, from a template or from Python. The
@@ -251,14 +289,43 @@ The non-registering `Glue.model`, `Glue.form`, `Glue.queryset`, and
 `Glue.formset` shortcut forms are the public construction path. A custom
 `BaseGlue` is constructed directly. The existing
 `Glue.object(request, glue)` shortcut only registers an already-configured page
-root; it does not construct a child. Returning the raw Django object is an
-error because no field, operation, query, or access capability has been
-configured.
+root; it does not construct a child.
+
+A method may instead return a Django value of a type a Glue object is
+registered for, and Glue wraps it in that Glue object under the child's name
+([ADR 050](../../decisions/050-a-child-is-declared-and-read-as-its-django-value.md)).
+`@Glue.child`, written bare or with arguments, takes the options of that Glue
+object: a form is wrapped in a `FormGlue`, which takes `access` and `editable`
+as `Glue.form` does. With no `access`, a bare child has its owner's access, so
+it can do no more than the user its owner serves; a child that must do more
+says so. A child that returns a Glue object keeps the access it was given, and
+is declared with no options, because a setting has one place:
+
+```python
+class JournalEntryListComponent(QuerySetScrollComponent):
+    @Glue.child(access=Glue.Access.CHANGE)
+    def filters(self) -> JournalEntryFilterForm:
+        return JournalEntryFilterForm(company=self.request.company)
+```
+
+Each Glue object that can be returned bare registers, in the child type
+registry, the Django type it wraps, the options it takes, and what reading the
+child returns. The child descriptor asks the registry and never names a kind
+of Glue object. Only forms are registered. A model or queryset child is
+declared with `Glue.model(...)` or `Glue.queryset(...)` until one registers,
+and its registration must refuse a child given neither `fields` nor `exclude`,
+because Glue can't choose which columns to sign and send. A formset is already
+declared as its own Glue class (`Glue.FormSet`). Any other raw Django object is
+an error, because no field, operation, query, or access capability has been
+configured for it.
 
 The return annotation is part of the declaration: it compiles the child slot,
-expected Glue family, and nullability into schema. `Glue.child` refuses a
-method without one, or with one that names no Glue object, when the class is
-defined, and Glue requires the runtime result to match. A `@Glue.property` is
+expected Glue family, and nullability into schema. `Glue.child` refuses, when
+the class is defined, a method with no annotation, one whose annotation names
+neither a Glue object nor a registered Django type, and an option the
+annotation's Glue object doesn't take. Glue requires the runtime result to
+match, and refuses a returned Glue object under a decorator with options. A
+`@Glue.property` is
 ordinary derived data and fails loudly if it unexpectedly returns `BaseGlue`; a
 normal Python `@property` remains entirely server-internal.
 
@@ -288,15 +355,27 @@ because a component's call carries them
 ([ADR 034](../../decisions/034-glue-child-and-child-submissions.md)). Every
 `Glue.child` of the component whose access is above `VIEW` is submitted with
 each call the component makes: the child's own signed token and its unsaved
-changes, and for a formset its rows. Reading the child inside the callable
-returns it reconstructed from that token with the changes applied, and every
-read in the call returns the same object:
+changes, and for a formset its rows. Glue reconstructs the child from that
+token with the changes applied, and every read in the call returns the same
+value.
+
+Reading a form child returns the Django form, however the child was declared
+([ADR 050](../../decisions/050-a-child-is-declared-and-read-as-its-django-value.md)):
+the form bound to the submitted values or, with nothing submitted, to its
+initial values, built with its `initial` and the arguments Glue keeps for it
+([ADR 041](../../decisions/041-formset-rows-take-form-kwargs.md)). Django
+validates it only when the component asks, and the child's response entry
+presents the errors of that form, as a `validate()` call's are presented.
+The `FormGlue` stays the child's island, which Glue's binding, calls,
+submissions and successors use; application code never sees it, and changing
+the form in Python changes no token. A child of a kind no Glue object is
+registered for, such as a formset, reads as its Glue object:
 
 ```python
 class InvoiceBuilderComponent(Glue.Component):
-    @Glue.child
-    def header_form(self) -> Glue.Form:
-        return Glue.form(target=InvoiceHeaderForm(), access=Glue.Access.ADD)
+    @Glue.child(access=Glue.Access.ADD)
+    def header_form(self) -> InvoiceHeaderForm:
+        return InvoiceHeaderForm()
 
     @Glue.child
     def lines_form(self) -> InvoiceLineFormSet:
@@ -317,9 +396,12 @@ reconstructed and not checked. The wire shape and admission rules are in
 `state-model.md` (§Child submissions).
 
 A child declared with `Glue.property`, a child with `VIEW` access, a queryset's
-rows and the children of a child are not submitted. A refresh submits nothing.
-When nothing was submitted for a slot, reading it runs the initializer and
-returns a new child on each read.
+rows and the children of a child are not submitted. A refresh and the
+re-render after a call carry children as a call does
+([ADR 049](../../decisions/049-a-component-sees-its-children-on-every-path.md)).
+When nothing was submitted for a slot, the component's first read of it in a
+request runs the initializer, and every later read in that request returns the
+same value.
 
 #### Post-init
 
@@ -356,13 +438,14 @@ The hook may do four things:
   callable returned this one, if any, and authorizes the `introduce` operation
   again at the new level. A denial unbinds the component and is handled as an
   initial denial is.
-- **Add page context.** Values added to `self.context_data` join the template
-  context of the first render: the component's own first render, the template
-  the tag renders into, and the view template around a URL view. They are not
-  signed and not kept. A component rebuilt for a later action starts with an
-  empty `context_data`, and a callable or listener that changes it fails, so
-  what the component's own template shows comes from the component: its
-  attributes, properties, and cached properties.
+- **Add page context.** Values added to `self.context_data` join the context of
+  the view template around a component a URL view serves, such as its page
+  title and breadcrumbs. They are not signed and not kept, and the component's
+  own template never sees them, on its first render or any other: it is drawn
+  again after calls from the token, so what it shows comes from the component,
+  its attributes, properties, and cached properties, and its only context
+  variable is `component`. A component rebuilt for a later action starts with
+  an empty `context_data`, and a callable or listener that changes it fails.
 
 **Init-only values.** A value passed to the constructor under a name that is
 not a declared parameter is an init-only value: Glue holds it until
@@ -521,7 +604,10 @@ grows every response, and re-signs the token on every change
   raises does not roll back a session write it made before failing.
 - **A declared value may live there.** `Glue.SessionAttr(default)`, a shortcut
   for `Glue.attr(default, session=True)`, declares a value stored in the
-  session under its own name. It is sent down as `computed_data`, like a
+  session under its own name, as its declaration's serializer dumps it, and
+  read back as the serializer restores it: a dataclass, an enum or a date is
+  kept as plain data and comes back as itself, and a value stored in a shape
+  the declaration no longer reads is its default. It is sent down as `computed_data`, like a
   `Glue.property`, and is never retained in the token, so the session is its
   only copy and the client cannot write it. A callable changes it by
   assignment. It is shared by every instance of the class. The value reaches
@@ -843,6 +929,13 @@ This follows Livewire's useful boundary: nested components are independent
 islands, ordinary interactions submit only the target snapshot, and reactive
 parent/child work selectively bundles independent component messages. Glue
 generalizes that boundary from UI components to every addressed Glue object.
+
+Livewire's islands are its nested components. Its form objects are not
+islands: each is a property in its component's state, and its counterpart in
+Glue is ADR 042's form held as state, built from its values alone. A child
+form is an island, with its own token and access, that its owner sees on every
+path (ADR 049): a call, the re-render after it, and a refresh each carry the
+child the user changed, and its owner reads it there as a call does.
 
 This is the shared Glue-object transport contract, not a component-only state
 mechanism. A component, `ModelGlue`, `FormGlue`, `QuerySetGlue`, `FormSetGlue`,

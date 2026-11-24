@@ -75,11 +75,32 @@ describe('child submissions', () => {
         expect(requests[0].childSubmissions).toBeUndefined()
     })
 
-    test('a refresh carries no children, because no call reads them', async () => {
+    // A refresh re-derives the owner's values, which may read a child (ADR 049).
+    test('a refresh carries each declared child with its unsaved changes', async () => {
         const contact = formEntry('contact')
-        const {proxy, requests} = cardClient({
+        const {client, proxy, requests} = cardClient({
             children: {contact},
             slots: {contact: {kind: 'form', nullable: false, submits_with_owner: true}},
+        })
+        client._registry.getProxy(contact.address).name = 'Bee'
+
+        await proxy.$refresh()
+
+        expect(requests[0].attribute).toBeNull()
+        expect(requests[0].childSubmissions).toEqual({
+            contact: {policy_token: contact.policy_token, updates: {name: 'Bee'}},
+        })
+    })
+
+    test('a refresh carries neither a property child nor a view-only child', async () => {
+        const contact = formEntry('contact')
+        const terms = formEntry('terms', {access: 'view'})
+        const {proxy, requests} = cardClient({
+            children: {contact, terms},
+            slots: {
+                contact: {kind: 'form', nullable: false},
+                terms: {kind: 'form', nullable: false, submits_with_owner: true},
+            },
         })
 
         await proxy.$refresh()

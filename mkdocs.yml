@@ -77,7 +77,6 @@ nav:
       - Contributors: about/contributors.md
 
 plugins:
-  - include-markdown
   - mkdocstrings:
       handlers:
         python:

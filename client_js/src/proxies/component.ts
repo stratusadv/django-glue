@@ -2,6 +2,7 @@ import BaseGlueProxy from "./base"
 import type {GlueEvent, GlueReceivedEvent, GlueRequestFields} from "./base"
 import HtmlRenderer, {htmlToFragment} from "../htmlRenderer"
 import type {HtmlResult} from "../htmlRenderer"
+import type GlueValueAttribute from "./attributes/base"
 import type {
     GlueAddressedEntry,
     GlueChildSlot,
@@ -19,6 +20,14 @@ interface GlueComponentStaticData extends GlueStaticData {
 }
 
 class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
+    declare _valueAttributes: Record<string, GlueValueAttribute> | undefined
+
+    // Each value attribute's description, as a form's and a model's fields
+    // are reached: a field attribute's label and choices (ADR 051).
+    get $fields(): Record<string, GlueValueAttribute> {
+        return this._valueAttributes || {}
+    }
+
     get $el(): Element | null {
         if (this._record.disposed || typeof document === 'undefined') return null
         return [...document.querySelectorAll('[data-glue-address]')].find(
@@ -32,8 +41,9 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
     }
 
     // A render keeps the children still mounted in this component (ADR 025).
-    // A call carries each child the component declares with Glue.child that
-    // the user may change, so the call can read what was typed into it.
+    // A call or a refresh carries each child the component declares with
+    // Glue.child that the user may change, so the component can read what was
+    // typed into it on every path (ADR 049).
     _requestFields(attribute: string | null): GlueRequestFields {
         const fields: GlueRequestFields = {}
         const root = this.$el
@@ -42,7 +52,6 @@ class GlueComponentProxy extends HtmlRenderer(BaseGlueProxy) {
                 element => element.getAttribute('data-glue-address')!,
             )
         }
-        if (attribute === null) return fields
 
         const slots = (this._record.staticData as GlueComponentStaticData)?.children || {}
         const submissions: Record<string, GlueChildSubmission> = {}

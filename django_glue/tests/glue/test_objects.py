@@ -2271,6 +2271,20 @@ class DjangoFormGlueObjectTestCase(TestCase):
             'difficulty': 3,
         })
 
+    def test_a_selected_value_its_field_cannot_read_selects_nothing_and_is_a_field_error(self):
+        from django import forms
+
+        class SkillForm(forms.Form):
+            skill = forms.ModelChoiceField(queryset=Glue.choices(Skill.objects.all(), search_fields=['name']))
+
+        Skill.objects.create(name='Grappling', difficulty=3)
+        glue_object = with_request(FormGlue(SkillForm(), **glue_context(name='skill-form')))
+        glue_object._stage_form_attribute_value('skill', 'not-a-number')
+
+        self.assertNotIn('selected_choice', glue_object.attributes['skill'].computed_data())
+        self.assertFalse(glue_object.is_valid())
+        self.assertIn('skill', glue_object.bound_form.errors)
+
     def test_searchable_multiple_choice_metadata_seeds_all_selected_choices(self):
         from django import forms
 
