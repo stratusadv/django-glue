@@ -77,9 +77,14 @@ def _loaded_glue_classes_by_name() -> dict[str, type[Any]]:
     return classes
 
 
-def _resolve_glue_result_annotation(
+def _resolve_result_annotation(
     target: Callable[..., Any] | None,
-) -> tuple[type[Any] | None, bool]:
+) -> tuple[Any, bool]:
+    """
+    A callable's resolved return annotation, and whether it is optional: an
+    ``X | None`` annotation resolves to ``X``. None when there is no annotation,
+    or it is a union of other types.
+    """
     if target is None:
         return None, False
 
@@ -113,6 +118,13 @@ def _resolve_glue_result_annotation(
             if argument is not NoneType
         )
         is_nullable = True
+    return annotation, is_nullable
+
+
+def _resolve_glue_result_annotation(
+    target: Callable[..., Any] | None,
+) -> tuple[type[Any] | None, bool]:
+    annotation, is_nullable = _resolve_result_annotation(target)
 
     from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 

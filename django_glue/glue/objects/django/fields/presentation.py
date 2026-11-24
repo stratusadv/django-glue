@@ -52,6 +52,23 @@ def field_schema(field: Any, *, editable: bool) -> dict[str, Any]:
 
 
 @dataclass(frozen=True, slots=True)
+class FieldAttributePresentation(GlueValueAttributePresentation):
+    """
+    A form field standing alone as an attribute's type, described as a form
+    describes its fields (ADR 051).
+    """
+
+    field: forms.Field
+    editable: bool
+
+    def schema(self) -> dict[str, Any]:
+        return {
+            **field_schema(self.field, editable=self.editable),
+            'widget': self.field.widget.__class__.__name__,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class FormFieldPresentation(GlueValueAttributePresentation):
     owner: FormGlue
     name: str

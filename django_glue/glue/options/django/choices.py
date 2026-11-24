@@ -6,7 +6,7 @@ import pickle
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
-from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError
+from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError, ValidationError
 from django.db.models import Model, Q, QuerySet
 from django.template.response import TemplateResponse
 from django.utils.html import conditional_escape
@@ -113,11 +113,22 @@ class GlueRelatedModelChoices:
         values: Sequence[Any],
         request: HttpRequest,
     ) -> list[dict[str, Any]]:
-        if not values:
+        # A value its field can't read, which only a crafted request sends, selects nothing; the
+        # form reports it as an invalid choice when it validates.
+        value_field = self.queryset.model._meta.get_field(self.value_field_name)
+        readable = []
+        for value in values:
+            try:
+                value_field.to_python(value)
+            except ValidationError:
+                continue
+            readable.append(value)
+
+        if not readable:
             return []
 
         queryset = self.queryset.filter(
-            **{f'{self.value_field_name}__in': values}
+            **{f'{self.value_field_name}__in': readable}
         )
         choices_by_value = {
             str(choice['value']): choice

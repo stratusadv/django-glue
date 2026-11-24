@@ -102,6 +102,18 @@ class FormGlue(BaseGlue):
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
         self._bound_form: forms.BaseForm | None = None
+        self._read_form: forms.BaseForm | None = None
+
+    def as_form(self) -> forms.BaseForm:
+        """
+        The Django form this object's owner reads it as, when it is a child
+        (ADR 050): built once, with its initial and kept arguments, and bound to
+        the submitted values or, with nothing submitted, to its initial ones.
+        Django validates it only when asked, and its errors are this object's.
+        """
+        if self._read_form is None:
+            self._read_form = self._bind_form()
+        return self._read_form
 
     @property
     def bound_form(self) -> forms.BaseForm | None:
@@ -185,7 +197,7 @@ class FormGlue(BaseGlue):
         from django_glue import Glue  # noqa: PLC0415
 
         declarations = {}
-        for name, field in self.form.fields.items():
+        for name in self.form.fields:
             if name in self.editable:
                 declarations[name] = Glue.attr(
                     property(
@@ -198,7 +210,9 @@ class FormGlue(BaseGlue):
                     # ADD for a form of no saved row, CHANGE for one that edits a row.
                     required_access=GlueAccess.required_save_access,
                     editable=True,
-                    value_type=field,
+                    # Its bound field, not the field alone: a field inside a
+                    # form holds its value raw for the form to clean (ADR 051).
+                    value_type=self.form[name],
                 )
             else:
                 declarations[name] = Glue.property(
@@ -271,12 +285,13 @@ class FormGlue(BaseGlue):
         property: that property calls ``is_valid()`` and would run a fresh
         ``full_clean()``, surfacing "required" errors on a bound-but-unsubmitted
         form (the moment a modal opens). Validation is triggered only by an
-        explicit validate/save call or a provider callable that validates the
-        form itself; this only reflects a result that already exists.
+        explicit validate/save call, a provider callable that validates the
+        form itself, or the owner validating the form it read this child as;
+        this only reflects a result that already exists.
         """
-        form_errors = self.form._errors
-        if form_errors is not None:
-            self._field_errors = {name: list(errors) for name, errors in form_errors.items()}
+        for form in (self.form, self._read_form):
+            if form is not None and form._errors is not None:
+                self._field_errors = {name: list(errors) for name, errors in form._errors.items()}
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
         # Field presentations read _field_errors. A provider callable (a
@@ -464,14 +479,16 @@ class FormGlue(BaseGlue):
                 for name in self.editable
                 if name in self.request.FILES
             })
+        # The bound form is built with the initial the form was given, as Django binds one: a
+        # disabled field validates it, has_changed() compares against it, and an __init__ may read
+        # it. For a model form it also keeps validation, which writes the cleaned values onto the
+        # instance, from reading them back as its initial and reporting nothing changed.
         kwargs = {
             'data': data,
             'files': files,
+            'initial': self.form.initial,
         }
         has_instance = getattr(self.form, 'instance', None) is not None
         if isinstance(self.form, forms.ModelForm) and has_instance:
             kwargs['instance'] = self.form.instance
-            # Validation writes the cleaned values onto the instance, so a second
-            # bind would read them as its initial and report nothing changed.
-            kwargs['initial'] = self.form.initial
         return form_class(**kwargs, **self._form_build_kwargs)

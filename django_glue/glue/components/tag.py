@@ -128,7 +128,8 @@ class GlueComponentNode(Node):
         except GlueAuthorizationError:
             return ''
         template = get_template(component.template)
-        with context.push(**component._template_context()):
+        # The component and nothing from context_data, as Component.render() draws it after calls.
+        with context.push(component=component):
             html = template.template.render(context)
         return mark_safe(inject_component_root(
             html,

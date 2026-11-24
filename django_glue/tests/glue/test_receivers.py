@@ -36,7 +36,9 @@ class RefusingDashboardComponent(RerenderingCounterDashboardComponent):
 
 
 class FailingDashboardComponent(RerenderingCounterDashboardComponent):
-    def _template_context(self) -> dict[str, Any]:
+    template = 'gorilla/component/failing_render.html'
+
+    def break_render(self) -> None:
         Gorilla.objects.create(name='Written by a failing receiver')
         message = 'The receiver template broke.'
         raise RuntimeError(message)

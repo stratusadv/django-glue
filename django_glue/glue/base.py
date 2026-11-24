@@ -715,6 +715,14 @@ class BaseGlue(ABC):
         """This object's response entries after its owner read it as a submitted child."""
         return [self.entry.model_dump()]
 
+    def _successor_submission(self) -> dict[str, Any]:
+        """
+        What the re-render after a call submits for this object as its owner's
+        child, once the call read it: its successor token, with no further
+        changes (ADR 049).
+        """
+        return {'policy_token': self.policy.token, 'updates': {}}
+
     def _retained_draft(self, policy: GluePolicy) -> dict[str, Any]:
         """The acknowledged editable draft the verified token carries: every
         signed editable-state value."""

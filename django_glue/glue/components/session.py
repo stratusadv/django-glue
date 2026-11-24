@@ -5,9 +5,12 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from django_glue.conf import settings
+from django_glue.serialization import GlueSerializerError
 
 if TYPE_CHECKING:
     from django.contrib.sessions.backends.base import SessionBase
+
+    from django_glue.serialization import GlueSerializer
 
 
 class ComponentSession(MutableMapping[str, Any]):
@@ -75,16 +78,21 @@ class ComponentSession(MutableMapping[str, Any]):
 class SessionValue:
     """
     Storage for a declared attribute kept in its component's session
-    (ADR 031), under the attribute's name. Reading a key that was never set
-    returns the declared default without writing it, so a read never marks
-    the session modified.
+    (ADR 031), under the attribute's name. A value is stored as its
+    declaration's serializer dumps it and read back as the serializer restores
+    it, so a dataclass, an enum or a date is kept as plain data and comes back
+    as itself. Reading a key that was never set, or one stored in a shape the
+    declaration no longer restores, returns the declared default without
+    writing it, so a read never marks the session modified.
     """
 
     def __init__(
         self,
+        serializer: Callable[[type], GlueSerializer],
         default: Any = None,
         default_factory: Callable[[], Any] | None = None,
     ) -> None:
+        self.serializer = serializer
         self.default = default
         self.default_factory = default_factory
         self.name = ''
@@ -96,14 +104,15 @@ class SessionValue:
         if instance is None:
             return self
         try:
-            return instance.session[self.name]
-        except KeyError:
+            return self.serializer(type(instance)).restore(instance.session[self.name])
+        except (KeyError, GlueSerializerError):
+            # Never set, or stored by an earlier shape of the declaration.
             if self.default_factory is not None:
                 return self.default_factory()
             return deepcopy(self.default)
 
     def __set__(self, instance: Any, value: Any) -> None:
-        instance.session[self.name] = value
+        instance.session[self.name] = self.serializer(type(instance)).dump(value)
 
     def __delete__(self, instance: Any) -> None:
         instance.session.pop(self.name, None)

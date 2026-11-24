@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Iterable, Mapping
-from contextlib import suppress
 from dataclasses import replace
 from functools import cache, partial
-from typing import TYPE_CHECKING, Any, get_type_hints
+from typing import TYPE_CHECKING, Any
 
+from django_glue.glue.annotations import resolve_annotations
 from django_glue.glue.attributes.attribute import (
     GlueAttribute,
     GlueAttributeKind,
@@ -27,13 +27,17 @@ class GlueAttributeCollector:
     @staticmethod
     @cache
     def collect(owner_type: type[Any]) -> tuple[GlueAttribute, ...]:
-        value_types: dict[str, Any] = {}
-        with suppress(NameError, TypeError):
-            value_types = get_type_hints(owner_type)
-        return tuple(
-            attribute
+        declarations = [
+            (source_name, static_attribute, options)
             for source_name, static_attribute in inspect.getmembers_static(owner_type)
             if (options := GlueAttributeCollector._get_options(static_attribute)) is not None
+        ]
+        # Only the declared attributes' annotations: any other is never evaluated, so it can't
+        # stop the class or cost the declared attributes their types.
+        value_types = resolve_annotations(owner_type, [source_name for source_name, _, _ in declarations])
+        return tuple(
+            attribute
+            for source_name, static_attribute, options in declarations
             for attribute in GlueAttributeCollector._compile_declaration(
                 source_name=source_name,
                 options=options,
@@ -104,7 +108,12 @@ class GlueAttributeCollector:
         declaration: Any,
         path: str,
     ) -> GlueAttribute:
-        if attribute.path != path or attribute.kind == GlueAttributeKind.NAMESPACE:
+        # A declaration that says how Glue reads it keeps that getter.
+        if (
+            attribute.path != path
+            or attribute.kind == GlueAttributeKind.NAMESPACE
+            or attribute.getter is not None
+        ):
             return attribute
         has_descriptor = (
             getattr(declaration, 'target', None) is not None
@@ -180,6 +189,7 @@ class GlueAttributeCollector:
                     expected_type=options.expected_type,
                     is_nullable=options.is_nullable,
                     is_declared_child=options.is_declared_child,
+                    getter=options.getter,
                 ),
             )
         kind = (
@@ -352,14 +362,14 @@ class GlueAttributeCollector:
                 provider_type=provider_type,
             ),
         ]
-        value_types: dict[str, Any] = {}
-        with suppress(NameError, TypeError):
-            value_types = get_type_hints(provider_type)
+        declarations = [
+            (child_name, static_attribute, child_options)
+            for child_name, static_attribute in inspect.getmembers_static(provider_type)
+            if (child_options := GlueAttributeCollector._get_options(static_attribute)) is not None
+        ]
+        value_types = resolve_annotations(provider_type, [child_name for child_name, _, _ in declarations])
         next_chain = chain | {provider_type}
-        for child_name, static_attribute in inspect.getmembers_static(provider_type):
-            child_options = GlueAttributeCollector._get_options(static_attribute)
-            if child_options is None:
-                continue
+        for child_name, static_attribute, child_options in declarations:
             if child_options.is_namespace:
                 attributes.extend(
                     GlueAttributeCollector._compile_namespace(
