@@ -1,11 +1,30 @@
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING, Any, get_type_hints
 
 from django_glue.exceptions import GlueAnnotationError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+
+if sys.version_info >= (3, 14):
+    from annotationlib import Format, get_annotations
+
+    def _get_own_annotations(klass: type) -> dict[str, Any]:
+        """
+        ``klass``'s own annotations. Python 3.14 evaluates them on demand (PEP 649), so a name
+        that can't be resolved, such as one imported only under ``TYPE_CHECKING``, comes back as
+        a ``ForwardRef`` rather than raising.
+        """
+        return get_annotations(klass, format=Format.FORWARDREF)
+
+else:
+
+    def _get_own_annotations(klass: type) -> dict[str, Any]:
+        """``klass``'s own annotations, as the class body stored them."""
+        return klass.__dict__.get('__annotations__', {})
 
 
 def resolve_annotations(owner: type, names: Iterable[str]) -> dict[str, Any]:
@@ -19,12 +38,10 @@ def resolve_annotations(owner: type, names: Iterable[str]) -> dict[str, Any]:
     be evaluated raises ``GlueAnnotationError``, naming it.
     """
     resolved: dict[str, Any] = {}
+    own_annotations = {klass: _get_own_annotations(klass) for klass in owner.__mro__}
 
     for name in names:
-        declaring = next(
-            (klass for klass in owner.__mro__ if name in klass.__dict__.get('__annotations__', {})),
-            None,
-        )
+        declaring = next((klass for klass in owner.__mro__ if name in own_annotations[klass]), None)
         if declaring is None:
             continue
 
@@ -33,7 +50,10 @@ def resolve_annotations(owner: type, names: Iterable[str]) -> dict[str, Any]:
         stand_in = type(
             declaring.__name__,
             (),
-            {'__annotations__': {name: declaring.__dict__['__annotations__'][name]}, '__module__': declaring.__module__},
+            {
+                '__annotations__': {name: own_annotations[declaring][name]},
+                '__module__': declaring.__module__,
+            },
         )
         try:
             resolved[name] = get_type_hints(stand_in, localns=dict(vars(declaring)))[name]
