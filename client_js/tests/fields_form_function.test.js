@@ -121,6 +121,65 @@ describe('field-backed proxy facades', () => {
         expect(calls).toBe(1)
     })
 
+    test('relation fields reload cached choices in server order and update shared fields', async () => {
+        GlueRelationAttribute.loadingCache.clear()
+        const firstEntry = createEntry({
+            policy: {
+                name: 'first_gorilla', address: 'first_gorilla#test',
+                state_snapshot: {skill: 1},
+                attributes: ['skill', 'foreign_key_choices'],
+            },
+            staticData: {
+                value_attributes: {skill: {
+                    value_path: 'skill', type: 'ModelChoiceField', editable: true,
+                    choice_model_path: 'app.Skill', choices_cache_key: 'reload-skill-cache',
+                }},
+                callables: {foreign_key_choices: {allowed_arguments: ['field_name']}},
+            },
+        })
+        const secondEntry = createEntry({
+            policy: {
+                name: 'second_gorilla', address: 'second_gorilla#test',
+                state_snapshot: {skill: null},
+                attributes: ['skill', 'foreign_key_choices'],
+            },
+            staticData: {
+                value_attributes: {skill: {
+                    value_path: 'skill', type: 'ModelChoiceField', editable: true,
+                    choice_model_path: 'app.Skill', choices_cache_key: 'reload-skill-cache',
+                }},
+                callables: {foreign_key_choices: {allowed_arguments: ['field_name']}},
+            },
+        })
+        const client = new GlueClient({objects: [firstEntry, secondEntry]})
+        let serverChoices = [{value: 1, label: 'Climbing'}]
+        let calls = 0
+        client.http.sendAttributeRequest = async request => {
+            calls++
+            return attributeResponse(request.address, {result: {results: serverChoices}})
+        }
+
+        const first = client.model.first_gorilla.$fields.skill
+        const second = client.model.second_gorilla.$fields.skill
+        await first.ensureChoices()
+        await second.ensureChoices()
+        expect(calls).toBe(1)
+
+        serverChoices = [
+            {value: 2, label: 'Bouldering'},
+            {value: 1, label: 'Climbing'},
+        ]
+        const reloaded = await first.reloadChoices()
+
+        expect(calls).toBe(2)
+        expect(reloaded).toEqual(serverChoices)
+        expect(first.choices).toEqual(serverChoices)
+        expect(second.choices).toEqual(serverChoices)
+
+        await second.ensureChoices()
+        expect(calls).toBe(2)
+    })
+
     test('search results retain a selected relation after search clears', async () => {
         GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({

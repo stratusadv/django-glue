@@ -142,6 +142,37 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
         return cache.promise
     }
 
+    // Re-fetches choices from the server, replaces the shared cache in server
+    // order, and updates every field subscribed to the same cache key (e.g.
+    // after a related record is created or edited in a modal).
+    reloadChoices(): Promise<GlueChoice[]> {
+        if (typeof this.owner.foreign_key_choices !== 'function') {
+            return Promise.resolve(this._choices || [])
+        }
+
+        const cacheKey = this._getChoicesCacheKey()
+        const cache = this._getOrCreateCache(cacheKey)
+        cache.fields.add(this)
+        this._choicesOverridden = false
+        cache.loaded = false
+
+        const request = this.owner.foreign_key_choices({
+            field_name: this.choice_field || this.name,
+        }).then(result => {
+            const {results = []} = result || {}
+            this._replaceChoices(Array.isArray(results) ? results : [])
+            cache.loaded = true
+            return this._choices || []
+        }).finally(() => {
+            if (cache.promise === request) {
+                cache.promise = null
+            }
+        })
+
+        cache.promise = request
+        return request
+    }
+
     // Runs a server-side search over the fields declared by Glue.choices()
     // and takes over this field's choices via a dedicated _searchChoices
     // slot (read by the choices getter above whenever _searchQuery is set)
@@ -243,6 +274,19 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
         })
 
         cache.choices = merged
+
+        for (const field of cache.fields) {
+            if (!field._choicesOverridden) {
+                field.choices = cache.choices
+            }
+        }
+    }
+
+    _replaceChoices(newChoices: GlueChoice[]): void {
+        const cache = this._getOrCreateCache(this._getChoicesCacheKey())
+        cache.choices = newChoices.filter(
+            (choice): choice is GlueChoice => Boolean(choice && typeof choice === 'object')
+        )
 
         for (const field of cache.fields) {
             if (!field._choicesOverridden) {

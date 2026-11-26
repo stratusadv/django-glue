@@ -5576,6 +5576,30 @@ ${expression ? 'Expression: "' + expression + `"
       });
       return cache.promise;
     }
+    reloadChoices() {
+      if (typeof this.owner.foreign_key_choices !== "function") {
+        return Promise.resolve(this._choices || []);
+      }
+      const cacheKey = this._getChoicesCacheKey();
+      const cache = this._getOrCreateCache(cacheKey);
+      cache.fields.add(this);
+      this._choicesOverridden = false;
+      cache.loaded = false;
+      const request = this.owner.foreign_key_choices({
+        field_name: this.choice_field || this.name
+      }).then((result) => {
+        const { results = [] } = result || {};
+        this._replaceChoices(Array.isArray(results) ? results : []);
+        cache.loaded = true;
+        return this._choices || [];
+      }).finally(() => {
+        if (cache.promise === request) {
+          cache.promise = null;
+        }
+      });
+      cache.promise = request;
+      return request;
+    }
     async searchChoices(query) {
       if (!query) {
         return this.clearSearch();
@@ -5652,6 +5676,15 @@ ${expression ? 'Expression: "' + expression + `"
         }
       });
       cache.choices = merged;
+      for (const field of cache.fields) {
+        if (!field._choicesOverridden) {
+          field.choices = cache.choices;
+        }
+      }
+    }
+    _replaceChoices(newChoices) {
+      const cache = this._getOrCreateCache(this._getChoicesCacheKey());
+      cache.choices = newChoices.filter((choice) => Boolean(choice && typeof choice === "object"));
       for (const field of cache.fields) {
         if (!field._choicesOverridden) {
           field.choices = cache.choices;
