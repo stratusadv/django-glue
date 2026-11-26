@@ -24,6 +24,10 @@ class AccountForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput)
     pin = forms.CharField(widget=forms.PasswordInput(render_value=True), required=False)
 
+    @Glue.attr(required_access=Glue.Access.CHANGE)
+    def submit(self) -> dict[str, Any]:
+        return {'valid': self.is_valid()}
+
 
 def account_form(
     request: HttpRequest,
@@ -108,6 +112,21 @@ def test_a_call_without_the_password_update_finds_it_missing(mock_request: HttpR
     assert entry['result']['valid'] is False
     assert entry['computed_data']['value_attributes']['password']['errors']
     assert 'email' not in entry['result']['errors']
+
+
+def test_a_provider_callable_returns_write_only_field_errors_without_prior_validate(
+    mock_request: HttpRequest,
+) -> None:
+    form = account_form(mock_request)
+    context = call_context(form, 'submit', updates={'email': 'dana@northwind.example'})
+    rebuilt = FormGlue.from_attribute_call_resolver_context(context)
+
+    entry, _ = rebuilt.process_attribute_call(context)
+
+    assert entry['result']['valid'] is False
+    assert entry['computed_data']['value_attributes']['password']['errors'] == [
+        'This field is required.',
+    ]
 
 
 def test_a_password_that_renders_its_value_stays_retained_state(mock_request: HttpRequest) -> None:

@@ -298,6 +298,7 @@ class FormGlue(BaseGlue):
         for form in (self.form, self._read_form):
             if form is not None and form._errors is not None:
                 self._field_errors = {name: list(errors) for name, errors in form._errors.items()}
+                self._derived_paths.update(self.form.fields)
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
         # Field presentations read _field_errors. A provider callable (a
