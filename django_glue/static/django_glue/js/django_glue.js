@@ -5463,7 +5463,16 @@ ${expression ? 'Expression: "' + expression + `"
       return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
     choiceLabelText(choice) {
-      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
+      const label = String(choice?.label ?? "");
+      if (!choice?.has_html_label) {
+        return label;
+      }
+      if (typeof document !== "undefined") {
+        const template = document.createElement("template");
+        template.innerHTML = label;
+        return template.content.textContent ?? "";
+      }
+      return label.replace(/<[^>]*>/g, "");
     }
   }
   var choice_default = GlueChoiceAttribute;

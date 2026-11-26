@@ -26,9 +26,19 @@ class GlueChoiceAttribute extends GlueValueAttribute {
     }
 
     // Plain text content of a choice label, for inputs and other text-only
-    // spots that cannot render HTML.
+    // spots that cannot render HTML. HTML labels are parsed inside a detached
+    // <template> so entities decode and tags strip without running markup.
     choiceLabelText(choice: GlueChoice | null | undefined): string {
-        return String(choice?.label ?? '').replace(/<[^>]*>/g, '')
+        const label = String(choice?.label ?? '')
+        if (!choice?.has_html_label) {
+            return label
+        }
+        if (typeof document !== 'undefined') {
+            const template = document.createElement('template')
+            template.innerHTML = label
+            return template.content.textContent ?? ''
+        }
+        return label.replace(/<[^>]*>/g, '')
     }
 }
 

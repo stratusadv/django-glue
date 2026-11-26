@@ -10,8 +10,9 @@ DEFAULT_EXCLUDED_MODEL_FIELD_TYPES = frozenset({
 # per query. Also the default for the public Glue.choices(search_limit=...) arg.
 DEFAULT_SEARCH_LIMIT = 25
 
-# Maximum number of unique whitespace-separated tokens scored per search query,
-# keeping the generated SQL CASE expressions bounded regardless of input length.
+# Maximum number of characters and unique whitespace-separated tokens scored per
+# search query, bounding both the SQL parameter size and CASE expression count.
+MAX_SEARCH_LENGTH = 200
 MAX_SEARCH_WORDS = 8
 
 # Attribute name under which a configured queryset's QuerySetChoiceOptions is

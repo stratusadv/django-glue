@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from django_glue.glue.options.django.constants import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
     DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_LENGTH,
     MAX_SEARCH_WORDS,
     QUERYSET_CHOICE_OPTIONS_ATTRIBUTE,
 )
@@ -247,7 +248,7 @@ def configure_choices(
 
 
 def _search_words(search: str) -> list[str]:
-    words = dict.fromkeys(word for word in search.casefold().split() if word)
+    words = dict.fromkeys(word for word in search[:MAX_SEARCH_LENGTH].casefold().split() if word)
     return list(words)[:MAX_SEARCH_WORDS]
 
 
