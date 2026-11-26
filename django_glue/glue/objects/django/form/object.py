@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from django_glue.glue.attributes import GlueAttribute
     from django_glue.glue.policy import GluePolicy
+    from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
 
 DEFAULT_SAVE_PATH = 'save'
@@ -103,6 +104,11 @@ class FormGlue(BaseGlue):
         self._editable_draft: dict[str, Any] = {}
         self._bound_form: forms.BaseForm | None = None
         self._read_form: forms.BaseForm | None = None
+        self._uploaded_files: MultiValueDict[str, Any] | None = None
+
+    def _authorize_reconstruction(self, context: AttributeCallRequestContext) -> None:
+        super()._authorize_reconstruction(context)
+        self._uploaded_files = context.uploaded_files
 
     def as_form(self) -> forms.BaseForm:
         """
@@ -472,12 +478,15 @@ class FormGlue(BaseGlue):
         }
         # Uploads bind only to editable fields, as values do: a request's files
         # are not narrowed to the fields the page lets the user change.
+        uploaded_files = self._uploaded_files if self._uploaded_files is not None else (
+            self.request.FILES if self.request else None
+        )
         files = None
-        if self.request:
+        if uploaded_files is not None:
             files = MultiValueDict({
-                name: self.request.FILES.getlist(name)
+                name: uploaded_files.getlist(name)
                 for name in self.editable
-                if name in self.request.FILES
+                if name in uploaded_files
             })
         # The bound form is built with the initial the form was given, as Django binds one: a
         # disabled field validates it, has_changed() compares against it, and an __init__ may read

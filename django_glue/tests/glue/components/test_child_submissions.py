@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django import forms
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.forms.formsets import all_valid
+from django.utils.datastructures import MultiValueDict
 
 from django_glue import Glue
 from django_glue.exceptions import GlueRequestError
@@ -311,3 +314,140 @@ def test_a_child_needs_a_glue_object_return_type() -> None:
             @Glue.child
             def contact(self):
                 return Glue.form(target=ContactPromoterForm())
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        kwargs.setdefault('widget', MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data: Any, initial: Any = None) -> list[Any]:
+        single_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_clean(item, initial) for item in data]
+        return [single_clean(data, initial)] if data else []
+
+
+class SupportingPaperForm(forms.Form):
+    title = forms.CharField()
+    attachments = MultipleFileField(required=False)
+
+
+class RowUploadForm(forms.Form):
+    note = forms.CharField()
+    proof = forms.FileField(required=False)
+
+
+class RowUploadFormSet(Glue.FormSet):
+    form_class = RowUploadForm
+    min_num = 1
+
+
+class UploadCardComponent(Component):
+    template = 'glue_template_test.html'
+
+    @Glue.child
+    def paper(self) -> Glue.Form:
+        return Glue.form(target=SupportingPaperForm(), access=self.access)
+
+    @Glue.child
+    def rows(self) -> Glue.FormSet:
+        return RowUploadFormSet(initial=[{'note': 'First'}], access=self.access)
+
+    @Glue.attr(required_access=Glue.Access.ADD, skip_rerender=True)
+    def submit(self) -> dict[str, Any]:
+        assert all_valid([self.paper, self.rows])
+        return {
+            'paper_files': [file.name for file in self.paper.cleaned_data['attachments']],
+            'row_files': [row['proof'].name if row.get('proof') else None for row in self.rows.cleaned_data],
+        }
+
+
+def test_files_uploaded_for_child_forms_and_formset_rows_bind_under_their_slot_prefixes(mock_request) -> None:
+    upload_card = Glue.object(mock_request, UploadCardComponent(access=Glue.Access.ADD))
+    tokens = tokens_by_address(upload_card)
+    rows_token = tokens[upload_card.policy.children['rows']]
+    [row_key] = GluePolicy.from_token(rows_token).children
+    row_address = GluePolicy.from_token(rows_token).children[row_key]
+
+    submissions = {
+        'paper': {'policy_token': tokens[upload_card.policy.children['paper']], 'updates': {'title': 'Accrual'}},
+        'rows': {
+            'policy_token': rows_token,
+            'updates': {},
+            'forms': {
+                row_key: {'policy_token': tokens[row_address], 'updates': {'note': 'Line 1'}},
+            },
+        },
+    }
+    context = call_context(upload_card, 'submit').model_copy(update={'child_submissions': submissions})
+    context.request._files = MultiValueDict({
+        'child_submissions.paper.attachments': [
+            SimpleUploadedFile('workpaper.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            SimpleUploadedFile('schedule.csv', b'a,b\n1,2\n', content_type='text/csv'),
+        ],
+        f'child_submissions.rows.forms.{row_key}.proof': [
+            SimpleUploadedFile('receipt.txt', b'paid', content_type='text/plain'),
+        ],
+        'child_submissions.other.attachments': [
+            SimpleUploadedFile('stranger.pdf', b'%PDF', content_type='application/pdf'),
+        ],
+    })
+
+    rebuilt = UploadCardComponent.from_attribute_call_resolver_context(context)
+    entry, _ = rebuilt.process_attribute_call(context)
+
+    assert entry['result'] == {
+        'paper_files': ['workpaper.pdf', 'schedule.csv'],
+        'row_files': ['receipt.txt'],
+    }
+
+
+@pytest.mark.django_db
+def test_files_uploaded_for_child_model_bind_under_its_slot_prefix(mock_request, tmp_path, settings) -> None:
+    from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    gorilla = Gorilla.objects.create(name='Koko', age=10, weight=100.0, height=1.5)
+
+    class GorillaCardComponent(Component):
+        template = 'glue_template_test.html'
+
+        @Glue.child
+        def fighter(self) -> Glue.Model:
+            return Glue.model(
+                target=gorilla,
+                fields=['name', 'profile_photo'],
+                access=self.access,
+            )
+
+        @Glue.attr(required_access=Glue.Access.CHANGE, skip_rerender=True)
+        def save_fighter(self) -> dict[str, Any]:
+            return self.fighter.save()
+
+    card = Glue.object(mock_request, GorillaCardComponent(access=Glue.Access.CHANGE))
+    fighter_token = tokens_by_address(card)[card.policy.children['fighter']]
+    context = call_context(card, 'save_fighter').model_copy(update={
+        'child_submissions': {'fighter': {'policy_token': fighter_token, 'updates': {'name': 'Koko Updated'}}},
+    })
+    context.request._files = MultiValueDict({
+        'child_submissions.fighter.profile_photo': [
+            SimpleUploadedFile('portrait.gif', gif, content_type='image/gif'),
+        ],
+        'profile_photo': [
+            SimpleUploadedFile('unscoped.gif', gif, content_type='image/gif'),
+        ],
+    })
+
+    rebuilt = GorillaCardComponent.from_attribute_call_resolver_context(context)
+    entry, _ = rebuilt.process_attribute_call(context)
+
+    gorilla.refresh_from_db()
+    assert entry['result']['success'] is True
+    assert gorilla.name == 'Koko Updated'
+    assert gorilla.profile_photo.name.startswith('gorilla_photos/portrait')

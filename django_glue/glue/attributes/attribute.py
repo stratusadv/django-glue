@@ -4,7 +4,7 @@ import inspect
 import json
 from collections.abc import Mapping
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from enum import StrEnum
 from types import NoneType, UnionType
 from typing import (
@@ -398,10 +398,24 @@ class BoundGlueAttribute:
     def _binding_owner(self) -> Any:
         return self.provider if self.provider is not None else self.owner
 
+    def _dump_via_serializer(self, value: Any, *, cause: Exception | None = None) -> Any:
+        try:
+            return self._serializer().dump(value)
+        except GlueSerializerError as error:
+            owner_type = type(self._binding_owner())
+            value_type = type(value)
+            raise GlueInvalidAttributeError(
+                attribute=self.attribute.path,
+                owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
+                value_type=f'{value_type.__module__}.{value_type.__qualname__}',
+            ) from (cause if cause is not None else error)
+
     def _wire_form(self, value: Any) -> Any:
         """
         A value attribute's value as it is signed and sent: itself when the wire
         encoder can already write it, otherwise as its serializer dumps it.
+        Typed dataclass attributes always dump through their declared serializer
+        so retained snapshots and computed values hold plain JSON data.
         """
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
 
@@ -411,19 +425,18 @@ class BoundGlueAttribute:
                 'object outside an addressed child declaration.'
             )
             raise TypeError(msg)
+        if self.attribute.serializer is not None and self._contains_matching(
+            value,
+            lambda item: is_dataclass(item) and not isinstance(item, type),
+            set(),
+        ):
+            dumped = self._dump_via_serializer(value)
+            json.dumps(dumped, cls=GlueResponseJSONEncoder)
+            return dumped
         try:
             json.dumps(value, cls=GlueResponseJSONEncoder)
         except TypeError as error:
-            try:
-                return self._serializer().dump(value)
-            except GlueSerializerError:
-                owner_type = type(self._binding_owner())
-                value_type = type(value)
-                raise GlueInvalidAttributeError(
-                    attribute=self.attribute.path,
-                    owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
-                    value_type=f'{value_type.__module__}.{value_type.__qualname__}',
-                ) from error
+            return self._dump_via_serializer(value, cause=error)
         return value
 
     @classmethod
@@ -433,18 +446,34 @@ class BoundGlueAttribute:
         expected_type: type[Any],
         visited: set[int],
     ) -> bool:
-        if isinstance(value, expected_type):
+        return cls._contains_matching(
+            value,
+            lambda item: isinstance(item, expected_type),
+            visited,
+        )
+
+    @classmethod
+    def _contains_matching(
+        cls,
+        value: Any,
+        predicate: Callable[[Any], bool],
+        visited: set[int],
+    ) -> bool:
+        if predicate(value):
             return True
-        if not isinstance(value, Mapping | list | tuple | set | frozenset):
+        is_dc = is_dataclass(value) and not isinstance(value, type)
+        if not is_dc and not isinstance(value, Mapping | list | tuple | set | frozenset):
             return False
         if id(value) in visited:
             return False
         visited.add(id(value))
-        if isinstance(value, Mapping):
+        if is_dc:
+            values = tuple(getattr(value, dc_field.name) for dc_field in fields(value))
+        elif isinstance(value, Mapping):
             values = (*value.keys(), *value.values())
         else:
             values = value
         return any(
-            cls._contains_type(item, expected_type, visited)
+            cls._contains_matching(item, predicate, visited)
             for item in values
         )

@@ -632,6 +632,7 @@ class Component(BaseGlue):
             target_glue_policy=child_policy,
             target_glue_updates=submission.get('updates', {}),
             target_attribute_name=None,
+            file_prefix=f'child_submissions.{path}.',
         )
         child = glue_class_registry.get_glue_class(
             child_policy.namespace,

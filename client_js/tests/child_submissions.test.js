@@ -154,4 +154,61 @@ describe('child submissions', () => {
             contact: {policy_token: 'c', updates: {name: 'Bee'}},
         })
     })
+
+    test('files inside child submissions and formset rows are extracted into FormData under their slot keys', async () => {
+        const calls = mockOperationFetch()
+        const http = new GlueHttp(new GlueConfig())
+        const workingPaper = new File(['abc'], 'working-paper.pdf', {type: 'application/pdf'})
+        const receipt = new File(['def'], 'receipt.png', {type: 'image/png'})
+
+        await http.sendAttributeRequest({
+            address: CARD,
+            policyToken: 't',
+            attribute: 'send',
+            childSubmissions: {
+                contact: {policy_token: 'c', updates: {name: 'Bee', attachments: [workingPaper]}},
+                lines: {
+                    policy_token: 'l',
+                    updates: {},
+                    forms: {
+                        0: {policy_token: 'r0', updates: {memo: 'Line 1', proof: receipt}},
+                    },
+                },
+            },
+        })
+
+        const body = calls[0].options.body
+        expect(JSON.parse(body.get('objects'))[0].child_submissions).toEqual({
+            contact: {policy_token: 'c', updates: {name: 'Bee'}},
+            lines: {
+                policy_token: 'l',
+                updates: {},
+                forms: {
+                    0: {policy_token: 'r0', updates: {memo: 'Line 1'}},
+                },
+            },
+        })
+        expect(body.getAll('child_submissions.contact.attachments').map(file => file.name)).toEqual(['working-paper.pdf'])
+        expect(body.getAll('child_submissions.lines.forms.0.proof').map(file => file.name)).toEqual(['receipt.png'])
+    })
+
+    test('a receiver whose child submission carries files is omitted from the piggyback request', async () => {
+        const calls = mockOperationFetch()
+        const http = new GlueHttp(new GlueConfig())
+        const paper = new File(['abc'], 'paper.pdf', {type: 'application/pdf'})
+
+        await http.sendAttributeRequest({
+            address: CARD,
+            policyToken: 't',
+            attribute: 'send',
+            receivers: [{
+                address: 'other#1',
+                policyToken: 'o',
+                updates: {},
+                childSubmissions: {contact: {policy_token: 'c', updates: {attachments: [paper]}}},
+            }],
+        })
+
+        expect(JSON.parse(calls[0].options.body.get('objects'))[0].receivers).toBeUndefined()
+    })
 })

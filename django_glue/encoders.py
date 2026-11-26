@@ -1,4 +1,5 @@
 from contextlib import suppress
+from dataclasses import fields, is_dataclass
 from typing import Any
 
 from django.core.files.base import File
@@ -55,6 +56,19 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
         # Handle bytes objects
         if isinstance(o, bytes):
             return o.decode('utf-8', errors='replace')
+
+        if is_dataclass(o) and not isinstance(o, type):
+            from django_glue.message import GlueMessage  # noqa: PLC0415
+            from django_glue.response import GlueResponse  # noqa: PLC0415
+
+            if isinstance(o, GlueResponse | GlueMessage):
+                message = (
+                    f'Internal Glue object {type(o).__name__} is not serializable '
+                    'as an ordinary Glue value.'
+                )
+                raise TypeError(message)
+
+            return {field.name: getattr(o, field.name) for field in fields(o)}
 
         # For other types not handled by the default encoder,
         # delegate to the base class (which handles datetime, date, etc.)

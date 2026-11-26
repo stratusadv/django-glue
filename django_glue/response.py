@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from typing import Any, ClassVar, Iterable, Self
 
 from django.conf import settings
@@ -101,7 +101,13 @@ class GlueResponse:
         )
 
     @classmethod
-    def _reject_glue_objects(cls, value: Any, *, path: str = 'result') -> None:
+    def _reject_glue_objects(
+        cls,
+        value: Any,
+        *,
+        path: str = 'result',
+        visited: set[int] | None = None,
+    ) -> None:
         from django_glue.glue.base import BaseGlue
 
         if isinstance(value, BaseGlue):
@@ -111,12 +117,27 @@ class GlueResponse:
             )
             raise TypeError(message)
 
+        if not isinstance(value, dict | list | tuple) and not (is_dataclass(value) and not isinstance(value, type)):
+            return
+
+        seen = visited if visited is not None else set()
+        if id(value) in seen:
+            return
+        seen.add(id(value))
+
         if isinstance(value, dict):
             for key, item in value.items():
-                cls._reject_glue_objects(item, path=f'{path}.{key}')
+                cls._reject_glue_objects(item, path=f'{path}.{key}', visited=seen)
         elif isinstance(value, list | tuple):
             for index, item in enumerate(value):
-                cls._reject_glue_objects(item, path=f'{path}[{index}]')
+                cls._reject_glue_objects(item, path=f'{path}[{index}]', visited=seen)
+        else:
+            for field in fields(value):
+                cls._reject_glue_objects(
+                    getattr(value, field.name),
+                    path=f'{path}.{field.name}',
+                    visited=seen,
+                )
 
 
 class GlueRedirectResponse:

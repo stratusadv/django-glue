@@ -97,7 +97,11 @@
 
   // client_js/src/utils.ts
   function isPlainObject(value) {
-    return Object.prototype.toString.call(value) === "[object Object]";
+    if (Object.prototype.toString.call(value) !== "[object Object]") {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === null || prototype === Object.prototype;
   }
   function serializeValue(value) {
     if (value === null || value === undefined) {
@@ -251,7 +255,9 @@
       if (mounted.length)
         entry.mounted = mounted;
       if (childSubmissions) {
-        entry.child_submissions = serializeValue(childSubmissions);
+        const extracted = this._extractChildSubmissionFiles(childSubmissions);
+        Object.assign(files, extracted.files);
+        entry.child_submissions = extracted.data;
       }
       const receiverEntries = receivers.flatMap((receiver) => {
         const extracted = this._extractFiles(serializeValue(receiver.updates || {}));
@@ -265,7 +271,10 @@
         if (receiver.mounted?.length)
           receiverEntry.mounted = receiver.mounted;
         if (receiver.childSubmissions) {
-          receiverEntry.child_submissions = serializeValue(receiver.childSubmissions);
+          const childExtracted = this._extractChildSubmissionFiles(receiver.childSubmissions);
+          if (Object.keys(childExtracted.files).length)
+            return [];
+          receiverEntry.child_submissions = childExtracted.data;
         }
         return [receiverEntry];
       });
@@ -332,6 +341,36 @@
         if (extracted !== undefined) {
           data[key] = extracted;
         }
+      });
+      return { files, data };
+    }
+    _extractChildSubmissionFiles(childSubmissions) {
+      const files = {};
+      const data = {};
+      Object.entries(childSubmissions).forEach(([path, submission]) => {
+        const extracted = this._extractFiles(serializeValue(submission.updates || {}));
+        Object.entries(extracted.files).forEach(([fieldKey, fileValue]) => {
+          files[`child_submissions.${path}.${fieldKey}`] = fileValue;
+        });
+        const next = {
+          policy_token: submission.policy_token,
+          updates: extracted.data
+        };
+        if (submission.forms) {
+          const forms = {};
+          Object.entries(submission.forms).forEach(([rowKey, row]) => {
+            const rowExtracted = this._extractFiles(serializeValue(row.updates || {}));
+            Object.entries(rowExtracted.files).forEach(([fieldKey, fileValue]) => {
+              files[`child_submissions.${path}.forms.${rowKey}.${fieldKey}`] = fileValue;
+            });
+            forms[rowKey] = {
+              policy_token: row.policy_token,
+              updates: rowExtracted.data
+            };
+          });
+          next.forms = forms;
+        }
+        data[path] = next;
       });
       return { files, data };
     }

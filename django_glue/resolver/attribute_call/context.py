@@ -3,6 +3,7 @@ from typing import Any
 
 from django.http import HttpRequest
 from django.urls import ResolverMatch
+from django.utils.datastructures import MultiValueDict
 from pydantic import BaseModel, Field, ValidationError
 
 from django_glue.conf import settings as glue_settings
@@ -75,6 +76,20 @@ class AttributeCallRequestContext(BaseModel):
     reintroduce: list[str] = Field(default_factory=list)
     mounted: list[str] = Field(default_factory=list)
     child_submissions: dict[str, Any] = Field(default_factory=dict)
+    file_prefix: str = ''
+
+    @property
+    def uploaded_files(self) -> MultiValueDict[str, Any]:
+        """The uploaded files scoped to this entry, keyed by bare field name."""
+        if not self.file_prefix:
+            return self.request.FILES
+
+        prefix = self.file_prefix
+        return MultiValueDict({
+            key.removeprefix(prefix): self.request.FILES.getlist(key)
+            for key in self.request.FILES
+            if key.startswith(prefix)
+        })
 
     @property
     def operation_kind(self) -> GlueOperationKind:
