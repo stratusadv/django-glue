@@ -1,5 +1,9 @@
 # Changelog for Django Glue
 
+## v0.8.14
+### Fixes
+- Fixed a bug in multi_file_field.html where a photo taken with a camera got overwritten when another photo was taken with the camera on mobile devices
+
 ## v0.8.13
 ### Fixes
 - Update `DjangoGlueKeepLive` to expire and prompt the user to reload the page if the most recent pulse was longer than the configured keep live interval + 5 seconds.
