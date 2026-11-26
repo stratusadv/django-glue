@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import operator
 import pickle
 from dataclasses import dataclass
+from functools import reduce
 from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
 from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError, ValidationError
-from django.db.models import Model, Q, QuerySet
+from django.db.models import Case, Expression, IntegerField, Model, Q, QuerySet, Value, When
 from django.template.response import TemplateResponse
 from django.utils.html import conditional_escape
 from django.utils.module_loading import import_string
@@ -20,6 +22,7 @@ if TYPE_CHECKING:
 from django_glue.glue.options.django.constants import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
     DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_WORDS,
     QUERYSET_CHOICE_OPTIONS_ATTRIBUTE,
 )
 
@@ -146,12 +149,10 @@ class GlueRelatedModelChoices:
     def load(self, *, search: str = '', request: HttpRequest) -> RelatedModelChoicesResult:
         queryset = self.queryset
         if self.is_searchable:
-            if search:
-                search_filter = Q()
-                for search_field in self.options.search_fields:
-                    search_filter |= Q(**{f'{search_field}__icontains': search})
-                queryset = queryset.filter(search_filter)
-            if not queryset.ordered:
+            words = _search_words(search)
+            if words:
+                queryset = _apply_search(queryset, self.options.search_fields, words)
+            elif not queryset.ordered:
                 queryset = queryset.order_by(queryset.model._meta.pk.name)
             queryset = queryset[:self.options.search_limit]
 
@@ -243,6 +244,74 @@ def configure_choices(
         ),
     )
     return cast('ChoiceSource', configured_queryset)
+
+
+def _search_words(search: str) -> list[str]:
+    words = dict.fromkeys(word for word in search.casefold().split() if word)
+    return list(words)[:MAX_SEARCH_WORDS]
+
+
+def _score_sum(conditions: list[Q]) -> Expression:
+    terms = [
+        Case(
+            When(condition, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        for condition in conditions
+    ]
+    return reduce(operator.add, terms)
+
+
+def _existing_ordering(queryset: QuerySet) -> tuple[Any, ...]:
+    if queryset.query.order_by:
+        return tuple(queryset.query.order_by)
+    if queryset.query.default_ordering and queryset.model._meta.ordering:
+        return tuple(queryset.model._meta.ordering)
+    return (queryset.model._meta.pk.name,)
+
+
+def _apply_search(
+    queryset: QuerySet,
+    search_fields: tuple[str, ...],
+    words: list[str],
+) -> QuerySet:
+    search_filter = Q()
+    for search_field in search_fields:
+        for word in words:
+            search_filter |= Q(**{f'{search_field}__icontains': word})
+
+    queryset = queryset.filter(search_filter)
+    existing_ordering = _existing_ordering(queryset)
+
+    if len(search_fields) == 1 and len(words) == 1:
+        return queryset.order_by(*existing_ordering)
+
+    annotations: dict[str, Expression] = {}
+    relevance_ordering: list[str] = []
+
+    if len(words) > 1:
+        word_conditions = [
+            reduce(operator.or_, (Q(**{f'{field}__icontains': word}) for field in search_fields))
+            for word in words
+        ]
+        annotations['_dg_words_matched'] = _score_sum(word_conditions)
+        relevance_ordering.append('-_dg_words_matched')
+
+    if len(search_fields) > 1:
+        field_conditions = [
+            reduce(operator.or_, (Q(**{f'{field}__icontains': word}) for word in words))
+            for field in search_fields
+        ]
+        annotations['_dg_fields_matched'] = _score_sum(field_conditions)
+        relevance_ordering.append('-_dg_fields_matched')
+
+        for index, field in enumerate(search_fields):
+            key = f'_dg_field_hits_{index}'
+            annotations[key] = _score_sum([Q(**{f'{field}__icontains': word}) for word in words])
+            relevance_ordering.append(f'-{key}')
+
+    return queryset.annotate(**annotations).order_by(*relevance_ordering, *existing_ordering)
 
 
 def _validate_queryset(queryset: QuerySet) -> None:
