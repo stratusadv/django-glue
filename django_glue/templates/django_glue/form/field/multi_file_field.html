@@ -1,20 +1,29 @@
 {% extends 'django_glue/form/field/_base_file_field.html' %}
 
 {% block x-data %}
+    getFileFingerPrint(file){
+        return file.finger_print ?? `${file.name}|${file.size}|${file.lastModified}`;
+    },
+
     async handle_files_change(event) {
         let files = Array.from(event.target.files || []);
 
         for (let file of files) {
             if (file.size > this.maximum_filesize) {
-                alert(`The file is too large (${this.format_file_size(file.size)}). Maximum size is ${this.format_file_size(this.maximum_filesize)}.`);
+                alert(`The file is too large (${this.format_file_size(file.size)}). Maximum size is
+                ${this.format_file_size(this.maximum_filesize)}.`);
                 continue;
             }
-
-            let index = this.files.findIndex(existing => existing.name === file.name);
+            let fileFingerPrint = this.getFileFingerPrint(file);
+            let index = this.files.findIndex(existing => this.getFileFingerPrint(existing) === fileFingerPrint);
 
             if (index !== -1) {
+                let existing = this.files[index];
                 URL.revokeObjectURL(this.files[index].data);
-                URL.revokeObjectURL(this.files[index].preview);
+                if (existing.preview) {
+                    URL.revokeObjectURL(this.files[index].preview);
+                }
+                delete this.objects[existing.id];
                 this.files.splice(index, 1);
             }
 
@@ -31,6 +40,7 @@
 
             this.files.push({
                 id: file_id,
+                finger_print: fileFingerPrint,
                 name: processed.name,
                 size: processed.size,
                 type: processed.type,
@@ -41,15 +51,15 @@
             this.show_dropdown = false;
         }
 
-        this.update_value();
-        this.show_dropdown = true;
-        this.update_form_files();
+            this.update_value();
+            this.show_dropdown = true;
+            this.update_form_files();
 
-        this.$refs.file_input.value = '';
-        this.$refs.camera_input.value = '';
-    },
+            this.$refs.file_input.value = '';
+            this.$refs.camera_input.value = '';
+        },
 
-    remove_file(file_id) {
+        remove_file(file_id) {
         let file = this.files.find(file => file.id === file_id);
 
         if (file) {
