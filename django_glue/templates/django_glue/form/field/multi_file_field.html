@@ -14,6 +14,7 @@
                 ${this.format_file_size(this.maximum_filesize)}.`);
                 continue;
             }
+
             let fileFingerPrint = this.getFileFingerPrint(file);
             let index = this.files.findIndex(existing => this.getFileFingerPrint(existing) === fileFingerPrint);
 
@@ -51,15 +52,15 @@
             this.show_dropdown = false;
         }
 
-            this.update_value();
-            this.show_dropdown = true;
-            this.update_form_files();
+        this.update_value();
+        this.show_dropdown = true;
+        this.update_form_files();
 
-            this.$refs.file_input.value = '';
-            this.$refs.camera_input.value = '';
-        },
+        this.$refs.file_input.value = '';
+        this.$refs.camera_input.value = '';
+    },
 
-        remove_file(file_id) {
+    remove_file(file_id) {
         let file = this.files.find(file => file.id === file_id);
 
         if (file) {

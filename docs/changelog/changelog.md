@@ -1,6 +1,6 @@
 # Changelog for Django Glue
 
-## v0.8.14
+##  v0.8.18
 ### Fixes
 - Fixed a bug in multi_file_field.html where a photo taken with a camera got overwritten when another photo was taken with the camera on mobile devices
 
