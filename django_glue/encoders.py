@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
 from contextlib import suppress
 from dataclasses import fields, is_dataclass
 from typing import Any
@@ -8,6 +11,54 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Model, QuerySet
 from django.db.models.fields.files import FieldFile
 from pydantic import BaseModel
+
+
+def is_dataclass_instance(value: Any) -> bool:
+    """True for a dataclass instance, never a dataclass type."""
+    return is_dataclass(value) and not isinstance(value, type)
+
+
+def iter_nested_values(
+    value: Any,
+    *,
+    path: str = '',
+    visited: set[int] | None = None,
+) -> Iterator[tuple[str, Any]]:
+    """
+    Yield ``(path, item)`` for ``value`` and every nested container or
+    dataclass member, breaking reference cycles.
+    """
+    seen = visited if visited is not None else set()
+    yield path, value
+
+    value_is_dataclass = is_dataclass_instance(value)
+    if not value_is_dataclass and not isinstance(value, Mapping | list | tuple | set | frozenset):
+        return
+    if id(value) in seen:
+        return
+    seen.add(id(value))
+
+    if value_is_dataclass:
+        for dataclass_field in fields(value):
+            child_path = f'{path}.{dataclass_field.name}' if path else dataclass_field.name
+            yield from iter_nested_values(
+                getattr(value, dataclass_field.name),
+                path=child_path,
+                visited=seen,
+            )
+    elif isinstance(value, Mapping):
+        for key, item in value.items():
+            key_path = f'{path}.<key>' if path else '<key>'
+            yield from iter_nested_values(key, path=key_path, visited=seen)
+            item_path = f'{path}.{key}' if path else str(key)
+            yield from iter_nested_values(item, path=item_path, visited=seen)
+    else:
+        for index, item in enumerate(value):
+            yield from iter_nested_values(
+                item,
+                path=f'{path}[{index}]',
+                visited=seen,
+            )
 
 
 def _serialize_field_file(file: FieldFile) -> dict | None:
@@ -57,7 +108,7 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
         if isinstance(o, bytes):
             return o.decode('utf-8', errors='replace')
 
-        if is_dataclass(o) and not isinstance(o, type):
+        if is_dataclass_instance(o):
             from django_glue.message import GlueMessage  # noqa: PLC0415
             from django_glue.response import GlueResponse  # noqa: PLC0415
 
@@ -68,7 +119,10 @@ class GlueResponseJSONEncoder(DjangoJSONEncoder):
                 )
                 raise TypeError(message)
 
-            return {field.name: getattr(o, field.name) for field in fields(o)}
+            return {
+                dataclass_field.name: getattr(o, dataclass_field.name)
+                for dataclass_field in fields(o)
+            }
 
         # For other types not handled by the default encoder,
         # delegate to the base class (which handles datetime, date, etc.)

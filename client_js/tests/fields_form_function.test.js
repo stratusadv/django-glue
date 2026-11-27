@@ -180,6 +180,92 @@ describe('field-backed proxy facades', () => {
         expect(calls).toBe(2)
     })
 
+    test('stale ensureChoices and overlapping reloadChoices ignore superseded responses', async () => {
+        GlueRelationAttribute.loadingCache.clear()
+        const entries = ['first', 'second', 'third'].map(prefix => createEntry({
+            policy: {
+                name: `${prefix}_gorilla`,
+                address: `${prefix}_gorilla#test`,
+                state_snapshot: {skill: 1},
+                attributes: ['skill', 'foreign_key_choices'],
+            },
+            staticData: {
+                value_attributes: {skill: {
+                    value_path: 'skill', type: 'ModelChoiceField', editable: true,
+                    choice_model_path: 'app.Skill', choices_cache_key: 'race-skill-cache',
+                }},
+                callables: {foreign_key_choices: {allowed_arguments: ['field_name']}},
+            },
+        }))
+        const client = new GlueClient({objects: entries})
+        const pending = []
+        client.http.sendAttributeRequest = request => new Promise(resolve => {
+            pending.push({address: request.address, resolve})
+        })
+
+        const first = client.model.first_gorilla.$fields.skill
+        const second = client.model.second_gorilla.$fields.skill
+        const third = client.model.third_gorilla.$fields.skill
+        const ensurePromise = first.ensureChoices()
+        const firstReload = second.reloadChoices()
+        const secondReload = third.reloadChoices()
+        await Promise.resolve()
+        expect(pending).toHaveLength(3)
+
+        // Newest reload resolves first.
+        pending[2].resolve(attributeResponse(pending[2].address, {result: {results: [{value: 3, label: 'Newest'}]}}))
+        await secondReload
+        expect(first.choices).toEqual([{value: 3, label: 'Newest'}])
+        expect(second.choices).toEqual([{value: 3, label: 'Newest'}])
+        expect(third.choices).toEqual([{value: 3, label: 'Newest'}])
+
+        // Earlier ensureChoices and first reload settle afterwards and must be ignored.
+        pending[0].resolve(attributeResponse(pending[0].address, {result: {results: [{value: 1, label: 'Stale Ensure'}]}}))
+        pending[1].resolve(attributeResponse(pending[1].address, {result: {results: [{value: 2, label: 'Stale Reload'}]}}))
+        await Promise.all([ensurePromise, firstReload])
+
+        expect(first.choices).toEqual([{value: 3, label: 'Newest'}])
+        expect(second.choices).toEqual([{value: 3, label: 'Newest'}])
+        expect(third.choices).toEqual([{value: 3, label: 'Newest'}])
+    })
+
+    test('failed reloadChoices preserves prior loaded choices and does not reset loaded flag', async () => {
+        GlueRelationAttribute.loadingCache.clear()
+        const manifest = createEntry({
+            policy: {
+                state_snapshot: {skill: 1},
+                attributes: ['skill', 'foreign_key_choices'],
+            },
+            staticData: {
+                value_attributes: {skill: {
+                    value_path: 'skill', type: 'ModelChoiceField', editable: true,
+                    choice_model_path: 'app.Skill', choices_cache_key: 'failed-reload-cache',
+                }},
+                callables: {foreign_key_choices: {allowed_arguments: ['field_name']}},
+            },
+        })
+        const client = new GlueClient({objects: [manifest]})
+        let calls = 0
+        client.http.sendAttributeRequest = async () => {
+            calls++
+            if (calls === 1) {
+                return attributeResponse('gorilla#test', {result: {results: [{value: 1, label: 'Climbing'}]}} )
+            }
+            throw new Error('Server unavailable')
+        }
+
+        const field = client.model.gorilla.$fields.skill
+        await field.ensureChoices()
+        expect(field.choices).toEqual([{value: 1, label: 'Climbing'}])
+
+        await expect(field.reloadChoices()).rejects.toThrow('Server unavailable')
+
+        expect(field.choices).toEqual([{value: 1, label: 'Climbing'}])
+        expect(calls).toBe(2)
+        await field.ensureChoices()
+        expect(calls).toBe(2)
+    })
+
     test('search results retain a selected relation after search clears', async () => {
         GlueRelationAttribute.loadingCache.clear()
         const manifest = createEntry({

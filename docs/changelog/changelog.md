@@ -24,8 +24,9 @@
   `FormGlue._populate_field_errors()` now marks every field in `form.fields` as
   derived so validation errors on write-only or untouched fields always reach
   the browser on failed submission.
-- **Safe HTML entity decoding in `choiceLabelText`.** Choice labels decode HTML
-  entities without assigning untrusted markup to `innerHTML`.
+- **Safe HTML entity decoding in `choiceLabelText`.** HTML-formatted choice labels
+  decode entities and strip tags inside an inert detached `<template>` element
+  instead of inserting markup into a live element.
 
 ## v1.6.0
 

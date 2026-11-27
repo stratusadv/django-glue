@@ -227,6 +227,9 @@ def configure_choices(
     if search_fields and configured_queryset.query.is_sliced:
         msg = 'Searchable Glue.choices querysets must not be sliced.'
         raise ValueError(msg)
+    if search_fields and configured_queryset.query.distinct_fields:
+        msg = 'Searchable Glue.choices querysets must not use distinct(*fields).'
+        raise ValueError(msg)
     normalized_search_fields = _normalize_search_fields(
         queryset=configured_queryset,
         search_fields=search_fields,
@@ -248,8 +251,12 @@ def configure_choices(
 
 
 def _search_words(search: str) -> list[str]:
-    words = dict.fromkeys(word for word in search[:MAX_SEARCH_LENGTH].casefold().split() if word)
-    return list(words)[:MAX_SEARCH_WORDS]
+    folded_words: dict[str, str] = {}
+    for word in search[:MAX_SEARCH_LENGTH].split():
+        folded_words.setdefault(word.casefold(), word)
+        if len(folded_words) >= MAX_SEARCH_WORDS:
+            break
+    return list(folded_words.values())
 
 
 def _score_sum(conditions: list[Q]) -> Expression:
@@ -288,7 +295,7 @@ def _apply_search(
     if len(search_fields) == 1 and len(words) == 1:
         return queryset.order_by(*existing_ordering)
 
-    annotations: dict[str, Expression] = {}
+    aliases_expressions: dict[str, Expression] = {}
     relevance_ordering: list[str] = []
 
     if len(words) > 1:
@@ -296,23 +303,24 @@ def _apply_search(
             reduce(operator.or_, (Q(**{f'{field}__icontains': word}) for field in search_fields))
             for word in words
         ]
-        annotations['_dg_words_matched'] = _score_sum(word_conditions)
+        aliases_expressions['_dg_words_matched'] = _score_sum(word_conditions)
         relevance_ordering.append('-_dg_words_matched')
 
     if len(search_fields) > 1:
-        field_conditions = [
-            reduce(operator.or_, (Q(**{f'{field}__icontains': word}) for word in words))
-            for field in search_fields
-        ]
-        annotations['_dg_fields_matched'] = _score_sum(field_conditions)
-        relevance_ordering.append('-_dg_fields_matched')
-
+        field_hit_expressions: list[Expression] = []
+        field_hit_ordering: list[str] = []
         for index, field in enumerate(search_fields):
-            key = f'_dg_field_hits_{index}'
-            annotations[key] = _score_sum([Q(**{f'{field}__icontains': word}) for word in words])
-            relevance_ordering.append(f'-{key}')
+            field_hits_alias = f'_dg_field_hits_{index}'
+            field_hit_expression = _score_sum([Q(**{f'{field}__icontains': word}) for word in words])
+            aliases_expressions[field_hits_alias] = field_hit_expression
+            field_hit_expressions.append(field_hit_expression)
+            field_hit_ordering.append(f'-{field_hits_alias}')
 
-    return queryset.annotate(**annotations).order_by(*relevance_ordering, *existing_ordering)
+        aliases_expressions['_dg_total_hits'] = reduce(operator.add, field_hit_expressions)
+        relevance_ordering.append('-_dg_total_hits')
+        relevance_ordering.extend(field_hit_ordering)
+
+    return queryset.annotate(**aliases_expressions).order_by(*relevance_ordering, *existing_ordering)
 
 
 def _validate_queryset(queryset: QuerySet) -> None:

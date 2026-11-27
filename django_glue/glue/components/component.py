@@ -627,12 +627,10 @@ class Component(BaseGlue):
                 details={'path': path},
             )
 
-        child_context = AttributeCallRequestContext.model_construct(
-            request=call_context.request,
-            target_glue_policy=child_policy,
-            target_glue_updates=submission.get('updates', {}),
-            target_attribute_name=None,
-            file_prefix=f'child_submissions.{path}.',
+        child_context = call_context.for_child_submission(
+            path=path,
+            child_policy=child_policy,
+            updates=submission.get('updates', {}),
         )
         child = glue_class_registry.get_glue_class(
             child_policy.namespace,
@@ -795,6 +793,7 @@ class Component(BaseGlue):
             request=self.request,
             target_glue_policy=self.policy,
             target_attribute_name='render',
+            allow_uploaded_files=False,
         )
         try:
             fresh = type(self).from_attribute_call_resolver_context(render_context)
@@ -830,6 +829,8 @@ class Component(BaseGlue):
                 **call_context.child_submissions,
                 **{path: child._successor_submission() for path, child in read_children.items()},
             },
+            allow_uploaded_files=call_context.allow_uploaded_files,
+            suppressed_file_children=call_context.suppressed_file_children | frozenset(read_children),
         )
         fresh = type(self).from_attribute_call_resolver_context(render_context)
         fresh._mounted_children = frozenset(call_context.mounted)

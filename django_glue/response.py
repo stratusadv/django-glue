@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Self
 
 from django.conf import settings
@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
-from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.encoders import GlueResponseJSONEncoder, iter_nested_values
 from django_glue.exceptions import GlueError
 from django_glue.message import GlueMessage
 
@@ -110,34 +110,13 @@ class GlueResponse:
     ) -> None:
         from django_glue.glue.base import BaseGlue
 
-        if isinstance(value, BaseGlue):
-            message = (
-                f'BaseGlue value of type {type(value).__name__} cannot appear '
-                f'nested at {path}; return it directly as the result instead.'
-            )
-            raise TypeError(message)
-
-        if not isinstance(value, dict | list | tuple) and not (is_dataclass(value) and not isinstance(value, type)):
-            return
-
-        seen = visited if visited is not None else set()
-        if id(value) in seen:
-            return
-        seen.add(id(value))
-
-        if isinstance(value, dict):
-            for key, item in value.items():
-                cls._reject_glue_objects(item, path=f'{path}.{key}', visited=seen)
-        elif isinstance(value, list | tuple):
-            for index, item in enumerate(value):
-                cls._reject_glue_objects(item, path=f'{path}[{index}]', visited=seen)
-        else:
-            for field in fields(value):
-                cls._reject_glue_objects(
-                    getattr(value, field.name),
-                    path=f'{path}.{field.name}',
-                    visited=seen,
+        for item_path, item in iter_nested_values(value, path=path, visited=visited):
+            if isinstance(item, BaseGlue):
+                message = (
+                    f'BaseGlue value of type {type(item).__name__} cannot appear '
+                    f'nested at {item_path}; return it directly as the result instead.'
                 )
+                raise TypeError(message)
 
 
 class GlueRedirectResponse:

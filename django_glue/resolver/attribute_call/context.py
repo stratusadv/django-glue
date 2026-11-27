@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from typing import Any
 
@@ -77,10 +79,14 @@ class AttributeCallRequestContext(BaseModel):
     mounted: list[str] = Field(default_factory=list)
     child_submissions: dict[str, Any] = Field(default_factory=dict)
     file_prefix: str = ''
+    allow_uploaded_files: bool = True
+    suppressed_file_children: frozenset[str] = Field(default_factory=frozenset)
 
     @property
     def uploaded_files(self) -> MultiValueDict[str, Any]:
         """The uploaded files scoped to this entry, keyed by bare field name."""
+        if not self.allow_uploaded_files:
+            return MultiValueDict()
         if not self.file_prefix:
             return self.request.FILES
 
@@ -90,6 +96,41 @@ class AttributeCallRequestContext(BaseModel):
             for key in self.request.FILES
             if key.startswith(prefix)
         })
+
+    def for_child_submission(
+        self,
+        *,
+        path: str,
+        child_policy: policy.GluePolicy,
+        updates: dict[str, Any],
+    ) -> AttributeCallRequestContext:
+        """Build a scoped call context for a submitted ``@Glue.child`` slot."""
+        return AttributeCallRequestContext.model_construct(
+            request=self.request,
+            target_glue_policy=child_policy,
+            target_glue_updates=updates,
+            target_attribute_name=None,
+            file_prefix=f'child_submissions.{path}.',
+            allow_uploaded_files=self.allow_uploaded_files and path not in self.suppressed_file_children,
+            suppressed_file_children=frozenset(),
+        )
+
+    def for_formset_row(
+        self,
+        *,
+        row_key: str,
+        row_policy: policy.GluePolicy,
+        updates: dict[str, Any],
+    ) -> AttributeCallRequestContext:
+        """Build a scoped call context for one row form inside a formset."""
+        return AttributeCallRequestContext.model_construct(
+            request=self.request,
+            target_glue_policy=row_policy,
+            target_glue_updates=updates,
+            file_prefix=f'{self.file_prefix}forms.{row_key}.' if self.file_prefix else '',
+            allow_uploaded_files=self.allow_uploaded_files,
+            suppressed_file_children=frozenset(),
+        )
 
     @property
     def operation_kind(self) -> GlueOperationKind:

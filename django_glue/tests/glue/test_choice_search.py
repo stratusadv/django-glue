@@ -156,3 +156,51 @@ def test_relevance_ranking_works_on_distinct_querysets() -> None:
     )
 
     assert _load_labels(queryset, search='acme portal') == ['Acme', 'Alpha']
+
+
+def test_primary_field_full_match_outranks_split_field_match() -> None:
+    Gorilla.objects.create(name='Acme Corp', description='Portal Rewrite')
+    Gorilla.objects.create(name='Acme Portal', description='Other')
+    Gorilla.objects.create(name='Acme Portal', description='Acme Portal')
+
+    queryset = Glue.choices(
+        Gorilla.objects.order_by('name', 'description'),
+        search_fields=('name', 'description'),
+        fields=('description',),
+    )
+
+    request = RequestFactory().get('/page/')
+    result = GlueRelatedModelChoices(queryset).load(search='acme portal', request=request)
+    pairs = [(item['label'], item['obj']['description']) for item in result['results']]
+
+    assert pairs == [
+        ('Acme Portal', 'Acme Portal'),
+        ('Acme Portal', 'Other'),
+        ('Acme Corp', 'Portal Rewrite'),
+    ]
+
+
+def test_search_words_preserves_non_ascii_casing_and_enforces_limits() -> None:
+    from django_glue.glue.options.django.choices import _search_words  # noqa: PLC0415
+    from django_glue.glue.options.django.constants import MAX_SEARCH_LENGTH, MAX_SEARCH_WORDS  # noqa: PLC0415
+
+    assert _search_words('Straße Übung übung İzmir') == ['Straße', 'Übung', 'İzmir']
+    assert len(_search_words(' '.join(f'word{index}' for index in range(MAX_SEARCH_WORDS + 5)))) == MAX_SEARCH_WORDS
+
+    long_query = 'a' * (MAX_SEARCH_LENGTH - 2) + ' bcdef'
+    assert _search_words(long_query) == ['a' * (MAX_SEARCH_LENGTH - 2), 'b']
+
+    Gorilla.objects.create(name='Übung Straße')
+    Gorilla.objects.create(name='Other')
+    queryset = Glue.choices(Gorilla.objects.order_by('name'), search_fields=('name',))
+
+    assert _load_labels(queryset, search='Übung') == ['Übung Straße']
+    assert _load_labels(queryset, search='Straße') == ['Übung Straße']
+
+
+def test_searchable_choices_rejects_distinct_on_fields() -> None:
+    with pytest.raises(ValueError, match=r'distinct\(\*fields\)'):
+        Glue.choices(
+            Gorilla.objects.distinct('name'),
+            search_fields=('name',),
+        )

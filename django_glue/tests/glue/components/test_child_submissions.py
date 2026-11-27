@@ -21,6 +21,7 @@ from django_glue.glue.sequence import SequenceGlue
 from django_glue.tests.glue.test_callable_parameters import call_context
 from test_project.fight.forms import ContactPromoterForm
 from test_project.gorilla.forms import SkillForm
+from test_project.gorilla.models import Gorilla
 
 VALID_CONTACT = {
     'name': 'Koko',
@@ -451,3 +452,276 @@ def test_files_uploaded_for_child_model_bind_under_its_slot_prefix(mock_request,
     assert entry['result']['success'] is True
     assert gorilla.name == 'Koko Updated'
     assert gorilla.profile_photo.name.startswith('gorilla_photos/portrait')
+
+
+@pytest.mark.django_db
+def test_child_model_upload_with_rerender_does_not_clobber_saved_file(mock_request, tmp_path, settings) -> None:
+    from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    gorilla = Gorilla.objects.create(name='Koko', age=10, weight=100.0, height=1.5)
+    observed_during_render: list[tuple[str, bool]] = []
+
+    class RerenderingGorillaCard(Component):
+        template = 'glue_template_test.html'
+
+        @Glue.child
+        def fighter(self) -> Glue.Model:
+            return Glue.model(
+                target=gorilla,
+                fields=['name', 'profile_photo'],
+                access=self.access,
+            )
+
+        @Glue.attr(required_access=Glue.Access.CHANGE)
+        def save_fighter(self) -> dict[str, Any]:
+            return self.fighter.save()
+
+        @Glue.attr(required_access=Glue.Access.VIEW)
+        def render(self):
+            photo = self.fighter.instance.profile_photo
+            observed_during_render.append((photo.name, bool(self.fighter._request_files)))
+            return super().render()
+
+    card = Glue.object(mock_request, RerenderingGorillaCard(access=Glue.Access.CHANGE))
+    fighter_token = tokens_by_address(card)[card.policy.children['fighter']]
+    context = call_context(card, 'save_fighter').model_copy(update={
+        'child_submissions': {'fighter': {'policy_token': fighter_token, 'updates': {'name': 'Koko Rerendered'}}},
+    })
+    context.request._files = MultiValueDict({
+        'child_submissions.fighter.profile_photo': [
+            SimpleUploadedFile('portrait.gif', gif, content_type='image/gif'),
+        ],
+    })
+
+    rebuilt = RerenderingGorillaCard.from_attribute_call_resolver_context(context)
+    entry, _ = rebuilt.process_attribute_call(context)
+
+    gorilla.refresh_from_db()
+    assert entry['result']['success'] is True
+    assert 'html' in entry
+    assert gorilla.profile_photo.name.startswith('gorilla_photos/portrait')
+    assert observed_during_render == [(gorilla.profile_photo.name, False)]
+
+
+class GorillaPhotoForm(forms.ModelForm):
+    class Meta:
+        model = Gorilla
+        fields = ['name', 'profile_photo']
+
+
+@pytest.mark.django_db
+def test_child_form_upload_with_rerender_does_not_rebind_consumed_files(mock_request, tmp_path, settings) -> None:
+    from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    gorilla = Gorilla.objects.create(name='Bobo', age=8, weight=90.0, height=1.4)
+    observed_files_during_render: list[dict[str, Any]] = []
+
+    class RerenderingFormCard(Component):
+        template = 'glue_template_test.html'
+
+        @Glue.child
+        def fighter_form(self) -> Glue.Form:
+            return Glue.form(target=GorillaPhotoForm(instance=gorilla), access=self.access)
+
+        @Glue.attr(required_access=Glue.Access.CHANGE)
+        def save_form(self) -> dict[str, Any]:
+            form = self.fighter_form
+            assert form.is_valid()
+            form.save()
+            return {'saved': True}
+
+        @Glue.attr(required_access=Glue.Access.VIEW)
+        def render(self):
+            observed_files_during_render.append({
+                'files': dict(self.fighter_form.files),
+                'photo': self.fighter_form.instance.profile_photo.name,
+            })
+            return super().render()
+
+    card = Glue.object(mock_request, RerenderingFormCard(access=Glue.Access.CHANGE))
+    form_token = tokens_by_address(card)[card.policy.children['fighter_form']]
+    context = call_context(card, 'save_form').model_copy(update={
+        'child_submissions': {'fighter_form': {'policy_token': form_token, 'updates': {'name': 'Bobo Saved'}}},
+    })
+    context.request._files = MultiValueDict({
+        'child_submissions.fighter_form.profile_photo': [
+            SimpleUploadedFile('bobo.gif', gif, content_type='image/gif'),
+        ],
+    })
+
+    rebuilt = RerenderingFormCard.from_attribute_call_resolver_context(context)
+    entry, _ = rebuilt.process_attribute_call(context)
+
+    gorilla.refresh_from_db()
+    assert entry['result'] == {'saved': True}
+    assert gorilla.profile_photo.name.startswith('gorilla_photos/bobo')
+    assert observed_files_during_render == [{'files': {}, 'photo': gorilla.profile_photo.name}]
+
+
+@pytest.mark.django_db
+def test_uploaded_child_files_do_not_leak_into_piggybacked_receivers(mock_request, tmp_path, settings) -> None:
+    import json  # noqa: PLC0415
+
+    from django.test import RequestFactory  # noqa: PLC0415
+
+    from django_glue.resolver.attribute_call.context import (  # noqa: PLC0415
+        AddressedObjectEntry,
+        AttributeCall,
+        AttributeCallBatchContext,
+        ReceiverEntry,
+    )
+    from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver  # noqa: PLC0415
+    from test_project.gorilla.models import Gorilla  # noqa: PLC0415
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
+    gorilla_a = Gorilla.objects.create(name='Alpha', age=10, weight=100.0, height=1.5)
+    gorilla_b = Gorilla.objects.create(name='Beta', age=11, weight=110.0, height=1.6)
+    receiver_observed_files: list[dict[str, Any]] = []
+
+    class SharedSlotCard(Component):
+        template = 'glue_template_test.html'
+        saved = Glue.event()
+        gorilla_pk: int = Glue.attr(parameter=True)
+
+        @Glue.child
+        def fighter(self) -> Glue.Model:
+            return Glue.model(
+                target=Gorilla.objects.get(pk=self.gorilla_pk),
+                fields=['name', 'profile_photo'],
+                access=self.access,
+            )
+
+        @Glue.attr(required_access=Glue.Access.CHANGE, skip_rerender=True)
+        def save_fighter(self) -> dict[str, Any]:
+            result = self.fighter.save()
+            self.saved()
+            return result
+
+    class SiblingReceiverCard(Component):
+        template = 'glue_template_test.html'
+        rerender_on = (SharedSlotCard.saved,)
+        gorilla_pk: int = Glue.attr(parameter=True)
+
+        @Glue.child
+        def fighter(self) -> Glue.Model:
+            return Glue.model(
+                target=Gorilla.objects.get(pk=self.gorilla_pk),
+                fields=['name', 'profile_photo'],
+                access=self.access,
+            )
+
+        @Glue.attr(required_access=Glue.Access.VIEW)
+        def render(self):
+            receiver_observed_files.append({
+                'photo': self.fighter.instance.profile_photo.name,
+                'files': dict(self.fighter._request_files or {}),
+            })
+            return super().render()
+
+    card_a = Glue.object(mock_request, SharedSlotCard(gorilla_pk=gorilla_a.pk, access=Glue.Access.CHANGE))
+    card_b = Glue.object(mock_request, SiblingReceiverCard(gorilla_pk=gorilla_b.pk, access=Glue.Access.CHANGE))
+    token_a = tokens_by_address(card_a)[card_a.policy.children['fighter']]
+    token_b = tokens_by_address(card_b)[card_b.policy.children['fighter']]
+
+    request = RequestFactory().post('/__dg__/callable_attribute/')
+    request.session = mock_request.session
+    request._files = MultiValueDict({
+        'child_submissions.fighter.profile_photo': [
+            SimpleUploadedFile('alpha.gif', gif, content_type='image/gif'),
+        ],
+    })
+
+    batch_context = AttributeCallBatchContext.model_construct(
+        request=request,
+        entries=[
+            AddressedObjectEntry(
+                address=card_a.address,
+                policy_token=card_a.policy.token,
+                call=AttributeCall(attribute='save_fighter'),
+                child_submissions={'fighter': {'policy_token': token_a, 'updates': {'name': 'Alpha Saved'}}},
+                receivers=[
+                    ReceiverEntry(
+                        address=card_b.address,
+                        policy_token=card_b.policy.token,
+                        child_submissions={'fighter': {'policy_token': token_b, 'updates': {'name': 'Beta Draft'}}},
+                    ),
+                ],
+            ),
+        ],
+        resolved_origins={},
+    )
+    response = GlueAttributeCallResolver()._resolve_json_response_from_context(batch_context)
+    payload = json.loads(response.content)
+
+    gorilla_a.refresh_from_db()
+    gorilla_b.refresh_from_db()
+    assert payload['objects'][0]['result']['success'] is True
+    assert gorilla_a.profile_photo.name.startswith('gorilla_photos/alpha')
+    assert gorilla_b.profile_photo.name == ''
+    assert receiver_observed_files == [{'photo': '', 'files': {}}]
+
+
+@pytest.mark.django_db
+def test_multi_entry_multipart_rejects_active_second_entry_but_allows_companion_refresh(mock_request) -> None:
+    from django.test import RequestFactory  # noqa: PLC0415
+
+    from django_glue.exceptions import GlueRequestErrorCode  # noqa: PLC0415
+    from django_glue.resolver.attribute_call.context import (  # noqa: PLC0415
+        AddressedObjectEntry,
+        AttributeCall,
+        AttributeCallBatchContext,
+    )
+    from django_glue.resolver.attribute_call.resolver import GlueAttributeCallResolver  # noqa: PLC0415
+
+    card_a = Glue.object(mock_request, UploadCardComponent(name='card_a', access=Glue.Access.ADD))
+    card_b = Glue.object(mock_request, UploadCardComponent(name='card_b', access=Glue.Access.ADD))
+
+    request = RequestFactory().post('/__dg__/callable_attribute/')
+    request.session = mock_request.session
+    request._files = MultiValueDict({
+        'child_submissions.paper.attachments': [
+            SimpleUploadedFile('workpaper.pdf', b'%PDF-1.4', content_type='application/pdf'),
+        ],
+    })
+
+    bad_batch = AttributeCallBatchContext.model_construct(
+        request=request,
+        entries=[
+            AddressedObjectEntry(
+                address=card_a.address,
+                policy_token=card_a.policy.token,
+                call=AttributeCall(attribute='submit'),
+            ),
+            AddressedObjectEntry(
+                address=card_b.address,
+                policy_token=card_b.policy.token,
+                call=AttributeCall(attribute='submit'),
+            ),
+        ],
+        resolved_origins={},
+    )
+    with pytest.raises(GlueRequestError) as exc_info:
+        GlueAttributeCallResolver()._validate_envelope(bad_batch)
+    assert exc_info.value.code == GlueRequestErrorCode.MALFORMED_REQUEST
+
+    companion_batch = AttributeCallBatchContext.model_construct(
+        request=request,
+        entries=[
+            AddressedObjectEntry(
+                address=card_a.address,
+                policy_token=card_a.policy.token,
+                call=AttributeCall(attribute='submit'),
+            ),
+            AddressedObjectEntry(
+                address=card_b.address,
+                policy_token=card_b.policy.token,
+            ),
+        ],
+        resolved_origins={},
+    )
+    GlueAttributeCallResolver()._validate_envelope(companion_batch)

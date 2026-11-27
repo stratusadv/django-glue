@@ -243,3 +243,95 @@ class GlueResponseJSONEncoderDataclassTestCase(TestCase):
             GlueResponse._reject_glue_objects(wrapped)
 
         self.assertTrue(BoundGlueAttribute._contains_type(wrapped, BaseGlue, set()))
+
+    def test_reject_glue_objects_checks_sets_and_non_dict_mappings(self):
+        from types import MappingProxyType  # noqa: PLC0415
+
+        class _StubGlue(BaseGlue):
+            @classmethod
+            def _reconstruct_from_policy(cls, policy, request):
+                return None
+
+        stub_glue = object.__new__(_StubGlue)
+
+        with self.assertRaises(TypeError):
+            GlueResponse._reject_glue_objects({stub_glue})
+
+        with self.assertRaises(TypeError):
+            GlueResponse._reject_glue_objects(frozenset({stub_glue}))
+
+        with self.assertRaisesRegex(TypeError, r'result\.child'):
+            GlueResponse._reject_glue_objects(MappingProxyType({'child': stub_glue}))
+
+        with self.assertRaisesRegex(TypeError, r'result\.<key>'):
+            GlueResponse._reject_glue_objects({stub_glue: 'value'})
+
+    def test_wire_form_rejects_internal_glue_dataclasses_on_typed_and_untyped_attributes(self):
+        from django_glue.glue.attributes.attribute import GlueAttribute, GlueAttributeKind, GlueValueRole  # noqa: PLC0415
+        from django_glue.serialization import glue_serializer_registry  # noqa: PLC0415
+
+        class _Owner:
+            untyped_response = GlueResponse(result='ok')
+            untyped_message = GlueMessage.info('hi')
+            typed_message = GlueMessage.info('hi')
+            nested_message = {'items': [GlueMessage.info('nested')]}
+
+        owner = _Owner()
+        cases = [
+            ('untyped_response', None, 'Internal Glue object GlueResponse'),
+            ('untyped_message', None, 'Internal Glue object GlueMessage'),
+            ('typed_message', glue_serializer_registry.resolve(GlueMessage), 'Internal Glue object GlueMessage'),
+            ('nested_message', glue_serializer_registry.resolve(dict[str, object]), 'Internal Glue object GlueMessage'),
+        ]
+        for attr_name, serializer, pattern in cases:
+            bound = BoundGlueAttribute(
+                owner=owner,
+                attribute=GlueAttribute(
+                    path=attr_name,
+                    source_name=attr_name,
+                    kind=GlueAttributeKind.VALUE,
+                    required_access=None,
+                    value_role=GlueValueRole.DERIVED_OUTPUT,
+                    serializer=serializer,
+                ),
+            )
+            with self.subTest(attr_name=attr_name), self.assertRaisesRegex(TypeError, pattern):
+                bound.wire_value()
+
+    def test_wire_form_normalizes_untyped_dataclass_value_to_plain_dict(self):
+        from django_glue.glue.attributes.attribute import GlueAttribute, GlueAttributeKind, GlueValueRole  # noqa: PLC0415
+
+        class _Owner:
+            def __init__(self) -> None:
+                self._derived_paths: set[str] = set()
+
+            choice = _SampleChoice(
+                value='consulting',
+                label='Consulting',
+                unit_price=Decimal('150.00'),
+                effective_date=datetime.date(2026, 11, 26),
+            )
+
+        bound = BoundGlueAttribute(
+            owner=_Owner(),
+            attribute=GlueAttribute(
+                path='choice',
+                source_name='choice',
+                kind=GlueAttributeKind.VALUE,
+                required_access=None,
+                value_role=GlueValueRole.DERIVED_OUTPUT,
+                serializer=None,
+            ),
+        )
+        wire = bound.wire_value()
+
+        self.assertIsInstance(wire, dict)
+        self.assertEqual(
+            wire,
+            {
+                'value': 'consulting',
+                'label': 'Consulting',
+                'unit_price': '150.00',
+                'effective_date': '2026-11-26',
+            },
+        )

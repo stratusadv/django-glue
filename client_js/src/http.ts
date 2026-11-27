@@ -299,6 +299,12 @@ class GlueHttp {
         return {files, data}
     }
 
+    _childSubmissionFileKey(path: string, fieldKey: string, rowKey?: string): string {
+        return rowKey === undefined
+            ? `child_submissions.${path}.${fieldKey}`
+            : `child_submissions.${path}.forms.${rowKey}.${fieldKey}`
+    }
+
     _extractChildSubmissionFiles(childSubmissions: Record<string, GlueChildSubmission>) {
         const files: Record<string, GlueFileValue> = {}
         const data: Record<string, GlueChildSubmission> = {}
@@ -308,10 +314,10 @@ class GlueHttp {
                 serializeValue(submission.updates || {}) as Record<string, unknown>,
             )
             Object.entries(extracted.files).forEach(([fieldKey, fileValue]) => {
-                files[`child_submissions.${path}.${fieldKey}`] = fileValue
+                files[this._childSubmissionFileKey(path, fieldKey)] = fileValue
             })
 
-            const next: GlueChildSubmission = {
+            const extractedSubmission: GlueChildSubmission = {
                 policy_token: submission.policy_token,
                 updates: extracted.data,
             }
@@ -323,17 +329,17 @@ class GlueHttp {
                         serializeValue(row.updates || {}) as Record<string, unknown>,
                     )
                     Object.entries(rowExtracted.files).forEach(([fieldKey, fileValue]) => {
-                        files[`child_submissions.${path}.forms.${rowKey}.${fieldKey}`] = fileValue
+                        files[this._childSubmissionFileKey(path, fieldKey, rowKey)] = fileValue
                     })
                     forms[rowKey] = {
                         policy_token: row.policy_token,
                         updates: rowExtracted.data,
                     }
                 })
-                next.forms = forms
+                extractedSubmission.forms = forms
             }
 
-            data[path] = next
+            data[path] = extractedSubmission
         })
 
         return {files, data}

@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Mapping
 from contextlib import suppress
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from types import NoneType, UnionType
 from typing import (
@@ -18,10 +17,16 @@ from typing import (
 )
 
 from django_glue.serialization import GlueSerializerError, glue_serializer_registry
-from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.encoders import (
+    GlueResponseJSONEncoder,
+    is_dataclass_instance,
+    iter_nested_values,
+)
 from django_glue.exceptions import GlueInvalidAttributeError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from django_glue.access import GlueAccess
     from django_glue.serialization import GlueSerializer
     from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
@@ -414,25 +419,43 @@ class BoundGlueAttribute:
         """
         A value attribute's value as it is signed and sent: itself when the wire
         encoder can already write it, otherwise as its serializer dumps it.
-        Typed dataclass attributes always dump through their declared serializer
-        so retained snapshots and computed values hold plain JSON data.
+        Dataclass attributes always normalize to plain JSON data so retained
+        snapshots and computed values never hold raw dataclass instances.
         """
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
+        from django_glue.message import GlueMessage  # noqa: PLC0415
+        from django_glue.response import GlueResponse  # noqa: PLC0415
 
-        if self._contains_type(value, BaseGlue, set()):
-            msg = (
-                f'Glue value attribute {self.attribute.path!r} returned a Glue '
-                'object outside an addressed child declaration.'
-            )
-            raise TypeError(msg)
-        if self.attribute.serializer is not None and self._contains_matching(
-            value,
-            lambda item: is_dataclass(item) and not isinstance(item, type),
-            set(),
-        ):
-            dumped = self._dump_via_serializer(value)
-            json.dumps(dumped, cls=GlueResponseJSONEncoder)
-            return dumped
+        contains_dataclass = False
+        for _path, item in iter_nested_values(value):
+            if isinstance(item, BaseGlue):
+                msg = (
+                    f'Glue value attribute {self.attribute.path!r} returned a Glue '
+                    'object outside an addressed child declaration.'
+                )
+                raise TypeError(msg)
+            if isinstance(item, GlueResponse | GlueMessage):
+                msg = (
+                    f'Internal Glue object {type(item).__name__} is not serializable '
+                    'as an ordinary Glue value.'
+                )
+                raise TypeError(msg)
+            if is_dataclass_instance(item):
+                contains_dataclass = True
+
+        if contains_dataclass:
+            if self.attribute.serializer is not None:
+                dumped = self._dump_via_serializer(value)
+                json.dumps(dumped, cls=GlueResponseJSONEncoder)
+                return dumped
+            try:
+                encoded = json.dumps(value, cls=GlueResponseJSONEncoder)
+            except TypeError as error:
+                dumped = self._dump_via_serializer(value, cause=error)
+                json.dumps(dumped, cls=GlueResponseJSONEncoder)
+                return dumped
+            return json.loads(encoded)
+
         try:
             json.dumps(value, cls=GlueResponseJSONEncoder)
         except TypeError as error:
@@ -444,36 +467,9 @@ class BoundGlueAttribute:
         cls,
         value: Any,
         expected_type: type[Any],
-        visited: set[int],
+        visited: set[int] | None = None,
     ) -> bool:
-        return cls._contains_matching(
-            value,
-            lambda item: isinstance(item, expected_type),
-            visited,
-        )
-
-    @classmethod
-    def _contains_matching(
-        cls,
-        value: Any,
-        predicate: Callable[[Any], bool],
-        visited: set[int],
-    ) -> bool:
-        if predicate(value):
-            return True
-        is_dc = is_dataclass(value) and not isinstance(value, type)
-        if not is_dc and not isinstance(value, Mapping | list | tuple | set | frozenset):
-            return False
-        if id(value) in visited:
-            return False
-        visited.add(id(value))
-        if is_dc:
-            values = tuple(getattr(value, dc_field.name) for dc_field in fields(value))
-        elif isinstance(value, Mapping):
-            values = (*value.keys(), *value.values())
-        else:
-            values = value
         return any(
-            cls._contains_matching(item, predicate, visited)
-            for item in values
+            isinstance(item, expected_type)
+            for _path, item in iter_nested_values(value, visited=visited)
         )

@@ -38,9 +38,6 @@ if TYPE_CHECKING:
     from django import forms
     from django.db import models
     from django.db.models import Model
-    from django.utils.datastructures import MultiValueDict
-
-    from django_glue.resolver.attribute_call.context import AttributeCallRequestContext
 
 ALL_FIELDS: Literal['__all__'] = '__all__'
 DRAFTED_PATHS_KEY = '$draft'
@@ -119,7 +116,6 @@ class ModelGlue(
         self.forms = self.normalize_forms(form, forms)
         self._field_errors: dict[str, list[str]] = {}
         self._editable_draft: dict[str, Any] = {}
-        self._uploaded_files: MultiValueDict[str, Any] | None = None
         # Internal, signed for collection children: the access a row settles to
         # after its first save (None for top-level model bindings).
         self._row_access: GlueAccess | None = None
@@ -542,15 +538,9 @@ class ModelGlue(
             if file_value is not None:
                 setattr(self.instance, field_name, file_value)
 
-    def _authorize_reconstruction(self, context: AttributeCallRequestContext) -> None:
-        super()._authorize_reconstruction(context)
-        self._uploaded_files = context.uploaded_files
-
     def _get_file_from_request(self, field_name: str) -> Any:
         """Get a file from uploaded files for a field."""
-        uploaded_files = self._uploaded_files if self._uploaded_files is not None else (
-            self.request.FILES if self.request else None
-        )
+        uploaded_files = self._request_files
         if not uploaded_files:
             return None
 

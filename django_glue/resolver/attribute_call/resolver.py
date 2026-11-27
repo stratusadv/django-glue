@@ -48,6 +48,19 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
         """An outer address that disagrees with its signed policy makes the
         whole request uninterpretable (state-model.md §10); an undecodable
         policy is an address fault the entry reports on its own."""
+        if context.request.FILES and any(
+            entry.call is not None
+            or entry.updates
+            or entry.child_submissions
+            or entry.receivers
+            for entry in context.entries[1:]
+        ):
+            raise GlueRequestError(
+                code=GlueRequestErrorCode.MALFORMED_REQUEST,
+                message='A request with uploaded files may only carry companion refreshes alongside its primary entry.',
+                details={'field': 'objects'},
+            )
+
         receivers = [receiver for entry in context.entries for receiver in entry.receivers]
         for entry in [*context.entries, *receivers]:
             try:
@@ -75,8 +88,12 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             for entry in context.entries
             for address in (entry.address, *(receiver.address for receiver in entry.receivers))
         }
-        for entry in context.entries:
-            resolved = self._resolve_entry(context, entry)
+        for index, entry in enumerate(context.entries):
+            resolved = self._resolve_entry(
+                context,
+                entry,
+                allow_uploaded_files=index == 0,
+            )
             answered = [(entry.address, resolved)]
             if entry.receivers and 'error' not in resolved[0]:
                 answered.extend(self._resolve_receivers(context, entry, resolved[0]))
@@ -100,6 +117,8 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
         self,
         context: AttributeCallBatchContext,
         entry: AddressedObjectEntry,
+        *,
+        allow_uploaded_files: bool = True,
     ) -> list[dict[str, Any]]:
         """Resolve one addressed entry. Address faults become an error entry
         and advance nothing; a success returns the addressed entry plus the
@@ -118,6 +137,7 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             reintroduce=entry.reintroduce,
             mounted=entry.mounted,
             child_submissions=entry.child_submissions,
+            allow_uploaded_files=allow_uploaded_files,
         )
         try:
             decoded.verify_request(context.request)
@@ -202,14 +222,18 @@ class GlueAttributeCallResolver(GlueResolver[AttributeCallBatchContext]):
             return []
 
         events = [delivery for delivery in deliveries if delivery['event'] in reacting]
-        return self._resolve_entry(context, AddressedObjectEntry(
-            address=receiver.address,
-            policy_token=receiver.policy_token,
-            updates=receiver.updates,
-            call=AttributeCall(attribute=RECEIVE_ATTRIBUTE, kwargs={'events': events}),
-            mounted=receiver.mounted,
-            child_submissions=receiver.child_submissions,
-        ))
+        return self._resolve_entry(
+            context,
+            AddressedObjectEntry(
+                address=receiver.address,
+                policy_token=receiver.policy_token,
+                updates=receiver.updates,
+                call=AttributeCall(attribute=RECEIVE_ATTRIBUTE, kwargs={'events': events}),
+                mounted=receiver.mounted,
+                child_submissions=receiver.child_submissions,
+            ),
+            allow_uploaded_files=False,
+        )
 
     @staticmethod
     def _error_entry(

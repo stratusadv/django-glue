@@ -14,6 +14,7 @@ interface GlueRelationAttributeOwner extends GlueValueAttributeOwner {
 // The choices every field with the same cache key shares.
 interface GlueChoicesCache {
     loaded: boolean
+    generation: number
     promise: Promise<GlueChoice[]> | null
     choices: GlueChoice[]
     fields: Set<GlueRelationAttribute>
@@ -124,22 +125,7 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
             return cache.promise
         }
 
-        if (typeof this.owner.foreign_key_choices !== 'function') {
-            return Promise.resolve(this._choices || [])
-        }
-
-        cache.promise = this.owner.foreign_key_choices({
-            field_name: this.choice_field || this.name,
-        }).then(result => {
-            const {results = []} = result || {}
-            this._mergeChoices(results)
-            cache.loaded = true
-            return this._choices || []
-        }).finally(() => {
-            cache.promise = null
-        })
-
-        return cache.promise
+        return this._loadChoicesFromServer(cache, {replace: false})
     }
 
     // Re-fetches choices from the server, replaces the shared cache in server
@@ -154,13 +140,32 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
         const cache = this._getOrCreateCache(cacheKey)
         cache.fields.add(this)
         this._choicesOverridden = false
-        cache.loaded = false
 
+        return this._loadChoicesFromServer(cache, {replace: true})
+    }
+
+    _loadChoicesFromServer(
+        cache: GlueChoicesCache,
+        {replace}: {replace: boolean},
+    ): Promise<GlueChoice[]> {
+        if (typeof this.owner.foreign_key_choices !== 'function') {
+            return Promise.resolve(this._choices || [])
+        }
+
+        const generation = ++cache.generation
         const request = this.owner.foreign_key_choices({
             field_name: this.choice_field || this.name,
         }).then(result => {
+            if (cache.generation !== generation) {
+                return this._choices || []
+            }
             const {results = []} = result || {}
-            this._replaceChoices(Array.isArray(results) ? results : [])
+            const normalized = Array.isArray(results) ? results : []
+            if (replace) {
+                this._replaceChoices(normalized)
+            } else {
+                this._mergeChoices(normalized)
+            }
             cache.loaded = true
             return this._choices || []
         }).finally(() => {
@@ -249,6 +254,7 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
         if (!cache) {
             cache = {
                 loaded: false,
+                generation: 0,
                 promise: null,
                 choices: [],
                 fields: new Set(),
@@ -256,6 +262,14 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
             GlueRelationAttribute.loadingCache.set(cacheKey, cache)
         }
         return cache
+    }
+
+    _syncCacheFields(cache: GlueChoicesCache): void {
+        for (const field of cache.fields) {
+            if (!field._choicesOverridden) {
+                field.choices = cache.choices
+            }
+        }
     }
 
     _mergeChoices(newChoices: GlueChoice[]): void {
@@ -274,12 +288,7 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
         })
 
         cache.choices = merged
-
-        for (const field of cache.fields) {
-            if (!field._choicesOverridden) {
-                field.choices = cache.choices
-            }
-        }
+        this._syncCacheFields(cache)
     }
 
     _replaceChoices(newChoices: GlueChoice[]): void {
@@ -288,11 +297,7 @@ class GlueRelationAttribute extends GlueChoiceAttribute {
             (choice): choice is GlueChoice => Boolean(choice && typeof choice === 'object')
         )
 
-        for (const field of cache.fields) {
-            if (!field._choicesOverridden) {
-                field.choices = cache.choices
-            }
-        }
+        this._syncCacheFields(cache)
     }
 }
 
