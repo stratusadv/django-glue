@@ -1,5 +1,33 @@
 # Changelog for Django Glue
 
+## v1.6.1
+
+### Features
+
+- **File uploads on child submissions.** Multipart requests now carry `File` and
+  `FileList` values from `@Glue.child` forms, models, and formsets (prefixed as
+  `child_submissions.<path>.`) end-to-end from the client to
+  `AttributeCallRequestContext`.
+- **Dataclass serialization in responses and attributes.**
+  `GlueResponseJSONEncoder` now serializes dataclass instances to plain dicts
+  (while rejecting internal `GlueResponse` and `GlueMessage` objects), and typed
+  dataclass attributes dump through their declared serializer.
+- **`reloadChoices()` on relation fields.** Client relation fields can re-fetch
+  their choice list on demand without refreshing the owning object.
+- **SQL-ranked multi-word `Glue.choices` search.** Choice search now ranks
+  matches across multiple words and `search_fields` in SQL and bounds incoming
+  search query length.
+
+### Fixed
+
+- **Write-only and validated form field errors always sync.**
+  `FormGlue._populate_field_errors()` now marks every field in `form.fields` as
+  derived so validation errors on write-only or untouched fields always reach
+  the browser on failed submission.
+- **Safe HTML entity decoding in `choiceLabelText`.** HTML-formatted choice labels
+  decode entities and strip tags inside an inert detached `<template>` element
+  instead of inserting markup into a live element.
+
 ## v1.6.0
 
 ### Features

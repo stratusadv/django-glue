@@ -1,26 +1,9 @@
+import {cloneValue, isPlainObject} from "../utils"
 import type {GlueComputedData, GluePolicyPayload} from "../wire"
 
 // An object's values by state path: its signed snapshot overlaid with its
 // derived output.
 type GlueValues = Record<string, unknown>
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-    if (value === null || typeof value !== 'object') return false
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
-}
-
-function cloneValue<T>(value: T): T {
-    if (value === null || value === undefined) return value
-    if (value instanceof Date) return new Date(value) as T
-    if (Array.isArray(value)) return value.map(item => cloneValue(item)) as T
-    if (isPlainObject(value)) {
-        return Object.fromEntries(
-            Object.entries(value).map(([key, item]) => [key, cloneValue(item)])
-        ) as T
-    }
-    return value
-}
 
 function valuesEqual(left: unknown, right: unknown): boolean {
     if (Object.is(left, right)) return true

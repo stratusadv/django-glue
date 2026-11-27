@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import operator
 import pickle
 from dataclasses import dataclass
+from functools import reduce
 from typing import TYPE_CHECKING, Any, Sequence, TypedDict, TypeVar, cast
 
 from django.core.exceptions import EmptyResultSet, FieldDoesNotExist, FieldError, ValidationError
-from django.db.models import Model, Q, QuerySet
+from django.db.models import Case, Expression, IntegerField, Model, Q, QuerySet, Value, When
 from django.template.response import TemplateResponse
 from django.utils.html import conditional_escape
 from django.utils.module_loading import import_string
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
 from django_glue.glue.options.django.constants import (
     DEFAULT_EXCLUDED_MODEL_FIELD_TYPES,
     DEFAULT_SEARCH_LIMIT,
+    MAX_SEARCH_LENGTH,
+    MAX_SEARCH_WORDS,
     QUERYSET_CHOICE_OPTIONS_ATTRIBUTE,
 )
 
@@ -146,12 +150,10 @@ class GlueRelatedModelChoices:
     def load(self, *, search: str = '', request: HttpRequest) -> RelatedModelChoicesResult:
         queryset = self.queryset
         if self.is_searchable:
-            if search:
-                search_filter = Q()
-                for search_field in self.options.search_fields:
-                    search_filter |= Q(**{f'{search_field}__icontains': search})
-                queryset = queryset.filter(search_filter)
-            if not queryset.ordered:
+            words = _search_words(search)
+            if words:
+                queryset = _apply_search(queryset, self.options.search_fields, words)
+            elif not queryset.ordered:
                 queryset = queryset.order_by(queryset.model._meta.pk.name)
             queryset = queryset[:self.options.search_limit]
 
@@ -225,6 +227,9 @@ def configure_choices(
     if search_fields and configured_queryset.query.is_sliced:
         msg = 'Searchable Glue.choices querysets must not be sliced.'
         raise ValueError(msg)
+    if search_fields and configured_queryset.query.distinct_fields:
+        msg = 'Searchable Glue.choices querysets must not use distinct(*fields).'
+        raise ValueError(msg)
     normalized_search_fields = _normalize_search_fields(
         queryset=configured_queryset,
         search_fields=search_fields,
@@ -243,6 +248,79 @@ def configure_choices(
         ),
     )
     return cast('ChoiceSource', configured_queryset)
+
+
+def _search_words(search: str) -> list[str]:
+    folded_words: dict[str, str] = {}
+    for word in search[:MAX_SEARCH_LENGTH].split():
+        folded_words.setdefault(word.casefold(), word)
+        if len(folded_words) >= MAX_SEARCH_WORDS:
+            break
+    return list(folded_words.values())
+
+
+def _score_sum(conditions: list[Q]) -> Expression:
+    terms = [
+        Case(
+            When(condition, then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+        for condition in conditions
+    ]
+    return reduce(operator.add, terms)
+
+
+def _existing_ordering(queryset: QuerySet) -> tuple[Any, ...]:
+    if queryset.query.order_by:
+        return tuple(queryset.query.order_by)
+    if queryset.query.default_ordering and queryset.model._meta.ordering:
+        return tuple(queryset.model._meta.ordering)
+    return (queryset.model._meta.pk.name,)
+
+
+def _apply_search(
+    queryset: QuerySet,
+    search_fields: tuple[str, ...],
+    words: list[str],
+) -> QuerySet:
+    search_filter = Q()
+    for search_field in search_fields:
+        for word in words:
+            search_filter |= Q(**{f'{search_field}__icontains': word})
+
+    queryset = queryset.filter(search_filter)
+    existing_ordering = _existing_ordering(queryset)
+
+    if len(search_fields) == 1 and len(words) == 1:
+        return queryset.order_by(*existing_ordering)
+
+    aliases_expressions: dict[str, Expression] = {}
+    relevance_ordering: list[str] = []
+
+    if len(words) > 1:
+        word_conditions = [
+            reduce(operator.or_, (Q(**{f'{field}__icontains': word}) for field in search_fields))
+            for word in words
+        ]
+        aliases_expressions['_dg_words_matched'] = _score_sum(word_conditions)
+        relevance_ordering.append('-_dg_words_matched')
+
+    if len(search_fields) > 1:
+        field_hit_expressions: list[Expression] = []
+        field_hit_ordering: list[str] = []
+        for index, field in enumerate(search_fields):
+            field_hits_alias = f'_dg_field_hits_{index}'
+            field_hit_expression = _score_sum([Q(**{f'{field}__icontains': word}) for word in words])
+            aliases_expressions[field_hits_alias] = field_hit_expression
+            field_hit_expressions.append(field_hit_expression)
+            field_hit_ordering.append(f'-{field_hits_alias}')
+
+        aliases_expressions['_dg_total_hits'] = reduce(operator.add, field_hit_expressions)
+        relevance_ordering.append('-_dg_total_hits')
+        relevance_ordering.extend(field_hit_ordering)
+
+    return queryset.annotate(**aliases_expressions).order_by(*relevance_ordering, *existing_ordering)
 
 
 def _validate_queryset(queryset: QuerySet) -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import inspect
 import json
-from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -18,10 +17,16 @@ from typing import (
 )
 
 from django_glue.serialization import GlueSerializerError, glue_serializer_registry
-from django_glue.encoders import GlueResponseJSONEncoder
+from django_glue.encoders import (
+    GlueResponseJSONEncoder,
+    is_dataclass_instance,
+    iter_nested_values,
+)
 from django_glue.exceptions import GlueInvalidAttributeError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from django_glue.access import GlueAccess
     from django_glue.serialization import GlueSerializer
     from django_glue.glue.attributes.presentation import GlueValueAttributePresentation
@@ -398,32 +403,63 @@ class BoundGlueAttribute:
     def _binding_owner(self) -> Any:
         return self.provider if self.provider is not None else self.owner
 
+    def _dump_via_serializer(self, value: Any, *, cause: Exception | None = None) -> Any:
+        try:
+            return self._serializer().dump(value)
+        except GlueSerializerError as error:
+            owner_type = type(self._binding_owner())
+            value_type = type(value)
+            raise GlueInvalidAttributeError(
+                attribute=self.attribute.path,
+                owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
+                value_type=f'{value_type.__module__}.{value_type.__qualname__}',
+            ) from (cause if cause is not None else error)
+
     def _wire_form(self, value: Any) -> Any:
         """
         A value attribute's value as it is signed and sent: itself when the wire
         encoder can already write it, otherwise as its serializer dumps it.
+        Dataclass attributes always normalize to plain JSON data so retained
+        snapshots and computed values never hold raw dataclass instances.
         """
         from django_glue.glue.base import BaseGlue  # noqa: PLC0415
+        from django_glue.message import GlueMessage  # noqa: PLC0415
+        from django_glue.response import GlueResponse  # noqa: PLC0415
 
-        if self._contains_type(value, BaseGlue, set()):
-            msg = (
-                f'Glue value attribute {self.attribute.path!r} returned a Glue '
-                'object outside an addressed child declaration.'
-            )
-            raise TypeError(msg)
+        contains_dataclass = False
+        for _path, item in iter_nested_values(value):
+            if isinstance(item, BaseGlue):
+                msg = (
+                    f'Glue value attribute {self.attribute.path!r} returned a Glue '
+                    'object outside an addressed child declaration.'
+                )
+                raise TypeError(msg)
+            if isinstance(item, GlueResponse | GlueMessage):
+                msg = (
+                    f'Internal Glue object {type(item).__name__} is not serializable '
+                    'as an ordinary Glue value.'
+                )
+                raise TypeError(msg)
+            if is_dataclass_instance(item):
+                contains_dataclass = True
+
+        if contains_dataclass:
+            if self.attribute.serializer is not None:
+                dumped = self._dump_via_serializer(value)
+                json.dumps(dumped, cls=GlueResponseJSONEncoder)
+                return dumped
+            try:
+                encoded = json.dumps(value, cls=GlueResponseJSONEncoder)
+            except TypeError as error:
+                dumped = self._dump_via_serializer(value, cause=error)
+                json.dumps(dumped, cls=GlueResponseJSONEncoder)
+                return dumped
+            return json.loads(encoded)
+
         try:
             json.dumps(value, cls=GlueResponseJSONEncoder)
         except TypeError as error:
-            try:
-                return self._serializer().dump(value)
-            except GlueSerializerError:
-                owner_type = type(self._binding_owner())
-                value_type = type(value)
-                raise GlueInvalidAttributeError(
-                    attribute=self.attribute.path,
-                    owner=f'{owner_type.__module__}.{owner_type.__qualname__}',
-                    value_type=f'{value_type.__module__}.{value_type.__qualname__}',
-                ) from error
+            return self._dump_via_serializer(value, cause=error)
         return value
 
     @classmethod
@@ -431,20 +467,9 @@ class BoundGlueAttribute:
         cls,
         value: Any,
         expected_type: type[Any],
-        visited: set[int],
+        visited: set[int] | None = None,
     ) -> bool:
-        if isinstance(value, expected_type):
-            return True
-        if not isinstance(value, Mapping | list | tuple | set | frozenset):
-            return False
-        if id(value) in visited:
-            return False
-        visited.add(id(value))
-        if isinstance(value, Mapping):
-            values = (*value.keys(), *value.values())
-        else:
-            values = value
         return any(
-            cls._contains_type(item, expected_type, visited)
-            for item in values
+            isinstance(item, expected_type)
+            for _path, item in iter_nested_values(value, visited=visited)
         )

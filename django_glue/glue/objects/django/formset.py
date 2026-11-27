@@ -549,10 +549,10 @@ class FormSetGlue(BaseCollectionGlue):
                     code=GlueRequestErrorCode.INVALID_KWARGS,
                     message='Submitted form token does not belong to this formset row.',
                 )
-            child_contexts[key] = AttributeCallRequestContext.model_construct(
-                request=call_context.request,
-                target_glue_policy=child_policy,
-                target_glue_updates=data.get('updates', {}),
+            child_contexts[key] = call_context.for_formset_row(
+                row_key=key,
+                row_policy=child_policy,
+                updates=data.get('updates', {}),
             )
 
         # Every submitted row's record is loaded in one query, keyed by the

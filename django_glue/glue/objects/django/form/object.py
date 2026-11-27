@@ -278,6 +278,16 @@ class FormGlue(BaseGlue):
         self._populate_field_errors()
         return super().get_state()
 
+    def _record_form_errors(self, form: forms.BaseForm) -> None:
+        """Copy an already-populated ``form._errors`` onto this object and mark
+        every field derived so errors sync to the browser (including write-only
+        and untouched fields)."""
+        if form._errors is None:
+            return
+        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
+        self._field_errors = {name: list(errors) for name, errors in form._errors.items()}
+        self._derived_paths.update(self.form.fields)
+
     def _populate_field_errors(self) -> None:
         """Sync _field_errors from the form's validation result, if any.
 
@@ -290,8 +300,8 @@ class FormGlue(BaseGlue):
         this only reflects a result that already exists.
         """
         for form in (self.form, self._read_form):
-            if form is not None and form._errors is not None:
-                self._field_errors = {name: list(errors) for name, errors in form._errors.items()}
+            if form is not None:
+                self._record_form_errors(form)
 
     def get_computed_data(self, *, include_all: bool = False) -> dict[str, Any]:
         # Field presentations read _field_errors. A provider callable (a
@@ -425,9 +435,7 @@ class FormGlue(BaseGlue):
         bound_form = self._bind_form()
         self._bound_form = bound_form
         valid = bound_form.is_valid()
-        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
-        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
-        self._derived_paths.update(self.form.fields)
+        self._record_form_errors(bound_form)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     @GlueAttributeDeclaration(required_access=GlueAccess.required_save_access)
@@ -436,9 +444,7 @@ class FormGlue(BaseGlue):
         valid = bound_form.is_valid()
         if valid and hasattr(bound_form, 'save'):
             bound_form.save()
-        # A plain list per field: an ErrorList keeps its messages where a response entry cannot see them.
-        self._field_errors = {name: list(errors) for name, errors in bound_form.errors.items()}
-        self._derived_paths.update(self.form.fields)
+        self._record_form_errors(bound_form)
         return {'valid': valid, 'errors': dict(bound_form.errors)}
 
     # Choice loading is read-only; returning form state would trigger validation during serialization.
@@ -472,12 +478,13 @@ class FormGlue(BaseGlue):
         }
         # Uploads bind only to editable fields, as values do: a request's files
         # are not narrowed to the fields the page lets the user change.
+        uploaded_files = self._request_files
         files = None
-        if self.request:
+        if uploaded_files is not None:
             files = MultiValueDict({
-                name: self.request.FILES.getlist(name)
+                name: uploaded_files.getlist(name)
                 for name in self.editable
-                if name in self.request.FILES
+                if name in uploaded_files
             })
         # The bound form is built with the initial the form was given, as Django binds one: a
         # disabled field validates it, has_changed() compares against it, and an __init__ may read

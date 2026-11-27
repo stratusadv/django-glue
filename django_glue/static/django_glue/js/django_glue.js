@@ -97,7 +97,26 @@
 
   // client_js/src/utils.ts
   function isPlainObject(value) {
-    return Object.prototype.toString.call(value) === "[object Object]";
+    if (Object.prototype.toString.call(value) !== "[object Object]") {
+      return false;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    return prototype === null || prototype === Object.prototype;
+  }
+  function cloneValue(value) {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (value instanceof Date) {
+      return new Date(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => cloneValue(item));
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
+    }
+    return value;
   }
   function serializeValue(value) {
     if (value === null || value === undefined) {
@@ -251,7 +270,9 @@
       if (mounted.length)
         entry.mounted = mounted;
       if (childSubmissions) {
-        entry.child_submissions = serializeValue(childSubmissions);
+        const extracted = this._extractChildSubmissionFiles(childSubmissions);
+        Object.assign(files, extracted.files);
+        entry.child_submissions = extracted.data;
       }
       const receiverEntries = receivers.flatMap((receiver) => {
         const extracted = this._extractFiles(serializeValue(receiver.updates || {}));
@@ -265,7 +286,10 @@
         if (receiver.mounted?.length)
           receiverEntry.mounted = receiver.mounted;
         if (receiver.childSubmissions) {
-          receiverEntry.child_submissions = serializeValue(receiver.childSubmissions);
+          const childExtracted = this._extractChildSubmissionFiles(receiver.childSubmissions);
+          if (Object.keys(childExtracted.files).length)
+            return [];
+          receiverEntry.child_submissions = childExtracted.data;
         }
         return [receiverEntry];
       });
@@ -332,6 +356,39 @@
         if (extracted !== undefined) {
           data[key] = extracted;
         }
+      });
+      return { files, data };
+    }
+    _childSubmissionFileKey(path, fieldKey, rowKey) {
+      return rowKey === undefined ? `child_submissions.${path}.${fieldKey}` : `child_submissions.${path}.forms.${rowKey}.${fieldKey}`;
+    }
+    _extractChildSubmissionFiles(childSubmissions) {
+      const files = {};
+      const data = {};
+      Object.entries(childSubmissions).forEach(([path, submission]) => {
+        const extracted = this._extractFiles(serializeValue(submission.updates || {}));
+        Object.entries(extracted.files).forEach(([fieldKey, fileValue]) => {
+          files[this._childSubmissionFileKey(path, fieldKey)] = fileValue;
+        });
+        const extractedSubmission = {
+          policy_token: submission.policy_token,
+          updates: extracted.data
+        };
+        if (submission.forms) {
+          const forms = {};
+          Object.entries(submission.forms).forEach(([rowKey, row]) => {
+            const rowExtracted = this._extractFiles(serializeValue(row.updates || {}));
+            Object.entries(rowExtracted.files).forEach(([fieldKey, fileValue]) => {
+              files[this._childSubmissionFileKey(path, fieldKey, rowKey)] = fileValue;
+            });
+            forms[rowKey] = {
+              policy_token: row.policy_token,
+              updates: rowExtracted.data
+            };
+          });
+          extractedSubmission.forms = forms;
+        }
+        data[path] = extractedSubmission;
       });
       return { files, data };
     }
@@ -5103,24 +5160,6 @@ ${expression ? 'Expression: "' + expression + `"
   });
 
   // client_js/src/runtime/state.ts
-  function isPlainObject2(value) {
-    if (value === null || typeof value !== "object")
-      return false;
-    const prototype = Object.getPrototypeOf(value);
-    return prototype === Object.prototype || prototype === null;
-  }
-  function cloneValue(value) {
-    if (value === null || value === undefined)
-      return value;
-    if (value instanceof Date)
-      return new Date(value);
-    if (Array.isArray(value))
-      return value.map((item) => cloneValue(item));
-    if (isPlainObject2(value)) {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneValue(item)]));
-    }
-    return value;
-  }
   function valuesEqual(left, right) {
     if (Object.is(left, right))
       return true;
@@ -5130,7 +5169,7 @@ ${expression ? 'Expression: "' + expression + `"
     if (Array.isArray(left) && Array.isArray(right)) {
       return left.length === right.length && left.every((item, index) => valuesEqual(item, right[index]));
     }
-    if (isPlainObject2(left) && isPlainObject2(right)) {
+    if (isPlainObject(left) && isPlainObject(right)) {
       const leftKeys = Object.keys(left);
       const rightKeys = Object.keys(right);
       return leftKeys.length === rightKeys.length && leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && valuesEqual(left[key], right[key]));
@@ -5138,7 +5177,7 @@ ${expression ? 'Expression: "' + expression + `"
     return false;
   }
   function observeValue(value, onMutation, cache = new WeakMap) {
-    if (!Array.isArray(value) && !isPlainObject2(value))
+    if (!Array.isArray(value) && !isPlainObject(value))
       return value;
     if (cache.has(value))
       return cache.get(value);
@@ -5463,7 +5502,16 @@ ${expression ? 'Expression: "' + expression + `"
       return label.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
     choiceLabelText(choice) {
-      return String(choice?.label ?? "").replace(/<[^>]*>/g, "");
+      const label = String(choice?.label ?? "");
+      if (!choice?.has_html_label) {
+        return label;
+      }
+      if (typeof document !== "undefined") {
+        const template = document.createElement("template");
+        template.innerHTML = label;
+        return template.content.textContent ?? "";
+      }
+      return label.replace(/<[^>]*>/g, "");
     }
   }
   var choice_default = GlueChoiceAttribute;
@@ -5561,20 +5609,45 @@ ${expression ? 'Expression: "' + expression + `"
       if (cache.promise) {
         return cache.promise;
       }
+      return this._loadChoicesFromServer(cache, { replace: false });
+    }
+    reloadChoices() {
       if (typeof this.owner.foreign_key_choices !== "function") {
         return Promise.resolve(this._choices || []);
       }
-      cache.promise = this.owner.foreign_key_choices({
+      const cacheKey = this._getChoicesCacheKey();
+      const cache = this._getOrCreateCache(cacheKey);
+      cache.fields.add(this);
+      this._choicesOverridden = false;
+      return this._loadChoicesFromServer(cache, { replace: true });
+    }
+    _loadChoicesFromServer(cache, { replace }) {
+      if (typeof this.owner.foreign_key_choices !== "function") {
+        return Promise.resolve(this._choices || []);
+      }
+      const generation = ++cache.generation;
+      const request = this.owner.foreign_key_choices({
         field_name: this.choice_field || this.name
       }).then((result) => {
+        if (cache.generation !== generation) {
+          return this._choices || [];
+        }
         const { results = [] } = result || {};
-        this._mergeChoices(results);
+        const normalized = Array.isArray(results) ? results : [];
+        if (replace) {
+          this._replaceChoices(normalized);
+        } else {
+          this._mergeChoices(normalized);
+        }
         cache.loaded = true;
         return this._choices || [];
       }).finally(() => {
-        cache.promise = null;
+        if (cache.promise === request) {
+          cache.promise = null;
+        }
       });
-      return cache.promise;
+      cache.promise = request;
+      return request;
     }
     async searchChoices(query) {
       if (!query) {
@@ -5629,6 +5702,7 @@ ${expression ? 'Expression: "' + expression + `"
       if (!cache) {
         cache = {
           loaded: false,
+          generation: 0,
           promise: null,
           choices: [],
           fields: new Set
@@ -5636,6 +5710,13 @@ ${expression ? 'Expression: "' + expression + `"
         GlueRelationAttribute.loadingCache.set(cacheKey, cache);
       }
       return cache;
+    }
+    _syncCacheFields(cache) {
+      for (const field of cache.fields) {
+        if (!field._choicesOverridden) {
+          field.choices = cache.choices;
+        }
+      }
     }
     _mergeChoices(newChoices) {
       const cache = this._getOrCreateCache(this._getChoicesCacheKey());
@@ -5652,11 +5733,12 @@ ${expression ? 'Expression: "' + expression + `"
         }
       });
       cache.choices = merged;
-      for (const field of cache.fields) {
-        if (!field._choicesOverridden) {
-          field.choices = cache.choices;
-        }
-      }
+      this._syncCacheFields(cache);
+    }
+    _replaceChoices(newChoices) {
+      const cache = this._getOrCreateCache(this._getChoicesCacheKey());
+      cache.choices = newChoices.filter((choice) => Boolean(choice && typeof choice === "object"));
+      this._syncCacheFields(cache);
     }
   }
   var relation_default = GlueRelationAttribute;
@@ -5841,7 +5923,7 @@ ${expression ? 'Expression: "' + expression + `"
           definePath(proxy, fieldPath, {
             get() {
               const value = record.getValue(valuePath);
-              if (memberFields && isPlainObject2(value)) {
+              if (memberFields && isPlainObject(value)) {
                 Object.defineProperty(value, "$fields", {
                   value: memberFields,
                   enumerable: false,

@@ -539,11 +539,12 @@ class ModelGlue(
                 setattr(self.instance, field_name, file_value)
 
     def _get_file_from_request(self, field_name: str) -> Any:
-        """Get a file from request.FILES for a field."""
-        if not self.request or not self.request.FILES:
+        """Get a file from uploaded files for a field."""
+        uploaded_files = self._request_files
+        if not uploaded_files:
             return None
 
-        return self.request.FILES.get(field_name)
+        return uploaded_files.get(field_name)
 
     @GlueAttributeDeclaration(required_access=GlueAccess.required_save_access)
     def save(self) -> dict[str, Any]:

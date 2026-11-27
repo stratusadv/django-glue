@@ -26,12 +26,23 @@ describe('choice field labels', () => {
             .toBe('<b>Grappling</b>')
     })
 
-    test('strips markup from the text label', () => {
+    test('strips markup and decodes entities from html labels without running markup', () => {
         const field = statusField()
 
         expect(field.choiceLabelText({value: 2, label: '<b>Grappling</b>', has_html_label: true}))
             .toBe('Grappling')
-        expect(field.choiceLabelText({value: 1, label: 'Fish & Chips'})).toBe('Fish & Chips')
+        expect(field.choiceLabelText({
+            value: 3,
+            label: 'Acme &amp; Co &gt; Portal &#x27;26',
+            has_html_label: true,
+        })).toBe("Acme & Co > Portal '26")
+        expect(field.choiceLabelText({
+            value: 4,
+            label: '<img src="x" onerror="globalThis.__choiceXss = true">Safe',
+            has_html_label: true,
+        })).toBe('Safe')
+        expect(globalThis.__choiceXss).toBeUndefined()
+        expect(field.choiceLabelText({value: 1, label: 'Fish & Chips <raw>'})).toBe('Fish & Chips <raw>')
     })
 
     test('treats missing labels as empty strings', () => {

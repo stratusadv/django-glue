@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Django Glue">
+  <rect width="128" height="128" rx="28" fill="#F5B731"/>
+  <g transform="translate(0 -3)">
+    <path d="M52 57C59 57 61 62 64 62C67 62 69 57 76 57L76 75C71 75 68.5 77 67.5 81L67.5 89A3.5 3.5 0 0 1 60.5 89L60.5 81C59.5 77 57 75 52 75Z" fill="#8A5FB1"/>
+    <g fill="none" stroke-width="11" stroke-linecap="round">
+      <circle cx="37" cy="66" r="16" stroke="#0C4B33"/>
+      <path d="M53 26V82" stroke="#0C4B33"/>
+      <circle cx="91" cy="66" r="16" stroke="#FFFFFF"/>
+      <path d="M107 50V92A16 16 0 0 1 75 92" stroke="#FFFFFF"/>
+    </g>
+  </g>
+</svg>

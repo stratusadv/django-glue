@@ -8,6 +8,7 @@ import type {
     GlueReceiverEntry,
     GlueRequestEntry,
     GlueResponseEntry,
+    GlueSubmittedForm,
 } from "./wire"
 
 interface GlueRequestOptions {
@@ -191,7 +192,9 @@ class GlueHttp {
         if (reintroduce) entry.reintroduce = reintroduce
         if (mounted.length) entry.mounted = mounted
         if (childSubmissions) {
-            entry.child_submissions = serializeValue(childSubmissions) as Record<string, GlueChildSubmission>
+            const extracted = this._extractChildSubmissionFiles(childSubmissions)
+            Object.assign(files, extracted.files)
+            entry.child_submissions = extracted.data
         }
         const receiverEntries = receivers.flatMap((receiver): GlueReceiverEntry[] => {
             const extracted = this._extractFiles(serializeValue(receiver.updates || {}) as Record<string, unknown>)
@@ -203,7 +206,9 @@ class GlueHttp {
             }
             if (receiver.mounted?.length) receiverEntry.mounted = receiver.mounted
             if (receiver.childSubmissions) {
-                receiverEntry.child_submissions = serializeValue(receiver.childSubmissions) as Record<string, GlueChildSubmission>
+                const childExtracted = this._extractChildSubmissionFiles(receiver.childSubmissions)
+                if (Object.keys(childExtracted.files).length) return []
+                receiverEntry.child_submissions = childExtracted.data
             }
             return [receiverEntry]
         })
@@ -289,6 +294,52 @@ class GlueHttp {
             if (extracted !== undefined) {
                 data[key] = extracted
             }
+        })
+
+        return {files, data}
+    }
+
+    _childSubmissionFileKey(path: string, fieldKey: string, rowKey?: string): string {
+        return rowKey === undefined
+            ? `child_submissions.${path}.${fieldKey}`
+            : `child_submissions.${path}.forms.${rowKey}.${fieldKey}`
+    }
+
+    _extractChildSubmissionFiles(childSubmissions: Record<string, GlueChildSubmission>) {
+        const files: Record<string, GlueFileValue> = {}
+        const data: Record<string, GlueChildSubmission> = {}
+
+        Object.entries(childSubmissions).forEach(([path, submission]) => {
+            const extracted = this._extractFiles(
+                serializeValue(submission.updates || {}) as Record<string, unknown>,
+            )
+            Object.entries(extracted.files).forEach(([fieldKey, fileValue]) => {
+                files[this._childSubmissionFileKey(path, fieldKey)] = fileValue
+            })
+
+            const extractedSubmission: GlueChildSubmission = {
+                policy_token: submission.policy_token,
+                updates: extracted.data,
+            }
+
+            if (submission.forms) {
+                const forms: Record<string, GlueSubmittedForm> = {}
+                Object.entries(submission.forms).forEach(([rowKey, row]) => {
+                    const rowExtracted = this._extractFiles(
+                        serializeValue(row.updates || {}) as Record<string, unknown>,
+                    )
+                    Object.entries(rowExtracted.files).forEach(([fieldKey, fileValue]) => {
+                        files[this._childSubmissionFileKey(path, fieldKey, rowKey)] = fileValue
+                    })
+                    forms[rowKey] = {
+                        policy_token: row.policy_token,
+                        updates: rowExtracted.data,
+                    }
+                })
+                extractedSubmission.forms = forms
+            }
+
+            data[path] = extractedSubmission
         })
 
         return {files, data}

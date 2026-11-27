@@ -39,6 +39,8 @@ from django_glue.response import GlueResponse
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
+    from django.utils.datastructures import MultiValueDict
+
     from django_glue.glue.attributes.attribute import (
         BoundGlueAttribute,
         GlueAttribute,
@@ -66,6 +68,16 @@ class BaseGlue(ABC):
         self._derived_paths: set[str] = set()
         self._disposed = False
         self._pending_events: list[dict[str, Any]] = []
+        self._uploaded_files: MultiValueDict[str, Any] | None = None
+
+    @property
+    def _request_files(self) -> MultiValueDict[str, Any] | None:
+        """Uploaded files scoped to this object, falling back to ``request.FILES``."""
+        if self._uploaded_files is not None:
+            return self._uploaded_files
+        if self.request is not None:
+            return self.request.FILES
+        return None
 
     @property
     def is_bound(self) -> bool:
@@ -503,6 +515,7 @@ class BaseGlue(ABC):
         """
         self.request = context.request
         self._address = context.target_glue_policy.address
+        self._uploaded_files = context.uploaded_files
         # Objects this call introduces are issued under this object's origin (ADR 035).
         origin = context.target_glue_policy.origin
         self.request.__dict__[DJANGO_GLUE_ORIGIN_REQUEST_ATTR_KEY] = origin

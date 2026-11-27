@@ -1,5 +1,10 @@
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return Object.prototype.toString.call(value) === '[object Object]'
+    if (Object.prototype.toString.call(value) !== '[object Object]') {
+        return false
+    }
+
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === null || prototype === Object.prototype
 }
 
 function cloneValue<T>(value: T): T {
